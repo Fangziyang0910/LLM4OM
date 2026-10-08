@@ -16,7 +16,7 @@ uv build
 git diff --check
 ```
 
-本次结果：参考导出与 69 个源文件校验通过；7 个运行模块的 strict mypy 通过；28 个测试通过（12 个维护 CLI＋16 个平台 CLI）。Python 3.12.3 与 3.11.13 两个独立环境分别运行全部 28 个测试及类型检查，均通过。sdist／wheel 构建通过；wheel 在干净的 Python 3.12.3 环境安装后，从仓库外工作目录分别运行 console script 和 SDK，均返回 artifact_ready。diff 空白检查通过。
+本次结果：参考导出与 69 个源文件校验通过；7 个运行模块的 strict mypy 通过；36 个测试通过（12 个维护 CLI＋24 个平台 CLI）。Python 3.12.3 与 3.11.13 两个独立环境分别运行全部 36 个测试及类型检查，均通过。sdist／wheel 构建通过；wheel 在干净的 Python 3.12.3 环境安装后，从仓库外工作目录分别运行 console script 和 SDK，均返回 artifact_ready。diff 空白检查通过。
 
 测试从 CLI 与公开文件观察行为；维护负例在临时仓库副本运行。没有调用运行模块的私有函数或以内部 mock 关系作验收。CI 已配置相同 Python 矩阵，GitHub runner 尚未运行。
 
@@ -59,4 +59,29 @@ catalog 中的 29 个资料 ID 和 citation_key 唯一；资料页与 29 个 Bib
 
 维护工具验证科研设计与 fixture，平台 CLI 测试验证 S01 工程流程。真实 Provider／Solver 兼容、隔离、预算执行、恢复、编译语义与方法效果仍须在后续切片中按 AC 验证。Math fixture 检查仅针对这份固定生产实例，不提供一般 IR 验证器或语义等价证明。五元素与 LPIR 是同一问题的独立人工示例，不是已完成文本编译。
 
-GitHub CLI 的仓库与标签读取返回 HTTP 401，远程标签尚未核验。本地 tracker／triage 配置已保存；Git 提交与同步状态以仓库记录为准，可见性保持原设置。Standards／Spec 本次采用作者自查与工具验证，没有运行独立审阅代理。
+GitHub CLI 的仓库与标签读取返回 HTTP 401，远程标签尚未核验。本地 tracker／triage 配置已保存；Git 提交与同步状态以仓库记录为准，可见性保持原设置。设计基线此前采用作者自查；S01 实现新增两个独立只读审阅进程，结果见下一节。
+
+## 6. 独立审阅与修复
+
+审阅比较 `da360913…` 与首次实现 `147c1c4`。Standards 和 Spec 使用分别初始化的 Codex CLI 进程，互不共享审阅结论；均只读，没有发布消息或修改仓库。以下分别保留每路发现，重叠项不合并排序。
+
+### Standards
+
+首次审阅报告四项硬问题，没有额外有意义的 smell：
+
+1. P1：client_secret、reference_model 等字段能进入公开问题。契约要求 metadata 不含 oracle 或模型秘密。已在持久化前拒绝已声明 oracle 字段和凭据别名，CLI 负例检查整个公开目录不含 sentinel。
+2. P2：只有 ID 的变量／约束仍收到 structural pass。已要求集合、参数、变量和约束的结构内容，并检查索引集合与数据来源列。
+3. P2：optional_views 中的 fixture 引用没有投影到运行目录。S01 已拒绝未支持的额外引用；provenance、trace 和 IR 同样检查。
+4. P2：产物写入 OSError 被归为 invalid_input，CLI 退出 1。已将输入读取转为领域错误，并保留存储 OSError 给 SDK／CLI；通过 OS 文件系统边界注入单次 rename 失败验证退出 2，不 mock 内部模块。
+
+### Spec
+
+首次审阅报告五项 P2，没有额外范围：
+
+1. symlink 循环使可写存储中只留下 start event，没有 RunBundle。已把路径解析错误转为 unsafe_path，并验证失败 bundle。
+2. 附加视图可保留越界或失效引用。已拒绝未支持引用，覆盖模型封装与附加字段。
+3. 同数据 hash 的外问题／revision IR 能被接受。已同时核对 IR 的 problem_id 和 problem_revision。
+4. 五元素内部内容缺失仍标为结构通过。已补齐结构要求；结构检查没有增加数学语义正确的声明。
+5. max_solver_calls=0 被拒绝，与非负计数契约不符。已允许零次求解／token 预算；实际需要的 Mock attempt 与 candidate 槽分别 admission。
+
+全部发现都有公共 CLI 回归证据。作者另外修正数值型 CSV 主键的等价去重，避免整数 1 与 1.0 被当成不同键。初次独立审阅没有重跑完整测试或真实资源测试；修复后的工程验证使用本记录第 1 节命令。

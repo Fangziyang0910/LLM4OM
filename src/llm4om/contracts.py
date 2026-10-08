@@ -56,6 +56,13 @@ def parse_json(raw: bytes) -> dict[str, Any]:
     return value
 
 
+def read_public_bytes(path: Path) -> bytes:
+    try:
+        return path.read_bytes()
+    except OSError as error:
+        raise RunError("input_unavailable", "validation", "Cannot read an explicit public input file.") from error
+
+
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -81,9 +88,10 @@ def _finite_numbers(value: Any) -> None:
 
 def _reject_private_fields(value: Any) -> None:
     if isinstance(value, dict):
-        private = {"apikey", "accesstoken", "token", "authorization", "password", "secret", "secrets",
-                   "credentials", "oracle", "oracleref", "oraclepath", "referenceobjective",
-                   "referencesolution", "referencecode"}
+        private = {"apikey", "accesstoken", "refreshtoken", "clientsecret", "token", "authorization",
+                   "password", "secret", "secrets", "credentials", "oracle", "oracleref", "oraclepath",
+                   "referenceobjective", "referencesolution", "referencecode", "referencemodel",
+                   "referencevariables", "independentchecker", "expertreview"}
         for key, item in value.items():
             normalized = "".join(character for character in str(key).lower() if character.isalnum())
             if normalized in private or (normalized == "containsoracle" and item is not False):
@@ -99,8 +107,20 @@ def _object(properties: dict[str, Any], required: list[str] | None = None) -> di
             "required": list(properties) if required is None else required}
 
 
-TEXT = {"type": "string", "minLength": 1}
+def reject_additional_refs(value: Any) -> None:
+    if isinstance(value, dict):
+        if "relative_path" in value or "namespace" in value:
+            raise RunError("unsupported_reference", "validation", "S01 cannot project additional artifact references.")
+        for item in value.values():
+            reject_additional_refs(item)
+    elif isinstance(value, list):
+        for item in value:
+            reject_additional_refs(item)
+
+
+TEXT = {"type": "string", "minLength": 1, "pattern": "\\S"}
 POSITIVE = {"type": "integer", "minimum": 1}
+NONNEGATIVE = {"type": "integer", "minimum": 0}
 HASH = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
 
 
@@ -108,8 +128,12 @@ def public_path(root: Path, relative: str) -> Path:
     path = Path(relative)
     if path.is_absolute() or ".." in path.parts or "\\" in relative:
         raise RunError("unsafe_path", "validation", "Public references must stay inside their source directory.")
-    resolved = (root / path).resolve()
-    if not resolved.is_relative_to(root.resolve()) or not resolved.is_file():
+    try:
+        resolved = (root / path).resolve()
+        contained = resolved.is_relative_to(root.resolve()) and resolved.is_file()
+    except (RuntimeError, OSError, ValueError) as error:
+        raise RunError("unsafe_path", "validation", "Cannot resolve a public reference inside its source directory.") from error
+    if not contained:
         raise RunError("unsafe_path", "validation", "Public reference escapes its source directory or is not a file.")
     return resolved
 
@@ -124,7 +148,7 @@ def read_artifact(root: Path, ref: dict[str, Any], version: str, id_key: str) ->
     except jsonschema.ValidationError as error:
         raise RunError("invalid_artifact_ref", "formulation", "Mock artifact reference has an unsupported shape or version.") from error
     path = public_path(root, ref["relative_path"])
-    raw = path.read_bytes()
+    raw = read_public_bytes(path)
     if hashlib.sha256(raw).hexdigest() != ref["sha256"] or len(raw) != ref["size_bytes"]:
         raise RunError("artifact_hash_mismatch", "formulation", "Mock artifact does not match its declared hash or size.")
     value = parse_json(raw)
@@ -134,6 +158,7 @@ def read_artifact(root: Path, ref: dict[str, Any], version: str, id_key: str) ->
 
 
 def validate_problem(problem: dict[str, Any]) -> None:
+    reject_additional_refs(problem)
     column = _object({"name": TEXT, "type": {"enum": ["string", "number", "integer"]},
                       "nullable": {"type": "boolean"}})
     schema = _object({
@@ -175,17 +200,21 @@ def validate_csv(raw: bytes, schema: dict[str, Any]) -> None:
         for row in rows:
             if None in row or any(value is None for value in row.values()):
                 raise ValueError("Incorrect number of cells.")
+            typed: dict[str, str | Decimal | None] = {}
             for column in columns:
                 value = row[column["name"]]
+                typed[column["name"]] = value
                 if value == "":
                     if not column["nullable"]:
                         raise ValueError("Missing non-nullable cell.")
+                    typed[column["name"]] = None
                 elif column["type"] in {"number", "integer"}:
                     number = Decimal(value)
                     if not number.is_finite() or (column["type"] == "integer" and number != number.to_integral_value()):
                         raise ValueError("Invalid numeric cell.")
+                    typed[column["name"]] = number
             if keys:
-                key = tuple(row[name] for name in keys)
+                key = tuple(typed[name] for name in keys)
                 if key in seen:
                     raise ValueError("Duplicate data key.")
                 seen.add(key)
@@ -194,6 +223,8 @@ def validate_csv(raw: bytes, schema: dict[str, Any]) -> None:
 
 
 def validate_model_artifact(artifact: dict[str, Any]) -> None:
+    reject_additional_refs({key: value for key, value in artifact.items()
+                            if key not in {"problem_ref", "formulation_ref"}})
     arrays = {name: {"type": "array"} for name in
               ["data_bindings", "assumptions", "requirement_traces", "diagnostics", "warnings", "optional_views"]}
     schema = _object({"schema_version": {"const": "0.2.0"}, "artifact_id": TEXT,
@@ -225,11 +256,28 @@ def validate_bindings(artifact: dict[str, Any], public: dict[str, Any]) -> None:
 
 
 def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) -> None:
-    entries = {"type": "array", "items": {"type": "object", "required": ["id"], "properties": {"id": TEXT}}}
+    reject_additional_refs({key: value for key, value in formulation.items() if key != "structured_ir_ref"})
+    indexes = {"type": "array", "items": TEXT, "uniqueItems": True}
+    set_entry = {"type": "object", "required": ["id"], "anyOf": [{"required": ["elements"]}, {"required": ["source"]}],
+                 "properties": {"id": TEXT, "elements": {"type": "array", "uniqueItems": True},
+                                "source": {"type": "object", "required": ["data_id", "column"]}}}
+    parameter_entry = {"type": "object", "required": ["id", "index_sets"],
+                       "anyOf": [{"required": ["source"]}, {"required": ["value"]}, {"required": ["expression_text"]}],
+                       "properties": {"id": TEXT, "index_sets": indexes, "expression_text": TEXT,
+                                      "source": {"type": "object", "required": ["data_id"],
+                                                 "anyOf": [{"required": ["column"]}, {"required": ["columns"]}]}}}
+    variable_entry = {"type": "object", "required": ["id", "index_sets", "domain", "lower_bound", "upper_bound"],
+                      "properties": {"id": TEXT, "index_sets": indexes, "domain": TEXT,
+                                     "lower_bound": {"type": ["number", "string", "null"]},
+                                     "upper_bound": {"type": ["number", "string", "null"]}}}
+    constraint_entry = {"type": "object", "required": ["id", "expression_text"],
+                        "properties": {"id": TEXT, "expression_text": TEXT}}
     schema = _object({"schema_version": {"const": "0.2.0"}, "formulation_id": TEXT,
         "problem_id": {"const": public["problem_id"]}, "problem_revision": {"const": public["revision"]},
         "representation_kind": {"const": "five_element"}, "representation": _object({
-            "sets": entries, "parameters": entries, "variables": entries, "constraints": entries,
+            **{name: {"type": "array", "items": entry} for name, entry in {
+                "sets": set_entry, "parameters": parameter_entry, "variables": variable_entry,
+                "constraints": constraint_entry}.items()},
             "objective": {"type": "object", "required": ["sense", "expression_text"], "properties": {
                 "sense": {"enum": ["min", "max"]}, "expression_text": TEXT}}}),
         "data_bindings": {"type": "array"}, "provenance": {"type": "object"},
@@ -241,6 +289,20 @@ def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) ->
             ids = [item["id"] for item in formulation["representation"][key]]
             if len(ids) != len(set(ids)):
                 raise ValueError("Duplicate IDs.")
+        set_ids = {item["id"] for item in formulation["representation"]["sets"]}
+        data = {ref["data_id"]: {column["name"] for column in ref["schema"]["columns"]} for ref in public["data_refs"]}
+        for key in ["sets", "parameters", "variables"]:
+            for item in formulation["representation"][key]:
+                if not set(item.get("index_sets", [])) <= set_ids:
+                    raise ValueError("Unknown index set.")
+                if "source" in item:
+                    source = item["source"]
+                    columns = source.get("columns", [source.get("column")])
+                    if not isinstance(source.get("data_id"), str) or source["data_id"] not in data or not isinstance(columns, list):
+                        raise ValueError("Unknown data source.")
+                    names = [*columns, *([source["key_column"]] if "key_column" in source else [])]
+                    if any(not isinstance(name, str) or name not in data[source["data_id"]] for name in names):
+                        raise ValueError("Unknown source column.")
     except (jsonschema.ValidationError, ValueError) as error:
         raise RunError("invalid_formulation", "formulation", "Mock output must supply five elements for the public problem revision.") from error
     validate_bindings(formulation, public)
@@ -261,7 +323,7 @@ def validate_config(settings: dict[str, Any]) -> None:
             "network": {"const": False}, "cpu_limit": POSITIVE, "memory_limit_mb": POSITIVE,
             "wall_time_s": {"type": "number", "exclusiveMinimum": 0}})}),
         "budget": _object({name: ({"type": "number", "exclusiveMinimum": 0} if name == "wall_time_s"
-                                 else {"type": "integer", "minimum": 0} if name == "max_repairs" else POSITIVE)
+                                 else POSITIVE if name == "max_concurrency" else NONNEGATIVE)
                            for name in ["max_llm_attempts", "max_total_tokens", "max_candidates",
                                         "max_repairs", "max_solver_calls", "wall_time_s", "max_concurrency"]}),
         "store": _object({"plugin_id": {"const": "llm4om.stores.filesystem"},
@@ -275,3 +337,5 @@ def validate_config(settings: dict[str, Any]) -> None:
         jsonschema.Draft202012Validator(schema).validate(settings)
     except jsonschema.ValidationError as error:
         raise RunError("invalid_config", "admission", "RunConfig is outside the S01 offline profile.") from error
+    if settings["budget"]["max_llm_attempts"] < 1 or settings["budget"]["max_candidates"] < 1:
+        raise RunError("unsupported_config", "admission", "Offline replay requires one Mock attempt and one candidate slot.")

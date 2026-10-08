@@ -1,7 +1,6 @@
 """Run one public problem through the explicitly offline S01 flow."""
 
 import hashlib
-import json
 import platform
 from copy import deepcopy
 from importlib.metadata import version
@@ -10,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from llm4om.contracts import (
-    RunError, parse_json, public_path, read_config, validate_config, validate_csv, validate_problem,
+    RunError, parse_json, public_path, read_config, read_public_bytes, validate_config, validate_csv, validate_problem,
 )
 from llm4om.mock import load_mock_output
 from llm4om.storage import RunStore
@@ -54,7 +53,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
         settings_valid = True
         artifact_ref, stages = _run_offline(store, problem, config, settings, ledger)
         status = "artifact_ready"
-    except (RunError, OSError, ValueError, KeyError, TypeError) as error:
+    except (RunError, ValueError, KeyError, TypeError) as error:
         status = "failed"
         error_record = {"code": error.code if isinstance(error, RunError) else "invalid_input",
                         "stage": error.stage if isinstance(error, RunError) else "validation",
@@ -82,12 +81,12 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
 
 def _run_offline(store: RunStore, problem: Path, config: Path, settings: dict[str, Any],
                  ledger: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    source_problem = problem.read_bytes()
+    source_problem = read_public_bytes(problem)
     public = parse_json(source_problem)
     validate_problem(public)
     data_refs = []
     for index, data in enumerate(public["data_refs"]):
-        raw = public_path(problem.parent, data["path"]).read_bytes()
+        raw = read_public_bytes(public_path(problem.parent, data["path"]))
         if data["sha256"] and hashlib.sha256(raw).hexdigest() != data["sha256"]:
             raise RunError("data_hash_mismatch", "validation", "A data file does not match its declared SHA-256.")
         validate_csv(raw, data["schema"])

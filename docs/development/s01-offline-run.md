@@ -48,15 +48,17 @@ Mock 响应必须属于相同原始 ProblemSpec 字节、revision 和数据 hash
 
 RunBundle 以 `bundle.json` 为入口。引用均相对于该运行目录，包含 hash、大小、namespace 和 schema_version；manifest 自身不引用自身。每个运行只复制明确的公开数据和产物引用，不复制源码／示例目录。公开配置去除本地存储位置，Mock 响应路径投影到公开产物；原始凭据和 oracle 字段被拒绝。
 
-Mock attempt 记为 1，外部 LLM 请求和 Solver 调用均为 0；缺失 token usage 为 null。预算在 S01 校验并计数；墙钟中断、并发预留、未知外部结果结算分别在 S03–S05 实现。
+Mock attempt 记为 1，外部 LLM 请求和 Solver 调用均为 0；缺失 token usage 为 null。计数预算允许零；离线 admission 需要至少一次 Mock attempt 和一个候选槽，solver／token 预算可为零。预算在 S01 校验并计数；墙钟中断、并发预留、未知外部结果结算分别在 S03–S05 实现。
+
+除问题、Formulation 和伴随 IR 的已支持引用外，S01 拒绝额外 ArtifactRef，不保留未验证或未投影的 optional_views／provenance／trace 引用。表述内部要求集合元素或公开数据来源、参数值或来源、变量域和边界、目标与约束表达；结构通过仍不意味着数学语义正确。
 
 ## 交付证据
 
 - tests/test_cli_run.py 从 CLI 观察成功、失败和公开产物；逐个行为先 red 再 green。
 - 正常流程、输入保持、无 oracle／requirements 拆分、独立运行、公开引用 hash 与报告一致性通过。
-- 负例覆盖重复键、非有限数值、版本／配置／预算、CSV 类型／空值／重复键、路径与 symlink 越界、输入／产物绑定、缺失五元素、伪报 Code、凭据、递归 YAML 与存储不可写。
+- 负例覆盖重复键、非有限数值、版本／配置／预算、CSV 类型／空值／类型化重复键、路径／symlink 越界和循环、问题／revision／数据绑定、五元素内部缺失、额外引用、伪报 Code、凭据别名、递归 YAML 与存储错误。
 - 完整仓库校验、类型检查、Python 环境与包安装结果见 [校验记录](../spec-validation.md)。
 
-Standards 对照开发规范与接口契约，Spec 对照开工前已确认的 S01。审阅基线为 `da3609131ede07d85d922d9a8d1dd224bcf934c3`。GitHub Issues 读取当前返回 HTTP 401；没有伪造 issue 编号，也没有关闭远程工作项。
+Standards 对照开发规范与接口契约，Spec 对照开工前已确认的 S01。两个独立只读审阅进程以 `da3609131ede07d85d922d9a8d1dd224bcf934c3` 为基线，检查首次实现 `147c1c4`；发现和修复分别记录在 [校验记录](../spec-validation.md#6-独立审阅与修复)。GitHub Issues 读取当前返回 HTTP 401；没有伪造 issue 编号，也没有关闭远程工作项。
 
 下一步优先 S02-A：将伴随的严格 LPIR 编译为 CodeArtifact，经真实 HiGHS 求解，分别验证 MILP=13 与 LP=40/3。S03-A 的第三方方法发现也已解除 S01 阻塞。

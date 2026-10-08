@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from llm4om.contracts import (
-    RunError, parse_json, read_artifact, validate_bindings, validate_formulation, validate_model_artifact,
+    RunError, parse_json, read_artifact, read_public_bytes, reject_additional_refs,
+    validate_bindings, validate_formulation, validate_model_artifact,
 )
 
 
@@ -19,7 +20,7 @@ class MockOutput:
 
 
 def load_mock_output(response: Path, public: dict[str, Any], problem_sha256: str) -> MockOutput:
-    raw = response.read_bytes()
+    raw = read_public_bytes(response)
     artifact = parse_json(raw)
     validate_model_artifact(artifact)
     validate_bindings(artifact, public)
@@ -29,5 +30,8 @@ def load_mock_output(response: Path, public: dict[str, Any], problem_sha256: str
     formulation = read_artifact(response.parent, artifact["formulation_ref"], "0.2.0", "formulation_id")
     validate_formulation(formulation, public)
     ir = read_artifact(response.parent, formulation["structured_ir_ref"], "0.1.0", "model_id")
+    reject_additional_refs(ir)
+    if ir.get("problem_id") != public["problem_id"] or ir.get("problem_revision") != public["revision"]:
+        raise RunError("artifact_problem_mismatch", "formulation", "Strict IR belongs to a different problem or revision.")
     validate_bindings(ir, public)
     return MockOutput(artifact, formulation, ir, hashlib.sha256(raw).hexdigest())

@@ -105,6 +105,17 @@ class OfflineRunTests(unittest.TestCase):
                 self.assertIn(bundle["error"]["code"], {"invalid_config", "unsupported_config"})
                 self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["llm_attempts"], 0)
 
+    def test_zero_solver_budget_is_valid_for_the_offline_profile(self) -> None:
+        inputs = self.fixture_copy()
+        settings = yaml.safe_load((inputs / "run.yaml").read_text())
+        settings["budget"]["max_solver_calls"] = 0
+        settings["budget"]["max_total_tokens"] = 0
+        (inputs / "run.yaml").write_text(yaml.safe_dump(settings))
+        result = self.run_cli(inputs / "problem.json", inputs / "run.yaml", "--offline")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        path, _ = self.bundle(result)
+        self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["solver_calls"], 0)
+
     def test_problem_boundary_rejects_ambiguous_json_and_unsupported_schema(self) -> None:
         inputs = self.fixture_copy()
         original = (inputs / "problem.json").read_text()
@@ -149,6 +160,17 @@ class OfflineRunTests(unittest.TestCase):
                 _, bundle = self.bundle(result)
                 self.assertEqual(bundle["error"]["code"], "unsafe_path")
 
+    def test_symlink_loops_preserve_a_failure_bundle(self) -> None:
+        inputs = self.fixture_copy()
+        (inputs / "data/loop.csv").symlink_to("loop.csv")
+        public = json.loads((inputs / "problem.json").read_text())
+        public["data_refs"][0]["path"] = "data/loop.csv"
+        (inputs / "problem.json").write_text(json.dumps(public))
+        result = self.run_cli(inputs / "problem.json", inputs / "run.yaml", "--offline")
+        self.assertEqual(result.returncode, 1)
+        _, bundle = self.bundle(result)
+        self.assertEqual(bundle["error"]["code"], "unsafe_path")
+
     def test_mock_references_are_verified_before_export(self) -> None:
         inputs = self.fixture_copy()
         (inputs / "formulation.json").write_text((inputs / "formulation.json").read_text() + " ")
@@ -157,11 +179,52 @@ class OfflineRunTests(unittest.TestCase):
         _, bundle = self.bundle(result)
         self.assertEqual(bundle["error"]["code"], "artifact_hash_mismatch")
 
+    def test_additional_artifact_references_are_rejected_before_export(self) -> None:
+        inputs = self.fixture_copy()
+        original = json.loads((inputs / "model-artifact.json").read_text())
+        dangling = {**original["formulation_ref"], "relative_path": "../outside.json"}
+        for key in ["optional_views", "provenance", "requirement_traces"]:
+            with self.subTest(key=key):
+                model = json.loads(json.dumps(original))
+                if key == "provenance":
+                    model[key]["extra_ref"] = dangling
+                else:
+                    model[key] = [{"artifact_ref": dangling}]
+                (inputs / "model-artifact.json").write_text(json.dumps(model))
+                result = self.run_cli(inputs / "problem.json", inputs / "run.yaml", "--offline")
+                self.assertEqual(result.returncode, 1)
+                _, bundle = self.bundle(result)
+                self.assertEqual(bundle["error"]["code"], "unsupported_reference")
+                self.assertIsNone(bundle["model_artifact_ref"])
+
+    def test_structured_ir_must_belong_to_the_public_problem_revision(self) -> None:
+        inputs = self.fixture_copy()
+        original_ir = json.loads((inputs / "model-ir.json").read_text())
+        original_formulation = json.loads((inputs / "formulation.json").read_text())
+        original_model = json.loads((inputs / "model-artifact.json").read_text())
+        for key in ["problem_id", "problem_revision"]:
+            with self.subTest(key=key):
+                ir = {**original_ir, key: "different"}
+                raw = json.dumps(ir).encode()
+                (inputs / "model-ir.json").write_bytes(raw)
+                formulation = json.loads(json.dumps(original_formulation))
+                formulation["structured_ir_ref"].update(sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
+                raw = json.dumps(formulation).encode()
+                (inputs / "formulation.json").write_bytes(raw)
+                model = json.loads(json.dumps(original_model))
+                model["formulation_ref"].update(sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
+                (inputs / "model-artifact.json").write_text(json.dumps(model))
+                result = self.run_cli(inputs / "problem.json", inputs / "run.yaml", "--offline")
+                self.assertEqual(result.returncode, 1)
+                _, bundle = self.bundle(result)
+                self.assertEqual(bundle["error"]["code"], "artifact_problem_mismatch")
+
     def test_structurally_invalid_mock_output_is_not_marked_available(self) -> None:
         inputs = self.fixture_copy()
         original = json.loads((inputs / "formulation.json").read_text())
         original_model = json.loads((inputs / "model-artifact.json").read_text())
-        for change in ["missing_constraints", "wrong_bindings", "wrong_revision", "claimed_code"]:
+        for change in ["missing_constraints", "wrong_bindings", "wrong_revision", "claimed_code",
+                       "sets", "parameters", "variables", "constraints"]:
             with self.subTest(change=change):
                 formulation = json.loads(json.dumps(original))
                 model = json.loads(json.dumps(original_model))
@@ -171,8 +234,10 @@ class OfflineRunTests(unittest.TestCase):
                     formulation["data_bindings"][0]["sha256"] = "0" * 64
                 elif change == "wrong_revision":
                     formulation["problem_revision"] = "2"
-                else:
+                elif change == "claimed_code":
                     model["stage_status"]["code"] = {"status": "available", "reason": None}
+                else:
+                    formulation["representation"][change] = [{"id": "incomplete"}]
                 raw = (json.dumps(formulation, ensure_ascii=False, indent=2) + "\n").encode()
                 (inputs / "formulation.json").write_bytes(raw)
                 model["formulation_ref"].update(sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
@@ -197,6 +262,21 @@ class OfflineRunTests(unittest.TestCase):
             if file.is_file():
                 self.assertNotIn(secret, file.read_text())
         self.assertNotIn(secret, result.stdout + result.stderr)
+
+    def test_credential_aliases_and_oracle_payload_fields_never_reach_exports(self) -> None:
+        inputs = self.fixture_copy()
+        original = json.loads((inputs / "problem.json").read_text())
+        for key in ["client_secret", "reference_model", "reference_variables", "independent_checker", "refresh_token"]:
+            with self.subTest(key=key):
+                public = {**original, "metadata": {key: "HIDDEN-PAYLOAD-SENTINEL"}}
+                (inputs / "problem.json").write_text(json.dumps(public))
+                result = self.run_cli(inputs / "problem.json", inputs / "run.yaml", "--offline")
+                self.assertEqual(result.returncode, 1)
+                path, bundle = self.bundle(result)
+                self.assertEqual(bundle["error"]["code"], "private_input")
+                for file in path.rglob("*"):
+                    if file.is_file():
+                        self.assertNotIn("HIDDEN-PAYLOAD-SENTINEL", file.read_text())
 
     def test_yaml_boundary_rejects_duplicates_nonfinite_values_and_secrets(self) -> None:
         inputs = self.fixture_copy()
@@ -232,6 +312,20 @@ class OfflineRunTests(unittest.TestCase):
                 path, bundle = self.bundle(result)
                 self.assertEqual(bundle["error"]["code"], "invalid_data")
                 self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["llm_attempts"], 0)
+
+    def test_csv_unique_keys_follow_declared_numeric_types(self) -> None:
+        inputs = self.fixture_copy()
+        raw = b"product_id,profit,cutting,finishing\n1,3,2,1\n1.0,2,1,2\n"
+        (inputs / "data/products.csv").write_bytes(raw)
+        public = json.loads((inputs / "problem.json").read_text())
+        public["data_refs"][0]["sha256"] = hashlib.sha256(raw).hexdigest()
+        public["data_refs"][0]["schema"]["columns"][0]["type"] = "integer"
+        (inputs / "problem.json").write_text(json.dumps(public))
+        result = self.run_cli(inputs / "problem.json", inputs / "run.yaml", "--offline")
+        self.assertEqual(result.returncode, 1)
+        path, bundle = self.bundle(result)
+        self.assertEqual(bundle["error"]["code"], "invalid_data")
+        self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["llm_attempts"], 0)
 
     def test_saved_evidence_and_report_are_consistent_and_do_not_claim_solving(self) -> None:
         result = self.run_cli(FIXTURE / "problem.json", FIXTURE / "run.yaml", "--offline")
@@ -298,6 +392,35 @@ class OfflineRunTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertEqual(json.loads(result.stderr)["error"]["code"], "store_unavailable")
         self.assertEqual(self.output.read_text(), "Existing user data.\n")
+
+    def test_artifact_write_failure_is_reported_as_storage_failure(self) -> None:
+        script = '''
+import os
+from pathlib import Path
+from unittest.mock import patch
+from llm4om.cli import main
+replace = os.replace
+def fail_artifact_write(source, target, *args, **kwargs):
+    if Path(target).name == "formulation.json":
+        raise OSError("Injected filesystem write failure.")
+    return replace(source, target, *args, **kwargs)
+with patch("os.replace", side_effect=fail_artifact_write):
+    raise SystemExit(main())
+'''
+        result = subprocess.run(
+            [sys.executable, "-c", script, "run", "--offline", "--problem", str(FIXTURE / "problem.json"),
+             "--config", str(FIXTURE / "run.yaml"), "--output", str(self.output)],
+            env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+            capture_output=True, text=True, cwd=self.temp.name,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(json.loads(result.stderr)["error"]["code"], "store_unavailable")
+
+    def test_missing_public_input_still_saves_an_input_failure_bundle(self) -> None:
+        result = self.run_cli(Path(self.temp.name) / "missing.json", FIXTURE / "run.yaml", "--offline")
+        self.assertEqual(result.returncode, 1)
+        _, bundle = self.bundle(result)
+        self.assertEqual(bundle["error"]["code"], "input_unavailable")
 
 
 if __name__ == "__main__":
