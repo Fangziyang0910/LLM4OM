@@ -30,4 +30,4 @@
 - 实验、恢复与入口：评测协议 → DD-06/07/08 → 相应 AC 与切片依赖。
 - GitHub 操作：先读 [issue tracker](issue-tracker.md)；triage 再读 [label mapping](triage-labels.md)。
 
-当前仓库没有平台实现。研究文档、设计 fixture 和维护工具的完成状态分别报告。
+当前已实现 S01 离线切片。研究、fixture、维护工具和真实 Provider／Solver 验收分别报告。

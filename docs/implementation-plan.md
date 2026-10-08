@@ -1,6 +1,6 @@
 # 1.0 开发计划与接入顺序
 
-文档修订：0.4.0。以下是本地开发计划，尚未发布为 GitHub Issues，平台尚未实现。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
+文档修订：0.4.0。以下是本地开发计划，尚未发布为 GitHub Issues；S01 离线切片已实现，其余任务待开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
 
 ## 1. 首批能力矩阵
 
@@ -32,6 +32,8 @@
 | S01 | 最小 CLI run 读取自然语言与 CSV，经 Mock direct 保存五元素、阶段可用性和标为 mock 的运行记录 | 无 | CLI：无 oracle 单问题；成功和失败都保存 RunBundle；数据 hash 可核验。AC-03/08/19/23 |
 
 只实现这条路径需要的契约与存储。不建立全套空插件、完整实验矩阵或伪造的真实 SolveResult。覆盖 FR-07/13/20/32/36；DD-01/04/07。
+
+状态：已实现；[运行、实际支持范围与交付证据](development/s01-offline-run.md)。仅完成上述 FR/AC 的离线工程部分，完整发布项保持待验收。
 
 ### S02 真实 IR 编译与 HiGHS 求解
 
@@ -142,10 +144,10 @@ flowchart LR
     S09B --> S10
 ```
 
-当前平台切片均未完成，唯一初始前沿是 S01。领取前检查全部阻塞项与 assignee；完成后更新相关 issue 与证据链接。互不阻塞的下一步可以并行，不以阶段编号强制串行。
+S01 已完成，当前可执行前沿是 S02-A 和 S03-A；优先 S02-A。GitHub Issues 认证恢复后再核验远程工作项与领取状态。完成后关联真实证据；互不阻塞的任务可以并行。
 
 ## 5. 工程默认值与完成边界
 
-Python 3.11／3.12、Pydantic v2、Pyomo、HiGHS、pytest 和 JSON/YAML 是候选技术；CLI 可用 Typer，Web 可用 Streamlit。平台版本在 S01 实际选定并锁定，维护工具依赖与平台依赖分开。文件和事件优先，确有查询需要时再引入 SQLite。方法可自行依赖 Agent 框架，核心不强制依赖它。
+S01 采用 Python 3.11／3.12、标准库 argparse／dataclass／unittest，以及已有 PyYAML／jsonschema；依赖由 pyproject.toml 与 uv.lock 管理。维护工具复用这些依赖，类型检查使用开发依赖 mypy。Pyomo／HiGHS 在 S02 接入，Web 实现另行选择。文件和事件优先，确有查询需要时再引入 SQLite。方法可自行依赖 Agent 框架，核心不强制依赖它。
 
 LLMOPT 等训练类工作的流程／提示变体、MCTS autoformulation、ORPilot、IndustryOR／OptMATH 及 NLP／CP 留待首批契约被真实验证后扩展。每个新增方法、Solver 或 benchmark 都需要声明实际支持组合与来源。

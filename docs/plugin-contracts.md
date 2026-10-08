@@ -1,6 +1,6 @@
 # 插件、接口与数据契约
 
-核心对象／配置／Manifest 草案：0.2.0；GroundedLPIR：0.1.0；文档修订：0.4.0。本文定义当前开发契约，平台 SDK 尚未实现。Protocol 是接口示意，数据对象在对应纵向切片落实并验证。领域含义见 [GLOSSARY](../GLOSSARY.md)，调用顺序见 [详细设计](detailed-design.md)。
+核心对象／配置／Manifest 草案：0.2.0；GroundedLPIR：0.1.0；文档修订：0.4.0。本文定义当前开发契约；S01 已落实离线输入、Formulation、引用与 RunBundle 子集，实际范围见 [实现记录](development/s01-offline-run.md)。Protocol 是接口示意，数据对象在对应纵向切片落实并验证。领域含义见 [GLOSSARY](../GLOSSARY.md)，调用顺序见 [详细设计](detailed-design.md)。
 
 ## 1. 所有插件的共同契约
 
@@ -292,3 +292,13 @@ run-id/
 ```
 
 失败时缺少的阶段文件不伪造，bundle manifest 明确当前终态和可用产物。内部私有 oracle、未脱敏 raw response 与凭据不在公开 bundle；raw LLM trace 可含敏感业务数据，按可配置的本地访问与导出策略保存，默认导出仅提供脱敏摘要。导出 oracle 或 raw trace 不是普通报告器的隐式行为。
+
+### S01 已落实的离线子集
+
+应用入口为 `run_problem(problem: Path, config: Path, *, offline=False, output_root=None) -> RunResult`；RunResult 包含 run_id、bundle_path 和 status。CLI 要求显式 `--offline`。此入口读取文件型 ProblemSpec／RunConfig；对象型 SDK、完整 MethodContext、Registry 和真实资源接口按后续切片落实。
+
+`bundle.json` 使用 0.2.0，包含 run_id、mode=`offline_mock`、status=`artifact_ready|failed`、stages、error、model_artifact_ref、execution_plan 和 artifacts。artifact_ready 表示工程产物已保存，不是 MethodOutcome 的 candidate_selected，更不是求解完成；Candidate 仍为 proposed。error 为 null 或 `{code, stage, message}`；执行计划分别保存请求插件与实际 not_available 状态。所有 ArtifactRef 均以运行目录为 namespace 根，manifest 不包含自引用。
+
+离线结构评估使用公开默认协议：Formulation 的字段和绑定检查通过时为 structural pass；Code 与语义检查为 not_available。严格 IR 此时只验证引用和数据绑定，完整编译语义归 S02-A。预算账本记录 Mock attempt／candidate 数量、external_llm_requests=0、solver_calls=0、total_tokens=null 和 cost=0；它不声称已实现外部预算预留或墙钟中断。
+
+失败输入在存储可写时留下 bundle；存储错误由 SDK 抛出 OSError，CLI 返回退出码 2 和不含输入值的 store_unavailable。公开输入保留边界错误码，详细命令与 profile 见 [S01 实现记录](development/s01-offline-run.md)。

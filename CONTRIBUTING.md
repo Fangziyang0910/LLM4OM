@@ -1,6 +1,6 @@
 # 贡献与开发流程
 
-本仓库维护 LLM4OM 的研究、需求与设计基线，以及文档维护工具。平台开发从 [S01](docs/implementation-plan.md#s01-统一问题契约与离线纵向流程) 开始；每个任务交付可演示的纵向行为。
+本仓库维护 LLM4OM 的研究设计和平台实现。已交付 [S01](docs/development/s01-offline-run.md) 离线单问题流程；每个任务交付可演示的纵向行为。
 
 规范见 [CODING_STANDARDS](CODING_STANDARDS.md)，领域词见 [GLOSSARY](GLOSSARY.md)。按 [文档导航](docs/README.md)读取当前任务涉及的 FR/NFR、契约、详细设计与验收。方法或 benchmark 接入另读 [资料库](docs/references/README.md)及 [源码考察](docs/references/source-inspection.md)。
 
@@ -20,25 +20,27 @@
 
 研究方法接入固定上游提交，记录提示、流程、预算和依赖差异。改变算法行为使用方法变体；忠实适配保留其实际输出和支持矩阵。第三方代码与数据记录来源和许可。论文元数据、未知状态和阅读范围在 catalog 中维护。
 
-## 3. 维护工具的当前命令
+## 3. 开发与校验
 
-需要 Python 3.11 或更新版本。依赖仅用于仓库校验，不构成平台依赖或已验证的平台环境：
+当前平台使用 Python 3.11／3.12。依赖声明由 pyproject.toml 维护，完整解析由 uv.lock 固定；维护工具复用其中的 PyYAML／jsonschema。推荐执行：
 
 ```bash
-python3 -m pip install -r requirements-dev.txt
-python3 scripts/render_references.py --check
-python3 scripts/check_repository.py
-python3 -m unittest discover -s tests -v
+uv sync --locked --extra dev
+uv run --locked mypy
+uv run --locked python scripts/render_references.py --check
+uv run --locked python scripts/check_repository.py
+uv run --locked python -m unittest discover -s tests -v
+uv build
 ```
 
-修改 `docs/references/catalog.json` 后先运行 `python3 scripts/render_references.py` 生成资料页与 BibTeX，再执行检查。JSON 使用两空格布局；CSV 和授权原文保持字节稳定。所有纳入仓库的文件都在 [逐文件整理记录](docs/repository-audit.md)中说明职责与校验方式，新增文件同步记录。
+修改 `docs/references/catalog.json` 后先运行 `uv run --locked python scripts/render_references.py` 生成资料页与 BibTeX，再执行检查。JSON 使用两空格布局；CSV 和授权原文保持字节稳定。所有纳入仓库的文件都在 [逐文件整理记录](docs/repository-audit.md)中说明职责与校验方式，新增文件同步记录。
 
-仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。它不运行设计中的 CLI，也不替代隔离、预算、恢复或真实 benchmark 验收。
+仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。平台行为另由 tests/test_cli_run.py 从 CLI 检查；维护检查不替代隔离、预算执行、恢复或真实 benchmark 验收。
 
 ## 4. Review 与交付
 
 Review 分开回答两个问题：Standards 是否符合开发规范和相关契约；Spec 是否完成用户要求或 issue。显式调用 code-review 时按技能执行独立审阅；若当前环境无法运行独立审阅者，说明实际采用的自查范围。
 
-交付先完成对应检查，再报告变化、证据和剩余条件。PR 使用 [仓库模板](.github/PULL_REQUEST_TEMPLATE.md)说明 Summary、Evidence 与 Merge Danger。用户请求提交或 PR 时保存完整改动并关联工作项；平台实现完成后才建立平台 CI、发行包与发布标签。
+交付先完成对应检查，再报告变化、证据和剩余条件。PR 使用 [仓库模板](.github/PULL_REQUEST_TEMPLATE.md)说明 Summary、Evidence 与 Merge Danger。用户请求提交或 PR 时保存完整改动并关联工作项；S01 已加入离线 CI 和本地包构建；发布标签与公开包发布依据真实验收和用户授权进行。
 
 技能选择与触发条件见 [任务工作流](docs/agents/workflow.md)。常规实现选择无需额外审批；用户明确指令优先于工程默认值。

@@ -6,13 +6,13 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 核心流程：**问题描述与数据 → Formulation（数学表述）→ Code（求解实现）→ Solve → 决策结果与运行记录**。不同方法可以联合生成或往返修正两阶段输出；Benchmark 在同一流程上组织批量实验与方法比较。
 
-**LLM4OM = Large Language Models for Optimization Modeling**，其中 `4` 表示 `for`，`OM` 表示 `Optimization Modeling`，与 LLM4AD 的命名方式对应。仓库名为 `LLM4OM`，未来 Python 包名、命令名与插件命名空间采用 `llm4om`。
+**LLM4OM = Large Language Models for Optimization Modeling**，其中 `4` 表示 `for`，`OM` 表示 `Optimization Modeling`，与 LLM4AD 的命名方式对应。仓库名为 `LLM4OM`，Python 包名、命令名与插件命名空间采用 `llm4om`。
 
 完整项目标题：**LLM4OM: A Unified Platform for Automated Optimization Modeling with Large Language Models**。
 
 ## 当前状态
 
-本仓库目前包含 **1.0 调研、需求与设计基线（文档修订 0.4.0）**，尚未实现平台。平台命令、接口和示例是开发目标。
+已交付 **S01 离线单问题切片（Python 包 0.1.0）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，显式回放 Mock 五元素表述，保存阶段状态、数据 hash、事件、候选和报告。Code 与 Solve 尚未实现；Web、真实 LLM 和论文方法仍按开发计划接入。
 
 仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
 
@@ -53,20 +53,32 @@ GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache
 | [开发规范](CODING_STANDARDS.md)与 [贡献流程](CONTRIBUTING.md) | 模块设计、纵向任务、公共入口测试与审阅 |
 | [逐文件整理记录](docs/repository-audit.md) | 当前文件职责、事实来源与核验方式 |
 
-## 预期使用方式
+## 当前可运行的离线示例
 
-以下是计划中的 CLI，不可在当前文档仓库直接运行：
+在仓库根目录执行，使用 Python 3.11／3.12：
+
+```bash
+uv sync --locked --extra dev
+uv run --locked llm4om run --offline --problem examples/specs/problem.json --config examples/specs/run.yaml
+```
+
+CLI 输出 run_id、bundle_path 和 status。运行目录默认在 `runs/`；查看其中的 `bundle.json`、Formulation 与 `reports/report.md`。`--output PATH` 可覆盖存储根目录。成功状态 `artifact_ready` 表示离线产物已保存；不是求解完成。Mock 只回放为该输入编写的产物，不能处理任意新问题。
+
+CLI 和未来 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK 用法、实际支持范围和错误语义见 [S01 实现记录](docs/development/s01-offline-run.md)。
+
+## 后续使用方式
+
+以下命令仍是开发目标：
 
 ```bash
 llm4om plugins list
 llm4om doctor --config experiments/demo.yaml
-llm4om run --problem problem.json --config experiments/demo.yaml
 llm4om benchmark --config experiments/benchmark.yaml
 llm4om resume --run-id RUN_ID
 llm4om report --experiment-id EXPERIMENT_ID --format markdown
 ```
 
-CLI 和本地 Web 工作台调用同一 Python 应用接口。首批论文方法优先 `optimus` 和 `coe`，`direct` 提供工程对照，`feedback_repair` 为可选对照。模型主要使用通用外部 LLM，暂不集成任务专用训练权重；训练类工作的提示或建模流程可另作明确变体，未来专用模型仍走共同 LLM 接口。
+本地 Web 工作台将复用已有单问题应用入口。首批论文方法优先 `optimus` 和 `coe`，`direct` 提供工程对照，`feedback_repair` 为可选对照。模型主要使用通用外部 LLM，暂不集成任务专用训练权重；训练类工作的提示或建模流程可另作明确变体，未来专用模型仍走共同 LLM 接口。
 
 首批基准为 NL4Opt、NLP4LP 和 MAMO 的 EasyLP／ComplexLP 中符合 LP/MILP 范围的实例。求解器仍为 HiGHS 与 Gurobi，建模后端为 Pyomo／gurobipy。具体方法与求解器组合见 [能力矩阵](docs/implementation-plan.md#1-首批能力矩阵)。
 
@@ -74,4 +86,4 @@ CLI 和本地 Web 工作台调用同一 Python 应用接口。首批论文方法
 
 每个插件必须声明能力和兼容矩阵，不允许自动降级后仍把结果标成原方法；每个评估结论必须说明证据级别。**求解器报告最优，只表示候选模型被求解，不证明模型符合业务需求。**
 
-从 [开发计划的 S01](docs/implementation-plan.md#s01-统一问题契约与离线纵向流程) 开始。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+已完成 [S01](docs/implementation-plan.md#s01-统一问题契约与离线纵向流程)，下一步为 S02-A 真实 IR 编译与 HiGHS 求解。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。

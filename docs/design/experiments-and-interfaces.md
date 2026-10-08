@@ -1,6 +1,6 @@
 # 实验、恢复与入口详细设计
 
-文档修订：0.4.0。开发设计，尚未实现；返回 [详细设计索引](../detailed-design.md)。字段与错误语义由 [接口契约](../plugin-contracts.md)维护，指标由 [评测协议](../evaluation.md)维护。
+文档修订：0.4.0。开发设计，S01 已实现单问题应用入口与文件记录，其余能力待接入；返回 [详细设计索引](../detailed-design.md)。字段与错误语义由 [接口契约](../plugin-contracts.md)维护，指标由 [评测协议](../evaluation.md)维护。
 
 ## DD-06 Benchmark 与实验展开
 

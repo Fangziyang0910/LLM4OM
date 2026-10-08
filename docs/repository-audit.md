@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-08；文档修订：0.4.0。当前包含 58 个源文件，维护研究资料、需求与设计基线和文档工具；平台尚未实现。
+日期：2026-10-09；设计基线：0.4.0。当前包含 69 个源文件，维护科研设计、文档工具和 S01 离线平台切片。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -13,6 +13,7 @@
 | `.github/ISSUE_TEMPLATE/feature-spec.md` | 功能规格入口 | 完整 spec 字段、用户故事与公共测试入口 |
 | `.github/ISSUE_TEMPLATE/vertical-slice.md` | 纵向工作项入口 | parent、行为、验收与实际 blockers |
 | `.github/PULL_REQUEST_TEMPLATE.md` | PR 交付入口 | Summary、Evidence、Door／Blast Radius |
+| `.github/workflows/checks.yml` | 离线 CI | Python 3.11／3.12；锁定依赖、类型、仓库、行为和构建 |
 | `.gitignore` | 本地与运行产物边界 | 密钥、运行数据、缓存、下载材料保持忽略 |
 | `AGENTS.md` | 常驻项目约束与技能路由 | 保留科研项目约束；单个 Agent skills 块与按需指针 |
 | `CODING_STANDARDS.md` | 开发规范 | 深模块、真实 Seam、单一来源、格式、测试与 review |
@@ -20,7 +21,7 @@
 | `GLOSSARY.md` | 领域定义的唯一来源 | single-context；短定义与 Avoid；不含实现待办 |
 | `LICENSE` | Apache-2.0 授权原文 | 与整理前 SHA-256 一致 |
 | `NOTICE` | 项目归属与第三方声明 | 与整理前 SHA-256 一致 |
-| `README.md` | 项目概览与阅读入口 | 产品主线、当前可运行维护工具、未来平台命令分别说明 |
+| `README.md` | 项目概览与阅读入口 | 产品主线、S01 实际命令与后续能力分别说明 |
 | `docs/README.md` | 文档责任与阅读分支 | 软件工程与科研文档职责；按任务读取 |
 | `docs/acceptance.md` | 平台验收与需求追踪 | 保留 AC-01～25 和未执行清单；阶段引用仍有效 |
 | `docs/adr/0001-dual-artifact-paths.md` | 双产物路径取舍 | 三句背景／选择／原因符合 ADR 规范 |
@@ -37,6 +38,7 @@
 | `docs/design/experiments-and-interfaces.md` | DD-06/07/08 实验、恢复和入口 | 完整搬迁；批量与 Web 使用同一应用流程 |
 | `docs/design/modeling-methods.md` | DD-01/02 时序与方法策略 | 完整搬迁；方法内部选择与公开反馈规则 |
 | `docs/detailed-design.md` | 详细设计索引与需求编号 | DD-01～08 用于需求追踪，按需进入三个页面 |
+| `docs/development/s01-offline-run.md` | S01 实现与交付记录 | 实际支持范围、CLI／SDK、证据与下一可执行任务 |
 | `docs/evaluation.md` | 指标、证据与分母的唯一来源 | 公开检查／隐藏协议、失败分母、未知成本保持原口径 |
 | `docs/implementation-plan.md` | 本地纵向任务与 blocking edges | 24 个任务；首个 CLI、独立 Web、真实支持验收 |
 | `docs/plugin-contracts.md` | 接口、字段、版本和错误的唯一来源 | 目标 Protocol、小 Interface、能力与错误语义；统一术语 |
@@ -53,19 +55,28 @@
 | `examples/README.md` | fixture 用法与独立数学依据 | 方法输入权限、工程 Mock、绑定反例与维护命令 |
 | `examples/specs/data/capacities.csv` | 原始容量数据 | 固定字节、表头和 hash；独立整数／LP 核验 |
 | `examples/specs/data/products.csv` | 原始利润和资源数据 | 固定字节、表头和 hash；作为独立绑定依据 |
-| `examples/specs/formulation.json` | 五元素数学表述 | 0.2.0 核心对象；关联人工 LPIR，未声称从文本编译 |
-| `examples/specs/model-artifact.json` | 两阶段共同封装 | 表述可用、Code 待生成；源文件引用含 hash／大小 |
 | `examples/specs/expected-evaluation.json` | 预期断言 | 两阶段预期断言；不是实际 run；semantic not_available |
 | `examples/specs/experiment.yaml` | benchmark 配置草案 | 安全加载、direct 参数 schema、私有 oracle 入口 |
+| `examples/specs/formulation.json` | 五元素数学表述 | 0.2.0 核心对象；关联人工 LPIR，未声称从文本编译 |
+| `examples/specs/model-artifact.json` | 两阶段共同封装 | 表述可用、Code 待生成；源文件引用含 hash／大小 |
 | `examples/specs/model-ir.json` | 人工 grounded LPIR | 两空格布局；变量域、数据绑定、系数和引用核验 |
 | `examples/specs/oracle.json` | 私有参考规格 | 两空格布局；参考数值与规则说明；checker 仍 planned |
 | `examples/specs/plugin-manifest.json` | direct 能力与配置草案 | 0.2.0 能力与阶段配置；JSON Schema 拒绝不支持模式 |
 | `examples/specs/problem.json` | 公开问题规格 | 两空格布局；revision、需求与数据 hash 核验 |
-| `examples/specs/run.yaml` | 单问题配置草案 | Mock 响应改为两阶段封装；无实验／oracle 字段 |
-| `requirements-dev.txt` | 维护工具依赖 | 当前环境精确版本；与未来平台依赖分开 |
+| `examples/specs/run.yaml` | S01 单问题配置 | --offline 回放两阶段封装；无实验／oracle 字段 |
+| `pyproject.toml` | 包与依赖声明 | 运行／开发依赖、CLI 入口、类型检查与源码布局 |
 | `scripts/check_repository.py` | 仓库公开校验 CLI | 格式、链接、JSON、配置、数学、编号、引用与覆盖 |
 | `scripts/render_references.py` | 公开参考资料生成 CLI | catalog 生成两份导出；check 模式只读 |
+| `src/llm4om/__init__.py` | 公开应用导出 | RunResult／run_problem；CLI 与后续 Web 共用入口 |
+| `src/llm4om/__main__.py` | 模块 CLI 入口 | 与安装后的 console script 使用同一命令 |
+| `src/llm4om/application.py` | 单问题应用流程 | 公开输入、Mock 输出、候选、阶段与成功／失败证据 |
+| `src/llm4om/cli.py` | 用户 CLI | 参数解析、离线显式选择、JSON 摘要与退出码 |
+| `src/llm4om/contracts.py` | 运行边界校验 | 严格 JSON／YAML、CSV、路径、引用、五元素和输入绑定 |
+| `src/llm4om/mock.py` | 离线方法响应读取 | 明确 fixture、来源与数据 revision；不执行代码或读取参考答案 |
+| `src/llm4om/storage.py` | 运行文件存储 | 独立目录、原子替换、内容 hash 和递增事件 |
+| `tests/test_cli_run.py` | S01 公共 CLI 行为测试 | 成功、失败、数据、路径、引用、配置、隐私、报告和存储 |
 | `tests/test_repository_checks.py` | 维护工具公共入口测试 | 临时副本；坏链接、hash、配置、绑定、重复键、引用漂移、五元素与阶段引用 |
+| `uv.lock` | 完整依赖解析 | 由 uv 生成；PyPI 来源、版本和校验值；locked 安装 |
 
 ## 2. 授权原文与固定数据
 

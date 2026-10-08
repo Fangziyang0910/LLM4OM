@@ -23,6 +23,7 @@ __pycache__/
 *.sqlite*
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 build/
 dist/
 *.egg-info/

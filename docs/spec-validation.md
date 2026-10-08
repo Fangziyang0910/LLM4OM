@@ -1,26 +1,31 @@
 # 调研、需求与设计校验记录
 
-日期：2026-10-08；文档修订：0.4.0。本记录验证研究资料、设计文件与维护工具的一致性。平台验收由 [AC 清单](acceptance.md)维护，当前没有平台验收结果。
+日期：2026-10-09；设计基线：0.4.0。本记录验证科研设计、维护工具与 S01 离线实现；完整平台验收由 [AC 清单](acceptance.md)维护。S01 范围与证据见 [实现记录](development/s01-offline-run.md)。
 
 ## 1. 可复算的当前命令
 
 在仓库根目录运行，依赖见 [贡献流程](../CONTRIBUTING.md)：
 
 ```bash
-python3 scripts/render_references.py --check
-python3 scripts/check_repository.py
-python3 -m unittest discover -s tests -v
+uv sync --locked --extra dev
+uv run --locked mypy
+uv run --locked python scripts/render_references.py --check
+uv run --locked python scripts/check_repository.py
+uv run --locked python -m unittest discover -s tests -v
+uv build
 git diff --check
 ```
 
-本次结果：参考导出检查通过；仓库检查通过，覆盖 58 个源文件；12 个公共 CLI 测试通过；diff 空白检查通过。测试在临时仓库副本中改坏文件，再从脚本入口观察失败，不访问工具私有函数，也不调用平台接口。
+本次结果：参考导出与 69 个源文件校验通过；7 个运行模块的 strict mypy 通过；28 个测试通过（12 个维护 CLI＋16 个平台 CLI）。Python 3.12.3 与 3.11.13 两个独立环境分别运行全部 28 个测试及类型检查，均通过。sdist／wheel 构建通过；wheel 在干净的 Python 3.12.3 环境安装后，从仓库外工作目录分别运行 console script 和 SDK，均返回 artifact_ready。diff 空白检查通过。
+
+测试从 CLI 与公开文件观察行为；维护负例在临时仓库副本运行。没有调用运行模块的私有函数或以内部 mock 关系作验收。CI 已配置相同 Python 矩阵，GitHub runner 尚未运行。
 
 ## 2. 文档与任务结构
 
-- 当前 36 份 Markdown、8 份 JSON、2 份 YAML 配置均进入检查；所有源文件进入 [逐文件记录](repository-audit.md)。本地链接、标题／显式锚点、围栏、UTF-8、LF 和结尾换行通过检查。
+- 当前 37 份 Markdown、8 份 JSON、3 份 YAML 文件均进入检查；所有源文件进入 [逐文件记录](repository-audit.md)。本地链接、标题／显式锚点、围栏、UTF-8、LF 和结尾换行通过检查。
 - 36 FR、12 NFR、25 AC 编号连续且无重复。LP/MILP 执行范围保留；首批方法调整为 direct／OptiMUS／CoE，基准调整为 NL4Opt／NLP4LP／MAMO LP/MILP 子集。
 - DD-01～DD-08 用于需求追踪，详细设计按方法、执行、实验／入口分支读取。
-- S01～S10 保持阶段编号，拆为 24 个纵向任务。每项有可观察结果、公共测试入口与直接 blockers；初始可执行前沿为 S01，平台任务均未完成。
+- S01～S10 保持阶段编号，拆为 24 个纵向任务。每项有可观察结果、公共测试入口与直接 blockers；S01 已完成离线工程范围；当前可执行前沿为 S02-A／S03-A。
 - AGENTS 只有一个 Agent skills 块；glossary 是领域定义来源，四份简短 ADR 记录当前取舍，ADR-0004 明确两阶段选择。
 - 5 个 Mermaid 图块的源码围栏已检查。本次没有运行专用渲染器。
 
@@ -52,6 +57,6 @@ catalog 中的 29 个资料 ID 和 citation_key 唯一；资料页与 29 个 Bib
 
 ## 5. 验证边界
 
-当前校验工具属于仓库维护。真实 Provider／Solver 兼容、隔离、预算执行、恢复、编译语义与方法效果仍须在开发切片中按 AC 验证。Math fixture 检查仅针对这份固定生产实例，不提供一般 IR 验证器或语义等价证明。五元素与 LPIR 是同一问题的独立人工示例，不是已完成文本编译。
+维护工具验证科研设计与 fixture，平台 CLI 测试验证 S01 工程流程。真实 Provider／Solver 兼容、隔离、预算执行、恢复、编译语义与方法效果仍须在后续切片中按 AC 验证。Math fixture 检查仅针对这份固定生产实例，不提供一般 IR 验证器或语义等价证明。五元素与 LPIR 是同一问题的独立人工示例，不是已完成文本编译。
 
 GitHub CLI 的仓库与标签读取返回 HTTP 401，远程标签尚未核验。本地 tracker／triage 配置已保存；Git 提交与同步状态以仓库记录为准，可见性保持原设置。Standards／Spec 本次采用作者自查与工具验证，没有运行独立审阅代理。

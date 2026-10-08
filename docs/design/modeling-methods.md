@@ -1,6 +1,6 @@
 # 单问题与建模方法详细设计
 
-文档修订：0.4.0。开发设计，尚未实现；返回 [详细设计索引](../detailed-design.md)。字段与错误语义由 [接口契约](../plugin-contracts.md)维护，指标由 [评测协议](../evaluation.md)维护。
+文档修订：0.4.0。开发设计，S01 离线流程已实现；返回 [详细设计索引](../detailed-design.md)。字段与错误语义由 [接口契约](../plugin-contracts.md)维护，指标由 [评测协议](../evaluation.md)维护。
 
 ## DD-01 单问题建模与求解
 

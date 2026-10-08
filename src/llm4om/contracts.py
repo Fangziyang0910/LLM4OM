@@ -1,0 +1,277 @@
+"""Validate public inputs before methods see them."""
+
+import json
+import hashlib
+import math
+import csv
+from pathlib import Path
+from collections.abc import Hashable
+from decimal import Decimal, InvalidOperation
+from io import StringIO
+from typing import Any
+
+import jsonschema
+import yaml
+
+
+class RunError(ValueError):
+    def __init__(self, code: str, stage: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.stage = stage
+
+
+class _ConfigLoader(yaml.SafeLoader):
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[Hashable, Any]:
+        self.flatten_mapping(node)
+        return {key: value for key, value in _unique_object(self.construct_pairs(node, deep=deep)).items()}
+
+
+def read_config(path: Path) -> dict[str, Any]:
+    try:
+        value = yaml.load(path.read_text(encoding="utf-8"), Loader=_ConfigLoader)
+        if not isinstance(value, dict):
+            raise ValueError("Expected an object.")
+        _finite_numbers(value)
+        _reject_private_fields(value)
+        return value
+    except RunError:
+        raise
+    except (yaml.YAMLError, ValueError, RecursionError) as error:
+        raise RunError("invalid_config", "admission", "YAML must have unique keys and finite values without recursive aliases.") from error
+
+
+def parse_json(raw: bytes) -> dict[str, Any]:
+    try:
+        value = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object,
+                           parse_constant=_reject_constant)
+        _finite_numbers(value)
+        _reject_private_fields(value)
+    except RunError:
+        raise
+    except (ValueError, RecursionError) as error:
+        raise RunError("invalid_json", "validation", "JSON must have unique keys and finite numbers.") from error
+    if not isinstance(value, dict):
+        raise RunError("invalid_object", "validation", "Expected a JSON object.")
+    return value
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if not isinstance(key, str):
+            raise ValueError("Object keys must be strings.")
+        if key in result:
+            raise ValueError("Duplicate key.")
+        result[key] = value
+    return result
+
+
+def _reject_constant(value: str) -> None:
+    raise ValueError("Nonfinite number.")
+
+
+def _finite_numbers(value: Any) -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("Nonfinite number.")
+    if isinstance(value, (dict, list)):
+        for item in (value.values() if isinstance(value, dict) else value):
+            _finite_numbers(item)
+
+
+def _reject_private_fields(value: Any) -> None:
+    if isinstance(value, dict):
+        private = {"apikey", "accesstoken", "token", "authorization", "password", "secret", "secrets",
+                   "credentials", "oracle", "oracleref", "oraclepath", "referenceobjective",
+                   "referencesolution", "referencecode"}
+        for key, item in value.items():
+            normalized = "".join(character for character in str(key).lower() if character.isalnum())
+            if normalized in private or (normalized == "containsoracle" and item is not False):
+                raise RunError("private_input", "validation", "Public inputs cannot contain oracle fields or credentials.")
+            _reject_private_fields(item)
+    elif isinstance(value, list):
+        for item in value:
+            _reject_private_fields(item)
+
+
+def _object(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
+    return {"type": "object", "properties": properties, "additionalProperties": False,
+            "required": list(properties) if required is None else required}
+
+
+TEXT = {"type": "string", "minLength": 1}
+POSITIVE = {"type": "integer", "minimum": 1}
+HASH = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+
+
+def public_path(root: Path, relative: str) -> Path:
+    path = Path(relative)
+    if path.is_absolute() or ".." in path.parts or "\\" in relative:
+        raise RunError("unsafe_path", "validation", "Public references must stay inside their source directory.")
+    resolved = (root / path).resolve()
+    if not resolved.is_relative_to(root.resolve()) or not resolved.is_file():
+        raise RunError("unsafe_path", "validation", "Public reference escapes its source directory or is not a file.")
+    return resolved
+
+
+def read_artifact(root: Path, ref: dict[str, Any], version: str, id_key: str) -> dict[str, Any]:
+    schema = _object({"artifact_id": TEXT, "media_type": {"const": "application/json"},
+                      "sha256": HASH, "size_bytes": POSITIVE,
+                      "namespace": {"const": "fixture_public"}, "relative_path": TEXT,
+                      "schema_version": {"const": version}})
+    try:
+        jsonschema.Draft202012Validator(schema).validate(ref)
+    except jsonschema.ValidationError as error:
+        raise RunError("invalid_artifact_ref", "formulation", "Mock artifact reference has an unsupported shape or version.") from error
+    path = public_path(root, ref["relative_path"])
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != ref["sha256"] or len(raw) != ref["size_bytes"]:
+        raise RunError("artifact_hash_mismatch", "formulation", "Mock artifact does not match its declared hash or size.")
+    value = parse_json(raw)
+    if value.get("schema_version") != version or value.get(id_key) != ref["artifact_id"]:
+        raise RunError("invalid_artifact_ref", "formulation", "Mock artifact identity does not match its reference.")
+    return value
+
+
+def validate_problem(problem: dict[str, Any]) -> None:
+    column = _object({"name": TEXT, "type": {"enum": ["string", "number", "integer"]},
+                      "nullable": {"type": "boolean"}})
+    schema = _object({
+        "schema_version": {"const": "0.2.0"}, "problem_id": TEXT, "revision": TEXT,
+        "description": {**TEXT, "pattern": "\\S"}, "language": TEXT,
+        "problem_type_hint": {"enum": ["lp", "milp", "unknown"]},
+        "requirements": {"type": "array", "items": _object({
+            "id": TEXT, "text": TEXT, "category": {"enum": ["objective", "domain", "constraint", "data", "other"]},
+            "source_span": {"type": ["null", "object", "array"]}})},
+        "data_refs": {"type": "array", "items": _object({"data_id": TEXT, "path": TEXT,
+            "format": {"const": "csv"}, "sha256": {"anyOf": [HASH, {"type": "null"}, {"const": ""}]},
+            "schema": _object({"columns": {"type": "array", "items": column, "minItems": 1},
+                               "unique_by": {"type": "array", "items": TEXT, "uniqueItems": True}})})},
+        "assumptions": {"type": "array", "items": _object({"id": TEXT, "text": TEXT, "origin": TEXT,
+            "status": {"enum": ["explicit", "proposed", "confirmed"]}})},
+        "source": {"type": "object"}, "metadata": {"type": "object"},
+    }, ["schema_version", "problem_id", "revision", "description", "language", "problem_type_hint",
+        "requirements", "data_refs", "assumptions", "source"])
+    try:
+        jsonschema.Draft202012Validator(schema).validate(problem)
+        for key in ["requirements", "assumptions", "data_refs"]:
+            id_key = "data_id" if key == "data_refs" else "id"
+            ids = [item[id_key] for item in problem[key]]
+            if len(ids) != len(set(ids)):
+                raise ValueError("Duplicate IDs.")
+    except (jsonschema.ValidationError, ValueError) as error:
+        raise RunError("invalid_problem", "validation", "ProblemSpec does not match the public 0.2.0 CSV contract.") from error
+
+
+def validate_csv(raw: bytes, schema: dict[str, Any]) -> None:
+    try:
+        columns = schema["columns"]
+        names = [column["name"] for column in columns]
+        keys = schema["unique_by"]
+        rows = csv.DictReader(StringIO(raw.decode("utf-8")), strict=True)
+        if len(set(names)) != len(names) or rows.fieldnames != names or not set(keys) <= set(names):
+            raise ValueError("Invalid columns or keys.")
+        seen = set()
+        for row in rows:
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError("Incorrect number of cells.")
+            for column in columns:
+                value = row[column["name"]]
+                if value == "":
+                    if not column["nullable"]:
+                        raise ValueError("Missing non-nullable cell.")
+                elif column["type"] in {"number", "integer"}:
+                    number = Decimal(value)
+                    if not number.is_finite() or (column["type"] == "integer" and number != number.to_integral_value()):
+                        raise ValueError("Invalid numeric cell.")
+            if keys:
+                key = tuple(row[name] for name in keys)
+                if key in seen:
+                    raise ValueError("Duplicate data key.")
+                seen.add(key)
+    except (ValueError, InvalidOperation, csv.Error) as error:
+        raise RunError("invalid_data", "validation", "CSV does not match its columns, finite types, nullability or unique keys.") from error
+
+
+def validate_model_artifact(artifact: dict[str, Any]) -> None:
+    arrays = {name: {"type": "array"} for name in
+              ["data_bindings", "assumptions", "requirement_traces", "diagnostics", "warnings", "optional_views"]}
+    schema = _object({"schema_version": {"const": "0.2.0"}, "artifact_id": TEXT,
+        "problem_ref": {"type": "object"}, "formulation_ref": {"type": "object"},
+        "code_ref": {"type": "null"}, "provenance": {"type": "object"}, **arrays,
+        "stage_status": _object({
+            "formulation": _object({"status": {"const": "available"}, "reason": {"type": "null"}}),
+            "code": _object({"status": {"enum": ["pending", "not_available"]}, "reason": TEXT})})})
+    try:
+        jsonschema.Draft202012Validator(schema).validate(artifact)
+    except jsonschema.ValidationError as error:
+        raise RunError("invalid_model_artifact", "formulation", "S01 accepts a Formulation with Code explicitly unavailable or pending.") from error
+
+
+def validate_bindings(artifact: dict[str, Any], public: dict[str, Any]) -> None:
+    expected = {ref["data_id"]: ref["sha256"] for ref in public["data_refs"]}
+    bindings = artifact.get("data_bindings")
+    binding_schema = {"type": "array", "items": {"type": "object", "required": ["data_id", "sha256"],
+                                                 "properties": {"data_id": TEXT, "sha256": HASH}}}
+    try:
+        jsonschema.Draft202012Validator(binding_schema).validate(bindings)
+    except jsonschema.ValidationError as error:
+        raise RunError("artifact_data_mismatch", "formulation", "Data bindings must name the public data revision.") from error
+    if not isinstance(bindings, list):
+        raise RunError("artifact_data_mismatch", "formulation", "Data bindings must name the public data revision.")
+    actual = {item.get("data_id"): item.get("sha256") for item in bindings}
+    if len(actual) != len(bindings) or actual != expected:
+        raise RunError("artifact_data_mismatch", "formulation", "Mock artifact data bindings do not match the public input.")
+
+
+def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) -> None:
+    entries = {"type": "array", "items": {"type": "object", "required": ["id"], "properties": {"id": TEXT}}}
+    schema = _object({"schema_version": {"const": "0.2.0"}, "formulation_id": TEXT,
+        "problem_id": {"const": public["problem_id"]}, "problem_revision": {"const": public["revision"]},
+        "representation_kind": {"const": "five_element"}, "representation": _object({
+            "sets": entries, "parameters": entries, "variables": entries, "constraints": entries,
+            "objective": {"type": "object", "required": ["sense", "expression_text"], "properties": {
+                "sense": {"enum": ["min", "max"]}, "expression_text": TEXT}}}),
+        "data_bindings": {"type": "array"}, "provenance": {"type": "object"},
+        "structured_ir_ref": {"type": "object"},
+    })
+    try:
+        jsonschema.Draft202012Validator(schema).validate(formulation)
+        for key in ["sets", "parameters", "variables", "constraints"]:
+            ids = [item["id"] for item in formulation["representation"][key]]
+            if len(ids) != len(set(ids)):
+                raise ValueError("Duplicate IDs.")
+    except (jsonschema.ValidationError, ValueError) as error:
+        raise RunError("invalid_formulation", "formulation", "Mock output must supply five elements for the public problem revision.") from error
+    validate_bindings(formulation, public)
+
+
+def validate_config(settings: dict[str, Any]) -> None:
+    schema = _object({
+        "schema_version": {"const": "0.2.0"},
+        "method": _object({"plugin_id": {"const": "llm4om.methods.direct"}, "config": _object({
+            "formulation_mode": {"const": "five_element"}, "output_mode": {"const": "lp_ir"}})}),
+        "llm": _object({"provider_plugin_id": {"const": "llm4om.providers.mock"}, "model": TEXT,
+                        "config": _object({"response_artifact": TEXT})}),
+        "compiler": _object({"plugin_id": {"const": "llm4om.compilers.lp_ir_to_pyomo"}}),
+        "model_backend": _object({"plugin_id": {"const": "llm4om.model_backends.pyomo_factory"}}),
+        "solver": _object({"plugin_id": {"const": "llm4om.solvers.highs"}, "options": _object({
+            "time_limit_s": {"type": "number", "exclusiveMinimum": 0}}, [])}, ["plugin_id"]),
+        "executor": _object({"plugin_id": {"const": "llm4om.executors.container"}, "config": _object({
+            "network": {"const": False}, "cpu_limit": POSITIVE, "memory_limit_mb": POSITIVE,
+            "wall_time_s": {"type": "number", "exclusiveMinimum": 0}})}),
+        "budget": _object({name: ({"type": "number", "exclusiveMinimum": 0} if name == "wall_time_s"
+                                 else {"type": "integer", "minimum": 0} if name == "max_repairs" else POSITIVE)
+                           for name in ["max_llm_attempts", "max_total_tokens", "max_candidates",
+                                        "max_repairs", "max_solver_calls", "wall_time_s", "max_concurrency"]}),
+        "store": _object({"plugin_id": {"const": "llm4om.stores.filesystem"},
+                          "config": _object({"root": TEXT})}),
+        "reporters": {"type": "array", "items": _object({"plugin_id": {
+            "enum": ["llm4om.reporters.jsonl", "llm4om.reporters.markdown"]}})},
+        "evaluation": _object({"protocol_id": {"const": "llm4om.eval.public-v0.1"},
+                               "evaluator_plugin_id": {"const": "llm4om.evaluators.structural"}}),
+    }, ["schema_version", "method", "llm", "compiler", "model_backend", "solver", "executor", "budget", "store"])
+    try:
+        jsonschema.Draft202012Validator(schema).validate(settings)
+    except jsonschema.ValidationError as error:
+        raise RunError("invalid_config", "admission", "RunConfig is outside the S01 offline profile.") from error
