@@ -4,11 +4,11 @@
 
 ## 1. 自动算法设计的参考框架
 
-[LLM4AD 官方仓库](https://github.com/Optima-CityU/LLM4AD) 与 [平台论文](https://arxiv.org/abs/2412.17287) 提供算法设计任务、搜索方法与 LLM 的统一接口以及评估和实验支持。FormuMesh 借鉴“不同方法与任务可统一接入”的平台思路，处理的主要对象是优化模型与建模证据。
+[LLM4AD 官方仓库](https://github.com/Optima-CityU/LLM4AD) 与 [平台论文](https://arxiv.org/abs/2412.17287) 提供算法设计任务、搜索方法与 LLM 的统一接口以及评估和实验支持。LLM4OM 借鉴“不同方法与任务可统一接入”的平台思路，处理的主要对象是优化模型与建模证据。
 
 ## 2. 自动建模方法与数据工作
 
-| 工作 | 公开贡献／定位 | 在 FormuMesh 中的接入位置 |
+| 工作 | 公开贡献／定位 | 在 LLM4OM 中的接入位置 |
 |---|---|---|
 | [NL4Opt](https://arxiv.org/abs/2303.08233)／[官方数据仓库](https://github.com/nl4opt/nl4opt-competition) | 自然语言优化建模竞赛与 LP 结构表示任务 | TaskAdapter／dataset；不能假定所有版本都有可直接执行的参考答案 |
 | [OptiMUS](https://github.com/teshnizi/OptiMUS)／[论文](https://arxiv.org/abs/2402.10172) | 建模与求解代码生成、调试、反馈；仓库含不同版本 | 1.0 Method Adapter，必须锁定上游版本和差异 |

@@ -14,7 +14,7 @@ Manifest 字段：
 | 字段 | 必需 | 语义 |
 |---|---|---|
 | `schema_version` | 是 | Manifest 结构版本 |
-| `plugin_id` | 是 | 命名空间＋局部 ID，例如 `formumesh.methods.direct` |
+| `plugin_id` | 是 | 命名空间＋局部 ID，例如 `llm4om.methods.direct` |
 | `kind` | 是 | 下节规定的插件种类 |
 | `plugin_version` | 是 | SemVer，独立于契约版本 |
 | `contract_range` | 是 | 支持的接口版本范围 |
@@ -24,7 +24,7 @@ Manifest 字段：
 | `dependencies` | 是 | Python 依赖、执行环境、求解器／许可证条件 |
 | `source` | 是 | 内置／第三方、上游 URL、固定提交／版本、变体说明；无上游时为 null |
 
-内部 registry 键为 `(kind, plugin_id)`，一次环境不允许相同键的多个活动版本。与内置键冲突必须报错，不能以安装顺序覆盖。entry point 名称规划为 `formumesh.plugins`；加载第三方 Python 包会执行可信插件代码，因此安装／加载与生成代码隔离是两个问题。
+内部 registry 键为 `(kind, plugin_id)`，一次环境不允许相同键的多个活动版本。与内置键冲突必须报错，不能以安装顺序覆盖。entry point 名称规划为 `llm4om.plugins`；加载第三方 Python 包会执行可信插件代码，因此安装／加载与生成代码隔离是两个问题。
 
 ### 能力声明与匹配规则
 

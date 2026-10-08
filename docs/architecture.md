@@ -1,4 +1,4 @@
-# FormuMesh 架构设计
+# LLM4OM 架构设计
 
 设计版本：0.1.0。本文为实现目标，接口规范见 [插件契约](plugin-contracts.md)，范围以 [需求规格](requirements/v1.0.md) 为准。
 
@@ -66,7 +66,7 @@ flowchart TD
 这是未来结构，不是当前已实现目录：
 
 ```text
-src/formumesh/
+src/llm4om/
   contracts/        # immutable data objects / errors / protocol versions
   application/      # SDK use cases, run/experiment/report
   core/             # registry, planning, orchestration, budgets, events

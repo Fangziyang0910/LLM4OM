@@ -1,6 +1,6 @@
 {
   "schema_version": "0.1.0",
-  "plugin_id": "formumesh.methods.direct",
+  "plugin_id": "llm4om.methods.direct",
   "kind": "method",
   "plugin_version": "0.1.0",
   "contract_range": ">=0.1.0,<0.2.0",

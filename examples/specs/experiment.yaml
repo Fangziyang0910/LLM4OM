@@ -1,38 +1,38 @@
-# Design-only configuration. FormuMesh CLI is not implemented yet.
+# Design-only configuration. LLM4OM CLI is not implemented yet.
 schema_version: "0.1.0"
 experiment_id: "fixture-offline-production"
 task:
-  plugin_id: "formumesh.tasks.user_problem"
+  plugin_id: "llm4om.tasks.user_problem"
   config:
     problem_path: "problem.json"
     oracle_path: "oracle.json" # TaskAdapter-private: never included in MethodContext.
 methods:
-  - plugin_id: "formumesh.methods.direct"
+  - plugin_id: "llm4om.methods.direct"
     config:
       output_mode: "lp_ir"
 llm:
-  provider_plugin_id: "formumesh.providers.mock"
+  provider_plugin_id: "llm4om.providers.mock"
   model: "fixture-linear-model"
   config:
     response_artifact: "model-ir.json" # Engineering fixture only, never a real benchmark result.
 compiler:
-  plugin_id: "formumesh.compilers.lp_ir_to_pyomo"
+  plugin_id: "llm4om.compilers.lp_ir_to_pyomo"
 model_backend:
-  plugin_id: "formumesh.model_backends.pyomo_factory"
+  plugin_id: "llm4om.model_backends.pyomo_factory"
 solver:
-  plugin_id: "formumesh.solvers.highs"
+  plugin_id: "llm4om.solvers.highs"
   options:
     time_limit_s: 10
 executor:
-  plugin_id: "formumesh.executors.container"
+  plugin_id: "llm4om.executors.container"
   config:
     network: false
     cpu_limit: 1
     memory_limit_mb: 512
     wall_time_s: 30
 evaluation:
-  protocol_id: "formumesh.eval.checker-v0.1"
-  evaluator_plugin_id: "formumesh.evaluators.independent_checker"
+  protocol_id: "llm4om.eval.checker-v0.1"
+  evaluator_plugin_id: "llm4om.evaluators.independent_checker"
   abs_tol: 0.000001
   rel_tol: 0.00001
 budget:
@@ -45,9 +45,9 @@ budget:
   max_concurrency: 1
 repeats: 1
 store:
-  plugin_id: "formumesh.stores.filesystem"
+  plugin_id: "llm4om.stores.filesystem"
   config:
     root: "../../runs"
 reporters:
-  - plugin_id: "formumesh.reporters.jsonl"
-  - plugin_id: "formumesh.reporters.markdown"
+  - plugin_id: "llm4om.reporters.jsonl"
+  - plugin_id: "llm4om.reporters.markdown"

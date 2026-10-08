@@ -5,7 +5,7 @@
   "reference_objective": {"value": 13, "sense": "max", "reference_termination": "optimal", "abs_tol": 0.000001, "rel_tol": 0.00001, "source": "independent_finite_integer_enumeration"},
   "reference_solution": {"decisions": {"A": 3, "B": 2}, "comparison": "feasibility_and_objective_not_exact_vector"},
   "independent_checker": {
-    "checker_id": "formumesh.fixtures.production",
+    "checker_id": "llm4om.fixtures.production",
     "version": "0.1.0",
     "implementation_status": "planned",
     "required_decisions": ["A", "B"],

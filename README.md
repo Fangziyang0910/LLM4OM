@@ -1,10 +1,12 @@
-# FormuMesh
+# LLM4OM
 
 **自动优化建模集成平台 · A modular platform for automated optimization modeling**
 
-FormuMesh 将自动建模方法、LLM、任务与数据、建模产物、求解后端和基准评测接入同一个可扩展框架，作为通用智能优化平台的 1.0。
+LLM4OM 将自动建模方法、LLM、任务与数据、建模产物、求解后端和基准评测接入同一个可扩展框架，作为通用智能优化平台的 1.0。
 
-名称来自 **Formulation + Mesh**：以统一契约连接不同建模方法与工具。仓库名、未来 Python 包名与命令名采用 `formumesh`。2026-10-08 的 GitHub 仓库检索未发现同名仓库；这是技术命名检索，不是名称权利审查。
+**LLM4OM = Large Language Models for Optimization Modeling**，其中 `4` 表示 `for`，`OM` 表示 `Optimization Modeling`，与 LLM4AD 的命名方式对应。名称由用户于 2026-10-08 确定；GitHub 仓库名采用 `LLM4OM`，未来 Python 包名、命令名与插件命名空间采用 `llm4om`。
+
+完整项目标题：**LLM4OM: A Unified Platform for Automated Optimization Modeling with Large Language Models**。
 
 ## 当前状态
 
@@ -44,12 +46,12 @@ GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache
 以下是计划中的 CLI，不可在当前文档仓库直接运行：
 
 ```bash
-formumesh plugins list
-formumesh doctor --config experiments/demo.yaml
-formumesh run --problem problem.json --config experiments/demo.yaml
-formumesh benchmark --config experiments/benchmark.yaml
-formumesh resume --run-id RUN_ID
-formumesh report --experiment-id EXPERIMENT_ID --format markdown
+llm4om plugins list
+llm4om doctor --config experiments/demo.yaml
+llm4om run --problem problem.json --config experiments/demo.yaml
+llm4om benchmark --config experiments/benchmark.yaml
+llm4om resume --run-id RUN_ID
+llm4om report --experiment-id EXPERIMENT_ID --format markdown
 ```
 
 同一内核应能被 Python SDK 和本地 Web 工作台调用。首批内置方法计划为 `direct`、`feedback_repair` 和 `optimus`；专用 ORLM 模型通过 LLM 接口选择，不被错误归类为独立搜索方法。

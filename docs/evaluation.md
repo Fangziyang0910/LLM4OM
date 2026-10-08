@@ -1,6 +1,6 @@
 # 评测协议与正确性证据
 
-协议草案：`formumesh.eval.objective-v0.1` 与 `formumesh.eval.checker-v0.1`。以下为设计要求，当前没有实验结果。
+协议草案：`llm4om.eval.objective-v0.1` 与 `llm4om.eval.checker-v0.1`。以下为设计要求，当前没有实验结果。
 
 ## 1. 必须分开的判断
 
