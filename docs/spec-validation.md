@@ -16,7 +16,7 @@ uv build
 git diff --check
 ```
 
-本次结果：参考导出与 69 个源文件校验通过；7 个运行模块的 strict mypy 通过；36 个测试通过（12 个维护 CLI＋24 个平台 CLI）。Python 3.12.3 与 3.11.13 两个独立环境分别运行全部 36 个测试及类型检查，均通过。sdist／wheel 构建通过；wheel 在干净的 Python 3.12.3 环境安装后，从仓库外工作目录分别运行 console script 和 SDK，均返回 artifact_ready。diff 空白检查通过。
+本次结果：参考导出与 69 个源文件校验通过；7 个运行模块的 strict mypy 通过；39 个测试通过（12 个维护 CLI＋27 个平台 CLI）。Python 3.12.3 与 3.11.13 两个独立环境分别运行全部 39 个测试及类型检查，均通过。sdist／wheel 构建通过；wheel 在干净的 Python 3.12.3 环境安装后，从仓库外工作目录分别运行 console script 和 SDK，均返回 artifact_ready。diff 空白检查通过。
 
 测试从 CLI 与公开文件观察行为；维护负例在临时仓库副本运行。没有调用运行模块的私有函数或以内部 mock 关系作验收。CI 已配置相同 Python 矩阵，GitHub runner 尚未运行。
 
@@ -85,3 +85,5 @@ GitHub CLI 的仓库与标签读取返回 HTTP 401，远程标签尚未核验。
 5. max_solver_calls=0 被拒绝，与非负计数契约不符。已允许零次求解／token 预算；实际需要的 Mock attempt 与 candidate 槽分别 admission。
 
 全部发现都有公共 CLI 回归证据。作者另外修正数值型 CSV 主键的等价去重，避免整数 1 与 1.0 被当成不同键。初次独立审阅没有重跑完整测试或真实资源测试；修复后的工程验证使用本记录第 1 节命令。
+
+复核分别确认 Standards 三项已修复、Spec 四项已修复，并共同指出参数 null／空来源列仍需校验。后续已限制参数字面值为有限数值或数值表，拒绝 null／boolean 叶子与空来源列；CLI 同时验证数值 0 和完整数值表合法。公开 metadata 的未声明字段在保存前拒绝，遵循新增业务字段经版本化的约定。这些最后修复经作者自查与新增 CLI 回归验证，没有再次启动独立审阅。

@@ -248,6 +248,44 @@ class OfflineRunTests(unittest.TestCase):
                 self.assertIn(bundle["error"]["code"], {"invalid_formulation", "invalid_model_artifact", "artifact_data_mismatch"})
                 self.assertIsNone(bundle["model_artifact_ref"])
 
+    def test_literal_parameter_values_must_contain_finite_numbers(self) -> None:
+        inputs = self.fixture_copy()
+        original_formulation = json.loads((inputs / "formulation.json").read_text())
+        original_model = json.loads((inputs / "model-artifact.json").read_text())
+        for value, expected in [(None, 1), ({"A": None}, 1), (True, 1), (0, 0), ({"A": 3, "B": 2}, 0)]:
+            with self.subTest(value=value):
+                formulation = json.loads(json.dumps(original_formulation))
+                formulation["representation"]["parameters"][0] = {
+                    "id": "profit", "index_sets": ["products"], "value": value}
+                raw = json.dumps(formulation).encode()
+                (inputs / "formulation.json").write_bytes(raw)
+                model = json.loads(json.dumps(original_model))
+                model["formulation_ref"].update(sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
+                (inputs / "model-artifact.json").write_text(json.dumps(model))
+                result = self.run_cli(inputs / "problem.json", inputs / "run.yaml", "--offline")
+                self.assertEqual(result.returncode, expected, result.stderr)
+                _, bundle = self.bundle(result)
+                if expected:
+                    self.assertEqual(bundle["error"]["code"], "invalid_formulation")
+
+    def test_parameter_sources_must_name_at_least_one_existing_column(self) -> None:
+        inputs = self.fixture_copy()
+        original_formulation = json.loads((inputs / "formulation.json").read_text())
+        original_model = json.loads((inputs / "model-artifact.json").read_text())
+        for columns in [[], ["missing"], [None]]:
+            with self.subTest(columns=columns):
+                formulation = json.loads(json.dumps(original_formulation))
+                formulation["representation"]["parameters"][0]["source"] = {"data_id": "products", "columns": columns}
+                raw = json.dumps(formulation).encode()
+                (inputs / "formulation.json").write_bytes(raw)
+                model = json.loads(json.dumps(original_model))
+                model["formulation_ref"].update(sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
+                (inputs / "model-artifact.json").write_text(json.dumps(model))
+                result = self.run_cli(inputs / "problem.json", inputs / "run.yaml", "--offline")
+                self.assertEqual(result.returncode, 1)
+                _, bundle = self.bundle(result)
+                self.assertEqual(bundle["error"]["code"], "invalid_formulation")
+
     def test_private_fields_are_rejected_without_exporting_their_values(self) -> None:
         inputs = self.fixture_copy()
         public = json.loads((inputs / "problem.json").read_text())
@@ -277,6 +315,19 @@ class OfflineRunTests(unittest.TestCase):
                 for file in path.rglob("*"):
                     if file.is_file():
                         self.assertNotIn("HIDDEN-PAYLOAD-SENTINEL", file.read_text())
+
+    def test_unregistered_metadata_cannot_bypass_public_projection(self) -> None:
+        inputs = self.fixture_copy()
+        public = json.loads((inputs / "problem.json").read_text())
+        public["metadata"] = {"custom_payload": "PRIVATE-UNKNOWN-FIELD"}
+        (inputs / "problem.json").write_text(json.dumps(public))
+        result = self.run_cli(inputs / "problem.json", inputs / "run.yaml", "--offline")
+        self.assertEqual(result.returncode, 1)
+        path, bundle = self.bundle(result)
+        self.assertEqual(bundle["error"]["code"], "invalid_problem")
+        for file in path.rglob("*"):
+            if file.is_file():
+                self.assertNotIn("PRIVATE-UNKNOWN-FIELD", file.read_text())
 
     def test_yaml_boundary_rejects_duplicates_nonfinite_values_and_secrets(self) -> None:
         inputs = self.fixture_copy()

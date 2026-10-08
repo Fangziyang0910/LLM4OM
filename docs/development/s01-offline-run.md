@@ -34,7 +34,7 @@ print(result.run_id, result.bundle_path, result.status)
 
 | 位置 | 当前行为 | 后续工作 |
 |---|---|---|
-| 输入 | ProblemSpec 0.2.0；自然语言 description；requirements 可空、类型可 unknown；CSV hash 可留空后计算 | 用户文本交互、任务适配 |
+| 输入 | ProblemSpec 0.2.0；自然语言 description；requirements 可空、类型可 unknown；CSV hash 可留空后计算；metadata 当前声明 purpose／contains_oracle | 用户文本交互、任务适配 |
 | 数据 | UTF-8 CSV；声明表头、string／number／integer、nullable、unique_by；保持原始字节 | 其他数据格式 |
 | 方法／Provider | direct 的 `hand_authored_fixture_replay` 变体；Mock 一次读取明确输入绑定的人工输出 | 真实 direct、外部 LLM、论文方法 |
 | Formulation | five_element，检查身份、revision、字段、引用、数据绑定；保存来源 | 语义检查与真实生成 |
@@ -50,7 +50,7 @@ RunBundle 以 `bundle.json` 为入口。引用均相对于该运行目录，包�
 
 Mock attempt 记为 1，外部 LLM 请求和 Solver 调用均为 0；缺失 token usage 为 null。计数预算允许零；离线 admission 需要至少一次 Mock attempt 和一个候选槽，solver／token 预算可为零。预算在 S01 校验并计数；墙钟中断、并发预留、未知外部结果结算分别在 S03–S05 实现。
 
-除问题、Formulation 和伴随 IR 的已支持引用外，S01 拒绝额外 ArtifactRef，不保留未验证或未投影的 optional_views／provenance／trace 引用。表述内部要求集合元素或公开数据来源、参数值或来源、变量域和边界、目标与约束表达；结构通过仍不意味着数学语义正确。
+除问题、Formulation 和伴随 IR 的已支持引用外，S01 拒绝额外 ArtifactRef，不保留未验证或未投影的 optional_views／provenance／trace 引用。表述内部要求集合元素或公开数据来源、参数数值或非空来源列映射、变量域和边界、目标与约束表达。参数字面值为有限数值或嵌套数值表，未知参数可用明确的 expression_text 表述；null／boolean 不当作数值。结构通过仍不意味着数学语义正确。
 
 ## 交付证据
 

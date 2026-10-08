@@ -174,7 +174,8 @@ def validate_problem(problem: dict[str, Any]) -> None:
                                "unique_by": {"type": "array", "items": TEXT, "uniqueItems": True}})})},
         "assumptions": {"type": "array", "items": _object({"id": TEXT, "text": TEXT, "origin": TEXT,
             "status": {"enum": ["explicit", "proposed", "confirmed"]}})},
-        "source": {"type": "object"}, "metadata": {"type": "object"},
+        "source": {"type": "object"},
+        "metadata": _object({"purpose": TEXT, "contains_oracle": {"const": False}}, []),
     }, ["schema_version", "problem_id", "revision", "description", "language", "problem_type_hint",
         "requirements", "data_refs", "assumptions", "source"])
     try:
@@ -264,6 +265,7 @@ def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) ->
     parameter_entry = {"type": "object", "required": ["id", "index_sets"],
                        "anyOf": [{"required": ["source"]}, {"required": ["value"]}, {"required": ["expression_text"]}],
                        "properties": {"id": TEXT, "index_sets": indexes, "expression_text": TEXT,
+                                      "value": {"$ref": "#/$defs/parameter_value"},
                                       "source": {"type": "object", "required": ["data_id"],
                                                  "anyOf": [{"required": ["column"]}, {"required": ["columns"]}]}}}
     variable_entry = {"type": "object", "required": ["id", "index_sets", "domain", "lower_bound", "upper_bound"],
@@ -283,6 +285,11 @@ def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) ->
         "data_bindings": {"type": "array"}, "provenance": {"type": "object"},
         "structured_ir_ref": {"type": "object"},
     })
+    schema["$defs"] = {"parameter_value": {"anyOf": [
+        {"type": "number"},
+        {"type": "array", "items": {"$ref": "#/$defs/parameter_value"}},
+        {"type": "object", "additionalProperties": {"$ref": "#/$defs/parameter_value"}},
+    ]}}
     try:
         jsonschema.Draft202012Validator(schema).validate(formulation)
         for key in ["sets", "parameters", "variables", "constraints"]:
@@ -298,7 +305,8 @@ def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) ->
                 if "source" in item:
                     source = item["source"]
                     columns = source.get("columns", [source.get("column")])
-                    if not isinstance(source.get("data_id"), str) or source["data_id"] not in data or not isinstance(columns, list):
+                    if (not isinstance(source.get("data_id"), str) or source["data_id"] not in data
+                            or not isinstance(columns, list) or not columns):
                         raise ValueError("Unknown data source.")
                     names = [*columns, *([source["key_column"]] if "key_column" in source else [])]
                     if any(not isinstance(name, str) or name not in data[source["data_id"]] for name in names):
