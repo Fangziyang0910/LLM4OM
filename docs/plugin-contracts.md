@@ -1,6 +1,6 @@
 # 插件、接口与数据契约
 
-契约版本：0.1.0，设计规范而非已实现 SDK。本文中的 Python Protocol 为接口草案；类型必须在首个实现切片落实为可序列化、可验证的数据对象，不能复制未定义类型后声称已可运行。
+核心对象／配置／Manifest 草案：0.2.0；GroundedLPIR：0.1.0；文档修订：0.4.0。本文定义当前开发契约，平台 SDK 尚未实现。Protocol 是接口示意，数据对象在对应纵向切片落实并验证。领域含义见 [GLOSSARY](../GLOSSARY.md)，调用顺序见 [详细设计](detailed-design.md)。
 
 ## 1. 所有插件的共同契约
 
@@ -24,11 +24,13 @@ Manifest 字段：
 | `dependencies` | 是 | Python 依赖、执行环境、求解器／许可证条件 |
 | `source` | 是 | 内置／第三方、上游 URL、固定提交／版本、变体说明；无上游时为 null |
 
+source 对研究方法另记录研究路线（prompting-based／training-based／hybrid）、接入方式（原流程适配／流程变体）、原模型与实际外部 LLM 的差异，以及可获得的 `paper_url`、`citation_key`、`paper_version`、`upstream_commit`、`variant_id` 与适配差异引用。名称或题目不是唯一身份；论文、模型权重、推理流程与数据集分别关联。考察提交不自动作为已验证接入版本。
+
 内部 registry 键为 `(kind, plugin_id)`，一次环境不允许相同键的多个活动版本。与内置键冲突必须报错，不能以安装顺序覆盖。entry point 名称规划为 `llm4om.plugins`；加载第三方 Python 包会执行可信插件代码，因此安装／加载与生成代码隔离是两个问题。
 
 ### 能力声明与匹配规则
 
-能力是显式枚举或带版本的描述，不使用未定义的 `supports_everything`。最少声明 `problem_types`、`input_artifact_kinds`、`output_artifact_kinds`，并按种类声明 `model_backends`、`solvers`、`llm_features`、`oracle_requirements`、`execution_modes`、`supports_checkpoint`、`supports_clarification`。
+能力是显式枚举或带版本的描述，不使用未定义的 `supports_everything`。最少声明 `problem_types`、`input_artifact_kinds`、`output_artifact_kinds`；方法另声明 `formulation_representations`、`code_representations` 和阶段输出可用性，并按种类声明 `model_backends`、`solvers`、`llm_features`、`oracle_requirements`、`execution_modes`、`supports_checkpoint`、`supports_clarification`。
 
 缺失能力等于未知，不等于支持。Planner 先验证静态组合，再以无付费默认的 dependency check 验证本机环境。`preflight_ok` 只表示准备条件通过，不能保证运行时服务或模型行为正常。
 
@@ -40,7 +42,7 @@ Manifest 字段：
 
 | 种类 | 最小业务接口 | 调用位置／关键约束 |
 |---|---|---|
-| `method` | `async run(problem, context) -> MethodOutcome` | 只访问公开问题和 Context；内部搜索策略不泄漏到核心 |
+| `method` | `async run(problem, context, *, checkpoint=None) -> MethodOutcome` | 只访问公开问题和 Context；内部搜索策略不泄漏到核心；checkpoint 能力必须声明 |
 | `llm_provider` | `async complete(request, context) -> LLMResponse` | Gateway 控制凭据、预算、重试和 trace |
 | `task_adapter` | `iter_cases(config) -> Iterator[EvaluationCase]` | 导入／调度端；公开输入与 oracle 分开 |
 | `data_loader` | `load(ref, schema, context) -> DataView` | 受控数据读取，有限视图和大小限制 |
@@ -59,7 +61,8 @@ Registry、Planner、预算账本与状态机是 1.0 稳定核心，不为了未
 ```python
 class ModelingMethod(Plugin, Protocol):
     async def run(
-        self, problem: PublicProblem, context: MethodContext
+        self, problem: PublicProblem, context: MethodContext,
+        *, checkpoint: MethodCheckpoint | None = None
     ) -> MethodOutcome: ...
 
 class MethodContext(Protocol):
@@ -72,9 +75,15 @@ class MethodContext(Protocol):
     def emit(self, event: MethodEvent) -> None: ...
 ```
 
-Context 中不存在 Evaluator、EvaluationOracle 或原始完整 EvaluationCase；内部方法不能自行构造 Provider 绕过 Gateway。角色模型选择经 `llm.complete(request, role="critic")` 等请求，由实验配置控制，记录具体角色和模型。
+Context 中不存在 Evaluator、EvaluationOracle 或原始完整 EvaluationCase；内部方法不能自行构造 Provider 绕过 Gateway。角色模型选择经 `llm.complete(request, role="critic")` 等请求，由实验配置控制，记录具体角色和模型。当前主要调用通用外部 LLM；专用训练模型未来通过同一 Provider／model 配置接入。
 
 MethodOutcome 的 `status` 为 `candidate_selected | needs_input | failed | exhausted`。包含最终 candidate_id（可空）、公开 candidates 引用、诊断、ClarificationRequest（可空）及 opaque checkpoint（可空）。checkpoint 必须可序列化、版本化；不能 pickle 任意运行对象以假装可移植。
+
+`supports_checkpoint=false` 的方法必须拒绝非空 checkpoint。checkpoint 引用其方法版本、公开输入 hash、配置 hash 与预算／事件位置。恢复经过应用层兼容校验后传入，不要求核心解释方法内部状态。
+
+MethodEvent 记录 `stage=formulation|code|selection`、candidate_id、阶段输入／输出引用和 call_ids。一次调用联合产生两阶段输出时，两份阶段记录可引用同一 call_id；账本按真实 attempt_id 计费，不重复计量。方法可在 Code／Solve 的公开反馈后返回 Formulation；不强制两个独立方法入口或固定两次调用。
+
+ExecutionGateway 最小方法为 `async execute_candidate(candidate_ref) -> ExecutionResult`，使用 run 已锁定的表示转换、后端、求解参数与执行配置，负责预算和结果记录。它提供公开编译／执行／求解反馈，不调用隐藏 benchmark 评分。方法可以按需要执行中间候选；最终阶段复用配置一致的已有记录或补齐执行，见 DD-01/02。
 
 最终候选由方法根据公开证据选择，评分开始前冻结。评估器不得在全部候选中用隐藏正确答案挑选最好结果；若报告 oracle-best，应独立列作诊断指标而非默认成功率。
 
@@ -102,6 +111,8 @@ Hash 对原始文件字节计算；结构化对象另记录规范化 JSON 哈希
 
 `PublicProblem` 是经过路径解析、哈希校验与权限投影的 ProblemSpec。它不增加参考目标或参考代码。Requirement 的 source_span 是原文字符范围或表格定位，不是 LLM 的推测结果。
 
+自然语言用户输入可以没有人工需求拆分，requirements 为空合法。方法推断出的规则或新增假设属于候选说明，不静默改写为原始已确认需求。数据路径先相对于其 ProblemSpec 来源目录解析，再投影为受控公开引用。
+
 Assumption 标成 proposed 时必须保留待确认状态；批量不能静默转为 confirmed。描述显式完整的问题无需为了形式化流程强制让人再确认一次。
 
 ### 3.3 EvaluationCase / EvaluationOracle
@@ -117,24 +128,54 @@ Case 包含公开问题、dataset manifest 引用及私有 `oracle_ref`。Oracle
 
 各字段缺失代表该证据不可用。只有目标值时不得制造参考变量或声称证明可行性。Oracle 的数值和正文不写进给方法的完整配置。
 
-### 3.4 Candidate / ModelArtifact
+reference_objective 可记录 `quality_label=optimal|best_known|feasible_reference|unknown` 及其求解／验证证据。TaskAdapter 依据实际参考记录确定标签，不从文件名或字段名推断最优性。缺乏最优性证据的参考保留其质量语义，见评测协议。
 
-Candidate 必需：`candidate_id`、`run_id`、`parent_ids`、`sequence_no`、`artifact_ref`、`created_by`、`status`；`created_by` 包含方法／版本／variant_id、call_ids、提示 hash 与角色。状态表达 `proposed | invalid | executed | rejected | selected`，求解终止状态单独保存。
+### 3.4 Candidate / ModelArtifact / 阶段输出
 
-ModelArtifact 必需：
+Candidate 必需：`candidate_id`、`run_id`、`parent_ids`、`sequence_no`、`artifact_ref`、`created_by`、`status`。`created_by` 包含方法／版本／variant_id、call_ids、提示 hash 与角色；候选状态为 proposed／invalid／executed／rejected／selected，求解终止状态另存。
+
+ModelArtifact 是整个候选建模输出的共同封装：
 
 | 字段 | 含义 |
 |---|---|
-| `artifact_kind` | `lp_ir | python_factory | native_code` |
-| `representation_ref` | 实际 IR／代码的引用 |
-| `model_backend` | code 路径必需；IR 编译前可 null |
-| `problem_ref`、`data_bindings` | 公开问题 revision 与数据哈希 |
-| `assumptions`、`requirement_traces` | 声明假设与映射，可空但不能伪造 |
-| `diagnostics`、`warnings` | 来源不确定、参数缺失、提取失败等 |
-| `provenance` | 调用、方法、上游版本、用户编辑来源 |
-| `optional_views` | 数学公式、图形、推断 IR 等补充产物及其证据标签 |
+| `schema_version`、`artifact_id` | 核心对象版本与输出身份 |
+| `problem_ref`、`data_bindings` | 公开问题 revision 与数据 hash |
+| `formulation_ref` | FormulationArtifact 引用，可 null |
+| `code_ref` | CodeArtifact 引用，可 null |
+| `stage_status` | formulation／code 分别为 available、pending 或 not_available；非 available 必须说明原因 |
+| `assumptions`、`requirement_traces` | 声明假设与需求映射，可空，保留来源 |
+| `diagnostics`、`warnings`、`provenance` | 方法、调用、上游版本、模型选择与用户编辑来源 |
+| `optional_views` | 其他数学视图、图形或提取视图，标明来源与证据 |
 
-一个方法可以只输出 native code，但必须如实说明无法提供的数学结构。需要数学模型展示时，UI 用明确的“尚未提供／推断视图”表达。
+available 必须有对应阶段引用；pending 表示后续阶段尚未完成；not_available 表示方法没有提供或无法忠实提取。最终可执行候选必须有 CodeArtifact，原生方法只有代码时 Formulation 可以 not_available。需要 LLM 补写五元素时形成带 inferred 来源的派生视图或新变体，不冒充原始输出。
+
+#### FormulationArtifact 与默认五元素
+
+必需字段：schema_version、formulation_id、problem_id、problem_revision、representation_kind、representation、data_bindings、provenance。`representation_kind=five_element` 的 representation 有五个字段：
+
+| 字段 | 内容 |
+|---|---|
+| `sets` | 集合 ID、索引及说明；显式元素或受控数据引用 |
+| `parameters` | 参数 ID、索引集合、数值／数据绑定与单位说明 |
+| `variables` | 决策变量 ID、索引、域和边界 |
+| `objective` | 目标方向、数学表达与解释 |
+| `constraints` | 约束 ID、数学表达、解释与需求映射 |
+
+表达可以使用 `expression_text`／LaTeX；集合、参数、变量和约束的稳定 ID 便于引用，字段齐全不证明数学正确。自由文本五元素是可读表述，不按任意 Python／LaTeX 表达式执行。
+
+direct 的 formulation_mode=five_element 选择默认表述；output_mode=lp_ir 选择伴随严格 IR，随后由 Compiler 完成 Code，output_mode=python_factory 则由方法提供对应 CodeArtifact。两种模式的最终输出都使用 ModelArtifact，共同封装不是 LPIR 本体。
+
+需要确定性编译时，额外提供 `structured_ir_ref`，指向经过校验的 GroundedLPIR，并记录它与五元素的来源关系；没有严格 IR 时，由方法的 Code 步骤生成代码。其他 representation_kind 如 grounded_lp_ir／native_formulation／domain_dsl 必须声明 schema 和能力范围；native_formulation 保留上游数学表述的原文／结构和明确 schema；默认五元素不要求改写历史方法。领域 DSL 是特定问题族的可选表示，1.0 暂不承诺 DSL 求解路径。
+
+#### CodeArtifact 与实现来源
+
+必需字段：schema_version、code_id、representation_kind、representation_ref、model_backend、source_formulation_ref（可 null）、data_bindings、provenance。1.0 representation_kind 为 python_factory／native_code；构建指令或其他求解输入在扩展时声明。
+
+provenance 记录实现由方法生成、确定性编译或原生适配得到；编译来源另保存 compiler_id、compiler_version、源 IR hash 和 symbol_map 引用。代码阶段是模型的计算实现，随后才执行 Solve。工厂入口为 `build_model(data)`，原生脚本按锁定入口运行。
+
+data_bindings 至少包含 data_id 和 hash；可获得时增加参数／集合 ID、来源列、键／索引、单位和变换产物引用。派生数据保留父数据 hash。详细绑定缺失时注明不可用。Formulation 与 Code 使用同一份明确数据 revision；换数据或修改数学含义形成新候选／revision。
+
+optional_views 使用 origin=generated／extracted／inferred／hand_authored，数学层次为 parameterized／instantiated／unknown。来源标签与语义验证结论分别记录。
 
 ### 3.5 GroundedLPIR 0.1
 
@@ -161,7 +202,7 @@ LinearExpression = {constant: finite-number,
 
 ### 3.6 BuildArtifact / ModelHandle
 
-BuildArtifact 包含编译器／版本、源产物 hash、目标 Backend、代码／模型文件引用、数据绑定、symbol_map、诊断与编译配置 hash。编译不改变方法或候选 ID，但生成派生产物 ID。
+BuildArtifact 是确定性 Code 路径的构建记录，并关联其 CodeArtifact；包含编译器／版本、源产物 hash、目标 Backend、代码／模型文件引用、数据绑定、symbol_map、诊断与编译配置 hash。编译不改变方法或候选 ID，但生成派生产物 ID。
 
 ModelHandle 仅在 Worker 内持有后端对象、模型类型、变量／约束映射和可导出能力。跨 Worker 传输使用 BuildArtifact／序列化模型及解向量，不能将后端 Python 对象传给核心调度器。
 
@@ -175,7 +216,7 @@ ExecutionResult 必需：execution_id、mode、status、start/end、exit_code、
 
 ### 3.8 EvaluationResult
 
-结果包括协议 ID／版本、最终候选 ID、各 CheckOutcome、证据引用、primary outcome、分母归类、错误标签、warnings。每个 CheckOutcome 包含 `status=pass|fail|unknown|not_available|error`、检查器／版本、容差与解释。
+结果包括协议 ID／版本、最终候选 ID、formulation_validation／code_validation 及各 CheckOutcome、证据引用、primary outcome、分母归类、错误标签、warnings。每个 CheckOutcome 包含 `status=pass|fail|unknown|not_available|error`、检查器／版本、容差与解释。
 
 主指标必须显式命名，如 `objective_match_rate`；禁止把 objective match 改名为“语义正确率”。完整字段和指标算法见 [评测协议](evaluation.md)。
 
@@ -193,29 +234,37 @@ LLMResponse 包含 provider request ID、模型实际标识（可未知）、原
 
 Token 阈值采用发送前估算＋最大输出预留和响应后结算；估算、未知供应方用量、最后一次调用越界分别报告。调用次数可严格限制，token／费用不能在供应方信息不足时伪称绝对硬上限。新调用必须在剩余预算不足时拒绝；未知结果保守占用预留，不直接当零。
 
+方法的 Formulation 与 Code 调用共享 run 预算。阶段资源统计按 call_ids 关联，联合调用不能重复计费；分步调试实验的阶段输入固定并记录来源，使用隐藏参考表述辅助 Code 的实验单独标为 assisted。
+
 方法可以用候选自身的约束检查、公开 solver 信息或自评来选择候选，不能借隐藏 benchmark 答案选择。选择策略写入 manifest/config；所有候选按记录保留，最终选定后不因评分失败偷偷换另一个。
 
-## 6. 错误、取消与兼容性
+## 6. 错误、取消与版本校验
 
 统一 PluginError 包含 `code`、`stage`、`message`、`retryable`、`plugin_id`、`run_id`、`candidate_id`、`details_ref`。标准 code：CONFIG_INVALID、CAPABILITY_MISMATCH、DEPENDENCY_MISSING、AUTH_ERROR、RATE_LIMIT、PROVIDER_TIMEOUT、BUDGET_EXHAUSTED、DATA_INVALID、ARTIFACT_INVALID、COMPILATION_ERROR、EXECUTION_TIMEOUT、EXECUTION_OOM、SOLVER_ERROR、ORACLE_UNAVAILABLE、EVALUATION_ERROR、CHECKPOINT_INCOMPATIBLE、CANCELLED。
 
 业务模型 infeasible 是 SolveResult；不自动包装成 SolverError。缺少参考答案是证据 not_available；评估器程序抛异常才是 EVALUATION_ERROR。未知插件异常保留脱敏 traceback 并转为稳定错误，不能使其他 run 退出。
 
-Schema／plugin／IR／protocol 均记录完整版本。旧产物读取经显式迁移并生成新 hash；不原地修改原事件。新增问题类型或指标定义变化必须提升相关 schema／protocol 版本；报告禁止不说明地跨协议合并。
+Schema／plugin／IR／protocol 均记录完整版本。读入时校验声明版本；不支持的版本拒绝并报告原因，原事件和已保存输出保持不可变。新增问题类型或指标定义变化必须提升相关 schema／protocol 版本；报告禁止不说明地跨协议合并。
 
 ## 7. 接入完成的定义
 
 每个插件交付 Manifest、配置说明、能力矩阵、至少一个成功 fixture、一个不支持或失败 fixture、取消／预算适用性与契约测试。原生方法另外交付上游提交锁、适配差异和复现实验；后端另外交付真实求解记录。此时才能在插件列表中标记 `verified`，而不是仅凭 import 成功。
 
-## 8. ExperimentSpec / RunConfig
+## 8. ExperimentSpec 与单问题 RunConfig
 
 实验配置必需字段为 schema_version、experiment_id、task、methods、llm、model_backend、solver、executor、evaluation、budget、repeats、store、reporters。compiler 仅在相应 IR 转换路径必需；roles、sample_selection、cache_policy、allowed_problem_types 为可选配置。默认 allowed_problem_types 为 [lp,milp]。
+
+单问题 RunConfig 必需字段为 schema_version、method、llm、model_backend、solver、executor、budget、store；compiler 随 IR 路径需要，reporters、roles、evaluation 和 allowed_problem_types 可以按已声明默认值提供。公开问题由 SDK 参数或 CLI `--problem` 传入。它不要求 task、experiment_id、methods 列表、repeats 或 oracle_path；无 evaluation/oracle 时仍记录公开合法性与执行检查，独立检查为 not_available。示例见 [run.yaml](../examples/specs/run.yaml)。
+
+单问题省略 evaluation 的明确默认值为 `llm4om.eval.public-v0.1` 与 `llm4om.evaluators.structural`，不隐式获取参考答案。省略 reporters 仍保存机器可读 RunBundle；是否额外呈现 Markdown 等格式由明确配置决定。
 
 普通插件选择对象为 `{plugin_id, config}`，config 可为空对象；LLM 选择为 `{provider_plugin_id, model, config}`，solver 为 `{plugin_id, options}`。缺省 config 与 options 仅能使用 Manifest 中明确默认值，不能由插件静默选择模型或求解器。
 
 methods 是方法选择列表；角色 LLM 配置可在 roles 中覆盖默认 llm。1.0 实验可以按显式变体配置展开方法／模型／后端组合，展开后的每个 RunConfig 固定一个实例、方法、资源配置及评测协议，不共享可变插件状态。
 
 task.config 的 oracle_path／私有数据只在 TaskAdapter 与评估端存在。PublicRunConfig 投影去除这些字段、凭据和敏感路径后才传给方法／导出；不是把原始 YAML 直接塞进 Context。配置相对路径以该配置文件所在目录为基准，最终访问仍受对应工作根目录和公开／私有权限控制；示例中 store.root 可解析至仓库 runs，方法的数据引用不允许因此访问该整棵目录。
+
+ExperimentSpec 展开后每个 RunConfig 使用单数 method，并关联所属 experiment_id 与 case_id 等运行元数据。该关联不向方法暴露私有 oracle。单问题与实验共用 DD-01，用例差别在任务展开、参考材料与汇总。
 
 Budget 的硬计数阈值为非负整数，wall_time_s 为正数；repeats 为正整数；并发至少 1；max_repairs=0 合法。JSON/YAML 中禁止可执行标签与任意对象构造。全部插件参数经 config_schema／后端 options schema 校验；未知键 fail fast，扩展字段放入明示命名空间而不是随意透传。
 
@@ -231,7 +280,10 @@ run-id/
   events.jsonl
   candidates/<candidate-id>/
     artifact.json
-    representation.json|model.py
+    formulation.json
+    structured-ir.json       # when available
+    code-artifact.json
+    model.py                # when Code produced it
     build.json
     execution.json
     solve-result.json

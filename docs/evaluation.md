@@ -1,12 +1,13 @@
 # 评测协议与正确性证据
 
-协议草案：`llm4om.eval.objective-v0.1` 与 `llm4om.eval.checker-v0.1`。以下为设计要求，当前没有实验结果。
+协议草案：`llm4om.eval.public-v0.1`、`llm4om.eval.objective-v0.1` 与 `llm4om.eval.checker-v0.1`；文档修订：0.4.0。以下为设计要求，当前没有实验结果。单问题用户运行可以没有 oracle；benchmark 评测在同一运行流程上增加独立参考材料和汇总。
 
 ## 1. 必须分开的判断
 
 | 层次 | 检查内容 | 能说明什么 | 不能说明什么 |
 |---|---|---|---|
-| 产物合法性 | IR 类型／引用／域或代码入口是否有效 | 可进入下一阶段 | 业务逻辑正确 |
+| 表述合法性 | 五元素信息、引用或严格 IR 类型／域是否有效 | 可进入下一阶段 | 业务逻辑正确 |
+| 实现合法性 | Code 是否关联实际表述、数据与受支持后端 | 可构建或运行 | 忠实实现数学含义 |
 | 执行成功 | 编译／构建／脚本能运行 | 代码路径可执行 | 模型可行或正确 |
 | 候选模型状态 | solver 的原始与归一化终止状态 | 当前候选模型被求解到何种程度 | 候选表达了原问题 |
 | 候选内可行性 | 解满足候选自己的约束与变量域 | 解对候选模型可行 | 没有遗漏业务约束 |
@@ -18,9 +19,13 @@
 
 ## 2. 两种主协议
 
+单问题的默认公开检查协议为 `llm4om.eval.public-v0.1`，由 structural 评估器汇总产物合法性、执行和可获得的候选内检查。无 oracle 时，独立可行性、参考目标匹配与模型等价检查为 not_available；没有 benchmark 分母和准确率。该协议与下面两种 benchmark 主协议分别标识。
+
 ### 2.1 Objective 协议
 
 适用于具有已核验、有限参考目标值的 LP／MILP 实例。主指标命名为 **objective_match_rate**。记录候选求解状态，不能因目标匹配就将 time_limit 改写为 optimal。
+
+参考材料区分已证明最优、best-known 和仅可行参考。字段名叫 optimal_value 不证明数值最优。best-known 参考可用于预声明的质量阈值比较，不能直接当作最优正确性证据；候选取得更好的独立可行解时记录改进并检查参考状态，不强行将其归为目标错误。
 
 若 oracle 提供原问题目标计算器，优先由原决策映射独立计算目标；否则只能比较提取到的候选 reported objective，并将证据标为 `reported_objective_match`。参考材料只有数值时，对语义或原问题可行性保持 unknown／not_available。
 
@@ -57,7 +62,7 @@ abs(predicted - reference) <= abs_tol + rel_tol * abs(reference)
 
 ## 5. 语义与编译验证
 
-**建模验证与编译验证单独计量。** 同一错误模型在两个求解器中得到相同数值，不能证明建模正确；同一正确 IR 在两个后端不一致，则需要调查编译、数值容差或求解终止条件。
+**Formulation 正确性与 Code 语义保持分别观察。** 代码正确运行可能实现了错误表述；正确表述也可能被代码错译。阶段结构检查、独立数学检查和端到端解质量分别记录，不能从后一项倒推前两项。 同一错误模型在两个求解器中得到相同数值，不能证明建模正确；同一正确 IR 在两个后端不一致，则需要调查编译、数值容差或求解终止条件。
 
 1.0 提供：独立微型 fixture 检查器；需求条目到变量／目标／约束的溯源展示；可插拔独立解检查；限定性质与数据扰动测试接口；可选人工审阅标签。没有能力覆盖完整约束时写出覆盖范围。
 
@@ -69,8 +74,8 @@ abs(predicted - reference) <= abs_tol + rel_tol * abs(reference)
 
 至少提供两种比较设置：
 
-- **固定底座与资源**：各方法使用同一模型与预算，比较方法策略。
-- **方法原生推荐设置**：保留各方法角色与模型配置，比较完整系统；不得描述成纯方法因果比较。
+- **固定底座与资源**：首批 direct／OptiMUS／CoE 使用同一通用外部 LLM 与预算，比较方法流程；角色覆盖公开记录。
+- **完整系统设置（后续）**：具备原推荐模型时另作对照。当前训练权重不在接入范围，借用其提示／流程的变体不列为原专用模型系统成绩。
 
 记录真实尝试与缓存命中。HTTP 重试属于 LLM attempts，语义修正属于 repair，二者不可混用。由 oracle 选取最佳候选的 pass@k 诊断与方法实际选择的 final outcome 分开呈现。
 
@@ -94,12 +99,37 @@ abs(predicted - reference) <= abs_tol + rel_tol * abs(reference)
 
 ## 9. 成本与报告字段
 
-至少记录 attempts、completed calls、outcome_unknown calls、input／output／cached／reasoning tokens 的可用项、pricing_version、estimated_cost、cost_status、wall time、modeling time、compile time、queue time、solve time、evaluation time、max resource。
+至少记录 attempts、completed calls、outcome_unknown calls、input／output／cached／reasoning tokens 的可用项、pricing_version、estimated_cost、cost_status、wall time、modeling time、formulation time、code time、compile time、queue time、solve time、evaluation time、max resource。
 
-成本未知使用 null，status 为 unknown；Mock 费用可为 0 但注明 mock；用户未提供定价时保留 token 和调用数。wall time 包含失败与等待，不能把批量吞吐耗时当单问题响应耗时。
+联合生成的调用分别关联阶段，但账本只按真实 attempt 入账；无法分离阶段时间／token 时标 jointly_measured，不将整次调用在两阶段重复相加。成本未知使用 null，status 为 unknown；Mock 费用可为 0 但注明 mock；用户未提供定价时保留 token 和调用数。wall time 包含失败与等待，不能把批量吞吐耗时当单问题响应耗时。
 
 最少错误标签：description_ambiguous、data_missing、domain_error、constraint_omission、objective_error、code_error、compile_error、solver_limit、budget_limit、provider_error、checker_error、unknown_semantics。细粒度语义标签需有证据，不通过异常文本自动确定全部根因。
 
+有相应证据时另记录 data_binding_error、index_binding_error 与 unit_error，区分参数来源、索引绑定和单位问题。数据文件 hash 正确不证明使用了正确的列或键；模型结构正确也不证明数值绑定正确。
+
 ## 10. 必须交付的首份实验报告
 
-发布前提交两个真实基准的冻结 manifest、三种方法的共同兼容设置、至少一个真实模型的逐样本记录、目标／独立验证证据覆盖率、资源统计、上游适配差异及失败分析。运行规模由可用预算明确指定，不因预算限制伪造完整基准成绩；小样本报告标作 smoke／pilot。全量基准完成不是实现发布的硬前提，但全部声明能力的真实验收不能缺失。
+发布前提交 NL4Opt、NLP4LP、MAMO LP/MILP 的三个冻结 manifest、direct／OptiMUS／CoE 的共同兼容设置、至少一个真实模型的逐样本记录、目标／独立验证证据覆盖率、资源统计、上游适配差异及失败分析。运行规模由可用预算明确指定，不因预算限制伪造完整基准成绩；小样本报告标作 smoke／pilot。全量基准完成不是实现发布的硬前提，但全部声明能力的真实验收不能缺失。
+
+## 11. 支持科研分析的比较维度
+
+研究报告从方法实际最终输出开始，按需要展开解释：生成错误来自需求理解、数学结构、数据绑定、计算实现还是求解终止；候选集中是否存在更好表述但选择失败；修正是否改进可执行性却改变了业务含义。
+
+| 研究维度 | 固定条件 | 记录的结果 |
+|---|---|---|
+| Formulation 策略 | 固定公开输入、通用 LLM 与预算 | 五元素、数学错误证据、数据绑定与来源 |
+| Code 策略 | 冻结同一表述与数据、声明后端 | 生成／编译失败、实现偏差与求解记录 |
+| 方法策略 | 共同样本、同一 LLM、可比执行路径和预算 | final outcome、候选链、实际资源消耗 |
+| 模型能力 | 固定方法、提示、任务版本与输出模式 | 逐样本结果、错误类别与证据覆盖 |
+| 表示与数据访问 | 信息内容相同，表示／数据视图变化明确 | 结构、绑定、执行错误分别计量 |
+| 反馈修正 | 初始候选来源与预算一致，反馈类型明确 | 每轮结果、约束变更、最终选择 |
+| 求解效率 | 原问题质量阈值、数据、求解器与硬件固定 | 解质量、界/gap、模型规模和 solve time |
+| 输入规模 | 任务结构与数据生成规则明确 | 描述长度、文件大小、变量／约束数量和阶段时间 |
+
+Code 隔离实验的固定表述可来自人工参考，但该实验明确标 assisted，不计入无辅助端到端方法成功率。
+
+这些维度是平台支持的实验口径，不是 1.0 必须新增的所有研究实验。只有质量满足预定标准的有效表述才进入求解效率比较；失败运行仍保留并另列成功覆盖率，避免比较产生选择偏差。
+
+有限实例的数据扰动可以检验具体性质，不能升级为所有参数下的模型等价证明。模型级评估器必须说明等价关系、变量映射与覆盖范围。可参考 [图编辑距离评测](https://aclanthology.org/2024.lrec-main.1438/)与 [EquivaMap](https://arxiv.org/abs/2502.14760)，接入前分别验收。
+
+单问题没有独立参考时，报告可以展示候选模型求解状态和假设、需求／数据来源，但不会给出未知的原问题正确率。相关研究分类见 [研究综述](research-landscape.md)，完整流程见 DD-06。

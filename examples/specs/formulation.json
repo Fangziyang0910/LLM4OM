@@ -1,0 +1,134 @@
+{
+  "schema_version": "0.2.0",
+  "formulation_id": "fixture-production-formulation-001",
+  "problem_id": "fixture-production-milp-001",
+  "problem_revision": "1",
+  "representation_kind": "five_element",
+  "representation": {
+    "sets": [
+      {
+        "id": "products",
+        "elements": [
+          "A",
+          "B"
+        ],
+        "description": "产品集合。"
+      },
+      {
+        "id": "resources",
+        "elements": [
+          "cutting",
+          "finishing"
+        ],
+        "description": "资源集合。"
+      }
+    ],
+    "parameters": [
+      {
+        "id": "profit",
+        "index_sets": [
+          "products"
+        ],
+        "source": {
+          "data_id": "products",
+          "key_column": "product_id",
+          "column": "profit"
+        },
+        "description": "每件产品的利润。"
+      },
+      {
+        "id": "usage",
+        "index_sets": [
+          "resources",
+          "products"
+        ],
+        "source": {
+          "data_id": "products",
+          "key_column": "product_id",
+          "columns": [
+            "cutting",
+            "finishing"
+          ]
+        },
+        "description": "每件产品消耗的资源量。"
+      },
+      {
+        "id": "capacity",
+        "index_sets": [
+          "resources"
+        ],
+        "source": {
+          "data_id": "capacities",
+          "key_column": "resource_id",
+          "column": "capacity"
+        },
+        "description": "可用资源容量。"
+      }
+    ],
+    "variables": [
+      {
+        "id": "qty",
+        "index_sets": [
+          "products"
+        ],
+        "domain": "integer",
+        "lower_bound": 0,
+        "upper_bound": null,
+        "description": "各产品的生产数量。",
+        "requirement_ids": [
+          "R-DOMAIN"
+        ]
+      }
+    ],
+    "objective": {
+      "sense": "max",
+      "expression_text": "sum_{p in products} profit[p] * qty[p]",
+      "description": "最大化总利润。",
+      "requirement_ids": [
+        "R-PROFIT"
+      ]
+    },
+    "constraints": [
+      {
+        "id": "capacity_cutting",
+        "expression_text": "sum_{p in products} usage[cutting,p] * qty[p] <= capacity[cutting]",
+        "description": "cutting 资源使用量不得超过容量。",
+        "requirement_ids": [
+          "R-CUTTING"
+        ]
+      },
+      {
+        "id": "capacity_finishing",
+        "expression_text": "sum_{p in products} usage[finishing,p] * qty[p] <= capacity[finishing]",
+        "description": "finishing 资源使用量不得超过容量。",
+        "requirement_ids": [
+          "R-FINISHING"
+        ]
+      }
+    ]
+  },
+  "data_bindings": [
+    {
+      "data_id": "products",
+      "sha256": "74ad23f699830b8bbf6d32948c9ff9209fc39ff9ddbaa5c64c97140850249064"
+    },
+    {
+      "data_id": "capacities",
+      "sha256": "3aa7ec045769676457aa38cd1732b78fcd4b6926aa1db9916cc453cb6dfaaf47"
+    }
+  ],
+  "structured_ir_ref": {
+    "artifact_id": "fixture-production-model-001",
+    "media_type": "application/json",
+    "sha256": "35ec358e326b18d17d47685145f94edbe917044df4f24e339030f124f7873154",
+    "size_bytes": 2149,
+    "namespace": "fixture_public",
+    "relative_path": "model-ir.json",
+    "schema_version": "0.1.0"
+  },
+  "provenance": {
+    "origin": "hand_authored_design_fixture",
+    "not_a_real_method_run": true,
+    "ir_relationship": "independently_hand_authored_same_problem_not_compiled_from_text"
+  }
+}

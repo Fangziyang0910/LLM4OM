@@ -2,23 +2,28 @@
 
 **自动优化建模集成平台 · A modular platform for automated optimization modeling**
 
-LLM4OM 将自动建模方法、LLM、任务与数据、建模产物、求解后端和基准评测接入同一个可扩展框架，作为通用智能优化平台的 1.0。
+LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输入自然语言描述与可选数据，指定建模方法、LLM 和兼容求解配置，获得可检查的建模输出与求解结果。平台提供 CLI 与 Web 可视化工作台，持续接入不同 benchmark、建模方法和求解器，作为通用智能优化平台的 1.0。
 
-**LLM4OM = Large Language Models for Optimization Modeling**，其中 `4` 表示 `for`，`OM` 表示 `Optimization Modeling`，与 LLM4AD 的命名方式对应。名称由用户于 2026-10-08 确定；GitHub 仓库名采用 `LLM4OM`，未来 Python 包名、命令名与插件命名空间采用 `llm4om`。
+核心流程：**问题描述与数据 → Formulation（数学表述）→ Code（求解实现）→ Solve → 决策结果与运行记录**。不同方法可以联合生成或往返修正两阶段输出；Benchmark 在同一流程上组织批量实验与方法比较。
+
+**LLM4OM = Large Language Models for Optimization Modeling**，其中 `4` 表示 `for`，`OM` 表示 `Optimization Modeling`，与 LLM4AD 的命名方式对应。仓库名为 `LLM4OM`，未来 Python 包名、命令名与插件命名空间采用 `llm4om`。
 
 完整项目标题：**LLM4OM: A Unified Platform for Automated Optimization Modeling with Large Language Models**。
 
 ## 当前状态
 
-本仓库目前包含 **1.0 需求与设计基线**，尚未实现平台。文档里的命令、接口、目录和示例是开发目标，不代表已可运行；不提供未经实验验证的性能或准确率承诺。
+本仓库目前包含 **1.0 调研、需求与设计基线（文档修订 0.4.0）**，尚未实现平台。平台命令、接口和示例是开发目标。
 
-GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache-2.0。私有可见性与开源许可证分别管理；本次初始化不发布公开版本。
+仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
+
+GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache-2.0。私有可见性与开源许可证分别管理。
 
 ## 1.0 目标
 
 - 可插拔接入自动建模方法与不同 LLM，二者独立配置。
 - 将自然语言、表格数据和任务配置规范化为统一问题输入。
 - 输出可检查的数学模型、代码、假设、需求映射和执行证据。
+- 默认按集合、参数、变量、目标和约束组织 Formulation，Code 阶段生成或编译到兼容后端。
 - 同时支持结构化 LP/MILP IR 和已有方法的原生代码产物。
 - 统一调度求解、隔离执行、预算控制、反馈修正与批量评测。
 - 保留问题、插件、数据、模型、配置和运行轨迹的版本与来源。
@@ -29,17 +34,24 @@ GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache
 
 | 文档 | 内容 |
 |---|---|
+| [文档体系与阅读导航](docs/README.md) | 需求说明、需求分析、需求规格、架构、详细设计与验证的关系 |
+| [需求分析](docs/requirements/analysis.md) | 已确认目标、领域任务、需求来源、优先级与设计追踪 |
 | [需求规格](docs/requirements/v1.0.md) | 用户、范围、场景、功能需求、非功能需求与发布标准 |
-| [领域术语](CONTEXT.md) | 方法、模型、建模语言、求解器、基准与评估证据的统一定义 |
+| [领域术语](GLOSSARY.md) | 方法、模型、建模语言、求解器、基准与评估证据的统一定义 |
 | [架构设计](docs/architecture.md) | 模块职责、插件接入、数据流、执行与恢复 |
+| [详细设计](docs/detailed-design.md) | 单问题运行、反馈修正、产物与数据绑定、实验、CLI/Web 的执行细节 |
 | [插件与数据契约](docs/plugin-contracts.md) | 接口、核心数据结构、能力声明、兼容性与错误语义 |
 | [评测协议](docs/evaluation.md) | 正确性层次、分母、容差、预算、公平比较与数据污染控制 |
 | [开发计划](docs/implementation-plan.md) | 可独立验收的开发切片、依赖关系与首批适配矩阵 |
 | [验收清单](docs/acceptance.md) | 端到端场景、契约测试、发布证据与需求追踪 |
-| [相关工作](docs/research-landscape.md) | 参考项目、可借鉴模块、证据与调研限制 |
+| [研究综述](docs/research-landscape.md) | 代表性方法、benchmark、评测路线与平台设计依据 |
+| [参考资料库](docs/references/README.md) | 论文、代码、数据与出版记录；配套 BibTeX 和机器可读目录 |
+| [源码考察记录](docs/references/source-inspection.md) | 固定提交、实际入口、表示与适配分析 |
 | [决策与待定项](docs/decisions-and-open-questions.md) | 用户明确要求、设计默认值、后续需确认的事项 |
 | [示例规格](examples/README.md) | 一份可手工核验的 MILP 问题、IR、参考解和实验配置 |
 | [规格校验记录](docs/spec-validation.md) | 文档链接、编号、JSON/YAML 与手算 fixture 的审阅结果 |
+| [开发规范](CODING_STANDARDS.md)与 [贡献流程](CONTRIBUTING.md) | 模块设计、纵向任务、公共入口测试与审阅 |
+| [逐文件整理记录](docs/repository-audit.md) | 当前文件职责、事实来源与核验方式 |
 
 ## 预期使用方式
 
@@ -54,7 +66,9 @@ llm4om resume --run-id RUN_ID
 llm4om report --experiment-id EXPERIMENT_ID --format markdown
 ```
 
-同一内核应能被 Python SDK 和本地 Web 工作台调用。首批内置方法计划为 `direct`、`feedback_repair` 和 `optimus`；专用 ORLM 模型通过 LLM 接口选择，不被错误归类为独立搜索方法。
+CLI 和本地 Web 工作台调用同一 Python 应用接口。首批论文方法优先 `optimus` 和 `coe`，`direct` 提供工程对照，`feedback_repair` 为可选对照。模型主要使用通用外部 LLM，暂不集成任务专用训练权重；训练类工作的提示或建模流程可另作明确变体，未来专用模型仍走共同 LLM 接口。
+
+首批基准为 NL4Opt、NLP4LP 和 MAMO 的 EasyLP／ComplexLP 中符合 LP/MILP 范围的实例。求解器仍为 HiGHS 与 Gurobi，建模后端为 Pyomo／gurobipy。具体方法与求解器组合见 [能力矩阵](docs/implementation-plan.md#1-首批能力矩阵)。
 
 ## 开发约定
 

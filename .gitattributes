@@ -2,4 +2,8 @@
 *.md text
 *.json text
 *.yaml text
+*.yml text
 *.csv text
+*.py text
+*.bib text
+*.txt text

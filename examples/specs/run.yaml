@@ -1,0 +1,42 @@
+# Planned single-problem config: deterministic engineering fixture, not a real LLM result.
+schema_version: "0.2.0"
+method:
+  plugin_id: "llm4om.methods.direct"
+  config:
+    formulation_mode: "five_element"
+    output_mode: "lp_ir"
+llm:
+  provider_plugin_id: "llm4om.providers.mock"
+  model: "fixture-production-v1"
+  config:
+    response_artifact: "model-artifact.json" # Engineering Mock input, not an actual method run.
+compiler:
+  plugin_id: "llm4om.compilers.lp_ir_to_pyomo"
+model_backend:
+  plugin_id: "llm4om.model_backends.pyomo_factory"
+solver:
+  plugin_id: "llm4om.solvers.highs"
+  options:
+    time_limit_s: 10
+executor:
+  plugin_id: "llm4om.executors.container"
+  config:
+    network: false
+    cpu_limit: 1
+    memory_limit_mb: 512
+    wall_time_s: 30
+budget:
+  max_llm_attempts: 1
+  max_total_tokens: 4096
+  max_candidates: 1
+  max_repairs: 0
+  max_solver_calls: 1
+  wall_time_s: 60
+  max_concurrency: 1
+store:
+  plugin_id: "llm4om.stores.filesystem"
+  config:
+    root: "../../runs"
+reporters:
+  - plugin_id: "llm4om.reporters.jsonl"
+  - plugin_id: "llm4om.reporters.markdown"

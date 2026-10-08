@@ -1,0 +1,52 @@
+{
+  "schema_version": "0.2.0",
+  "artifact_id": "fixture-production-artifact-001",
+  "problem_ref": {
+    "artifact_id": "fixture-production-milp-001",
+    "media_type": "application/json",
+    "sha256": "c2adf24c0d072d6c1a25dc2dff293e238f5cbf28ae20eefd719480ac9e395336",
+    "size_bytes": 2626,
+    "namespace": "fixture_public",
+    "relative_path": "problem.json",
+    "schema_version": "0.2.0"
+  },
+  "data_bindings": [
+    {
+      "data_id": "products",
+      "sha256": "74ad23f699830b8bbf6d32948c9ff9209fc39ff9ddbaa5c64c97140850249064"
+    },
+    {
+      "data_id": "capacities",
+      "sha256": "3aa7ec045769676457aa38cd1732b78fcd4b6926aa1db9916cc453cb6dfaaf47"
+    }
+  ],
+  "formulation_ref": {
+    "artifact_id": "fixture-production-formulation-001",
+    "media_type": "application/json",
+    "sha256": "f937179b4441469a01300832047291b981a93891603bdc97847cf32f6a463cf4",
+    "size_bytes": 3434,
+    "namespace": "fixture_public",
+    "relative_path": "formulation.json",
+    "schema_version": "0.2.0"
+  },
+  "code_ref": null,
+  "stage_status": {
+    "formulation": {
+      "status": "available",
+      "reason": null
+    },
+    "code": {
+      "status": "pending",
+      "reason": "The planned compiler will create CodeArtifact; no code has been generated or executed."
+    }
+  },
+  "assumptions": [],
+  "requirement_traces": [],
+  "diagnostics": [],
+  "warnings": [],
+  "provenance": {
+    "origin": "hand_authored_design_fixture",
+    "not_a_real_method_run": true
+  },
+  "optional_views": []
+}

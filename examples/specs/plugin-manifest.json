@@ -1,28 +1,67 @@
 {
-  "schema_version": "0.1.0",
+  "schema_version": "0.2.0",
   "plugin_id": "llm4om.methods.direct",
   "kind": "method",
-  "plugin_version": "0.1.0",
-  "contract_range": ">=0.1.0,<0.2.0",
+  "plugin_version": "0.2.0",
+  "contract_range": ">=0.2.0,<0.3.0",
   "display_name": "Direct Modeling",
-  "description": "Single semantic generation baseline; infrastructure retry is counted separately from repair.",
+  "description": "Engineering baseline with observable Formulation and Code outputs; a joint generation counts once.",
   "capabilities": {
-    "problem_types": ["lp", "milp"],
-    "input_artifact_kinds": ["public_problem"],
-    "output_artifact_kinds": ["lp_ir", "python_factory"],
-    "llm_features": ["text"],
-    "execution_modes": ["container", "trusted_local"],
+    "problem_types": [
+      "lp",
+      "milp"
+    ],
+    "input_artifact_kinds": [
+      "public_problem"
+    ],
+    "output_artifact_kinds": [
+      "model_artifact"
+    ],
+    "llm_features": [
+      "text"
+    ],
+    "execution_modes": [
+      "container",
+      "trusted_local"
+    ],
     "supports_checkpoint": false,
     "supports_clarification": false,
-    "oracle_requirements": []
+    "oracle_requirements": [],
+    "formulation_representations": [
+      "five_element",
+      "grounded_lp_ir"
+    ],
+    "code_representations": [
+      "python_factory"
+    ]
   },
   "config_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "properties": {"output_mode": {"type": "string", "enum": ["lp_ir", "python_factory"]}},
-    "required": ["output_mode"],
+    "properties": {
+      "output_mode": {
+        "type": "string",
+        "enum": [
+          "lp_ir",
+          "python_factory"
+        ]
+      },
+      "formulation_mode": {
+        "type": "string",
+        "enum": [
+          "five_element"
+        ],
+        "default": "five_element"
+      }
+    },
+    "required": [
+      "formulation_mode",
+      "output_mode"
+    ],
     "additionalProperties": false
   },
-  "dependencies": {"execution": "compatible executor and solver are required for solve evidence"},
+  "dependencies": {
+    "execution": "compatible executor and solver are required for solve evidence"
+  },
   "source": null
 }

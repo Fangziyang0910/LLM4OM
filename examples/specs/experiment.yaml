@@ -1,5 +1,5 @@
 # Design-only configuration. LLM4OM CLI is not implemented yet.
-schema_version: "0.1.0"
+schema_version: "0.2.0"
 experiment_id: "fixture-offline-production"
 task:
   plugin_id: "llm4om.tasks.user_problem"
@@ -9,12 +9,13 @@ task:
 methods:
   - plugin_id: "llm4om.methods.direct"
     config:
+      formulation_mode: "five_element"
       output_mode: "lp_ir"
 llm:
   provider_plugin_id: "llm4om.providers.mock"
   model: "fixture-linear-model"
   config:
-    response_artifact: "model-ir.json" # Engineering fixture only, never a real benchmark result.
+    response_artifact: "model-artifact.json" # Engineering fixture only, never a real benchmark result.
 compiler:
   plugin_id: "llm4om.compilers.lp_ir_to_pyomo"
 model_backend:

@@ -11,7 +11,7 @@ __pycache__/
 *.py[cod]
 .DS_Store
 
-# Generated runtime data, never benchmark/private oracle data
+# Runtime output and downloaded datasets; hand-authored source fixtures stay tracked
 /runs/
 /artifacts/
 /datasets/

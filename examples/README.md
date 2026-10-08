@@ -8,13 +8,25 @@
 |---|---|---|
 | [problem.json](specs/problem.json) | 公开描述、需求条目与数据引用 | 是 |
 | [products.csv](specs/data/products.csv)／[capacities.csv](specs/data/capacities.csv) | 公开业务数据 | 是 |
+| [formulation.json](specs/formulation.json) | 五元素 Formulation，引用人工 LPIR | Mock 流程显式使用；非真实方法输出 |
+| [model-artifact.json](specs/model-artifact.json) | 共同封装：表述可用、Code 尚待生成 | 工程 Mock 响应；后续编译才生成 CodeArtifact |
 | [model-ir.json](specs/model-ir.json) | 人工构造的目标模型，仅用于工程 fixture | 真实基准建模时否；Mock 流程可显式使用 |
 | [oracle.json](specs/oracle.json) | 自建参考目标与独立规则说明 | 否；Evaluator 读取 |
 | [plugin-manifest.json](specs/plugin-manifest.json) | direct 插件 Manifest 草案 | 配置／发现元信息 |
 | [experiment.yaml](specs/experiment.yaml) | 离线示例配置草案 | 公开部分可以；oracle 由 TaskAdapter 私有处理 |
+| [run.yaml](specs/run.yaml) | 无 oracle 的单问题配置草案 | 全部为公开配置；仍是工程 Mock |
 | [expected-evaluation.json](specs/expected-evaluation.json) | 预期结果断言 | 否；不能冒充真实 run 输出 |
 
 例子将 oracle 放在同一源码目录是为了文档可读；运行时只能挂载明确的公开数据文件，不能把整份 examples／源码目录挂进生成代码容器。
+
+`run.yaml` 与 `experiment.yaml` 分别演示单问题和 benchmark 两种用法。前者使用单数 method，没有 task/oracle_path、experiment_id 和 repeats；后者由任务适配器导入公开问题与私有参考材料。两者配置草案为 0.2.0，显式选择 five_element。Mock 响应指向 model-artifact.json；Formulation 内的 structured_ir_ref 指向独立手写的 LPIR 0.1.0，不是已从文本编译出的结果。Code 引用当前为空，阶段为 pending；后续真实编译产生源表述可追踪的 CodeArtifact。两者计划调用同一单问题应用流程。预期 CLI 用法如下，当前不可运行：
+
+```bash
+llm4om run --problem examples/specs/problem.json --config examples/specs/run.yaml
+llm4om benchmark --config examples/specs/experiment.yaml
+```
+
+run 配置不进行隐藏评分；工程 Mock 和求解结果的来源分别标识，独立证据为不可用。experiment 配置中的预期独立检查仍需后续实现。
 
 ## 2. 数学问题
 
@@ -32,3 +44,9 @@ s.t. 2A + B <= 8
 独立评估必须使用原问题的整数域、两条资源规则及原利润计算，而不是只检查候选自己的约束。只得到目标值 13 时仍不能证明模型在其他实例中等价。
 
 文件中的数据 sha256 按原始 UTF-8 CSV 字节计算；更改数据必须同步文件引用、数据绑定和 reference revision。
+
+当前可运行 `python3 scripts/check_repository.py` 校验这些设计文件，包括五元素字段与阶段引用的 hash／大小／revision。它从 CSV 独立枚举整数点并核对 IR 绑定、参考断言和 LP 松弛证据；它不调用 LLM、编译器或 Solver。维护工具的命令与测试入口见 [贡献流程](../CONTRIBUTING.md)。
+
+## 3. 数据绑定错误的设计反例
+
+若把产品利润绑定为 A=2、B=3，候选模型会选择 A=2、B=3，并报告目标 13。该解满足原资源约束，但按原问题利润计算为 12。候选自报目标与参考数值同为 13，独立原目标计算仍能发现错误。这是拟加入验收的绑定反例，不能当作已经运行的结果。
