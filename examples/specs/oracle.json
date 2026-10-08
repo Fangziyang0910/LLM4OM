@@ -1,0 +1,18 @@
+{
+  "schema_version": "0.1.0",
+  "problem_id": "fixture-production-milp-001",
+  "problem_revision": "1",
+  "reference_objective": {"value": 13, "sense": "max", "reference_termination": "optimal", "abs_tol": 0.000001, "rel_tol": 0.00001, "source": "independent_finite_integer_enumeration"},
+  "reference_solution": {"decisions": {"A": 3, "B": 2}, "comparison": "feasibility_and_objective_not_exact_vector"},
+  "independent_checker": {
+    "checker_id": "formumesh.fixtures.production",
+    "version": "0.1.0",
+    "implementation_status": "planned",
+    "required_decisions": ["A", "B"],
+    "rules": ["A and B are nonnegative integers", "2*A + B <= 8", "A + 2*B <= 8"],
+    "objective": "3*A + 2*B",
+    "rule_format": "human_readable_specification_not_eval_code"
+  },
+  "source": {"kind": "original_fixture", "license_ref": "Apache-2.0"},
+  "access": "evaluator_only"
+}

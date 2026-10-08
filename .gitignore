@@ -1,0 +1,28 @@
+# Secrets and environment
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.lic
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Generated runtime data, never benchmark/private oracle data
+/runs/
+/artifacts/
+/datasets/
+/data/
+/cache/
+/reports/
+/work/
+*.log
+*.sqlite*
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
