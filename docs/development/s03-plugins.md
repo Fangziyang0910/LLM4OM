@@ -27,7 +27,7 @@ Manifest 0.2.0 使用 method_profile=`grounded_single_candidate/0.1.0`。这是�
 - MethodContext 提供公开 CSV bytes 的只读 data、只读预算上限、原问题 SHA-256 和 LLM Gateway。它没有 oracle、评估器、凭据或任意路径读取接口。Mock Gateway 接受 role／content 文本消息，返回带 call_id／来源的 LLMResponse.text；请求次数在核心计数，不由方法自报。
 - 方法与构建器分别负责输出和 Code。实际 IR 必须属于公开问题／revision、匹配数据 hash、处于允许的 LP/MILP 类型范围。模型来源／版本和变体写入候选、环境及共同封装。结构通过不说明原问题语义正确。
 
-核心 run 使用同一个 prepare_run 预检并保存 admission-plan.json；最终 bundle 的阶段状态仍表示实际已执行情况，不能把预检通过当作求解完成。SDK 保持同步入口，在专用线程中运行 async 方法，可从已有 event loop 调用。当前不提供并行运行的完整调度保证。
+核心 run 使用同一个 prepare_run 预检并保存 admission-plan.json 及经私有字段检查的 requested-config.json；失败 admission 同样保留请求方法和参数。最终 bundle 的阶段状态仍表示实际已执行情况，不能把预检通过当作求解完成。SDK 保持同步入口，在专用线程中运行 async 方法，可从已有 event loop 调用。当前不提供并行运行的完整调度保证。
 
 ## 预检与错误
 
@@ -35,6 +35,6 @@ Manifest 0.2.0 使用 method_profile=`grounded_single_candidate/0.1.0`。这是�
 
 未知方法为 unknown_plugin；重复键为 duplicate_plugin；坏 Manifest／工厂为 invalid_plugin_manifest／plugin_load_error；不支持区间为 incompatible_contract；配置、依赖、预算和能力分别给出明确 admission 错误。整个发现环境中出现无效活动方法时，清单和运行均拒绝，不依安装顺序覆盖。
 
-方法未知异常为 method_error，保存异常类别与文件名／行号／函数组成的脱敏 traceback，不保存异常参数或源码行。插件 Python stdout／stderr 被抑制，CLI 保持 JSON 输出；它不构成对任意可信宿主插件的系统隔离。原存储 OSError 边界、离线回放和真实 HiGHS 保留。
+构造缺少依赖为 dependency_missing，其他构造错误为 invalid_config；方法未知异常为 method_error，保存异常类别与文件名／行号／函数组成的脱敏 traceback，不保存异常参数或源码行。插件 Python stdout／stderr 被抑制，CLI 保持 JSON 输出；它不构成对任意可信宿主插件的系统隔离。原存储 OSError 边界、离线回放和真实 HiGHS 保留。
 
 当前提供方为工程 Mock；连通性检查、真实 LLM、其他插件种类、native_code、参数化工厂、token／墙钟的完整限制与容器隔离仍待实现。验证环境、测试、包安装和两路审阅见 [校验记录](../spec-validation.md)。

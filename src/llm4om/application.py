@@ -55,6 +55,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
     solve_ref = None
     execution_ref = None
     admission_ref = None
+    requested_config_ref = None
     stages: dict[str, Any] = {name: {"status": "not_available", "reason": "Stage has not run."}
               for name in ("formulation", "code", "solve")}
     try:
@@ -62,6 +63,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
             if isinstance(config_error, RunError):
                 raise config_error
             raise RunError("invalid_config", "validation", "Cannot read a valid RunConfig.")
+        requested_config_ref = store.json("requested-config.json", settings, "requested-config")
         validate_config(settings)
         settings_valid = True
         plan = prepare_run(settings, offline=offline)
@@ -114,6 +116,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
                "error": error_record, "model_artifact_ref": artifact_ref, "solve_result_ref": solve_ref,
                "execution_result_ref": execution_ref,
                "admission_plan_ref": admission_ref,
+               "requested_config_ref": requested_config_ref,
                "final_candidate_id": "001" if status == "completed" else None,
                "execution_plan": {name: {"requested_plugin_id": settings.get(name, {}).get("plugin_id"),
                     "resolved_plugin_id": settings[name]["plugin_id"] if resource_status[name] != "not_available" else None,

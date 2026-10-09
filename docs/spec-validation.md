@@ -20,7 +20,7 @@ S01 交付时的结果：参考导出与 69 个源文件校验通过；7 个运�
 
 S02-A 交付结果：76 个源文件与参考导出通过检查；9 个模块的 strict mypy 通过。Python 3.12.3／3.11.13 分别运行完整 57 个测试，均通过（12 个维护 CLI、27 个离线 CLI、7 个真实求解 CLI、11 个编译／Solver）。solve extra 锁定 Pyomo 6.10.1／highspy 1.15.1；缺 Solver 的独立基础环境仍验证稳定 admission 失败，原离线测试全部保留。
 
-S03 当前结果：86 个源文件检查通过，12 个模块在 Python 3.12.3／3.11.13 的 strict mypy 通过；两个环境分别完整 72 tests passed（原 57 项＋15 项安装／方法／预检 CLI／SDK 行为）。独立方法通过真实 wheel 构建／安装发现，不 mock entry_points。SDK 0.2.0 的 sdist／wheel 构建通过；干净基础安装在仓库外验证离线 doctor／SDK，真实 doctor 在缺 solve extra 时稳定拒绝。其余真实安装与独立审阅记录在第 8 节补齐。
+S03 当前结果：86 个源文件检查通过，12 个模块在 Python 3.12.3／3.11.13 的 strict mypy 通过；两个环境分别完整 77 tests passed（原 57 项＋20 项安装／方法／预检 CLI／SDK 行为）。独立方法通过真实 wheel 构建／安装发现，不 mock entry_points。SDK 0.2.0 的 sdist／wheel 构建通过；干净基础安装在仓库外验证离线 doctor／SDK，真实 doctor 在缺 solve extra 时稳定拒绝。安装 solve extra 和独立方法 wheel 后，从仓库外验证发现、doctor、CLI 与 SDK，均得到目标 20、A=3／B=2；完整审阅记录见第 8 节。
 
 sdist／wheel 构建通过，wheel 在干净的 Python 3.12.3 环境安装后，从仓库外运行 console script 和 SDK，均 completed；真实结果为目标 13、A=3／B=2。项目内演示 run_id 为 `cc1b7c7366a4451d9e6512a84fa668ce`，产物位于忽略的 runs 目录；LP=40/3、常数／域／失败状态另有独立微型测试。公开运行产物扫描不含凭据／oracle sentinel。`.env` 权限为 0600，被 Git 忽略，未提交。
 
@@ -120,3 +120,27 @@ S01 交付时 GitHub CLI 返回 HTTP 401。用户重新登录后已验证仓库�
 Standards 共 5 项、Spec 共 4 项，分别保留，均已处理。实际回归在公共 CLI／Compiler／Solver 完成，不以私有函数或内部 mock 作验收。作者另增加极小非零目标系数 admission：原生容差可能让 max 1e-12·x（无上界）报告 optimal，当前明确拒绝这一数值范围。
 
 初次独立结论针对 4822a1c；后续修复由作者运行公共回归、两版本完整检查和最终 wheel 验证，没有再次启动独立审阅。
+
+## 8. S03 独立审阅与修复
+
+Standards／Spec 使用两个独立只读 Codex CLI 进程，固定比较 7a0d78c…b8e66dd，规格来自工作项 #3／#4 和已批准 S03-A／B。审阅者检查已提交源码，后续修复不计入初次结论；使用内存 entry point／CLI／SDK 探针，不重跑需要临时写盘的安装和完整测试。
+
+### Standards
+
+3 项规范问题，另有 1 项判断性 smell：
+
+1. P2：悬空本地 schema 引用与无进展递归使 doctor 抛裸异常。违反边界错误语义。发现阶段现检查本地引用是否解析，配置评估时将解析／递归异常转为 invalid_plugin_manifest。
+2. P2：factory.create 缺少依赖被归为 method_error／formulation。违反构造错误的依赖／配置语义。构造与 run 分开处理，ImportError／OSError 为 dependency_missing，其余构造错误为 invalid_config，阶段为 admission。
+3. P3：负例通过精确替换示例方法源码注入错误，内部变量改名会使注入失效。违反行为测试应经得住内部重构。负例现独立构建错误方法／factory，仍通过真实 wheel 安装与同一公开 CLI／SDK 观察行为。
+4. 判断性 Possible Duplicated Code：成功测试与 configured_run 重复配置／运行逻辑。已复用 helper，不新增生产抽象。
+
+### Spec
+
+4 项问题；未发现额外范围：
+
+1. P2：悬空 schema 引用让 doctor 失去 JSON 报告。已补本地引用检查及稳定 admission 错误，覆盖悬空与递归场景。
+2. P2：admission 失败未保存请求方法与参数。现保存经 JSON／私有字段检查的 requested-config.json，并在失败／成功 bundle 中保留 requested_config_ref；预检仍在方法调用之前。
+3. P2：describe 错误缺少异常类别与脱敏 frame。import／describe／create／run 现复用安全诊断，发现错误另关联 entry point；不保存错误参数和源码行，Python 输出被抑制。
+4. P3：S03 审阅证据仍指向待补章节。现补齐实际两路发现、修复、验证范围及独立安装证据。源码没有伪报真实 LLM、原生路径或容器已实现。
+
+Standards 共 4 项、Spec 共 4 项，分别保留并已处理；最后修复由作者在公开入口回归，未再次启动独立审阅。S03 工程示例 run_id 为 3c8f0b29cadb42d38038a4f9c9e22d14，来源为独立方法 0.1.0、SDK 0.2.0 和人工 Mock；目标偏移有意为 20，语义验证为 not_available。GitHub #4 已用 native blocked_by 关联 #3；没有关闭或修改父工作项。

@@ -28,6 +28,12 @@ class MethodPlugin:
             try:
                 with _quiet():
                     method = self.factory.create(config)
+            except (Exception, SystemExit) as error:
+                code = "dependency_missing" if isinstance(error, (ImportError, OSError)) else "invalid_config"
+                raise RunError(code, "admission", "Cannot construct the method with this configuration and environment.",
+                               details={"plugin_id": self.manifest["plugin_id"], **_exception_details(error)}) from error
+            try:
+                with _quiet():
                     outcome = await method.run(problem, context, checkpoint=None)
                 if not isinstance(outcome, MethodOutcome):
                     raise TypeError("Expected MethodOutcome.")
@@ -35,9 +41,7 @@ class MethodPlugin:
             except RunError as error:
                 raise RunError(error.code, error.stage, "The modeling method or its public resource failed.") from error
             except (Exception, SystemExit) as error:
-                details = {"plugin_id": self.manifest["plugin_id"], "exception_type": type(error).__name__,
-                           "frames": [{"file": Path(frame.filename).name, "line": frame.lineno, "function": frame.name}
-                                      for frame in traceback.extract_tb(error.__traceback__)]}
+                details = {"plugin_id": self.manifest["plugin_id"], **_exception_details(error)}
                 raise RunError("method_error", "formulation", "The installed modeling method failed.", details=details) from error
         # A sync SDK can be called from an existing event loop.
         with ThreadPoolExecutor(max_workers=1) as worker:
@@ -53,8 +57,14 @@ def discover_methods() -> dict[tuple[str, str], MethodPlugin]:
             with _quiet():
                 factory = entry.load()
         except (Exception, SystemExit) as error:
-            raise RunError("plugin_load_error", "admission", "Cannot import an installed method factory.") from error
-        manifest = _manifest(factory)
+            raise RunError("plugin_load_error", "admission", "Cannot import an installed method factory.",
+                           details={"entry_point": entry.name, "value": entry.value, **_exception_details(error)}) from error
+        try:
+            manifest = _manifest(factory)
+        except RunError as error:
+            if error.details is not None:
+                error.details.update(entry_point=entry.name, value=entry.value)
+            raise
         origin = {"kind": "installed", "entry_point": entry.name, "value": entry.value,
                   "distribution": entry.dist.name if entry.dist else None,
                   "distribution_version": entry.dist.version if entry.dist else None}
@@ -94,25 +104,37 @@ def _manifest(factory: Any) -> dict[str, Any]:
         if not callable(factory.create):
             raise TypeError("Factory must create a method.")
     except (Exception, SystemExit) as error:
-        raise RunError("invalid_plugin_manifest", "admission", "Installed method Manifest or factory does not match the current profile.") from error
+        raise RunError("invalid_plugin_manifest", "admission", "Installed method Manifest or factory does not match the current profile.",
+                       details=_exception_details(error)) from error
     interval = re.fullmatch(f">=(?P<lower>{stable_version}),\\s*<(?P<upper>{stable_version})", manifest["contract_range"])
     if interval is None or not (tuple(map(int, interval["lower"].split("."))) <= (0, 2, 0) < tuple(map(int, interval["upper"].split(".")))):
         raise RunError("incompatible_contract", "admission", "Method contract_range does not include core 0.2.0.")
     return manifest
 
 
-def _local_schema(value: Any) -> None:
+def _local_schema(value: Any, resolver: jsonschema.RefResolver | None = None) -> None:
+    if resolver is None:
+        resolver = jsonschema.RefResolver.from_schema(value)
     if isinstance(value, dict):
         if "$id" in value or any(key in value and not str(value[key]).startswith("#") for key in ("$ref", "$dynamicRef")):
             raise ValueError("This profile requires self-contained configuration schemas.")
+        for key in ("$ref", "$dynamicRef"):
+            if key in value and not isinstance(resolver.resolve(value[key])[1], (dict, bool)):
+                raise ValueError("A configuration reference must resolve to a local schema.")
         for child in value.values():
-            _local_schema(child)
+            _local_schema(child, resolver)
     elif isinstance(value, list):
         for child in value:
-            _local_schema(child)
+            _local_schema(child, resolver)
 
 
 @contextmanager
 def _quiet() -> Iterator[None]:
     with open(os.devnull, "w") as sink, redirect_stdout(sink), redirect_stderr(sink):
         yield
+
+
+def _exception_details(error: BaseException) -> dict[str, Any]:
+    return {"exception_type": type(error).__name__,
+            "frames": [{"file": Path(frame.filename).name, "line": frame.lineno, "function": frame.name}
+                       for frame in traceback.extract_tb(error.__traceback__)]}

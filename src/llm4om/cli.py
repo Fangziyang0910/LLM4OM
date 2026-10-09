@@ -31,7 +31,7 @@ def main() -> int:
             inventory = discover_methods()
         except RunError as error:
             print(json.dumps({"schema_version": "0.2.0", "plugins": [], "error": {
-                "code": error.code, "stage": error.stage, "message": str(error)}}))
+                "code": error.code, "stage": error.stage, "message": str(error), "details": error.details}}))
             return 1
         print(json.dumps({"schema_version": "0.2.0", "plugins": [
             {"manifest": plugin.manifest, "origin": plugin.origin} for plugin in inventory.values()]}))

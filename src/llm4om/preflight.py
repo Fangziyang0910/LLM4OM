@@ -28,6 +28,9 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False) -> Admission
     except jsonschema.ValidationError as error:
         raise RunError("invalid_config", "admission", "Method config does not match its Manifest.",
                        details={"path": ["method", "config", *error.absolute_path]}) from error
+    except (jsonschema.exceptions.RefResolutionError, RecursionError) as error:
+        raise RunError("invalid_plugin_manifest", "admission", "Method configuration schema cannot be resolved or evaluated.",
+                       details={"path": ["method", "config_schema"]}) from error
     if not offline and settings["executor"]["plugin_id"] != "llm4om.executors.trusted_local":
         raise RunError("offline_required", "admission", "Select trusted_local or offline mode; container execution is not implemented.")
     capabilities = method.manifest["capabilities"]

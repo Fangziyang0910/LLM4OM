@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import shutil
+from textwrap import indent
 import unittest
 from pathlib import Path
 
@@ -22,9 +23,29 @@ class PluginTests(unittest.TestCase):
         self.inputs = self.root / "input"
         shutil.copytree(ROOT / "examples/specs", self.inputs)
 
-    def install_method(self) -> None:
+    def install_method(self, *, run_body: str | None = None, describe_body: str | None = None,
+                       create_body: str | None = None) -> None:
         project = self.root / "method"
         shutil.copytree(ROOT / "examples/plugins/fixture_method", project)
+        if run_body is not None or describe_body is not None or create_body is not None:
+            source = '''import json
+from importlib.resources import files
+from llm4om.methods import MethodOutcome, ModelProposal
+class TestMethod:
+    async def run(self, problem, context, *, checkpoint=None):
+RUN_BODY
+class TestFactory:
+    def describe(self):
+DESCRIBE_BODY
+    def create(self, config):
+CREATE_BODY
+plugin = TestFactory()
+'''
+            body = run_body or 'return MethodOutcome("candidate_selected", "001", None)'
+            describe = describe_body or 'return json.loads(files(__package__).joinpath("manifest.json").read_text())'
+            source = source.replace("RUN_BODY", indent(body, "        ")).replace("DESCRIBE_BODY", indent(describe, "        "))
+            source = source.replace("CREATE_BODY", indent(create_body or "return TestMethod()", "        "))
+            (project / "src/llm4om_fixture_method/__init__.py").write_text(source)
         subprocess.run(["uv", "build", "--offline", "--wheel", "--out-dir", str(self.root / "dist")],
                        cwd=project, check=True, capture_output=True, text=True)
         wheel = next((self.root / "dist").glob("*.whl"))
@@ -38,7 +59,7 @@ class PluginTests(unittest.TestCase):
         (self.inputs / "solve.yaml").write_text(yaml.safe_dump(settings))
         result = self.cli("run", "--problem", str(self.inputs / "problem.json"), "--config", str(self.inputs / "solve.yaml"),
                           "--output", str(self.root / "runs"))
-        self.assertTrue(result.stdout, result.stderr)
+        self.assertTrue(result.stdout, result.stderr[:2000])
         path = Path(json.loads(result.stdout)["bundle_path"])
         return result, path, json.loads((path / "bundle.json").read_text())
 
@@ -56,21 +77,14 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(record["origin"]["kind"], "builtin")
 
     def test_independently_installed_method_is_discovered_and_used_by_run(self) -> None:
-        import yaml
         self.install_method()
         listing = self.cli("plugins", "list")
         self.assertEqual(listing.returncode, 0, listing.stderr)
         external = [item for item in json.loads(listing.stdout)["plugins"]
                     if item["manifest"]["plugin_id"] == "llm4om.examples.objective_offset"][0]
         self.assertEqual(external["origin"]["distribution"], "llm4om-fixture-method")
-        settings = yaml.safe_load((self.inputs / "solve.yaml").read_text())
-        settings["method"] = {"plugin_id": "llm4om.examples.objective_offset", "config": {"objective_offset": 7}}
-        (self.inputs / "solve.yaml").write_text(yaml.safe_dump(settings))
-        result = self.cli("run", "--problem", str(self.inputs / "problem.json"), "--config", str(self.inputs / "solve.yaml"),
-                          "--output", str(self.root / "runs"))
+        result, path, bundle = self.configured_run()
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-        path = Path(json.loads(result.stdout)["bundle_path"])
-        bundle = json.loads((path / "bundle.json").read_text())
         solve = json.loads((path / bundle["solve_result_ref"]["relative_path"]).read_text())
         self.assertAlmostEqual(solve["objective_value"], 20)
         candidate = json.loads((path / "candidates/001/candidate.json").read_text())
@@ -95,6 +109,7 @@ class PluginTests(unittest.TestCase):
                                  ("plugin_id", "not-namespaced", "invalid_plugin_manifest"),
                                  ("contract_range", ">=0.3.0,<0.4.0", "incompatible_contract"),
                                  ("config_schema", {"$ref": "https://example.invalid/schema.json"}, "invalid_plugin_manifest"),
+                                 ("config_schema", {"$ref": "#/$defs/missing"}, "invalid_plugin_manifest"),
                                  ("kind", "solver_backend", "invalid_plugin_manifest")]:
             with self.subTest(field=key):
                 path.write_text(json.dumps({**original, key: value}))
@@ -103,30 +118,28 @@ class PluginTests(unittest.TestCase):
                 self.assertEqual(json.loads(result.stdout)["error"]["code"], code)
 
     def test_unknown_method_exception_has_safe_public_diagnostics(self) -> None:
-        self.install_method()
-        module = self.packages / "llm4om_fixture_method/__init__.py"
-        original = module.read_text()
-        for exception in ("RuntimeError", "SystemExit"):
-            with self.subTest(exception=exception):
-                text = original.replace('        response = await',
-                       f'        print("PRIVATE-METHOD-ERROR-SENTINEL")\n        raise {exception}("PRIVATE-METHOD-ERROR-SENTINEL")\n        response = await')
-                module.write_text(text)
-                result, path, bundle = self.configured_run()
-                self.assertEqual(result.returncode, 1)
-                self.assertEqual(bundle["error"]["code"], "method_error")
-                diagnostic = json.loads((path / bundle["error"]["details_ref"]["relative_path"]).read_text())
-                self.assertTrue(diagnostic["frames"])
-                self.assertNotIn("PRIVATE-METHOD-ERROR-SENTINEL", result.stderr + result.stdout)
-                for file in path.rglob("*"):
-                    if file.is_file():
-                        self.assertNotIn(b"PRIVATE-METHOD-ERROR-SENTINEL", file.read_bytes())
+        self.install_method(run_body='print("PRIVATE-METHOD-ERROR-SENTINEL")\nraise RuntimeError("PRIVATE-METHOD-ERROR-SENTINEL")')
+        result, path, bundle = self.configured_run()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(bundle["error"]["code"], "method_error")
+        diagnostic = json.loads((path / bundle["error"]["details_ref"]["relative_path"]).read_text())
+        self.assertTrue(diagnostic["frames"])
+        self.assertNotIn("PRIVATE-METHOD-ERROR-SENTINEL", result.stderr + result.stdout)
+        for file in path.rglob("*"):
+            if file.is_file():
+                self.assertNotIn(b"PRIVATE-METHOD-ERROR-SENTINEL", file.read_bytes())
+
+    def test_installed_method_exit_does_not_terminate_the_run_process(self) -> None:
+        self.install_method(run_body='raise SystemExit("PRIVATE-METHOD-ERROR-SENTINEL")')
+        result, path, bundle = self.configured_run()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(bundle["error"]["code"], "method_error")
+        self.assertNotIn("PRIVATE-METHOD-ERROR-SENTINEL", result.stdout + result.stderr)
 
     def test_method_calls_cannot_bypass_the_shared_mock_budget(self) -> None:
-        self.install_method()
-        module = self.packages / "llm4om_fixture_method/__init__.py"
-        text = module.read_text().replace('        value = json.loads(response.text)',
-                    '        await context.llm.complete({"messages": [{"role": "user", "content": "second"}]})\n        value = json.loads(response.text)')
-        module.write_text(text)
+        self.install_method(run_body='''await context.llm.complete({"messages": [{"role": "user", "content": "first"}]})
+await context.llm.complete({"messages": [{"role": "user", "content": "second"}]})
+raise RuntimeError("Budget was not enforced.")''')
         result, path, bundle = self.configured_run()
         self.assertEqual(result.returncode, 1)
         self.assertEqual(bundle["error"]["code"], "budget_exhausted")
@@ -135,11 +148,10 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(ledger["solver_calls"], 0)
 
     def test_method_output_cannot_change_the_public_problem_binding(self) -> None:
-        self.install_method()
-        module = self.packages / "llm4om_fixture_method/__init__.py"
-        text = module.read_text().replace('        value["structured_ir"]["objective"]',
-                    '        value["structured_ir"]["problem_id"] = "another-problem"\n        value["structured_ir"]["objective"]')
-        module.write_text(text)
+        self.install_method(run_body='''reply = await context.llm.complete({"messages": [{"role": "user", "content": "fixture"}]})
+payload = json.loads(reply.text)
+payload["structured_ir"]["problem_id"] = "another-problem"
+return MethodOutcome("candidate_selected", "001", ModelProposal(payload["artifact"], payload["formulation"], payload["structured_ir"]))''')
         result, path, bundle = self.configured_run()
         self.assertEqual(result.returncode, 1)
         self.assertEqual(bundle["error"]["code"], "artifact_problem_mismatch")
@@ -199,18 +211,14 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(json.loads(report.stdout)["error"]["code"], "budget_exhausted")
 
     def test_malformed_method_outcome_still_saves_a_failed_bundle(self) -> None:
-        self.install_method()
-        module = self.packages / "llm4om_fixture_method/__init__.py"
-        module.write_text(module.read_text().replace('ModelProposal(value["artifact"], value["formulation"], value["structured_ir"])', '{}'))
+        self.install_method(run_body='return MethodOutcome("candidate_selected", "001", {})')
         result, path, bundle = self.configured_run()
         self.assertEqual(result.returncode, 1)
         self.assertEqual(bundle["error"]["code"], "invalid_method_outcome")
         self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["solver_calls"], 0)
 
     def test_method_cannot_request_undeclared_provider_features(self) -> None:
-        self.install_method()
-        module = self.packages / "llm4om_fixture_method/__init__.py"
-        module.write_text(module.read_text().replace('context.llm.complete({"messages":', 'context.llm.complete({"tools": [], "messages":'))
+        self.install_method(run_body='await context.llm.complete({"tools": [], "messages": [{"role": "user", "content": "tools"}]})')
         result, path, bundle = self.configured_run()
         self.assertEqual(result.returncode, 1)
         self.assertEqual(bundle["error"]["code"], "capability_mismatch")
@@ -257,6 +265,55 @@ asyncio.run(main())
         self.assertEqual(plan["solver_id"], "llm4om.solvers.highs")
         report = self.cli("doctor", "--config", str(self.inputs / "solve.yaml"))
         self.assertTrue(json.loads(report.stdout)["preflight_ok"])
+
+    def test_recursive_schema_failure_is_a_safe_admission_error(self) -> None:
+        self.install_method()
+        path = self.packages / "llm4om_fixture_method/manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["config_schema"] = {"$ref": "#"}
+        path.write_text(json.dumps(manifest))
+        result, run_path, bundle = self.configured_run()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(bundle["error"]["code"], "invalid_plugin_manifest")
+        self.assertEqual(json.loads((run_path / "budget-ledger.json").read_text())["llm_attempts"], 0)
+        report = self.cli("doctor", "--config", str(self.inputs / "solve.yaml"))
+        self.assertEqual(report.returncode, 1)
+        self.assertEqual(json.loads(report.stdout)["error"]["code"], "invalid_plugin_manifest")
+
+    def test_rejected_admission_preserves_the_requested_method_configuration(self) -> None:
+        self.install_method()
+        path = self.packages / "llm4om_fixture_method/manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["capabilities"]["solvers"] = []
+        path.write_text(json.dumps(manifest))
+        result, run_path, bundle = self.configured_run()
+        self.assertEqual(result.returncode, 1)
+        request = json.loads((run_path / bundle["requested_config_ref"]["relative_path"]).read_text())
+        self.assertEqual(request["method"]["plugin_id"], "llm4om.examples.objective_offset")
+        self.assertEqual(request["method"]["config"], {"objective_offset": 7})
+        self.assertEqual(json.loads((run_path / "budget-ledger.json").read_text())["llm_attempts"], 0)
+
+    def test_factory_missing_dependency_is_classified_before_method_calls(self) -> None:
+        self.install_method(create_body='raise ModuleNotFoundError("PRIVATE-FACTORY-SENTINEL")')
+        result, path, bundle = self.configured_run()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(bundle["error"]["code"], "dependency_missing")
+        self.assertEqual(bundle["error"]["stage"], "admission")
+        self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["llm_attempts"], 0)
+        self.assertNotIn("PRIVATE-FACTORY-SENTINEL", (path / "diagnostics/plugin-error.json").read_text())
+
+    def test_describe_failures_keep_safe_diagnostics_and_entry_point(self) -> None:
+        self.install_method(describe_body='raise RuntimeError("PRIVATE-DESCRIBE-SENTINEL")')
+        result, path, bundle = self.configured_run()
+        self.assertEqual(bundle["error"]["code"], "invalid_plugin_manifest")
+        diagnostic = json.loads((path / bundle["error"]["details_ref"]["relative_path"]).read_text())
+        self.assertEqual(diagnostic["exception_type"], "RuntimeError")
+        self.assertEqual(diagnostic["entry_point"], "fixture_method")
+        report = self.cli("doctor", "--config", str(self.inputs / "solve.yaml"))
+        self.assertEqual(json.loads(report.stdout)["error"]["details"]["exception_type"], "RuntimeError")
+        self.assertNotIn("PRIVATE-DESCRIBE-SENTINEL", result.stdout + result.stderr + report.stdout)
+        listing = self.cli("plugins", "list")
+        self.assertEqual(json.loads(listing.stdout)["error"]["details"]["entry_point"], "fixture_method")
 
 
 if __name__ == "__main__":
