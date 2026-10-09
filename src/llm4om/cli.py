@@ -15,7 +15,7 @@ from llm4om.preflight import prepare_run
 def main() -> int:
     parser = argparse.ArgumentParser(prog="llm4om")
     commands = parser.add_subparsers(dest="command", required=True)
-    run = commands.add_parser("run", help="Replay a Mock Formulation; optionally compile and solve grounded LPIR")
+    run = commands.add_parser("run", help="Generate or replay Formulation; compile and solve grounded LPIR")
     run.add_argument("--problem", type=Path, required=True)
     run.add_argument("--config", type=Path, required=True)
     run.add_argument("--output", type=Path, help="Override the configured filesystem store root")
@@ -39,7 +39,7 @@ def main() -> int:
     if args.command == "doctor":
         report: dict[str, Any] = {"schema_version": "0.2.0", "connectivity_checks": {"status": "not_requested"}}
         try:
-            plan = prepare_run(read_config(args.config), offline=args.offline)
+            plan = prepare_run(read_config(args.config), offline=args.offline, config_dir=args.config.parent)
             report.update(preflight_ok=True, execution_plan=plan.snapshot, error=None)
         except (RunError, OSError) as error:
             report.update(preflight_ok=False, execution_plan=None, error={

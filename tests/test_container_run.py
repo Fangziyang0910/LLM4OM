@@ -9,6 +9,7 @@ import hashlib
 import shutil
 import os
 from pathlib import Path
+from importlib.metadata import version
 
 import yaml
 
@@ -59,7 +60,7 @@ elif operation == "inspect":
         self.assertEqual(report["error"]["code"], "executor_unavailable")
 
     def test_incompatible_worker_response_does_not_become_a_solve_result(self) -> None:
-        runtime = {"schema_version": "0.2.0", "runtime": {"python": "3.12.15", "llm4om": "0.3.0",
+        runtime = {"schema_version": "0.2.0", "runtime": {"python": "3.12.15", "llm4om": version("llm4om"),
             "packages": {"Pyomo": "6.10.1", "highspy": "1.15.1"}}}
         for schema_version in ("999.0.0", "0.2.0"):
             with self.subTest(schema_version=schema_version):

@@ -12,9 +12,11 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 ## 当前状态
 
-已交付 **S01 离线回放、S02-A 真实 HiGHS、S03 方法发现与预检、S04-A 容器执行（Python 包 0.3.0）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web、真实 LLM 与论文方法仍按开发计划接入。
+已交付 **S01 离线回放、S02-A 真实 HiGHS、S03 方法发现与预检、S04-A 容器执行（Python 包 0.3.0）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web 与论文方法仍按开发计划接入。
 
 仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
+
+当前工作树增加 S05-A 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（包 0.4.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
 
 GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache-2.0。私有可见性与开源许可证分别管理。
 
@@ -66,9 +68,9 @@ uv run --locked llm4om run --problem examples/specs/problem.json --config exampl
 uv run --locked llm4om run --offline --problem examples/specs/problem.json --config examples/specs/run.yaml
 ```
 
-CLI 输出 run_id、bundle_path 和 status。运行目录默认在 `runs/`；查看其中的 `bundle.json`、阶段产物、解向量和 `reports/report.md`。`--output PATH` 可覆盖存储根目录。真实 run 默认使用已构建的 Docker 镜像；solve.yaml 显式选择 trusted_local。两条路径真实得到 A=3、B=2、目标 13，状态 completed；offline run 的 artifact_ready 只表示离线产物已保存。Formulation 仍来自人工 Mock，不能处理任意新问题；候选求解成功不代表业务语义已验证。
+CLI 输出 run_id、bundle_path 和 status。运行目录默认在 `runs/`；查看其中的 `bundle.json`、阶段产物、解向量和 `reports/report.md`。`--output PATH` 可覆盖存储根目录。真实 run 默认使用已构建的 Docker 镜像；solve.yaml 显式选择 trusted_local。两条路径真实得到 A=3、B=2、目标 13，状态 completed；offline run 的 artifact_ready 只表示离线产物已保存。这些配置的 Formulation 来自人工 Mock；外部 LLM 配置见 S05-A。候选求解成功不代表业务语义已验证。
 
-CLI 和未来 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK、支持范围与错误语义见 [S01](docs/development/s01-offline-run.md)、[S02-A](docs/development/s02-highs.md)、[S03](docs/development/s03-plugins.md)及 [S04-A](docs/development/s04-container.md)。本地 LLM 凭据保存在 Git 忽略的 `.env`，变量名见 [.env.example](.env.example)；当前求解切片不加载它，Provider 接入归 S05。
+CLI 和未来 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK、支持范围与错误语义见 [S01](docs/development/s01-offline-run.md)、[S02-A](docs/development/s02-highs.md)、[S03](docs/development/s03-plugins.md)及 [S04-A](docs/development/s04-container.md)。本地 LLM 凭据保存在 Git 忽略的 `.env`，变量名见 [.env.example](.env.example)。S05-A 文本 Provider 优先加载配置目录的 `.env`，不存在时加载当前工作目录的 `.env`；进程环境优先。Mock 不读取凭据文件。
 
 ## 后续使用方式
 

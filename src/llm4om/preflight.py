@@ -1,8 +1,11 @@
 """Resolve and validate a supported run before a method receives resources."""
 
 from dataclasses import dataclass
+import time
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
+from pathlib import Path
+from llm4om.providers import credential_environment, provider_factory, MockProvider, OpenAICompatibleProvider, OpenAICompatibleFactory
 
 import jsonschema
 
@@ -16,10 +19,21 @@ from llm4om.plugins import MethodPlugin, discover_methods
 class AdmissionPlan:
     method: MethodPlugin
     snapshot: dict[str, Any]
+    provider: MockProvider | OpenAICompatibleProvider
+    deadline: float
 
 
-def prepare_run(settings: dict[str, Any], *, offline: bool = False) -> AdmissionPlan:
+def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: Path | None = None) -> AdmissionPlan:
+    started = time.time()
     validate_config(settings)
+    factory = provider_factory(settings["llm"]["provider_plugin_id"])
+    if offline and settings["llm"]["provider_plugin_id"] != "llm4om.providers.mock":
+        raise RunError("capability_mismatch", "admission", "Offline replay requires an explicitly configured Mock Provider.")
+    credential_path = (config_dir or Path.cwd()) / ".env"
+    if not credential_path.exists():
+        credential_path = Path.cwd() / ".env"
+    environment = credential_environment(credential_path) if isinstance(factory, OpenAICompatibleFactory) else None
+    provider = factory.create(settings["llm"]["config"], settings["llm"]["model"], environment=environment)
     inventory = discover_methods()
     method = inventory.get(("method", settings["method"]["plugin_id"]))
     if method is None:
@@ -41,6 +55,8 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False) -> Admission
                 "llm_features": ["text"], "oracle_requirements": []}
     if not offline:
         required["execution_modes"] = [settings["executor"]["plugin_id"].removeprefix("llm4om.executors.")]
+    if not set(capabilities.get("llm_features", [])) <= set(factory.describe()["features"]):
+        raise RunError("capability_mismatch", "admission", "Provider does not support the requested method features.")
     for field, value in required.items():
         declared = capabilities.get(field)
         compatible = (isinstance(declared, list) and set(value) <= set(declared)) if field in {
@@ -72,4 +88,4 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False) -> Admission
         "method": {"manifest": method.manifest, "origin": method.origin},
         "compiler_id": settings["compiler"]["plugin_id"], "model_backend_id": settings["model_backend"]["plugin_id"],
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
-        "packages": packages, "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types})
+        "packages": packages, "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": factory.describe(), "model": settings["llm"]["model"]}, provider, started + settings["budget"]["wall_time_s"])

@@ -9,6 +9,7 @@ from collections.abc import Hashable
 from decimal import Decimal, InvalidOperation
 from io import StringIO
 from typing import Any
+from urllib.parse import urlsplit
 
 import jsonschema
 import yaml
@@ -91,13 +92,18 @@ def _finite_numbers(value: Any) -> None:
 def _reject_private_fields(value: Any) -> None:
     if isinstance(value, dict):
         private = {"apikey", "accesstoken", "refreshtoken", "clientsecret", "token", "authorization",
-                   "password", "secret", "secrets", "credentials", "oracle", "oracleref", "oraclepath",
+                   "password", "secret", "secrets", "credentials", "headers", "authheader", "authorizationheader",
+                   "oracle", "oracleref", "oraclepath",
                    "referenceobjective", "referencesolution", "referencecode", "referencemodel",
                    "referencevariables", "independentchecker", "expertreview"}
         for key, item in value.items():
             normalized = "".join(character for character in str(key).lower() if character.isalnum())
             if normalized in private or (normalized == "containsoracle" and item is not False):
                 raise RunError("private_input", "validation", "Public inputs cannot contain oracle fields or credentials.")
+            if normalized == "baseurl" and isinstance(item, str):
+                address = urlsplit(item)
+                if address.username or address.password or address.query or address.fragment:
+                    raise RunError("private_input", "validation", "Provider URLs cannot contain credentials or query fields.")
             _reject_private_fields(item)
     elif isinstance(value, list):
         for item in value:
@@ -355,8 +361,7 @@ def validate_config(settings: dict[str, Any]) -> None:
     schema = _object({
         "schema_version": {"const": "0.2.0"},
         "method": _object({"plugin_id": TEXT, "config": {"type": "object"}}),
-        "llm": _object({"provider_plugin_id": {"const": "llm4om.providers.mock"}, "model": TEXT,
-                        "config": _object({"response_artifact": TEXT})}),
+        "llm": _object({"provider_plugin_id": TEXT, "model": TEXT, "config": {"type": "object"}}),
         "compiler": _object({"plugin_id": {"const": "llm4om.compilers.lp_ir_to_pyomo"}}),
         "model_backend": _object({"plugin_id": {"const": "llm4om.model_backends.pyomo_factory"}}),
         "solver": _object({"plugin_id": {"const": "llm4om.solvers.highs"}, "options": _object({
@@ -385,6 +390,6 @@ def validate_config(settings: dict[str, Any]) -> None:
     try:
         jsonschema.Draft202012Validator(schema).validate(settings)
     except jsonschema.ValidationError as error:
-        raise RunError("invalid_config", "admission", "RunConfig is outside the supported Mock/grounded-LPIR profile.") from error
+        raise RunError("invalid_config", "admission", "RunConfig is outside the supported text/grounded-LPIR profile.") from error
     if settings["budget"]["max_llm_attempts"] < 1 or settings["budget"]["max_candidates"] < 1:
         raise RunError("unsupported_config", "admission", "Offline replay requires one Mock attempt and one candidate slot.")

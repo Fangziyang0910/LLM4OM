@@ -3,6 +3,7 @@
 import hashlib
 import json
 import platform
+import time
 from copy import deepcopy
 from importlib.metadata import version
 from dataclasses import dataclass
@@ -19,7 +20,7 @@ from llm4om.contracts import (
     validate_model_artifact, validate_formulation, validate_bindings, reject_additional_refs,
     validate_worker_response,
 )
-from llm4om.mock import MockGateway
+from llm4om.providers import Gateway
 from llm4om.methods import MethodContext, ModelProposal
 from llm4om.preflight import AdmissionPlan, prepare_run
 from llm4om.linear import CompiledCode, compile_ir
@@ -68,7 +69,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
         requested_config_ref = store.json("requested-config.json", settings, "requested-config")
         validate_config(settings)
         settings_valid = True
-        plan = prepare_run(settings, offline=offline)
+        plan = prepare_run(settings, offline=offline, config_dir=config.parent)
         admission_ref = store.json("admission-plan.json", plan.snapshot, "admission-plan")
         mode = plan.snapshot["mode"]
         artifact_ref, stages = _prepare_candidate(store, problem, config, settings, ledger, offline, plan)
@@ -102,7 +103,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
         report = (f"# LLM4OM run {store.run_id}\n\nMode: {mode}. Status: {status}.\n\n"
                   "| Stage | Status |\n|---|---|\n" +
                   "".join(f"| {name} | {stage['status']} |\n" for name, stage in stages.items()) +
-                  f"\nMethod: {settings['method']['plugin_id']}. Provider: Mock. External LLM requests: 0.\n"
+                  f"\nMethod: {settings['method']['plugin_id']}. Provider: {settings['llm']['provider_plugin_id']}. External LLM requests: {ledger['external_llm_requests']}.\n"
                   "Structural checks do not establish semantic correctness.\n")
         if solve_ref is not None:
             solve_summary = parse_json(read_public_bytes(store.path / solve_ref["relative_path"]))
@@ -151,7 +152,8 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     store.json("dataset-manifest.json", {"schema_version": "0.2.0", "data": data_refs}, "dataset")
     public_config = deepcopy(settings)
     public_config["store"]["config"]["root"] = "."
-    public_config["llm"]["config"]["response_artifact"] = "candidates/001/artifact.json"
+    if "response_artifact" in public_config["llm"]["config"]:
+        public_config["llm"]["config"]["response_artifact"] = "candidates/001/artifact.json"
     public_config.setdefault("evaluation", {"protocol_id": "llm4om.eval.public-v0.1",
                                             "evaluator_plugin_id": "llm4om.evaluators.structural"})
     store.json("public-config.json", public_config, "config")
@@ -162,12 +164,16 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
                "mode": plan.snapshot["mode"],
                "method": {"manifest": method.manifest, "origin": method.origin},
                "method_variant": (method.manifest["source"] or {}).get("variant_id", "grounded_single_candidate")}, "environment")
-    response = public_path(config.parent, settings["llm"]["config"]["response_artifact"])
-    gateway = MockGateway(response, public, hashlib.sha256(source_problem).hexdigest(), store, ledger,
-                          settings["budget"]["max_llm_attempts"])
+    gateway = plan.provider.gateway(public, hashlib.sha256(source_problem).hexdigest(), store, ledger,
+                                    settings["budget"], config.parent, deadline=plan.deadline)
     context = MethodContext(gateway, MappingProxyType(data_content), MappingProxyType(deepcopy(settings["budget"])),
                             hashlib.sha256(source_problem).hexdigest())
-    outcome = method.run(deepcopy(settings["method"]["config"]), deepcopy(public), context)
+    try:
+        outcome = method.run(deepcopy(settings["method"]["config"]), deepcopy(public), context)
+    finally:
+        if isinstance(gateway, Gateway):
+            ledger.update(gateway.ledger)
+            store.json("llm-trace.json", {"schema_version": "0.2.0", "attempts": gateway.trace}, "llm-trace")
     if (outcome.status != "candidate_selected" or outcome.final_candidate_id != "001"
             or not isinstance(outcome.proposal, ModelProposal)):
         raise RunError("invalid_method_outcome", "formulation", "This profile requires one selected candidate with ID 001.")
@@ -188,14 +194,13 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
         raise RunError("invalid_method_outcome", "formulation", "Method must supply an identified grounded LPIR 0.1.0.")
     if ir.get("problem_type") not in plan.snapshot["allowed_problem_types"]:
         raise RunError("capability_mismatch", "formulation", "Actual IR type is outside the admitted problem types.")
-    ir_ref = formulation["structured_ir_ref"]
     formulation["structured_ir_ref"] = store.json(
         "candidates/001/structured-ir.json", ir, ir["model_id"])
     formulation_ref = store.json("candidates/001/formulation.json", formulation, formulation["formulation_id"])
     artifact["problem_ref"] = problem_ref
     artifact["formulation_ref"] = formulation_ref
     call_ids = [call.call_id for call in gateway.calls]
-    artifact["provenance"]["replay"] = {"mode": "offline_mock", "call_ids": call_ids,
+    artifact["provenance"]["replay"] = {"mode": gateway.calls[-1].evidence_origin if gateway.calls else "no_calls", "call_ids": call_ids,
                                         "response_sha256": gateway.calls[-1].source_sha256 if gateway.calls else None}
     artifact["provenance"]["method"] = {"manifest": method.manifest, "origin": method.origin}
     artifact_ref = store.json("candidates/001/artifact.json" if offline else "candidates/001/formulation-snapshot.json", artifact, artifact["artifact_id"])
@@ -242,6 +247,13 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode, artifact_ref: di
                        settings: dict[str, Any], ledger: dict[str, Any], plan: AdmissionPlan) -> tuple[dict[str, Any] | None, dict[str, Any], RunError | None]:
     started = datetime.now(timezone.utc).isoformat()
     timer = monotonic()
+    remaining = plan.deadline - time.time()
+    if remaining <= 0:
+        raise RunError("deadline_exhausted", "execution", "No shared run deadline remains for Worker execution.")
+    if ledger["solver_calls"] >= settings["budget"]["max_solver_calls"]:
+        raise RunError("budget_exhausted", "execution", "No shared Solver call slot remains.")
+    solver_options = {**settings["solver"].get("options", {})}
+    solver_options["time_limit_s"] = min(solver_options.get("time_limit_s", remaining), remaining)
     ledger["solver_calls"] += 1
     store.emit("solver_started", solver_id=settings["solver"]["plugin_id"])
     out, err = StringIO(), StringIO()
@@ -256,8 +268,9 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode, artifact_ref: di
             formulation = parse_json(read_public_bytes(store.path / artifact["formulation_ref"]["relative_path"]))
             ir = parse_json(read_public_bytes(store.path / formulation["structured_ir_ref"]["relative_path"]))
             request = {"ir": ir, "source_sha256": hashlib.sha256(compiled.source.encode()).hexdigest(),
-                       "solver_options": settings["solver"].get("options", {})}
-            limits = settings["executor"]["config"]
+                       "solver_options": solver_options}
+            limits = {**settings["executor"]["config"]}
+            limits["wall_time_s"] = min(limits["wall_time_s"], remaining)
             inputs = {"request.json": json.dumps(request, ensure_ascii=False, allow_nan=False).encode(),
                       "model.py": compiled.source.encode()}
             for data in parse_json(read_public_bytes(store.path / "public-problem.json"))["data_refs"]:
@@ -279,7 +292,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode, artifact_ref: di
             resources = payload["resources"]
         else:
             with redirect_stdout(out), redirect_stderr(err):
-                solve = solve_highs(compiled, settings["solver"].get("options", {}))
+                solve = solve_highs(compiled, solver_options)
         variables = solve.pop("variables")
         solve["schema_version"] = "0.2.0"
         solve["solution_ref"] = store.json("candidates/001/solution.json", {

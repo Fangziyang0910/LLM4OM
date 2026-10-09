@@ -315,11 +315,11 @@ RunConfig 可以显式选择 trusted_local，config 为空对象；container 由
 
 SDK 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对象，当前只装载 method。Manifest 的 capabilities.method_profile 为 grounded_single_candidate/0.1.0；plugin_version 当前为稳定 major.minor.patch，contract_range 为 `>=X.Y.Z,<A.B.C` 并包含核心契约 0.2.0。config_schema 自包含，允许本地片段引用，暂不接受 $id 或远程 $ref／$dynamicRef；dependencies.python 为分发包名称列表，记录已安装版本。source 暂不接受额外 ArtifactRef，研究 URL／固定版本／变体等文字元数据可保存。
 
-当前 async run 返回内存 MethodOutcome：status=candidate_selected、final_candidate_id=001、proposal=ModelProposal(artifact, formulation, structured_ir)。核心验证原问题 hash／revision、五元素和数据绑定，生成实际引用与候选记录；这不是已实现完整的多候选／checkpoint Protocol。MethodContext 当前提供 llm、只读公开 data／预算上限和 problem_sha256；Mock LLMResponse 提供 text、call_id、evidence_origin、source_sha256，仍不是完整真实 Provider 响应验收。窄 profile 明确版本化，后续增加资源和状态时同步声明。
+当前 async run 返回内存 MethodOutcome：status=candidate_selected、final_candidate_id=001、proposal=ModelProposal(artifact, formulation, structured_ir)。核心验证原问题 hash／revision、五元素和数据绑定，生成实际引用与候选记录；这不是已实现完整的多候选／checkpoint Protocol。MethodContext 当前提供 llm、只读公开 data／预算上限和 problem_sha256；MethodContext 的 LLMResponse 提供 text、call_id、evidence_origin、source_sha256，以及可选 finish_reason；真实 Provider 完整 usage 与身份保存在 Gateway trace。窄 profile 明确版本化，后续增加资源和状态时同步声明。
 
 doctor 与 run 共用 prepare_run；先验证参数，再匹配当前表示、目标类型、Backend／Solver、Provider 功能和 Executor，再检查分发包与真实求解依赖。缺失能力为未知；请求的资源须被方法声明，当前表示 profile 固定，不能靠枚举并集暗示 native_code 可用。allowed_problem_types 缺省 lp／milp，实际 IR 类型在产出后再次核对。真实运行保存 admission_plan_ref；离线计划只准备回放，不标记 Code／Solve 已执行。未知方法异常与 SystemExit 转为稳定错误和脱敏 frame，原错误参数／源码行与插件 Python 输出不进入公开结果。
 
-示例、字段级诊断、实际版本和未实现项见 [S03](development/s03-plugins.md)。当前不执行真实连通性检查，不加载 .env；SDK 包版本 0.3.0、核心对象 0.2.0、IR 0.1.0 和 profile 0.1.0 分别管理。
+示例、字段级诊断、实际版本和未实现项见 [S03](development/s03-plugins.md)。S03 不执行真实连通性检查，不加载 .env；后续 Provider 工作树实现见 S05-A 子集。SDK 包、核心对象 0.2.0、IR 0.1.0 和 profile 0.1.0 分别管理。
 
 ### S04-A 已落实的容器子集
 
@@ -330,3 +330,17 @@ container 配置必须包含 network=false、正 cpu_limit、整数 memory_limit
 ExecutionResult 增加可选 worker_status、image_id、container_id、container_name、oom_killed、oom_evidence、restrictions 和 executor_diagnostics；stdout／stderr 为有界文件引用。oom_evidence 为 docker_state／docker_event 或 null；只使用实际标记或同容器的 daemon 事件，不从 137 推断原因。资源超限为 execution_timeout／execution_oom／execution_output_limit，SolveResult 缺失；已生成 Formulation／Code 保留。Docker 控制失败为 executor_error，缺环境为 executor_unavailable，非法直接 Executor 输入为 invalid_execution_request。控制与清理有界，失败保留实际退出／输出／容器身份和诊断，不用默认值伪造缺失测量。
 
 固定策略、真实测试与当前限制见 [S04-A](development/s04-container.md)。它只交付 grounded LPIR 的容器路径和可复用 Executor；参数化工厂、原生代码、完整预算、取消／恢复均仍按开发计划实现。
+
+### S05-A 文本 Provider 子集
+
+公共接口保持 LLMGateway.complete(request) 与 MethodOutcome／ModelProposal。Provider factory 由 provider_plugin_id 选择并独立校验 config、text 能力和凭据，不依赖方法 ID。当前 factory 仅内置 Mock 与 openai_compatible；第三方 entry point 仍只装载 method。Provider 的 stdlib HTTP adapter 是窄 TextProvider，同步 complete(messages, timeout) 返回规范化文本和 usage；Gateway 提供方法使用的 async 接口并拥有资源控制。
+
+openai_compatible 配置为 base_url、credential_env，另有 max_output_tokens（默认 1024）、max_retries（默认 2，范围 0～5）、timeout_s（默认 30）。只接受非流式 text；请求字段仅 messages、可选 request_id／role。doctor 优先读取配置目录 literal .env，不存在时读取当前工作目录 .env；进程环境优先，但不发请求。Credential、header 与 URL 凭据在公开投影边界拒绝，凭据值不进入配置快照、Context 数据或 Worker。
+
+Direct 使用完整公开问题及 CSV 值，外部回复只能是 representation 和 structured_ir 两字段的紧凑数学对象。平台生成 artifact／formulation／IR ID、revision、数据 hash、引用与 provenance。representation 的五元素语义与 GroundedLPIR 数学字段复用本契约；紧凑 IR 只含 problem_type、variables、objective、constraints、assumptions。五元素与 IR 是联合生成，Code 是确定性编译；未取得语义证据时仍为 not_available。finish_reason=length 时 Direct 返回 llm_output_truncated，保留 trace 和用量，不形成 Formulation。旧 Mock packet 与独立方法 fixture 保持有效。
+
+Gateway archive 是共享 run 资源身份。文件锁原子 admission，OS slot 锁限制并发；每次 attempt 使用独立 UUID。省略 request_id 时每次调用使用独立 UUID，相同消息可独立采样。显式 request_id 用于恢复；内容 hash 同时绑定端点／模型／输出上限／消息。预算与 deadline 恢复不重置；不同预算拒绝恢复。已保存成功直接复用，未知身份拒绝重新发送并保留预留。这不提供 CLI resume 或方法 checkpoint。
+
+发送前按规范化输入 UTF-8 字节数估算 token，加最大输出预留；实际 total 可用才结算预留。input／output／total／cached／reasoning 缺失均为 null，cached 与 reasoning 不重复计费。无定价时 cost=null。最后调用实测 token 越界返回 token_budget_overrun，并保留成功回复。429／5xx／连接故障有限重试，认证／无效请求／非法响应／超时不重试；失败 charge／usage 未知时保守保留预留。共享 deadline 约束请求 timeout、重试、Worker admission、容器墙钟和 Solver time_limit；HTTP 在可终止子进程中执行，完整 deadline 覆盖 DNS、TLS 和持续滴流；取消回收进程并保留未知结果的预留。
+
+公开 llm-trace.json 只包含身份／hash、模型／role、start／end、finish_reason、usage、reservation 和稳定诊断。原始回复与恢复状态存于公开运行目录之外的 .private/run_id，目录 0700、文件 0600，不列入 bundle。详细字段、配置、限制与验收命令见 [S05-A 实现记录](development/s05-provider.md)。已有本地 HTTP 接缝与两个真实外部模型／容器案例；具体证据见实现记录。完整 1.0 仍按开发计划验收。

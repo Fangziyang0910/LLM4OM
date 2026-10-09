@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-09；设计基线：0.4.0。当前包含 93 个源文件，维护科研设计、文档工具和 S01／S02-A／S03／S04-A 平台切片。
+日期：2026-10-09；设计基线：0.4.0。当前包含 97 个源文件，维护科研设计、文档工具、已交付切片与待验收 S05-A 实现。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -9,7 +9,7 @@
 | 文件 | 职责／事实来源 | 核验方式与保留理由 |
 |---|---|---|
 | `.editorconfig` | 编辑器格式 | UTF-8、LF、缩进；授权原文例外 |
-| `.env.example` | 本地 LLM 凭据变量模板 | 无真实密钥；当前求解不加载，Provider 接入归 S05 |
+| `.env.example` | 本地 LLM 凭据变量模板 | 无真实密钥；S05-A 非执行加载，进程环境优先 |
 | `.gitattributes` | Git 文本格式 | 全部当前文本类型使用 LF |
 | `.github/ISSUE_TEMPLATE/feature-spec.md` | 功能规格入口 | 完整 spec 字段、用户故事与公共测试入口 |
 | `.github/ISSUE_TEMPLATE/vertical-slice.md` | 纵向工作项入口 | parent、行为、验收与实际 blockers |
@@ -42,6 +42,7 @@
 | `docs/development/s01-offline-run.md` | S01 实现与交付记录 | 实际支持范围、CLI／SDK、证据与下一可执行任务 |
 | `docs/development/s02-highs.md` | S02-A 实现与真实证据 | 严格 IR、Pyomo／HiGHS、trusted_local、实际状态与未验证条件 |
 | `docs/development/s03-plugins.md` | S03 实现与运行 profile | 独立安装、兼容预检、真实方法来源、SDK 和未实现范围 |
+| `docs/development/s05-provider.md` | S05-A 工作树实现与待验收记录 | 文本 Provider、compact 输出、资源恢复、HTTP 沙箱阻塞与父任务命令 |
 | `docs/evaluation.md` | 指标、证据与分母的唯一来源 | 公开检查／隐藏协议、失败分母、未知成本保持原口径 |
 | `docs/implementation-plan.md` | 本地纵向任务与 blocking edges | 24 个任务；首个 CLI、独立 Web、真实支持验收 |
 | `docs/plugin-contracts.md` | 接口、字段、版本和错误的唯一来源 | 目标 Protocol、小 Interface、能力与错误语义；统一术语 |
@@ -90,7 +91,8 @@
 | `src/llm4om/mock.py` | 离线方法响应读取 | 明确 fixture、来源与数据 revision；不执行代码或读取参考答案 |
 | `src/llm4om/methods.py` | 当前方法公共 profile | ModelProposal／MethodOutcome／Context／LLMResponse 和实际 direct Adapter |
 | `src/llm4om/plugins.py` | 方法发现与运行 Module | 动态 factory、版本／唯一键、JSON schema、同步／异步桥接与脱敏异常 |
-| `src/llm4om/preflight.py` | 共用运行 admission | 方法配置、实际能力、依赖、预算和固定计划；不调用 Provider |
+| `src/llm4om/preflight.py` | 共用运行 admission | 方法配置、实际能力、依赖、预算和固定计划；不发 Provider HTTP 请求 |
+| `src/llm4om/providers.py` | Provider 与共享 Gateway | 公共 HTTP seam、literal 凭据加载、原子资源／恢复和私有回复 |
 | `src/llm4om/storage.py` | 运行文件存储 | 独立目录、原子替换、内容 hash 和递增事件 |
 | `src/llm4om/worker.py` | 镜像可信入口 | 严格 IR／实际代码 hash 核对、后端 API 求解、资源测量 |
 | `tests/test_cli_run.py` | S01 公共 CLI 行为测试 | 成功、失败、数据、路径、引用、配置、隐私、报告和存储 |
@@ -98,6 +100,8 @@
 | `tests/test_container_run.py` | S04-A 公共 CLI／Worker 测试 | 真实目标 13、代码替换拒绝、超限保留证据而无伪造解 |
 | `tests/test_linear_solver.py` | 编译／Solver 公共行为测试 | 独立微型 LP/MILP，真实常数、域、状态和数值拒绝 |
 | `tests/test_plugins.py` | S03 公共 CLI／SDK 行为测试 | 真实独立包构建／安装、预检、预算、坏输出、来源与异常 |
+| `tests/test_provider.py` | S05-A 公共 Provider／Gateway 测试 | 外部本地 HTTP fixture 与凭据、预算、deadline、usage、重试、共享恢复和隐私 |
+| `tests/test_provider_pipeline.py` | S05-A 公共 CLI 测试 | 未付费 doctor admission、LP13／无数据 LP 的 HTTP fixture 到真实 HiGHS |
 | `tests/test_repository_checks.py` | 维护工具公共入口测试 | 临时副本；坏链接、hash、配置、绑定、重复键、引用漂移、五元素与阶段引用 |
 | `tests/test_solve_run.py` | S02-A 公共 CLI 行为测试 | 真实 MILP／LP、缺依赖、预算、失败阶段与证据引用 |
 | `uv.lock` | 完整依赖解析 | 由 uv 生成；PyPI 来源、版本和校验值；locked 安装 |

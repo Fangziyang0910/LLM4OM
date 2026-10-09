@@ -18,7 +18,7 @@ from uuid import uuid4
 from llm4om.contracts import RunError, parse_json
 
 
-DEFAULT_IMAGE = "llm4om-worker:0.3.0"
+DEFAULT_IMAGE = "llm4om-worker:0.4.0"
 _CONTROL_TIMEOUT_S = 2.0
 _REAP_TIMEOUT_S = 0.5
 _CONTROL_OUTPUT_BYTES = 1048576
