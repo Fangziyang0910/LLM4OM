@@ -449,12 +449,22 @@ print(json.dumps(checks))
 
     def test_memory_limit_reports_real_oom(self) -> None:
         from llm4om.executors import run_container
-        # Allow the runtime monitor to attach before deliberately exhausting the cgroup.
-        source = "import mmap,time\ntime.sleep(0.5)\nr=mmap.mmap(-1,256*1024*1024,flags=mmap.MAP_PRIVATE|mmap.MAP_ANONYMOUS)\nfor offset in range(0,len(r),mmap.PAGESIZE): r[offset]=1"
+        # Gradual pressure leaves time for the runtime's asynchronous OOM monitor.
+        source = '''import json,mmap,time
+from pathlib import Path
+print("[DEBUG-oom-s05]", json.dumps({name: (Path("/sys/fs/cgroup") / name).read_text()
+    for name in ["memory.max", "memory.current", "memory.events"]}), flush=True)
+time.sleep(0.5)
+r=mmap.mmap(-1,256*1024*1024,flags=mmap.MAP_PRIVATE|mmap.MAP_ANONYMOUS)
+for start in range(0,len(r),4*1024*1024):
+    for offset in range(start,start+4*1024*1024,mmap.PAGESIZE): r[offset]=1
+    time.sleep(0.25)
+'''
         execution = run_container(["python", "-I", "-c", source], {}, {
             "network": False, "cpu_limit": 1, "memory_limit_mb": 64, "wall_time_s": 10}, image=self.image)
         self.assertEqual(execution.status, "oom", {
             "exit_code": execution.exit_code, "oom_killed": execution.oom_killed,
+            "stdout": execution.stdout.decode(errors="replace"),
             "stderr": execution.stderr.decode(errors="replace"), "diagnostics": execution.diagnostics})
         self.assertTrue(execution.oom_killed)
         self.assertEqual(execution.exit_code, 137)
