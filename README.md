@@ -20,7 +20,8 @@ S05-A 提供 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配
 
 S05-B 新增独立 Messages Adapter（SDK／Worker 0.8.0）。本地工程实现与支持范围见
 [实现记录](docs/development/s05b-messages.md)和[配置示例](examples/specs/messages.yaml)；
-真实指定模型的端到端验收与独立审查仍待完成，既有小探针不替代平台验收。
+真实指定模型的端到端验收已记录；独立审查发现的凭据 admission 修复及最新恢复修复仍待集成复验。
+既有小探针不替代平台验收，SDK／Worker 0.8.0 仍未发布。
 
 GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache-2.0。私有可见性与开源许可证分别管理。
 

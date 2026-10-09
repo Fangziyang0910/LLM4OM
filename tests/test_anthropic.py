@@ -360,6 +360,70 @@ class MessagesRecoveryTests(unittest.TestCase):
         from test_resume_crash import CrashResumeTests
         return CrashResumeTests.resource_crash(self, status, **kwargs)
 
+    def test_unadmitted_checkpoint_resumes_after_local_credentials_are_restored(self):
+        from llm4om import resume_run
+        from unittest.mock import patch
+        from test_resume_crash import CRASH
+        messages_reply = self.reply
+        for provider in ('anthropic', 'openai_compatible'):
+            with self.subTest(provider=provider):
+                config = self.http_config()
+                settings = yaml.safe_load(config.read_text())
+                settings['llm']['provider_plugin_id'] = 'llm4om.providers.' + provider
+                config.write_text(yaml.safe_dump(settings))
+                self.reply = messages_reply if provider == 'anthropic' else {
+                    'choices': [{'message': {'content': messages_reply['content'][0]['text']},
+                                 'finish_reason': 'stop'}], 'usage': {'total_tokens': 70}}
+                fault = CRASH.replace(
+                    'record = json.loads(lines[-1])', 'record = json.loads(Path(target).read_text())')
+                fault = fault.replace(
+                    '"history" not in Path(target).parts and isinstance(record, dict) and record.get("kind") == "formulation_saved"',
+                    'Path(target).name == "checkpoint.json" and record.get("payload", {}).get("state", {}).get("method_checkpoint")')
+                output = self.root / provider
+                process = subprocess.run([sys.executable, '-c', fault, 'run',
+                    '--problem', str(self.inputs / 'problem.json'), '--config', str(config),
+                    '--output', str(output)], cwd=self.root, capture_output=True, text=True, timeout=15)
+                self.assertEqual(process.returncode, 91, process.stderr)
+                path = next(path for path in output.iterdir() if len(path.name) == 32)
+                checkpoint = json.loads((path / 'checkpoint.json').read_text())['payload']['state']
+                request_id = checkpoint['method_checkpoint']['request_id']
+                archive = output / '.private' / path.name
+                original = (archive / 'state.json').read_bytes()
+                self.assertEqual(json.loads(original)['attempts'], [])
+                before = len(self.requests)
+                os.environ.pop('S05B_KEY')
+                # An isolated cwd prevents fallback to any developer credential file.
+                previous_cwd = Path.cwd()
+                os.chdir(self.root)
+                try:
+                    for credential in (None, '', 'invalid\nkey', 'invalid\u00e9key'):
+                        with self.subTest(credential=repr(credential)):
+                            if credential is not None:
+                                os.environ['S05B_KEY'] = credential
+                            with patch('asyncio.create_subprocess_exec', side_effect=AssertionError('No HTTP child')):
+                                result = resume_run(path)
+                            self.assertEqual(result.status, 'failed')
+                            self.assertEqual(json.loads((path / 'bundle.json').read_text())['error']['code'], 'auth_error')
+                            ledger = json.loads((path / 'budget-ledger.json').read_text())
+                            for field in ('llm_attempts', 'external_llm_requests', 'reserved_tokens'):
+                                self.assertEqual(ledger[field], 0, field)
+                            self.assertEqual(json.loads((path / 'llm-trace.json').read_text())['attempts'], [])
+                            self.assertEqual((archive / 'state.json').read_bytes(), original)
+                            self.assertEqual(len(self.requests), before)
+                    os.environ['S05B_KEY'] = 'synthetic-secret'
+                    result = resume_run(path)
+                finally:
+                    os.chdir(previous_cwd)
+                self.assertEqual(result.status, 'completed')
+                self.assertEqual(result.run_id, path.name)
+                self.assertEqual(len(self.requests), before + 1)
+                ledger = json.loads((path / 'budget-ledger.json').read_text())
+                self.assertEqual(ledger['external_llm_requests'], 1)
+                self.assertEqual(ledger['solver_calls'], 1)
+                trace = json.loads((path / 'llm-trace.json').read_text())['attempts']
+                self.assertEqual([item['request_id'] for item in trace], [request_id])
+                self.assertEqual(json.loads((path / 'candidates/001/solve-result.json').read_text())['objective_value'], 13)
+
     def test_durable_success_replays_without_credentials_after_both_commit_windows(self):
         from llm4om import resume_run
         for journal in (False, True):

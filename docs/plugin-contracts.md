@@ -626,4 +626,10 @@ Gateway 保留既有 attempt／并发／token 预留／绝对 deadline／取消�
 成功缺少 total 仍保留预留，失败／取消保留未知结果。已持久化成功在 core 回调之前或 mutable head
 之前崩溃，仍经不可变链校验后复用；未知 request_id 不重发；真实损坏拒绝。
 已完成身份校验不构造凭据 Provider；未完成恢复通过 factory.restore 延迟凭据解析，仅真正新增
-HTTP attempt 时读取。成功回复回放不要求 API key。显式 rerun 的既有累计资源语义不变。
+HTTP attempt 时读取。成功回复回放与未知 request_id 检查不要求 API key，也不读取凭据文件。
+TextProvider.prepare() 是本地、幂等的准备接口；HTTP Adapter 复用 factory 的凭据校验，
+成功后在该 Provider 实例内固定凭据。Gateway 在资源锁内先检查保存记录、deadline 和预算，
+再调用 prepare()，复查取消与 deadline 后才持久化 attempt／预留；准备失败不增加请求或预留。
+补回有效凭据后，同一 run／request_id 可继续。同步 complete 与异步 acomplete 的直接调用也先准备；
+已准备的 transport 与重试不重新读取环境，避免 admission 后再发生本地凭据错误。
+真正发送后的 HTTP 认证失败仍保留实际 attempt 和未知费用。显式 rerun 的既有累计资源语义不变。

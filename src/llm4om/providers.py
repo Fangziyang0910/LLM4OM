@@ -37,6 +37,8 @@ class TextProvider(Protocol):
     max_retries: int
     timeout_s: float
 
+    def prepare(self) -> None: ...
+
     def complete(self, messages: list[dict[str, Any]], timeout: float) -> dict[str, Any]: ...
 
     async def acomplete(self, messages: list[dict[str, Any]], timeout: float) -> dict[str, Any]: ...
@@ -128,9 +130,14 @@ class HTTPTextProvider:
         saved(hashlib.sha256((archive / "state.json").read_bytes()).hexdigest(), gateway.ledger)
         return gateway
 
-    def _transport_input(self, messages: list[dict[str, Any]], timeout: float) -> bytes:
+    def prepare(self) -> None:
+        """Resolve local credentials once, before durable admission or direct transport."""
         if self._load_credential is not None:
             self._credential = self._load_credential()
+            self._load_credential = None
+
+    def _transport_input(self, messages: list[dict[str, Any]], timeout: float) -> bytes:
+        self.prepare()
         return json.dumps({"provider": self.plugin_id, "endpoint": self.identity, "model": self.model,
                            "max_output_tokens": self.max_output_tokens, "credential": self._credential,
                            "messages": messages, "timeout": timeout}, allow_nan=False).encode()
@@ -642,6 +649,10 @@ class Gateway:
                 used += self.inherited_ledger.get("reserved_tokens", 0) + self.inherited_ledger.get("known_total_tokens", self.inherited_ledger.get("total_tokens") or 0)
                 if len(state["attempts"]) + self.inherited_ledger.get("llm_attempts", 0) >= self.budget["max_llm_attempts"] or used + reservation > self.budget["max_total_tokens"]:
                     raise RunError("budget_exhausted", "admission", "No shared Provider attempt or token budget remains.")
+                self.provider.prepare()
+                self.cancellation.check()
+                if time.time() >= state["deadline"]:
+                    raise RunError("deadline_exhausted", "admission", "The shared run deadline has expired.")
                 attempt_id = uuid4().hex
                 item = {"attempt_id": attempt_id, "request_id": request_id, "request_sha256": request_hash,
                         "provider": self.provider.plugin_id,
