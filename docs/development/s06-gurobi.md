@@ -119,5 +119,27 @@ checks then reproduced two Interface failures: read-only Mapping rejection and f
 bounds or RHS being treated as absent. Three regression tests were red; the shared Mapping/range
 checks made all ten Gurobi Solver/Backend tests green (parent-red.log / parent-green.log).
 Strict mypy again passed 21 modules. The final source adds these three tests (171 total available);
-no duplicate full matrix is claimed. Package/image and actual container checks below are recorded
-after these corrections. Independent Standards/Spec review and final publication remain pending.
+no duplicate full matrix is claimed. Final package/image and actual container checks were performed after these corrections.
+Python 3.12: ten Solver/Backend tests (0.191s) and six CLI/SDK container tests (19.396s) pass.
+Python 3.11: the newly rebuilt installed wheel passes all ten Solver/Backend tests (0.258s).
+Wheel/sdist build and the final Worker image pass, with image ID
+`sha256:9beba6d537077df8233a8de159bd6bed546644d67ed6e7e9a4779ed3c8c9a9de`.
+Repository check covers 117 files. Logs use the `parent-` prefix in `/tmp/llm4om-s06a/`.
+The annotated native example was independently packaged/installed and solved objective13 with
+zero LLM calls; its public bundle is under `parent-example/installed-native/runs/`.
+
+## Standards
+
+Independent review pinned `6445c60...1996468`: one P2 documented-standard finding, native
+`build_model(data)` missing explicit input/output types. Parent added `Mapping[str, bytes] -> ModelHandle`
+and verified the actual installed fixture. No actionable Fowler heuristics were reported.
+The fix is parent-verified, not an independent second review. Report: `review-standards.md`.
+
+## Spec
+
+The independent review of the same pinned diff found no missing/incorrect S06-A requirements or
+unasked implementation. It read Issue14, the contracts and connected code/tests; it did not rerun
+runtime evidence. Report: `review-spec.md`. Source-only research for S07-B/C is explicitly unimplemented.
+
+Standard/Spec reports and parent corrections are kept distinct. No remote CI or paid LLM call was
+used for this slice; package remains unpublished and full 1.0 remains in the approved plan.

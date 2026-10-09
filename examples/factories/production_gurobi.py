@@ -2,11 +2,12 @@
 
 import csv
 import io
+from typing import Mapping
 import gurobipy as gp
 from llm4om.backends import ModelHandle
 
 
-def build_model(data):
+def build_model(data: Mapping[str, bytes]) -> ModelHandle:
     products = list(csv.DictReader(io.StringIO(data["products"].decode("utf-8"))))
     capacities = list(csv.DictReader(io.StringIO(data["capacities"].decode("utf-8"))))
     env = gp.Env(empty=True)

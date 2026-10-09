@@ -1,6 +1,6 @@
 # 1.0 开发计划与接入顺序
 
-文档修订：0.4.0。以下是开发计划；S01／S02-A／S02-B／S03／S04-A／S05-A／S07-A／S06-A 已实现当前范围，S03 使用 [Issue #3](https://github.com/Fangziyang0910/LLM4OM/issues/3)／[#4](https://github.com/Fangziyang0910/LLM4OM/issues/4)，S02-A 使用 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1) 跟踪，当前支持与验收范围见各切片记录；其余任务待开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
+文档修订：0.4.0。以下是开发计划；S01／S02-A／S02-B／S03／S04-A／S05-A／S07-A／S06-A 已实现当前范围，S03 使用 [Issue #3](https://github.com/Fangziyang0910/LLM4OM/issues/3)／[#4](https://github.com/Fangziyang0910/LLM4OM/issues/4)，S02-A 使用 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1) 跟踪，未标记为已完成的切片继续按依赖开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
 
 ## 1. 首批能力矩阵
 
@@ -150,7 +150,7 @@ flowchart LR
     S09B --> S10
 ```
 
-S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。[S02-B](development/s02b-factory.md) 也已完成当前范围。当前前沿包含 S04-B、S05-B、S06-A、S07-B／C／D；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
+S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。[S02-B](development/s02b-factory.md) 也已完成当前范围。[S06-A](development/s06-gurobi.md) 已完成当前范围。当前前沿包含 S04-B、S05-B、S06-B／C、S07-B／C／D；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
 
 ## 5. 工程默认值与完成边界
 
