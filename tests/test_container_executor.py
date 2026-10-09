@@ -380,6 +380,8 @@ print(json.dumps(checks))
 '''
         with tempfile.TemporaryDirectory(prefix="llm4om-private-") as directory, patch.dict(
                 os.environ, {"LLM4OM_LLM_API_KEY": "PRIVATE-CONTAINER-ENV-SENTINEL"}):
+            # Readable host permissions ensure this probe tests the mount boundary.
+            Path(directory).chmod(0o755)
             private = Path(directory) / "oracle.txt"
             private.write_bytes(b"PRIVATE-HOST-READ-SENTINEL")
             private.chmod(0o644)
