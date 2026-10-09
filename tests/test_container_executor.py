@@ -92,7 +92,11 @@ elif operation == "start":
 elif operation == "kill" and "kill_error" in scenario:
     sys.exit(1)
 elif operation == "inspect":
-    state = {"ExitCode": 137 if "oom" in scenario else 0, "OOMKilled": "oom" in scenario, "Running": False}
+    state = {"ExitCode": 137 if "oom" in scenario or "sigkill" in scenario else 0, "OOMKilled": "oom" in scenario, "Running": False}
+    if "deferred_oom" in scenario:
+        observed = Path(__file__).with_name("observed")
+        state["OOMKilled"] = observed.exists()
+        observed.write_text("inspected")
     if "inspect_missing_exit" in scenario:
         del state["ExitCode"]
     if "inspect_missing_config" in scenario:
@@ -227,6 +231,18 @@ except RunError as error:
         self.assertTrue(result["oom_killed"])
         self.assertEqual(result["exit_code"], 137)
         self.assertTrue(any("remove" in item for item in result["diagnostics"]))
+
+    def test_delayed_docker_oom_evidence_is_collected_after_sigkill_exit(self) -> None:
+        result = self.run_hanging_docker("deferred_oom")
+        self.assertEqual(result["status"], "oom")
+        self.assertTrue(result["oom_killed"])
+        self.assertEqual(result["exit_code"], 137)
+
+    def test_sigkill_exit_without_oom_evidence_is_a_failure(self) -> None:
+        result = self.run_hanging_docker("sigkill")
+        self.assertEqual(result["status"], "failed")
+        self.assertFalse(result["oom_killed"])
+        self.assertEqual(result["exit_code"], 137)
 
     def test_oom_exit_evidence_survives_incomplete_inspect_and_cleanup_hang(self) -> None:
         result = self.run_hanging_docker("oom+inspect_missing_config+rm")

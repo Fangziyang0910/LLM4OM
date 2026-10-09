@@ -40,6 +40,8 @@ ExecutionResult 保存实际 exit code、镜像与容器 ID、资源限制、Wor
 
 Docker 控制命令各有 2 秒上限，控制输出上限为 1 MiB；本地 CLI 进程组终止后最多等待 0.5 秒回收。超限后 attach／kill 也有明确期限，持续排空输出避免管道背压阻止终止。容器退出后执行 remove；清理失败保留容器身份和诊断，不把失败覆盖成成功。daemon 完全失联时无法保证远端容器已经删除，恢复后的自动协调仍属后续恢复工作。
 
+若正常收集到 exit=137 且 OOMKilled=false，执行器最多等待 2 秒复查 Docker OOM 证据。只在观察到 true 时归为 OOM；没有相应证据的 SIGKILL 仍为 failed。已经确定的 timeout／output_limit 保留原终态。
+
 策略依据 Docker 官方 [运行参数](https://docs.docker.com/engine/containers/run/)、[资源约束](https://docs.docker.com/engine/containers/resource_constraints/)和 [无网络模式](https://docs.docker.com/engine/network/drivers/none/)。本页支持声明以真实 fixture 为准。
 
 ## 实际验证范围

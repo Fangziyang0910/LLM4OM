@@ -10,7 +10,7 @@ import tempfile
 from dataclasses import dataclass
 from importlib.metadata import version
 from pathlib import Path, PurePosixPath
-from time import monotonic
+from time import monotonic, sleep
 from typing import Any, Mapping
 from uuid import uuid4
 
@@ -216,6 +216,18 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
         exit_code = None if state["Running"] else state["ExitCode"]
         if state["Running"]:
             diagnostics.append("inspect: Worker is still running.")
+        if status == "completed" and exit_code == 137 and oom_killed is False:
+            # Docker can publish the exit before its asynchronous OOM event.
+            evidence_deadline = monotonic() + _CONTROL_TIMEOUT_S
+            while monotonic() < evidence_deadline:
+                sleep(0.05)
+                observed = json.loads(_docker(["inspect", name], diagnostics))[0]["State"]["OOMKilled"]
+                if not isinstance(observed, bool):
+                    raise ValueError("Docker returned invalid OOM evidence.")
+                if observed:
+                    oom_killed = True
+                    status = "oom"
+                    break
         if status == "completed":
             if attach_code != 0 or exit_code != 0:
                 status = "failed"

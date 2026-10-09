@@ -178,3 +178,7 @@ Standards 共 3 项、Spec 共 2 项，分别保留并已处理。后续修复�
 代码提交 3ed5246 的 [push CI](https://github.com/Fangziyang0910/LLM4OM/actions/runs/37891702051) 和 [PR CI](https://github.com/Fangziyang0910/LLM4OM/actions/runs/37891706954) 均 success；两个 workflow 的 Python 3.11／3.12 job 均通过，包括实际 Worker 镜像构建、完整 105 项测试、类型、仓库检查与包构建。草稿 [PR #7](https://github.com/Fangziyang0910/LLM4OM/pull/7) 基于 codex/s03-plugins，关联 #6；后续 S05-A 为 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)。
 
 复查中间提交 edc8529 的一次 PR CI，发现 bytearray 内存 fixture 返回 failed 而非 oom；该日志未记录 stderr／exit／OOMKilled，因此原因尚不能确定。作者在真实 Worker 对原分配器和逐页映射分别重复 5 次，均得到 Docker OOMKilled=true、exit=137。fixture 改为逐页触达匿名映射，并在断言失败时提供上述原生证据；公共 OOM 回归通过，后续 CI 单独验证此测试调整。没有把 exit=137 或 MemoryError 自动归为 OOM。
+
+b32682f 的 PR CI success，push CI 再现该失败，新增诊断显示 exit=137、OOMKilled=false、stderr 为空。这与终止和 OOM 证据发布顺序不一致的解释相符；仅改变内存分配方式没有解决问题。执行器现对正常收集到的 137／false 最多复查 2 秒，仅在实际观察到 OOMKilled=true 时报告 OOM。外部 CLI fixture 复现“首次 false、随后 true”，先 red 再 green；独立负例确认 SIGKILL／false 仍为 failed。已知 timeout／output_limit 的终态不被改写。
+
+该修复在 Python 3.12.3／3.11.13 各完整 107 项测试通过，14 模块 strict mypy、93 文件与参考导出通过；公开 Worker 构建命令通过，更新镜像 ID 为 sha256:7dd854d34c3775721343ae16cf06573138f2dfd364dc1fa32b16295ed97da885。后续 CI 验证这次执行器修复。
