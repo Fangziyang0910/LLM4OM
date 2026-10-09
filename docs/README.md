@@ -66,3 +66,5 @@ NLP4LP 的公开描述／具体 JSON 参数与私有参考分离、实际来源�
 原问题独立解检查、参考质量与有限反例探测见 [S07-D](development/s07-checkers.md)。
 
 CoE流程与真实模型、独立原问题检查的开发证据见 [S06-C](development/s06-coe.md)。
+
+角色模型覆盖／共享资源与实际支持见 [S05-D1](development/s05-role-models.md)。

@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-10；SDK／Worker 开发版本：0.13.0。当前包含 179 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-10；SDK／Worker 开发版本：0.14.0。当前包含 182 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -215,3 +215,6 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/coe.py` | CoE 原创流程与原生调用 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
 | `tests/test_coe_method.py` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
 | `tests/test_coe_run.py` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
+| `docs/development/s05-role-models.md` | 角色模型配置与共享资源证据 | 公共配置／Gateway／HTTP／SDK、身份与预算验收 |
+| `tests/test_role_models.py` | 角色模型配置与共享资源证据 | 公共配置／Gateway／HTTP／SDK、身份与预算验收 |
+| `tests/test_role_pipeline.py` | 角色模型配置与共享资源证据 | 公共配置／Gateway／HTTP／SDK、身份与预算验收 |

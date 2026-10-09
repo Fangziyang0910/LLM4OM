@@ -119,14 +119,15 @@ class HTTPTextProvider:
         self._load_credential = credential if callable(credential) else None
 
     def gateway(self, public: dict[str, Any], problem_sha256: str, store: Any,
-                ledger: dict[str, Any], budget: Mapping[str, Any], config_dir: Path, *, deadline: float) -> "Gateway":
+                ledger: dict[str, Any], budget: Mapping[str, Any], config_dir: Path, *, deadline: float,
+                role_providers: Mapping[str, "HTTPTextProvider"] | None = None) -> "Gateway":
         archive = store.path.parent / ".private" / store.run_id
         def saved(digest: str, ledger: dict[str, Any]) -> None:
             store.state["gateway_sha256"] = digest
             store.state["ledger"].update(ledger)
             store.checkpoint()
         gateway = Gateway(self, budget, archive, deadline=deadline, cancellation=store.cancellation, on_save=saved,
-                          inherited_ledger=store.state.get("inherited_ledger"))
+                          inherited_ledger=store.state.get("inherited_ledger"), role_providers=role_providers)
         saved(hashlib.sha256((archive / "state.json").read_bytes()).hexdigest(), gateway.ledger)
         return gateway
 
@@ -447,7 +448,8 @@ def _resource_state(archive: Path, *, expected: str | None = None,
                         or item["status"] not in {"unknown", "success"}
                         or any(value is not None and (type(value) is not int or value < 0) for value in item["usage"].values())):
                     raise ValueError("Invalid resource counters.")
-                identity = state["provider_identity"]
+                base_identity = state["provider_identity"]
+                identity = base_identity.get("roles", {}).get(item["role"], base_identity)
                 if (item["provider"] != identity["plugin_id"] or item["requested_model"] != identity["model"]
                         or item["endpoint_sha256"] != identity["endpoint_sha256"]
                         or not isinstance(item["request_id"], str) or not item["request_id"]
@@ -488,7 +490,8 @@ class Gateway:
     def __init__(self, provider: TextProvider, budget: Mapping[str, Any], archive: Path, *, deadline: float | None = None,
                  cancellation: CancellationToken | None = None,
                  on_save: Callable[[str, dict[str, Any]], None] | None = None,
-                 inherited_ledger: Mapping[str, Any] | None = None) -> None:
+                 inherited_ledger: Mapping[str, Any] | None = None,
+                 role_providers: Mapping[str, HTTPTextProvider] | None = None) -> None:
         try:
             jsonschema.Draft202012Validator({"type": "object", "properties": {
                 **{name: {"type": "integer", "minimum": 0} for name in ["max_llm_attempts", "max_total_tokens"]},
@@ -499,6 +502,16 @@ class Gateway:
         except (jsonschema.ValidationError, ValueError, TypeError) as error:
             raise RunError("invalid_config", "admission", "Invalid shared Gateway budget.") from error
         self.provider, self.budget, self.archive = provider, dict(budget), archive
+        self.role_providers = dict(role_providers or {})
+        if any(not isinstance(role, str) or not role.strip() or not isinstance(selected, HTTPTextProvider)
+               for role, selected in self.role_providers.items()):
+            raise RunError("invalid_config", "admission", "Role overrides require named HTTP text Providers.")
+        identity = {"plugin_id": provider.plugin_id, "model": provider.model,
+            "endpoint_sha256": hashlib.sha256(provider.identity.encode()).hexdigest(), "max_output_tokens": provider.max_output_tokens}
+        if self.role_providers:
+            identity["roles"] = {role: {"plugin_id": selected.plugin_id, "model": selected.model,
+                "endpoint_sha256": hashlib.sha256(selected.identity.encode()).hexdigest(), "max_output_tokens": selected.max_output_tokens}
+                for role, selected in self.role_providers.items()}
         self.cancellation = cancellation or CancellationToken()
         self._on_save = on_save
         self.inherited_ledger = dict(inherited_ledger or {})
@@ -511,13 +524,8 @@ class Gateway:
                     _atomic(archive / "state.json", _resource_bytes(_resource_state(archive, allow_unpublished_genesis=True)))
                 else:
                     self._save({"budget": self.budget, "deadline": deadline if deadline is not None else time.time() + budget["wall_time_s"], "attempts": [], "inherited_ledger": self.inherited_ledger, "archive_id": archive.name,
-                            "provider_identity": {"plugin_id": provider.plugin_id, "model": provider.model,
-                                "endpoint_sha256": hashlib.sha256(provider.identity.encode()).hexdigest(),
-                                "max_output_tokens": provider.max_output_tokens}})
+                            "provider_identity": identity})
             state = self._load()
-            identity = {"plugin_id": provider.plugin_id, "model": provider.model,
-                        "endpoint_sha256": hashlib.sha256(provider.identity.encode()).hexdigest(),
-                        "max_output_tokens": provider.max_output_tokens}
             if state["inherited_ledger"] != self.inherited_ledger or state["provider_identity"] != identity or state["budget"] != self.budget or (deadline is not None and state["deadline"] != deadline):
                 raise RunError("checkpoint_incompatible", "admission", "Gateway identity or budget differs from its saved resource state.")
             _atomic(archive / "state.json", _resource_bytes(state))
@@ -599,8 +607,9 @@ class Gateway:
                     "required": ["role", "content"], "additionalProperties": False}},
                 "request_id": {"type": "string", "minLength": 1}, "role": {"type": "string", "minLength": 1}},
                 "required": ["messages"], "additionalProperties": False}).validate(request)
-            raw = json.dumps({"endpoint": self.provider.identity, "model": self.provider.model,
-                              "max_output_tokens": self.provider.max_output_tokens,
+            provider = self.role_providers.get(request.get("role", "formulation"), self.provider)
+            raw = json.dumps({"endpoint": provider.identity, "model": provider.model,
+                              "max_output_tokens": provider.max_output_tokens,
                               "request": request}, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()
         except (jsonschema.ValidationError, ValueError, TypeError) as error:
             raise RunError("invalid_llm_request", "admission", "Requests require role/text messages.") from error
@@ -629,12 +638,13 @@ class Gateway:
         if slot is None:
             raise RunError("budget_exhausted", "admission", "No shared Provider concurrency slot remains.")
         try:
-            return await self._attempts(request, request_id, request_hash, len(raw))
+            return await self._attempts(request, request_id, request_hash, len(raw), provider)
         finally:
             os.close(slot)
 
-    async def _attempts(self, request: dict[str, Any], request_id: str, request_hash: str, estimate: int) -> LLMResponse:
-        for retry in range(self.provider.max_retries + 1):
+    async def _attempts(self, request: dict[str, Any], request_id: str, request_hash: str, estimate: int,
+                        provider: TextProvider) -> LLMResponse:
+        for retry in range(provider.max_retries + 1):
             with _resource_lock(self.archive):
                 state = self._load()
                 for previous in state["attempts"]:
@@ -646,20 +656,20 @@ class Gateway:
                 remaining = state["deadline"] - time.time()
                 if remaining <= 0:
                     raise RunError("deadline_exhausted", "admission", "The shared run deadline has expired.")
-                reservation = estimate + self.provider.max_output_tokens
+                reservation = estimate + provider.max_output_tokens
                 used = sum(item["reservation"] + (item["usage"]["total_tokens"] or 0) for item in state["attempts"])
                 used += self.inherited_ledger.get("reserved_tokens", 0) + self.inherited_ledger.get("known_total_tokens", self.inherited_ledger.get("total_tokens") or 0)
                 if len(state["attempts"]) + self.inherited_ledger.get("llm_attempts", 0) >= self.budget["max_llm_attempts"] or used + reservation > self.budget["max_total_tokens"]:
                     raise RunError("budget_exhausted", "admission", "No shared Provider attempt or token budget remains.")
-                self.provider.prepare()
+                provider.prepare()
                 self.cancellation.check()
                 if time.time() >= state["deadline"]:
                     raise RunError("deadline_exhausted", "admission", "The shared run deadline has expired.")
                 attempt_id = uuid4().hex
                 item = {"attempt_id": attempt_id, "request_id": request_id, "request_sha256": request_hash,
-                        "provider": self.provider.plugin_id,
-                        "endpoint_sha256": hashlib.sha256(self.provider.identity.encode()).hexdigest(),
-                        "requested_model": self.provider.model, "role": request.get("role", "formulation"),
+                        "provider": provider.plugin_id,
+                        "endpoint_sha256": hashlib.sha256(provider.identity.encode()).hexdigest(),
+                        "requested_model": provider.model, "role": request.get("role", "formulation"),
                         "start": time.time(), "end": None, "reservation": reservation,
                         "estimated_input_tokens": estimate, "diagnostic": "outcome_unknown", "status": "unknown",
                         "response_id": None, "response_sha256": None, "model": None, "finish_reason": None,
@@ -671,8 +681,8 @@ class Gateway:
             code = None
             retryable = False
             try:
-                reply = await _supervise(self.provider.acomplete(
-                    request["messages"], min(self.provider.timeout_s, state["deadline"] - time.time())),
+                reply = await _supervise(provider.acomplete(
+                    request["messages"], min(provider.timeout_s, state["deadline"] - time.time())),
                     self.cancellation)
             except HTTPError as error:
                 code = "auth_error" if error.code in {401, 403} else "rate_limit" if error.code == 429 else "provider_error" if error.code >= 500 else "invalid_provider_request"
@@ -704,7 +714,7 @@ class Gateway:
             if reply is not None:
                 self.cancellation.check()
                 return self._response(item)
-            if not retryable or retry == self.provider.max_retries:
+            if not retryable or retry == provider.max_retries:
                 raise RunError(code or "provider_error", "llm", "Provider request failed; outcome and charge may be unknown.")
             delay = min(0.1 * 2 ** retry, 1.0)
             if remaining <= delay:
@@ -725,7 +735,10 @@ class MockProvider:
         self.config = config
 
     def gateway(self, public: dict[str, Any], problem_sha256: str, store: Any,
-                ledger: dict[str, Any], budget: Mapping[str, Any], config_dir: Path, *, deadline: float) -> Any:
+                ledger: dict[str, Any], budget: Mapping[str, Any], config_dir: Path, *, deadline: float,
+                role_providers: Mapping[str, HTTPTextProvider] | None = None) -> Any:
+        if role_providers:
+            raise RunError("capability_mismatch", "admission", "Mock Provider does not route external role models.")
         from llm4om.contracts import public_path
         from llm4om.mock import MockGateway
         return MockGateway(public_path(config_dir, self.config["response_artifact"]), public,

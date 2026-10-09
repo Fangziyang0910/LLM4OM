@@ -1,6 +1,7 @@
 """Resolve and validate a supported run before a method receives resources."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import partial
 import time
 import os
 import sys
@@ -24,6 +25,7 @@ class AdmissionPlan:
     snapshot: dict[str, Any]
     provider: MockProvider | HTTPTextProvider | None
     deadline: float
+    role_providers: dict[str, HTTPTextProvider] = field(default_factory=dict)
 
 
 def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: Path | None = None,
@@ -37,22 +39,37 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     if time.time() >= deadline:
         raise RunError("deadline_exhausted", "admission", "The absolute run deadline expired.")
     factory = provider_factory(settings["llm"]["provider_plugin_id"])
+    role_models = settings["llm"].get("role_models", {})
+    role_factories: dict[str, HTTPTextFactory] = {}
+    for role, selection in role_models.items():
+        role_factory = provider_factory(selection["provider_plugin_id"])
+        if not isinstance(factory, HTTPTextFactory) or not isinstance(role_factory, HTTPTextFactory) or offline:
+            raise RunError("capability_mismatch", "admission", "Role routing requires declared online HTTP text Providers.")
+        role_factory.validate(selection["config"], selection["model"])
+        role_factories[role] = role_factory
     if offline and settings["llm"]["provider_plugin_id"] != "llm4om.providers.mock":
         raise RunError("capability_mismatch", "admission", "Offline replay requires an explicitly configured Mock Provider.")
     provider: MockProvider | HTTPTextProvider | None = None
+    role_providers: dict[str, HTTPTextProvider] = {}
     if not identity_only:
-        def environment() -> dict[str, str]:
-            if os.environ.get(settings["llm"]["config"].get("credential_env", "")):
+        def environment(credential_name: str) -> dict[str, str]:
+            if os.environ.get(credential_name):
                 return dict(os.environ)
             credential_path = (config_dir or Path.cwd()) / ".env"
             if not credential_path.exists():
                 credential_path = Path.cwd() / ".env"
             return credential_environment(credential_path)
         if isinstance(factory, HTTPTextFactory):
-            provider = (factory.restore(settings["llm"]["config"], settings["llm"]["model"], environment=environment)
-                        if expected is not None else factory.create(settings["llm"]["config"], settings["llm"]["model"], environment=environment()))
+            default_credential_name = settings["llm"]["config"]["credential_env"]
+            provider = (factory.restore(settings["llm"]["config"], settings["llm"]["model"], environment=lambda: environment(default_credential_name))
+                        if expected is not None else factory.create(settings["llm"]["config"], settings["llm"]["model"], environment=environment(default_credential_name)))
         else:
             provider = factory.create(settings["llm"]["config"], settings["llm"]["model"])
+        for role, selected_factory in role_factories.items():
+            selection = role_models[role]
+            role_providers[role] = (selected_factory.restore(selection["config"], selection["model"],
+                environment=partial(environment, selection["config"]["credential_env"]))
+                if expected is not None else selected_factory.create(selection["config"], selection["model"], environment=environment(selection["config"]["credential_env"])))
     inventory = discover_methods()
     method = inventory.get(("method", settings["method"]["plugin_id"]))
     if method is None:
@@ -87,6 +104,8 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         required["execution_modes"] = [settings["executor"]["plugin_id"].removeprefix("llm4om.executors.")]
     if not set(capabilities.get("llm_features", [])) <= set(factory.describe()["features"]):
         raise RunError("capability_mismatch", "admission", "Provider does not support the requested method features.")
+    if any(not set(capabilities.get("llm_features", [])) <= set(selected.describe()["features"]) for selected in role_factories.values()):
+        raise RunError("capability_mismatch", "admission", "Role Provider does not support the requested method features.")
     for field, value in required.items():
         declared = capabilities.get(field)
         compatible = (isinstance(declared, list) and set(value) <= set(declared)) if field in {
@@ -151,4 +170,11 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         "method_profile": profile, "method_cancellation": capabilities.get("cancellation", "unknown"), "code_origin": "method_generated" if profile in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0", "native_script/0.1.0", "native_script/0.2.0") else "deterministic_compilation",
         "compiler_id": settings["compiler"]["plugin_id"] if profile == "grounded_single_candidate/0.1.0" else None, "model_backend_id": settings["model_backend"]["plugin_id"],
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
-        "packages": packages, "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": factory.describe(), "model": settings["llm"]["model"]}, provider, deadline)
+        "packages": packages, "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": factory.describe(), "model": settings["llm"]["model"],
+        **({"role_models": {role: {"provider": role_factories[role].describe(), "model": selection["model"],
+            "config": selection["config"]} for role, selection in role_models.items()},
+            "model_comparison": "heterogeneous_role_models" if any(selection["model"] != settings["llm"]["model"]
+                for selection in role_models.values()) else "same_requested_model_roles",
+            "role_resource_comparison": "different_role_resources" if any(
+                any(selection[key] != settings["llm"][key] for key in ("provider_plugin_id", "model", "config"))
+                for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers)

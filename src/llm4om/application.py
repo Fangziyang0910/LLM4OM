@@ -242,7 +242,7 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     if plan.provider is None:
         raise RunError("checkpoint_incompatible", "admission", "Identity-only admission cannot run a method.")
     gateway = plan.provider.gateway(public, hashlib.sha256(source_problem).hexdigest(), store, ledger,
-                                    settings["budget"], config.parent, deadline=plan.deadline)
+                                    settings["budget"], config.parent, deadline=plan.deadline, role_providers=plan.role_providers)
     def save_method_checkpoint(value: dict[str, Any]) -> None:
         if not method.manifest["capabilities"].get("supports_checkpoint"):
             raise RunError("checkpoint_unsupported", "formulation", "Method has no internal checkpoint contract.")

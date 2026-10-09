@@ -406,10 +406,12 @@ def validate_worker_response(payload: dict[str, Any], expected_runtime: dict[str
 
 
 def validate_config(settings: dict[str, Any]) -> None:
+    llm_selection = _object({"provider_plugin_id": TEXT, "model": TEXT, "config": {"type": "object"}})
     schema = _object({
         "schema_version": {"const": "0.2.0"},
         "method": _object({"plugin_id": TEXT, "config": {"type": "object"}}),
-        "llm": _object({"provider_plugin_id": TEXT, "model": TEXT, "config": {"type": "object"}}),
+        "llm": _object({**llm_selection["properties"], "role_models": {"type": "object", "propertyNames": TEXT,
+            "additionalProperties": llm_selection}}, ["provider_plugin_id", "model", "config"]),
         "compiler": _object({"plugin_id": {"const": "llm4om.compilers.lp_ir_to_pyomo"}}),
         "model_backend": _object({"plugin_id": {"enum": ["llm4om.model_backends.pyomo_factory", "llm4om.model_backends.gurobipy"]}}),
         "solver": _object({"plugin_id": {"enum": ["llm4om.solvers.highs", "llm4om.solvers.gurobi"]}, "options": _object({

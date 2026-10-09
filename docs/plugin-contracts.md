@@ -919,3 +919,27 @@ success creates independent original-problem correctness. Original prompts,
 one-import adaptation, seeded fallback and configured Provider sampling/caps are
 named changes; source-exact prompt/runtime and paper-score reproduction are not
 claimed.
+
+## 19. S05-D1 role model routing (SDK 0.14.0)
+
+RunConfig.llm.role_models is an optional object keyed by exact logical role names.
+Each value has exactly provider_plugin_id, model and config. Empty/omitted
+mappings preserve the default. Supported overrides are online HTTP text Providers;
+Mock/default-offline combinations fail admission. Each override is validated
+with its own Provider schema and the method's requested features before calls.
+Method requests use a role field in the common complete(request) interface.
+
+Admission freezes default/role resources and distinguishes declared requested
+model names from Provider/config resource differences. Same requested names do
+not prove same weights or experiment conditions. Calls retain actual Provider,
+requested/returned model, role, endpoint hash, usage and null unknown cost.
+
+Gateway owns one archive/budget/concurrency/deadline for every role. The selected
+Provider controls that request's output cap, transport, retry and timeout.
+Private provider_identity.roles freezes each role's Provider/model/endpoint hash
+and cap; immutable request hashes use the actual selected resource. Journal
+validation checks each attempt against its declared role identity and decodes
+successful raw replies with that Provider. Changed role identity or unknown
+outcome cannot produce a silent replay/resubmit. Credentials are resolved using
+the selected role's credential_env and literal .env fallback; completed replay
+needs no new credential and keeps its original call_id and accounting.

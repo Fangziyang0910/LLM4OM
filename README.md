@@ -167,3 +167,5 @@ NLP4LP Task／Evaluation 已进入 SDK/Worker0.11.0 开发版本：完整保留3
 SDK／Worker0.12.0 的原问题独立可行性、原目标重算与有限探测见 [S07-D](docs/development/s07-checkers.md)。Web／批量实验仍按完整1.0计划实施。
 
 CoE专家路由与原生函数的开发实现、真实外部模型／原问题检查和剩余验收见 [S06-C](docs/development/s06-coe.md)。
+
+角色模型覆盖与共享预算的0.14.0开发行为见 [记录](docs/development/s05-role-models.md)。

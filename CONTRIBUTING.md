@@ -57,3 +57,5 @@ S07-B 的 SDK/Worker0.11.0 开发实现与固定 NLP4LP 数据、公开参数绑
 S07-D 的 SDK/Worker0.12.0 原问题检查与有限探测见 [实现记录](docs/development/s07-checkers.md)。沿用本机聚焦测试→一次完整回归；GitHub Actions 仅手动补充。
 
 S06-C使用本机 Method／HTTP／Gurobi聚焦测试和一次交付回归；0.13.0的真实模型与流程差异见 [记录](docs/development/s06-coe.md)。
+
+S05-D1角色模型配置见 [实现记录](docs/development/s05-role-models.md)；公共反馈修正与澄清仍是后续范围。
