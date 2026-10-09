@@ -150,7 +150,7 @@ flowchart LR
     S09B --> S10
 ```
 
-S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。[S02-B](development/s02b-factory.md) 也已完成当前范围。[S06-A](development/s06-gurobi.md) 已完成当前范围。[S04-B](development/s04-resume.md) 已实现当前范围，独立审查由父任务处理。当前前沿包含 S05-B、S06-B／C、S07-B／C／D；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
+S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。[S02-B](development/s02b-factory.md) 也已完成当前范围。[S06-A](development/s06-gurobi.md) 已完成当前范围。[S04-B](development/s04-resume.md)与 [S05-B](development/s05b-messages.md)已完成当前范围，本机241项集成回归及独立审查通过。当前前沿包含 S06-B／C、S07-B／C／D；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
 
 ## 5. 工程默认值与完成边界
 

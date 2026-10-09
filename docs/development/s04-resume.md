@@ -1,6 +1,6 @@
 # S04-B 取消与恢复
 
-本页记录 Issue 16 的当前实现与本机验收范围。规范来源为 [DD-07](../design/experiments-and-interfaces.md#dd-07-持久化恢复与报告)、[接口契约](../plugin-contracts.md#12-s04-b-cancellation-and-resume-sdk-070) 和 [验收清单](../acceptance.md)。SDK／Worker 为 0.7.0，未发布；既有四项修复及后续完整 Formulation 恢复修复分别保留聚焦证据，最新完整回归与独立审查待 parent 执行。
+本页记录 Issue 16 的当前实现与本机验收范围。规范来源为 [DD-07](../design/experiments-and-interfaces.md#dd-07-持久化恢复与报告)、[接口契约](../plugin-contracts.md#12-s04-b-cancellation-and-resume-sdk-070) 和 [验收清单](../acceptance.md)。首次实现于 SDK／Worker 0.7.0，当前已在未发布的 0.8.0 完成集成验收。
 
 ## 当前入口
 
@@ -75,43 +75,30 @@ Docker 清理继续使用既有有界 kill／inspect／remove；daemon 故障时
 手工候选验证目标 13、40/3 和 3；参数化 Pyomo 与 native Gurobi 的恢复不再发 HTTP 或最终重复求解。
 合成 HTTP fixture 不证明某个付费模型的质量；Gurobi 仍只声明既有 size-limited 微型环境。
 
-2026-10-09 修复基线 f82b8e2 本机 Python 3.12.11 完整回归：200 tests，379.359 秒，全部通过。
-strict mypy 检查 22 个源码文件；仓库／参考检查、wheel／sdist 构建通过。
-Python 3.11.13 使用干净 wheel：11 个崩溃／派生用例、2 个监督用例、1 个 Provider 复用用例通过；没有重复完整矩阵。
-新 Worker 实际求解目标 13，容器已删除；镜像 ID 为 `sha256:995a1957f3eb8817fc94c7178c30478bb03351665a2b0ea56206de85fd88d391`。
-容器与本机 SDK 源码 hash 都为 `eff6ca3ac5731a30ce2155919ffc62689be956f0718c0e422582d506576febcf`。
-证据位于 `/tmp/llm4om-s04b/fix-evidence/`。旧 SDK 的两个崩溃用例独立复现失败，新实现通过；
-验收覆盖进程硬退出与 OS 文件发布失败，未验证物理断电。没有付费模型请求或云端 CI。
-后续独立复审发现并修复完成状态提交、首次 genesis 恢复、转义凭据和私有日志耦合问题。
-求解完成状态在 solver_finished 之前提交，已用耗尽 Solver 上限的硬退出／恢复用例验证复用目标 13。
-以上旧基线包／镜像证据不替代本轮源码验收。
-最终四项修复以 dc511e3594de353136c37b5bf70ddc9000071c3b 为基线，证据位于
-`/tmp/llm4om-s04b/final-fix-evidence/`；四个主行为分别保存 red／green 日志。
-新测试从公共 MethodPlugin／Gateway、CLI／SDK 与 OS mkdir／fsync／rename 观察行为，
-覆盖 completed Execution 公开投影的早期硬退出、重复失败恢复、收据提交中断、不可变结果损坏和绑定不匹配。
-本轮 Python 3.12 聚焦：20 项崩溃／派生测试、1 项绑定拒绝、1 项双后端容器恢复、24 项 Provider 和 8 项兼容性测试通过。
-干净 Python 3.11.13 wheel 的 10 项新用例通过（38.809 秒）；strict mypy、仓库／引用检查、wheel／sdist 构建通过。
-新 Worker 对参数化 Pyomo 与 native Gurobi 的早期发布崩溃后 CLI 恢复均得到目标 13，HTTP／Solver 各一次。
-另存 grounded Worker 实跑 bundle，目标 13，全部引用校验通过，实际执行容器已删除。
-源码／wheel／Worker 的 SDK SHA-256 均为 `6cb4db6ba2b6b802e5d8f06bfe1f378083629fc123acfdd693c243564616c22c`；
-新镜像 ID 为 `sha256:f22e9d1f9bf6343887a0b21f82d2bfe8a898fac0e167717b1e8e36593b1a6788`。
-完整回归与独立 Standards／Spec 复审仍待 parent；旧 203 tests 回归不作为这四项修复的验收证据。
+2026-10-09，集成版本 `ecefddd` 的本机 Python 3.12.11 完整回归：**241 tests，522.681 秒，全部通过**。
+它包含全部最新修复：Formulation／Code／Execution 的完成发布恢复、方法 checkpoint 所有权、目录持久化、
+资源 head 回退拒绝、取消清理、未知请求预留和显式派生重跑。原始独立方法、参数化 Pyomo／native Gurobi、
+Task 导入与评测回归保留，真实 Docker／Solver 未跳过。
+
+独立 Standards／Spec 审阅对照原始 S04-B／S05-B 范围，未发现新的 P1／P2。
+strict mypy 检查22个源码文件，仓库128文件与参考检查、wheel／sdist 构建通过。
+干净 Python 3.11.13 wheel 的7项重点场景通过（44.426秒），另经合成 Messages 与真实 Worker
+求得 A=3、B=2、目标13；completed 恢复不需凭据，容器已删除。没有重复第二套完整版本矩阵。
+
+源码／安装 wheel／Worker 的 SDK hash 为 `4913ca520852db5587fe79195992ce99f303480c7cc7f54f8ac796992fbdb063`；
+镜像为 `sha256:edd9be002d1c96f8656cbf00f793d8e775182bc221c29308df0de4525a85a87f`。
+公开产物与包的项目密钥扫描通过。完整日志、wheel／Worker 证明和审阅记录位于
+`/tmp/llm4om-s05b/integrated-full-python312.log`、`/tmp/llm4om-s05b/integrated-evidence/` 和
+`/tmp/llm4om-s05b/integrated-review-{standards,spec}.md`。
+
+此前修复的逐步 red／green 保存在 `/tmp/llm4om-s04b/fix-evidence/`、
+`/tmp/llm4om-s04b/final-fix-evidence/` 和 `/tmp/llm4om-s04b/formulation-fix-evidence/`。
+这些工程 fixture 不证明付费模型质量；实际 Messages 模型任务另见 [S05-B](s05b-messages.md#实际服务与模型)。
+验收覆盖进程硬退出与 OS 文件发布失败，未验证物理断电。未触发云端 CI。
 OptiMUS／CoE、Web、batch 与完整 1.0 尚未完成；本切片不更改这些已批准范围。
 
-2026-10-09 后续 Spec P2 修复基线 `2f8fe4802e76a04dca3217bd0d4027e127cf64b2`，证据位于
-`/tmp/llm4om-s04b/formulation-fix-evidence/`。独立 wheel 安装且 supports_checkpoint=false 的 Method，
-在完成 Formulation 事件 checkpoint 与更早完整 ModelArtifact 发布后硬退出，修复前均返回 checkpoint_unsupported；
-修复后原阶段复用。Code 完成事件原先恢复后重复两次，现为一次且 build 记录完整。
-故障注入只使用 OS rename 和规范记录字段；合成 HTTP 下 Method／请求各一次，max_llm_attempts=1 不变。
-工厂与 native 的原 Formulation、Code、源码和数据 hash 保留，真实 HiGHS／微型 Gurobi 目标均为 13。
-本轮 Python 3.12 的 25 个不同聚焦用例通过；干净 Python 3.11.13 wheel 的 8 个关键用例通过（34.168 秒）。
-这些检查包含 cold admission、未完成方法拒绝／派生重跑、内部 checkpoint 所有权、未知预留、deadline、并发／owner lock、
-目录 fsync、私有 head 顺序、双后端 Execution 复用及 importer FD。一次测试命令的 importer 类名错误已用正确入口单独通过。
-strict mypy（22 源码文件）、仓库／引用检查及 wheel／sdist 构建通过。
-源码、wheel 与新 Worker 的 SDK SHA-256 均为 `2784071b28c211d931fa70d06543eda8ad8e416395fc521cd20a916a2e45a0a3`；
-镜像 ID 为 `sha256:2e3472b0f236bc9343aa85a8121c4a9ff1b24d4946cce27039b019115634de64`。
-本轮未运行全套或 CI，未调用付费模型，未发布包；parent 负责最终独立评审、整合与一次完整回归。
-源码身份校验保持严格，不声明旧源码 checkpoint 迁移，也不声明 S04 原 issue 或完整 1.0 全部完成。
+Formulation／Code 后续修复的独立方法、工厂／native 与阶段复用 red／green 另存于
+`/tmp/llm4om-s04b/formulation-fix-evidence/`；它们已纳入上述241项完整回归。
 
 恢复要求原公开输入／配置仍在原路径且字节不变；本版不提供移动目录后的自动路径迁移。
 已完成运行的身份校验不加载 Provider 凭据，也不新增模型／Solver API 调用。

@@ -1,6 +1,6 @@
 # S05-B Messages 实现与验收
 
-状态：SDK／Worker 0.8.0 的本机工程与真实指定模型端到端验证已通过；独立审查和最新恢复修复的集成仍待完成。
+状态：SDK／Worker 0.8.0 的本机工程与真实指定模型端到端验证已通过；最新恢复修复、独立审查和本机集成验收已通过。
 规范来源为 [Issue18](https://github.com/Fangziyang0910/LLM4OM/issues/18)、FR-15/16/17、AC-07/08、
 [Provider 契约](../plugin-contracts.md#13-s05-b-messages-adapter-sdk-080)和 [S04-B 恢复](s04-resume.md)。
 [此前协议探针](s05b-anthropic-research.md)只证明配置服务接受 Messages，不是本 Adapter 的平台验收。
@@ -55,15 +55,15 @@ OS 硬退出覆盖成功 private commit 先于 core 回调和 journal 先于 mut
 补回合成凭据后，两种协议各以同一请求的一次 loopback HTTP 和一次真实 HiGHS 求解得到目标13。
 Gateway 准备期间的取消与 deadline 也在 admission 前拒绝；成功回复与未知请求仍免凭据恢复。
 此次修复证据单独保存在 `/tmp/llm4om-s05b/admission-fix-evidence/author-report.md`；
-以下220项为修复前基线，不证明新修复。新全量回归留待 parent 独立审查和最新核心修复集成后执行。
+以下220项为修复前基线，不证明新修复。最新集成版本的完整回归与审查结果见下节。
 
 SDK、Direct Manifest、默认 Worker 和 lock 同步0.8.0；独立 fixture 方法的依赖范围扩至<0.9.0。
 OpenAI 旧 journal 的字段布局保持，完整 run 的精确 SDK／源码身份检查不放宽。
 这次交付不迁移已有0.7.0运行，需保留原运行环境恢复。
-真实模型验证已完成；独立 Standards／Spec 审查、最新恢复修复集成与交付尚未完成，包未发布。
+真实模型验证与独立 Standards／Spec 审查、最新恢复修复集成验收均已完成，包未发布。
 完整1.0、OptiMUS／CoE、Web、batch、角色路由与结构化功能均未因此完成。
 
-## 最终本机校验
+## 早期工程基线
 
 2026-10-09，已将 parent `dc511e3` 的完成状态提交、genesis 恢复与 Gateway.recover 修复纳入源码。
 Python3.12.11 一次完整回归220项，437.810秒，全部通过；原回归预期保留，真实 Docker 未跳过。
@@ -90,4 +90,23 @@ CLI 恢复已完成运行仍成功，没有增加请求／求解次数。公开 
 证据位于 `/tmp/llm4om-s05b/real-acceptance/verification.json`，run_id 为 `4a113fd56d764d2782d6d2f21f78854f`。
 
 这验证配置服务的 Messages 兼容性与此微型问题的生成／求解，不是完整 benchmark 成绩。
-本次源码基于 `dc511e3`；随后发现的 S04-B 完成记录发布、资源回退等边界修复仍需集成和复审。
+本次源码基于 `dc511e3`；随后发现的 S04-B 边界与凭据 admission 问题已修复；它们的集成验收单独记录如下。
+
+## 最终集成验收
+
+2026-10-09，`ecefddd` 的本机 Python 3.12.11 完整回归241项，522.681秒，全部通过。
+独立 Standards／Spec 对照原始 Issue16／18 与开发计划，均未发现新的 P1／P2。
+最新核心恢复与凭据准备修复全部纳入此版本，旧203／220项基线不替代本次验收。
+strict mypy22模块、仓库128文件、参考检查和 wheel／sdist 构建通过。
+干净 Python3.11.13 wheel 的7项关键兼容用例通过（44.426秒），没有重复完整矩阵。
+
+安装 wheel 经合成 Messages 与真实新 Worker 得到 A=3、B=2、目标13，一次 HTTP／Solver；
+容器已删除，completed 恢复不需要凭据，原始私有内容未进入公开 bundle。
+源码／wheel／Worker hash 均为 `4913ca520852db5587fe79195992ce99f303480c7cc7f54f8ac796992fbdb063`；
+镜像为 `sha256:edd9be002d1c96f8656cbf00f793d8e775182bc221c29308df0de4525a85a87f`。
+源码、wheel／sdist 与82个公开文件的项目密钥扫描通过。
+完整日志和证明位于 `/tmp/llm4om-s05b/integrated-full-python312.log` 与
+`/tmp/llm4om-s05b/integrated-evidence/`。没有云端 CI 或为存储修复重复付费模型调用。
+
+真实模型任务使用先前已保存的同协议实现，实际证据与版本单独保留；最终存储／准备语义由本次
+本机回归和安装包／Worker 检查验证。旧运行要求保留原 SDK／源码／镜像身份，不做自动迁移。
