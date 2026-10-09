@@ -1,0 +1,78 @@
+{
+  "upstream_commit": "e182e9ef5841605c2a7e87467021fd83522b6484",
+  "license": "MIT",
+  "files": {
+    "LICENSE": {
+      "file": "LICENSE.txt",
+      "sha256": "17b0a6b26154e8c43a04fa87cb35888f25915ba4387cb17c5d8cdd95d92a97fa",
+      "size_bytes": 1069,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/LICENSE"
+    },
+    "main.py": {
+      "file": "main.py.txt",
+      "sha256": "d2a55a202311bb3fe0176505d2973f5b198f769b525a27230868b3c2f04141b2",
+      "size_bytes": 4443,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/main.py"
+    },
+    "utils.py": {
+      "file": "utils.py.txt",
+      "sha256": "a3b46436ee6fd135478e7a2065fd073c63f7c11f6cc165d270219a1255765467",
+      "size_bytes": 6110,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/utils.py"
+    },
+    "objective.py": {
+      "file": "objective.py.txt",
+      "sha256": "8334b824a92a5d48203d3f5c974bdef8c7bea58de5aa00e1d491c1af3b470d9e",
+      "size_bytes": 2530,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/objective.py"
+    },
+    "constraint.py": {
+      "file": "constraint.py.txt",
+      "sha256": "9dcdcb81b0fed92c3f6b52d166b29e73e4455a76a2d94eb8388cfc0df9d28494",
+      "size_bytes": 13566,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/constraint.py"
+    },
+    "constraint_model.py": {
+      "file": "constraint_model.py.txt",
+      "sha256": "48ca1351b13c7221135a4d7be1cc7719e01a735fcfec36016807c2dd9da1e18d",
+      "size_bytes": 16435,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/constraint_model.py"
+    },
+    "objective_model.py": {
+      "file": "objective_model.py.txt",
+      "sha256": "f20cf8536591157ff886fae1fe72291575327d79811d236af1750c9847a96f09",
+      "size_bytes": 3398,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/objective_model.py"
+    },
+    "target_code.py": {
+      "file": "target_code.py.txt",
+      "sha256": "6f68ec78078584ae5d093184cb56b56b7346e7830fc8e5f0400aa4657aa6d263",
+      "size_bytes": 5606,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/target_code.py"
+    },
+    "generate_code.py": {
+      "file": "generate_code.py.txt",
+      "sha256": "0a77e2613041f67ddde17376f5848cc44fc988ae3126bd76a347ed38388d8bc5",
+      "size_bytes": 2393,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/generate_code.py"
+    },
+    "execute_code.py": {
+      "file": "execute_code.py.txt",
+      "sha256": "3a7686e7dc6ae60590ad69281bc9237f8fd9d2c7fa29cc7ba70257e8cfb5cacf",
+      "size_bytes": 3083,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/execute_code.py"
+    },
+    "parameters.py": {
+      "file": "parameters.py.txt",
+      "sha256": "ad217ecddf3a129f730d140c399433c85d6b45160a443e9edb32ad952a454d6d",
+      "size_bytes": 4381,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/parameters.py"
+    },
+    "rag/rag_utils.py": {
+      "file": "rag__rag_utils.py.txt",
+      "sha256": "7e2987b81509de12bafa48f8c256bf054500e51e5a0a67d8bd69cd75d92a3810",
+      "size_bytes": 983,
+      "url": "https://github.com/teshnizi/OptiMUS/blob/e182e9ef5841605c2a7e87467021fd83522b6484/rag/rag_utils.py"
+    }
+  }
+}

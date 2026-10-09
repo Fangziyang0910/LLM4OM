@@ -315,7 +315,7 @@ RunConfig 可以显式选择 trusted_local，config 为空对象；container 由
 
 SDK 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对象，当前只装载 method。Manifest 的 capabilities.method_profile 为 grounded_single_candidate/0.1.0；plugin_version 当前为稳定 major.minor.patch，contract_range 为 `>=X.Y.Z,<A.B.C` 并包含核心契约 0.2.0。config_schema 自包含，允许本地片段引用，暂不接受 $id 或远程 $ref／$dynamicRef；dependencies.python 为分发包名称列表，记录已安装版本。source 暂不接受额外 ArtifactRef，研究 URL／固定版本／变体等文字元数据可保存。
 
-当前 async run 返回内存 MethodOutcome：status=candidate_selected、final_candidate_id=001、proposal=ModelProposal(artifact, formulation, structured_ir)。核心验证原问题 hash／revision、五元素和数据绑定，生成实际引用与候选记录；这不是完整的多候选 Protocol；当前内部 checkpoint 扩展见第 12 节。MethodContext 当前提供 llm、只读公开 data／预算上限和 problem_sha256；MethodContext 的 LLMResponse 提供 text、call_id、evidence_origin、source_sha256，以及可选 finish_reason；真实 Provider 完整 usage 与身份保存在 Gateway trace。窄 profile 明确版本化，后续增加资源和状态时同步声明。
+当前 async run 返回内存 MethodOutcome：status=candidate_selected、final_candidate_id=001、proposal=ModelProposal(artifact, formulation, structured_ir)。核心验证原问题 hash／revision、声明的 Formulation 和数据绑定，生成实际引用与候选记录；多 revision／原生脚本资源见第 14 节，内部 checkpoint 扩展见第 12 节。MethodContext 提供 llm、只读公开 data／预算上限和 problem_sha256，以及可选运行资源。LLMResponse 提供 text、call_id、evidence_origin、source_sha256，以及可选 finish_reason；真实 Provider 完整 usage 与身份保存在 Gateway trace。
 
 doctor 与 run 共用 prepare_run；先验证参数，再匹配当前表示、目标类型、Backend／Solver、Provider 功能和 Executor，再检查分发包与真实求解依赖。缺失能力为未知；请求的资源须被方法声明，当前表示 profile 固定，不能靠枚举并集暗示 native_code 可用。allowed_problem_types 缺省 lp／milp，实际 IR 类型在产出后再次核对。真实运行保存 admission_plan_ref；离线计划只准备回放，不标记 Code／Solve 已执行。未知方法异常与 SystemExit 转为稳定错误和脱敏 frame，原错误参数／源码行与插件 Python 输出不进入公开结果。
 
@@ -651,3 +651,72 @@ TextProvider.prepare() 是本地、幂等的准备接口；HTTP Adapter 复用 f
 补回有效凭据后，同一 run／request_id 可继续。同步 complete 与异步 acomplete 的直接调用也先准备；
 已准备的 transport 与重试不重新读取环境，避免 admission 后再发生本地凭据错误。
 真正发送后的 HTTP 认证失败仍保留实际 attempt 和未知费用。显式 rerun 的既有累计资源语义不变。
+
+## 14. S06-B native script resources (SDK 0.9.0)
+
+Status: implemented development interface; remaining acceptance is recorded in
+[S06-B](development/s06b-optimus.md). Existing0.2.0 CSV/five-element profiles
+remain valid. ProblemSpec0.3.0 also accepts JSON object data with
+`format=json`, `schema={type: object}`, a public relative path and SHA-256.
+Duplicate keys, nonfinite values, reserved oracle material and non-object JSON
+are rejected before generation. Every file has an8MiB bound; original bytes
+are retained. JSON is not silently converted to CSV or given invented columns.
+
+Native Formulation0.3.0 has `representation_kind=native_formulation`,
+`representation={schema: <declared source-state schema>, state: <original JSON object>}`,
+problem identity/revision, data_bindings, provenance and structured_ir_ref=null.
+Bindings cover the admitted public files and hashes. This stores original
+source states without fabricating five-element content or semantic evidence.
+
+The `native_script/0.1.0` method profile requires native_formulation,
+native_script, gurobipy, Gurobi and container execution. Offline/HiGHS/local
+execution and undeclared combinations reject admission before paid calls.
+`MethodContext.resources` is an optional mediated `MethodResources` interface:
+
+```python
+class MethodResources(Protocol):
+    async def execute(self, execution_id: str, code: ScriptCodeProposal) -> dict[str, Any]: ...
+    def record(self, name: str, value: bytes) -> ArtifactRef: ...
+    def emit(self, event: dict[str, Any]) -> None: ...
+```
+
+The current profile supplies this interface for admitted native scripts.
+Other profiles do not imply access. Context also carries the original absolute
+`deadline`; existing cancellation and save_checkpoint contracts remain.
+No hidden evaluator, credential or unrestricted host execution is supplied.
+Artifact names are bounded basenames under `method/`; JSON artifacts are
+validated. ScriptCodeProposal0.1.0 contains original source, source_sha256,
+exact public-derived data_json bytes and data_bindings. A selected ModelProposal
+contains the matching execution_id. CodeArtifact0.2.0 retains source_formulation,
+source bytes, `factory_contract=native_script/0.1.0`, `entry_point=code.py`,
+data_json_ref and execution_id; it does not claim a build_model factory.
+
+Execution feedback contains source exit/status/stdout/stderr, original source
+and data refs, untrusted capture refs, optional trusted solve_result_ref and
+collector_error. Source exit and collector status remain distinct. The raw
+script runs in a protected child inside the read-only, network-disabled Worker;
+its capture is a candidate transport. The fresh collector validates MPS,
+variable map and supported structure before solving through actual SDK APIs.
+Source text/stdout/capture attributes cannot assert trusted result fields.
+
+Each script attempt consumes one Solver slot; a supported capture's collector
+consumes another. Two available slots are required before script admission.
+Ledger counters retain script_executions, collector_calls, capture_attempts,
+hook_optimize_observations and separate admission_solver_probe_calls.
+source_optimize_calls=null and source_optimize_measurement identifies untrusted
+hook observations: arbitrary Python can bypass the hook, so the platform cannot
+assert an exact in-script optimize count. Existing wall/CPU/memory/output bounds
+still constrain the execution. Failed calls stay in the denominator.
+
+Execution IDs bind exact source/data hashes, data bindings and frozen admission.
+A complete verified result is reused; unknown admitted execution is not retried.
+Interrupted complete publication can be reconciled from verified receipts.
+Cancelling stops the owned script container and the fixed-source driver; a
+killed driver's pipes are drained before its event loop closes. Completed
+resume needs no new credential, model request or Solver call.
+
+OptiMUS uses the fixed default main (EC=true, RAG=None). All source calls use
+Gateway and deterministic replay IDs. The original three-execution repair loop
+and last-successful-executed selection remain; an unexecuted final repair cannot
+be selected as solved. Requested RAG modes fail before paid calls until actual
+compatible rights-cleared corpus/index/embedding resources are admitted.

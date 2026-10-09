@@ -79,6 +79,8 @@ class NL4OptEvaluator:
                             level = "deterministic_compilation"
                         elif origin == "method_generated" and code.get("factory_contract") in ("python_factory/0.1.0", "native_gurobipy/0.1.0"):
                             level = "factory_contract"
+                        elif origin == "method_generated" and code.get("factory_contract") == "native_script/0.1.0":
+                            level = "native_script_contract"
                         else:
                             raise RunError("invalid_code_evidence", "evaluation", "Code origin is not supported by this evaluator.")
                     result[field] = {"status": "pass", "level": level}

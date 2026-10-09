@@ -54,6 +54,13 @@ class RepositoryChecksTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("data hash mismatch: products", result.stdout)
 
+    def test_rejects_changed_fixed_upstream_source(self) -> None:
+        path = self.repo / "src/llm4om/optimus_source/main.py.txt"
+        path.write_bytes(path.read_bytes() + b"\n# changed\n")
+        result = self.check_repository()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("main.py.txt: fixed upstream bytes changed or missing", result.stdout)
+
     def test_rejects_stale_reference_exports(self) -> None:
         path = self.repo / "docs/references/catalog.json"
         catalog = json.loads(path.read_text())

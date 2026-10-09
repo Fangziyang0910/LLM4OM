@@ -23,6 +23,8 @@ S05-B 新增独立 Messages Adapter（SDK／Worker 0.8.0）。本地工程实现
 真实指定模型端到端验收、最新修复的241项本机集成回归和独立审查均已通过。
 既有小探针不替代平台验收，SDK／Worker 0.8.0 仍未发布。
 
+S06-B 的 OptiMUS 固定源码流程已进入 SDK/Worker0.9.0 开发版本，保留原生 Formulation、脚本及执行驱动修正；支持 gurobipy/Gurobi 容器路径。本机流程验证和剩余验收见 [实现记录](docs/development/s06b-optimus.md)，公开输入见 [示例](examples/optimus/README.md)。0.8.0 是已验收基线；0.9.0 尚未完成全部验收。
+
 GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache-2.0。私有可见性与开源许可证分别管理。
 
 ## 1.0 目标

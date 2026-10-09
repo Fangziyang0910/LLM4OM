@@ -11,7 +11,7 @@ import sys
 import time
 from typing import Any
 
-from llm4om.contracts import RunError, parse_json, read_public_bytes, validate_bindings, validate_csv, validate_formulation, validate_problem
+from llm4om.contracts import RunError, parse_json, read_public_bytes, validate_bindings, validate_data, validate_formulation, validate_problem
 from llm4om.linear import compile_ir
 from llm4om.solvers import solve
 
@@ -38,7 +38,7 @@ def solve_factory(path: Path, *, solver_id: str = "llm4om.solvers.highs") -> tup
         raw = read_public_bytes(path.parent / ref["path"])
         if hashlib.sha256(raw).hexdigest() != ref["sha256"]:
             raise RunError("data_hash_mismatch", "execution", "Public data bytes differ from the factory binding.")
-        validate_csv(raw, ref["schema"])
+        validate_data(raw, ref)
     # Prevent a same-UID child from accessing collector memory or /proc parent fds.
     if ctypes.CDLL(None, use_errno=True).prctl(4, 0, 0, 0, 0) != 0:
         raise RunError("factory_isolation_unavailable", "execution", "Cannot protect the collector from the factory child.")

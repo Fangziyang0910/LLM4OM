@@ -152,7 +152,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/control.py` | S04-B 协作 CancellationToken 与私有异步监督 | run／owner 身份绑定、CLI／SDK 控制文件，不向宿主 PID 发信号 |
 | `tests/test_resume_run.py` | S04-B CLI／SDK／Provider HTTP／Executor 行为 | 取消、SIGINT、真实 Docker 清理、成功／未知回复、阶段复用、锁、损坏与 deadline |
 | `docs/development/s04-resume.md` | S04-B 当前实现与本机验收范围 | 公开入口、checkpoint／预算／身份、默认拒绝／显式派生及实际支持边界 |
-| `docs/development/s06b-optimus-source.md` | 固定 OptiMUS 0.3 主流程、提示、原生输出与适配接缝研究 | 19 份源码／文档 hash、16 份检索资源 hash、真实默认模式与 paper/source 区分；未集成 |
+| `docs/development/s06b-optimus-source.md` | 固定 OptiMUS 0.3 主流程、提示、原生输出与适配接缝研究 | 19 份源码／文档 hash、16 份检索资源 hash、真实默认模式与 paper/source 区分；实现与验收见 S06-B 记录 |
 | `docs/development/s06c-coe-source.md` | 固定 CoE 角色路由、协作／反思、函数输出与输入分类研究 | 30 份源文件 hash、真实选择／反馈语义、无许可材料的观察与原生接口需求；未集成 |
 | `tests/test_resume_crash.py` | S04-B 真实硬崩溃与派生恢复 | CLI／SDK、独立安装无 checkpoint Method、合成 HTTP、OS fsync／rename；Formulation／Code 完成提交、早期产物与 Execution 复用、收据保留及累计资源 |
 | `tests/test_async_control.py` | 公共 Method 任务监督行为 | 取消等待清理、SystemExit 诊断与 Python 3.11 兼容 |
@@ -161,3 +161,31 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_anthropic.py` | S05-B 独立 Messages 协议与应用行为 | 真实 loopback HTTP、CLI/SDK、OS 硬退出、未知用量／预算、凭据回显与损坏拒绝 |
 | `examples/specs/messages.yaml` | Messages 文本配置模板 | 指定模型、占位 HTTPS 端点、共同预算与 container 路径；doctor 不付费 |
 | `docs/development/s05b-messages.md` | S05-B 实现与实际支持 | 本地 red/green、SDK/Worker 版本与真实验收／独立审查的待办边界 |
+
+| `src/llm4om/method_resources.py` | 运行拥有的脚本执行、预算、公开 artifact/event 与执行复用 | SDK 合成 HTTP＋实际 Gurobi，取消／结果收据／未知执行 |
+| `src/llm4om/optimus.py` | 固定 OptiMUS main 方法适配与 Gateway／资源驱动 | 实际固定 main 的同 tape 六状态／提示／修正／选择对照 |
+| `src/llm4om/optimus_runtime.py` | 受控固定源码加载与资源桥、独立 main 对照 | 原始 hash、公共输入、提示状态与 execution tape |
+| `src/llm4om/script_worker.py` | 原生脚本隔离执行与不可信 capture | 真实容器、source 诊断、MPS 捕获与新 collector 独立求解 |
+| `docs/development/s06b-optimus.md` | S06-B 开发实现与证据范围 | 实际支持、固定源码差异、本机验收及剩余条件 |
+| `examples/optimus/README.md` | OptiMUS 公开微型问题操作说明 | 明确付费流程、人工数学预期、占位端点和本地配置 |
+| `examples/optimus/problem.json` | 公开人工 MILP 规格 | ProblemSpec0.3.0、JSON 数据 hash 与公开来源 |
+| `examples/optimus/params.json` | 公开参数元数据与数值 | 保留 value／shape／definition 与手算目标12 |
+| `examples/optimus/labels.json` | 公开人工领域与问题类型标签 | 明确公开来源，无 oracle 推导 |
+| `examples/optimus/run.yaml` | OptiMUS 容器／外部文本 LLM 配置模板 | 明确 no-RAG、Solver/修正预算与占位 Provider 端点 |
+| `tests/test_optimus_method.py` | 固定源码流程忠实度 | 公共 MethodContext、实际 main 同 tape、quirks／修正／最终选择 |
+| `tests/test_optimus_run.py` | OptiMUS SDK 本机端到端验收 | 合成 HTTP、实际 Gurobi／Docker、预算、取消和未知／完整恢复 |
+| `tests/test_public_json.py` | JSON 公开数据与原生 Formulation 契约 | 原始 state、不合法键／数值／oracle／schema |
+| `tests/test_script_worker.py` | 原生脚本 Worker 与可信 collector 公共行为 | 原始 bytes、多个模型拒绝、exit 诊断与独立 API 结果 |
+| `src/llm4om/optimus_source/LICENSE.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/constraint.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/constraint_model.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/execute_code.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/generate_code.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/main.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/manifest.json` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/objective.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/objective_model.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/parameters.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/rag__rag_utils.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/target_code.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+| `src/llm4om/optimus_source/utils.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |

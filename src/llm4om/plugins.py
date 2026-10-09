@@ -17,6 +17,7 @@ import jsonschema
 
 from llm4om.control import _supervise
 from llm4om.methods import DirectFactory, MethodContext, MethodOutcome
+from llm4om.optimus import OptimusFactory
 from llm4om.contracts import RunError, parse_json, reject_additional_refs
 
 
@@ -65,9 +66,10 @@ class MethodPlugin:
 
 
 def discover_methods() -> dict[tuple[str, str], MethodPlugin]:
-    builtin = DirectFactory()
-    manifest = _manifest(builtin)
-    plugins = {(manifest["kind"], manifest["plugin_id"]): MethodPlugin(manifest, {"kind": "builtin"}, builtin)}
+    plugins = {}
+    for builtin in (DirectFactory(), OptimusFactory()):
+        manifest = _manifest(builtin)
+        plugins[(manifest["kind"], manifest["plugin_id"])] = MethodPlugin(manifest, {"kind": "builtin"}, builtin)
     for entry in sorted(entry_points(group="llm4om.plugins"), key=lambda item: (item.name, item.value)):
         try:
             with _quiet():

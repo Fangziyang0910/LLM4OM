@@ -68,8 +68,17 @@ def markdown_anchors(text: str) -> set[str]:
 
 def check_text(files: list[Path]) -> list[str]:
     errors = []
+    source = ROOT / "src/llm4om/optimus_source"
+    manifest = json.loads((source / "manifest.json").read_text())
+    pinned = {source / entry["file"]: entry for entry in manifest["files"].values()}
+    for path, entry in pinned.items():
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"] or path.stat().st_size != entry["size_bytes"]:
+            errors.append(f"{path.relative_to(ROOT)}: fixed upstream bytes changed or missing")
     for path in files:
         name = path.relative_to(ROOT)
+        # Fixed upstream files keep their original whitespace and license bytes.
+        if path in pinned:
+            continue
         text = path.read_text(encoding="utf-8")
         if not path.read_bytes().endswith(b"\n"):
             errors.append(f"{name}: missing final newline")

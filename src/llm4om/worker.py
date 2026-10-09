@@ -10,7 +10,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 from llm4om.contracts import RunError, parse_json, read_public_bytes
-from llm4om.solvers import solver_runtime, solve
+from llm4om.solvers import solver_runtime, solver_packages, solve
 from llm4om.linear import compile_ir
 
 
@@ -19,18 +19,31 @@ def main() -> int:
     parser.add_argument("--runtime", action="store_true")
     parser.add_argument("--solver", default="llm4om.solvers.highs")
     parser.add_argument("--solve", type=Path)
+    parser.add_argument("--collect-native", type=Path)
     parser.add_argument("--solve-stdin", action="store_true")
     args = parser.parse_args()
     try:
-        runtime = {"python": platform.python_version(), "llm4om": version("llm4om"), **solver_runtime(args.solver)}
+        runtime = {"python": platform.python_version(), "llm4om": version("llm4om"),
+                   **({"packages": solver_packages(args.solver)} if args.collect_native is not None else solver_runtime(args.solver))}
         if args.runtime:
             print(json.dumps({"schema_version": "0.2.0", "runtime": runtime}, allow_nan=False))
             return 0
-        if args.solve is None and not args.solve_stdin:
+        if args.solve is None and not args.solve_stdin and args.collect_native is None:
             parser.error("--solve or --runtime is required")
-        request = parse_json(sys.stdin.buffer.read() if args.solve_stdin else read_public_bytes(args.solve))
+        request = parse_json(sys.stdin.buffer.read() if args.solve_stdin else read_public_bytes(args.collect_native or args.solve))
         factory = None
-        if not args.solve_stdin and request.get("kind") in ("python_factory/0.1.0", "native_gurobipy/0.1.0"):
+        if args.collect_native is not None:
+            from llm4om.gurobi import read_native, native_instance, solve_native
+            if (args.solver != "llm4om.solvers.gurobi" or set(request) != {
+                    "schema_version", "transport", "source_sha256", "solver_options", "allowed_problem_types"}
+                    or request["schema_version"] != "0.1.0"):
+                raise RunError("invalid_worker_request", "execution", "Invalid native collector request.")
+            with read_native(request["transport"]) as handle:
+                instance = native_instance(handle)
+                if instance["problem_type"] not in request["allowed_problem_types"]:
+                    raise RunError("capability_mismatch", "execution", "Captured model type is outside admission.")
+                result = solve_native(handle, request["solver_options"])
+        elif not args.solve_stdin and request.get("kind") in ("python_factory/0.1.0", "native_gurobipy/0.1.0"):
             from llm4om.factory_worker import solve_factory
             result, factory = solve_factory(args.solve, solver_id=args.solver)
         else:

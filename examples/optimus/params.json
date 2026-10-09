@@ -1,0 +1,12 @@
+{
+  "Capacity": {
+    "value": 4,
+    "shape": [],
+    "definition": "Maximum production units."
+  },
+  "Profit": {
+    "value": 3,
+    "shape": [],
+    "definition": "Profit per production unit."
+  }
+}

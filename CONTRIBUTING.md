@@ -4,6 +4,8 @@
 
 SDK／Worker 0.8.0 已完成 [S04-B 取消／恢复](docs/development/s04-resume.md)和 [S05-B Messages](docs/development/s05b-messages.md)集成验收；241项本机回归与独立审阅通过，包未发布。
 
+S06-B 正在验收 SDK/Worker0.9.0 的完整固定 OptiMUS 主流程；支持与证据见 [实现记录](docs/development/s06b-optimus.md)。已验收0.8.0 基线与开发版本分别记录。
+
 规范见 [CODING_STANDARDS](CODING_STANDARDS.md)，领域词见 [GLOSSARY](GLOSSARY.md)。按 [文档导航](docs/README.md)读取当前任务涉及的 FR/NFR、契约、详细设计与验收。方法或 benchmark 接入另读 [资料库](docs/references/README.md)及 [源码考察](docs/references/source-inspection.md)。
 
 ## 1. 从需求到工作项

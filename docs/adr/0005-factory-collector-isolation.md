@@ -6,3 +6,5 @@
 S06-A 延续此边界：Pyomo 导出实例可独立选择 Gurobi；native gurobipy 以 SDK MPS 和显式变量映射
 传递候选模型，可信父进程使用新的 SDK 对象检查 LP/MILP 结构并求解。原生提取视图标为
 native_exported_instance；原 Code／Formulation 和原生身份保留，导出不证明源码语义。
+
+S06-B 的原生脚本先在隔离子进程执行，保留其退出诊断以驱动上游修正；capture 仅是候选 MPS。另一个新的可信 Worker 校验并求解，原始执行与独立收集分开记账。这样保留源码控制流，同时防止生成代码把自身 stdout 或被修改的 API 对象当作可信结果。

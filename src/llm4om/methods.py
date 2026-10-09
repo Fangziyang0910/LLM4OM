@@ -36,11 +36,30 @@ class FactoryCodeProposal:
 
 
 @dataclass(frozen=True)
+class ScriptCodeProposal:
+    """Original native script and explicitly derived public data.json bytes."""
+
+    source: str
+    source_sha256: str
+    data_bindings: list[dict[str, Any]]
+    data_json: bytes
+    schema_version: str = "0.1.0"
+    representation_kind: str = "native_script"
+
+
+class MethodResources(Protocol):
+    async def execute(self, execution_id: str, code: ScriptCodeProposal) -> dict[str, Any]: ...
+    def record(self, name: str, value: bytes) -> dict[str, Any]: ...
+    def emit(self, event: dict[str, Any]) -> None: ...
+
+
+@dataclass(frozen=True)
 class ModelProposal:
     artifact: dict[str, Any]
     formulation: dict[str, Any]
     structured_ir: dict[str, Any] | None = None
-    code: FactoryCodeProposal | None = None
+    code: FactoryCodeProposal | ScriptCodeProposal | None = None
+    execution_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -58,6 +77,8 @@ class MethodContext:
     problem_sha256: str
     cancellation: CancellationToken = field(default_factory=CancellationToken)
     save_checkpoint: Callable[[dict[str, Any]], None] | None = None
+    resources: MethodResources | None = None
+    deadline: float | None = None
 
 
 class DirectMethod:
@@ -175,7 +196,7 @@ class DirectFactory:
     def describe(self) -> dict[str, Any]:
         return {
             "schema_version": "0.2.0", "plugin_id": "llm4om.methods.direct", "kind": "method",
-            "plugin_version": "0.8.0", "contract_range": ">=0.2.0,<0.3.0",
+            "plugin_version": "0.9.0", "contract_range": ">=0.2.0,<0.3.0",
             "display_name": "Direct (declared text output)",
             "description": "One public text response produces a five-element Formulation with grounded LPIR or parameterized Python factory.",
             "capabilities": {"method_profile": "grounded_single_candidate/0.1.0", "problem_types": ["lp", "milp"],

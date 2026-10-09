@@ -17,13 +17,14 @@ from types import MappingProxyType
 from typing import Any
 
 from llm4om.contracts import (
-    RunError, parse_json, public_path, read_config, read_public_bytes, validate_config, validate_csv, validate_problem,
+    RunError, parse_json, public_path, read_config, read_public_bytes, validate_config, validate_data, validate_problem,
     validate_model_artifact, validate_formulation, validate_bindings, reject_additional_refs,
     validate_worker_response,
 )
 from llm4om.control import CancellationToken
 from llm4om.providers import Gateway
-from llm4om.methods import FactoryCodeProposal, MethodContext, ModelProposal
+from llm4om.methods import FactoryCodeProposal, ScriptCodeProposal, MethodContext, ModelProposal
+from llm4om.method_resources import RunMethodResources
 from llm4om.preflight import AdmissionPlan, prepare_run
 from llm4om.linear import CompiledCode, compile_ir
 from llm4om.storage import RunStore
@@ -114,8 +115,10 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
             raise RunError("checkpoint_incompatible", "admission", "Method, package, runtime or resource identity changed.")
         admission_ref = store.json("admission-plan.json", plan.snapshot, "admission-plan")
         mode = plan.snapshot["mode"]
-        if plan.snapshot["method_profile"] in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0"):
-            code_level = "factory_contract"
+        if plan.snapshot["method_profile"] in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0", "native_script/0.1.0"):
+            code_level = "native_script_contract" if plan.snapshot["method_profile"] == "native_script/0.1.0" else "factory_contract"
+        if plan.snapshot["method_profile"] == "native_script/0.1.0" and "admission" not in store.state:
+            ledger["admission_solver_probe_calls"] = ledger.get("admission_solver_probe_calls", 0) + 2
         store.state["admission"] = plan.snapshot
         store.state["sdk"] = version("llm4om")
         store.state["host"] = {"python": platform.python_version(), "sdk_sha256": _sdk_sha256(),
@@ -193,7 +196,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
                     "resolved_plugin_id": settings[name]["plugin_id"] if resource_status[name] != "not_available" else None,
                     "status": resource_status[name],
                     "reason": None if resource_status[name] == "available" else "Method supplied Code; compiler is not used."
-                    if name == "compiler" and code_level == "factory_contract" else "Resource did not complete successfully."}
+                    if name == "compiler" and code_level in ("factory_contract", "native_script_contract") else "Resource did not complete successfully."}
                     for name in ["compiler", "model_backend", "solver", "executor"]} if settings_valid else {},
                "artifacts": list(store.refs)}, "bundle")
     store.state["status"] = status
@@ -213,8 +216,8 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
         raw = read_public_bytes(public_path(problem.parent, data["path"]))
         if data["sha256"] and hashlib.sha256(raw).hexdigest() != data["sha256"]:
             raise RunError("data_hash_mismatch", "validation", "A data file does not match its declared SHA-256.")
-        validate_csv(raw, data["schema"])
-        ref = store.write(f"data/{index}.csv", raw, data["data_id"])
+        validate_data(raw, data)
+        ref = store.write(f"data/{index}.{data['format']}", raw, data["data_id"])
         data_refs.append(ref)
         data_content[data["data_id"]] = raw
         data["path"] = ref["relative_path"]
@@ -248,7 +251,8 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
         store.state["method_checkpoint"] = value
         store.checkpoint()
     context = MethodContext(gateway, MappingProxyType(data_content), MappingProxyType(deepcopy(settings["budget"])),
-                            hashlib.sha256(source_problem).hexdigest(), store.cancellation, save_method_checkpoint)
+                            hashlib.sha256(source_problem).hexdigest(), store.cancellation, save_method_checkpoint,
+                            RunMethodResources(store, public, settings, plan) if plan.snapshot["method_profile"] == "native_script/0.1.0" else None, plan.deadline)
     store.state["method_started"] = True
     store.checkpoint()
     try:
@@ -266,9 +270,9 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     output = outcome.proposal
     artifact = parse_json(json.dumps(output.artifact, allow_nan=False).encode())
     formulation = parse_json(json.dumps(output.formulation, allow_nan=False).encode())
-    factory_profile = plan.snapshot["method_profile"] in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0")
+    factory_profile = plan.snapshot["method_profile"] in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0", "native_script/0.1.0")
     source_ref = None
-    if factory_profile and isinstance(output.code, FactoryCodeProposal) and isinstance(output.code.source, str):
+    if factory_profile and isinstance(output.code, (FactoryCodeProposal, ScriptCodeProposal)) and isinstance(output.code.source, str):
         source_ref = store.write("candidates/001/model.py", output.code.source.encode(), "method-source")
         store.json("candidates/001/supplied-formulation.json", formulation, "supplied-formulation")
         store.json("candidates/001/supplied-code.json", {
@@ -280,7 +284,7 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     if artifact["problem_ref"].get("sha256") != hashlib.sha256(source_problem).hexdigest():
         raise RunError("artifact_problem_mismatch", "formulation", "Method output belongs to another public input.")
     if factory_profile:
-        if (output.structured_ir is not None or not isinstance(output.code, FactoryCodeProposal)
+        if (output.structured_ir is not None or not isinstance(output.code, (FactoryCodeProposal, ScriptCodeProposal))
                 or source_ref is None or output.code.schema_version != "0.1.0" or not output.code.source
                 or output.code.representation_kind not in plan.method.manifest["capabilities"]["code_representations"]):
             raise RunError("invalid_method_outcome", "code", "Factory profile requires only a versioned Code proposal.")
@@ -307,10 +311,13 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     artifact["problem_ref"] = problem_ref
     artifact["formulation_ref"] = formulation_ref
     if factory_profile:
-        assert isinstance(output.code, FactoryCodeProposal)
+        assert isinstance(output.code, (FactoryCodeProposal, ScriptCodeProposal))
         code_ref = store.json("candidates/001/code-artifact.json", {
             "schema_version": "0.2.0", "code_id": "method-code-001", "representation_kind": output.code.representation_kind,
-            "factory_contract": "native_gurobipy/0.1.0" if output.code.representation_kind == "native_code" else "python_factory/0.1.0", "entry_point": "build_model",
+            "factory_contract": "native_script/0.1.0" if isinstance(output.code, ScriptCodeProposal) else "native_gurobipy/0.1.0" if output.code.representation_kind == "native_code" else "python_factory/0.1.0",
+            "entry_point": "code.py" if isinstance(output.code, ScriptCodeProposal) else "build_model",
+            **({"data_json_ref": store.write("candidates/001/data.json", output.code.data_json, "script-data"),
+                "execution_id": output.execution_id} if isinstance(output.code, ScriptCodeProposal) else {}),
             "representation_ref": source_ref, "model_backend": settings["model_backend"]["plugin_id"],
             "source_formulation_ref": formulation_ref, "data_bindings": output.code.data_bindings,
             "provenance": {"origin": "method_generated", "method": method.manifest,
@@ -371,6 +378,29 @@ def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: 
 
 def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_ref: dict[str, Any],
                        settings: dict[str, Any], ledger: dict[str, Any], plan: AdmissionPlan) -> tuple[dict[str, Any] | None, dict[str, Any], RunError | None]:
+    if plan.snapshot["method_profile"] == "native_script/0.1.0":
+        artifact = _load_verified_record(store, artifact_ref)
+        code = _load_verified_record(store, artifact["code_ref"])
+        source = read_public_bytes(store.path / code["representation_ref"]["relative_path"])
+        data = read_public_bytes(store.path / code["data_json_ref"]["relative_path"])
+        public = _load_verified_record(store, store.projections["public-problem.json"])
+        method_resources = RunMethodResources(store, public, settings, plan)
+        execution = method_resources.reuse(code["execution_id"], ScriptCodeProposal(source.decode(),
+            code["representation_ref"]["sha256"], code["data_bindings"], data))
+        execution_ref = store.state["method_executions"][code["execution_id"]]["result_ref"]
+        solve_ref = execution["solve_result_ref"]
+        error = None
+        if execution["source"]["status"] != "completed" or execution["source"]["exit_code"] != 0:
+            error = RunError("source_execution_failed", "execution", "The selected last executed source script failed.")
+        elif execution["collector_error"] is not None or solve_ref is None:
+            error = RunError("collector_failed", "execution", "Source exited successfully but independent Solver evidence is unavailable.")
+        candidate = _load_verified_record(store, store.projections["candidates/001/candidate-snapshot.json"])
+        candidate.update(status="selected" if error is None else "executed")
+        store.json("candidates/001/candidate.json", candidate, "001")
+        store.state.update(executed_artifact_ref=artifact_ref, solve_ref=solve_ref, execution_ref=execution_ref,
+                           phase="execute_done" if error is None else "code_done")
+        store.checkpoint()
+        return solve_ref, execution_ref, error
     started = datetime.now(timezone.utc).isoformat()
     timer = monotonic()
     remaining = plan.deadline - time.time()
@@ -649,8 +679,9 @@ def _reconcile_execution(store: RunStore, settings: dict[str, Any]) -> None:
 
 def _sdk_sha256() -> str:
     digest = hashlib.sha256()
-    for path in sorted(Path(__file__).parent.glob("*.py")):
-        digest.update(path.name.encode())
+    root = Path(__file__).parent
+    for path in sorted(path for path in root.rglob("*") if path.suffix in (".py", ".txt", ".json")):
+        digest.update(path.relative_to(root).as_posix().encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
 
@@ -713,6 +744,9 @@ def resume_run(run: Path, *, cancellation: CancellationToken | None = None,
             return RunResult(store.run_id, store.path, store.state["status"])
         if time.time() >= store.state["deadline"]:
             raise RunError("deadline_exhausted", "admission", "The original absolute run deadline expired.")
+        if plan.snapshot["method_profile"] == "native_script/0.1.0" and "public-problem.json" in store.projections:
+            public = _load_verified_record(store, store.projections["public-problem.json"])
+            RunMethodResources(store, public, settings, plan).reconcile()
         _reconcile_formulation(store)
         if (store.state.get("artifact_ref") is None and store.state.get("method_checkpoint") is None
                 and store.state.get("method_started")):

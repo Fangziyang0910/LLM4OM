@@ -1,6 +1,15 @@
 LLM4OM
 Copyright 2026 Ziyang Fang
 
-This repository currently contains original requirements, design documents,
-and illustrative fixtures for an automated optimization modeling platform.
-Third-party projects are referenced; their code and datasets are not bundled.
+This repository contains original requirements, design documents, fixtures,
+and an implementation of an automated optimization modeling platform.
+
+OptiMUS source files and prompt templates are bundled under their original
+MIT license in src/llm4om/optimus_source/.
+Copyright (c) 2023 Ali Teshnizi.
+Upstream: https://github.com/teshnizi/OptiMUS
+Fixed commit: e182e9ef5841605c2a7e87467021fd83522b6484
+The original license is retained in optimus_source/LICENSE.txt; manifest.json
+records the original file URLs and byte hashes. Platform bridges are separate
+from those unchanged files. No retrieval corpus or third-party benchmark
+dataset is bundled by this integration.

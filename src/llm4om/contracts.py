@@ -176,16 +176,19 @@ def validate_problem(problem: dict[str, Any]) -> None:
     column = _object({"name": TEXT, "type": {"enum": ["string", "number", "integer"]},
                       "nullable": {"type": "boolean"}})
     schema = _object({
-        "schema_version": {"const": "0.2.0"}, "problem_id": TEXT, "revision": TEXT,
+        "schema_version": {"enum": ["0.2.0", "0.3.0"]}, "problem_id": TEXT, "revision": TEXT,
         "description": {**TEXT, "pattern": "\\S"}, "language": TEXT,
         "problem_type_hint": {"enum": ["lp", "milp", "unknown"]},
         "requirements": {"type": "array", "items": _object({
             "id": TEXT, "text": TEXT, "category": {"enum": ["objective", "domain", "constraint", "data", "other"]},
             "source_span": {"type": ["null", "object", "array"]}})},
-        "data_refs": {"type": "array", "items": _object({"data_id": TEXT, "path": TEXT,
+        "data_refs": {"type": "array", "items": {"oneOf": [_object({"data_id": TEXT, "path": TEXT,
             "format": {"const": "csv"}, "sha256": {"anyOf": [HASH, {"type": "null"}, {"const": ""}]},
             "schema": _object({"columns": {"type": "array", "items": column, "minItems": 1},
-                               "unique_by": {"type": "array", "items": TEXT, "uniqueItems": True}})})},
+                               "unique_by": {"type": "array", "items": TEXT, "uniqueItems": True}})}),
+            _object({"data_id": TEXT, "path": TEXT, "format": {"const": "json"},
+                     "sha256": {"anyOf": [HASH, {"type": "null"}, {"const": ""}]},
+                     "schema": _object({"type": {"const": "object"}})})]}},
         "assumptions": {"type": "array", "items": _object({"id": TEXT, "text": TEXT, "origin": TEXT,
             "status": {"enum": ["explicit", "proposed", "confirmed"]}})},
         "source": {"type": "object"},
@@ -194,13 +197,27 @@ def validate_problem(problem: dict[str, Any]) -> None:
         "requirements", "data_refs", "assumptions", "source"])
     try:
         jsonschema.Draft202012Validator(schema).validate(problem)
+        if problem["schema_version"] == "0.2.0" and any(ref["format"] != "csv" for ref in problem["data_refs"]):
+            raise ValueError("JSON data require ProblemSpec 0.3.0.")
         for key in ["requirements", "assumptions", "data_refs"]:
             id_key = "data_id" if key == "data_refs" else "id"
             ids = [item[id_key] for item in problem[key]]
             if len(ids) != len(set(ids)):
                 raise ValueError("Duplicate IDs.")
     except (jsonschema.ValidationError, ValueError) as error:
-        raise RunError("invalid_problem", "validation", "ProblemSpec does not match the public 0.2.0 CSV contract.") from error
+        raise RunError("invalid_problem", "validation", "ProblemSpec does not match its public data contract.") from error
+
+
+def validate_data(raw: bytes, ref: dict[str, Any]) -> None:
+    """Validate admitted public bytes without transforming their values."""
+    if len(raw) > 8 * 1024 * 1024:
+        raise RunError("invalid_data", "validation", "Public data exceed the 8 MiB per-file limit.")
+    if ref["format"] == "csv":
+        validate_csv(raw, ref["schema"])
+    elif ref["format"] == "json" and ref["schema"] == {"type": "object"}:
+        parse_json(raw)
+    else:
+        raise RunError("invalid_data", "validation", "Unsupported public data format or schema.")
 
 
 def validate_csv(raw: bytes, schema: dict[str, Any]) -> None:
@@ -272,6 +289,20 @@ def validate_bindings(artifact: dict[str, Any], public: dict[str, Any]) -> None:
 
 def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) -> None:
     reject_additional_refs({key: value for key, value in formulation.items() if key != "structured_ir_ref"})
+    if formulation.get("representation_kind") == "native_formulation":
+        schema = _object({"schema_version": {"const": "0.3.0"}, "formulation_id": TEXT,
+            "problem_id": {"const": public["problem_id"]}, "problem_revision": {"const": public["revision"]},
+            "representation_kind": {"const": "native_formulation"},
+            "representation": _object({"schema": TEXT, "state": {"type": "object"}}),
+            "data_bindings": {"type": "array"}, "provenance": {"type": "object"},
+            "structured_ir_ref": {"type": "null"}})
+        try:
+            jsonschema.Draft202012Validator(schema).validate(formulation)
+            parse_json(json.dumps(formulation, allow_nan=False).encode())
+        except (jsonschema.ValidationError, ValueError) as error:
+            raise RunError("invalid_formulation", "formulation", "Native Formulation requires a declared schema and original JSON state.") from error
+        validate_bindings(formulation, public)
+        return
     indexes = {"type": "array", "items": TEXT, "uniqueItems": True}
     set_entry = {"type": "object", "required": ["id"], "anyOf": [{"required": ["elements"]}, {"required": ["source"]}],
                  "properties": {"id": TEXT, "elements": {"type": "array", "uniqueItems": True},
@@ -311,7 +342,8 @@ def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) ->
             if len(ids) != len(set(ids)):
                 raise ValueError("Duplicate IDs.")
         set_ids = {item["id"] for item in formulation["representation"]["sets"]}
-        data = {ref["data_id"]: {column["name"] for column in ref["schema"]["columns"]} for ref in public["data_refs"]}
+        data = {ref["data_id"]: {column["name"] for column in ref["schema"]["columns"]}
+                for ref in public["data_refs"] if ref["format"] == "csv"}
         for key in ["sets", "parameters", "variables"]:
             for item in formulation["representation"][key]:
                 if not set(item.get("index_sets", [])) <= set_ids:

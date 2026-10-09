@@ -32,6 +32,8 @@ uv run --locked --extra solve llm4om run --problem examples/specs/problem.json -
 
 先按 [开发命令](../CONTRIBUTING.md#3-开发与校验)安装依赖。运行命令均不读取 oracle.json／expected-evaluation.json。run.yaml 的真实执行使用容器；--offline 跳过 Code／Solve；solve.yaml 显式 trusted_local。两条真实路径均保存代码、解和状态。独立语义检查均为 not_available。实际 RunBundle 在 runs 下，详情见 [S01](../docs/development/s01-offline-run.md)／[S02-A](../docs/development/s02-highs.md)／[S04-A](../docs/development/s04-container.md)。benchmark 命令与独立检查待后续实现。
 
+OptiMUS 开发流程的公开 JSON 参数、labels 和真实 Provider 配置模板见 [专用示例](optimus/README.md)；它与人工 Mock fixture 分开使用。
+
 ## 2. 数学问题
 
 生产 A、B 两种产品，数量为非负整数。单位利润分别为 3、2；资源 cutting 单位消耗为 2、1，总量 8；资源 finishing 单位消耗为 1、2，总量 8。

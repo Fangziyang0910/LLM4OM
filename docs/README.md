@@ -53,7 +53,7 @@ S06-A 微型真实 Gurobi／native 路径与限制见 [实现记录](development
 
 S07-B/C 的固定数据格式与参考可用性见 [来源考察](development/s07-benchmark-research.md)；此记录不是已集成声明。
 
-S06-B 的完整固定上游流程与接入接缝见 [OptiMUS 源码研究](development/s06b-optimus-source.md)；方法接入与真实 reference run 尚待实现。
+S06-B 的固定上游行为见 [OptiMUS 源码研究](development/s06b-optimus-source.md)；开发实现、本机 reference tape 及剩余真实验收见 [实现记录](development/s06b-optimus.md)。
 
 S06-C 的固定角色路由、反思与原生函数输出见 [CoE 源码研究](development/s06c-coe-source.md)；此记录不宣称方法已经接入。
 
