@@ -1,7 +1,7 @@
 # S07-C MAMO import and numeric comparison
 
-Status: SDK/Worker0.10.0 development implementation; final package/integration
-acceptance and independent review are pending. Scope: [Issue22](https://github.com/Fangziyang0910/LLM4OM/issues/22),
+Status: SDK/Worker0.10.0 local implementation and actual local acceptance;
+independent review is pending. Delivery: [draft PR24](https://github.com/Fangziyang0910/LLM4OM/pull/24). Scope: [Issue22](https://github.com/Fangziyang0910/LLM4OM/issues/22),
 FR-08–12/28–30, DD-06, AC-04/05/15/25. Source facts are in the
 [fixed-source research](s07-benchmark-research.md). The [contracts](../plugin-contracts.md#15-s07-c-mamo-task-interface-sdk-0100)
 define the implemented interface; [evaluation protocol](../evaluation.md) defines evidence layers.
@@ -77,8 +77,24 @@ negative ties and preserving an incompatible numeric reference. The existing
 five NL4Opt import/evaluation cases passed after the shared check extraction.
 Strict mypy passed27 modules. Logs are under `/tmp/llm4om-s07c/`.
 
-Final Worker/package/wheel smoke and one complete local integration regression
-remain pending. Independent Standards/Spec review is unavailable because the
+Wheel/sdist and actual Worker build passed. A clean Python3.11.13 wheel
+installation passed all five MAMO cases, including six actual HiGHS numeric
+boundaries. One complete local Python3.12.11 regression passed268 tests in
+588.824s; it includes actual Docker/HiGHS/Gurobi and existing protocols.
+Source158/public942/package121 actual-project-key scans passed; all863 public
+projections omit private fields, snapshot private storage is0700/0600.
+
+Actual SDK0.10.0 run `853e511be97048b39fba7660b35f19bd` supplies the canonical
+HiGHS vector/objective match. An earlier smoke harness used a stale loopback
+config and failed; its saved evaluation keeps denominator1/numerator0. The
+corrected harness creates a fresh run instead of deleting that failed attempt.
+Completed resume passed. Evidence: `/tmp/llm4om-s07c/verification.json`,
+`canonical/sdk010/solver-verification.json`, `full-python312.log` and
+`wheel-311-focused.log`.
+
+Independent Standards/Spec review is unavailable because the
 local Codex CLI account usage limit was reached; parent self-review will be
-recorded separately. No remote CI, package publication or dataset redistribution
+recorded separately at `parent-review-standards.md` and `parent-review-spec.md`
+in the task evidence directory. No remaining actionable P1/P2 was found in that
+parent reading; it does not fulfil independent review. No remote CI, package publication or dataset redistribution
 was used. Whole1.0 remains incomplete.
