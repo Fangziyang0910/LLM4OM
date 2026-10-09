@@ -56,3 +56,5 @@ S07-B/C 的固定数据格式与参考可用性见 [来源考察](development/s0
 S06-B 的完整固定上游流程与接入接缝见 [OptiMUS 源码研究](development/s06b-optimus-source.md)；方法接入与真实 reference run 尚待实现。
 
 S06-C 的固定角色路由、反思与原生函数输出见 [CoE 源码研究](development/s06c-coe-source.md)；此记录不宣称方法已经接入。
+
+S05-B 的协议与现有服务可用性见 [Anthropic Messages 考察](development/s05b-anthropic-research.md)；实际 Provider 接入仍待开发。

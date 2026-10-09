@@ -156,3 +156,4 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `docs/development/s06c-coe-source.md` | 固定 CoE 角色路由、协作／反思、函数输出与输入分类研究 | 30 份源文件 hash、真实选择／反馈语义、无许可材料的观察与原生接口需求；未集成 |
 | `tests/test_resume_crash.py` | S04-B 真实硬崩溃与派生恢复 | 公共 CLI／SDK、OS 原子存储边界、HTTP 次数、累计资源与完整性 |
 | `tests/test_async_control.py` | 公共 Method 任务监督行为 | 取消等待清理、SystemExit 诊断与 Python 3.11 兼容 |
+| `docs/development/s05b-anthropic-research.md` | Anthropic Messages 官方协议与已配置服务的真实小探针 | 同一指定模型、Messages HTTP200、真实 usage／未知成本、私有原始回复；Adapter 尚未实现 |
