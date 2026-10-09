@@ -59,3 +59,5 @@ S07-D 的 SDK/Worker0.12.0 原问题检查与有限探测见 [实现记录](docs
 S06-C使用本机 Method／HTTP／Gurobi聚焦测试和一次交付回归；0.13.0的真实模型与流程差异见 [记录](docs/development/s06-coe.md)。
 
 S05-D1角色模型配置见 [实现记录](docs/development/s05-role-models.md)；公共反馈修正与澄清仍是后续范围。
+
+S05-C1公共候选资源见 [实现记录](docs/development/s05-public-candidates.md)。开发使用本机聚焦 red→green，稳定切片执行一次必要完整回归；GitHub Actions仅手动补充。

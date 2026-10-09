@@ -680,8 +680,9 @@ class MethodResources(Protocol):
     def emit(self, event: dict[str, Any]) -> None: ...
 ```
 
-The current profile supplies this interface for admitted native scripts.
-Other profiles do not imply access. Context also carries the original absolute
+SDK0.15.0 supplies public record/emit resources to admitted methods. Script
+execution remains restricted to the native-script profiles; candidate assessment
+uses the explicitly admitted profile in section 20. Context also carries the original absolute
 `deadline`; existing cancellation and save_checkpoint contracts remain.
 No hidden evaluator, credential or unrestricted host execution is supplied.
 Artifact names are bounded basenames under `method/`; JSON artifacts are
@@ -943,3 +944,65 @@ successful raw replies with that Provider. Changed role identity or unknown
 outcome cannot produce a silent replay/resubmit. Credentials are resolved using
 the selected role's credential_env and literal .env fallback; completed replay
 needs no new credential and keeps its original call_id and accounting.
+
+## 20. S05-C1 public candidate assessment (SDK 0.15.0)
+
+`grounded_candidates/0.1.0` admits five-element Formulation plus grounded LPIR,
+with the same explicit compiler, Pyomo backend and declared LP/MILP Solver matrix
+as the original grounded profile. The current real candidate assessment evidence
+covers HiGHS in trusted_local and container modes. Generated factory/native Code
+and native-script feedback retain their existing profiles; they do not yet imply
+this multi-candidate assessment interface. Offline replay rejects this profile
+during preflight because it has no actual Solver execution.
+
+```python
+class MethodResources(Protocol):
+    async def assess(self, candidate_id: str, proposal: ModelProposal, *,
+                     parent_id: str | None = None,
+                     change_reason: str | None = None) -> dict[str, Any]: ...
+    def select(self, candidate_id: str, *, rule: str, reason: str) -> MethodOutcome: ...
+```
+
+Assessment admits one bounded candidate ID and charges the shared candidate count
+before parsing, compilation or execution. A repair requires an already assessed
+parent in this run and a nonempty public change_reason; it also charges max_repairs.
+`max_repairs=0` is valid. Root candidates and repairs share max_candidates; actual
+Solver attempts share max_solver_calls and the original absolute deadline. Budget
+refusal before candidate admission creates no candidate and no extra Solver call.
+The existing LLM Gateway continues to own all actual LLM usage and reservations.
+
+Assessment0.1.0 returns candidate_id, proposal_sha256, the supplied public proposal
+text reference, status=`invalid|executed`, per-stage availability, actual artifact,
+execution and Solve references, has_primal_solution, termination and public stage
+diagnostics. Invalid output and its diagnostics remain in the candidate directory.
+The proposal hash binds the full declared proposal, parent and change reason;
+candidate IDs cannot be rebound. Candidate metadata records parent_ids, sequence,
+actual method identity and change_reason. Supplied proposals are public modeling
+outputs; full raw Provider responses retain their existing private archive boundary.
+
+The common application machinery validates input hashes/revision/data bindings,
+Formulation and actual LPIR type, compiles Code and runs the admitted Solver.
+No hidden oracle or independent benchmark result is passed to the method. A
+trusted primal demonstrates candidate execution, not correctness for the original
+natural-language problem. Assessment diagnostics are engine observations; a
+method's change_reason and selection explanation are declared reasoning.
+
+Selection requires an assessed candidate with trusted completed Solver evidence
+and no assessment error. A legal infeasible/unbounded result can be selected; a
+primal is not fabricated. The method declares rule and reason. The core preserves
+these in immutable candidate-selection0.1.0 and validates run membership. It does
+not infer mathematical optimality or compare objectives across candidate models.
+The selected MethodOutcome has proposal=null and the real candidate ID. The
+application reuses that candidate's verified execution without another Solver call.
+Original single-candidate outcomes keep their existing proposal and ID001 behavior.
+
+Same-identity completed assessment replay verifies all referenced bytes and consumes
+no extra candidate/repair/Solver slot. Hard-exit recovery accepts a completed
+assessment publication receipt with matching proposal hash and candidate ID.
+An interrupted final-selection publication is verified against that assessment
+and frozen before method reentry; recovery does not ask the method to choose again.
+Methods need their declared versioned checkpoint to resume unfinished reasoning.
+An admitted assessment with no completed receipt is execution_outcome_unknown;
+it is never automatically executed again. SDK/source/Worker identity checks stay
+strict across resume. The optional feedback_repair method and factory Code-only
+repair/Formulation reuse remain subsequent S05-C work.

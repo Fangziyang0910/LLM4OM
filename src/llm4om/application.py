@@ -124,8 +124,10 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
         store.state["host"] = {"python": platform.python_version(), "sdk_sha256": _sdk_sha256(),
                                "packages": {name: version(name) for name in ("PyYAML", "jsonschema")}}
         store.checkpoint()
-        if artifact_ref is None:
+        if artifact_ref is None or store.state.get("candidate_assessment_pending"):
             artifact_ref, stages = _prepare_candidate(store, problem, config, settings, ledger, offline, plan)
+            solve_ref = store.state.get("solve_ref")
+            execution_ref = store.state.get("execution_ref")
         status = "artifact_ready"
         if not offline:
             if store.state["phase"] == "method_done":
@@ -192,7 +194,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
                "public_problem_ref": store.projections.get("public-problem.json"),
                "lineage_ref": store.state.get("lineage_ref"),
                "public_projections": {name: ref for name, ref in store.projections.items() if name != "bundle.json"},
-               "final_candidate_id": "001" if status == "completed" else None,
+               "final_candidate_id": store.state.get("candidate_id", "001") if status == "completed" else None,
                "execution_plan": {name: {"requested_plugin_id": settings.get(name, {}).get("plugin_id"),
                     "resolved_plugin_id": settings[name]["plugin_id"] if resource_status[name] != "not_available" else None,
                     "status": resource_status[name],
@@ -253,7 +255,7 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
         store.checkpoint()
     context = MethodContext(gateway, MappingProxyType(data_content), MappingProxyType(deepcopy(settings["budget"])),
                             hashlib.sha256(source_problem).hexdigest(), store.cancellation, save_method_checkpoint,
-                            RunMethodResources(store, public, settings, plan) if plan.snapshot["method_profile"] in ("native_script/0.1.0", "native_script/0.2.0") else None, plan.deadline)
+                            RunMethodResources(store, public, settings, plan, responses=gateway.calls), plan.deadline)
     store.state["method_started"] = True
     store.checkpoint()
     try:
@@ -265,19 +267,34 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
             store.json("llm-trace.json", {"schema_version": "0.2.0", "attempts": gateway.trace}, "llm-trace")
         store.state["ledger"] = ledger
         store.checkpoint()
-    if (outcome.status != "candidate_selected" or outcome.final_candidate_id != "001"
-            or not isinstance(outcome.proposal, ModelProposal)):
+    if outcome.status == "candidate_selected" and outcome.proposal is None:
+        return RunMethodResources(store, public, settings, plan).selected(outcome.final_candidate_id)
+    if plan.snapshot["method_profile"] == "grounded_candidates/0.1.0":
+        raise RunError("invalid_method_outcome", "formulation", "The candidate profile requires a saved assessment and selection.")
+    if outcome.status != "candidate_selected" or outcome.final_candidate_id != "001" or not isinstance(outcome.proposal, ModelProposal):
         raise RunError("invalid_method_outcome", "formulation", "This profile requires one selected candidate with ID 001.")
-    output = outcome.proposal
+    store.state["candidate_id"] = "001"
+    replay = {"mode": gateway.calls[-1].evidence_origin if gateway.calls else "no_calls",
+              "call_ids": [call.call_id for call in gateway.calls],
+              "response_sha256": gateway.calls[-1].source_sha256 if gateway.calls else None}
+    return _persist_proposal(store, outcome.proposal, public, problem_ref, context.problem_sha256,
+                             settings, offline, plan, replay)
+
+
+def _persist_proposal(store: RunStore, output: ModelProposal, public: dict[str, Any],
+                      problem_ref: dict[str, Any], problem_sha256: str, settings: dict[str, Any],
+                      offline: bool, plan: AdmissionPlan, replay: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    candidate_id = store.state.get("candidate_id", "001")
+    method = plan.method
     artifact = parse_json(json.dumps(output.artifact, allow_nan=False).encode())
     formulation = parse_json(json.dumps(output.formulation, allow_nan=False).encode()) if output.formulation is not None else None
     factory_profile = plan.snapshot["method_profile"] in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0", "native_script/0.1.0", "native_script/0.2.0")
     source_ref = None
     if factory_profile and isinstance(output.code, (FactoryCodeProposal, ScriptCodeProposal)) and isinstance(output.code.source, str):
-        source_ref = store.write("candidates/001/model.py", output.code.source.encode(), "method-source")
+        source_ref = store.write(f"candidates/{candidate_id}/model.py", output.code.source.encode(), "method-source")
         if formulation is not None:
-            store.json("candidates/001/supplied-formulation.json", formulation, "supplied-formulation")
-        store.json("candidates/001/supplied-code.json", {
+            store.json(f"candidates/{candidate_id}/supplied-formulation.json", formulation, "supplied-formulation")
+        store.json(f"candidates/{candidate_id}/supplied-code.json", {
             "schema_version": output.code.schema_version, "source_ref": source_ref,
             "source_sha256": output.code.source_sha256, "data_bindings": output.code.data_bindings}, "supplied-code")
     validate_model_artifact(artifact)
@@ -291,7 +308,7 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
             raise RunError("capability_mismatch", "formulation", "Supplied Formulation is outside the declared representations.")
         if artifact["stage_status"]["formulation"]["status"] != "available":
             raise RunError("invalid_method_outcome", "formulation", "Supplied Formulation must be recorded as available.")
-    if artifact["problem_ref"].get("sha256") != hashlib.sha256(source_problem).hexdigest():
+    if artifact["problem_ref"].get("sha256") != problem_sha256:
         raise RunError("artifact_problem_mismatch", "formulation", "Method output belongs to another public input.")
     if factory_profile:
         if (output.structured_ir is not None or not isinstance(output.code, (FactoryCodeProposal, ScriptCodeProposal))
@@ -317,17 +334,17 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
             raise RunError("invalid_method_outcome", "formulation", "Method must supply an identified grounded LPIR 0.1.0.")
         if ir.get("problem_type") not in plan.snapshot["allowed_problem_types"]:
             raise RunError("capability_mismatch", "formulation", "Actual IR type is outside the admitted problem types.")
-        formulation["structured_ir_ref"] = store.json("candidates/001/structured-ir.json", ir, ir["model_id"])
-    formulation_ref = store.json("candidates/001/formulation.json", formulation, formulation["formulation_id"]) if formulation is not None else None
+        formulation["structured_ir_ref"] = store.json(f"candidates/{candidate_id}/structured-ir.json", ir, ir["model_id"])
+    formulation_ref = store.json(f"candidates/{candidate_id}/formulation.json", formulation, formulation["formulation_id"]) if formulation is not None else None
     artifact["problem_ref"] = problem_ref
     artifact["formulation_ref"] = formulation_ref
     if factory_profile:
         assert isinstance(output.code, (FactoryCodeProposal, ScriptCodeProposal))
-        code_ref = store.json("candidates/001/code-artifact.json", {
+        code_ref = store.json(f"candidates/{candidate_id}/code-artifact.json", {
             "schema_version": "0.2.0", "code_id": "method-code-001", "representation_kind": output.code.representation_kind,
             "factory_contract": "native_script/0.1.0" if isinstance(output.code, ScriptCodeProposal) else "native_gurobipy/0.1.0" if output.code.representation_kind == "native_code" else "python_factory/0.1.0",
             "entry_point": "code.py" if isinstance(output.code, ScriptCodeProposal) else "build_model",
-            **({"data_json_ref": store.write("candidates/001/data.json", output.code.data_json, "script-data"),
+            **({"data_json_ref": store.write(f"candidates/{candidate_id}/data.json", output.code.data_json, "script-data"),
                 "execution_id": output.execution_id} if isinstance(output.code, ScriptCodeProposal) else {}),
             "representation_ref": source_ref, "model_backend": settings["model_backend"]["plugin_id"],
             "source_formulation_ref": formulation_ref, "data_bindings": output.code.data_bindings,
@@ -335,25 +352,26 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
                            "generation": formulation["provenance"] if formulation is not None else artifact["provenance"]}}, "method-code-001")
         artifact["code_ref"] = code_ref
         artifact["stage_status"]["code"] = {"status": "available", "reason": None}
-    call_ids = [call.call_id for call in gateway.calls]
-    artifact["provenance"]["replay"] = {"mode": gateway.calls[-1].evidence_origin if gateway.calls else "no_calls", "call_ids": call_ids,
-                                        "response_sha256": gateway.calls[-1].source_sha256 if gateway.calls else None}
+    artifact["provenance"]["replay"] = replay
     artifact["provenance"]["method"] = {"manifest": method.manifest, "origin": method.origin}
-    artifact_ref = store.json("candidates/001/artifact.json" if offline else "candidates/001/formulation-snapshot.json", artifact, artifact["artifact_id"])
+    artifact_ref = store.json(f"candidates/{candidate_id}/artifact.json" if offline else f"candidates/{candidate_id}/formulation-snapshot.json", artifact, artifact["artifact_id"])
     return artifact_ref, _save_formulation(store, artifact_ref, artifact)
 
 
 def _save_formulation(store: RunStore, artifact_ref: dict[str, Any], artifact: dict[str, Any]) -> dict[str, Any]:
+    candidate_id = store.state.get("candidate_id", "001")
     method = artifact["provenance"]["method"]["manifest"]
     call_ids = artifact["provenance"]["replay"]["call_ids"]
-    store.json("candidates/001/candidate.json" if store.state["offline"] else "candidates/001/candidate-snapshot.json", {
-        "schema_version": "0.2.0", "candidate_id": "001", "run_id": store.run_id, "parent_ids": [],
-        "sequence_no": 1, "artifact_ref": artifact_ref,
+    store.json(f"candidates/{candidate_id}/candidate.json" if store.state["offline"] else f"candidates/{candidate_id}/candidate-snapshot.json", {
+        "schema_version": "0.2.0", "candidate_id": candidate_id, "run_id": store.run_id, "parent_ids": store.state.get("candidate_parent_ids", []),
+        "change_reason": store.state.get("candidate_change_reason"),
+        "sequence_no": max(1, store.state["ledger"]["candidates"]), "artifact_ref": artifact_ref,
         "created_by": {"method_id": method["plugin_id"], "method_version": method["plugin_version"],
                        "variant_id": (method["source"] or {}).get("variant_id", "grounded_single_candidate"),
                        "call_ids": call_ids, "prompt_hash": None,
-                       "role": "formulation" if artifact["formulation_ref"] is not None else "code"}, "status": "proposed"}, "001")
-    store.state["ledger"]["candidates"] = 1
+                       "role": "formulation" if artifact["formulation_ref"] is not None else "code"}, "status": "proposed"}, candidate_id)
+    if not store.state.get("candidate_assessment_pending"):
+        store.state["ledger"]["candidates"] = max(1, store.state["ledger"]["candidates"])
     stages = {**artifact["stage_status"], "solve": {"status": "not_available", "reason": "Solve has not run."}}
     store.state.update(artifact_ref=artifact_ref, stages=stages, phase="method_done")
     store.emit("formulation_saved" if artifact["formulation_ref"] is not None else "code_output_saved",
@@ -362,6 +380,7 @@ def _save_formulation(store: RunStore, artifact_ref: dict[str, Any], artifact: d
 
 
 def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: dict[str, Any]) -> tuple[dict[str, Any], CompiledCode | None]:
+    candidate_id = store.state.get("candidate_id", "001")
     artifact = parse_json(read_public_bytes(store.path / artifact_ref["relative_path"]))
     if artifact["code_ref"] is not None:
         return artifact_ref, None
@@ -369,9 +388,9 @@ def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: 
     ir_ref = formulation["structured_ir_ref"]
     ir = parse_json(read_public_bytes(store.path / ir_ref["relative_path"]))
     compiled = compile_ir(ir)
-    source_ref = store.write("candidates/001/model.py", compiled.source.encode(), "compiled-source")
-    symbols_ref = store.json("candidates/001/symbol-map.json", compiled.symbol_map, "symbol-map")
-    code_ref = store.json("candidates/001/code-artifact.json", {
+    source_ref = store.write(f"candidates/{candidate_id}/model.py", compiled.source.encode(), "compiled-source")
+    symbols_ref = store.json(f"candidates/{candidate_id}/symbol-map.json", compiled.symbol_map, "symbol-map")
+    code_ref = store.json(f"candidates/{candidate_id}/code-artifact.json", {
         "schema_version": "0.2.0", "code_id": "compiled-code", "representation_kind": "python_factory",
         "representation_ref": source_ref, "model_backend": settings["model_backend"]["plugin_id"],
         "source_formulation_ref": artifact["formulation_ref"], "data_bindings": artifact["data_bindings"],
@@ -380,8 +399,8 @@ def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: 
     artifact["artifact_id"] += "-compiled"
     artifact["code_ref"] = code_ref
     artifact["stage_status"]["code"] = {"status": "available", "reason": None}
-    artifact_ref = store.json("candidates/001/artifact.json", artifact, artifact["artifact_id"])
-    store.json("candidates/001/build.json", {"schema_version": "0.2.0", "code_artifact_ref": code_ref,
+    artifact_ref = store.json(f"candidates/{candidate_id}/artifact.json", artifact, artifact["artifact_id"])
+    store.json(f"candidates/{candidate_id}/build.json", {"schema_version": "0.2.0", "code_artifact_ref": code_ref,
         "compiler_id": settings["compiler"]["plugin_id"], "compiler_version": "0.1.0",
         "source_ir_ref": ir_ref, "target_backend": settings["model_backend"]["plugin_id"],
         "symbol_map_ref": symbols_ref, "data_bindings": artifact["data_bindings"],
@@ -391,6 +410,7 @@ def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: 
 
 def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_ref: dict[str, Any],
                        settings: dict[str, Any], ledger: dict[str, Any], plan: AdmissionPlan) -> tuple[dict[str, Any] | None, dict[str, Any], RunError | None]:
+    candidate_id = store.state.get("candidate_id", "001")
     if plan.snapshot["method_profile"] in ("native_script/0.1.0", "native_script/0.2.0"):
         artifact = _load_verified_record(store, artifact_ref)
         code = _load_verified_record(store, artifact["code_ref"])
@@ -407,9 +427,9 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
             error = RunError("source_execution_failed", "execution", "The selected last executed source script failed.")
         elif execution["collector_error"] is not None or solve_ref is None:
             error = RunError("collector_failed", "execution", "Source exited successfully but independent Solver evidence is unavailable.")
-        candidate = _load_verified_record(store, store.projections["candidates/001/candidate-snapshot.json"])
+        candidate = _load_verified_record(store, store.projections[f"candidates/{candidate_id}/candidate-snapshot.json"])
         candidate.update(status="selected" if error is None else "executed")
-        store.json("candidates/001/candidate.json", candidate, "001")
+        store.json(f"candidates/{candidate_id}/candidate.json", candidate, candidate_id)
         store.state.update(executed_artifact_ref=artifact_ref, solve_ref=solve_ref, execution_ref=execution_ref,
                            phase="execute_done" if error is None else "code_done")
         store.checkpoint()
@@ -425,7 +445,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
     solver_options["time_limit_s"] = min(solver_options.get("time_limit_s", remaining), remaining)
     ledger["solver_calls"] += 1
     input_artifact_ref = artifact_ref
-    store.state.update(ledger=ledger, phase="execute_pending", execution_id="execution-001")
+    store.state.update(ledger=ledger, phase="execute_pending", execution_id=f"execution-{candidate_id}")
     store.checkpoint()
     store.emit("solver_started", solver_id=settings["solver"]["plugin_id"])
     out, err = StringIO(), StringIO()
@@ -483,17 +503,17 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
                         or instance["provenance"]["origin"] != view_origin
                         or set(exported["decision_map"]) != {v["id"] for v in instance["variables"]}):
                     raise RunError("worker_protocol_error", "execution", "Factory instance evidence differs from the admitted binding.")
-                view_ref = store.json("candidates/001/factory-instance.json", instance, instance["model_id"])
-                map_ref = store.json("candidates/001/decision-map.json", {
+                view_ref = store.json(f"candidates/{candidate_id}/factory-instance.json", instance, instance["model_id"])
+                map_ref = store.json(f"candidates/{candidate_id}/decision-map.json", {
                     "schema_version": "0.1.0", "decisions": exported["decision_map"],
                     "source_sha256": exported["source_sha256"], "data_bindings": artifact["data_bindings"],
                     "problem_revision": public["revision"], "origin": view_origin}, "decision-map")
                 artifact["optional_views"].append({"origin": view_origin, "artifact_ref": view_ref,
                     "decision_map_ref": map_ref, "source_code_ref": artifact["code_ref"]})
                 if view_origin == "native_exported_instance":
-                    native_ref = store.write("candidates/001/native-model.mps", base64.b64decode(exported["model_mps"], validate=True), "native-model")
+                    native_ref = store.write(f"candidates/{candidate_id}/native-model.mps", base64.b64decode(exported["model_mps"], validate=True), "native-model")
                     artifact["optional_views"][-1]["native_model_ref"] = native_ref
-                artifact_ref = store.json("candidates/001/artifact.json", artifact, artifact["artifact_id"])
+                artifact_ref = store.json(f"candidates/{candidate_id}/artifact.json", artifact, artifact["artifact_id"])
             elif "factory" in payload:
                 raise RunError("worker_protocol_error", "execution", "Grounded solving must not claim a factory export.")
             solve = payload["result"]
@@ -524,9 +544,9 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
             executor_details.update(exit_code=exit_code)
         variables = solve.pop("variables")
         solve["schema_version"] = "0.2.0"
-        solve["solution_ref"] = store.json("candidates/001/solution.json", {
+        solve["solution_ref"] = store.json(f"candidates/{candidate_id}/solution.json", {
             "schema_version": "0.2.0", "variables": variables, "evidence_origin": solve["evidence_origin"]}, "solution") if variables is not None else None
-        solve_ref = store.json("candidates/001/solve-result.json", solve, "solve-result")
+        solve_ref = store.json(f"candidates/{candidate_id}/solve-result.json", solve, "solve-result")
         if solve["termination"] == "error":
             error = RunError("solver_error", "solve", "Solver reports an execution error.")
     except RunError as failure:
@@ -539,12 +559,12 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
         error = RunError("solver_error", "solve", "Cannot build or solve the compiled model.")
     except (ValueError, KeyError, TypeError):
         error = RunError("worker_protocol_error", "execution", "Worker result does not match the declared protocol.")
-    output_ref = store.write("candidates/001/stdout.txt", out.getvalue().encode(), "stdout")
-    stderr_ref = store.write("candidates/001/stderr.txt", err.getvalue().encode(), "stderr")
-    execution_ref = store.json("candidates/001/execution.json", {"schema_version": "0.2.0",
+    output_ref = store.write(f"candidates/{candidate_id}/stdout.txt", out.getvalue().encode(), "stdout")
+    stderr_ref = store.write(f"candidates/{candidate_id}/stderr.txt", err.getvalue().encode(), "stderr")
+    execution_ref = store.json(f"candidates/{candidate_id}/execution.json", {"schema_version": "0.2.0",
         "run_id": store.run_id, "input_artifact_ref": input_artifact_ref, "artifact_ref": artifact_ref,
         "solver_call": ledger["solver_calls"],
-        "execution_id": "execution-001", "mode": settings["executor"]["plugin_id"].removeprefix("llm4om.executors."), "status": "cancelled" if error and error.code == "run_cancelled" else "failed" if error else "completed",
+        "execution_id": f"execution-{candidate_id}", "mode": settings["executor"]["plugin_id"].removeprefix("llm4om.executors."), "status": "cancelled" if error and error.code == "run_cancelled" else "failed" if error else "completed",
         "start": started, "end": datetime.now(timezone.utc).isoformat(),
         "worker_status": container.status if container else executor_details.get("status"),
         "exit_code": container.exit_code if container else executor_details.get("exit_code"),
@@ -558,10 +578,10 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
         "restrictions": container.restrictions if container else executor_details.get("restrictions"),
         "executor_diagnostics": list(container.diagnostics) if container else executor_details.get("diagnostics", []),
         "solve_result_ref": solve_ref, "stdout_ref": output_ref,
-        "stderr_ref": stderr_ref, "diagnostics": [{"code": error.code, "stage": error.stage}] if error else []}, "execution-001")
-    candidate = parse_json(read_public_bytes(store.path / "candidates/001/candidate-snapshot.json"))
+        "stderr_ref": stderr_ref, "diagnostics": [{"code": error.code, "stage": error.stage}] if error else []}, f"execution-{candidate_id}")
+    candidate = parse_json(read_public_bytes(store.path / f"candidates/{candidate_id}/candidate-snapshot.json"))
     candidate.update(artifact_ref=artifact_ref, status="executed" if error else "selected")
-    store.json("candidates/001/candidate.json", candidate, "001")
+    store.json(f"candidates/{candidate_id}/candidate.json", candidate, candidate_id)
     store.state.update(executed_artifact_ref=artifact_ref, artifact_ref=artifact_ref,
                        solve_ref=solve_ref, execution_ref=execution_ref,
                        phase="execute_done" if solve_ref is not None and error is None else "code_done")
@@ -604,7 +624,8 @@ def _load_verified_record(store: RunStore, ref: dict[str, Any]) -> dict[str, Any
 
 
 def _reconcile_formulation(store: RunStore) -> None:
-    name = "candidates/001/artifact.json" if store.state["offline"] else "candidates/001/formulation-snapshot.json"
+    candidate_id = store.state.get("candidate_id", "001")
+    name = f"candidates/{candidate_id}/artifact.json" if store.state["offline"] else f"candidates/{candidate_id}/formulation-snapshot.json"
     records = store.interrupted_publications.get(name, [])
     if store.state.get("artifact_ref") is not None or not records:
         return
@@ -650,7 +671,8 @@ def _reconcile_formulation(store: RunStore) -> None:
 
 
 def _reconcile_execution(store: RunStore, settings: dict[str, Any]) -> None:
-    records = store.interrupted_publications.get("candidates/001/execution.json", [])
+    candidate_id = store.state.get("candidate_id", "001")
+    records = store.interrupted_publications.get(f"candidates/{candidate_id}/execution.json", [])
     if store.state["phase"] != "execute_pending" or not records:
         return
     try:
@@ -688,9 +710,9 @@ def _reconcile_execution(store: RunStore, settings: dict[str, Any]) -> None:
                                   "resources": execution["resources"]}, runtime,
                                  solver_id=settings["solver"]["plugin_id"], model_backend=settings["model_backend"]["plugin_id"])
         store.accept_publications()
-        candidate = load(store.projections["candidates/001/candidate-snapshot.json"])
+        candidate = load(store.projections[f"candidates/{candidate_id}/candidate-snapshot.json"])
         candidate.update(artifact_ref=artifact_ref, status="selected")
-        store.json("candidates/001/candidate.json", candidate, "001")
+        store.json(f"candidates/{candidate_id}/candidate.json", candidate, candidate_id)
         store.state.update(artifact_ref=artifact_ref, executed_artifact_ref=artifact_ref,
                            solve_ref=solve_ref, execution_ref=execution_ref, phase="execute_done")
         store.checkpoint()
@@ -765,7 +787,7 @@ def resume_run(run: Path, *, cancellation: CancellationToken | None = None,
             return RunResult(store.run_id, store.path, store.state["status"])
         if time.time() >= store.state["deadline"]:
             raise RunError("deadline_exhausted", "admission", "The original absolute run deadline expired.")
-        if plan.snapshot["method_profile"] in ("native_script/0.1.0", "native_script/0.2.0") and "public-problem.json" in store.projections:
+        if "public-problem.json" in store.projections:
             public = _load_verified_record(store, store.projections["public-problem.json"])
             RunMethodResources(store, public, settings, plan).reconcile()
         _reconcile_formulation(store)

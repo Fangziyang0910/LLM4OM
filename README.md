@@ -169,3 +169,5 @@ SDK／Worker0.12.0 的原问题独立可行性、原目标重算与有限探测�
 CoE专家路由与原生函数的开发实现、真实外部模型／原问题检查和剩余验收见 [S06-C](docs/development/s06-coe.md)。
 
 角色模型覆盖与共享预算的0.14.0开发行为见 [记录](docs/development/s05-role-models.md)。
+
+公共候选评估、来源链与最终选择的0.15.0开发行为见 [S05-C1](docs/development/s05-public-candidates.md)。验收以本机测试与实际 HiGHS 为依据；完整修正策略仍在后续范围。

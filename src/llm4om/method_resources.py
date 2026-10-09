@@ -6,18 +6,166 @@ import hashlib
 import json
 import re
 import time
+from pathlib import Path
 from typing import Any
 
 from llm4om.contracts import RunError, parse_json, public_path, read_public_bytes, validate_bindings, validate_worker_response
 from llm4om.executors import run_container
-from llm4om.methods import ScriptCodeProposal
+from llm4om.methods import LLMResponse, MethodOutcome, ModelProposal, ScriptCodeProposal
 from llm4om.preflight import AdmissionPlan
 from llm4om.storage import RunStore
 
 
 class RunMethodResources:
-    def __init__(self, store: RunStore, public: dict[str, Any], settings: dict[str, Any], plan: AdmissionPlan) -> None:
+    def __init__(self, store: RunStore, public: dict[str, Any], settings: dict[str, Any], plan: AdmissionPlan,
+                 *, responses: list[LLMResponse] | None = None) -> None:
         self.store, self.public, self.settings, self.plan = store, public, settings, plan
+        self.responses = responses if responses is not None else []
+
+    async def assess(self, candidate_id: str, proposal: ModelProposal, *, parent_id: str | None = None,
+                     change_reason: str | None = None) -> dict[str, Any]:
+        from llm4om.application import _persist_proposal, _compile_candidate, _execute_candidate
+
+        store = self.store
+        store.cancellation.check()
+        if (not isinstance(candidate_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,80}", candidate_id)
+                or not isinstance(proposal, ModelProposal)):
+            raise RunError("invalid_candidate", "formulation", "A candidate needs a bounded ID and a ModelProposal.")
+        if store.state["offline"]:
+            raise RunError("capability_mismatch", "admission", "Candidate assessment requires an online Solver execution plan.")
+        if self.plan.snapshot["method_profile"] != "grounded_candidates/0.1.0":
+            raise RunError("capability_mismatch", "admission", "Candidate assessment requires the admitted grounded_candidates profile.")
+        if parent_id is not None and (not isinstance(parent_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,80}", parent_id)):
+            raise RunError("invalid_candidate", "formulation", "A repair parent needs a bounded candidate ID.")
+        if parent_id is not None and (not isinstance(change_reason, str) or not change_reason.strip() or len(change_reason) > 4096):
+            raise RunError("invalid_candidate", "formulation", "A repair needs a public change reason.")
+        def encode(value: Any) -> dict[str, str]:
+            if not isinstance(value, bytes):
+                raise TypeError("Unsupported candidate value.")
+            return {"bytes_sha256": hashlib.sha256(value).hexdigest()}
+        try:
+            raw = json.dumps({"proposal": asdict(proposal), "parent_id": parent_id, "change_reason": change_reason},
+                             sort_keys=True, allow_nan=False, default=encode).encode()
+        except (TypeError, ValueError) as failure:
+            raise RunError("invalid_candidate", "formulation", "Candidate metadata must contain finite JSON values.") from failure
+        if len(raw) > 8 * 1024 * 1024:
+            raise RunError("invalid_candidate", "formulation", "Candidate metadata exceeds its byte limit.")
+        parse_json(raw)
+        identity = hashlib.sha256(raw).hexdigest()
+        records = store.state.setdefault("candidate_assessments", {})
+        prior = records.get(candidate_id)
+        if prior is not None:
+            if prior["identity"] != identity:
+                raise RunError("checkpoint_incompatible", "formulation", "Candidate ID was rebound to another proposal or parent.")
+            if prior.get("result_ref") is not None:
+                return deepcopy(self._load(prior["result_ref"]))
+            raise RunError("execution_outcome_unknown", "execution", "An admitted candidate has no assessment receipt; it will not be repeated.")
+        if parent_id is not None and (parent_id not in records or records[parent_id].get("result_ref") is None):
+            raise RunError("invalid_candidate", "formulation", "A repair parent must be an assessed candidate in this run.")
+        ledger = store.state["ledger"]
+        if time.time() >= self.plan.deadline:
+            raise RunError("deadline_exhausted", "formulation", "No shared run deadline remains.")
+        if ledger["candidates"] >= self.settings["budget"]["max_candidates"]:
+            raise RunError("budget_exhausted", "formulation", "No shared candidate slot remains.")
+        if parent_id is not None and ledger.get("repairs", 0) >= self.settings["budget"]["max_repairs"]:
+            raise RunError("budget_exhausted", "formulation", "No shared repair slot remains.")
+        ledger["candidates"] += 1
+        ledger["repairs"] = ledger.get("repairs", 0) + int(parent_id is not None)
+        records[candidate_id] = {"identity": identity, "result_ref": None}
+        store.state.update(candidate_id=candidate_id, candidate_parent_ids=[parent_id] if parent_id else [],
+                           candidate_change_reason=change_reason, candidate_assessment_pending=True,
+                           artifact_ref=None, solve_ref=None, execution_ref=None, executed_artifact_ref=None,
+                           phase="candidate_pending")
+        store.checkpoint()
+        path = "candidates/" + candidate_id + "/"
+        proposal_ref = store.write(path + "supplied-proposal.txt", raw, candidate_id + "-supplied-proposal")
+        error = None
+        artifact_ref = solve_ref = execution_ref = None
+        stages: dict[str, Any] = {name: {"status": "not_available", "reason": "Stage has not run."}
+                  for name in ("formulation", "code", "solve")}
+        try:
+            public_ref = store.projections["public-problem.json"]
+            replay = {"mode": self.responses[-1].evidence_origin if self.responses else "no_calls",
+                      "call_ids": [response.call_id for response in self.responses],
+                      "response_sha256": self.responses[-1].source_sha256 if self.responses else None}
+            artifact_ref, stages = _persist_proposal(store, proposal, self.public, public_ref,
+                hashlib.sha256(read_public_bytes(Path(store.state["problem"]))).hexdigest(),
+                self.settings, False, self.plan, replay)
+            artifact_ref, compiled = _compile_candidate(store, artifact_ref, self.settings)
+            stages["code"] = {"status": "available", "reason": None}
+            store.state.update(artifact_ref=artifact_ref, phase="code_done")
+            solve_ref, execution_ref, error = _execute_candidate(store, compiled, artifact_ref, self.settings, ledger, self.plan)
+            artifact_ref = store.state.get("executed_artifact_ref", artifact_ref)
+            if solve_ref is not None:
+                stages["solve"] = {"status": "available", "reason": None}
+        except (RunError, ValueError, KeyError, TypeError) as failure:
+            if not isinstance(failure, RunError):
+                failure = RunError("invalid_method_outcome", "formulation", "Candidate output does not match the declared model contract.")
+            if failure.code == "run_cancelled":
+                raise
+            error = failure
+        solve = self._load(solve_ref) if solve_ref is not None else None
+        result = {"schema_version": "0.1.0", "candidate_id": candidate_id, "proposal_sha256": identity,
+                  "proposal_ref": proposal_ref,
+                  "status": "invalid" if error is not None and execution_ref is None else "executed",
+                  "stages": stages, "artifact_ref": artifact_ref, "execution_result_ref": execution_ref,
+                  "solve_result_ref": solve_ref, "has_primal_solution": solve["has_primal_solution"] if solve else False,
+                  "termination": solve["termination"] if solve else None,
+                  "diagnostics": [{"code": error.code, "stage": error.stage, "message": str(error)}] if error else []}
+        candidate_ref = store.projections.get(path + "candidate-snapshot.json")
+        candidate = self._load(candidate_ref) if candidate_ref else {
+            "schema_version": "0.2.0", "candidate_id": candidate_id, "run_id": store.run_id,
+            "sequence_no": ledger["candidates"], "parent_ids": [parent_id] if parent_id else [],
+            "change_reason": change_reason, "artifact_ref": artifact_ref,
+            "created_by": {"method_id": self.plan.method.manifest["plugin_id"],
+                "method_version": self.plan.method.manifest["plugin_version"],
+                "variant_id": (self.plan.method.manifest["source"] or {}).get("variant_id", "grounded_candidates"),
+                "call_ids": [response.call_id for response in self.responses], "prompt_hash": None, "role": "formulation"}}
+        candidate.update(status=result["status"], artifact_ref=artifact_ref)
+        store.json(path + "candidate.json", candidate, candidate_id)
+        records[candidate_id]["result_ref"] = store.json(path + "assessment.json", result, candidate_id + "-assessment")
+        store.state.update(phase="method_pending", stages=stages)
+        store.checkpoint()
+        store.emit("candidate_assessed", candidate_id=candidate_id, assessment_ref=records[candidate_id]["result_ref"])
+        return deepcopy(result)
+
+    def select(self, candidate_id: str, *, rule: str, reason: str) -> MethodOutcome:
+        store = self.store
+        store.cancellation.check()
+        if not all(isinstance(value, str) and value.strip() and len(value) <= 4096 for value in (rule, reason)):
+            raise RunError("invalid_selection", "formulation", "Selection needs a declared rule and a public reason.")
+        if not isinstance(candidate_id, str):
+            raise RunError("invalid_selection", "formulation", "The selection needs a candidate ID.")
+        record = store.state.get("candidate_assessments", {}).get(candidate_id)
+        if record is None or record.get("result_ref") is None:
+            raise RunError("invalid_selection", "formulation", "The selected candidate must be assessed in this run.")
+        result = self._load(record["result_ref"])
+        if result["diagnostics"] or result["artifact_ref"] is None or result["solve_result_ref"] is None:
+            raise RunError("invalid_selection", "formulation", "Selection requires a valid candidate with trusted completed Solver evidence.")
+        selection = {"schema_version": "0.1.0", "candidate_id": candidate_id,
+                     "rule": rule, "reason": reason, "assessment_ref": record["result_ref"]}
+        previous = store.projections.get("candidate-selection.json")
+        if previous is not None and self._load(previous) != selection:
+            raise RunError("invalid_selection", "formulation", "A saved final selection is immutable.")
+        store.json("candidate-selection.json", selection, "candidate-selection")
+        candidate = self._load(store.projections["candidates/" + candidate_id + "/candidate.json"])
+        candidate["status"] = "selected"
+        store.json("candidates/" + candidate_id + "/candidate.json", candidate, candidate_id)
+        store.state.update(candidate_id=candidate_id, artifact_ref=result["artifact_ref"], stages=result["stages"],
+                           solve_ref=result["solve_result_ref"], execution_ref=result["execution_result_ref"],
+                           candidate_assessment_pending=False, phase="execute_done")
+        store.checkpoint()
+        return MethodOutcome("candidate_selected", candidate_id, None)
+
+    def selected(self, candidate_id: str | None) -> tuple[dict[str, Any], dict[str, Any]]:
+        store = self.store
+        if (candidate_id is None or candidate_id != store.state.get("candidate_id")
+                or store.state.get("candidate_assessment_pending") or "candidate-selection.json" not in store.projections):
+            raise RunError("invalid_method_outcome", "formulation", "A reference-only outcome requires a saved selection.")
+        selection = self._load(store.projections["candidate-selection.json"])
+        if selection["candidate_id"] != candidate_id:
+            raise RunError("invalid_method_outcome", "formulation", "Outcome differs from the saved selection.")
+        return store.state["artifact_ref"], store.state["stages"]
 
     def record(self, name: str, value: bytes) -> dict[str, Any]:
         self.store.cancellation.check()
@@ -42,6 +190,17 @@ class RunMethodResources:
 
     def reconcile(self) -> None:
         """Accept complete execution receipts before the application clears them."""
+        for candidate_id, record in self.store.state.get("candidate_assessments", {}).items():
+            receipts = self.store.interrupted_publications.get("candidates/" + candidate_id + "/assessment.json", [])
+            if record.get("result_ref") is not None or not receipts:
+                continue
+            result = self._load(receipts[-1])
+            if result["candidate_id"] != candidate_id or result["proposal_sha256"] != record["identity"]:
+                raise RunError("checkpoint_incompatible", "execution", "Candidate assessment receipt identity differs.")
+            self.store.accept_publications()
+            record["result_ref"] = receipts[-1]
+            self.store.state["phase"] = "method_pending"
+            self.store.checkpoint()
         for execution_id, record in self.store.state.get("method_executions", {}).items():
             receipts = self.store.interrupted_publications.get("method/executions/" + execution_id + "/result.json", [])
             if record.get("result_ref") is not None or not receipts:
@@ -51,6 +210,14 @@ class RunMethodResources:
             data = read_public_bytes(public_path(self.store.path, result["data_ref"]["relative_path"]))
             self.reuse(execution_id, ScriptCodeProposal(source.decode(), record["identity"]["source_sha256"],
                        record["identity"]["data_bindings"], data))
+        selections = self.store.interrupted_publications.get("candidate-selection.json", [])
+        if selections:
+            selection = self._load(selections[-1])
+            record = self.store.state.get("candidate_assessments", {}).get(selection["candidate_id"])
+            if record is None or selection["assessment_ref"] != record.get("result_ref"):
+                raise RunError("checkpoint_incompatible", "execution", "Selection receipt differs from the assessed candidate.")
+            self.store.accept_publications()
+            self.select(selection["candidate_id"], rule=selection["rule"], reason=selection["reason"])
 
     def _execute(self, execution_id: str, code: ScriptCodeProposal) -> dict[str, Any]:
         store, plan = self.store, self.plan
