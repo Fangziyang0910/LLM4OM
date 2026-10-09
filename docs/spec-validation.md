@@ -1,31 +1,31 @@
 # 调研、需求与设计校验记录
 
-日期：2026-10-09；设计基线：0.4.0。本记录验证科研设计、维护工具与 S01 离线实现；完整平台验收由 [AC 清单](acceptance.md)维护。S01 范围与证据见 [实现记录](development/s01-offline-run.md)。
+日期：2026-10-09；设计基线：0.4.0。本记录验证科研设计、维护工具与 S01／S02-A 实现；完整平台验收由 [AC 清单](acceptance.md)维护。实际范围见 [S01](development/s01-offline-run.md)／[S02-A](development/s02-highs.md)。
 
 ## 1. 可复算的当前命令
 
 在仓库根目录运行，依赖见 [贡献流程](../CONTRIBUTING.md)：
 
 ```bash
-uv sync --locked --extra dev
-uv run --locked mypy
-uv run --locked python scripts/render_references.py --check
-uv run --locked python scripts/check_repository.py
-uv run --locked python -m unittest discover -s tests -v
+uv sync --locked --extra dev --extra solve
+uv run --locked --extra dev --extra solve mypy
+uv run --locked --extra dev --extra solve python scripts/render_references.py --check
+uv run --locked --extra dev --extra solve python scripts/check_repository.py
+uv run --locked --extra dev --extra solve python -m unittest discover -s tests -v
 uv build
 git diff --check
 ```
 
-本次结果：参考导出与 69 个源文件校验通过；7 个运行模块的 strict mypy 通过；39 个测试通过（12 个维护 CLI＋27 个平台 CLI）。Python 3.12.3 与 3.11.13 两个独立环境分别运行全部 39 个测试及类型检查，均通过。sdist／wheel 构建通过；wheel 在干净的 Python 3.12.3 环境安装后，从仓库外工作目录分别运行 console script 和 SDK，均返回 artifact_ready。diff 空白检查通过。
+S01 交付时的结果：参考导出与 69 个源文件校验通过；7 个运行模块的 strict mypy 通过；39 个测试通过（12 个维护 CLI＋27 个平台 CLI）。Python 3.12.3 与 3.11.13 两个独立环境分别运行全部 39 个测试及类型检查，均通过。sdist／wheel 构建通过；wheel 在干净的 Python 3.12.3 环境安装后，从仓库外工作目录分别运行 console script 和 SDK，均返回 artifact_ready。diff 空白检查通过。
 
 测试从 CLI 与公开文件观察行为；维护负例在临时仓库副本运行。没有调用运行模块的私有函数或以内部 mock 关系作验收。CI 已配置相同 Python 矩阵，GitHub runner 尚未运行。
 
 ## 2. 文档与任务结构
 
-- 当前 37 份 Markdown、8 份 JSON、3 份 YAML 文件均进入检查；所有源文件进入 [逐文件记录](repository-audit.md)。本地链接、标题／显式锚点、围栏、UTF-8、LF 和结尾换行通过检查。
+- 当前 38 份 Markdown、8 份 JSON、4 份 YAML 文件均进入检查；所有源文件进入 [逐文件记录](repository-audit.md)。本地链接、标题／显式锚点、围栏、UTF-8、LF 和结尾换行通过检查。
 - 36 FR、12 NFR、25 AC 编号连续且无重复。LP/MILP 执行范围保留；首批方法调整为 direct／OptiMUS／CoE，基准调整为 NL4Opt／NLP4LP／MAMO LP/MILP 子集。
 - DD-01～DD-08 用于需求追踪，详细设计按方法、执行、实验／入口分支读取。
-- S01～S10 保持阶段编号，拆为 24 个纵向任务。每项有可观察结果、公共测试入口与直接 blockers；S01 已完成离线工程范围；当前可执行前沿为 S02-A／S03-A。
+- S01～S10 保持阶段编号，拆为 24 个纵向任务。每项有可观察结果、公共测试入口与直接 blockers；S01 已完成离线工程范围；S02-A 已完成严格 IR 与真实 HiGHS 范围；当前前沿为 S02-B／S03-A。
 - AGENTS 只有一个 Agent skills 块；glossary 是领域定义来源，四份简短 ADR 记录当前取舍，ADR-0004 明确两阶段选择。
 - 5 个 Mermaid 图块的源码围栏已检查。本次没有运行专用渲染器。
 
@@ -33,11 +33,11 @@ git diff --check
 
 ## 3. 配置与数学 fixture
 
-JSON 检查拒绝重复键、NaN／Infinity 与格式漂移。两份 YAML 使用 safe_load；direct 参数按 Manifest 的 JSON Schema 验证。预算的计数、正数墙钟时间、至少一个并发及实验 repeats 按契约核对。
+JSON 检查拒绝重复键、NaN／Infinity 与格式漂移。三份示例 YAML 使用 safe_load；direct 参数按 Manifest 的 JSON Schema 验证。预算的计数、正数墙钟时间、至少一个并发及实验 repeats 按契约核对。
 
-单问题 run.yaml 没有 task、methods 列表、experiment_id、repeats 或 oracle_path。两份配置使用同一 direct 参数与统一的 Mock response_artifact 名称。Mock 来源和隐藏参考入口分别标识。
+单问题 run.yaml／solve.yaml 没有 task、methods 列表、experiment_id、repeats 或 oracle_path。三份配置使用同一 direct 参数与统一的 Mock response_artifact 名称。Mock 来源和隐藏参考入口分别标识。
 
-核心对象／配置／Manifest 使用草案 0.2.0，LPIR 保持 0.1.0。新增五元素 Formulation 与共同封装，源问题／表述／IR 引用的 hash、大小、revision 和 schema 一致。Code 当前为 pending，后续编译预期才为 available；没有生成实际 CodeArtifact。
+核心对象／配置／Manifest 使用草案 0.2.0，LPIR 保持 0.1.0。新增五元素 Formulation 与共同封装，源问题／表述／IR 引用的 hash、大小、revision 和 schema 一致。源 fixture 的 Code 为 pending；S02-A 在运行目录中产生 available 的真实 CodeArtifact，不改写人工源文件。
 
 数据 hash 与模型绑定一致。维护工具以 CSV 为独立依据核对 IR 系数与资源约束，枚举固定两产品问题的整数点：最优 A=3/B=2、目标 13。LP 松弛 A=B=8/3、目标 40/3；使用可行点与非负对偶权重 4/3、1/3 核对相同上下界。
 
@@ -57,9 +57,9 @@ catalog 中的 29 个资料 ID 和 citation_key 唯一；资料页与 29 个 Bib
 
 ## 5. 验证边界
 
-维护工具验证科研设计与 fixture，平台 CLI 测试验证 S01 工程流程。真实 Provider／Solver 兼容、隔离、预算执行、恢复、编译语义与方法效果仍须在后续切片中按 AC 验证。Math fixture 检查仅针对这份固定生产实例，不提供一般 IR 验证器或语义等价证明。五元素与 LPIR 是同一问题的独立人工示例，不是已完成文本编译。
+维护工具验证科研设计与 fixture；平台测试验证 S01 离线行为与 S02-A 严格 IR 编译／真实 HiGHS。真实 Provider、Gurobi、隔离、完整预算执行、恢复与方法效果仍须按 AC 验证。维护工具的数学核验只针对固定生产实例；运行编译器另行校验通用的当前 grounded LPIR 结构。五元素与 LPIR 是人工示例，未实现自由文本到 IR 的转换，也不提供一般语义等价证明。
 
-GitHub CLI 的仓库与标签读取返回 HTTP 401，远程标签尚未核验。本地 tracker／triage 配置已保存；Git 提交与同步状态以仓库记录为准，可见性保持原设置。设计基线此前采用作者自查；S01 实现新增两个独立只读审阅进程，结果见下一节。
+S01 交付时 GitHub CLI 返回 HTTP 401。用户重新登录后已验证仓库读取、ADMIN 权限和 PRIVATE 可见性，并按 to-tickets 将 S02-A 发布为 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1)，使用 enhancement／ready-for-agent 标签。没有变更仓库可见性；Git 提交与同步状态以仓库记录为准。设计基线此前采用作者自查；S01 实现新增两个独立只读审阅进程，结果见下一节。
 
 ## 6. 独立审阅与修复
 

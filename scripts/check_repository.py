@@ -117,21 +117,21 @@ def check_configs() -> list[str]:
     jsonschema.Draft202012Validator.check_schema(manifest["config_schema"])
     errors = []
     configs = []
-    for name in ["run.yaml", "experiment.yaml"]:
+    for name in ["run.yaml", "experiment.yaml", "solve.yaml"]:
         config = yaml.safe_load((fixture / name).read_text())
         configs.append(config)
         if config["schema_version"] != manifest["schema_version"]:
             errors.append(f"{name}: fixture schema version mismatch")
-        methods = [config["method"]] if name == "run.yaml" else config["methods"]
+        methods = config["methods"] if name == "experiment.yaml" else [config["method"]]
         for method in methods:
             if method["plugin_id"] == manifest["plugin_id"]:
                 for error in validator.iter_errors(method["config"]):
                     errors.append(f"{name}: invalid method config at {list(error.path)}")
-        if name == "run.yaml" and (
+        if name != "experiment.yaml" and (
             {"task", "methods", "experiment_id", "repeats"} & config.keys()
             or "oracle_path" in json.dumps(config)
         ):
-            errors.append("run.yaml: single-problem config contains experiment or oracle fields")
+            errors.append(f"{name}: single-problem config contains experiment or oracle fields")
         for key, value in config["budget"].items():
             numeric = not isinstance(value, bool) and isinstance(value, (int, float))
             valid = numeric and math.isfinite(value) and value >= 0
@@ -150,6 +150,8 @@ def check_configs() -> list[str]:
             errors.append(f"{name}: missing mock response artifact")
     if configs[0]["method"] != configs[1]["methods"][0]:
         errors.append("fixture method config differs between single run and experiment")
+    if configs[2]["method"] != configs[0]["method"]:
+        errors.append("fixture method config differs between offline and real solve")
     return errors
 
 

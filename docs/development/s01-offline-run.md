@@ -59,6 +59,6 @@ Mock attempt 记为 1，外部 LLM 请求和 Solver 调用均为 0；缺失 toke
 - 负例覆盖重复键、非有限数值、版本／配置／预算、CSV 类型／空值／类型化重复键、路径／symlink 越界和循环、问题／revision／数据绑定、五元素内部缺失、额外引用、伪报 Code、凭据别名、递归 YAML 与存储错误。
 - 完整仓库校验、类型检查、Python 环境与包安装结果见 [校验记录](../spec-validation.md)。
 
-Standards 对照开发规范与接口契约，Spec 对照开工前已确认的 S01。两个独立只读审阅进程以 `da3609131ede07d85d922d9a8d1dd224bcf934c3` 为基线，检查首次实现 `147c1c4`；发现和修复分别记录在 [校验记录](../spec-validation.md#6-独立审阅与修复)。GitHub Issues 读取当前返回 HTTP 401；没有伪造 issue 编号，也没有关闭远程工作项。
+Standards 对照开发规范与接口契约，Spec 对照开工前已确认的 S01。两个独立只读审阅进程以 `da3609131ede07d85d922d9a8d1dd224bcf934c3` 为基线，检查首次实现 `147c1c4`；发现和修复分别记录在 [校验记录](../spec-validation.md#6-独立审阅与修复)。S01 交付时 GitHub Issues 返回 HTTP 401，未发布远程工作项；认证恢复后的 S02-A 使用真实 Issue #1 跟踪。
 
-下一步优先 S02-A：将伴随的严格 LPIR 编译为 CodeArtifact，经真实 HiGHS 求解，分别验证 MILP=13 与 LP=40/3。S03-A 的第三方方法发现也已解除 S01 阻塞。
+后续 [S02-A](s02-highs.md) 已实现伴随严格 LPIR 的 Code 编译和真实 HiGHS 求解；本页只维护 S01 离线 profile。当前前沿以 [开发计划](../implementation-plan.md)为准。

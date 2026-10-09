@@ -1,6 +1,6 @@
 # 示例规格与手算参考
 
-这些文件是人工编写的契约 fixture。S01 CLI／SDK 已能显式回放公开建模产物并保存记录；它们不代表真实 LLM 输出或 Solver 实验结果。
+这些文件是人工编写的契约 fixture。S01 CLI／SDK 显式回放公开产物，S02-A 将其编译后真实求解。源 fixture 不是 LLM 输出或实际 RunBundle；真实 Solver 结果在每次运行目录中产生。
 
 ## 1. 文件角色
 
@@ -14,18 +14,20 @@
 | [oracle.json](specs/oracle.json) | 自建参考目标与独立规则说明 | 否；Evaluator 读取 |
 | [plugin-manifest.json](specs/plugin-manifest.json) | direct 插件 Manifest 草案 | 配置／发现元信息 |
 | [experiment.yaml](specs/experiment.yaml) | 离线示例配置草案 | 公开部分可以；oracle 由 TaskAdapter 私有处理 |
-| [run.yaml](specs/run.yaml) | S01 无 oracle 单问题配置 | 全部为公开配置；仍是工程 Mock |
+| [run.yaml](specs/run.yaml) | S01 无 oracle 离线配置 | 全部为公开配置；仍是工程 Mock |
+| [solve.yaml](specs/solve.yaml) | S02-A trusted_local 真实 HiGHS 配置 | 人工 Formulation／IR → Code → Solve；不调用 LLM |
 | [expected-evaluation.json](specs/expected-evaluation.json) | 预期结果断言 | 否；不能冒充真实 run 输出 |
 
 例子将 oracle 放在同一源码目录是为了文档可读；运行时只能挂载明确的公开数据文件，不能把整份 examples／源码目录挂进生成代码容器。
 
-`run.yaml` 与 `experiment.yaml` 分别演示单问题和 benchmark 两种用法。前者使用单数 method，没有 task/oracle_path、experiment_id 和 repeats；后者由任务适配器导入公开问题与私有参考材料。两者配置草案为 0.2.0，显式选择 five_element。Mock 响应指向 model-artifact.json；Formulation 内的 structured_ir_ref 指向独立手写的 LPIR 0.1.0，不是已从文本编译出的结果。Code 引用当前为空，阶段为 pending；后续真实编译产生源表述可追踪的 CodeArtifact。S01 已使用单问题应用入口；benchmark 将在 S08 复用它。当前可运行：
+`run.yaml` 与 `experiment.yaml` 分别演示单问题和 benchmark 两种用法。前者使用单数 method，没有 task/oracle_path、experiment_id 和 repeats；后者由任务适配器导入公开问题与私有参考材料。两者配置草案为 0.2.0，显式选择 five_element。Mock 响应指向 model-artifact.json；Formulation 内的 structured_ir_ref 指向独立手写的 LPIR 0.1.0，不是已从文本编译出的结果。源 fixture 的 Code 引用为空、阶段为 pending；S02-A 在运行目录中生成可追踪的 CodeArtifact。S01 已使用单问题应用入口；benchmark 将在 S08 复用它。当前可运行：
 
 ```bash
 uv run --locked llm4om run --offline --problem examples/specs/problem.json --config examples/specs/run.yaml
+uv run --locked --extra solve llm4om run --problem examples/specs/problem.json --config examples/specs/solve.yaml
 ```
 
-先按 [开发命令](../CONTRIBUTING.md#3-开发与校验)安装依赖。run 不读取 oracle.json／expected-evaluation.json，不执行代码或求解；编译器、后端、求解器和容器配置只记录为后续目标。Code 为 pending，Solve 和独立语义检查为 not_available。实际 RunBundle 在 runs 下，详情见 [S01](../docs/development/s01-offline-run.md)。benchmark 命令与独立检查待后续实现。
+先按 [开发命令](../CONTRIBUTING.md#3-开发与校验)安装依赖。两条命令均不读取 oracle.json／expected-evaluation.json。第一条跳过 Code／Solve；第二条显式 trusted_local，保存真实代码、解和状态。独立语义检查均为 not_available。实际 RunBundle 在 runs 下，详情见 [S01](../docs/development/s01-offline-run.md)／[S02-A](../docs/development/s02-highs.md)。benchmark 命令与独立检查待后续实现。
 
 ## 2. 数学问题
 

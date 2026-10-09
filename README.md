@@ -12,7 +12,7 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 ## 当前状态
 
-已交付 **S01 离线单问题切片（Python 包 0.1.0）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，显式回放 Mock 五元素表述，保存阶段状态、数据 hash、事件、候选和报告。Code 与 Solve 尚未实现；Web、真实 LLM 和论文方法仍按开发计划接入。
+已交付 **S01 离线回放与 S02-A 真实 HiGHS 求解（Python 包 0.1.0）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。Web、真实 LLM 与论文方法仍按开发计划接入。
 
 仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
 
@@ -53,18 +53,19 @@ GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache
 | [开发规范](CODING_STANDARDS.md)与 [贡献流程](CONTRIBUTING.md) | 模块设计、纵向任务、公共入口测试与审阅 |
 | [逐文件整理记录](docs/repository-audit.md) | 当前文件职责、事实来源与核验方式 |
 
-## 当前可运行的离线示例
+## 当前可运行的示例
 
 在仓库根目录执行，使用 Python 3.11／3.12：
 
 ```bash
-uv sync --locked --extra dev
+uv sync --locked --extra dev --extra solve
+uv run --locked --extra solve llm4om run --problem examples/specs/problem.json --config examples/specs/solve.yaml
 uv run --locked llm4om run --offline --problem examples/specs/problem.json --config examples/specs/run.yaml
 ```
 
-CLI 输出 run_id、bundle_path 和 status。运行目录默认在 `runs/`；查看其中的 `bundle.json`、Formulation 与 `reports/report.md`。`--output PATH` 可覆盖存储根目录。成功状态 `artifact_ready` 表示离线产物已保存；不是求解完成。Mock 只回放为该输入编写的产物，不能处理任意新问题。
+CLI 输出 run_id、bundle_path 和 status。运行目录默认在 `runs/`；查看其中的 `bundle.json`、阶段产物、解向量和 `reports/report.md`。`--output PATH` 可覆盖存储根目录。第一条命令使用显式 trusted_local，真实得到 A=3、B=2、目标 13，状态 completed；第二条的 artifact_ready 只表示离线产物已保存。Formulation 仍来自人工 Mock，不能处理任意新问题；候选求解成功不代表业务语义已验证。
 
-CLI 和未来 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK 用法、实际支持范围和错误语义见 [S01 实现记录](docs/development/s01-offline-run.md)。
+CLI 和未来 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK、支持范围与错误语义见 [S01](docs/development/s01-offline-run.md)和 [S02-A](docs/development/s02-highs.md)。本地 LLM 凭据保存在 Git 忽略的 `.env`，变量名见 [.env.example](.env.example)；当前求解切片不加载它，Provider 接入归 S05。
 
 ## 后续使用方式
 

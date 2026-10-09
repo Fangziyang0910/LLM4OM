@@ -1,6 +1,6 @@
 # 插件、接口与数据契约
 
-核心对象／配置／Manifest 草案：0.2.0；GroundedLPIR：0.1.0；文档修订：0.4.0。本文定义当前开发契约；S01 已落实离线输入、Formulation、引用与 RunBundle 子集，实际范围见 [实现记录](development/s01-offline-run.md)。Protocol 是接口示意，数据对象在对应纵向切片落实并验证。领域含义见 [GLOSSARY](../GLOSSARY.md)，调用顺序见 [详细设计](detailed-design.md)。
+核心对象／配置／Manifest 草案：0.2.0；GroundedLPIR：0.1.0；文档修订：0.4.0。本文定义当前开发契约；S01 已落实离线输入与公开产物，S02-A 已落实严格 IR 编译与真实 HiGHS；实际范围见 [S01](development/s01-offline-run.md)／[S02-A](development/s02-highs.md)。Protocol 是接口示意，数据对象在对应纵向切片落实并验证。领域含义见 [GLOSSARY](../GLOSSARY.md)，调用顺序见 [详细设计](detailed-design.md)。
 
 ## 1. 所有插件的共同契约
 
@@ -302,3 +302,11 @@ run-id/
 离线结构评估使用公开默认协议：Formulation 的字段和绑定检查通过时为 structural pass；Code 与语义检查为 not_available。严格 IR 此时只验证引用和数据绑定，完整编译语义归 S02-A。预算账本记录 Mock attempt／candidate 数量、external_llm_requests=0、solver_calls=0、total_tokens=null 和 cost=0；它不声称已实现外部预算预留或墙钟中断。
 
 失败输入在存储可写时留下 bundle；存储错误由 SDK 抛出 OSError，CLI 返回退出码 2 和不含输入值的 store_unavailable。公开输入保留边界错误码，详细命令与 profile 见 [S01 实现记录](development/s01-offline-run.md)。
+
+### S02-A 已落实的编译／求解子集
+
+当前只执行 Mock 表述中明确提供的 grounded_lp 0.1.0，编译输出 python_factory 并关联源 Formulation、IR、symbol map 与数据 hash。工厂固定当前 revision，data 参数尚不重新绑定；参数化输入归 S02-B。自由文本、原生代码和真实 LLM 输出不进入当前编译入口。实际命令、版本与数值边界见 [S02-A 实现记录](development/s02-highs.md)。
+
+RunConfig 可以显式选择 trusted_local，config 为空对象；container 配置只在离线回放时接受为目标配置，不会自动降级。solve extra 提供 Pyomo／HiGHS，缺失依赖或零 Solver 预算在 Mock 前拒绝。当前 Solver options 只支持 time_limit_s，实际容差和原生数值阈值随结果保存。
+
+真实 bundle mode 为 trusted_local，执行完成为 completed；termination 与 primal 可用性由 SolveResult 分别表达。增加 solve_result_ref、execution_result_ref 和 final_candidate_id；执行错误仍保存已完成阶段。编译前快照与最终候选分别保存，旧事件引用不可失效。Code 的编译检查通过不推导 semantic_validation 通过；infeasible／unbounded 是实际结果。ExecutionResult 的 exit_code、CPU 与内存未测量时为 null。solver_calls 计 Solver 适配器尝试，外部 LLM 请求仍为零；总墙钟强制中断、资源隔离与恢复待 S04。

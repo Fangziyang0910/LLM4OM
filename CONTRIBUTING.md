@@ -1,6 +1,6 @@
 # 贡献与开发流程
 
-本仓库维护 LLM4OM 的研究设计和平台实现。已交付 [S01](docs/development/s01-offline-run.md) 离线单问题流程；每个任务交付可演示的纵向行为。
+本仓库维护 LLM4OM 的研究设计和平台实现。已交付 [S01](docs/development/s01-offline-run.md) 离线单问题流程与 [S02-A](docs/development/s02-highs.md) 真实 HiGHS 求解；每个任务交付可演示的纵向行为。
 
 规范见 [CODING_STANDARDS](CODING_STANDARDS.md)，领域词见 [GLOSSARY](GLOSSARY.md)。按 [文档导航](docs/README.md)读取当前任务涉及的 FR/NFR、契约、详细设计与验收。方法或 benchmark 接入另读 [资料库](docs/references/README.md)及 [源码考察](docs/references/source-inspection.md)。
 
@@ -25,22 +25,22 @@
 当前平台使用 Python 3.11／3.12。依赖声明由 pyproject.toml 维护，完整解析由 uv.lock 固定；维护工具复用其中的 PyYAML／jsonschema。推荐执行：
 
 ```bash
-uv sync --locked --extra dev
-uv run --locked mypy
-uv run --locked python scripts/render_references.py --check
-uv run --locked python scripts/check_repository.py
-uv run --locked python -m unittest discover -s tests -v
+uv sync --locked --extra dev --extra solve
+uv run --locked --extra dev --extra solve mypy
+uv run --locked --extra dev --extra solve python scripts/render_references.py --check
+uv run --locked --extra dev --extra solve python scripts/check_repository.py
+uv run --locked --extra dev --extra solve python -m unittest discover -s tests -v
 uv build
 ```
 
-修改 `docs/references/catalog.json` 后先运行 `uv run --locked python scripts/render_references.py` 生成资料页与 BibTeX，再执行检查。JSON 使用两空格布局；CSV 和授权原文保持字节稳定。所有纳入仓库的文件都在 [逐文件整理记录](docs/repository-audit.md)中说明职责与校验方式，新增文件同步记录。
+修改 `docs/references/catalog.json` 后先运行 `uv run --locked --extra dev --extra solve python scripts/render_references.py` 生成资料页与 BibTeX，再执行检查。JSON 使用两空格布局；CSV 和授权原文保持字节稳定。所有纳入仓库的文件都在 [逐文件整理记录](docs/repository-audit.md)中说明职责与校验方式，新增文件同步记录。
 
-仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。平台行为另由 tests/test_cli_run.py 从 CLI 检查；维护检查不替代隔离、预算执行、恢复或真实 benchmark 验收。
+仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。平台测试从 CLI 与编译／Solver 公共接口验证离线和真实求解路径；维护检查不替代隔离、完整预算执行、恢复或 benchmark 验收。基础安装可省略 solve extra，但完整测试必须安装它。
 
 ## 4. Review 与交付
 
 Review 分开回答两个问题：Standards 是否符合开发规范和相关契约；Spec 是否完成用户要求或 issue。显式调用 code-review 时按技能执行独立审阅；若当前环境无法运行独立审阅者，说明实际采用的自查范围。
 
-交付先完成对应检查，再报告变化、证据和剩余条件。PR 使用 [仓库模板](.github/PULL_REQUEST_TEMPLATE.md)说明 Summary、Evidence 与 Merge Danger。用户请求提交或 PR 时保存完整改动并关联工作项；S01 已加入离线 CI 和本地包构建；发布标签与公开包发布依据真实验收和用户授权进行。
+交付先完成对应检查，再报告变化、证据和剩余条件。PR 使用 [仓库模板](.github/PULL_REQUEST_TEMPLATE.md)说明 Summary、Evidence 与 Merge Danger。用户请求提交或 PR 时保存完整改动并关联工作项；CI 覆盖离线与真实 HiGHS，本地验证包构建；发布标签与公开包发布依据真实验收和用户授权进行。
 
 技能选择与触发条件见 [任务工作流](docs/agents/workflow.md)。常规实现选择无需额外审批；用户明确指令优先于工程默认值。

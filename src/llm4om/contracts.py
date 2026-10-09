@@ -327,9 +327,12 @@ def validate_config(settings: dict[str, Any]) -> None:
         "model_backend": _object({"plugin_id": {"const": "llm4om.model_backends.pyomo_factory"}}),
         "solver": _object({"plugin_id": {"const": "llm4om.solvers.highs"}, "options": _object({
             "time_limit_s": {"type": "number", "exclusiveMinimum": 0}}, [])}, ["plugin_id"]),
-        "executor": _object({"plugin_id": {"const": "llm4om.executors.container"}, "config": _object({
-            "network": {"const": False}, "cpu_limit": POSITIVE, "memory_limit_mb": POSITIVE,
-            "wall_time_s": {"type": "number", "exclusiveMinimum": 0}})}),
+        "executor": {"anyOf": [
+            _object({"plugin_id": {"const": "llm4om.executors.container"}, "config": _object({
+                "network": {"const": False}, "cpu_limit": POSITIVE, "memory_limit_mb": POSITIVE,
+                "wall_time_s": {"type": "number", "exclusiveMinimum": 0}})}),
+            _object({"plugin_id": {"const": "llm4om.executors.trusted_local"}, "config": _object({})}),
+        ]},
         "budget": _object({name: ({"type": "number", "exclusiveMinimum": 0} if name == "wall_time_s"
                                  else POSITIVE if name == "max_concurrency" else NONNEGATIVE)
                            for name in ["max_llm_attempts", "max_total_tokens", "max_candidates",
@@ -344,6 +347,6 @@ def validate_config(settings: dict[str, Any]) -> None:
     try:
         jsonschema.Draft202012Validator(schema).validate(settings)
     except jsonschema.ValidationError as error:
-        raise RunError("invalid_config", "admission", "RunConfig is outside the S01 offline profile.") from error
+        raise RunError("invalid_config", "admission", "RunConfig is outside the supported Mock/grounded-LPIR profile.") from error
     if settings["budget"]["max_llm_attempts"] < 1 or settings["budget"]["max_candidates"] < 1:
         raise RunError("unsupported_config", "admission", "Offline replay requires one Mock attempt and one candidate slot.")

@@ -1,4 +1,4 @@
-# Planned single-problem config: deterministic engineering fixture, not a real LLM result.
+# S01 offline config; container execution remains planned. No real LLM result.
 schema_version: "0.2.0"
 method:
   plugin_id: "llm4om.methods.direct"

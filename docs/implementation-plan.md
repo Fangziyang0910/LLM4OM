@@ -1,6 +1,6 @@
 # 1.0 开发计划与接入顺序
 
-文档修订：0.4.0。以下是本地开发计划，尚未发布为 GitHub Issues；S01 离线切片已实现，其余任务待开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
+文档修订：0.4.0。以下是开发计划；S01／S02-A 已实现，S02-A 使用 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1) 跟踪，其余任务待开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
 
 ## 1. 首批能力矩阵
 
@@ -39,10 +39,12 @@
 
 | 切片 | What to build／可演示结果 | Blocked by | 公共测试入口与验收 |
 |---|---|---|---|
-| S02-A | 同一个 CLI run 将 Formulation 中显式提供的 grounded LPIR 编译为 CodeArtifact，并用 HiGHS 真实求解 | S01 | CLI＋编译／Solver 公共契约：MILP=13，LP=40/3；常数、域、无解、无界与状态。AC-10/11/14 |
+| S02-A | 同一个 CLI run 将 Formulation 中显式提供的 grounded LPIR 编译为 CodeArtifact，并用 HiGHS 真实求解 | S01 | CLI＋编译／Solver 公共契约：MILP=13，LP=40/3；常数、域、无解、无界与状态。AC-10/11/13；隔离归 AC-14/S04 |
 | S02-B | 同一个 CLI run 接受参数化 Pyomo 工厂，关联源 Formulation，换数据后形成新绑定 | S02-A | CLI：数据 revision、模型 Handle、决策映射和工厂异常。AC-03/10/13/24 |
 
-以 CSV 为独立依据核验决策；交换利润的候选按原目标应为 12。覆盖 FR-21～25/29；DD-04/05。独立检查器验证工程 fixture，不声称一般语义等价。
+以 CSV 为独立依据核验决策；交换利润的候选按原目标应为 12。覆盖 FR-21～25/29；DD-04/05。独立检查器是后续验收要求，不声称一般语义等价。
+
+状态：S02-A 已实现，见 [支持范围与真实证据](development/s02-highs.md)；S02-B 待实现。HiGHS 部分已验证，Gurobi、容器与完整 time_limit 验收仍未完成。
 
 ### S03 插件发现、配置与预检
 
@@ -144,10 +146,10 @@ flowchart LR
     S09B --> S10
 ```
 
-S01 已完成，当前可执行前沿是 S02-A 和 S03-A；优先 S02-A。GitHub Issues 认证恢复后再核验远程工作项与领取状态。完成后关联真实证据；互不阻塞的任务可以并行。
+S01／S02-A 已完成，当前可执行前沿是 S02-B 和 S03-A。GitHub Issues 认证已恢复，S02-A 的工作项为 #1。完成后关联真实证据；互不阻塞的任务可以并行。
 
 ## 5. 工程默认值与完成边界
 
-S01 采用 Python 3.11／3.12、标准库 argparse／dataclass／unittest，以及已有 PyYAML／jsonschema；依赖由 pyproject.toml 与 uv.lock 管理。维护工具复用这些依赖，类型检查使用开发依赖 mypy。Pyomo／HiGHS 在 S02 接入，Web 实现另行选择。文件和事件优先，确有查询需要时再引入 SQLite。方法可自行依赖 Agent 框架，核心不强制依赖它。
+S01 采用 Python 3.11／3.12、标准库 argparse／dataclass／unittest，以及已有 PyYAML／jsonschema；依赖由 pyproject.toml 与 uv.lock 管理。维护工具复用这些依赖，类型检查使用开发依赖 mypy。Pyomo 6.10.1／highspy 1.15.1 已通过可选 solve extra 接入 S02-A，Web 实现另行选择。文件和事件优先，确有查询需要时再引入 SQLite。方法可自行依赖 Agent 框架，核心不强制依赖它。
 
 LLMOPT 等训练类工作的流程／提示变体、MCTS autoformulation、ORPilot、IndustryOR／OptMATH 及 NLP／CP 留待首批契约被真实验证后扩展。每个新增方法、Solver 或 benchmark 都需要声明实际支持组合与来源。
