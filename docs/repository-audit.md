@@ -88,7 +88,7 @@
 | `src/llm4om/evaluation.py` | S07-A 单样本后置评测 | 公共运行结果、Code 实际来源、失败、checker error、零 eligible 与无 oracle 导出 |
 | `tests/test_task_evaluation.py` | S07-A 公共接口验收 | 独立 fixture 身份、实际 HTTP／Docker／HiGHS、篡改与失败记录 |
 | `examples/tasks/nl4opt-import.yaml` | 官方固定 dev split 的本地导入配置 | 已下载源字节 hash；路径以配置目录为根，不自动 fetch |
-| `src/llm4om/application.py` | 单问题应用流程 | 公开输入、候选与阶段；校验中断 Execution 的候选／绑定／Solver 身份并复用完成结果 |
+| `src/llm4om/application.py` | 单问题应用流程 | 公开输入、候选与阶段原子完成事件；共用引用图校验，恢复完整 Formulation 及 Execution 的实际产物／绑定／Solver 证据 |
 | `src/llm4om/cli.py` | 用户 CLI | 参数解析、离线显式选择、JSON 摘要与退出码 |
 | `src/llm4om/contracts.py` | 运行边界校验 | 严格 JSON／YAML、CSV、路径、引用、五元素、输入绑定与 Worker 响应 |
 | `src/llm4om/executors.py` | 真实容器执行 Module | 公共 bytes、权限与资源、有界控制／清理、真实限制证据 |
@@ -154,6 +154,6 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `docs/development/s04-resume.md` | S04-B 当前实现与本机验收范围 | 公开入口、checkpoint／预算／身份、默认拒绝／显式派生及实际支持边界 |
 | `docs/development/s06b-optimus-source.md` | 固定 OptiMUS 0.3 主流程、提示、原生输出与适配接缝研究 | 19 份源码／文档 hash、16 份检索资源 hash、真实默认模式与 paper/source 区分；未集成 |
 | `docs/development/s06c-coe-source.md` | 固定 CoE 角色路由、协作／反思、函数输出与输入分类研究 | 30 份源文件 hash、真实选择／反馈语义、无许可材料的观察与原生接口需求；未集成 |
-| `tests/test_resume_crash.py` | S04-B 真实硬崩溃与派生恢复 | CLI／SDK、OS 目录 fsync／rename；早期 completed Execution 复用、收据保留、head 回滚拒绝与累计资源 |
+| `tests/test_resume_crash.py` | S04-B 真实硬崩溃与派生恢复 | CLI／SDK、独立安装无 checkpoint Method、合成 HTTP、OS fsync／rename；Formulation／Code 完成提交、早期产物与 Execution 复用、收据保留及累计资源 |
 | `tests/test_async_control.py` | 公共 Method 任务监督行为 | 取消等待清理、SystemExit 诊断与 Python 3.11 兼容 |
 | `docs/development/s05b-anthropic-research.md` | Anthropic Messages 官方协议与已配置服务的真实小探针 | 同一指定模型、Messages HTTP200、真实 usage／未知成本、私有原始回复；Adapter 尚未实现 |

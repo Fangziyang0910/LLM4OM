@@ -123,15 +123,14 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
         store.checkpoint()
         if artifact_ref is None:
             artifact_ref, stages = _prepare_candidate(store, problem, config, settings, ledger, offline, plan)
-            store.state.update(artifact_ref=artifact_ref, stages=stages, phase="method_done")
-            store.checkpoint()
         status = "artifact_ready"
         if not offline:
             if store.state["phase"] == "method_done":
                 artifact_ref, compiled = _compile_candidate(store, artifact_ref, settings)
                 stages["code"] = {"status": "available", "reason": None}
                 store.state.update(artifact_ref=artifact_ref, phase="code_done")
-                store.checkpoint()
+                store.emit("code_saved", artifact_ref=artifact_ref,
+                           **({"evidence_origin": "method_generated"} if compiled is None else {}))
             else:
                 compiled = _restored_compilation(store, artifact_ref)
             cancellation.check()
@@ -323,23 +322,29 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
                                         "response_sha256": gateway.calls[-1].source_sha256 if gateway.calls else None}
     artifact["provenance"]["method"] = {"manifest": method.manifest, "origin": method.origin}
     artifact_ref = store.json("candidates/001/artifact.json" if offline else "candidates/001/formulation-snapshot.json", artifact, artifact["artifact_id"])
-    store.json("candidates/001/candidate.json" if offline else "candidates/001/candidate-snapshot.json", {"schema_version": "0.2.0", "candidate_id": "001",
-               "run_id": store.run_id, "parent_ids": [], "sequence_no": 1, "artifact_ref": artifact_ref,
-               "created_by": {"method_id": settings["method"]["plugin_id"], "method_version": method.manifest["plugin_version"],
-                              "variant_id": (method.manifest["source"] or {}).get("variant_id", "grounded_single_candidate"), "call_ids": call_ids,
-                              "prompt_hash": None, "role": "formulation"}, "status": "proposed"}, "001")
-    ledger["candidates"] = 1
+    return artifact_ref, _save_formulation(store, artifact_ref, artifact)
+
+
+def _save_formulation(store: RunStore, artifact_ref: dict[str, Any], artifact: dict[str, Any]) -> dict[str, Any]:
+    method = artifact["provenance"]["method"]["manifest"]
+    call_ids = artifact["provenance"]["replay"]["call_ids"]
+    store.json("candidates/001/candidate.json" if store.state["offline"] else "candidates/001/candidate-snapshot.json", {
+        "schema_version": "0.2.0", "candidate_id": "001", "run_id": store.run_id, "parent_ids": [],
+        "sequence_no": 1, "artifact_ref": artifact_ref,
+        "created_by": {"method_id": method["plugin_id"], "method_version": method["plugin_version"],
+                       "variant_id": (method["source"] or {}).get("variant_id", "grounded_single_candidate"),
+                       "call_ids": call_ids, "prompt_hash": None, "role": "formulation"}, "status": "proposed"}, "001")
+    store.state["ledger"]["candidates"] = 1
+    stages = {**artifact["stage_status"], "solve": {"status": "not_available", "reason": "Solve has not run."}}
+    store.state.update(artifact_ref=artifact_ref, stages=stages, phase="method_done")
     store.emit("formulation_saved", artifact_ref=artifact_ref, call_ids=call_ids, evidence_origin="method_output")
-    stages = {**artifact["stage_status"], "solve": {
-        "status": "not_available", "reason": "Solve has not run."}}
-    return artifact_ref, stages
+    return stages
 
 
 def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: dict[str, Any]) -> tuple[dict[str, Any], CompiledCode | None]:
     artifact = parse_json(read_public_bytes(store.path / artifact_ref["relative_path"]))
     formulation = parse_json(read_public_bytes(store.path / artifact["formulation_ref"]["relative_path"]))
     if artifact["code_ref"] is not None:
-        store.emit("code_saved", artifact_ref=artifact_ref, evidence_origin="method_generated")
         return artifact_ref, None
     ir_ref = formulation["structured_ir_ref"]
     ir = parse_json(read_public_bytes(store.path / ir_ref["relative_path"]))
@@ -356,7 +361,6 @@ def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: 
     artifact["code_ref"] = code_ref
     artifact["stage_status"]["code"] = {"status": "available", "reason": None}
     artifact_ref = store.json("candidates/001/artifact.json", artifact, artifact["artifact_id"])
-    store.emit("code_saved", artifact_ref=artifact_ref)
     store.json("candidates/001/build.json", {"schema_version": "0.2.0", "code_artifact_ref": code_ref,
         "compiler_id": settings["compiler"]["plugin_id"], "compiler_version": "0.1.0",
         "source_ir_ref": ir_ref, "target_backend": settings["model_backend"]["plugin_id"],
@@ -533,32 +537,76 @@ def _restored_compilation(store: RunStore, artifact_ref: dict[str, Any]) -> Comp
     return compile_ir(ir)
 
 
+def _load_verified_record(store: RunStore, ref: dict[str, Any]) -> dict[str, Any]:
+    visited: set[str] = set()
+    def verify(value: Any) -> None:
+        if isinstance(value, dict):
+            if {"relative_path", "namespace", "sha256"} <= value.keys():
+                if value not in store.refs or value.get("namespace") != "run_public":
+                    raise ValueError("Result refers to an unverified artifact.")
+                if value["relative_path"] not in visited:
+                    visited.add(value["relative_path"])
+                    if value["media_type"] == "application/json":
+                        verify(load(value))
+            else:
+                for item in value.values():
+                    verify(item)
+        elif isinstance(value, list):
+            for item in value:
+                verify(item)
+    def load(ref: dict[str, Any]) -> dict[str, Any]:
+        return parse_json(read_public_bytes(public_path(store.path, ref["relative_path"])))
+    verify(ref)
+    return load(ref)
+
+
+def _reconcile_formulation(store: RunStore) -> None:
+    name = "candidates/001/artifact.json" if store.state["offline"] else "candidates/001/formulation-snapshot.json"
+    records = store.interrupted_publications.get(name, [])
+    if store.state.get("artifact_ref") is not None or not records:
+        return
+    try:
+        artifact_ref = records[-1]
+        artifact = _load_verified_record(store, artifact_ref)
+        public_ref = store.projections["public-problem.json"]
+        public = _load_verified_record(store, public_ref)
+        formulation = _load_verified_record(store, artifact["formulation_ref"])
+        validate_bindings(artifact, public)
+        validate_formulation(formulation, public)
+        if (artifact["problem_ref"] != public_ref
+                or artifact["provenance"]["method"] != store.state["admission"]["method"]
+                or artifact["stage_status"]["formulation"] != {"status": "available", "reason": None}):
+            raise ValueError("Completed Formulation differs from the admitted input or method.")
+        if artifact["code_ref"] is None:
+            validate_model_artifact(artifact)
+            ir = _load_verified_record(store, formulation["structured_ir_ref"])
+            validate_bindings(ir, public)
+            if (ir["problem_id"] != public["problem_id"] or ir["problem_revision"] != public["revision"]
+                    or ir["problem_type"] not in store.state["admission"]["allowed_problem_types"]):
+                raise ValueError("Completed Formulation IR belongs to another input or profile.")
+        else:
+            code = _load_verified_record(store, artifact["code_ref"])
+            validate_bindings(code, public)
+            if (code["source_formulation_ref"] != artifact["formulation_ref"]
+                    or code["provenance"]["method"] != store.state["admission"]["method"]["manifest"]
+                    or code["provenance"]["origin"] != "method_generated"
+                    or code["model_backend"] != store.state["admission"]["model_backend_id"]):
+                raise ValueError("Completed Code differs from the admitted Formulation or method.")
+        store.accept_publications()
+        _save_formulation(store, artifact_ref, artifact)
+    except (RunError, ValueError, KeyError, TypeError) as error:
+        raise RunError("checkpoint_incompatible", "admission", "Cannot reconcile the completed Formulation.") from error
+
+
 def _reconcile_execution(store: RunStore, settings: dict[str, Any]) -> None:
     records = store.interrupted_publications.get("candidates/001/execution.json", [])
     if store.state["phase"] != "execute_pending" or not records:
         return
     try:
-        visited: set[str] = set()
-        def verify(value: Any) -> None:
-            if isinstance(value, dict):
-                if {"relative_path", "namespace", "sha256"} <= value.keys():
-                    if value not in store.refs or value.get("namespace") != "run_public":
-                        raise ValueError("Result refers to an unverified artifact.")
-                    if value["relative_path"] not in visited:
-                        visited.add(value["relative_path"])
-                        if value["media_type"] == "application/json":
-                            verify(load(value))
-                else:
-                    for item in value.values():
-                        verify(item)
-            elif isinstance(value, list):
-                for item in value:
-                    verify(item)
         def load(ref: dict[str, Any]) -> dict[str, Any]:
             return parse_json(read_public_bytes(public_path(store.path, ref["relative_path"])))
         execution_ref = records[-1]
-        verify(execution_ref)
-        execution = load(execution_ref)
+        execution = _load_verified_record(store, execution_ref)
         if execution["status"] != "completed":
             return
         artifact_ref = execution["artifact_ref"]
@@ -665,6 +713,7 @@ def resume_run(run: Path, *, cancellation: CancellationToken | None = None,
             return RunResult(store.run_id, store.path, store.state["status"])
         if time.time() >= store.state["deadline"]:
             raise RunError("deadline_exhausted", "admission", "The original absolute run deadline expired.")
+        _reconcile_formulation(store)
         if (store.state.get("artifact_ref") is None and store.state.get("method_checkpoint") is None
                 and store.state.get("method_started")):
             raise RunError("checkpoint_unsupported", "admission", "No completed stage or supported internal method checkpoint exists.")

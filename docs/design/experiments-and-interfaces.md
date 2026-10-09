@@ -32,7 +32,10 @@ TaskAdapter → 公开 ProblemSpec + 私有 oracle_ref → dataset manifest → 
 S04-B 当前实现见 [取消与恢复](../development/s04-resume.md)。核心阶段 checkpoint 与方法内部 checkpoint 分开保存。方法支持 checkpoint 时，其 run 入口接受可序列化 checkpoint。恢复校验方法、契约、公开输入和配置。版本不兼容则拒绝；不支持内部 checkpoint 且尚无完整阶段时，默认 continue 明确拒绝；显式 rerun 创建派生运行，保留 lineage、父公开历史副本、已有费用与未知预留，并继续计入配置上限。新 run 的 deadline 与同一 run 的原 deadline 分别记录。
 
 核心以不可变 checkpoint 和写入意图校验未提交公开视图，验证中断 owner 后先保存可重复恢复的引用收据，再重建视图。
-存储负责引用与持久化；应用核对 completed Execution 的尝试身份、候选／Code／数据绑定和真实 Solver 结果，
+存储负责引用与持久化；Formulation／Code 的核心引用、阶段状态和完成事件一起提交，Code 的 build 先保存。
+应用在内部 checkpoint 能力判断前，验证并接纳收据中的完整 ModelArtifact，复用原 Formulation／Code 引用；
+已完成的方法不再执行，也不新增模型调用。候选记录和阶段状态由正常路径与恢复路径共用的提交逻辑补齐。
+应用核对 completed Execution 的尝试身份、候选／Code／数据绑定和真实 Solver 结果，
 在新 Solver admission 前复用已发布但尚未进入 execute_done 的结果。失败的身份校验不消耗该恢复收据。
 新建目录的祖先项先在父目录 fsync，随后才能发布引用其内容的记录。方法收到 checkpoint 深拷贝，只通过显式回调提交步骤。
 Gateway 以不可变资源单链连接 admission／settlement；私有 mutable head 必须匹配链中版本，且等于或晚于核心已知 hash。
