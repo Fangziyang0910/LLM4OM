@@ -17,6 +17,7 @@ from typing import Any
 from llm4om.contracts import (
     RunError, parse_json, public_path, read_config, read_public_bytes, validate_config, validate_csv, validate_problem,
     validate_model_artifact, validate_formulation, validate_bindings, reject_additional_refs,
+    validate_worker_response,
 )
 from llm4om.mock import MockGateway
 from llm4om.methods import MethodContext, ModelProposal
@@ -268,6 +269,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode, artifact_ref: di
             if container.status in ("timeout", "oom", "output_limit"):
                 raise RunError(f"execution_{container.status}", "execution", "The isolated Worker exceeded an enforced resource limit.")
             payload = parse_json(container.stdout)
+            validate_worker_response(payload, {name: plan.snapshot["worker"][name] for name in ("python", "llm4om", "packages")})
             if "error" in payload:
                 raise RunError(payload["error"]["code"], payload["error"]["stage"], payload["error"]["message"])
             if container.status != "completed" or container.exit_code != 0:

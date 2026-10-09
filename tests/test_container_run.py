@@ -16,20 +16,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ContainerRunTests(unittest.TestCase):
-    def test_doctor_rejects_incomplete_worker_runtime_before_the_method_runs(self) -> None:
-        # Substitute only the external Docker CLI; real isolation is tested separately.
-        with tempfile.TemporaryDirectory() as directory:
-            docker = Path(directory) / "docker"
-            docker.write_text(f"#!{sys.executable}\n" + '''import json, sys
+    def docker_fixture(self, command: str, *, runtime: dict, solve: dict | None = None) -> tuple[subprocess.CompletedProcess, Path]:
+        # Substitute the external Docker protocol only; real resource tests remain separate.
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        docker = root / "docker"
+        docker.write_text(f"#!{sys.executable}\n" + '''import json, os, sys
+from pathlib import Path
 operation = sys.argv[1]
+mode = Path(__file__).with_name("worker-mode")
 if operation == "version":
     print("29.6.2")
 elif operation == "image":
     print(json.dumps([{"Id": "sha256:fixture", "Config": {"Labels": {}}}]))
 elif operation == "create":
+    mode.write_text("runtime" if "--runtime" in sys.argv else "solve")
     print("fixture-container")
 elif operation == "start":
-    print(json.dumps({"schema_version": "0.2.0", "runtime": {"packages": []}}))
+    print(os.environ["WORKER_RUNTIME_FIXTURE" if mode.read_text() == "runtime" else "WORKER_SOLVE_FIXTURE"])
 elif operation == "inspect":
     print(json.dumps([{"State": {"ExitCode": 0, "OOMKilled": False, "Running": False},
         "Config": {"User": "65532:65532"}, "HostConfig": {"NetworkMode": "none",
@@ -37,14 +42,37 @@ elif operation == "inspect":
         "NanoCpus": 1000000000, "PidsLimit": 64, "CapDrop": ["ALL"],
         "SecurityOpt": ["no-new-privileges"]}, "Mounts": []}]))
 ''')
-            docker.chmod(0o755)
-            result = subprocess.run([sys.executable, "-m", "llm4om", "doctor", "--config",
-                str(ROOT / "examples/specs/run.yaml")], capture_output=True, text=True, timeout=15,
-                env={**os.environ, "PATH": directory + os.pathsep + os.defpath})
-            self.assertEqual(result.returncode, 1, result.stderr + result.stdout)
-            report = json.loads(result.stdout)
-            self.assertFalse(report["preflight_ok"])
-            self.assertEqual(report["error"]["code"], "executor_unavailable")
+        docker.chmod(0o755)
+        arguments = [sys.executable, "-m", "llm4om", command, "--config", str(ROOT / "examples/specs/run.yaml")]
+        if command == "run":
+            arguments += ["--problem", str(ROOT / "examples/specs/problem.json"), "--output", str(root / "runs")]
+        result = subprocess.run(arguments, capture_output=True, text=True, timeout=15,
+            env={**os.environ, "PATH": str(root) + os.pathsep + os.defpath,
+                 "WORKER_RUNTIME_FIXTURE": json.dumps(runtime), "WORKER_SOLVE_FIXTURE": json.dumps(solve)})
+        return result, root
+
+    def test_doctor_rejects_incomplete_worker_runtime_before_the_method_runs(self) -> None:
+        result, _ = self.docker_fixture("doctor", runtime={"schema_version": "0.2.0", "runtime": {"packages": []}})
+        self.assertEqual(result.returncode, 1, result.stderr + result.stdout)
+        report = json.loads(result.stdout)
+        self.assertFalse(report["preflight_ok"])
+        self.assertEqual(report["error"]["code"], "executor_unavailable")
+
+    def test_incompatible_worker_response_does_not_become_a_solve_result(self) -> None:
+        runtime = {"schema_version": "0.2.0", "runtime": {"python": "3.12.15", "llm4om": "0.3.0",
+            "packages": {"Pyomo": "6.10.1", "highspy": "1.15.1"}}}
+        for schema_version in ("999.0.0", "0.2.0"):
+            with self.subTest(schema_version=schema_version):
+                payload = {"schema_version": schema_version, "runtime": runtime["runtime"],
+                    "result": {"variables": {"qty_A": 3, "qty_B": 2}, "termination": "optimal"}, "resources": {}}
+                result, _ = self.docker_fixture("run", runtime=runtime, solve=payload)
+                self.assertTrue(result.stdout, result.stderr)
+                self.assertEqual(result.returncode, 1, result.stderr + result.stdout)
+                path = Path(json.loads(result.stdout)["bundle_path"])
+                bundle = json.loads((path / "bundle.json").read_text())
+                self.assertEqual(bundle["error"]["code"], "worker_protocol_error")
+                self.assertIsNone(bundle["solve_result_ref"])
+                self.assertIsNotNone(bundle["execution_result_ref"])
 
     def test_output_limit_keeps_execution_evidence_without_a_solve_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

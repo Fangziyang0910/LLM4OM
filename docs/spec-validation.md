@@ -23,7 +23,7 @@ S02-A 交付结果：76 个源文件与参考导出通过检查；9 个模块的
 
 S03 当前结果：86 个源文件检查通过，12 个模块在 Python 3.12.3／3.11.13 的 strict mypy 通过；两个环境分别完整 77 tests passed（原 57 项＋20 项安装／方法／预检 CLI／SDK 行为）。独立方法通过真实 wheel 构建／安装发现，不 mock entry_points。SDK 0.2.0 的 sdist／wheel 构建通过；干净基础安装在仓库外验证离线 doctor／SDK，真实 doctor 在缺 solve extra 时稳定拒绝。安装 solve extra 和独立方法 wheel 后，从仓库外验证发现、doctor、CLI 与 SDK，均得到目标 20、A=3／B=2；完整审阅记录见第 8 节。
 
-S04-A 当前结果：93 个源文件、参考导出与 diff 检查通过。Python 3.12.3／3.11.13 各完整 104 tests passed（原 77＋23 Executor＋4 CLI／Worker），各有 14 个模块通过 strict mypy。Docker 29.6.2 的真实测试没有跳过；控制 daemon 卡住另用外部 CLI fixture。SDK 0.3.0 的 sdist／wheel 及公开 Worker 构建命令通过；只安装基础 wheel 的干净宿主没有 Pyomo，仍从仓库外通过 doctor、CLI 和 SDK 得到容器中的目标 13。Worker 为 Python 3.12.15、Pyomo 6.10.1、highspy 1.15.1，镜像 ID 为 sha256:80a5620effb216e176c17e5567d9bb4dd4fafab1a6974d5b485af6df6637ea32。每次运行自己的 admission／execution 记录是其镜像事实来源。独立审阅将在本次提交后按固定差异运行，并在本记录追加结果。
+S04-A 首次提交结果：93 个源文件、参考导出与 diff 检查通过。Python 3.12.3／3.11.13 各完整 104 tests passed（原 77＋23 Executor＋4 CLI／Worker），各有 14 个模块通过 strict mypy。Docker 29.6.2 的真实测试没有跳过；控制 daemon 卡住另用外部 CLI fixture。SDK 0.3.0 的 sdist／wheel 及公开 Worker 构建命令通过；只安装基础 wheel 的干净宿主没有 Pyomo，仍从仓库外通过 doctor、CLI 和 SDK 得到容器中的目标 13。Worker 为 Python 3.12.15、Pyomo 6.10.1、highspy 1.15.1，镜像 ID 为 sha256:80a5620effb216e176c17e5567d9bb4dd4fafab1a6974d5b485af6df6637ea32。每次运行自己的 admission／execution 记录是其镜像事实来源。独立审阅与修复见第 9 节。
 
 sdist／wheel 构建通过，wheel 在干净的 Python 3.12.3 环境安装后，从仓库外运行 console script 和 SDK，均 completed；真实结果为目标 13、A=3／B=2。项目内演示 run_id 为 `cc1b7c7366a4451d9e6512a84fa668ce`，产物位于忽略的 runs 目录；LP=40/3、常数／域／失败状态另有独立微型测试。公开运行产物扫描不含凭据／oracle sentinel。`.env` 权限为 0600，被 Git 忽略，未提交。
 
@@ -149,3 +149,26 @@ Standards／Spec 使用两个独立只读 Codex CLI 进程，固定比较 7a0d78
 Standards 共 4 项、Spec 共 4 项，分别保留并已处理；最后修复由作者在公开入口回归，未再次启动独立审阅。S03 工程示例 run_id 为 3c8f0b29cadb42d38038a4f9c9e22d14，来源为独立方法 0.1.0、SDK 0.2.0 和人工 Mock；目标偏移有意为 20，语义验证为 not_available。GitHub #4 已用 native blocked_by 关联 #3；没有关闭或修改父工作项。
 
 S03 代码提交 b5b3ef5 的 [push CI](https://github.com/Fangziyang0910/LLM4OM/actions/runs/37884375652) 已 success；草稿 [PR #5](https://github.com/Fangziyang0910/LLM4OM/pull/5) 基于 S02 的 codex/s02-highs，独立展示 S03 差异。PR CI 的最终状态以 GitHub Checks 为准。
+
+## 9. S04-A 独立审阅与修复
+
+两个独立只读 Codex CLI 进程分别审 Standards／Spec，固定比较 79f8966…aee19ab。规格为已批准 S04-A 和 Issue #6；两路没有共享发现或编辑源码。只读环境没有 Docker 权限；审阅者采用源码与纯内存探针，真实 Docker 和完整测试由作者执行。
+
+### Standards
+
+2 项规范问题，另有 1 项判断性 smell：
+
+1. P2：应用没有校验 Worker 求解响应版本及必需字段，把不完整的 999.0.0 响应改标为 0.2.0。违反契约第 6 节的版本校验、第 3.7 节的 SolveResult 必需字段及边界校验规范。现在先校验 envelope、运行时、求解身份／字段／解可用性和资源；非法响应为 worker_protocol_error，不生成 SolveResult。公共 CLI 负例覆盖未知版本和正确版本的缺字段响应，保留 ExecutionResult。
+2. P2：inspect 未读到 OOMKilled 时默认 false。违反缺失测量不可伪造的规则。现在初始值为 null，实际观察后才保存 boolean；已有 timeout＋inspect 卡住负例先失败，再验证未知 OOM 与其他诊断共同保留。
+3. 判断性 Possible Duplicated Code：构建器与 Executor 重复定义默认镜像。构建器现复用已有 DEFAULT_IMAGE，避免版本更新时不同步。
+
+### Spec
+
+2 项证据缺口；未发现额外范围或明确的隔离实现错误：
+
+1. P2：“真实 fixture 验证网络、越界读写”缺少实际宿主私有读取目标。已在公开暂存目录外创建可读的人工 sentinel，真实容器分别尝试绝对路径、/input/.. 和 /proc/1/root 路径，均不能读取；公开输出不含 sentinel。
+2. P2：“终止后清理容器／子进程”只覆盖单进程 timeout 和主动回收的 fork fixture。真实 timeout fixture 现在创建两个仍在睡眠的子进程，再强制终止；验证容器被删除及下一任务正常运行。
+
+Standards 共 3 项、Spec 共 2 项，分别保留并已处理。后续修复由作者通过公共 CLI／Executor 回归；没有再次启动独立审阅。
+
+修复后 Python 3.12.3／3.11.13 各完整 105 tests passed（77 原有＋23 Executor＋5 CLI／Worker），两环境的 14 个模块 strict mypy、93 个源文件、参考导出、diff 检查及 sdist／wheel 构建均通过。公开构建 CLI 已生成修复后镜像 sha256:faa2fd3bace65ed53ca6a19e101661ccbcfb6d496a43256ea58fafce8ba5e912。干净基础 wheel 安装从仓库外得到目标 13，run_id 为 9ef42f257cc24c9ba28080d7da64982e；执行证据确认该镜像、无 OOM 和无控制／清理诊断。真实测试后没有遗留带 llm4om.execution 标签的容器。取消／恢复、完整运行预算、真实 LLM、原生路径与完整 1.0 均未标为验收完成。

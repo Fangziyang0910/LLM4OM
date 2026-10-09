@@ -31,7 +31,7 @@ class ContainerExecution:
     stderr: bytes
     wall_time_s: float
     output_truncated: bool
-    oom_killed: bool
+    oom_killed: bool | None
     image_id: str
     container_id: str
     restrictions: dict[str, Any]
@@ -129,7 +129,7 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
     diagnostics: list[str] = []
     container_id = ""
     exit_code: int | None = None
-    oom_killed = False
+    oom_killed: bool | None = None
     restrictions: dict[str, Any] = {"output_limit_bytes": maximum_output}
     failure: Exception | None = None
     operation = "public inputs"

@@ -6,13 +6,14 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from llm4om.executors import DEFAULT_IMAGE
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--tag", default="llm4om-worker:0.3.0")
+    parser.add_argument("--tag", default=DEFAULT_IMAGE)
     parser.add_argument("--offline", action="store_true", help="Resolve SDK build dependencies from the uv cache")
     args = parser.parse_args()
     try:

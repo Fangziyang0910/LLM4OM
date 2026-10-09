@@ -318,6 +318,39 @@ def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) ->
     validate_bindings(formulation, public)
 
 
+def validate_worker_response(payload: dict[str, Any], expected_runtime: dict[str, Any]) -> None:
+    number = {"type": ["number", "null"]}
+    result = _object({
+        "solver_id": {"const": "llm4om.solvers.highs"},
+        "solver_version": {"const": expected_runtime["packages"]["highspy"]},
+        "model_backend": {"const": "llm4om.model_backends.pyomo_factory"},
+        "raw_status": TEXT, "termination": {"enum": ["optimal", "feasible", "infeasible", "unbounded",
+            "infeasible_or_unbounded", "time_limit", "interrupted", "error", "unknown"]},
+        "has_primal_solution": {"type": "boolean"},
+        "variables": {"anyOf": [{"type": "object", "additionalProperties": {"type": "number"}}, {"type": "null"}]},
+        "objective_value": number, "objective_sense": {"enum": ["min", "max"]}, "best_bound": number,
+        "reported_gap": {"type": ["number", "null"], "minimum": 0},
+        "solve_time_s": {"type": "number", "minimum": 0},
+        "options": _object({"time_limit_s": {"type": "number", "minimum": 0}}, []),
+        "effective_options": {"type": "object"}, "numerical_limits": {"type": "object"},
+        "diagnostics": {"type": "array"}, "evidence_origin": {"const": "trusted_highs_api"},
+    })
+    schema = {"oneOf": [
+        _object({"schema_version": {"const": "0.2.0"}, "error": _object({"code": TEXT, "stage": TEXT, "message": TEXT})}),
+        _object({"schema_version": {"const": "0.2.0"}, "runtime": {"const": expected_runtime}, "result": result,
+                 "resources": _object({"cpu_time_s": {"type": "number", "minimum": 0}, "peak_memory_bytes": NONNEGATIVE})}),
+    ]}
+    try:
+        jsonschema.Draft202012Validator(schema).validate(payload)
+        if "result" in payload:
+            solve = payload["result"]
+            if (solve["has_primal_solution"] != (solve["variables"] is not None)
+                    or solve["has_primal_solution"] != (solve["objective_value"] is not None)):
+                raise ValueError("Primal availability and values disagree.")
+    except (jsonschema.ValidationError, ValueError) as error:
+        raise RunError("worker_protocol_error", "execution", "Worker response does not match the supported result protocol.") from error
+
+
 def validate_config(settings: dict[str, Any]) -> None:
     schema = _object({
         "schema_version": {"const": "0.2.0"},

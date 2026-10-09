@@ -83,7 +83,7 @@
 | `src/llm4om/__main__.py` | 模块 CLI 入口 | 与安装后的 console script 使用同一命令 |
 | `src/llm4om/application.py` | 单问题应用流程 | 公开输入、Mock 输出、候选、阶段与成功／失败证据 |
 | `src/llm4om/cli.py` | 用户 CLI | 参数解析、离线显式选择、JSON 摘要与退出码 |
-| `src/llm4om/contracts.py` | 运行边界校验 | 严格 JSON／YAML、CSV、路径、引用、五元素和输入绑定 |
+| `src/llm4om/contracts.py` | 运行边界校验 | 严格 JSON／YAML、CSV、路径、引用、五元素、输入绑定与 Worker 响应 |
 | `src/llm4om/executors.py` | 真实容器执行 Module | 公共 bytes、权限与资源、有界控制／清理、真实限制证据 |
 | `src/llm4om/highs.py` | 真实 Solver 边界 | Pyomo 线性表示转原生 HiGHS；域、数值阈值、状态、解与版本 |
 | `src/llm4om/linear.py` | 严格 IR 公共编译入口 | 结构／数值校验、重复项合并、固定工厂与 symbol map |

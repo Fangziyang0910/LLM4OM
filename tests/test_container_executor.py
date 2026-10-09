@@ -199,6 +199,7 @@ except RunError as error:
         result = self.run_hanging_docker("start+kill+inspect+rm")
         self.assertEqual(result["status"], "timeout")
         self.assertIsNone(result["exit_code"])
+        self.assertIsNone(result["oom_killed"])
         self.assertIn("before-hang", result["stdout"])
         self.assertTrue(any("inspect" in item for item in result["diagnostics"]))
         self.assertTrue(any("remove" in item for item in result["diagnostics"]))
@@ -305,9 +306,21 @@ except RunError as error:
 
     def test_timeout_kills_the_container_and_the_next_task_can_run(self) -> None:
         from llm4om.executors import run_container
-        limits = {"network": False, "cpu_limit": 1, "memory_limit_mb": 128, "wall_time_s": 0.4}
-        execution = run_container(["python", "-I", "/input/probe.py"], {"probe.py": b"while True: pass\n"}, limits, image=self.image)
+        limits = {"network": False, "cpu_limit": 1, "memory_limit_mb": 128, "wall_time_s": 1}
+        source = b'''import json, os, time
+children = []
+for _ in range(2):
+    pid = os.fork()
+    if pid == 0:
+        time.sleep(60)
+        os._exit(0)
+    children.append(pid)
+print(json.dumps({"children": children}), flush=True)
+time.sleep(60)
+'''
+        execution = run_container(["python", "-I", "/input/probe.py"], {"probe.py": source}, limits, image=self.image)
         self.assertEqual(execution.status, "timeout")
+        self.assertEqual(len(json.loads(execution.stdout)["children"]), 2)
         self.assertLess(execution.wall_time_s, 5)
         result = subprocess.run(["docker", "inspect", execution.container_id], capture_output=True, timeout=5)
         self.assertNotEqual(result.returncode, 0)
@@ -338,7 +351,7 @@ except RunError as error:
 
     def test_network_host_environment_and_file_writes_are_denied(self) -> None:
         from llm4om.executors import run_container
-        source = b'''import os, json, socket
+        source = b'''import os, json, socket, sys
 from pathlib import Path
 checks = {"secret_absent": "LLM4OM_LLM_API_KEY" not in os.environ,
           "oracle_absent": not Path("/input/oracle.json").exists(),
@@ -348,6 +361,14 @@ try:
     checks["network_blocked"] = False
 except OSError:
     checks["network_blocked"] = True
+for label, path in (("private_host_read_denied", sys.argv[1]),
+                    ("traversal_read_denied", "/input/.." + sys.argv[1]),
+                    ("proc_root_read_denied", "/proc/1/root" + sys.argv[1])):
+    try:
+        Path(path).read_bytes()
+        checks[label] = False
+    except OSError:
+        checks[label] = True
 for label, path in (("root_read_only", "/etc/escape"), ("input_read_only", "/input/public.csv")):
     try:
         Path(path).write_text("overwrite")
@@ -356,12 +377,17 @@ for label, path in (("root_read_only", "/etc/escape"), ("input_read_only", "/inp
         checks[label] = True
 print(json.dumps(checks))
 '''
-        with patch.dict(os.environ, {"LLM4OM_LLM_API_KEY": "PRIVATE-CONTAINER-ENV-SENTINEL"}):
-            execution = run_container(["python", "-I", "/input/probe.py"], {"probe.py": source, "public.csv": b"public\n"}, {
+        with tempfile.TemporaryDirectory(prefix="llm4om-private-") as directory, patch.dict(
+                os.environ, {"LLM4OM_LLM_API_KEY": "PRIVATE-CONTAINER-ENV-SENTINEL"}):
+            private = Path(directory) / "oracle.txt"
+            private.write_bytes(b"PRIVATE-HOST-READ-SENTINEL")
+            private.chmod(0o644)
+            execution = run_container(["python", "-I", "/input/probe.py", str(private)], {"probe.py": source, "public.csv": b"public\n"}, {
                 "network": False, "cpu_limit": 1, "memory_limit_mb": 128, "wall_time_s": 10}, image=self.image)
         self.assertEqual(execution.exit_code, 0)
         self.assertTrue(all(json.loads(execution.stdout).values()))
         self.assertNotIn(b"PRIVATE-CONTAINER-ENV-SENTINEL", execution.stdout + execution.stderr)
+        self.assertNotIn(b"PRIVATE-HOST-READ-SENTINEL", execution.stdout + execution.stderr)
 
     def test_memory_limit_reports_real_oom(self) -> None:
         from llm4om.executors import run_container
