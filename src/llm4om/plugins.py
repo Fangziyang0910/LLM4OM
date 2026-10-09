@@ -14,6 +14,7 @@ from typing import Any, Iterator
 from pathlib import Path
 import jsonschema
 
+from llm4om.control import _supervise
 from llm4om.methods import DirectFactory, MethodContext, MethodOutcome
 from llm4om.contracts import RunError, parse_json, reject_additional_refs
 
@@ -40,30 +41,15 @@ class MethodPlugin:
                 raise RunError(code, "admission", "Cannot construct the method with this configuration and environment.",
                                details={"plugin_id": self.manifest["plugin_id"], **_exception_details(error)}) from error
             try:
-                async def watched() -> MethodOutcome:
-                    async def method_task() -> MethodOutcome:
-                        try:
-                            result: MethodOutcome = await method.run(problem, context, checkpoint=checkpoint)
-                            return result
-                        except SystemExit as error:
-                            raise RunError("method_error", "formulation", "The installed modeling method failed.",
-                                           details=_exception_details(error)) from error
-                    pending = asyncio.create_task(method_task())
+                async def method_task() -> MethodOutcome:
                     try:
-                        while not pending.done():
-                            context.cancellation.check()
-                            await asyncio.sleep(0.05)
-                        result: MethodOutcome = await pending
+                        result: MethodOutcome = await method.run(problem, context, checkpoint=checkpoint)
                         return result
-                    finally:
-                        if not pending.done():
-                            pending.cancel()
-                            try:
-                                await pending
-                            except asyncio.CancelledError:
-                                pass
+                    except SystemExit as error:
+                        raise RunError("method_error", "formulation", "The installed modeling method failed.",
+                                       details=_exception_details(error)) from error
                 with _quiet():
-                    outcome = await watched()
+                    outcome = await _supervise(method_task(), context.cancellation)
                 if not isinstance(outcome, MethodOutcome):
                     raise TypeError("Expected MethodOutcome.")
                 return outcome

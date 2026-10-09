@@ -1,8 +1,9 @@
 """Cooperative cancellation; only owned resource children are terminated."""
 
+import asyncio
 from pathlib import Path
 from threading import Event
-from typing import Any
+from typing import Any, Coroutine, TypeVar
 
 from llm4om.contracts import RunError, parse_json
 
@@ -35,3 +36,22 @@ class CancellationToken:
     def check(self) -> None:
         if self.cancelled:
             raise RunError("run_cancelled", "control", "The run was cancelled.")
+
+
+_Result = TypeVar("_Result")
+
+
+async def _supervise(work: Coroutine[Any, Any, _Result], cancellation: CancellationToken) -> _Result:
+    pending = asyncio.create_task(work)
+    try:
+        while not pending.done():
+            cancellation.check()
+            await asyncio.sleep(0.05)
+        return await pending
+    finally:
+        if not pending.done():
+            pending.cancel()
+            try:
+                await pending
+            except asyncio.CancelledError:
+                pass

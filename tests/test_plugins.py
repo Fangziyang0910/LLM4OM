@@ -318,7 +318,10 @@ asyncio.run(main())
     def test_cancelled_method_without_internal_checkpoint_refuses_resume(self) -> None:
         import time
         import yaml
-        self.install_method(run_body='import asyncio\nawait asyncio.sleep(30)')
+        self.install_method(run_body='import asyncio, os\nfrom pathlib import Path\nfrom llm4om.methods import DirectMethod\nmarker = Path(os.environ["FIXTURE_ENTERED"])\nif not marker.exists():\n    marker.write_text("method entered")\n    await asyncio.sleep(30)\nfrom dataclasses import replace\nreturn await DirectMethod().run(problem, replace(context, save_checkpoint=None))')
+        marker = self.root / "method-entered"
+        os.environ["FIXTURE_ENTERED"] = str(marker)
+        self.addCleanup(os.environ.pop, "FIXTURE_ENTERED", None)
         settings = yaml.safe_load((self.inputs / "solve.yaml").read_text())
         settings["method"] = {"plugin_id": "llm4om.examples.objective_offset", "config": {"objective_offset": 7}}
         config = self.inputs / "plugin.yaml"
@@ -332,9 +335,9 @@ asyncio.run(main())
             deadline = time.monotonic() + 6
             path = None
             while time.monotonic() < deadline:
-                paths = list(output.glob("*/environment-lock.json"))
-                if paths:
-                    path = paths[0].parent
+                paths = [item for item in output.iterdir() if len(item.name) == 32] if output.exists() else []
+                if paths and marker.exists():
+                    path = paths[0]
                     break
                 time.sleep(0.02)
             self.assertIsNotNone(path)
@@ -348,6 +351,18 @@ asyncio.run(main())
             self.assertEqual(json.loads(restored.stdout)["error"]["code"], "checkpoint_unsupported")
             self.assertEqual((path / "events.jsonl").read_bytes(), history)
             self.assertEqual(len(list(output.glob("*/bundle.json"))), 1)
+            rerun = self.cli("resume", "--strategy", "rerun", "--run-id", path.name, "--output", str(output))
+            self.assertEqual(rerun.returncode, 0, rerun.stderr + rerun.stdout)
+            record = json.loads(rerun.stdout)
+            self.assertEqual(record["status"], "completed")
+            self.assertNotEqual(record["run_id"], path.name)
+            child = Path(record["bundle_path"])
+            bundle = json.loads((child / "bundle.json").read_text())
+            lineage = json.loads((child / bundle["lineage_ref"]["relative_path"]).read_text())
+            self.assertEqual(lineage["parent_run_id"], path.name)
+            self.assertEqual(lineage["operation"], "derived_rerun")
+            self.assertEqual((path / "events.jsonl").read_bytes(), history)
+            self.assertEqual(json.loads((child / "budget-ledger.json").read_text())["llm_attempts"], 1)
         finally:
             if process.poll() is None:
                 process.kill()

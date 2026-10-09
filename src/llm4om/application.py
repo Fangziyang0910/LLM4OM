@@ -22,7 +22,7 @@ from llm4om.contracts import (
     validate_worker_response,
 )
 from llm4om.control import CancellationToken
-from llm4om.providers import Gateway
+from llm4om.providers import Gateway, _resource_state, _resource_bytes
 from llm4om.methods import FactoryCodeProposal, MethodContext, ModelProposal
 from llm4om.preflight import AdmissionPlan, prepare_run
 from llm4om.linear import CompiledCode, compile_ir
@@ -63,7 +63,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
     except (OSError, ValueError, KeyError, TypeError) as error:
         config_error = error
     mode = "offline_mock" if offline else "not_resolved"
-    store.emit("run_resumed" if store.state else "run_started", mode=mode)
+    store.emit("run_resumed" if "problem" in store.state else "run_started", mode=mode)
     ledger: dict[str, Any] = {"schema_version": "0.2.0", "llm_attempts": 0,
                              "solver_calls": 0, "external_llm_requests": 0, "candidates": 0, "total_tokens": None,
                              "cost": 0, "evidence_origin": "mock_fixture"}
@@ -88,7 +88,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
         requested_config_ref = store.json("requested-config.json", settings, "requested-config")
         validate_config(settings)
         settings_valid = True
-        if not store.state:
+        if "problem" not in store.state:
             sources = {str(problem.resolve()): hashlib.sha256(read_public_bytes(problem)).hexdigest(),
                        str(config.resolve()): hashlib.sha256(read_public_bytes(config)).hexdigest()}
             public_input = parse_json(read_public_bytes(problem))
@@ -190,6 +190,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
                "admission_plan_ref": admission_ref,
                "requested_config_ref": requested_config_ref,
                "public_problem_ref": store.projections.get("public-problem.json"),
+               "lineage_ref": store.state.get("lineage_ref"),
                "public_projections": {name: ref for name, ref in store.projections.items() if name != "bundle.json"},
                "final_candidate_id": "001" if status == "completed" else None,
                "execution_plan": {name: {"requested_plugin_id": settings.get(name, {}).get("plugin_id"),
@@ -534,9 +535,12 @@ def _sdk_sha256() -> str:
     return digest.hexdigest()
 
 
-def resume_run(run: Path, *, cancellation: CancellationToken | None = None) -> RunResult:
-    """Restore the same run and frozen resources; unsupported method state is refused."""
-    store = RunStore(run.parent, resume=run, cancellation=cancellation)
+def resume_run(run: Path, *, cancellation: CancellationToken | None = None,
+               strategy: str = "continue") -> RunResult:
+    """Continue fixed work, or explicitly start a derived semantic rerun with carried usage."""
+    if strategy not in {"continue", "rerun"}:
+        raise RunError("invalid_resume_strategy", "admission", "Resume strategy must be continue or rerun.")
+    store = RunStore(run.parent, resume=run, cancellation=cancellation if strategy == "continue" else None)
     try:
         if store.state.get("sdk") != version("llm4om"):
             raise RunError("checkpoint_incompatible", "admission", "SDK version differs from the saved run.")
@@ -545,10 +549,17 @@ def resume_run(run: Path, *, cancellation: CancellationToken | None = None) -> R
         for path, digest in store.state["sources"].items():
             if hashlib.sha256(read_public_bytes(Path(path))).hexdigest() != digest:
                 raise RunError("checkpoint_incompatible", "admission", "Original public input or configuration changed.")
+        resource_records: list[dict[str, Any]] = []
         if "gateway_sha256" in store.state:
-            resource = store.path.parent / ".private" / store.run_id / "state.json"
-            if not resource.is_file() or hashlib.sha256(resource.read_bytes()).hexdigest() != store.state["gateway_sha256"]:
-                raise RunError("checkpoint_incompatible", "admission", "Saved Gateway resource identity changed or is missing.")
+            archive = store.path.parent / ".private" / store.run_id
+            resource = _resource_state(archive, expected=store.state["gateway_sha256"])
+            settings = read_config(Path(store.state["config"]))
+            if (resource["budget"] != settings["budget"] or resource["deadline"] != store.state["deadline"]
+                    or resource["inherited_ledger"] != store.state.get("inherited_ledger", {})):
+                raise RunError("checkpoint_incompatible", "admission", "Resource budget or deadline changed.")
+            store.state["ledger"].update(Gateway._ledger(resource["attempts"], resource["inherited_ledger"]))
+            resource_records = [{key: value for key, value in item.items() if key not in {"reply", "raw_reply"}}
+                                for item in resource["attempts"]]
         host = {"python": platform.python_version(), "sdk_sha256": _sdk_sha256(), "packages": {name: version(name) for name in ("PyYAML", "jsonschema")}}
         if host != store.state.get("host"):
             raise RunError("checkpoint_incompatible", "admission", "Host Python or package identity changed.")
@@ -556,11 +567,31 @@ def resume_run(run: Path, *, cancellation: CancellationToken | None = None) -> R
         # Completed runs validate identity without consuming a new runtime probe or deadline.
         saved_deadline = store.state["deadline"]
         plan = prepare_run(settings, offline=store.state["offline"], config_dir=Path(store.state["config"]).parent,
-                           deadline=max(saved_deadline, time.time() + 5) if store.state.get("status") in ("completed", "artifact_ready") else saved_deadline,
+                           deadline=max(saved_deadline, time.time() + 5) if strategy == "rerun" or store.state.get("status") in ("completed", "artifact_ready") else saved_deadline,
                            cancellation=store.cancellation, expected=store.state["admission"],
-                           identity_only=store.state.get("status") in ("completed", "artifact_ready"))
+                           identity_only=strategy == "rerun" or store.state.get("status") in ("completed", "artifact_ready"))
         if plan.snapshot != store.state["admission"]:
             raise RunError("checkpoint_incompatible", "admission", "Saved resource identity differs from admission.")
+        if strategy == "rerun":
+            child = RunStore(run.parent, cancellation=cancellation)
+            try:
+                parent_refs = [child.write("parent/" + store.run_id + "/" + ref["relative_path"],
+                    read_public_bytes(public_path(store.path, ref["relative_path"])), ref["artifact_id"],
+                    ref.get("schema_version")) for ref in store.refs]
+                parent_checkpoint_ref = child.write("parent/" + store.run_id + "/checkpoint.json",
+                    read_public_bytes(store.path / "checkpoint.json"), "parent-checkpoint", "0.1.0")
+                ledger = deepcopy(store.state["ledger"])
+                lineage_ref = child.json("lineage.json", {"schema_version": "0.1.0",
+                    "operation": "derived_rerun", "parent_run_id": store.run_id,
+                    "parent_budget_ledger": ledger, "input_hashes": store.state["sources"],
+                    "parent_checkpoint_ref": parent_checkpoint_ref,
+                    "parent_artifacts": parent_refs, "parent_resource_records": resource_records, "reused_records": [],
+                    "policy": "Fresh method execution; previous paid/unknown usage and reservations count against the configured caps."}, "lineage")
+                child.state.update(lineage_ref=lineage_ref, inherited_ledger=ledger, ledger=deepcopy(ledger))
+                return _run_problem(Path(store.state["problem"]), Path(store.state["config"]), child,
+                                    offline=store.state["offline"])
+            finally:
+                child.close()
         if store.state.get("status") in ("completed", "artifact_ready"):
             return RunResult(store.run_id, store.path, store.state["status"])
         if time.time() >= store.state["deadline"]:

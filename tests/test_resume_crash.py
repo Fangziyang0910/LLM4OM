@@ -1,0 +1,272 @@
+"""Hard exits at the documented atomic filesystem publication boundary, via CLI."""
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+
+from llm4om import resume_run
+from llm4om.contracts import RunError
+
+ROOT = Path(__file__).resolve().parents[1]
+
+# The OS rename is the actual durability boundary. Inspect published records, not
+# private orchestration functions; os._exit prevents cooperative final saving.
+CRASH = '''
+import json, os, sys
+from pathlib import Path
+from llm4om.cli import main
+replace = os.replace
+def crash(source, target, *args, **kwargs):
+    result = replace(source, target, *args, **kwargs)
+    try:
+        lines = Path(target).read_text().splitlines()
+        record = json.loads(lines[-1])
+    except (OSError, ValueError, UnicodeError, IndexError):
+        return result
+    if "history" not in Path(target).parts and isinstance(record, dict) and record.get("kind") == "formulation_saved":
+        os._exit(91)
+    return result
+os.replace = crash
+sys.exit(main())
+'''
+
+class CrashResumeTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.inputs = self.root / 'inputs'
+        shutil.copytree(ROOT / 'examples/specs', self.inputs)
+
+    def crashed_run(self):
+        output = self.root / 'runs'
+        process = subprocess.run([sys.executable, '-c', CRASH, 'run', '--offline',
+            '--problem', str(self.inputs / 'problem.json'), '--config', str(self.inputs / 'run.yaml'),
+            '--output', str(output)], capture_output=True, text=True, timeout=10)
+        self.assertEqual(process.returncode, 91, process.stderr)
+        return next(path for path in output.iterdir() if len(path.name) == 32)
+
+    def test_hard_crash_after_publication_restores_last_checkpoint_and_counted_attempt(self):
+        path = self.crashed_run()
+        result = resume_run(path)
+        self.assertEqual(result.status, 'artifact_ready')
+        ledger = json.loads((path / 'budget-ledger.json').read_text())
+        self.assertEqual(ledger['llm_attempts'], 1)
+        self.assertEqual(ledger['external_llm_requests'], 0)
+        events = [json.loads(line) for line in (path / 'events.jsonl').read_text().splitlines()]
+        self.assertEqual(sum(event['kind'] == 'mock_call_started' for event in events), 1)
+
+    def test_unclean_owner_does_not_allow_corrupt_committed_public_bytes(self):
+        path = self.crashed_run()
+        (path / 'requested-config.json').write_text('{}')
+        with self.assertRaises(RunError) as caught:
+            resume_run(path)
+        self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
+
+    def http_config(self, *, max_attempts=1):
+        import threading
+        import yaml
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        formulation = json.loads((self.inputs / 'formulation.json').read_text())
+        ir = json.loads((self.inputs / 'model-ir.json').read_text())
+        compact = {'representation': formulation['representation'], 'structured_ir': {
+            key: ir[key] for key in ('problem_type', 'variables', 'objective', 'constraints', 'assumptions')}}
+        self.requests = []
+        requests = self.requests
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                requests.append(self.rfile.read(int(self.headers['Content-Length'])))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({'choices': [{'message': {'content': json.dumps(compact)},
+                    'finish_reason': 'stop'}], 'usage': {'total_tokens': 500}}).encode())
+            def log_message(self, *args):
+                pass
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        settings = yaml.safe_load((self.inputs / 'solve.yaml').read_text())
+        settings['budget']['max_total_tokens'] = 30000
+        settings['budget']['max_llm_attempts'] = max_attempts
+        settings['llm'] = {'provider_plugin_id': 'llm4om.providers.openai_compatible', 'model': 'synthetic',
+            'config': {'base_url': f'http://127.0.0.1:{server.server_port}/v1',
+                       'credential_env': 'S04B_TEST_KEY', 'max_retries': 0}}
+        config = self.inputs / 'http.yaml'
+        config.write_text(yaml.safe_dump(settings))
+        os.environ['S04B_TEST_KEY'] = 'synthetic-fixture'
+        self.addCleanup(os.environ.pop, 'S04B_TEST_KEY', None)
+        return config
+
+    def resource_crash(self, status, *, journal=False, max_attempts=1):
+        config = self.http_config(max_attempts=max_attempts)
+        fault = CRASH.replace('record = json.loads(lines[-1])', 'record = json.loads(Path(target).read_text())')
+        start = fault.index('    if "history"')
+        end = fault.index('    return result', start)
+        fault = fault[:start] + (
+            '    if Path(target).name == "state.json" and '
+            f'any(item.get("status") == {status!r} for item in record.get("attempts", [])):\n'
+            '        os._exit(91)\n') + fault[end:]
+        if journal:
+            fault = fault.replace('Path(target).name == "state.json"', 'Path(target).parent.name == "journal"')
+            fault = fault.replace('record.get("attempts", [])', 'record.get("state", {}).get("attempts", [])')
+        output = self.root / 'runs'
+        process = subprocess.run([sys.executable, '-c', fault, 'run',
+            '--problem', str(self.inputs / 'problem.json'), '--config', str(config),
+            '--output', str(output)], capture_output=True, text=True, timeout=15)
+        self.assertEqual(process.returncode, 91, process.stderr)
+        return next(path for path in output.iterdir() if len(path.name) == 32)
+
+    def test_private_success_survives_crash_before_core_callback_without_http_resend(self):
+        path = self.resource_crash('success')
+        result = resume_run(path)
+        self.assertEqual(result.status, 'completed')
+        self.assertEqual(len(self.requests), 1)
+        ledger = json.loads((path / 'budget-ledger.json').read_text())
+        self.assertEqual(ledger['external_llm_requests'], 1)
+        self.assertEqual(ledger['total_tokens'], 500)
+
+    def test_private_unknown_reservation_survives_crash_without_http_send(self):
+        path = self.resource_crash('unknown')
+        result = resume_run(path)
+        bundle = json.loads((path / 'bundle.json').read_text())
+        self.assertEqual(result.status, 'failed')
+        self.assertEqual(bundle['error']['code'], 'provider_outcome_unknown')
+        ledger = json.loads((path / 'budget-ledger.json').read_text())
+        self.assertEqual(ledger['external_llm_requests'], 1)
+        self.assertGreater(ledger['reserved_tokens'], 0)
+        self.assertIsNone(ledger['total_tokens'])
+        self.assertEqual(len(self.requests), 0)
+
+    def test_success_journal_commit_before_mutable_head_is_reconciled_without_resend(self):
+        path = self.resource_crash('success', journal=True)
+        result = resume_run(path)
+        self.assertEqual(result.status, 'completed')
+        self.assertEqual(len(self.requests), 1)
+        self.assertEqual(json.loads((path / 'budget-ledger.json').read_text())['total_tokens'], 500)
+
+    def test_explicit_semantic_rerun_keeps_unknown_parent_usage_and_reservations_visible(self):
+        path = self.resource_crash('unknown', max_attempts=3)
+        checkpoint = (path / 'checkpoint.json').read_bytes()
+        child = resume_run(path, strategy='rerun')
+        self.assertNotEqual(child.run_id, path.name)
+        self.assertEqual(child.status, 'completed')
+        self.assertEqual((path / 'checkpoint.json').read_bytes(), checkpoint)
+        ledger = json.loads((child.bundle_path / 'budget-ledger.json').read_text())
+        self.assertEqual(ledger['external_llm_requests'], 2)
+        self.assertEqual(ledger['known_total_tokens'], 500)
+        self.assertIsNone(ledger['total_tokens'])
+        self.assertGreater(ledger['reserved_tokens'], 0)
+        bundle = json.loads((child.bundle_path / 'bundle.json').read_text())
+        lineage = json.loads((child.bundle_path / bundle['lineage_ref']['relative_path']).read_text())
+        self.assertEqual(lineage['parent_resource_records'][0]['status'], 'unknown')
+        self.assertEqual(lineage['reused_records'], [])
+        self.assertEqual(len(self.requests), 1)
+
+    def test_explicit_rerun_does_not_forget_exhausted_parent_attempt_cap(self):
+        path = self.resource_crash('success')
+        child = resume_run(path, strategy='rerun')
+        bundle = json.loads((child.bundle_path / 'bundle.json').read_text())
+        self.assertEqual(child.status, 'failed')
+        self.assertEqual(bundle['error']['code'], 'budget_exhausted')
+        self.assertEqual(json.loads((child.bundle_path / 'budget-ledger.json').read_text())['external_llm_requests'], 1)
+        self.assertEqual(len(self.requests), 1)
+
+    def test_storage_failure_after_view_commit_is_recoverable_without_losing_attempt(self):
+        from unittest.mock import patch
+        from llm4om import run_problem
+        replace = os.replace
+        def failing_storage(source, target, *args, **kwargs):
+            result = replace(source, target, *args, **kwargs)
+            if 'history' not in Path(target).parts:
+                try:
+                    event = json.loads(Path(target).read_text().splitlines()[-1])
+                except (ValueError, OSError, IndexError):
+                    return result
+                if isinstance(event, dict) and event.get('kind') == 'formulation_saved':
+                    raise OSError('Synthetic failure after OS rename')
+            return result
+        with patch('os.replace', side_effect=failing_storage):
+            with self.assertRaises(OSError):
+                run_problem(self.inputs / 'problem.json', self.inputs / 'run.yaml',
+                            offline=True, output_root=self.root / 'runs')
+        path = next(path for path in (self.root / 'runs').iterdir() if len(path.name) == 32)
+        self.assertEqual(resume_run(path).status, 'artifact_ready')
+        self.assertEqual(json.loads((path / 'budget-ledger.json').read_text())['llm_attempts'], 1)
+
+    def test_solver_started_attempt_is_retained_across_hard_crash(self):
+        import yaml
+        config = self.inputs / 'solve.yaml'
+        settings = yaml.safe_load(config.read_text())
+        settings['budget']['max_solver_calls'] = 2
+        config.write_text(yaml.safe_dump(settings))
+        process = subprocess.run([sys.executable, '-c', CRASH.replace('formulation_saved', 'solver_started'),
+            'run', '--problem', str(self.inputs / 'problem.json'), '--config', str(config),
+            '--output', str(self.root / 'runs')], capture_output=True, text=True, timeout=10)
+        self.assertEqual(process.returncode, 91, process.stderr)
+        path = next(path for path in (self.root / 'runs').iterdir() if len(path.name) == 32)
+        self.assertEqual(resume_run(path).status, 'completed')
+        ledger = json.loads((path / 'budget-ledger.json').read_text())
+        self.assertEqual(ledger['solver_calls'], 2)
+        self.assertEqual(ledger['llm_attempts'], 1)
+
+    def test_corrupt_private_head_and_immutable_response_are_refused_before_http(self):
+        import hashlib
+        path = self.resource_crash('success')
+        archive = path.parent / '.private' / path.name
+        head = archive / 'state.json'
+        original = head.read_bytes()
+        head.write_bytes(original + b' ')
+        with self.assertRaises(RunError) as caught:
+            resume_run(path)
+        self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
+        head.write_bytes(original)
+        version = archive / 'journal' / (hashlib.sha256(original).hexdigest() + '.json')
+        record = json.loads(version.read_text())
+        record['state']['attempts'][0]['reply'] = 'corrupt response'
+        version.write_text(json.dumps(record))
+        with self.assertRaises(RunError) as caught:
+            resume_run(path)
+        self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
+        self.assertEqual(len(self.requests), 1)
+        self.assertEqual(archive.stat().st_mode & 0o777, 0o700)
+        self.assertTrue(all(item.stat().st_mode & 0o777 == 0o600
+                            for item in archive.rglob('*') if item.is_file()))
+
+
+class DerivedRerunTests(unittest.TestCase):
+    setUp = CrashResumeTests.setUp
+    def test_explicit_rerun_creates_child_preserving_parent_history_and_usage(self):
+        from llm4om import run_problem
+        import yaml
+        config = self.inputs / 'run.yaml'
+        settings = yaml.safe_load(config.read_text())
+        settings['budget']['max_llm_attempts'] = 2
+        config.write_text(yaml.safe_dump(settings))
+        parent = run_problem(self.inputs / 'problem.json', self.inputs / 'run.yaml',
+                             offline=True, output_root=self.root / 'runs')
+        before = (parent.bundle_path / 'events.jsonl').read_bytes()
+        ledger = json.loads((parent.bundle_path / 'budget-ledger.json').read_text())
+        child = resume_run(parent.bundle_path, strategy='rerun')
+        self.assertNotEqual(child.run_id, parent.run_id)
+        self.assertEqual(child.status, 'artifact_ready')
+        self.assertEqual((parent.bundle_path / 'events.jsonl').read_bytes(), before)
+        bundle = json.loads((child.bundle_path / 'bundle.json').read_text())
+        lineage = json.loads((child.bundle_path / bundle['lineage_ref']['relative_path']).read_text())
+        self.assertEqual(lineage['operation'], 'derived_rerun')
+        self.assertEqual(lineage['parent_run_id'], parent.run_id)
+        self.assertEqual(lineage['parent_budget_ledger'], ledger)
+        self.assertEqual(lineage['input_hashes'], json.loads(
+            (parent.bundle_path / 'checkpoint.json').read_text())['payload']['state']['sources'])
+        child_ledger = json.loads((child.bundle_path / 'budget-ledger.json').read_text())
+        self.assertEqual(child_ledger['llm_attempts'], 2)
+        for ref in lineage['parent_artifacts']:
+            self.assertTrue((child.bundle_path / ref['relative_path']).is_file())
+
+
+if __name__ == '__main__':
+    unittest.main()

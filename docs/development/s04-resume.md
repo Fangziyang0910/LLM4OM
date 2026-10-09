@@ -1,15 +1,16 @@
 # S04-B 取消与恢复
 
-本页记录 Issue 16 的当前实现与本机验收范围。规范来源为 [DD-07](../design/experiments-and-interfaces.md#dd-07-持久化恢复与报告)、[接口契约](../plugin-contracts.md#12-s04-b-cancellation-and-resume-sdk-070) 和 [验收清单](../acceptance.md)。SDK／Worker 为 0.7.0，未发布；独立审查与发布由父任务处理。
+本页记录 Issue 16 的当前实现与本机验收范围。规范来源为 [DD-07](../design/experiments-and-interfaces.md#dd-07-持久化恢复与报告)、[接口契约](../plugin-contracts.md#12-s04-b-cancellation-and-resume-sdk-070) 和 [验收清单](../acceptance.md)。SDK／Worker 为 0.7.0，未发布；本机验收已通过，修复后的独立审查仍待完成。
 
 ## 当前入口
 
 ```bash
 llm4om cancel --run-id RUN_ID --output runs
 llm4om resume --run-id RUN_ID --output runs
+llm4om resume --run-id RUN_ID --output runs --strategy rerun
 ```
 
-SDK 导出 `CancellationToken`、`cancel_run(run: Path)`、`resume_run(run: Path, *, cancellation=None)`。
+SDK 导出 `CancellationToken`、`cancel_run(run: Path)`、`resume_run(run: Path, *, cancellation=None, strategy="continue")`。
 `run_problem` 新增可选 cancellation 参数，旧调用保持有效。Token 只绑定一次；需要恢复时使用新 Token。
 CLI 的 SIGINT 设置相同的协作取消信号，返回可检查的 cancelled RunBundle。
 
@@ -20,16 +21,23 @@ Direct 的内部 checkpoint 仅保存版本与 request_id，恢复时重新解�
 已完成 Formulation／Code 不再运行方法。匹配的 completed Execution／SolveResult 直接复用。
 已经 completed／artifact_ready 的运行保持同一 run_id，事件和输入不变。
 
-不支持内部 checkpoint 且尚无完整阶段的插件返回 checkpoint_unsupported，不创建新运行、不重发模型请求。
-本切片选择明确拒绝，不提供派生重跑策略。阶段已经完成时，核心恢复不要求插件支持内部 checkpoint。
+默认 continue 对不支持内部 checkpoint 且尚无完整阶段的插件返回 checkpoint_unsupported。
+显式 rerun 创建新的运行并重新执行方法，保存 lineage_ref、父输入 hash、checkpoint／公开历史副本、累计费用与未知预留。
+它可以产生新付费请求；不把父成功响应或 Solve 当作新方法输出。已有成功响应在 continue 中仍复用。
+新运行使用新的 deadline；已有 paid／unknown 尝试、token／reservation 和 Solver 次数继续计入配置上限。
+上限耗尽时派生运行明确失败；同一运行的 budget／deadline 从不重置。阶段已完成时，核心继续不要求方法内部 checkpoint。
 
 恢复校验公开输入与配置字节、所有保存的引用和当前公开视图、方法 profile／Manifest／安装包、SDK 源码与版本、
 Python／依赖版本、Worker 镜像与资源配置。校验失败先于 Provider HTTP 和候选求解。
 公开路径保留原始输入身份；内容版本存于 history，原事件引用不会因新摘要而失效。
+checkpoint.json 的 bytes 另存不可变 checkpoints/hash.json。视图替换前持久化以旧 checkpoint／owner 为基线的写入意图。
+验证中断 owner 和不可变记录后，恢复只重建未提交视图；真正损坏的已提交公开 bytes 仍拒绝。
 同一 run 的文件锁只允许一个写者。控制文件绑定 run_id、UID 和随机 owner_id；cancel 不向持久化 PID 发信号。
 
 Gateway 保存的成功响应只复用，不新增 HTTP attempt。未知结果保留 reservation，request_id 不重发。
-私有 archive 仍位于 store/.private/run_id，checkpoint 只保存其 hash／公开资源位置，不导出 raw reply 或凭据。
+私有 archive 仍位于 store/.private/run_id；不可变 journal 连接每次 admission／settlement，state.json 必须精确匹配链中版本。
+恢复从核心已知 hash 验证整条资源链，保留先于核心回调落盘的成功回复或未知预留；不声称跨文件系统事务。
+目录 0700、文件 0600。checkpoint 只保存 hash／公开资源位置，不导出 raw reply 或凭据。
 同一运行的总预算和绝对 deadline 不重置；过期恢复拒绝。已开始的 Solver 尝试仍计数，取消后再执行需要原预算中剩余的 slot。
 
 ## 取消与清理
@@ -46,14 +54,22 @@ Docker 清理继续使用既有有界 kill／inspect／remove；daemon 故障时
 
 ## 本机证据与范围
 
+`tests/test_resume_crash.py` 用实际 CLI 子进程在 OS rename 边界硬退出，覆盖公开视图、Solver 计数、
+成功／未知资源提交、journal 与 mutable head 间隙、真实损坏拒绝、派生累计费用。
+`tests/test_async_control.py` 验证公共 Method 取消等待清理及 SystemExit 诊断。
 `tests/test_resume_run.py` 覆盖 CLI／SDK 取消、SIGINT、HTTP 子进程回收、无关宿主进程存活、
 真实 Docker 删除、响应成功与未知结果复用、Code／Solve 完成边界、预算／deadline、损坏输入与并发写锁。
-`tests/test_plugins.py` 覆盖独立安装方法的诚实拒绝；原 Provider／Executor／Solver 测试保留。
+`tests/test_plugins.py` 覆盖独立安装方法的默认拒绝与显式派生重跑；原 Provider／Executor／Solver 测试保留。
 手工候选验证目标 13、40/3 和 3；参数化 Pyomo 与 native Gurobi 的恢复不再发 HTTP 或最终重复求解。
 合成 HTTP fixture 不证明某个付费模型的质量；Gurobi 仍只声明既有 size-limited 微型环境。
 
-交付执行一次 Python 3.12 主回归、strict mypy、仓库／参考检查、包构建及匹配的新 Worker 镜像验收。
-Python 3.11 使用干净 wheel 做聚焦兼容检查。具体命令与结果保存于任务证据目录，由父任务独立复核。
+2026-10-09 本机 Python 3.12.11 完整回归：200 tests，379.359 秒，全部通过。
+strict mypy 检查 22 个源码文件；仓库／参考检查、wheel／sdist 构建通过。
+Python 3.11.13 使用干净 wheel：11 个崩溃／派生用例、2 个监督用例、1 个 Provider 复用用例通过；没有重复完整矩阵。
+新 Worker 实际求解目标 13，容器已删除；镜像 ID 为 `sha256:995a1957f3eb8817fc94c7178c30478bb03351665a2b0ea56206de85fd88d391`。
+容器与本机 SDK 源码 hash 都为 `eff6ca3ac5731a30ce2155919ffc62689be956f0718c0e422582d506576febcf`。
+证据位于 `/tmp/llm4om-s04b/fix-evidence/`。旧 SDK 的两个崩溃用例独立复现失败，新实现通过；
+验收覆盖进程硬退出与 OS 文件发布失败，未验证物理断电。没有付费模型请求或云端 CI。
 OptiMUS／CoE、Web、batch 与完整 1.0 尚未完成；本切片不更改这些已批准范围。
 
 恢复要求原公开输入／配置仍在原路径且字节不变；本版不提供移动目录后的自动路径迁移。

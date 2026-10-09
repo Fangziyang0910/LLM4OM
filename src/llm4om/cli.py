@@ -27,6 +27,9 @@ def main() -> int:
     run.add_argument("--offline", action="store_true", help="Only replay Mock artifacts; skip Code and Solve")
     for name in ("cancel", "resume"):
         control = commands.add_parser(name, help=f"{name.capitalize()} a persisted run")
+        if name == "resume":
+            control.add_argument("--strategy", choices=("continue", "rerun"), default="continue",
+                                 help="Continue saved work, or explicitly rerun with parent usage still counted")
         control.add_argument("--run-id", required=True)
         control.add_argument("--output", type=Path, default=Path("runs"), help="Filesystem store root")
     importer = commands.add_parser("import", help="Freeze a local NL4Opt split")
@@ -93,7 +96,7 @@ def main() -> int:
             if args.command == "cancel":
                 print(json.dumps({"run_id": args.run_id, "status": cancel_run(path)}))
                 return 0
-            result = resume_run(path, cancellation=cancellation)
+            result = resume_run(path, cancellation=cancellation, strategy=args.strategy)
         else:
             result = run_problem(args.problem, args.config, offline=args.offline,
                                  output_root=args.output, cancellation=cancellation)

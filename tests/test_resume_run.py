@@ -6,9 +6,23 @@ import shutil
 import tempfile
 import unittest
 
-from llm4om import run_problem
+from llm4om import run_problem, CancellationToken
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class EventCancellation(CancellationToken):
+    """A public SDK token observes published event records at each cancellation check."""
+    def __init__(self, output, kind):
+        super().__init__()
+        self.output, self.kind = output, kind
+
+    def check(self):
+        for path in self.output.glob('*/events.jsonl'):
+            events = [json.loads(line) for line in path.read_text().splitlines()]
+            if any(event['kind'] == self.kind for event in events):
+                self.cancel()
+        super().check()
 
 
 class ResumeRunTests(unittest.TestCase):
@@ -128,19 +142,10 @@ class ResumeRunTests(unittest.TestCase):
         self.assertEqual(json.loads(cancelled.stdout)['status'], 'inactive')
 
     def test_cancel_after_actual_solve_resumes_without_redundant_solve(self):
-        import os
-        from unittest.mock import patch
-        from llm4om import CancellationToken, resume_run
-        token = CancellationToken()
-        replace = os.replace
-        def stop_after_execution(source, target, *args, **kwargs):
-            result = replace(source, target, *args, **kwargs)
-            if Path(target).name == 'execution.json':
-                token.cancel()
-            return result
-        with patch('os.replace', side_effect=stop_after_execution):
-            result = run_problem(self.inputs / 'problem.json', self.inputs / 'solve.yaml',
-                                 output_root=self.root / 'runs', cancellation=token)
+        from llm4om import resume_run
+        token = EventCancellation(self.root / 'runs', 'solver_finished')
+        result = run_problem(self.inputs / 'problem.json', self.inputs / 'solve.yaml',
+                             output_root=self.root / 'runs', cancellation=token)
         self.assertEqual(result.status, 'cancelled')
         before = json.loads((result.bundle_path / 'bundle.json').read_text())
         restored = resume_run(result.bundle_path)
@@ -159,7 +164,6 @@ class ResumeRunTests(unittest.TestCase):
         import threading
         import yaml
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-        from unittest.mock import patch
         from llm4om import CancellationToken, resume_run
         formulation = json.loads((self.inputs / 'formulation.json').read_text())
         ir = json.loads((self.inputs / 'model-ir.json').read_text())
@@ -188,21 +192,35 @@ class ResumeRunTests(unittest.TestCase):
         config.write_text(yaml.safe_dump(settings))
         os.environ['S04B_TEST_KEY'] = 'synthetic-fixture'
         self.addCleanup(os.environ.pop, 'S04B_TEST_KEY', None)
-        token = CancellationToken()
-        replace = os.replace
-        def cancel_after_saved_reply(source, target, *args, **kwargs):
-            result = replace(source, target, *args, **kwargs)
-            if Path(target).name == 'state.json':
-                value = json.loads(Path(target).read_text())
-                if any(attempt.get('status') == 'success' for attempt in value['attempts']):
-                    token.cancel()
-            return result
-        with patch('os.replace', side_effect=cancel_after_saved_reply):
-            result = run_problem(self.inputs / 'problem.json', config, output_root=self.root / 'runs', cancellation=token)
+        # Install a Method fixture that cancels at its public Gateway reply boundary.
+        from test_plugins import PluginTests
+        self.packages = self.root / 'packages'
+        PluginTests.install_method(self, run_body="""from dataclasses import replace
+from llm4om.methods import DirectMethod
+class ReplyBoundary:
+    async def complete(self, request):
+        response = await context.llm.complete(request)
+        if checkpoint is None:
+            context.cancellation.cancel()
+            context.cancellation.check()
+        return response
+return await DirectMethod().run(problem, replace(context, llm=ReplyBoundary()), checkpoint=checkpoint)""")
+        manifest_path = self.packages / 'llm4om_fixture_method/manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['capabilities']['supports_checkpoint'] = True
+        manifest_path.write_text(json.dumps(manifest))
+        settings['method'] = {'plugin_id': 'llm4om.examples.objective_offset', 'config': {'objective_offset': 0}}
+        config.write_text(yaml.safe_dump(settings))
+        from llm4om.application import RunResult
+        record = json.loads(PluginTests.cli(self, 'run', '--problem', str(self.inputs / 'problem.json'),
+            '--config', str(config), '--output', str(self.root / 'runs')).stdout)
+        result = RunResult(record['run_id'], Path(record['bundle_path']), record['status'])
         bundle = json.loads((result.bundle_path / 'bundle.json').read_text())
         self.assertEqual(result.status, 'cancelled')
         self.assertIsNone(bundle['model_artifact_ref'])
-        restored = resume_run(result.bundle_path)
+        record = json.loads(PluginTests.cli(self, 'resume', '--run-id', result.run_id,
+            '--output', str(self.root / 'runs')).stdout)
+        restored = RunResult(record['run_id'], Path(record['bundle_path']), record['status'])
         self.assertEqual(restored.status, 'completed')
         self.assertEqual(len(requests), 1)
         ledger = json.loads((restored.bundle_path / 'budget-ledger.json').read_text())
@@ -210,23 +228,15 @@ class ResumeRunTests(unittest.TestCase):
         self.assertEqual(ledger['total_tokens'], 500)
         # Reading a completed result needs no valid Provider credential.
         os.environ['S04B_TEST_KEY'] = 'invalid\ncredential'
-        self.assertEqual(resume_run(restored.bundle_path), restored)
+        record = json.loads(PluginTests.cli(self, 'resume', '--run-id', restored.run_id,
+            '--output', str(self.root / 'runs')).stdout)
+        self.assertEqual(record['status'], 'completed')
 
 
     def staged_cancel(self, *, config_name='solve.yaml'):
-        import os
-        from unittest.mock import patch
-        from llm4om import CancellationToken
-        token = CancellationToken()
-        replace = os.replace
-        def stop_after_code(source, target, *args, **kwargs):
-            result = replace(source, target, *args, **kwargs)
-            if Path(target).name == 'build.json':
-                token.cancel()
-            return result
-        with patch('os.replace', side_effect=stop_after_code):
-            result = run_problem(self.inputs / 'problem.json', self.inputs / config_name,
-                                 output_root=self.root / 'runs', cancellation=token)
+        token = EventCancellation(self.root / 'runs', 'code_saved')
+        result = run_problem(self.inputs / 'problem.json', self.inputs / config_name,
+                             output_root=self.root / 'runs', cancellation=token)
         self.assertEqual(result.status, 'cancelled')
         return result
 
@@ -365,7 +375,6 @@ class ResumeRunTests(unittest.TestCase):
     def test_factory_and_native_completed_candidates_resume_without_reexecution(self):
         import os
         import yaml
-        from unittest.mock import patch
         from llm4om import CancellationToken, resume_run
         from test_factory_run import FactoryRunTests
         for mode, source, expected in (
@@ -390,16 +399,9 @@ class ResumeRunTests(unittest.TestCase):
                 config.write_text(yaml.safe_dump(self.config))
                 os.environ['S02B_FIXTURE_KEY'] = 'synthetic-fixture'
                 self.addCleanup(os.environ.pop, 'S02B_FIXTURE_KEY', None)
-                token = CancellationToken()
-                replace = os.replace
-                def stop_after_execution(source, target, *args, **kwargs):
-                    result = replace(source, target, *args, **kwargs)
-                    if Path(target).name == 'execution.json':
-                        token.cancel()
-                    return result
-                with patch('os.replace', side_effect=stop_after_execution):
-                    result = run_problem(self.inputs / 'problem.json', config,
-                                         output_root=self.root / 'runs', cancellation=token)
+                token = EventCancellation(self.root / mode, 'solver_finished')
+                result = run_problem(self.inputs / 'problem.json', config,
+                                     output_root=self.root / mode, cancellation=token)
                 self.assertEqual(result.status, 'cancelled')
                 before = json.loads((result.bundle_path / 'bundle.json').read_text())
                 restored = resume_run(result.bundle_path)

@@ -59,6 +59,16 @@ class ProviderTests(unittest.TestCase):
                                                     environment={'S05_TEST_KEY': 'synthetic-secret'})
         return Gateway(provider, self.budget, self.root / 'private')
 
+    def test_success_metadata_cannot_persist_the_api_credential(self):
+        from llm4om.contracts import RunError
+        self.responses[0][1]['debug_metadata'] = 'synthetic-secret'
+        gateway = self.gateway()
+        with self.assertRaises(RunError) as caught:
+            asyncio.run(gateway.complete({'messages': [{'role': 'user', 'content': 'hello'}]}))
+        self.assertEqual(caught.exception.code, 'invalid_provider_response')
+        self.assertTrue(all(b'synthetic-secret' not in path.read_bytes()
+                            for path in gateway.archive.rglob('*') if path.is_file()))
+
     def test_slow_drip_obeys_request_and_run_deadlines(self):
         for run_limit in [False, True]:
             with self.subTest(run_limit=run_limit):

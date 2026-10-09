@@ -77,11 +77,12 @@ CLI 和未来 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK、支�
 ```bash
 llm4om cancel --run-id RUN_ID --output runs
 llm4om resume --run-id RUN_ID --output runs
+llm4om resume --run-id RUN_ID --output runs --strategy rerun
 ```
 
 SDK 使用 CancellationToken／cancel_run／resume_run，CLI SIGINT 走同一取消路径。
 恢复保留原 run、预算与 deadline，复用已完成模型调用和匹配求解记录；未知 HTTP 结果不重发。
-不支持内部 checkpoint 且无已完成阶段时明确拒绝。支持范围与证据见 [S04-B](docs/development/s04-resume.md)。
+不支持内部 checkpoint 且无已完成阶段时，默认 continue 明确拒绝。显式 rerun 创建新运行并保留父历史、累计费用与未知预留；可产生新付费请求，累计预算上限仍有效。支持范围与证据见 [S04-B](docs/development/s04-resume.md)。
 
 ## 后续使用方式
 

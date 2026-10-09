@@ -536,15 +536,21 @@ A `ModelHandle.decision_map` accepts any Mapping, including a read-only Mapping,
 
 `run_problem(..., cancellation: CancellationToken | None = None)` 保持旧调用兼容。
 `cancel_run(run: Path) -> str` 返回 cancellation_requested／inactive；只写绑定 run_id／owner_uid／owner_id 的控制请求。
-`resume_run(run: Path, *, cancellation=None) -> RunResult` 使用同一运行、预算、私有 Gateway archive 和绝对 deadline。
-CLI 为 `cancel|resume --run-id RUN_ID --output STORE_ROOT`；run／resume 的 SIGINT 走相同协作路径。
+`resume_run(run: Path, *, cancellation=None, strategy="continue") -> RunResult` 默认使用同一运行、预算、私有 Gateway archive 和绝对 deadline。
+`strategy="rerun"` 显式创建派生运行，重新执行方法；它不是方法内部 checkpoint 恢复。
+CLI 为 `cancel|resume --run-id RUN_ID --output STORE_ROOT`；resume 可加 `--strategy continue|rerun`，默认 continue。run／resume 的 SIGINT 走相同协作路径。
 
 核心 checkpoint.json 为 0.1.0 envelope，含 payload 和规范化 JSON 的 SHA-256。
 payload 保存 run_id、不可变 ArtifactRefs、递增事件、当前公开视图的引用、核心阶段状态、原公开输入／配置 hash、
 admission／SDK／Python／包身份、方法内部 checkpoint 和预算／资源位置。
 文件经 fsync／原子 replace 发布；owner.lock 防止并发写者，control.lock 串行化控制身份更新。
 内容文件保存在 history/hash/path，原引用不改写；固定路径为当前公开视图。
-恢复检查引用及视图的实际 bytes；损坏／不兼容返回 checkpoint_incompatible，不忽略 hash 失败。
+checkpoint 的原始 bytes 另存于 checkpoints/hash.json；checkpoint.json 原子提交选择当前一致版本。
+公开视图替换前，publication.json 保存基于该 checkpoint hash 的写入意图与 owner_id、目标不可变引用。
+只有 owner 锁已释放、control 仍 active、owner_id 与基线 hash 均匹配的中断，才允许协调未提交视图。
+恢复先校验全部不可变 bytes，再确认视图只含已提交或已记录的未提交 bytes，然后重建 checkpoint 视图。
+未提交的新视图删除，但不可变历史保留。已提交视图或不可变引用的真实损坏仍返回 checkpoint_incompatible。
+OS atomic rename／fsync 是存储故障注入边界；协作取消测试使用公开 Method／资源和 SDK Token／事件记录。
 不序列化 ModelHandle、Solver SDK 对象、credential、oracle 或 pickle。
 
 MethodContext 兼容增加 cancellation 和可选 save_checkpoint(versioned_json) 回调。
@@ -554,13 +560,23 @@ Direct 声明 supports_checkpoint=true，仅保存 0.1.0 的 request_id；稳定
 未声明时 admission 的 method_cancellation=unknown，不能据资源可取消就宣称插件内部有界。
 独立 fixture 仍 supports_checkpoint=false，声明 cooperative，拒绝非空内部 checkpoint。
 
-未完成方法且没有内部 checkpoint 时返回 checkpoint_unsupported。本版不提供派生重跑；不会静默创建新 run 或付费调用。
+未完成方法且没有内部 checkpoint 时，continue 返回 checkpoint_unsupported。显式 rerun 可执行此方法。
+派生运行的 RunBundle.lineage_ref 指向 immutable lineage.json，记录 operation=derived_rerun、parent_run_id、
+input_hashes、父 checkpoint 引用、父公开历史副本、parent_budget_ledger、parent_resource_records 和 reused_records。
+语义重跑不复用父模型回复／Solve，reused_records 为空；已有证据副本不冒充新方法输出。
+新 run 使用新的 deadline，但父 paid／unknown 尝试、已知 token、未知 reservation 和 Solver 次数仍计入原配置上限。
+不足时派生 run 明确 budget_exhausted，不能通过重复派生忘记费用或未知预留。rerun 可产生新的付费请求，须由用户显式选择。
 完整 Formulation／Code 阶段直接继续；匹配的 execute_done 复用保存的真实 Execution／SolveResult。
 匹配由已验证的公开 bytes、数据绑定、固定配置／Manifest／包及 Worker 身份共同确定。
 completed／artifact_ready 恢复幂等；其他过期恢复返回 deadline_exhausted。
 solver_calls 在尝试前持久化，取消不退还已开始的 slot；下一尝试需要原预算中剩余 slot。
 
-Gateway admission／settlement 同步保存 checkpoint 的资源 state hash 与账本位置。
+Gateway admission／settlement 先写 journal/hash.json 不可变版本（0.1.0、previous_sha256、state），
+再原子更新私有 state.json，最后回调保存核心资源 hash／账本。两处存储不声称跨文件系统事务。
+恢复验证完整单链、核心已知 hash 位于链上、当前 state.json 精确匹配链中版本、固定 archive／Provider／
+预算／deadline／请求身份、只追加 attempt 与一次结算、usage／reservation 和 raw response hash。
+已验证的新 journal head 可前进于核心引用或 mutable head；其预留和成功回复仍保留。破坏链或实际 bytes 仍拒绝。
+archive／journal 目录为 0700，私有文件为 0600，不保存 API credential；只公开脱敏 trace 与累计资源账本。
 成功回复复用既有 attempt_id；未知结果保留预留并返回 provider_outcome_unknown，不重新提交相同 request_id。
 私有 raw reply 不进入公开 checkpoint。Mock 的同请求工程回复可持久化复用，仍 external_llm_requests=0。
 容器和 HTTP 子进程使用已有有界清理；trusted_local 的严格 IR／运行时检查也在拥有的子进程执行。

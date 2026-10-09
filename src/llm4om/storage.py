@@ -16,7 +16,8 @@ from llm4om.control import CancellationToken
 def _atomic(path: Path, content: bytes) -> None:
     temporary = path.with_name(path.name + '.' + uuid4().hex + '.tmp')
     try:
-        with temporary.open('xb') as stream:
+        descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(descriptor, 'wb') as stream:
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
@@ -65,11 +66,17 @@ class RunStore:
         self.projections: dict[str, dict[str, Any]] = {}
         self.state: dict[str, Any] = {}
         self.cancellation = cancellation or CancellationToken()
+        self._checkpoint_hash: str | None = None
+        self._pending: dict[str, list[dict[str, Any]]] = {}
         self.identity = {'schema_version': '0.1.0', 'run_id': self.run_id,
                          'owner_uid': os.getuid(), 'owner_id': uuid4().hex}
         try:
             if resume:
-                envelope = parse_json(read_public_bytes(self.path / 'checkpoint.json'))
+                checkpoint_bytes = read_public_bytes(self.path / 'checkpoint.json')
+                self._checkpoint_hash = hashlib.sha256(checkpoint_bytes).hexdigest()
+                envelope = parse_json(checkpoint_bytes)
+                if read_public_bytes(self.path / 'checkpoints' / (self._checkpoint_hash + '.json')) != checkpoint_bytes:
+                    raise ValueError('Immutable checkpoint changed.')
                 payload = envelope['payload']
                 if (envelope['schema_version'] != '0.1.0' or envelope['sha256'] != hashlib.sha256(_bytes(payload)).hexdigest()
                         or payload['run_id'] != self.run_id):
@@ -80,12 +87,44 @@ class RunStore:
                         raise ValueError('Public bytes changed.')
                 self.refs, self.events, self.state = payload['refs'], payload['events'], payload['state']
                 self.projections = payload['projections']
+                pending_path = self.path / 'publication.json'
+                pending = parse_json(read_public_bytes(pending_path)) if pending_path.exists() else {}
+                control = parse_json(read_public_bytes(self.path / 'control.json'))
+                interrupted = (control.get('active') is True and control.get('run_id') == self.run_id
+                               and control.get('owner_uid') == os.getuid()
+                               and pending.get('checkpoint_sha256') == self._checkpoint_hash
+                               and pending.get('owner_id') == control.get('owner_id'))
+                versions = pending.get('projections', {}) if interrupted else {}
+                for name, records in versions.items():
+                    public_path(self.path, name, require_file=False)
+                    for ref in records:
+                        if ref['relative_path'] != 'history/' + ref['sha256'] + '/' + name:
+                            raise ValueError('Uncommitted reference identity changed.')
+                        raw = read_public_bytes(public_path(self.path, ref['relative_path']))
+                        if len(raw) != ref['size_bytes'] or hashlib.sha256(raw).hexdigest() != ref['sha256']:
+                            raise ValueError('Uncommitted immutable bytes changed.')
+                repairs = []
                 for name, ref in self.projections.items():
                     raw = read_public_bytes(public_path(self.path, name))
                     if hashlib.sha256(raw).hexdigest() != ref['sha256']:
-                        raise ValueError('Public projection changed.')
+                        if not any(hashlib.sha256(raw).hexdigest() == item['sha256'] for item in versions.get(name, [])):
+                            raise ValueError('Public projection changed.')
+                        repairs.append((name, ref))
+                for name, records in versions.items():
+                    if name not in self.projections:
+                        path = public_path(self.path, name, require_file=False)
+                        if path.exists():
+                            raw = read_public_bytes(path)
+                            if not any(hashlib.sha256(raw).hexdigest() == item['sha256'] for item in records):
+                                raise ValueError('Uncommitted public bytes changed.')
                 if [event['sequence_no'] for event in self.events] != list(range(1, len(self.events) + 1)):
                     raise ValueError('Event sequence mismatch.')
+                for name, ref in repairs:
+                    _atomic(public_path(self.path, name), read_public_bytes(public_path(self.path, ref['relative_path'])))
+                for name in versions:
+                    if name not in self.projections:
+                        public_path(self.path, name, require_file=False).unlink(missing_ok=True)
+                pending_path.unlink(missing_ok=True)
             if not versioned:
                 return
             with _control_lock(self.path):
@@ -100,14 +139,26 @@ class RunStore:
         try:
             if self.versioned:
                 with _control_lock(self.path):
-                    _atomic(self.path / 'control.json', _bytes({**self.identity, 'active': False}))
+                    _atomic(self.path / 'control.json', _bytes({**self.identity, 'active': bool(self._pending)}))
         finally:
             os.close(self._lock)
 
     def checkpoint(self) -> None:
         payload = {'run_id': self.run_id, 'refs': self.refs, 'events': self.events, 'state': self.state, 'projections': self.projections}
-        _atomic(self.path / 'checkpoint.json', _bytes({'schema_version': '0.1.0',
-                'sha256': hashlib.sha256(_bytes(payload)).hexdigest(), 'payload': payload}))
+        raw = _bytes({'schema_version': '0.1.0',
+                      'sha256': hashlib.sha256(_bytes(payload)).hexdigest(), 'payload': payload})
+        versions = self.path / 'checkpoints'
+        versions.mkdir(exist_ok=True)
+        immutable = versions / (hashlib.sha256(raw).hexdigest() + '.json')
+        if immutable.exists():
+            if read_public_bytes(immutable) != raw:
+                raise RunError('checkpoint_incompatible', 'storage', 'Immutable checkpoint bytes changed.')
+        else:
+            _atomic(immutable, raw)
+        _atomic(self.path / 'checkpoint.json', raw)
+        self._checkpoint_hash = hashlib.sha256(raw).hexdigest()
+        self._pending = {}
+        (self.path / 'publication.json').unlink(missing_ok=True)
 
     def write(self, name: str, content: bytes, artifact_id: str,
               schema_version: str | None = None) -> dict[str, Any]:
@@ -119,13 +170,20 @@ class RunStore:
         destination.parent.mkdir(parents=True, exist_ok=True)
         if not destination.exists():
             _atomic(destination, content)
+        elif read_public_bytes(destination) != content:
+            raise RunError('checkpoint_incompatible', 'storage', 'Immutable artifact bytes changed.')
         projection.parent.mkdir(parents=True, exist_ok=True)
-        _atomic(projection, content)
         ref = {'artifact_id': artifact_id,
             'media_type': {'.json': 'application/json', '.csv': 'text/csv', '.md': 'text/markdown',
                            '.jsonl': 'application/x-ndjson'}.get(destination.suffix, 'application/octet-stream'),
             'sha256': hashlib.sha256(content).hexdigest(), 'size_bytes': len(content),
             'namespace': 'run_public', 'relative_path': name, 'schema_version': schema_version}
+        if self.versioned:
+            self._pending.setdefault(projection_name, []).append(ref)
+            _atomic(self.path / 'publication.json', _bytes({
+                'checkpoint_sha256': self._checkpoint_hash, 'owner_id': self.identity['owner_id'],
+                'projections': self._pending}))
+        _atomic(projection, content)
         self.refs = [item for item in self.refs if item['relative_path'] != name] + [ref]
         self.projections[projection_name] = ref
         return ref

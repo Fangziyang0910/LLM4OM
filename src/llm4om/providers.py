@@ -13,7 +13,9 @@ from contextlib import contextmanager
 from email.message import Message
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Protocol
-from llm4om.control import CancellationToken
+from llm4om.control import CancellationToken, _supervise
+from llm4om.storage import _atomic
+from llm4om.contracts import read_public_bytes
 from urllib.error import HTTPError, URLError
 from uuid import uuid4
 from urllib.parse import urlsplit
@@ -73,6 +75,14 @@ def _connection_code(error: Exception) -> str:
     return "provider_timeout" if isinstance(reason, TimeoutError) else "provider_connection_error"
 
 
+def _reply_usage(value: dict[str, Any]) -> dict[str, Any]:
+    usage = value.get("usage") or {}
+    return {"input_tokens": usage.get("prompt_tokens"), "output_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
+            "cached_tokens": (usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
+            "reasoning_tokens": (usage.get("completion_tokens_details") or {}).get("reasoning_tokens")}
+
+
 class OpenAICompatibleProvider:
     plugin_id = "llm4om.providers.openai_compatible"
 
@@ -91,7 +101,8 @@ class OpenAICompatibleProvider:
             store.state["gateway_sha256"] = digest
             store.state["ledger"].update(ledger)
             store.checkpoint()
-        gateway = Gateway(self, budget, archive, deadline=deadline, cancellation=store.cancellation, on_save=saved)
+        gateway = Gateway(self, budget, archive, deadline=deadline, cancellation=store.cancellation, on_save=saved,
+                          inherited_ledger=store.state.get("inherited_ledger"))
         saved(hashlib.sha256((archive / "state.json").read_bytes()).hexdigest(), gateway.ledger)
         return gateway
 
@@ -156,16 +167,14 @@ class OpenAICompatibleProvider:
         if len(raw) > 8 * 1024 * 1024:
             raise RunError("invalid_provider_response", "llm", "Provider response exceeds the supported size.")
         try:
+            if self._credential.encode() in raw:
+                raise ValueError("Response contains a credential.")
             value = parse_json(raw)
             choices = value["choices"]
             content = choices[0]["message"]["content"]
             if not isinstance(content, str) or self._credential in content:
                 raise ValueError("Invalid content.")
-            usage = value.get("usage") or {}
-            fields = {"input_tokens": usage.get("prompt_tokens"), "output_tokens": usage.get("completion_tokens"),
-                      "total_tokens": usage.get("total_tokens"),
-                      "cached_tokens": (usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
-                      "reasoning_tokens": (usage.get("completion_tokens_details") or {}).get("reasoning_tokens")}
+            fields = _reply_usage(value)
             if any(token is not None and (type(token) is not int or token < 0) for token in fields.values()):
                 raise ValueError("Invalid usage.")
             def safe(field: Any) -> str | None:
@@ -211,11 +220,107 @@ class OpenAICompatibleFactory:
         return OpenAICompatibleProvider(config, model, credential)
 
 
+def _resource_bytes(state: dict[str, Any]) -> bytes:
+    return json.dumps(state, allow_nan=False).encode()
+
+
+def _resource_state(archive: Path, *, expected: str | None = None) -> dict[str, Any]:
+    """Verify the entire immutable chain, including the mutable head and core anchor."""
+    # ponytail: full snapshots suit bounded runs; use incremental records for large search budgets.
+    try:
+        current = read_public_bytes(archive / "state.json")
+        current_hash = hashlib.sha256(current).hexdigest()
+        versions: dict[str, dict[str, Any]] = {}
+        children: dict[str | None, str] = {}
+        for path in (archive / "journal").glob("*.json"):
+            envelope = parse_json(read_public_bytes(path))
+            state = envelope["state"]
+            digest = hashlib.sha256(_resource_bytes(state)).hexdigest()
+            previous = envelope["previous_sha256"]
+            if (path.stem != digest or envelope["schema_version"] != "0.1.0"
+                    or previous in children or digest in versions):
+                raise ValueError("Invalid resource chain.")
+            versions[digest] = state
+            children[previous] = digest
+        if current_hash not in versions or (expected is not None and expected not in versions):
+            raise ValueError("Missing resource anchor or invalid mutable bytes.")
+        previous_state = None
+        seen = set()
+        cursor = children.get(None)
+        while cursor is not None:
+            if cursor in seen:
+                raise ValueError("Resource cycle.")
+            seen.add(cursor)
+            state = versions[cursor]
+            attempts = state["attempts"]
+            if state["archive_id"] != archive.name or len({item["attempt_id"] for item in attempts}) != len(attempts):
+                raise ValueError("Resource identity mismatch.")
+            if previous_state is not None:
+                if any(state[key] != previous_state[key] for key in ("budget", "deadline", "archive_id", "provider_identity", "inherited_ledger")):
+                    raise ValueError("Resource configuration changed.")
+                old = previous_state["attempts"]
+                if len(attempts) not in (len(old), len(old) + 1):
+                    raise ValueError("Resource attempts were dropped.")
+                changed = 0
+                for before, after in zip(old, attempts):
+                    if before == after:
+                        continue
+                    changed += 1
+                    mutable = {"end", "diagnostic", "status", "response_id", "response_sha256", "model",
+                               "finish_reason", "provider_request_id", "usage", "reservation", "reply", "raw_reply"}
+                    if (before["status"] != "unknown" or before["end"] is not None
+                            or any(after.get(key) != value for key, value in before.items() if key not in mutable)
+                            or (after["status"] != "success" and after["reservation"] != before["reservation"])):
+                        raise ValueError("Invalid resource settlement.")
+                if changed != (1 if len(attempts) == len(old) else 0):
+                    raise ValueError("Invalid resource transition.")
+                if len(attempts) > len(old) and (attempts[-1]["status"] != "unknown" or attempts[-1]["end"] is not None):
+                    raise ValueError("Admission must preserve an unknown reservation before sending.")
+            elif attempts:
+                raise ValueError("Resource genesis must be empty.")
+            for item in attempts:
+                if (type(item["reservation"]) is not int or item["reservation"] < 0
+                        or item["status"] not in {"unknown", "success"}
+                        or any(value is not None and (type(value) is not int or value < 0) for value in item["usage"].values())):
+                    raise ValueError("Invalid resource counters.")
+                identity = state["provider_identity"]
+                if (item["provider"] != identity["plugin_id"] or item["requested_model"] != identity["model"]
+                        or item["endpoint_sha256"] != identity["endpoint_sha256"]
+                        or not isinstance(item["request_id"], str) or not item["request_id"]
+                        or re.fullmatch(r"[0-9a-f]{64}", item["request_sha256"]) is None
+                        or type(item["estimated_input_tokens"]) is not int or item["estimated_input_tokens"] <= 0):
+                    raise ValueError("Invalid immutable request identity.")
+                if item["status"] == "success":
+                    raw = item["raw_reply"].encode()
+                    reply = parse_json(raw)
+                    if (hashlib.sha256(raw).hexdigest() != item["response_sha256"]
+                            or reply["choices"][0]["message"]["content"] != item["reply"]
+                            or _reply_usage(reply) != item["usage"]
+                            or (item["usage"]["total_tokens"] is not None and item["reservation"] != 0)):
+                        raise ValueError("Invalid response bytes or settlement.")
+                if (item["usage"]["total_tokens"] is None
+                        and item["reservation"] != item["estimated_input_tokens"] + identity["max_output_tokens"]):
+                    raise ValueError("Reservation changed without known usage.")
+                if item["status"] == "unknown" and (item.get("reply") is not None or item["reservation"] <= 0):
+                    raise ValueError("Unknown outcomes require held reservations.")
+            previous_state = state
+            following = children.get(cursor)
+            if following is None:
+                if len(seen) != len(versions):
+                    raise ValueError("Disconnected resource chain.")
+                return state
+            cursor = following
+        raise ValueError("Missing resource genesis.")
+    except (OSError, RunError, ValueError, KeyError, TypeError, IndexError, AttributeError) as error:
+        raise RunError("checkpoint_incompatible", "admission", "Cannot verify the private resource journal and committed bytes.") from error
+
+
 class Gateway:
     """A private archive is the run identity; restore uses that same archive and budget."""
     def __init__(self, provider: TextProvider, budget: Mapping[str, Any], archive: Path, *, deadline: float | None = None,
                  cancellation: CancellationToken | None = None,
-                 on_save: Callable[[str, dict[str, Any]], None] | None = None) -> None:
+                 on_save: Callable[[str, dict[str, Any]], None] | None = None,
+                 inherited_ledger: Mapping[str, Any] | None = None) -> None:
         try:
             jsonschema.Draft202012Validator({"type": "object", "properties": {
                 **{name: {"type": "integer", "minimum": 0} for name in ["max_llm_attempts", "max_total_tokens"]},
@@ -228,14 +333,23 @@ class Gateway:
         self.provider, self.budget, self.archive = provider, dict(budget), archive
         self.cancellation = cancellation or CancellationToken()
         self._on_save = on_save
+        self.inherited_ledger = dict(inherited_ledger or {})
         self.calls: list[LLMResponse] = []
         archive.mkdir(parents=True, exist_ok=True, mode=0o700)
         archive.chmod(0o700)
         with self._locked():
             if not (archive / "state.json").exists():
-                self._save({"budget": self.budget, "deadline": deadline if deadline is not None else time.time() + budget["wall_time_s"], "attempts": []})
-            if self._load()["budget"] != self.budget or (deadline is not None and self._load()["deadline"] != deadline):
-                raise RunError("checkpoint_incompatible", "admission", "Gateway budget differs from its saved resource state.")
+                self._save({"budget": self.budget, "deadline": deadline if deadline is not None else time.time() + budget["wall_time_s"], "attempts": [], "inherited_ledger": self.inherited_ledger, "archive_id": archive.name,
+                            "provider_identity": {"plugin_id": provider.plugin_id, "model": provider.model,
+                                "endpoint_sha256": hashlib.sha256(provider.identity.encode()).hexdigest(),
+                                "max_output_tokens": provider.max_output_tokens}})
+            state = self._load()
+            identity = {"plugin_id": provider.plugin_id, "model": provider.model,
+                        "endpoint_sha256": hashlib.sha256(provider.identity.encode()).hexdigest(),
+                        "max_output_tokens": provider.max_output_tokens}
+            if state["inherited_ledger"] != self.inherited_ledger or state["provider_identity"] != identity or state["budget"] != self.budget or (deadline is not None and state["deadline"] != deadline):
+                raise RunError("checkpoint_incompatible", "admission", "Gateway identity or budget differs from its saved resource state.")
+            _atomic(archive / "state.json", _resource_bytes(state))
 
     @contextmanager
     def _locked(self) -> Iterator[None]:
@@ -245,23 +359,25 @@ class Gateway:
             yield
 
     def _load(self) -> dict[str, Any]:
-        return parse_json((self.archive / "state.json").read_bytes())
+        return _resource_state(self.archive)
 
     def _save(self, state: dict[str, Any]) -> None:
-        raw = json.dumps(state, allow_nan=False).encode()
-        descriptor = os.open(self.archive / "state.tmp", os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(raw)
-            stream.flush()
-            os.fsync(stream.fileno())
-        (self.archive / "state.tmp").replace(self.archive / "state.json")
-        directory = os.open(self.archive, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
+        raw = _resource_bytes(state)
+        journal = self.archive / "journal"
+        journal.mkdir(mode=0o700, exist_ok=True)
+        previous = None
+        if (self.archive / "state.json").exists():
+            previous = hashlib.sha256(_resource_bytes(self._load())).hexdigest()
+        digest = hashlib.sha256(raw).hexdigest()
+        if digest != previous:
+            version = journal / (digest + ".json")
+            if version.exists():
+                raise RunError("checkpoint_incompatible", "storage", "Resource version already exists.")
+            _atomic(version, json.dumps({"schema_version": "0.1.0", "previous_sha256": previous,
+                                       "state": state}, allow_nan=False).encode())
+        _atomic(self.archive / "state.json", raw)
         if self._on_save is not None:
-            self._on_save(hashlib.sha256(raw).hexdigest(), self._ledger(state["attempts"]))
+            self._on_save(hashlib.sha256(raw).hexdigest(), self._ledger(state["attempts"], self.inherited_ledger))
 
     @property
     def trace(self) -> list[dict[str, Any]]:
@@ -272,14 +388,18 @@ class Gateway:
     def ledger(self) -> dict[str, Any]:
         with self._locked():
             attempts = self._load()["attempts"]
-        return self._ledger(attempts)
+        return self._ledger(attempts, self.inherited_ledger)
 
     @staticmethod
-    def _ledger(attempts: list[dict[str, Any]]) -> dict[str, Any]:
+    def _ledger(attempts: list[dict[str, Any]], inherited: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        inherited = inherited or {}
         known = [item["usage"]["total_tokens"] for item in attempts if item["usage"]["total_tokens"] is not None]
-        return {"llm_attempts": len(attempts), "external_llm_requests": len(attempts),
-                "total_tokens": sum(known) if len(known) == len(attempts) else None, "known_total_tokens": sum(known),
-                "reserved_tokens": sum(item["reservation"] for item in attempts), "cost": None,
+        return {"llm_attempts": len(attempts) + inherited.get("llm_attempts", 0),
+                "external_llm_requests": len(attempts) + inherited.get("external_llm_requests", 0),
+                "total_tokens": sum(known) + (inherited.get("total_tokens") or 0)
+                if len(known) == len(attempts) and (not inherited or inherited.get("total_tokens") is not None) else None,
+                "known_total_tokens": sum(known) + inherited.get("known_total_tokens", inherited.get("total_tokens") or 0),
+                "reserved_tokens": sum(item["reservation"] for item in attempts) + inherited.get("reserved_tokens", 0), "cost": None,
                 "evidence_origin": "external_provider"}
 
     async def complete(self, request: dict[str, Any]) -> LLMResponse:
@@ -342,7 +462,8 @@ class Gateway:
                     raise RunError("deadline_exhausted", "admission", "The shared run deadline has expired.")
                 reservation = estimate + self.provider.max_output_tokens
                 used = sum(item["reservation"] + (item["usage"]["total_tokens"] or 0) for item in state["attempts"])
-                if len(state["attempts"]) >= self.budget["max_llm_attempts"] or used + reservation > self.budget["max_total_tokens"]:
+                used += self.inherited_ledger.get("reserved_tokens", 0) + self.inherited_ledger.get("known_total_tokens", self.inherited_ledger.get("total_tokens") or 0)
+                if len(state["attempts"]) + self.inherited_ledger.get("llm_attempts", 0) >= self.budget["max_llm_attempts"] or used + reservation > self.budget["max_total_tokens"]:
                     raise RunError("budget_exhausted", "admission", "No shared Provider attempt or token budget remains.")
                 attempt_id = uuid4().hex
                 item = {"attempt_id": attempt_id, "request_id": request_id, "request_sha256": request_hash,
@@ -360,20 +481,9 @@ class Gateway:
             code = None
             retryable = False
             try:
-                pending = asyncio.create_task(self.provider.acomplete(
-                    request["messages"], min(self.provider.timeout_s, state["deadline"] - time.time())))
-                try:
-                    while not pending.done():
-                        self.cancellation.check()
-                        await asyncio.sleep(0.05)
-                    reply = await pending
-                finally:
-                    if not pending.done():
-                        pending.cancel()
-                        try:
-                            await pending
-                        except asyncio.CancelledError:
-                            pass
+                reply = await _supervise(self.provider.acomplete(
+                    request["messages"], min(self.provider.timeout_s, state["deadline"] - time.time())),
+                    self.cancellation)
             except HTTPError as error:
                 code = "auth_error" if error.code in {401, 403} else "rate_limit" if error.code == 429 else "provider_error" if error.code >= 500 else "invalid_provider_request"
                 retryable = error.code == 429 or 500 <= error.code < 600
@@ -394,6 +504,7 @@ class Gateway:
                     if reply["usage"]["total_tokens"] is not None:
                         item["reservation"] = 0
                     total = sum(entry["reservation"] + (entry["usage"]["total_tokens"] or 0) for entry in state["attempts"])
+                    total += self.inherited_ledger.get("reserved_tokens", 0) + self.inherited_ledger.get("known_total_tokens", self.inherited_ledger.get("total_tokens") or 0)
                     if total > self.budget["max_total_tokens"]:
                         item["diagnostic"] = "token_budget_overrun"
                     elif time.time() > state["deadline"]:
