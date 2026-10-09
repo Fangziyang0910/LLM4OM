@@ -152,3 +152,5 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/control.py` | S04-B 协作 CancellationToken | run／owner 身份绑定、CLI／SDK 控制文件，不向宿主 PID 发信号 |
 | `tests/test_resume_run.py` | S04-B CLI／SDK／Provider HTTP／Executor 行为 | 取消、SIGINT、真实 Docker 清理、成功／未知回复、阶段复用、锁、损坏与 deadline |
 | `docs/development/s04-resume.md` | S04-B 当前实现与本机验收范围 | 公开入口、checkpoint／预算／身份、不支持时拒绝及实际支持边界 |
+| `docs/development/s06b-optimus-source.md` | 固定 OptiMUS 0.3 主流程、提示、原生输出与适配接缝研究 | 19 份源码／文档 hash、16 份检索资源 hash、真实默认模式与 paper/source 区分；未集成 |
+| `docs/development/s06c-coe-source.md` | 固定 CoE 角色路由、协作／反思、函数输出与输入分类研究 | 30 份源文件 hash、真实选择／反馈语义、无许可材料的观察与原生接口需求；未集成 |
