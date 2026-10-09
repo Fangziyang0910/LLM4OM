@@ -32,7 +32,7 @@ def main() -> int:
                                  help="Continue saved work, or explicitly rerun with parent usage still counted")
         control.add_argument("--run-id", required=True)
         control.add_argument("--output", type=Path, default=Path("runs"), help="Filesystem store root")
-    importer = commands.add_parser("import", help="Freeze a local NL4Opt split")
+    importer = commands.add_parser("import", help="Freeze a declared local task source")
     importer.add_argument("--config", type=Path, required=True)
     importer.add_argument("--output", type=Path, required=True)
     evaluator = commands.add_parser("evaluate", help="Evaluate one frozen case after modeling")

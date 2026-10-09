@@ -31,7 +31,8 @@ class _ConfigLoader(yaml.SafeLoader):
 
 def read_config(path: Path) -> dict[str, Any]:
     try:
-        value = yaml.load(path.read_text(encoding="utf-8"), Loader=_ConfigLoader)
+        value = (parse_json(path.read_bytes()) if path.suffix == ".json"
+                 else yaml.load(path.read_text(encoding="utf-8"), Loader=_ConfigLoader))
         if not isinstance(value, dict):
             raise ValueError("Expected an object.")
         _finite_numbers(value)

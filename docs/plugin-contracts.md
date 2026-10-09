@@ -347,7 +347,7 @@ Gateway archive 是共享 run 资源身份。文件锁原子 admission，OS slot
 
 ## 7. S07-A local Task / Evaluation interface (implemented)
 
-S07-A was delivered in unreleased 0.4.0; current SDK is 0.6.0. `TaskAdapter.iter_cases(config: Path)` yields frozen
+S07-A was delivered in unreleased0.4.0; its existing snapshot protocol remains unchanged in SDK0.10.0. `TaskAdapter.iter_cases(config: Path)` yields frozen
 `EvaluationCase` values. For `NL4OptAdapter`, config is the imported `manifest.json`.
 The case carries `case_id`, public ProblemSpec path, privileged `oracle_ref`, frozen manifest
 bytes and frozen entry bytes. Pass only `case.public_problem` to `run_problem`; never pass
@@ -720,3 +720,62 @@ Gateway and deterministic replay IDs. The original three-execution repair loop
 and last-successful-executed selection remain; an unexecuted final repair cannot
 be selected as solved. Requested RAG modes fail before paid calls until actual
 compatible rights-cleared corpus/index/embedding resources are admitted.
+
+## 15. S07-C MAMO Task interface (SDK 0.10.0)
+
+Status: development implementation; actual evidence and remaining acceptance
+are recorded in [S07-C](development/s07-mamo.md). Existing NL4Opt0.1 snapshots
+and import configs remain valid. A `.json` configuration is parsed as strict
+JSON, preserving scientific-notation numbers; other config files use the
+existing duplicate-key/finite-value-safe YAML loader.
+
+MAMO import config0.2.0 explicitly selects `adapter_id=llm4om.tasks.mamo` and
+contains dataset_id, source_kind (official/fixture/fork), source_version, files,
+license_file, reviews, selected and tolerance. files contains exactly easy_lp,
+complex_lp and ode, each with a bounded local path and SHA-256. Official source
+must equal the fixed commit/hashes/counts and original CC BY-SA4.0 license.
+Fixtures/forks use distinct IDs/versions. No fetch or solver support is implied.
+
+Snapshot0.2.0 preserves all optimization cases in manifest.cases, public
+ProblemSpec0.2.0 under `public/`, and original records/files under0700 `private/`.
+Each entry retains subset/sample ID, original line/raw-record/Question hashes,
+public/private refs, selected/eligible, review, reference_quality and exclusion
+reason. Original data bytes and Answer remain private; public source metadata
+contains no answer or hidden-code/model/vector reference. Official LICENSE and
+ATTRIBUTION remain separate from the SDK license. Full snapshot/manifest is
+privileged; export only the declared public problems/license/attribution and
+public run results.
+
+`selected=null` selects all optimization questions; an explicit list uses
+`easy_lp:<id>` / `complex_lp:<id>`. `reviews` is a list bound to exact Question
+hashes, with classification lp/milp/unsupported/unresolved, domain_policy,
+rounding_policy, reviewer, reason and public evidence spans for problem_type,
+variable_domains and rounding. Supported reviews require every aspect and
+explicit domains/rounding; unsupported/unresolved cases retain a reason.
+This is a declared public mathematical review, not keyword certification.
+Missing reviews stay in selected counts with `public_math_review_required`;
+they do not gain numeric evaluation eligibility from an EasyLP label or Answer.
+
+`TaskAdapter.load_case(manifest, case_id)` loads frozen metadata for scoring;
+`iter_cases` yields selected cases after public/private hashes and public review
+checks. It keeps selected ineligible cases, since admission/generation failures
+must remain observable. MAMOAdapter implements this interface alongside
+NL4OptAdapter. Generic evaluate_case chooses the declared Task/Evaluator pair.
+Run material is verified in a shared checker before privileged comparison;
+missing/changed case files become persisted checker errors with frozen counts.
+
+Protocol `llm4om.eval.mamo-numeric-v0.1` uses explicit abs_tol/rel_tol and
+`abs(pred-ref)<=abs_tol+rel_tol*abs(ref)`. Rounding policy is `none` with
+null decimal_places or `decimal_half_away_from_zero` with decimal_places0–12.
+Only the candidate is rounded; the original numeric reference is preserved.
+Reference digits do not determine the rounding rule. Output exposes the
+candidate objective and supplied-reference match status, never the private
+reference value/difference or Answer. Independent feasibility/semantic layers
+remain unavailable without an independent checker/model/certificate.
+
+Per-case evaluation0.2.0 records N_selected/N_eligible from the frozen manifest,
+N_evaluated1, selected/eligible, objective_match_numerator and its case
+objective_match_denominator (1 for an eligible case, otherwise0), and a case
+objective_match_rate. Failed generation, execution and checker attempts keep
+that denominator with numerator0. This is not the global experiment rate;
+S08 aggregation must use the complete frozen selection and retain failures.

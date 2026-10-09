@@ -16,7 +16,7 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
 
-S05-A 提供 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（最初交付包 0.4.0，当前 SDK 为 0.8.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
+S05-A 提供 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（最初交付包 0.4.0，已验收 SDK 基线为 0.8.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
 
 S05-B 新增独立 Messages Adapter（SDK／Worker 0.8.0）。本地工程实现与支持范围见
 [实现记录](docs/development/s05b-messages.md)和[配置示例](examples/specs/messages.yaml)；
@@ -159,3 +159,5 @@ Direct 的 `output_mode: native_gurobipy` 对应 gurobipy Backend／Gurobi Solve
 原生源码和 Formulation 保留，可信 Worker 重新读取 SDK MPS 并独立求解；提取视图不证明语义。
 能力矩阵、公开 proposal／返回值、许可证分类和真实验收边界见
 [S06-A 实现记录](docs/development/s06-gurobi.md)与[契约](docs/plugin-contracts.md#11-s06-a-gurobi-and-native-code-sdk-060)。
+
+MAMO Task／Evaluation 已进入 SDK/Worker0.10.0 开发版本：保留全部优化问题、公开题面资格评阅和私有数值答案，单样本失败仍计入分母。实际支持与剩余验收见 [S07-C](docs/development/s07-mamo.md)；全量基准成绩未生成。

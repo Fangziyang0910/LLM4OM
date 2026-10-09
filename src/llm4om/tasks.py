@@ -63,6 +63,7 @@ class EvaluationCase:
 
 class TaskAdapter(Protocol):
     def iter_cases(self, config: Path) -> Iterator[EvaluationCase]: ...
+    def load_case(self, config: Path, case_id: str) -> EvaluationCase: ...
 
 
 class Evaluator(Protocol):
@@ -84,8 +85,19 @@ def _validate_source(settings: dict[str, Any]) -> None:
 
 
 def import_dataset(config: Path, output: Path) -> Path:
-    """Validate a complete local split before atomically accepting a new snapshot."""
+    """Freeze a supported local task source through its declared adapter."""
     settings = read_config(config)
+    adapter = settings.get("adapter_id", "llm4om.tasks.nl4opt")
+    if adapter == "llm4om.tasks.mamo":
+        from llm4om.mamo import import_mamo
+        return import_mamo(config, output, settings)
+    if adapter != "llm4om.tasks.nl4opt":
+        raise RunError("invalid_task_config", "import", "Unknown task adapter.")
+    return _import_nl4opt(config, output, settings)
+
+
+def _import_nl4opt(config: Path, output: Path, settings: dict[str, Any]) -> Path:
+    """Validate a complete local split before atomically accepting a new snapshot."""
     schema = {"type": "object", "additionalProperties": False,
               "required": ["schema_version", "dataset_id", "source_kind", "source_version", "split", "path", "sha256"],
               "properties": {"schema_version": {"const": "0.1.0"},
@@ -188,11 +200,13 @@ def import_dataset(config: Path, output: Path) -> Path:
     return output.resolve() / "manifest.json"
 
 
-class NL4OptAdapter:
+class _FrozenTaskAdapter:
     def iter_cases(self, config: Path) -> Iterator[EvaluationCase]:
         """Read and verify a frozen snapshot, never expose it to a MethodContext."""
         for case in self._cases(config):
             entry = parse_reference_json(case.entry)
+            if entry["selected"] is not True:
+                continue
             for name, path in (("public_ref", case.public_problem), ("oracle_ref", case.oracle_ref)):
                 ref = entry[name]
                 content = path.read_bytes()
@@ -207,6 +221,11 @@ class NL4OptAdapter:
             raise RunError("unknown_case", "evaluation", "Case ID is absent from the frozen manifest.")
         return case
 
+    def _cases(self, config: Path) -> Iterator[EvaluationCase]:
+        raise NotImplementedError
+
+
+class NL4OptAdapter(_FrozenTaskAdapter):
     def _cases(self, config: Path) -> Iterator[EvaluationCase]:
         raw = config.read_bytes()
         manifest = parse_reference_json(raw)

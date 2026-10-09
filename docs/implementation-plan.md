@@ -157,3 +157,5 @@ S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/
 S01 采用 Python 3.11／3.12、标准库 argparse／dataclass／unittest，以及已有 PyYAML／jsonschema；依赖由 pyproject.toml 与 uv.lock 管理。维护工具复用这些依赖，类型检查使用开发依赖 mypy。Pyomo 6.10.1／highspy 1.15.1 已通过可选 solve extra 接入 S02-A，Web 实现另行选择。文件和事件优先，确有查询需要时再引入 SQLite。方法可自行依赖 Agent 框架，核心不强制依赖它。
 
 LLMOPT 等训练类工作的流程／提示变体、MCTS autoformulation、ORPilot、IndustryOR／OptMATH 及 NLP／CP 留待首批契约被真实验证后扩展。每个新增方法、Solver 或 benchmark 都需要声明实际支持组合与来源。
+
+S07-C 当前已贯通固定 MAMO 导入、公开资格冻结与单样本数值比较；已完成规范来源的真实 HiGHS 微型验收，包／Worker／完整回归与独立审阅仍待完成。见 [实现记录](development/s07-mamo.md)，Issue22 保持打开。

@@ -189,3 +189,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/optimus_source/rag__rag_utils.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
 | `src/llm4om/optimus_source/target_code.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
 | `src/llm4om/optimus_source/utils.py.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
+
+| `src/llm4om/mamo.py` | MAMO 固定来源投影、公开资格评阅与私有数值比较 | SDK／CLI、原始 hash／ID／许可、真实 HiGHS、舍入／零答案／失败分母 |
+| `tests/test_mamo.py` | MAMO Task／Evaluation 公开行为测试 | 导入隔离、选择／资格、损坏／缺失、真实求解与数值协议边界 |
+| `docs/development/s07-mamo.md` | S07-C 实现与实际验收记录 | 来源／协议／真实 Solver 微型证据与剩余检查明确区分 |
