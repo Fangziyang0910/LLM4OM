@@ -66,6 +66,11 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
+def _connection_code(error: Exception) -> str:
+    reason = error.reason if isinstance(error, URLError) else error
+    return "provider_timeout" if isinstance(reason, TimeoutError) else "provider_connection_error"
+
+
 class OpenAICompatibleProvider:
     plugin_id = "llm4om.providers.openai_compatible"
 
@@ -181,6 +186,8 @@ class OpenAICompatibleFactory:
         try:
             jsonschema.Draft202012Validator(self.describe()["config_schema"]).validate(config)
             address = urlsplit(config["base_url"])
+            if address.port == 0:
+                raise ValueError("Invalid endpoint port.")
             if (address.scheme not in {"http", "https"} or not address.hostname or address.username
                     or address.password or address.query or address.fragment
                     or (address.scheme == "http" and address.hostname not in {"localhost", "127.0.0.1", "::1"})):
@@ -340,8 +347,7 @@ class Gateway:
                 retryable = error.code == 429 or 500 <= error.code < 600
                 error.close()
             except (TimeoutError, URLError, ConnectionError, OSError) as error:
-                reason = error.reason if isinstance(error, URLError) else error
-                code = "provider_timeout" if isinstance(reason, TimeoutError) else "provider_connection_error"
+                code = _connection_code(error)
                 retryable = code != "provider_timeout"
             except RunError as error:
                 code = error.code
@@ -355,7 +361,7 @@ class Gateway:
                     item["reply"] = reply["text"]
                     if reply["usage"]["total_tokens"] is not None:
                         item["reservation"] = 0
-                    total = sum(entry["usage"]["total_tokens"] or 0 for entry in state["attempts"])
+                    total = sum(entry["reservation"] + (entry["usage"]["total_tokens"] or 0) for entry in state["attempts"])
                     if total > self.budget["max_total_tokens"]:
                         item["diagnostic"] = "token_budget_overrun"
                     elif time.time() > state["deadline"]:
@@ -442,8 +448,7 @@ def _transport_main() -> None:
         error.close()
         result = {"http_status": status}
     except (TimeoutError, URLError, ConnectionError, OSError) as error:
-        reason = error.reason if isinstance(error, URLError) else error
-        result = {"error": "provider_timeout" if isinstance(reason, TimeoutError) else "provider_connection_error"}
+        result = {"error": _connection_code(error)}
     except RunError as error:
         result = {"error": error.code}
     sys.stdout.buffer.write(json.dumps(result, allow_nan=False).encode())

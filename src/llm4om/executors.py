@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from importlib.metadata import version
 from pathlib import Path, PurePosixPath
-from time import monotonic, sleep
+from time import monotonic, sleep, time
 from typing import Any, Mapping
 from uuid import uuid4
 
@@ -68,19 +68,26 @@ def _dispose(process: subprocess.Popen[bytes], operation: str, diagnostics: list
                 diagnostics.append(_diagnostic(f"{operation} close", error))
 
 
-def _docker(arguments: list[str], diagnostics: list[str]) -> bytes:
+def _check_deadline(deadline: float | None) -> None:
+    if deadline is not None and time() >= deadline:
+        raise RunError("deadline_exhausted", "execution", "No shared run deadline remains for Worker admission.")
+
+
+def _docker(arguments: list[str], diagnostics: list[str], *, deadline: float | None = None) -> bytes:
+    _check_deadline(deadline)
     process = subprocess.Popen(["docker", *arguments], stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     captured = [bytearray(), bytearray()]
     total = 0
-    deadline = monotonic() + _CONTROL_TIMEOUT_S
+    control_deadline = monotonic() + min(_CONTROL_TIMEOUT_S, deadline - time() if deadline is not None else _CONTROL_TIMEOUT_S)
     try:
         with selectors.DefaultSelector() as selector:
             assert process.stdout is not None and process.stderr is not None
             selector.register(process.stdout, selectors.EVENT_READ, 0)
             selector.register(process.stderr, selectors.EVENT_READ, 1)
             while selector.get_map() or process.poll() is None:
-                if monotonic() >= deadline:
+                if monotonic() >= control_deadline:
+                    _check_deadline(deadline)
                     raise subprocess.TimeoutExpired(process.args, _CONTROL_TIMEOUT_S)
                 for key, _ in selector.select(timeout=0.05):
                     chunk = os.read(key.fd, 4096)
@@ -99,17 +106,19 @@ def _docker(arguments: list[str], diagnostics: list[str]) -> bytes:
         _dispose(process, arguments[0], diagnostics)
 
 
-def container_runtime(image: str = DEFAULT_IMAGE) -> dict[str, Any]:
+def container_runtime(image: str = DEFAULT_IMAGE, *, deadline: float | None = None) -> dict[str, Any]:
     diagnostics: list[str] = []
     operation = "version"
     try:
-        version = _docker(["version", "--format", "{{.Server.Version}}"], diagnostics).decode().strip()
+        version = _docker(["version", "--format", "{{.Server.Version}}"], diagnostics, deadline=deadline).decode().strip()
         operation = "image inspect"
-        raw = _docker(["image", "inspect", image], diagnostics)
+        raw = _docker(["image", "inspect", image], diagnostics, deadline=deadline)
         info = json.loads(raw)[0]
         if not version or not isinstance(info["Id"], str) or not info["Id"] or diagnostics:
             raise ValueError("Docker runtime evidence is incomplete.")
         return {"docker": version, "image_id": info["Id"], "image": image, "labels": info["Config"].get("Labels") or {}}
+    except RunError:
+        raise
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
         diagnostics.append(_diagnostic(operation, error))
         raise RunError("executor_unavailable", "admission",
@@ -118,13 +127,15 @@ def container_runtime(image: str = DEFAULT_IMAGE) -> dict[str, Any]:
 
 
 def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[str, Any],
-                  *, image: str = DEFAULT_IMAGE) -> ContainerExecution:
-    _validate_request(command, inputs, limits, image)
-    runtime = container_runtime(image)
+                  *, image: str = DEFAULT_IMAGE, deadline: float | None = None) -> ContainerExecution:
+    _validate_request(command, inputs, limits, image, deadline)
+    runtime = container_runtime(image, deadline=deadline)
     name = f"llm4om-{uuid4().hex}"
     maximum_output = limits.get("output_limit_bytes", 1048576)
     pids = limits.get("pids_limit", 64)
     started = monotonic()
+    _check_deadline(deadline)
+    wall_time_s = min(limits["wall_time_s"], deadline - time() if deadline is not None else limits["wall_time_s"])
     event_start = datetime.now(timezone.utc).isoformat()
     status = "completed"
     captured = [bytearray(), bytearray()]
@@ -165,10 +176,11 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
                 "--entrypoint", command[0], runtime["image_id"], *command[1:]]
         operation = "create"
         create_attempted = True
-        container_id = _docker(args, diagnostics).decode().strip()
+        container_id = _docker(args, diagnostics, deadline=deadline).decode().strip()
         if not container_id:
             raise ValueError("Docker did not return a container ID.")
         operation = "attach"
+        _check_deadline(deadline)
         process = subprocess.Popen(["docker", "start", "-a", name], stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
         with selectors.DefaultSelector() as selector:
@@ -176,7 +188,7 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
             selector.register(process.stdout, selectors.EVENT_READ, 0)
             selector.register(process.stderr, selectors.EVENT_READ, 1)
             while selector.get_map() or process.poll() is None:
-                if status == "completed" and monotonic() - started >= limits["wall_time_s"]:
+                if status == "completed" and monotonic() - started >= wall_time_s:
                     status = "timeout"
                 if status != "completed" and stop_deadline is None:
                     stop_deadline = monotonic() + _CONTROL_TIMEOUT_S
@@ -256,6 +268,8 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
             "nano_cpus": config["NanoCpus"], "pids_limit": config["PidsLimit"], "cap_drop": config["CapDrop"],
             "security_options": config["SecurityOpt"], "mounts": [{"destination": item["Destination"], "rw": item["RW"]}
                 for item in info["Mounts"]], "output_limit_bytes": maximum_output}
+    except RunError:
+        raise
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError, TypeError) as error:
         diagnostics.append(_diagnostic(operation, error))
         if status not in ("timeout", "output_limit", "oom"):
@@ -294,9 +308,12 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
         restrictions, tuple(diagnostics), oom_evidence)
 
 
-def _validate_request(command: list[str], inputs: Mapping[str, bytes], limits: dict[str, Any], image: str) -> None:
+def _validate_request(command: list[str], inputs: Mapping[str, bytes], limits: dict[str, Any], image: str,
+                      deadline: float | None = None) -> None:
     allowed = {"network", "cpu_limit", "memory_limit_mb", "wall_time_s", "output_limit_bytes", "pids_limit", "image"}
     try:
+        if deadline is not None and (isinstance(deadline, bool) or not isinstance(deadline, (int, float)) or not math.isfinite(deadline)):
+            raise ValueError("Shared deadline requires a finite timestamp.")
         if not isinstance(command, list) or not command or not all(
                 isinstance(item, str) and item and "\0" not in item for item in command):
             raise ValueError("Command requires text arguments.")
@@ -333,9 +350,9 @@ def _validate_request(command: list[str], inputs: Mapping[str, bytes], limits: d
         raise RunError("invalid_execution_request", "admission", "Container command, public files or limits are invalid.") from error
 
 
-def worker_runtime(limits: dict[str, Any]) -> dict[str, Any]:
+def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None) -> dict[str, Any]:
     execution = run_container(["python", "-I", "-m", "llm4om.worker", "--runtime"], {}, limits,
-                              image=limits.get("image", DEFAULT_IMAGE))
+                              image=limits.get("image", DEFAULT_IMAGE), deadline=deadline)
     try:
         data = parse_json(execution.stdout)
         runtime = data["runtime"]

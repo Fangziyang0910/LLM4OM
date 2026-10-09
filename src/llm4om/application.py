@@ -276,7 +276,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode, artifact_ref: di
             for data in parse_json(read_public_bytes(store.path / "public-problem.json"))["data_refs"]:
                 inputs[data["path"]] = read_public_bytes(store.path / data["path"])
             container = run_container(["python", "-I", "-m", "llm4om.worker", "--solve", "/input/request.json"],
-                                      inputs, limits, image=plan.snapshot["worker"]["image_id"])
+                inputs, limits, image=plan.snapshot["worker"]["image_id"], deadline=plan.deadline)
             out.write(container.stdout.decode(errors="replace"))
             err.write(container.stderr.decode(errors="replace"))
             if container.status in ("timeout", "oom", "output_limit"):

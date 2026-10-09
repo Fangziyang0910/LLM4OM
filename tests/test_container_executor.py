@@ -45,8 +45,13 @@ class ContainerExecutorTests(unittest.TestCase):
                     run_container(command, files, restrictions, image=image)
                 self.assertEqual(caught.exception.code, "invalid_execution_request")
                 self.assertEqual(caught.exception.stage, "admission")
+        for deadline in [True, "future", float("nan"), float("inf"), 10**1000]:
+            with self.subTest(deadline=deadline):
+                with self.assertRaises(RunError) as caught:
+                    run_container(["python"], {}, limits, deadline=deadline)
+                self.assertEqual(caught.exception.code, "invalid_execution_request")
 
-    def run_hanging_docker(self, scenario: str) -> dict:
+    def run_hanging_docker(self, scenario: str, *, deadline_s: float | None = None) -> dict:
         # Only daemon/control faults use this external CLI fixture; resource tests use real Docker.
         with tempfile.TemporaryDirectory(prefix="llm4om-control-test-") as directory:
             docker = Path(directory) / "docker"
@@ -54,9 +59,13 @@ class ContainerExecutorTests(unittest.TestCase):
 from pathlib import Path
 scenario = os.environ["LLM4OM_CONTROL_SCENARIO"]
 operation = sys.argv[1]
+with Path(__file__).with_name("operations").open("a") as stream:
+    print(operation, file=stream)
 trace = Path(__file__).with_name("pids")
 with trace.open("a") as stream:
     print(os.getpid(), os.getpgrp(), file=stream)
+if scenario == "slow_" + operation:
+    time.sleep(0.5)
 if operation == "create":
     mount = sys.argv[sys.argv.index("--mount") + 1]
     Path(__file__).with_name("public-root").write_text(mount.split("src=", 1)[1].split(",", 1)[0])
@@ -114,14 +123,16 @@ elif operation == "events" and "event_oom" in scenario:
     print(json.dumps({"Type": "container", "Action": "oom", "Actor": {"ID": "other" if "wrong" in scenario else "fixture-container"}}))
 ''')
             docker.chmod(0o755)
-            source = '''import json
+            source = '''import json, os, time
 from dataclasses import asdict
 from llm4om.contracts import RunError
 from llm4om.executors import run_container
 try:
+    duration = os.environ["S05_EXECUTOR_DEADLINE_S"]
     result = run_container(["python", "-c", "pass"], {}, {
         "network": False, "cpu_limit": 1, "memory_limit_mb": 128,
-        "wall_time_s": 0.3, "output_limit_bytes": 8192})
+        "wall_time_s": 0.3, "output_limit_bytes": 8192},
+        deadline=time.time() + float(duration) if duration else None)
     data = asdict(result)
     data["stdout"] = result.stdout.decode(errors="replace")
     data["stderr"] = result.stderr.decode(errors="replace")
@@ -133,7 +144,8 @@ except RunError as error:
             process = subprocess.Popen([sys.executable, "-c", source], start_new_session=True,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 env={**os.environ, "PATH": directory + os.pathsep + os.defpath,
-                     "LLM4OM_CONTROL_SCENARIO": scenario})
+                     "LLM4OM_CONTROL_SCENARIO": scenario,
+                     "S05_EXECUTOR_DEADLINE_S": str(deadline_s) if deadline_s is not None else ""})
             try:
                 try:
                     out, err = process.communicate(timeout=12)
@@ -165,7 +177,18 @@ except RunError as error:
                             pass
             self.assertEqual(process.returncode, 0, err.decode(errors="replace"))
             self.assertLess(monotonic() - started, 12)
-            return json.loads(out)
+            result = json.loads(out)
+            result["fixture_operations"] = (Path(directory) / "operations").read_text().splitlines()
+            return result
+
+    def test_shared_deadline_prevents_worker_start_after_slow_admission(self) -> None:
+        for scenario in ["slow_version", "slow_create"]:
+            with self.subTest(scenario=scenario):
+                started = monotonic()
+                result = self.run_hanging_docker(scenario, deadline_s=0.3)
+                self.assertEqual(result["code"], "deadline_exhausted")
+                self.assertNotIn("start", result["fixture_operations"])
+                self.assertLess(monotonic() - started, 1.5)
 
     def test_attach_and_kill_hangs_preserve_timeout_and_cleanup_evidence(self) -> None:
         result = self.run_hanging_docker("start+kill+rm")

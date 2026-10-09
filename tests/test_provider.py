@@ -243,6 +243,21 @@ class ProviderTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, 'token_budget_overrun')
         self.assertEqual(len(self.requests), 1)
 
+    def test_settlement_counts_unknown_attempt_reservations(self):
+        success = self.responses[0]
+        success[1]['usage']['total_tokens'] = 9900
+        self.responses = [(503, {}), success]
+        gateway = self.gateway()
+        request = {'request_id': 'saved-reserved-overrun', 'messages': [{'role': 'user', 'content': 'retry'}]}
+        with self.assertRaises(ValueError) as caught:
+            asyncio.run(gateway.complete(request))
+        self.assertEqual(caught.exception.code, 'token_budget_overrun')
+        self.assertGreater(gateway.ledger['reserved_tokens'] + gateway.ledger['known_total_tokens'], 10000)
+        with self.assertRaises(ValueError) as caught:
+            asyncio.run(self.gateway().complete(request))
+        self.assertEqual(caught.exception.code, 'token_budget_overrun')
+        self.assertEqual(len(self.requests), 2)
+
     def test_connection_failure_has_bounded_attempts(self):
         self.server.shutdown()
         self.server.server_close()
@@ -316,6 +331,8 @@ class CredentialAdmissionTests(unittest.TestCase):
         config = {'base_url': 'https://example.invalid/v1', 'credential_env': 'S05_TEST_KEY'}
         factory = OpenAICompatibleFactory()
         for candidate, code in [(config, 'auth_error'), ({**config, 'stream': True}, 'invalid_config'),
+                                ({**config, 'base_url': 'https://example.invalid:abc/v1'}, 'invalid_config'),
+                                ({**config, 'base_url': 'https://example.invalid:70000/v1'}, 'invalid_config'),
                                 ({**config, 'base_url': 'https://user:secret@example.invalid'}, 'invalid_config')]:
             with self.assertRaises(RunError) as caught:
                 factory.create(candidate, 'deepseek-v4-pro-0813', environment={})

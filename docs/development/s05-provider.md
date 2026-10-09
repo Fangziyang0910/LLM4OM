@@ -57,7 +57,7 @@ domain = continuous|integer|binary
 
 每个真实 attempt 有独立 UUID。Gateway 在 HTTP 前用文件锁原子保存尝试与 token 预留，OS slot 锁限制共享并发。429、5xx 和连接错误最多重试 max_retries 次，退避为 0.1、0.2、0.4…秒，最大 1 秒。401／403、其他 4xx、不支持请求和非法响应不重试。超时保留未知结果，不主动重发。HTTP 错误 body 不进入公开诊断。
 
-估算为规范化请求 UTF-8 字节数；它是 admission 估算，不是供应方 token 测量。响应保留 input、output、total、cached、reasoning；缺字段为 null，cached／reasoning 不重复加入 total。没有定价表，cost 为 null。已知 total 结算预留，未知 total 或失败保守持有预留。最后调用实测越界保存成功回复并返回 token_budget_overrun。共享 deadline 限制调用 timeout、重试、Worker admission、容器墙钟与 Solver time_limit。
+估算为规范化请求 UTF-8 字节数；它是 admission 估算，不是供应方 token 测量。响应保留 input、output、total、cached、reasoning；缺字段为 null，cached／reasoning 不重复加入 total。没有定价表，cost 为 null。已知 total 结算预留，未知 total 或失败保守持有预留。结算后继续计入其他未知 attempt 的预留；最后调用实测占用越界保存成功回复并返回 token_budget_overrun。共享绝对 deadline 限制调用 timeout、重试、Docker admission／create、Worker 启动、容器墙钟与 Solver time_limit。清理仍允许有限额外时间以回收进程和容器。
 
 原始回复和资源状态保存在公开 run 目录之外的 `.private/<run_id>/state.json`，目录 0700，文件 0600。公开 bundle 只列 llm-trace.json 摘要：请求／回复身份与 hash、模型、角色、时间、finish、usage 和稳定诊断。没有 prompt、reply 或 header。
 
@@ -69,7 +69,7 @@ domain = continuous|integer|binary
 
 新增嵌套配置 CLI 先返回 auth_error（red），实现当前工作目录 .env fallback 后通过（green）。完整回归中一次截止测试返回 provider_timeout；这与等待退避时的 deadline_exhausted 都是合法时间边界结果。测试检查有限耗时和请求数，避免假定宿主调度时间。
 
-两版本完整回归、包构建／独立安装与独立 Standards／Spec 审阅结果在交付时记录。包依赖未新增，uv.lock 同步本包 0.4.0。trusted_local 不提供宿主求解进程硬墙钟隔离；容器路径提供进程隔离。完整方法取消／CLI resume 仍归 S04-B。
+首次两版本完整回归各 137 项通过。wheel／sdist 构建成功；干净 Python 3.11 环境只安装基础 wheel，真实模型配置的 doctor 免费预检通过，容器 run 目标 13。公开 bundle、wheel／sdist 的真实凭据值扫描均通过。审阅修复后的全量回归另记录。包依赖未新增，uv.lock 同步本包 0.4.0。trusted_local 不提供宿主求解进程硬墙钟隔离；容器路径提供进程隔离。完整方法取消／CLI resume 仍归 S04-B。
 
 ## 真实外部模型记录
 
@@ -81,3 +81,11 @@ domain = continuous|integer|binary
 | 无数据连续 LP | min 2x+y，x+y≥5，x≤2，y≤4；x=1、y=4、目标 6。原目标=2(x+y)-y≥10-4=6，解达到该界 | input=493、output=2142、total=2635；reasoning=1636 属于 output | 75141bcc146b4f0c9dddced2ac6aa233 |
 
 首次生产调用把 max_output_tokens 设为 4096，供应方报告全部 4096 为 reasoning，finish_reason=length，text 为空，因此没有形成 Formulation（原记录为 invalid_json，现明确返回 llm_output_truncated）；该失败及真实用量仍保留。提高到 16384 后得到完整 JSON 和 stop，两次成功均经候选校验、确定性 Code 编译及容器 Solver API 完成。成本缺少定价依据，保持 null；这些微型实例证明实际流程，没有替代 benchmark 或完整语义评测。
+
+## 独立审阅与修复
+
+固定比较 ce9cdad…f9cfe21；两个独立只读 Codex CLI 进程分别审查 Standards 和 Issue #8 Spec，没有共享报告、编辑源码或读取凭据。真实测试由作者执行。
+
+Standards：2 项契约问题，另有 1 项 possible Duplicated Code 判断。Worker admission 使用过期相对时限，现传递共享绝对 deadline 到 Docker 检查、创建和启动；慢 version／create 的外部 CLI fixture 先复现启动越界，再通过 deadline 拒绝且未 start。非法端口现通过 urlsplit.port 在 admission 校验，abc／70000 负例先 auth_error，再 invalid_config。重复连接错误映射集中为一个私有函数。
+
+Spec：2 项实现问题，1 项交付证据缺口，无范围蔓延。Worker deadline 问题同上；结算现将未知 attempt 预留与已知 total 同时计入占用。503 后成功实测 9900 的负例先错误返回成功，再 token_budget_overrun，保存回复恢复仍拒绝越界且不重发。两版本回归、安装和审阅证据在本页与校验记录补齐。修复目前为作者 TDD 核验，不把它表述为审阅者复审通过。

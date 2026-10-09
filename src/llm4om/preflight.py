@@ -80,7 +80,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     worker = None
     if not offline:
         if execution_mode == "container":
-            worker = worker_runtime(settings["executor"]["config"])
+            worker = worker_runtime(settings["executor"]["config"], deadline=started + settings["budget"]["wall_time_s"])
             packages.update(worker["packages"])
         else:
             packages.update(runtime_versions())
