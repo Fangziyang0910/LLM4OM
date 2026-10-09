@@ -17,7 +17,7 @@ from llm4om.preflight import prepare_run
 def main() -> int:
     parser = argparse.ArgumentParser(prog="llm4om")
     commands = parser.add_subparsers(dest="command", required=True)
-    run = commands.add_parser("run", help="Generate or replay Formulation; compile and solve grounded LPIR")
+    run = commands.add_parser("run", help="Generate Formulation and Code; solve supported LP/MILP")
     run.add_argument("--problem", type=Path, required=True)
     run.add_argument("--config", type=Path, required=True)
     run.add_argument("--output", type=Path, help="Override the configured filesystem store root")
