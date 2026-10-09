@@ -8,6 +8,7 @@ import jsonschema
 
 from llm4om.contracts import RunError, validate_config
 from llm4om.highs import runtime_versions
+from llm4om.executors import worker_runtime
 from llm4om.plugins import MethodPlugin, discover_methods
 
 
@@ -31,8 +32,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False) -> Admission
     except (jsonschema.exceptions.RefResolutionError, RecursionError) as error:
         raise RunError("invalid_plugin_manifest", "admission", "Method configuration schema cannot be resolved or evaluated.",
                        details={"path": ["method", "config_schema"]}) from error
-    if not offline and settings["executor"]["plugin_id"] != "llm4om.executors.trusted_local":
-        raise RunError("offline_required", "admission", "Select trusted_local or offline mode; container execution is not implemented.")
+    execution_mode = settings["executor"]["plugin_id"].removeprefix("llm4om.executors.")
     capabilities = method.manifest["capabilities"]
     required = {"method_profile": "grounded_single_candidate/0.1.0",
                 "input_artifact_kinds": ["public_problem"], "output_artifact_kinds": ["model_artifact"],
@@ -61,10 +61,15 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False) -> Admission
                            details={"distribution": name}) from error
     if not offline and settings["budget"]["max_solver_calls"] < 1:
         raise RunError("budget_exhausted", "admission", "Real solving requires one Solver call slot.")
+    worker = None
     if not offline:
-        packages.update(runtime_versions())
-    return AdmissionPlan(method, {"schema_version": "0.2.0", "mode": "offline_mock" if offline else "trusted_local",
+        if execution_mode == "container":
+            worker = worker_runtime(settings["executor"]["config"])
+            packages.update(worker["packages"])
+        else:
+            packages.update(runtime_versions())
+    return AdmissionPlan(method, {"schema_version": "0.2.0", "mode": "offline_mock" if offline else execution_mode,
         "method": {"manifest": method.manifest, "origin": method.origin},
         "compiler_id": settings["compiler"]["plugin_id"], "model_backend_id": settings["model_backend"]["plugin_id"],
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
-        "packages": packages, "budget": settings["budget"], "allowed_problem_types": allowed_types})
+        "packages": packages, "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types})

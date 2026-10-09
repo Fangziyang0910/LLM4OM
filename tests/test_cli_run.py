@@ -79,11 +79,15 @@ class OfflineRunTests(unittest.TestCase):
         events = [json.loads(line) for line in (path / "events.jsonl").read_text().splitlines()]
         self.assertEqual(events[-1]["status"], "failed")
 
-    def test_mock_replay_requires_explicit_offline_mode(self) -> None:
-        result = self.run_cli()
+    def test_missing_container_image_cannot_fallback_to_local_execution(self) -> None:
+        inputs = self.fixture_copy()
+        settings = yaml.safe_load((inputs / "run.yaml").read_text())
+        settings["executor"]["config"]["image"] = "llm4om-worker:absent-test-image"
+        (inputs / "run.yaml").write_text(yaml.safe_dump(settings))
+        result = self.run_cli(inputs / "problem.json", inputs / "run.yaml")
         self.assertEqual(result.returncode, 1)
         _, bundle = self.bundle(result)
-        self.assertEqual(bundle["error"]["code"], "offline_required")
+        self.assertEqual(bundle["error"]["code"], "executor_unavailable")
 
     def test_config_admission_rejects_unsupported_or_invalid_requests(self) -> None:
         inputs = self.fixture_copy()

@@ -307,16 +307,26 @@ run-id/
 
 当前只执行 Mock 表述中明确提供的 grounded_lp 0.1.0，编译输出 python_factory 并关联源 Formulation、IR、symbol map 与数据 hash。工厂固定当前 revision，data 参数尚不重新绑定；参数化输入归 S02-B。自由文本、原生代码和真实 LLM 输出不进入当前编译入口。实际命令、版本与数值边界见 [S02-A 实现记录](development/s02-highs.md)。
 
-RunConfig 可以显式选择 trusted_local，config 为空对象；container 配置只在离线回放时接受为目标配置，不会自动降级。solve extra 提供 Pyomo／HiGHS，缺失依赖或零 Solver 预算在 Mock 前拒绝。当前 Solver options 只支持 time_limit_s，实际容差和原生数值阈值随结果保存。
+RunConfig 可以显式选择 trusted_local，config 为空对象；container 由 S04-A 实际执行，也可离线回放，不会自动降级。solve extra 提供 Pyomo／HiGHS，缺失依赖或零 Solver 预算在 Mock 前拒绝。当前 Solver options 只支持 time_limit_s，实际容差和原生数值阈值随结果保存。
 
-真实 bundle mode 为 trusted_local，执行完成为 completed；termination 与 primal 可用性由 SolveResult 分别表达。增加 solve_result_ref、execution_result_ref 和 final_candidate_id；执行错误仍保存已完成阶段。编译前快照与最终候选分别保存，旧事件引用不可失效。Code 的编译检查通过不推导 semantic_validation 通过；infeasible／unbounded 是实际结果。ExecutionResult 的 exit_code、CPU 与内存未测量时为 null。solver_calls 计 Solver 适配器尝试，外部 LLM 请求仍为零；总墙钟强制中断、资源隔离与恢复待 S04。
+真实 bundle mode 为 trusted_local，执行完成为 completed；termination 与 primal 可用性由 SolveResult 分别表达。增加 solve_result_ref、execution_result_ref 和 final_candidate_id；执行错误仍保存已完成阶段。编译前快照与最终候选分别保存，旧事件引用不可失效。Code 的编译检查通过不推导 semantic_validation 通过；infeasible／unbounded 是实际结果。ExecutionResult 的 exit_code、CPU 与内存未测量时为 null。solver_calls 计 Solver 适配器尝试，外部 LLM 请求仍为零；容器资源限制由 S04-A 实施；完整运行预算与恢复按 S04-B／S05 继续落实。
 
 ### S03 已落实的方法 profile 与预检子集
 
-SDK 0.2.0 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对象，当前只装载 method。Manifest 的 capabilities.method_profile 为 grounded_single_candidate/0.1.0；plugin_version 当前为稳定 major.minor.patch，contract_range 为 `>=X.Y.Z,<A.B.C` 并包含核心契约 0.2.0。config_schema 自包含，允许本地片段引用，暂不接受 $id 或远程 $ref／$dynamicRef；dependencies.python 为分发包名称列表，记录已安装版本。source 暂不接受额外 ArtifactRef，研究 URL／固定版本／变体等文字元数据可保存。
+SDK 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对象，当前只装载 method。Manifest 的 capabilities.method_profile 为 grounded_single_candidate/0.1.0；plugin_version 当前为稳定 major.minor.patch，contract_range 为 `>=X.Y.Z,<A.B.C` 并包含核心契约 0.2.0。config_schema 自包含，允许本地片段引用，暂不接受 $id 或远程 $ref／$dynamicRef；dependencies.python 为分发包名称列表，记录已安装版本。source 暂不接受额外 ArtifactRef，研究 URL／固定版本／变体等文字元数据可保存。
 
 当前 async run 返回内存 MethodOutcome：status=candidate_selected、final_candidate_id=001、proposal=ModelProposal(artifact, formulation, structured_ir)。核心验证原问题 hash／revision、五元素和数据绑定，生成实际引用与候选记录；这不是已实现完整的多候选／checkpoint Protocol。MethodContext 当前提供 llm、只读公开 data／预算上限和 problem_sha256；Mock LLMResponse 提供 text、call_id、evidence_origin、source_sha256，仍不是完整真实 Provider 响应验收。窄 profile 明确版本化，后续增加资源和状态时同步声明。
 
 doctor 与 run 共用 prepare_run；先验证参数，再匹配当前表示、目标类型、Backend／Solver、Provider 功能和 Executor，再检查分发包与真实求解依赖。缺失能力为未知；请求的资源须被方法声明，当前表示 profile 固定，不能靠枚举并集暗示 native_code 可用。allowed_problem_types 缺省 lp／milp，实际 IR 类型在产出后再次核对。真实运行保存 admission_plan_ref；离线计划只准备回放，不标记 Code／Solve 已执行。未知方法异常与 SystemExit 转为稳定错误和脱敏 frame，原错误参数／源码行与插件 Python 输出不进入公开结果。
 
-示例、字段级诊断、实际版本和未实现项见 [S03](development/s03-plugins.md)。当前不执行真实连通性检查，不加载 .env；包版本与核心对象 0.2.0、IR 0.1.0 和 profile 0.1.0 分别管理。
+示例、字段级诊断、实际版本和未实现项见 [S03](development/s03-plugins.md)。当前不执行真实连通性检查，不加载 .env；SDK 包版本 0.3.0、核心对象 0.2.0、IR 0.1.0 和 profile 0.1.0 分别管理。
+
+### S04-A 已落实的容器子集
+
+container 配置必须包含 network=false、正 cpu_limit、整数 memory_limit_mb 和正 wall_time_s，可选 image、整数 pids_limit 和整数 output_limit_bytes。省略 image 使用 SDK 对应 Worker tag；admission 将它解析为本地不可变 image_id，检查真实 Worker 运行时，候选执行使用同一 ID。没有自动 pull 或本地降级。
+
+公开 Executor 为 run_container(command: list[str], inputs: Mapping[str, bytes], limits, *, image) → ContainerExecution。输入只能是安全相对路径与公开 bytes；方法 Context 不获得此低层接口。实际求解由核心选择可信 Worker 入口，仅发送严格 IR、实际编译代码、Solver options 和公开 CSV。Worker 验证 IR／实际 CodeArtifact 的 hash，并经平台 Solver API 产生结果。
+
+ExecutionResult 增加可选 worker_status、image_id、container_id、container_name、oom_killed、restrictions 和 executor_diagnostics；stdout／stderr 为有界文件引用。资源超限为 execution_timeout／execution_oom／execution_output_limit，SolveResult 缺失；已生成 Formulation／Code 保留。Docker 控制失败为 executor_error，缺环境为 executor_unavailable，非法直接 Executor 输入为 invalid_execution_request。控制与清理有界，失败保留实际退出／输出／容器身份和诊断，不用默认值伪造缺失测量。
+
+固定策略、真实测试与当前限制见 [S04-A](development/s04-container.md)。它只交付 grounded LPIR 的容器路径和可复用 Executor；参数化工厂、原生代码、完整预算、取消／恢复均仍按开发计划实现。

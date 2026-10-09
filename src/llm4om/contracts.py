@@ -331,7 +331,9 @@ def validate_config(settings: dict[str, Any]) -> None:
         "executor": {"anyOf": [
             _object({"plugin_id": {"const": "llm4om.executors.container"}, "config": _object({
                 "network": {"const": False}, "cpu_limit": POSITIVE, "memory_limit_mb": POSITIVE,
-                "wall_time_s": {"type": "number", "exclusiveMinimum": 0}})}),
+                "wall_time_s": {"type": "number", "exclusiveMinimum": 0},
+                "image": TEXT, "output_limit_bytes": POSITIVE, "pids_limit": POSITIVE},
+                ["network", "cpu_limit", "memory_limit_mb", "wall_time_s"])}),
             _object({"plugin_id": {"const": "llm4om.executors.trusted_local"}, "config": _object({})}),
         ]},
         "budget": _object({name: ({"type": "number", "exclusiveMinimum": 0} if name == "wall_time_s"

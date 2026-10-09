@@ -12,7 +12,7 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 ## 当前状态
 
-已交付 **S01 离线回放、S02-A 真实 HiGHS、S03 方法发现与预检（Python 包 0.2.0）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web、真实 LLM 与论文方法仍按开发计划接入。
+已交付 **S01 离线回放、S02-A 真实 HiGHS、S03 方法发现与预检、S04-A 容器执行（Python 包 0.3.0）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web、真实 LLM 与论文方法仍按开发计划接入。
 
 仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
 
@@ -59,15 +59,16 @@ GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache
 
 ```bash
 uv sync --locked --extra dev --extra solve
+uv run --locked python scripts/build_worker_image.py
 uv run --locked --extra solve llm4om plugins list
-uv run --locked --extra solve llm4om doctor --config examples/specs/solve.yaml
-uv run --locked --extra solve llm4om run --problem examples/specs/problem.json --config examples/specs/solve.yaml
+uv run --locked llm4om doctor --config examples/specs/run.yaml
+uv run --locked llm4om run --problem examples/specs/problem.json --config examples/specs/run.yaml
 uv run --locked llm4om run --offline --problem examples/specs/problem.json --config examples/specs/run.yaml
 ```
 
-CLI 输出 run_id、bundle_path 和 status。运行目录默认在 `runs/`；查看其中的 `bundle.json`、阶段产物、解向量和 `reports/report.md`。`--output PATH` 可覆盖存储根目录。真实 run 使用显式 trusted_local，真实得到 A=3、B=2、目标 13，状态 completed；offline run 的 artifact_ready 只表示离线产物已保存。Formulation 仍来自人工 Mock，不能处理任意新问题；候选求解成功不代表业务语义已验证。
+CLI 输出 run_id、bundle_path 和 status。运行目录默认在 `runs/`；查看其中的 `bundle.json`、阶段产物、解向量和 `reports/report.md`。`--output PATH` 可覆盖存储根目录。真实 run 默认使用已构建的 Docker 镜像；solve.yaml 显式选择 trusted_local。两条路径真实得到 A=3、B=2、目标 13，状态 completed；offline run 的 artifact_ready 只表示离线产物已保存。Formulation 仍来自人工 Mock，不能处理任意新问题；候选求解成功不代表业务语义已验证。
 
-CLI 和未来 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK、支持范围与错误语义见 [S01](docs/development/s01-offline-run.md)、[S02-A](docs/development/s02-highs.md)和 [S03](docs/development/s03-plugins.md)。本地 LLM 凭据保存在 Git 忽略的 `.env`，变量名见 [.env.example](.env.example)；当前求解切片不加载它，Provider 接入归 S05。
+CLI 和未来 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK、支持范围与错误语义见 [S01](docs/development/s01-offline-run.md)、[S02-A](docs/development/s02-highs.md)、[S03](docs/development/s03-plugins.md)及 [S04-A](docs/development/s04-container.md)。本地 LLM 凭据保存在 Git 忽略的 `.env`，变量名见 [.env.example](.env.example)；当前求解切片不加载它，Provider 接入归 S05。
 
 ## 后续使用方式
 
@@ -87,4 +88,4 @@ llm4om report --experiment-id EXPERIMENT_ID --format markdown
 
 每个插件必须声明能力和兼容矩阵，不允许自动降级后仍把结果标成原方法；每个评估结论必须说明证据级别。**求解器报告最优，只表示候选模型被求解，不证明模型符合业务需求。**
 
-已完成 S01／S02-A／S03；当前前沿与后续依赖见 [开发计划](docs/implementation-plan.md)。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+已完成 S01／S02-A／S03／S04-A 当前范围；当前前沿与后续依赖见 [开发计划](docs/implementation-plan.md)。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。

@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-09；设计基线：0.4.0。当前包含 86 个源文件，维护科研设计、文档工具和 S01／S02-A／S03 平台切片。
+日期：2026-10-09；设计基线：0.4.0。当前包含 93 个源文件，维护科研设计、文档工具和 S01／S02-A／S03／S04-A 平台切片。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -14,7 +14,7 @@
 | `.github/ISSUE_TEMPLATE/feature-spec.md` | 功能规格入口 | 完整 spec 字段、用户故事与公共测试入口 |
 | `.github/ISSUE_TEMPLATE/vertical-slice.md` | 纵向工作项入口 | parent、行为、验收与实际 blockers |
 | `.github/PULL_REQUEST_TEMPLATE.md` | PR 交付入口 | Summary、Evidence、Door／Blast Radius |
-| `.github/workflows/checks.yml` | 平台 CI | Python 3.11／3.12；离线／真实 HiGHS、锁定依赖、类型、仓库和构建 |
+| `.github/workflows/checks.yml` | 平台 CI | Python 3.11／3.12；构建 Worker、真实隔离／HiGHS、锁定依赖、类型、仓库和包构建 |
 | `.gitignore` | 本地与运行产物边界 | 密钥、运行数据、缓存、下载材料保持忽略 |
 | `AGENTS.md` | 常驻项目约束与技能路由 | 保留科研项目约束；单个 Agent skills 块与按需指针 |
 | `CODING_STANDARDS.md` | 开发规范 | 深模块、真实 Seam、单一来源、格式、测试与 review |
@@ -73,7 +73,10 @@
 | `examples/specs/problem.json` | 公开问题规格 | 两空格布局；revision、需求与数据 hash 核验 |
 | `examples/specs/run.yaml` | S01 单问题配置 | --offline 回放两阶段封装；无实验／oracle 字段 |
 | `examples/specs/solve.yaml` | S02-A 真实求解配置 | 显式 trusted_local，人工表述／IR 与真实 HiGHS 分别标明 |
+| `docker/worker.Dockerfile` | 可信 Worker 镜像 | 固定基础 digest、带 hash 依赖和 SDK wheel；无源码／密钥构建上下文 |
+| `docs/development/s04-container.md` | S04-A 交付记录 | 实际容器流程、资源／权限、真实故障测试与支持边界 |
 | `pyproject.toml` | 包与依赖声明 | 运行／开发依赖、CLI 入口、类型检查与源码布局 |
+| `scripts/build_worker_image.py` | 公开镜像构建 CLI | 临时上下文只包含固定 wheel、依赖和 Dockerfile；真实镜像构建验证 |
 | `scripts/check_repository.py` | 仓库公开校验 CLI | 格式、链接、JSON、配置、数学、编号、引用与覆盖 |
 | `scripts/render_references.py` | 公开参考资料生成 CLI | catalog 生成两份导出；check 模式只读 |
 | `src/llm4om/__init__.py` | 公开应用导出 | RunResult／run_problem；CLI 与后续 Web 共用入口 |
@@ -81,6 +84,7 @@
 | `src/llm4om/application.py` | 单问题应用流程 | 公开输入、Mock 输出、候选、阶段与成功／失败证据 |
 | `src/llm4om/cli.py` | 用户 CLI | 参数解析、离线显式选择、JSON 摘要与退出码 |
 | `src/llm4om/contracts.py` | 运行边界校验 | 严格 JSON／YAML、CSV、路径、引用、五元素和输入绑定 |
+| `src/llm4om/executors.py` | 真实容器执行 Module | 公共 bytes、权限与资源、有界控制／清理、真实限制证据 |
 | `src/llm4om/highs.py` | 真实 Solver 边界 | Pyomo 线性表示转原生 HiGHS；域、数值阈值、状态、解与版本 |
 | `src/llm4om/linear.py` | 严格 IR 公共编译入口 | 结构／数值校验、重复项合并、固定工厂与 symbol map |
 | `src/llm4om/mock.py` | 离线方法响应读取 | 明确 fixture、来源与数据 revision；不执行代码或读取参考答案 |
@@ -88,7 +92,10 @@
 | `src/llm4om/plugins.py` | 方法发现与运行 Module | 动态 factory、版本／唯一键、JSON schema、同步／异步桥接与脱敏异常 |
 | `src/llm4om/preflight.py` | 共用运行 admission | 方法配置、实际能力、依赖、预算和固定计划；不调用 Provider |
 | `src/llm4om/storage.py` | 运行文件存储 | 独立目录、原子替换、内容 hash 和递增事件 |
+| `src/llm4om/worker.py` | 镜像可信入口 | 严格 IR／实际代码 hash 核对、后端 API 求解、资源测量 |
 | `tests/test_cli_run.py` | S01 公共 CLI 行为测试 | 成功、失败、数据、路径、引用、配置、隐私、报告和存储 |
+| `tests/test_container_executor.py` | S04-A 公共 Executor 测试 | 真实网络／文件／资源／清理；控制命令外部 fixture 验证有限返回 |
+| `tests/test_container_run.py` | S04-A 公共 CLI／Worker 测试 | 真实目标 13、代码替换拒绝、超限保留证据而无伪造解 |
 | `tests/test_linear_solver.py` | 编译／Solver 公共行为测试 | 独立微型 LP/MILP，真实常数、域、状态和数值拒绝 |
 | `tests/test_plugins.py` | S03 公共 CLI／SDK 行为测试 | 真实独立包构建／安装、预检、预算、坏输出、来源与异常 |
 | `tests/test_repository_checks.py` | 维护工具公共入口测试 | 临时副本；坏链接、hash、配置、绑定、重复键、引用漂移、五元素与阶段引用 |

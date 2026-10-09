@@ -24,6 +24,7 @@ from llm4om.preflight import AdmissionPlan, prepare_run
 from llm4om.linear import CompiledCode, compile_ir
 from llm4om.highs import solve_highs
 from llm4om.storage import RunStore
+from llm4om.executors import run_container
 
 
 @dataclass(frozen=True)
@@ -74,7 +75,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
         if not offline:
             artifact_ref, compiled = _compile_candidate(store, artifact_ref, settings)
             stages["code"] = {"status": "available", "reason": None}
-            solve_ref, execution_ref, execution_error = _execute_candidate(store, compiled, artifact_ref, settings, ledger)
+            solve_ref, execution_ref, execution_error = _execute_candidate(store, compiled, artifact_ref, settings, ledger, plan)
             if solve_ref is not None:
                 stages["solve"] = {"status": "available", "reason": None}
             if execution_error is not None:
@@ -157,7 +158,7 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
                "llm4om": version("llm4om"),
                "packages": {**{name: version(name) for name in ["PyYAML", "jsonschema"]},
                             **plan.snapshot["packages"]},
-               "mode": "offline_mock" if offline else "trusted_local",
+               "mode": plan.snapshot["mode"],
                "method": {"manifest": method.manifest, "origin": method.origin},
                "method_variant": (method.manifest["source"] or {}).get("variant_id", "grounded_single_candidate")}, "environment")
     response = public_path(config.parent, settings["llm"]["config"]["response_artifact"])
@@ -237,7 +238,7 @@ def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: 
 
 
 def _execute_candidate(store: RunStore, compiled: CompiledCode, artifact_ref: dict[str, Any],
-                       settings: dict[str, Any], ledger: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any], RunError | None]:
+                       settings: dict[str, Any], ledger: dict[str, Any], plan: AdmissionPlan) -> tuple[dict[str, Any] | None, dict[str, Any], RunError | None]:
     started = datetime.now(timezone.utc).isoformat()
     timer = monotonic()
     ledger["solver_calls"] += 1
@@ -245,28 +246,72 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode, artifact_ref: di
     out, err = StringIO(), StringIO()
     error = None
     solve_ref = None
+    container = None
+    resources = {"cpu_time_s": None, "peak_memory_bytes": None}
+    executor_details: dict[str, Any] = {}
     try:
-        with redirect_stdout(out), redirect_stderr(err):
-            solve = solve_highs(compiled, settings["solver"].get("options", {}))
+        if settings["executor"]["plugin_id"] == "llm4om.executors.container":
+            artifact = parse_json(read_public_bytes(store.path / artifact_ref["relative_path"]))
+            formulation = parse_json(read_public_bytes(store.path / artifact["formulation_ref"]["relative_path"]))
+            ir = parse_json(read_public_bytes(store.path / formulation["structured_ir_ref"]["relative_path"]))
+            request = {"ir": ir, "source_sha256": hashlib.sha256(compiled.source.encode()).hexdigest(),
+                       "solver_options": settings["solver"].get("options", {})}
+            limits = settings["executor"]["config"]
+            inputs = {"request.json": json.dumps(request, ensure_ascii=False, allow_nan=False).encode(),
+                      "model.py": compiled.source.encode()}
+            for data in parse_json(read_public_bytes(store.path / "public-problem.json"))["data_refs"]:
+                inputs[data["path"]] = read_public_bytes(store.path / data["path"])
+            container = run_container(["python", "-I", "-m", "llm4om.worker", "--solve", "/input/request.json"],
+                                      inputs, limits, image=plan.snapshot["worker"]["image_id"])
+            out.write(container.stdout.decode(errors="replace"))
+            err.write(container.stderr.decode(errors="replace"))
+            if container.status in ("timeout", "oom", "output_limit"):
+                raise RunError(f"execution_{container.status}", "execution", "The isolated Worker exceeded an enforced resource limit.")
+            payload = parse_json(container.stdout)
+            if "error" in payload:
+                raise RunError(payload["error"]["code"], payload["error"]["stage"], payload["error"]["message"])
+            if container.status != "completed" or container.exit_code != 0:
+                raise RunError("executor_error", "execution", "The isolated Worker failed.")
+            solve = payload["result"]
+            solve["evidence_origin"] = "trusted_container_worker"
+            resources = payload["resources"]
+        else:
+            with redirect_stdout(out), redirect_stderr(err):
+                solve = solve_highs(compiled, settings["solver"].get("options", {}))
         variables = solve.pop("variables")
         solve["schema_version"] = "0.2.0"
         solve["solution_ref"] = store.json("candidates/001/solution.json", {
-            "schema_version": "0.2.0", "variables": variables, "evidence_origin": "trusted_highs_api"}, "solution") if variables is not None else None
+            "schema_version": "0.2.0", "variables": variables, "evidence_origin": solve["evidence_origin"]}, "solution") if variables is not None else None
         solve_ref = store.json("candidates/001/solve-result.json", solve, "solve-result")
         store.emit("solver_finished", solve_result_ref=solve_ref, termination=solve["termination"])
         if solve["termination"] == "error":
             error = RunError("solver_error", "solve", "HiGHS reports an execution error.")
     except RunError as failure:
         error = failure
+        if failure.code == "executor_error":
+            executor_details = failure.details or {}
+            out.write(executor_details.get("stdout", ""))
+            err.write(executor_details.get("stderr", ""))
     except (RuntimeError, ArithmeticError) as failure:
         error = RunError("solver_error", "solve", "Cannot build or solve the compiled model.")
+    except (ValueError, KeyError, TypeError):
+        error = RunError("worker_protocol_error", "execution", "Worker result does not match the declared protocol.")
     output_ref = store.write("candidates/001/stdout.txt", out.getvalue().encode(), "stdout")
     stderr_ref = store.write("candidates/001/stderr.txt", err.getvalue().encode(), "stderr")
     execution_ref = store.json("candidates/001/execution.json", {"schema_version": "0.2.0",
-        "execution_id": "execution-001", "mode": "trusted_local", "status": "failed" if error else "completed",
-        "start": started, "end": datetime.now(timezone.utc).isoformat(), "exit_code": None,
-        "wall_time_s": monotonic() - timer, "resources": {"cpu_time_s": None, "peak_memory_bytes": None},
-        "output_truncated": False, "solve_result_ref": solve_ref, "stdout_ref": output_ref,
+        "execution_id": "execution-001", "mode": settings["executor"]["plugin_id"].removeprefix("llm4om.executors."), "status": "failed" if error else "completed",
+        "start": started, "end": datetime.now(timezone.utc).isoformat(),
+        "worker_status": container.status if container else executor_details.get("status"),
+        "exit_code": container.exit_code if container else executor_details.get("exit_code"),
+        "wall_time_s": monotonic() - timer, "resources": resources,
+        "output_truncated": container.output_truncated if container else executor_details.get("output_truncated", False),
+        "image_id": container.image_id if container else executor_details.get("image_id"),
+        "container_id": container.container_id if container else executor_details.get("container_id"),
+        "container_name": executor_details.get("container_name"),
+        "oom_killed": container.oom_killed if container else executor_details.get("oom_killed"),
+        "restrictions": container.restrictions if container else executor_details.get("restrictions"),
+        "executor_diagnostics": list(container.diagnostics) if container else executor_details.get("diagnostics", []),
+        "solve_result_ref": solve_ref, "stdout_ref": output_ref,
         "stderr_ref": stderr_ref, "diagnostics": [{"code": error.code, "stage": error.stage}] if error else []}, "execution-001")
     candidate = parse_json(read_public_bytes(store.path / "candidates/001/candidate-snapshot.json"))
     candidate.update(artifact_ref=artifact_ref, status="executed" if error else "selected")

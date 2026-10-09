@@ -54,14 +54,14 @@ class DirectFactory:
     def describe(self) -> dict[str, Any]:
         return {
             "schema_version": "0.2.0", "plugin_id": "llm4om.methods.direct", "kind": "method",
-            "plugin_version": "0.2.0", "contract_range": ">=0.2.0,<0.3.0",
+            "plugin_version": "0.3.0", "contract_range": ">=0.2.0,<0.3.0",
             "display_name": "Direct (Mock engineering profile)",
             "description": "One public Mock text response produces a five-element Formulation and grounded LPIR.",
             "capabilities": {"method_profile": "grounded_single_candidate/0.1.0", "problem_types": ["lp", "milp"],
                 "input_artifact_kinds": ["public_problem"], "output_artifact_kinds": ["model_artifact"],
                 "formulation_representations": ["five_element"], "code_representations": ["python_factory"],
                 "model_backends": ["llm4om.model_backends.pyomo_factory"], "solvers": ["llm4om.solvers.highs"],
-                "llm_features": ["text"], "execution_modes": ["trusted_local"],
+                "llm_features": ["text"], "execution_modes": ["trusted_local", "container"],
                 "supports_checkpoint": False, "supports_clarification": False, "oracle_requirements": []},
             "config_schema": {"type": "object", "properties": {
                 "formulation_mode": {"const": "five_element"}, "output_mode": {"const": "lp_ir"}},

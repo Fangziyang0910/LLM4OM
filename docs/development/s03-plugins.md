@@ -37,4 +37,4 @@ Manifest 0.2.0 使用 method_profile=`grounded_single_candidate/0.1.0`。这是�
 
 构造缺少依赖为 dependency_missing，其他构造错误为 invalid_config；方法未知异常为 method_error，保存异常类别与文件名／行号／函数组成的脱敏 traceback，不保存异常参数或源码行。插件 Python stdout／stderr 被抑制，CLI 保持 JSON 输出；它不构成对任意可信宿主插件的系统隔离。原存储 OSError 边界、离线回放和真实 HiGHS 保留。
 
-当前提供方为工程 Mock；连通性检查、真实 LLM、其他插件种类、native_code、参数化工厂、token／墙钟的完整限制与容器隔离仍待实现。验证环境、测试、包安装和两路审阅见 [校验记录](../spec-validation.md)。
+当前提供方为工程 Mock；连通性检查、真实 LLM、其他插件种类、native_code、参数化工厂、token／墙钟的完整限制仍待实现；容器隔离由 [S04-A](s04-container.md)接续落实。验证环境、测试、包安装和两路审阅见 [校验记录](../spec-validation.md)。

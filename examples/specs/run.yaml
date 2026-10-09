@@ -1,4 +1,4 @@
-# S01 offline config; container execution remains planned. No real LLM result.
+# Mock formulation; S04-A container solve or explicit S01 offline replay. No real LLM result.
 schema_version: "0.2.0"
 method:
   plugin_id: "llm4om.methods.direct"

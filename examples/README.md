@@ -14,7 +14,7 @@
 | [oracle.json](specs/oracle.json) | 自建参考目标与独立规则说明 | 否；Evaluator 读取 |
 | [plugin-manifest.json](specs/plugin-manifest.json) | direct 插件 Manifest 草案 | 配置／发现元信息 |
 | [experiment.yaml](specs/experiment.yaml) | 离线示例配置草案 | 公开部分可以；oracle 由 TaskAdapter 私有处理 |
-| [run.yaml](specs/run.yaml) | S01 无 oracle 离线配置 | 全部为公开配置；仍是工程 Mock |
+| [run.yaml](specs/run.yaml) | S04-A 容器求解／S01 离线配置 | 全部为公开配置；仍是工程 Mock |
 | [solve.yaml](specs/solve.yaml) | S02-A trusted_local 真实 HiGHS 配置 | 人工 Formulation／IR → Code → Solve；不调用真实 LLM |
 | [plugin-run.yaml](specs/plugin-run.yaml) | S03 独立方法配置 | 需先安装 [工程插件](plugins/fixture_method/README.md)；有意偏移目标，非业务正确性验收 |
 | [expected-evaluation.json](specs/expected-evaluation.json) | 预期结果断言 | 否；不能冒充真实 run 输出 |
@@ -24,11 +24,13 @@
 `run.yaml` 与 `experiment.yaml` 分别演示单问题和 benchmark 两种用法。前者使用单数 method，没有 task/oracle_path、experiment_id 和 repeats；后者由任务适配器导入公开问题与私有参考材料。两者配置草案为 0.2.0，显式选择 five_element。Mock 响应指向 model-artifact.json；Formulation 内的 structured_ir_ref 指向独立手写的 LPIR 0.1.0，不是已从文本编译出的结果。源 fixture 的 Code 引用为空、阶段为 pending；S02-A 在运行目录中生成可追踪的 CodeArtifact。S01 已使用单问题应用入口；benchmark 将在 S08 复用它。当前可运行：
 
 ```bash
+uv run --locked python scripts/build_worker_image.py
+uv run --locked llm4om run --problem examples/specs/problem.json --config examples/specs/run.yaml
 uv run --locked llm4om run --offline --problem examples/specs/problem.json --config examples/specs/run.yaml
 uv run --locked --extra solve llm4om run --problem examples/specs/problem.json --config examples/specs/solve.yaml
 ```
 
-先按 [开发命令](../CONTRIBUTING.md#3-开发与校验)安装依赖。两条命令均不读取 oracle.json／expected-evaluation.json。第一条跳过 Code／Solve；第二条显式 trusted_local，保存真实代码、解和状态。独立语义检查均为 not_available。实际 RunBundle 在 runs 下，详情见 [S01](../docs/development/s01-offline-run.md)／[S02-A](../docs/development/s02-highs.md)。benchmark 命令与独立检查待后续实现。
+先按 [开发命令](../CONTRIBUTING.md#3-开发与校验)安装依赖。运行命令均不读取 oracle.json／expected-evaluation.json。run.yaml 的真实执行使用容器；--offline 跳过 Code／Solve；solve.yaml 显式 trusted_local。两条真实路径均保存代码、解和状态。独立语义检查均为 not_available。实际 RunBundle 在 runs 下，详情见 [S01](../docs/development/s01-offline-run.md)／[S02-A](../docs/development/s02-highs.md)／[S04-A](../docs/development/s04-container.md)。benchmark 命令与独立检查待后续实现。
 
 ## 2. 数学问题
 

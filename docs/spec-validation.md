@@ -1,6 +1,6 @@
 # 调研、需求与设计校验记录
 
-日期：2026-10-09；设计基线：0.4.0。本记录验证科研设计、维护工具与 S01／S02-A／S03 实现；完整平台验收由 [AC 清单](acceptance.md)维护。实际范围见 [S01](development/s01-offline-run.md)／[S02-A](development/s02-highs.md)／[S03](development/s03-plugins.md)。
+日期：2026-10-09；设计基线：0.4.0。本记录验证科研设计、维护工具与 S01／S02-A／S03／S04-A 实现；完整平台验收由 [AC 清单](acceptance.md)维护。实际范围见 [S01](development/s01-offline-run.md)／[S02-A](development/s02-highs.md)／[S03](development/s03-plugins.md)／[S04-A](development/s04-container.md)。
 
 ## 1. 可复算的当前命令
 
@@ -9,6 +9,7 @@
 ```bash
 uv sync --locked --extra dev --extra solve
 uv run --locked --extra dev --extra solve mypy
+uv run --locked python scripts/build_worker_image.py
 uv run --locked --extra dev --extra solve python scripts/render_references.py --check
 uv run --locked --extra dev --extra solve python scripts/check_repository.py
 uv run --locked --extra dev --extra solve python -m unittest discover -s tests -v
@@ -22,16 +23,18 @@ S02-A 交付结果：76 个源文件与参考导出通过检查；9 个模块的
 
 S03 当前结果：86 个源文件检查通过，12 个模块在 Python 3.12.3／3.11.13 的 strict mypy 通过；两个环境分别完整 77 tests passed（原 57 项＋20 项安装／方法／预检 CLI／SDK 行为）。独立方法通过真实 wheel 构建／安装发现，不 mock entry_points。SDK 0.2.0 的 sdist／wheel 构建通过；干净基础安装在仓库外验证离线 doctor／SDK，真实 doctor 在缺 solve extra 时稳定拒绝。安装 solve extra 和独立方法 wheel 后，从仓库外验证发现、doctor、CLI 与 SDK，均得到目标 20、A=3／B=2；完整审阅记录见第 8 节。
 
+S04-A 当前结果：93 个源文件、参考导出与 diff 检查通过。Python 3.12.3／3.11.13 各完整 104 tests passed（原 77＋23 Executor＋4 CLI／Worker），各有 14 个模块通过 strict mypy。Docker 29.6.2 的真实测试没有跳过；控制 daemon 卡住另用外部 CLI fixture。SDK 0.3.0 的 sdist／wheel 及公开 Worker 构建命令通过；只安装基础 wheel 的干净宿主没有 Pyomo，仍从仓库外通过 doctor、CLI 和 SDK 得到容器中的目标 13。Worker 为 Python 3.12.15、Pyomo 6.10.1、highspy 1.15.1，镜像 ID 为 sha256:80a5620effb216e176c17e5567d9bb4dd4fafab1a6974d5b485af6df6637ea32。每次运行自己的 admission／execution 记录是其镜像事实来源。独立审阅将在本次提交后按固定差异运行，并在本记录追加结果。
+
 sdist／wheel 构建通过，wheel 在干净的 Python 3.12.3 环境安装后，从仓库外运行 console script 和 SDK，均 completed；真实结果为目标 13、A=3／B=2。项目内演示 run_id 为 `cc1b7c7366a4451d9e6512a84fa668ce`，产物位于忽略的 runs 目录；LP=40/3、常数／域／失败状态另有独立微型测试。公开运行产物扫描不含凭据／oracle sentinel。`.env` 权限为 0600，被 Git 忽略，未提交。
 
 测试从 CLI 与公开文件观察行为；维护负例在临时仓库副本运行。没有调用运行模块的私有函数或以内部 mock 关系作验收。代码提交 6ffde5d 的 [push CI](https://github.com/Fangziyang0910/LLM4OM/actions/runs/37878496065) 与 [PR CI](https://github.com/Fangziyang0910/LLM4OM/actions/runs/37878529552) 已在 GitHub runner 完成，Python 3.11／3.12 两个 job 均 success。交付分支为 codex/s02-highs，草稿 [PR #2](https://github.com/Fangziyang0910/LLM4OM/pull/2) 关联 Issue #1。
 
 ## 2. 文档与任务结构
 
-- 当前 40 份 Markdown、9 份 JSON、5 份 YAML 文件均进入检查；所有源文件进入 [逐文件记录](repository-audit.md)。本地链接、标题／显式锚点、围栏、UTF-8、LF 和结尾换行通过检查。
+- 当前 41 份 Markdown、9 份 JSON、5 份 YAML 文件均进入检查；所有源文件进入 [逐文件记录](repository-audit.md)。本地链接、标题／显式锚点、围栏、UTF-8、LF 和结尾换行通过检查。
 - 36 FR、12 NFR、25 AC 编号连续且无重复。LP/MILP 执行范围保留；首批方法调整为 direct／OptiMUS／CoE，基准调整为 NL4Opt／NLP4LP／MAMO LP/MILP 子集。
 - DD-01～DD-08 用于需求追踪，详细设计按方法、执行、实验／入口分支读取。
-- S01～S10 保持阶段编号，拆为 24 个纵向任务。每项有可观察结果、公共测试入口与直接 blockers；S01 已完成离线工程范围；S02-A 已完成严格 IR 与真实 HiGHS 范围；S03 当前方法发现／预检已完成；当前前沿为 S02-B／S04-A。
+- S01～S10 保持阶段编号，拆为 24 个纵向任务。每项有可观察结果、公共测试入口与直接 blockers；S01 已完成离线工程范围；S02-A 已完成严格 IR 与真实 HiGHS 范围；S03 当前方法发现／预检已完成；S04-A 已完成当前 grounded 容器范围；当前前沿见开发计划。
 - AGENTS 只有一个 Agent skills 块；glossary 是领域定义来源，四份简短 ADR 记录当前取舍，ADR-0004 明确两阶段选择。
 - 5 个 Mermaid 图块的源码围栏已检查。本次没有运行专用渲染器。
 
