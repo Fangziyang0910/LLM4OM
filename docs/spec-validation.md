@@ -22,7 +22,7 @@ S02-A 当前结果：76 个源文件与参考导出通过检查；9 个模块的
 
 sdist／wheel 构建通过，wheel 在干净的 Python 3.12.3 环境安装后，从仓库外运行 console script 和 SDK，均 completed；真实结果为目标 13、A=3／B=2。项目内演示 run_id 为 `cc1b7c7366a4451d9e6512a84fa668ce`，产物位于忽略的 runs 目录；LP=40/3、常数／域／失败状态另有独立微型测试。公开运行产物扫描不含凭据／oracle sentinel。`.env` 权限为 0600，被 Git 忽略，未提交。
 
-测试从 CLI 与公开文件观察行为；维护负例在临时仓库副本运行。没有调用运行模块的私有函数或以内部 mock 关系作验收。CI 已配置相同 Python 矩阵，GitHub runner 尚未运行。
+测试从 CLI 与公开文件观察行为；维护负例在临时仓库副本运行。没有调用运行模块的私有函数或以内部 mock 关系作验收。代码提交 6ffde5d 的 [push CI](https://github.com/Fangziyang0910/LLM4OM/actions/runs/37878496065) 与 [PR CI](https://github.com/Fangziyang0910/LLM4OM/actions/runs/37878529552) 已在 GitHub runner 完成，Python 3.11／3.12 两个 job 均 success。交付分支为 codex/s02-highs，草稿 [PR #2](https://github.com/Fangziyang0910/LLM4OM/pull/2) 关联 Issue #1。
 
 ## 2. 文档与任务结构
 
