@@ -150,3 +150,4 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `docs/development/s07-benchmark-research.md` | S07-B/C NLP4LP／MAMO 固定来源与字段考察 | 实际提交、文件 hash、样本数量、公开／私有投影、参考损坏与评测边界；尚未集成 |
 | `docs/development/s06b-optimus-source.md` | 固定 OptiMUS 0.3 主流程、提示、原生输出与适配接缝研究 | 19 份源码／文档 hash、16 份检索资源 hash、真实默认模式与 paper/source 区分；未集成 |
 | `docs/development/s06c-coe-source.md` | 固定 CoE 角色路由、协作／反思、函数输出与输入分类研究 | 30 份源文件 hash、真实选择／反馈语义、无许可材料的观察与原生接口需求；未集成 |
+| `docs/development/s05b-anthropic-research.md` | Anthropic Messages 官方协议与已配置服务的真实小探针 | 同一指定模型、Messages HTTP200、真实 usage／未知成本、私有原始回复；Adapter 尚未实现 |
