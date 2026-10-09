@@ -15,7 +15,7 @@ from email.message import Message
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Protocol
 from llm4om.control import CancellationToken, _supervise
-from llm4om.storage import _atomic
+from llm4om.storage import _atomic, _mkdir
 from llm4om.contracts import read_public_bytes
 from urllib.error import HTTPError, URLError
 from uuid import uuid4
@@ -291,6 +291,8 @@ def _resource_state(archive: Path, *, expected: str | None = None,
             if cursor in seen:
                 raise ValueError("Resource cycle.")
             seen.add(cursor)
+            if cursor == current_hash and expected is not None and expected not in seen:
+                raise ValueError("Mutable resource head precedes the committed core anchor.")
             state = versions[cursor]
             attempts = state["attempts"]
             if state["archive_id"] != archive.name or len({item["attempt_id"] for item in attempts}) != len(attempts):
@@ -377,7 +379,7 @@ class Gateway:
         self._on_save = on_save
         self.inherited_ledger = dict(inherited_ledger or {})
         self.calls: list[LLMResponse] = []
-        archive.mkdir(parents=True, exist_ok=True, mode=0o700)
+        _mkdir(archive, mode=0o700)
         archive.chmod(0o700)
         with _resource_lock(self.archive):
             if not (archive / "state.json").exists():
@@ -417,7 +419,7 @@ class Gateway:
     def _save(self, state: dict[str, Any]) -> None:
         raw = _resource_bytes(state)
         journal = self.archive / "journal"
-        journal.mkdir(mode=0o700, exist_ok=True)
+        _mkdir(journal, mode=0o700)
         previous = None
         if (self.archive / "state.json").exists():
             previous = hashlib.sha256(_resource_bytes(self._load())).hexdigest()

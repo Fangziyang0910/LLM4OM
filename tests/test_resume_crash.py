@@ -102,6 +102,49 @@ class CrashResumeTests(unittest.TestCase):
         self.addCleanup(os.environ.pop, 'S04B_TEST_KEY', None)
         return config
 
+    def test_sdk_persists_all_new_directory_ancestors_before_record_publication(self):
+        import stat
+        from unittest.mock import patch
+        from llm4om import run_problem
+        config = self.http_config()
+        output = self.root / 'new' / 'nested' / 'runs'
+        mkdir, fsync, replace = os.mkdir, os.fsync, os.replace
+        unsynced, created, synced = set(), set(), set()
+        def observe_mkdir(path, *args, **kwargs):
+            result = mkdir(path, *args, **kwargs)
+            path = Path(path).resolve()
+            if path.is_relative_to(self.root):
+                unsynced.add(path)
+                created.add(path)
+            return result
+        def observe_fsync(fd):
+            result = fsync(fd)
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                directory = Path(os.readlink(f'/proc/self/fd/{fd}'))
+                persisted = {path for path in unsynced if path.parent == directory}
+                synced.update(persisted)
+                unsynced.difference_update(persisted)
+            return result
+        def observe_replace(source, target, *args, **kwargs):
+            target = Path(target).resolve()
+            if target.is_relative_to(output):
+                self.assertFalse(set(target.parents) & unsynced,
+                                 f'Record published before ancestor entries were synced: {target}')
+            return replace(source, target, *args, **kwargs)
+        with patch('os.mkdir', side_effect=observe_mkdir), patch('os.fsync', side_effect=observe_fsync), \
+                patch('os.replace', side_effect=observe_replace):
+            result = run_problem(self.inputs / 'problem.json', config, output_root=output)
+        self.assertEqual(result.status, 'completed')
+        self.assertEqual(created, synced)
+        self.assertTrue(any(path.name == 'history' for path in created))
+        self.assertTrue(any(path.name == 'checkpoints' for path in created))
+        self.assertTrue(any(path.name == 'journal' for path in created))
+        archive = output / '.private' / result.run_id
+        self.assertEqual(archive.stat().st_mode & 0o777, 0o700)
+        self.assertEqual((archive / 'journal').stat().st_mode & 0o777, 0o700)
+        self.assertTrue(all(path.stat().st_mode & 0o777 == 0o600
+                            for path in archive.rglob('*') if path.is_file()))
+
     def resource_crash(self, status, *, journal=False, max_attempts=1):
         config = self.http_config(max_attempts=max_attempts)
         fault = CRASH.replace('record = json.loads(lines[-1])', 'record = json.loads(Path(target).read_text())')
@@ -248,6 +291,156 @@ class CrashResumeTests(unittest.TestCase):
         self.assertEqual(sum(event['kind'] == 'solver_started' for event in events), 1)
         self.assertEqual(sum(event['kind'] == 'execution_reused' for event in events), 1)
 
+    def completed_execution_crash(self, config=None):
+        fault = CRASH.replace('record = json.loads(lines[-1])', 'record = json.loads(Path(target).read_text())')
+        fault = fault.replace('record.get("kind") == "formulation_saved"',
+            'record.get("execution_id") == "execution-001" and record.get("status") == "completed"')
+        output = self.root / 'runs' / (config.stem if config else 'grounded')
+        process = subprocess.run([sys.executable, '-c', fault, 'run',
+            '--problem', str(self.inputs / 'problem.json'),
+            '--config', str(config or self.inputs / 'solve.yaml'), '--output', str(output)],
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(process.returncode, 91, process.stderr)
+        path = next(path for path in output.iterdir() if len(path.name) == 32)
+        self.assertEqual(json.loads((path / 'checkpoint.json').read_text())['payload']['state']['phase'],
+                         'execute_pending')
+        return path
+
+    def test_completed_execution_projection_reuses_solve_before_core_done(self):
+        from unittest.mock import patch
+        path = self.completed_execution_crash()
+        execution = json.loads((path / 'candidates/001/execution.json').read_text())
+        self.assertEqual(execution['status'], 'completed')
+        with patch('subprocess.Popen', side_effect=AssertionError('Completed recovery must not launch another Solver')):
+            result = resume_run(path)
+        self.assertEqual(result.status, 'completed', json.loads((path / 'bundle.json').read_text()).get('error'))
+        bundle = json.loads((path / 'bundle.json').read_text())
+        self.assertEqual(bundle['solve_result_ref'], execution['solve_result_ref'])
+        self.assertEqual(json.loads((path / bundle['solve_result_ref']['relative_path']).read_text())['objective_value'], 13)
+        self.assertEqual(json.loads((path / 'budget-ledger.json').read_text())['solver_calls'], 1)
+        events = [json.loads(line) for line in (path / 'events.jsonl').read_text().splitlines()]
+        self.assertEqual(sum(event['kind'] == 'solver_started' for event in events), 1)
+        self.assertEqual(sum(event['kind'] == 'execution_reused' for event in events), 1)
+
+    def test_completed_execution_receipt_survives_repeated_failed_resume(self):
+        path = self.completed_execution_crash()
+        problem = self.inputs / 'problem.json'
+        original = problem.read_bytes()
+        problem.write_bytes(original + b' ')
+        for _ in range(2):
+            with self.assertRaises(RunError) as caught:
+                resume_run(path)
+            self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
+        problem.write_bytes(original)
+        result = resume_run(path)
+        self.assertEqual(result.status, 'completed')
+        self.assertEqual(json.loads((path / 'budget-ledger.json').read_text())['solver_calls'], 1)
+        self.assertEqual(json.loads((path / 'candidates/001/solve-result.json').read_text())['objective_value'], 13)
+
+    def test_completed_execution_requires_actual_immutable_result_bytes(self):
+        path = self.completed_execution_crash()
+        execution = json.loads((path / 'candidates/001/execution.json').read_text())
+        immutable = path / execution['solve_result_ref']['relative_path']
+        original = immutable.read_bytes()
+        immutable.write_bytes(original + b' ')
+        with self.assertRaises(RunError) as caught:
+            resume_run(path)
+        self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
+        immutable.write_bytes(original)
+        self.assertEqual(resume_run(path).status, 'completed')
+
+    def test_completed_execution_receipt_commit_interruption_remains_recoverable(self):
+        from unittest.mock import patch
+        path = self.completed_execution_crash()
+        replace = os.replace
+        def interrupt_receipt(source, target, *args, **kwargs):
+            result = replace(source, target, *args, **kwargs)
+            try:
+                record = json.loads(Path(target).read_text())
+            except (OSError, ValueError):
+                return result
+            if 'checkpoints' not in Path(target).parts and record.get('payload', {}).get('interrupted_publications'):
+                raise OSError('Synthetic interruption after durable receipt commit')
+            return result
+        with patch('os.replace', side_effect=interrupt_receipt):
+            with self.assertRaises(RunError) as caught:
+                resume_run(path)
+        self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
+        self.assertEqual(resume_run(path).status, 'completed')
+        self.assertEqual(json.loads((path / 'budget-ledger.json').read_text())['solver_calls'], 1)
+
+    def test_unrecorded_completed_public_execution_cannot_replace_solver_evidence(self):
+        path = self.completed_execution_crash()
+        projection = path / 'candidates/001/execution.json'
+        original = projection.read_bytes()
+        execution = json.loads(original)
+        execution['solve_result_ref']['sha256'] = '0' * 64
+        projection.write_text(json.dumps(execution))
+        with self.assertRaises(RunError) as caught:
+            resume_run(path)
+        self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
+        projection.write_bytes(original)
+        self.assertEqual(resume_run(path).status, 'completed')
+
+    def test_completed_execution_rejects_foreign_binding_with_consistent_publication_hashes(self):
+        import hashlib
+        from unittest.mock import patch
+        path = self.completed_execution_crash()
+        name = 'candidates/001/execution.json'
+        execution = json.loads((path / name).read_text())
+        checkpoint = json.loads((path / 'checkpoint.json').read_text())['payload']
+        execution['input_artifact_ref'] = checkpoint['projections']['candidates/001/formulation-snapshot.json']
+        raw = (json.dumps(execution, ensure_ascii=False, indent=2) + '\n').encode()
+        publication = json.loads((path / 'publication.json').read_text())
+        ref = publication['projections'][name][-1]
+        ref.update(sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
+        ref['relative_path'] = 'history/' + ref['sha256'] + '/' + name
+        immutable = path / ref['relative_path']
+        immutable.parent.mkdir(parents=True)
+        immutable.write_bytes(raw)
+        (path / name).write_bytes(raw)
+        (path / 'publication.json').write_text(json.dumps(publication))
+        with patch('subprocess.Popen', side_effect=AssertionError('Binding rejection must precede resources')):
+            with self.assertRaises(RunError) as caught:
+                resume_run(path)
+        self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
+
+    def test_completed_execution_projection_preserves_factory_and_native_binding(self):
+        import yaml
+        from llm4om.executors import DEFAULT_IMAGE
+        from test_factory_run import FactoryRunTests
+        for mode, filename in (('python_factory', 'production.py'), ('native_gurobipy', 'production_gurobi.py')):
+            with self.subTest(mode=mode):
+                self.config = yaml.safe_load((self.inputs / 'run.yaml').read_text())
+                self.config['method']['config']['output_mode'] = mode
+                self.config['executor']['config']['image'] = os.environ.get('S04B_WORKER_IMAGE', DEFAULT_IMAGE)
+                if mode == 'native_gurobipy':
+                    self.config['model_backend']['plugin_id'] = 'llm4om.model_backends.gurobipy'
+                    self.config['solver']['plugin_id'] = 'llm4om.solvers.gurobi'
+                FactoryRunTests.start_provider(self, (ROOT / 'examples/factories' / filename).read_text())
+                if mode == 'native_gurobipy':
+                    self.reply[mode] = self.reply.pop('python_factory')
+                config = self.inputs / (mode + '.yaml')
+                config.write_text(yaml.safe_dump(self.config))
+                os.environ['S02B_FIXTURE_KEY'] = 'synthetic-fixture'
+                self.addCleanup(os.environ.pop, 'S02B_FIXTURE_KEY', None)
+                path = self.completed_execution_crash(config)
+                execution = json.loads((path / 'candidates/001/execution.json').read_text())
+                process = subprocess.run([sys.executable, '-m', 'llm4om', 'resume', '--run-id', path.name,
+                    '--output', str(path.parent)], capture_output=True, text=True, timeout=30)
+                self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+                bundle = json.loads((path / 'bundle.json').read_text())
+                self.assertEqual(bundle['model_artifact_ref'], execution['artifact_ref'])
+                self.assertEqual(bundle['solve_result_ref'], execution['solve_result_ref'])
+                artifact = json.loads((path / bundle['model_artifact_ref']['relative_path']).read_text())
+                self.assertEqual(artifact['optional_views'][-1]['source_code_ref'], artifact['code_ref'])
+                self.assertEqual(json.loads((path / bundle['solve_result_ref']['relative_path']).read_text())['objective_value'], 13)
+                self.assertEqual(json.loads((path / 'budget-ledger.json').read_text())['solver_calls'], 1)
+                self.assertEqual(len(self.requests), 1)
+                events = [json.loads(line) for line in (path / 'events.jsonl').read_text().splitlines()]
+                self.assertEqual(sum(event['kind'] == 'solver_started' for event in events), 1)
+                self.assertEqual(sum(event['kind'] == 'execution_reused' for event in events), 1)
+
     def test_corrupt_private_head_and_immutable_response_are_refused_before_http(self):
         import hashlib
         path = self.resource_crash('success')
@@ -276,6 +469,25 @@ class CrashResumeTests(unittest.TestCase):
         self.assertEqual(archive.stat().st_mode & 0o777, 0o700)
         self.assertTrue(all(item.stat().st_mode & 0o777 == 0o600
                             for item in archive.rglob('*') if item.is_file()))
+
+    def test_committed_settlement_rejects_valid_older_genesis_head_before_resources(self):
+        from llm4om import run_problem
+        config = self.http_config()
+        result = run_problem(self.inputs / 'problem.json', config, output_root=self.root / 'runs')
+        self.assertEqual(result.status, 'completed')
+        path = result.bundle_path
+        archive = path.parent / '.private' / path.name
+        genesis = next(json.loads(item.read_text())['state'] for item in (archive / 'journal').glob('*.json')
+                       if json.loads(item.read_text())['previous_sha256'] is None)
+        (archive / 'state.json').write_bytes(json.dumps(genesis, allow_nan=False).encode())
+        checkpoint = (path / 'checkpoint.json').read_bytes()
+        events = (path / 'events.jsonl').read_bytes()
+        with self.assertRaises(RunError) as caught:
+            resume_run(path)
+        self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
+        self.assertEqual(len(self.requests), 1)
+        self.assertEqual((path / 'checkpoint.json').read_bytes(), checkpoint)
+        self.assertEqual((path / 'events.jsonl').read_bytes(), events)
 
 
 class DerivedRerunTests(unittest.TestCase):
