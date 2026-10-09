@@ -150,7 +150,7 @@ flowchart LR
     S09B --> S10
 ```
 
-S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。[S02-B](development/s02b-factory.md) 也已完成当前范围。[S06-A](development/s06-gurobi.md) 已完成当前范围。[S04-B](development/s04-resume.md)与 [S05-B](development/s05b-messages.md)已完成当前范围，本机241项集成回归及独立审查通过。[S06-B](development/s06b-optimus.md) 已实现固定源码默认流程，真实模型／Solver 和干净 wheel 安装已验收，263项完整本机回归已通过，独立审阅因本机 Codex CLI 用量上限尚未完成。S07-B/C 已接入并完成本机验收，独立审阅仍待完成。S07-D 原问题检查实现见 [记录](development/s07-checkers.md)。未完成范围仍包括 S05-C/D、S06-C、完整插件／角色路由、S08、S09 与 S10；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
+S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。[S02-B](development/s02b-factory.md) 也已完成当前范围。[S06-A](development/s06-gurobi.md) 已完成当前范围。[S04-B](development/s04-resume.md)与 [S05-B](development/s05b-messages.md)已完成当前范围，本机241项集成回归及独立审查通过。[S06-B](development/s06b-optimus.md) 已实现固定源码默认流程，真实模型／Solver 和干净 wheel 安装已验收，263项完整本机回归已通过，独立审阅因本机 Codex CLI 用量上限尚未完成。S07-B/C 已接入并完成本机验收，独立审阅仍待完成。S07-D 原问题检查实现见 [记录](development/s07-checkers.md)。[S06-C](development/s06-coe.md) 已通过真实模型、独立原问题检查和306项本机回归，独立审阅仍待完成。未完成范围仍包括 S05-C/D、完整插件／角色路由、S08、S09 与 S10；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
 
 ## 5. 工程默认值与完成边界
 

@@ -1,6 +1,6 @@
 # S06-C CoE 实现
 
-状态：SDK／Worker0.13.0 开发中；[#28](https://github.com/Fangziyang0910/LLM4OM/issues/28)。基线9451afa的0.12.0已通过290项本机回归。规范见 [插件契约](../plugin-contracts.md)、[评测协议](../evaluation.md)与 [固定源码考察](s06c-coe-source.md)。此文件区分已实现行为与尚未完成的交付验收。
+状态：SDK／Worker0.13.0 本机实现验收通过，独立审阅待完成；[#28](https://github.com/Fangziyang0910/LLM4OM/issues/28)。基线9451afa的0.12.0已通过290项本机回归。规范见 [插件契约](../plugin-contracts.md)、[评测协议](../evaluation.md)与 [固定源码考察](s06c-coe-source.md)。此文件区分已实现行为与尚未完成的交付验收。
 
 当前保留7个专家、动态 conductor、顺序评论、reducer、可选公开测试和反向追责。匹配先扫描尚未参与的名称，再扫描整个注册表；允许重复专家。无效路由使用记录 seed 的随机回退。下一轮重新建立评论池，反思修改不重新执行 reducer。最后选择实际最后一次 reducer 原生代码，保留未执行的反思结果。
 
@@ -22,8 +22,10 @@
 
 本机6项公共 Method／Context tape测试覆盖动态／重复／无效路由、代码提取、反向追责、解析失败、首次公开通过和下一轮清空评论。合成 HTTP＋实际 Gurobi测试覆盖原生函数、目标12、缺 Formulation、无模型的伪返回值、profile／预算拒绝、反思再试、非 prob_*、最终失败、自然语言默认接口、capacity7测试与capacity4原任务分离、取消与完整 Code 崩溃恢复。OptiMUS9项流程回归通过。
 
-这些结果不代表真实模型质量。0.13.0的6项方法 tape与10项实际 HTTP／Gurobi聚焦测试通过；源码／Worker身份一致。真实指定模型与原问题独立检查已通过。干净 wheel和一次完整本机回归正在验收。独立 Standards／Spec 审阅仍受本机 CLI 配额限制；不得将父自查当作独立审阅。GitHub Actions仅手动补充；本切片未触发远程 CI、发布包或改变私有可见性。完整1.0仍包括后续修正／澄清、角色配置、批量实验、Web和发布验收。
+这些结果不代表真实模型质量。0.13.0的6项方法 tape与10项实际 HTTP／Gurobi聚焦测试通过；源码／Worker身份一致。真实指定模型与原问题独立检查已通过。干净 Python3.11 wheel的10项应用测试／70.573秒通过；Python3.12.11完整本机回归306项／702.09秒通过。mypy32个模块、仓库179文件、参考资料／diff和wheel／sdist检查通过。独立 Standards／Spec 审阅仍受本机 CLI 配额限制；不得将父自查当作独立审阅。GitHub Actions仅手动补充；本切片未触发远程 CI、发布包或改变私有可见性。完整1.0仍包括后续修正／澄清、角色配置、批量实验、Web和发布验收。
 
 真实 run `f50a813f8da54e8aaad5db4db37ca25e` 使用指定 deepseek-v4-pro-0813，11次调用／12695个已报告 token，成本未知。公开测试生成器加入了多余的 description 参数，公开调用失败且反思耗尽；该状态未改写为通过。实际最后 reducer代码按原接口／原参数执行，独立 Gurobi得到 qty_A=3、qty_B=2；原始 CSV检查器确认整数域、全部容量和原利润13。两个结论分别报告，不能用最终解正确来宣称公开测试生成或整个模型语义已验证。
 
 实际模型输入未包含私有参考目标、决策映射或性质点；检查器只在最终选定输出后运行。原生 Code 的有限 IR性质检查为 not_available。固定源码直接运行／精确提示对照仍为not_available；独立编写的流程与公开 transition tapes不标为原源码运行。完整材料在 `/tmp/llm4om-s06c-implementation/real-acceptance/verification.json`。
+
+已验收代码 hash为 `036b919517a6fbe383245ad9d021f67bdc92708a06df6fa98d4cf6a8a4ce36df`，源码／wheel／Worker一致。镜像 `sha256:fcfa48c9913d9e0ca9e419ed1b385a27609072a28e7aac5066db220ead4d8afe`；旧0.12.0镜像保留。真实运行的无密钥CLI resume保持调用与预算账本不变。179个源文件、154个公开运行文件与wheel通过实际密钥扫描；私有oracle不进入方法提示或Worker。完整本机日志在 `/tmp/llm4om-s06c-implementation/verification.json` 及其相邻文件，不提交运行数据。
