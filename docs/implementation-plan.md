@@ -159,3 +159,5 @@ S01 采用 Python 3.11／3.12、标准库 argparse／dataclass／unittest，以�
 LLMOPT 等训练类工作的流程／提示变体、MCTS autoformulation、ORPilot、IndustryOR／OptMATH 及 NLP／CP 留待首批契约被真实验证后扩展。每个新增方法、Solver 或 benchmark 都需要声明实际支持组合与来源。
 
 S07-C 当前已贯通固定 MAMO 导入、公开资格冻结与单样本数值比较；已完成规范来源的真实 HiGHS 微型验收，包／Worker／干净 wheel 安装及268项本机完整回归已通过，独立审阅仍待完成。见 [实现记录](development/s07-mamo.md)，Issue22 保持打开。
+
+S07-B 当前已贯通 NLP4LP 固定发布导入、公开 JSON 参数／私有参考隔离与资格冻结；361个原始问题完整导入，322／37／2参考可用性分别记录。真实指定模型与完整本机验收仍待完成。见 [实现记录](development/s07-nlp4lp.md)，Issue21 保持打开。

@@ -3,7 +3,6 @@
 import hashlib
 import math
 from collections.abc import Iterator
-from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 import shutil
 import tempfile
@@ -24,48 +23,9 @@ SOURCE_FILES = {
     "ode": ("data/ode/mamo_ode.jsonl", "e877c8e12add7ec6b528e3cd64d83d48dac019f9d3f09327f803f802ef015dfa", 346),
 }
 LICENSE_HASH = "187442db4df3afd21f2f0525739fd4beac28a62daaba3ee8d3533f60e7c33ec7"
-ROUNDING_SCHEMA = {"oneOf": [
-    {"type": "object", "additionalProperties": False, "required": ["kind", "decimal_places"],
-     "properties": {"kind": {"const": "none"}, "decimal_places": {"type": "null"}}},
-    {"type": "object", "additionalProperties": False, "required": ["kind", "decimal_places"],
-     "properties": {"kind": {"const": "decimal_half_away_from_zero"},
-                    "decimal_places": {"type": "integer", "minimum": 0, "maximum": 12}}}]}
-REVIEW_SCHEMA = {"type": "object", "additionalProperties": False, "required": [
-    "subset", "sample_id", "question_sha256", "classification", "domain_policy", "rounding_policy",
-    "evidence", "reviewer", "reason"], "properties": {
-    "subset": {"enum": ["easy_lp", "complex_lp"]},
-    "sample_id": {"type": "string", "pattern": "^[1-9][0-9]*$"},
-    "question_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "classification": {"enum": ["lp", "milp", "unsupported", "unresolved"]},
-    "domain_policy": {"type": ["null", "string"]},
-    "rounding_policy": {"anyOf": [ROUNDING_SCHEMA, {"type": "null"}]},
-    "evidence": {"type": "array", "minItems": 1, "items": {
-        "type": "object", "additionalProperties": False, "required": ["aspect", "start", "end", "text"],
-        "properties": {"aspect": {"enum": ["problem_type", "variable_domains", "rounding"]},
-                       "start": {"type": "integer", "minimum": 0}, "end": {"type": "integer", "minimum": 1},
-                       "text": {"type": "string", "minLength": 1}}}},
-    "reviewer": {"type": "string", "minLength": 1}, "reason": {"type": ["null", "string"]}}}
+from llm4om.task_policy import review_schema, _review_shape, _review_policy, supplied_numeric_match
 
-
-def _review_shape(review: dict[str, Any]) -> None:
-    jsonschema.Draft202012Validator(REVIEW_SCHEMA).validate(review)
-    if review["classification"] in ("lp", "milp"):
-        if (not isinstance(review["domain_policy"], str) or not review["domain_policy"].strip()
-                or review["rounding_policy"] is None or review["reason"] is not None
-                or {span["aspect"] for span in review["evidence"]} != {"problem_type", "variable_domains", "rounding"}):
-            raise ValueError("Supported review needs explicit domains, rounding and all public evidence aspects.")
-    elif not isinstance(review["reason"], str) or not review["reason"].strip():
-        raise ValueError("Unsupported/unresolved review requires a reason.")
-
-
-def _review_policy(review: dict[str, Any], question: str) -> None:
-    _review_shape(review)
-    if review["question_sha256"] != hashlib.sha256(question.encode()).hexdigest():
-        raise ValueError("Review belongs to another public question.")
-    for span in review["evidence"]:
-        if not 0 <= span["start"] < span["end"] <= len(question) or question[span["start"]:span["end"]] != span["text"]:
-            raise ValueError("Review evidence is not an exact public question span.")
-
+REVIEW_SCHEMA = review_schema(("easy_lp", "complex_lp"))
 
 def import_mamo(config: Path, output: Path, settings: dict[str, Any]) -> Path:
     """Validate source and policy before publishing one immutable snapshot."""
@@ -326,14 +286,8 @@ class MAMOEvaluator:
             primal = observed["candidate_primal"]
             if not entry["eligible"] or primal["status"] != "available" or observed["case_binding"]["status"] != "pass":
                 return
-            candidate = Decimal(str(primal["reported_objective"]))
-            reference = Decimal(record["Answer"])
-            rounding = review["rounding_policy"]
-            if rounding["kind"] == "decimal_half_away_from_zero":
-                unit = Decimal(1).scaleb(-rounding["decimal_places"])
-                candidate = candidate.quantize(unit, rounding=ROUND_HALF_UP)
-            tolerance = policy["tolerance"]
-            matched = abs(candidate - reference) <= Decimal(str(tolerance["abs_tol"])) + Decimal(str(tolerance["rel_tol"])) * abs(reference)
+            matched = supplied_numeric_match(primal["reported_objective"], record["Answer"],
+                review["rounding_policy"], policy["tolerance"])
             observed["objective_match"] = {"status": "pass" if matched else "fail", "level": "supplied_numeric_reference_match"}
             observed["objective_match_numerator"] = int(matched)
             observed["objective_match_rate"] = float(matched)

@@ -91,6 +91,9 @@ def import_dataset(config: Path, output: Path) -> Path:
     if adapter == "llm4om.tasks.mamo":
         from llm4om.mamo import import_mamo
         return import_mamo(config, output, settings)
+    if adapter == "llm4om.tasks.nlp4lp":
+        from llm4om.nlp4lp import import_nlp4lp
+        return import_nlp4lp(config, output, settings)
     if adapter != "llm4om.tasks.nl4opt":
         raise RunError("invalid_task_config", "import", "Unknown task adapter.")
     return _import_nl4opt(config, output, settings)

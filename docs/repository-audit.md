@@ -193,3 +193,9 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/mamo.py` | MAMO 固定来源投影、公开资格评阅与私有数值比较 | SDK／CLI、原始 hash／ID／许可、真实 HiGHS、舍入／零答案／失败分母 |
 | `tests/test_mamo.py` | MAMO Task／Evaluation 公开行为测试 | 导入隔离、选择／资格、损坏／缺失、真实求解与数值协议边界 |
 | `docs/development/s07-mamo.md` | S07-C 实现与实际验收记录 | 来源／协议／真实 Solver 微型证据与剩余检查明确区分 |
+
+| `src/llm4om/nlp4lp.py` | 固定 NLP4LP 导入、公开参数与私有参考、资格与数值评测 | 真实来源／ID／hash／类型／缺失损坏，SDK／CLI 与真实 Solver |
+| `src/llm4om/nlp4lp_source.json` | 固定首方发布的自生成 hash／大小／URL 元数据 | 2,127文件固定提交；不含问题、答案或代码内容；固定 manifest hash |
+| `src/llm4om/task_policy.py` | MAMO／NLP4LP 公开数学评阅与数值容差共用规则 | 公共问题／参数绑定、范围／舍入、原始参考不改写；实际边界回归 |
+| `tests/test_nlp4lp.py` | NLP4LP Task／Evaluation 的公开行为验收 | nested JSON／类型／原始 bytes／私有隔离、故障、资格、真实 HiGHS与绑定 |
+| `docs/development/s07-nlp4lp.md` | S07-B 实现与实际证据范围 | 来源／公开私有投影／指标分母／本机验收与剩余条件 |

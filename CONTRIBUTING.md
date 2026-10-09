@@ -51,3 +51,5 @@ Review 分开回答两个问题：Standards 是否符合开发规范和相关契
 技能选择与触发条件见 [任务工作流](docs/agents/workflow.md)。常规实现选择无需额外审批；用户明确指令优先于工程默认值。
 
 S07-C 的 SDK/Worker0.10.0 开发实现、固定数据来源和本机数值验收见 [MAMO 记录](docs/development/s07-mamo.md)。
+
+S07-B 的 SDK/Worker0.11.0 开发实现与固定 NLP4LP 数据、公开参数绑定和私有参考边界见 [实现记录](docs/development/s07-nlp4lp.md)。

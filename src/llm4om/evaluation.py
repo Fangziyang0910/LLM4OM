@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable
 
@@ -70,7 +71,18 @@ def _evaluate_outcome(case: EvaluationCase, outcome: Path, result: dict[str, Any
                     [ref for ref in bundle["artifacts"] if ref["relative_path"] == "public-problem.json"])
         if problems:
             observed = _read_ref(outcome, problems[0])
-            if observed != public:
+            expected = deepcopy(public)
+            if len(observed["data_refs"]) != len(expected["data_refs"]):
+                raise RunError("outcome_case_mismatch", "evaluation", "Public data references differ from the frozen case.")
+            for original, bound in zip(expected["data_refs"], observed["data_refs"]):
+                source_data = public_path(case.public_problem.parent, original["path"]).read_bytes()
+                run_data = public_path(outcome, bound["path"]).read_bytes()
+                if (source_data != run_data or hashlib.sha256(source_data).hexdigest() != original["sha256"]
+                        or {key: value for key, value in original.items() if key != "path"} !=
+                           {key: value for key, value in bound.items() if key != "path"}):
+                    raise RunError("outcome_case_mismatch", "evaluation", "Run data do not match exact frozen public bytes and schema.")
+                original["path"] = bound["path"]
+            if observed != expected:
                 raise RunError("outcome_case_mismatch", "evaluation", "Run belongs to another public problem revision.")
             result["case_binding"] = {"status": "pass"}
         elif bundle["status"] not in {"failed", "cancelled"}:
@@ -115,9 +127,12 @@ def evaluate_case(manifest: Path, case_id: str, outcome: Path, output: Path) -> 
     from llm4om.tasks import NL4OptAdapter
 
     from llm4om.mamo import MAMOAdapter, MAMOEvaluator
+    from llm4om.nlp4lp import NLP4LPAdapter, NLP4LPEvaluator
     adapter_id = parse_reference_json(manifest.read_bytes()).get("adapter_id")
-    adapters: dict[str, type[TaskAdapter]] = {"llm4om.tasks.nl4opt": NL4OptAdapter, "llm4om.tasks.mamo": MAMOAdapter}
-    evaluators: dict[str, type[Evaluator]] = {"llm4om.tasks.nl4opt": NL4OptEvaluator, "llm4om.tasks.mamo": MAMOEvaluator}
+    adapters: dict[str, type[TaskAdapter]] = {"llm4om.tasks.nl4opt": NL4OptAdapter, "llm4om.tasks.mamo": MAMOAdapter,
+                                          "llm4om.tasks.nlp4lp": NLP4LPAdapter}
+    evaluators: dict[str, type[Evaluator]] = {"llm4om.tasks.nl4opt": NL4OptEvaluator, "llm4om.tasks.mamo": MAMOEvaluator,
+                                          "llm4om.tasks.nlp4lp": NLP4LPEvaluator}
     if adapter_id not in adapters:
         raise RunError("invalid_manifest", "evaluation", "Unknown task adapter.")
     case = adapters[adapter_id]().load_case(manifest, case_id)

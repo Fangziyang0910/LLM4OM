@@ -779,3 +779,56 @@ objective_match_denominator (1 for an eligible case, otherwise0), and a case
 objective_match_rate. Failed generation, execution and checker attempts keep
 that denominator with numerator0. This is not the global experiment rate;
 S08 aggregation must use the complete frozen selection and retain failures.
+
+## 16. S07-B NLP4LP Task interface (SDK 0.11.0)
+
+Status: development interface; evidence/pending acceptance is recorded in
+[S07-B](development/s07-nlp4lp.md). NL4Opt0.1 and MAMO0.2 protocols stay valid.
+
+NLP4LP import config0.2.0 contains adapter_id=llm4om.tasks.nlp4lp, dataset_id,
+source_kind (official/fixture/fork), source_version, release_root, sha256,
+reviews, selected and tolerance. The local release directory contains train.jsonl,
+source README and per-instance data/<original-id> files. Official identity pins
+the release commit, aggregate hash and all2,127-file hashes/sizes. No network
+fetch/access acceptance occurs. Fixtures/forks use distinct IDs/versions.
+
+Public projection: public/<id>.json ProblemSpec0.3.0 plus exact concrete
+public/params-<id>.json bytes. data_id=parameters, format=json, schema.type=object,
+SHA-256 and a problem-relative path bind them. Source scalar/list/dictionary/string
+values retain types. Source reference definitions do not supply public metadata.
+Private records and original aggregate/per-instance bytes preserve code,
+problem_info, keywords, parametrized_description and nested solutions. The
+source card/attribution is separate from SDK code licensing and must accompany
+permitted public projections. The SDK ships only source hash metadata.
+
+Manifest0.2.0 identifies original ID/difficulty/line/record/description/data hashes,
+source consistency, private refs, reference_quality and reference_diagnostic.
+reference_counts uses available_unverified/missing_solution/invalid_solution.
+The fixed release is361records with322/37/2 in those categories. Malformed private
+solutions remain diagnostics; no public question is removed for that reason.
+A decoded objective/vector is not an optimum/feasibility certificate.
+
+The shared public review schema supports subset=train and also requires
+public data_sha256, data_binding_policy and a data_binding evidence aspect.
+Review binds exact description/data and declares domains/rounding/reasons.
+selected=null selects all original IDs; an explicit list uses the original ID
+strings. N_imported/N_selected/N_eligible are frozen before modeling; numeric
+eligibility additionally requires an available supplied reference. Unknown
+classification/bindings and unsupported structure cannot acquire LP/MILP status
+from difficulty labels. NLP4LPAdapter implements the same selected iteration/
+load_case interface as the other tasks.
+
+NLP4LPEvaluator uses llm4om.eval.nlp4lp-supplied-v0.1. Common case/run checks
+verify all public artifacts and frozen source data; copied run data paths can
+differ only with identical bytes/hash/schema and problem identity. Grading
+occurs after model selection and verifies private source material separately.
+Objective match uses the shared abs+relative tolerance and candidate-only
+rounding rule. Public result records availability, binding policy, unknown
+vector mapping/independent feasibility/semantic evidence, and case numerator/
+denominator. It does not expose private values/vectors/code or collapse missing
+reference, model failure and checker failure into one success flag. Complete
+experiment aggregation remains S08; one case rate is not a full benchmark rate.
+
+Direct prompts now describe provided CSV/JSON data and the public problem;
+factory Code parses the declared raw-byte format. This does not introduce
+JSON column metadata or prove per-parameter mathematical binding automatically.

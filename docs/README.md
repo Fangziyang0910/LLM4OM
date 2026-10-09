@@ -60,3 +60,5 @@ S06-C 的固定角色路由、反思与原生函数输出见 [CoE 源码研究](
 S05-B 的协议与现有服务可用性见 [Anthropic Messages 考察](development/s05b-anthropic-research.md)；实际 Provider 接入仍待开发。
 
 MAMO 固定优化问题导入及数值比较的开发实现与实际证据见 [S07-C](development/s07-mamo.md)。
+
+NLP4LP 的公开描述／具体 JSON 参数与私有参考分离、实际来源和验收见 [S07-B](development/s07-nlp4lp.md)。

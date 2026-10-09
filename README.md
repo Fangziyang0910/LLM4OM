@@ -161,3 +161,5 @@ Direct 的 `output_mode: native_gurobipy` 对应 gurobipy Backend／Gurobi Solve
 [S06-A 实现记录](docs/development/s06-gurobi.md)与[契约](docs/plugin-contracts.md#11-s06-a-gurobi-and-native-code-sdk-060)。
 
 MAMO Task／Evaluation 已进入 SDK/Worker0.10.0 开发版本：保留全部优化问题、公开题面资格评阅和私有数值答案，单样本失败仍计入分母。实际支持与剩余验收见 [S07-C](docs/development/s07-mamo.md)；全量基准成绩未生成。
+
+NLP4LP Task／Evaluation 已进入 SDK/Worker0.11.0 开发版本：完整保留361个公开描述与参数，参考缺失／损坏分别记录，资格按公开问题与数据评阅冻结。实际支持与待验收条件见 [S07-B](docs/development/s07-nlp4lp.md)。

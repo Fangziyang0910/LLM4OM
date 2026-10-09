@@ -107,7 +107,7 @@ class DirectMethod:
             "IR objective={sense:min|max,expression,requirement_ids}; "
             "IR constraints=[{id,expression,sense:le|ge|eq,rhs,requirement_ids}]. "
             "Each expression={constant:number,terms:[{variable_id,coefficient:number}]}. "
-            "Use finite numeric coefficients grounded in explicit public CSV values. Null means unbounded. "
+            "Ground finite numeric coefficients in the public problem and supplied CSV/JSON values. Preserve data value types. Null means unbounded. "
             "Use only public requirement IDs. assumptions is an array. "
             "Do not generate platform IDs, references, hashes, provenance, code, or answers. "
             "Five-element text and grounded LPIR must express the same model."
@@ -120,8 +120,8 @@ class DirectMethod:
                 "variables=[{id,index_sets,domain,lower_bound,upper_bound,requirement_ids}], "
                 "objective={sense:min|max,expression_text,requirement_ids}, "
                 "constraints=[{id,expression_text,requirement_ids}]. "
-                "Use parameterized expressions referring to public CSV columns, not stale literal data. "
-                "python_factory defines build_model(data), where data maps each public data_id to raw CSV bytes. "
+                "Use parameterized expressions grounded in the public problem and provided data, not stale literal data. "
+                "python_factory defines build_model(data), where data maps each public data_id to raw CSV/JSON bytes. Parse the declared format. "
                 "Build a concrete Pyomo LP/MILP, and return llm4om.backends.ModelHandle(model, decision_map). "
                 "decision_map maps explicit stable decision IDs to every scalar Pyomo variable, one to one. "
                 "Only real/integer/binary interval domains and finite linear expressions are supported. "
@@ -196,7 +196,7 @@ class DirectFactory:
     def describe(self) -> dict[str, Any]:
         return {
             "schema_version": "0.2.0", "plugin_id": "llm4om.methods.direct", "kind": "method",
-            "plugin_version": "0.10.0", "contract_range": ">=0.2.0,<0.3.0",
+            "plugin_version": "0.11.0", "contract_range": ">=0.2.0,<0.3.0",
             "display_name": "Direct (declared text output)",
             "description": "One public text response produces a five-element Formulation with grounded LPIR or parameterized Python factory.",
             "capabilities": {"method_profile": "grounded_single_candidate/0.1.0", "problem_types": ["lp", "milp"],
