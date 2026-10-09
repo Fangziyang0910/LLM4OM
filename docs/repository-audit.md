@@ -148,3 +148,4 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/specs/gurobi.yaml` | 当前可运行人工 Mock LPIR→容器 Gurobi 配置 | doctor/run 目标13；实际 size_limited，不调用外部 LLM |
 | `docs/development/s06-gurobi.md` | S06-A 实现、支持矩阵和真实环境边界 | CLI/SDK、Backend/Solver 与 Executor 本地验收，报告／证据在任务目录 |
 | `docs/development/s07-benchmark-research.md` | S07-B/C NLP4LP／MAMO 固定来源与字段考察 | 实际提交、文件 hash、样本数量、公开／私有投影、参考损坏与评测边界；尚未集成 |
+| `docs/development/s06b-optimus-source.md` | 固定 OptiMUS 0.3 主流程、提示、原生输出与适配接缝研究 | 19 份源码／文档 hash、16 份检索资源 hash、真实默认模式与 paper/source 区分；未集成 |

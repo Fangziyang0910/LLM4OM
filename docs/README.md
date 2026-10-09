@@ -52,3 +52,5 @@ LLM4OM 面向自动优化建模研究者和开发者。核心用例是输入自�
 S06-A 微型真实 Gurobi／native 路径与限制见 [实现记录](development/s06-gurobi.md)。
 
 S07-B/C 的固定数据格式与参考可用性见 [来源考察](development/s07-benchmark-research.md)；此记录不是已集成声明。
+
+S06-B 的完整固定上游流程与接入接缝见 [OptiMUS 源码研究](development/s06b-optimus-source.md)；方法接入与真实 reference run 尚待实现。
