@@ -11,9 +11,10 @@ from time import monotonic
 from pathlib import Path
 from unittest.mock import patch
 
+from llm4om.executors import DEFAULT_IMAGE
 
 class ContainerExecutorTests(unittest.TestCase):
-    image = "python@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f"
+    image = DEFAULT_IMAGE
 
     def test_invalid_requests_are_rejected_before_contacting_docker(self) -> None:
         from llm4om.contracts import RunError
@@ -284,7 +285,7 @@ except RunError as error:
         from llm4om.executors import run_container
         execution = run_container(["python", "-I", "-m", "llm4om.worker", "--runtime"], {}, {
             "network": False, "cpu_limit": 1, "memory_limit_mb": 256, "wall_time_s": 10},
-            image="llm4om-worker:0.3.0")
+            image=self.image)
         self.assertEqual(execution.status, "completed")
         self.assertEqual(execution.exit_code, 0)
         self.assertEqual(json.loads(execution.stdout)["schema_version"], "0.2.0")
