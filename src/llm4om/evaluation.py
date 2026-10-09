@@ -44,14 +44,18 @@ class NL4OptEvaluator:
             "execution": {"status": "not_available"}, "candidate_primal": {"status": "not_available"},
             "case_binding": {"status": "not_available"}, "run_id": None, "run_status": "unknown", "run_error": None, "checker_error": None,
         }
-        return _evaluate_outcome(case, outcome, result)
+        return evaluate_outcome(case, outcome, result)
 
 
-def _evaluate_outcome(case: EvaluationCase, outcome: Path, result: dict[str, Any],
+def evaluate_outcome(case: EvaluationCase, outcome: Path, result: dict[str, Any],
                       reference_check: Callable[[dict[str, Any], dict[str, Any], dict[str, Any]], None] | None = None) -> dict[str, Any]:
     """Verify frozen material and actual outcome before privileged scoring."""
     entry = parse_reference_json(case.entry)
     try:
+        bundle = parse_json((outcome / "bundle.json").read_bytes())
+        if bundle.get("schema_version") != "0.2.0" or bundle.get("status") not in {"failed", "cancelled", "completed", "artifact_ready"}:
+            raise RunError("invalid_outcome", "evaluation", "Unsupported application outcome schema or status.")
+        result.update(run_id=bundle["run_id"], run_status=bundle["status"], run_error=bundle["error"])
         public = _read_ref(case.public_problem.parent.parent, entry["public_ref"])
         if public["problem_id"] != case.case_id:
             raise RunError("case_identity_mismatch", "evaluation", "Public problem differs from the selected case.")
@@ -59,10 +63,6 @@ def _evaluate_outcome(case: EvaluationCase, outcome: Path, result: dict[str, Any
         if (hashlib.sha256(oracle_raw).hexdigest() != entry["oracle_ref"]["sha256"]
                 or len(oracle_raw) != entry["oracle_ref"]["size_bytes"]):
             raise RunError("snapshot_hash_mismatch", "evaluation", "Private annotations changed after import.")
-        bundle = parse_json((outcome / "bundle.json").read_bytes())
-        if bundle.get("schema_version") != "0.2.0" or bundle.get("status") not in {"failed", "cancelled", "completed", "artifact_ready"}:
-            raise RunError("invalid_outcome", "evaluation", "Unsupported application outcome schema or status.")
-        result.update(run_id=bundle["run_id"], run_status=bundle["status"], run_error=bundle["error"])
         for ref in bundle["artifacts"]:
             _verify_ref(outcome, ref)
         for name, ref in bundle.get("public_projections", {}).items():
@@ -124,20 +124,15 @@ def _evaluate_outcome(case: EvaluationCase, outcome: Path, result: dict[str, Any
 
 def evaluate_case(manifest: Path, case_id: str, outcome: Path, output: Path) -> dict[str, Any]:
     """Persist one public evaluation result without exporting oracle references."""
-    from llm4om.tasks import NL4OptAdapter
-
-    from llm4om.mamo import MAMOAdapter, MAMOEvaluator
-    from llm4om.nlp4lp import NLP4LPAdapter, NLP4LPEvaluator
-    from llm4om.checker_tasks import CheckerFixtureAdapter, IndependentCheckerEvaluator
-    adapter_id = parse_reference_json(manifest.read_bytes()).get("adapter_id")
-    adapters: dict[str, type[TaskAdapter]] = {"llm4om.tasks.nl4opt": NL4OptAdapter, "llm4om.tasks.mamo": MAMOAdapter,
-                                          "llm4om.tasks.nlp4lp": NLP4LPAdapter, "llm4om.tasks.checker_fixture": CheckerFixtureAdapter}
-    evaluators: dict[str, type[Evaluator]] = {"llm4om.tasks.nl4opt": NL4OptEvaluator, "llm4om.tasks.mamo": MAMOEvaluator,
-                                          "llm4om.tasks.nlp4lp": NLP4LPEvaluator, "llm4om.tasks.checker_fixture": IndependentCheckerEvaluator}
-    if adapter_id not in adapters:
-        raise RunError("invalid_manifest", "evaluation", "Unknown task adapter.")
-    case = adapters[adapter_id]().load_case(manifest, case_id)
-    result = evaluators[adapter_id]().evaluate(case, outcome)
+    from llm4om.task_plugins import load_registered_case, validate_evaluation_result, _call
+    plugin, evaluator, case, identity = load_registered_case(manifest, case_id)
+    try:
+        result = _call(plugin, lambda: evaluator.evaluate(case, outcome), "evaluation")
+    except RunError as error:
+        from llm4om.task_plugins import evaluation_error
+        result = evaluation_error(case, outcome, plugin, error)
+    validate_evaluation_result(result, case, plugin, outcome)
+    result["plugin_identity"] = identity
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("x", encoding="utf-8") as stream:
         stream.write(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + "\n")

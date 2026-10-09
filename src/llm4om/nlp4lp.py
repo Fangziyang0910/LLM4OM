@@ -14,9 +14,9 @@ import jsonschema
 
 from llm4om.contracts import RunError, parse_json, parse_reference_json, public_path, validate_problem
 from llm4om.storage import RunStore
-from llm4om.tasks import _json, _FrozenTaskAdapter, EvaluationCase
+from llm4om.tasks import _json, FrozenTaskAdapter, EvaluationCase
 from llm4om.task_policy import review_schema, _review_policy, _review_shape, supplied_numeric_match
-from llm4om.evaluation import _evaluate_outcome, _verify_ref
+from llm4om.evaluation import evaluate_outcome, _verify_ref
 
 COMMIT = "f0f2abb5d4fa01812ab2c818dd350f6c34041d15"
 TRAIN_HASH = "84dbed2b8f27c10f94718c93bdc9608d606dffc56139021a859ee1e45bc0619f"
@@ -221,7 +221,10 @@ def import_nlp4lp(config: Path, output: Path, settings: dict[str, Any]) -> Path:
     return output.resolve() / "manifest.json"
 
 
-class NLP4LPAdapter(_FrozenTaskAdapter):
+class NLP4LPAdapter(FrozenTaskAdapter):
+    def import_source(self, config: Path, output: Path, settings: dict[str, Any]) -> Path:
+        return import_nlp4lp(config, output, settings)
+
     def iter_cases(self, config: Path) -> Iterator[EvaluationCase]:
         for case in super().iter_cases(config):
             entry = parse_reference_json(case.entry)
@@ -342,4 +345,4 @@ class NLP4LPEvaluator:
             observed["objective_match_numerator"] = int(matched)
             observed["objective_match_rate"] = float(matched)
 
-        return _evaluate_outcome(case, outcome, result, compare)
+        return evaluate_outcome(case, outcome, result, compare)

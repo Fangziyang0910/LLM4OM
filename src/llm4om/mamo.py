@@ -12,8 +12,8 @@ import jsonschema
 
 from llm4om.contracts import RunError, parse_reference_json, public_path, validate_problem
 from llm4om.storage import RunStore
-from llm4om.tasks import _json, _FrozenTaskAdapter, EvaluationCase
-from llm4om.evaluation import _evaluate_outcome, _verify_ref
+from llm4om.tasks import _json, FrozenTaskAdapter, EvaluationCase
+from llm4om.evaluation import evaluate_outcome, _verify_ref
 
 COMMIT = "2c91069dee5c1e4db4b899eb176ec987d0251bb3"
 PROTOCOL = "llm4om.eval.mamo-numeric-v0.1"
@@ -182,7 +182,10 @@ def import_mamo(config: Path, output: Path, settings: dict[str, Any]) -> Path:
     return output.resolve() / "manifest.json"
 
 
-class MAMOAdapter(_FrozenTaskAdapter):
+class MAMOAdapter(FrozenTaskAdapter):
+    def import_source(self, config: Path, output: Path, settings: dict[str, Any]) -> Path:
+        return import_mamo(config, output, settings)
+
     def iter_cases(self, config: Path) -> Iterator[EvaluationCase]:
         for case in super().iter_cases(config):
             entry = parse_reference_json(case.entry)
@@ -292,4 +295,4 @@ class MAMOEvaluator:
             observed["objective_match_numerator"] = int(matched)
             observed["objective_match_rate"] = float(matched)
 
-        return _evaluate_outcome(case, outcome, result, compare)
+        return evaluate_outcome(case, outcome, result, compare)

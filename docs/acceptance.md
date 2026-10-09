@@ -112,3 +112,5 @@ S07-D 的上述原问题反例与证据分层已在本机验收，见 [实现记
 ## S05-C1 开发验收记录
 
 公共候选评估、父子来源链、共享预算和最终执行复用见 [实现记录](development/s05-public-candidates.md)。该组件关联AC-06/07/09/12；修正与声明变化由 [S05-C2](development/s05-feedback-repair.md)验证，澄清由 [S05-D2](development/s05-clarification.md)验证。完整平台发布与独立审阅仍待完成，AC不因单个组件而自动勾选。
+
+S03-C2的独立任务／评估器及冻结身份见 [记录](development/s03-task-registry.md)；完整发布清单不因此自动勾选。

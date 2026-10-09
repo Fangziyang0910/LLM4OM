@@ -15,6 +15,7 @@ from llm4om.evaluation import evaluate_case
 from llm4om.plugins import discover_plugins
 from llm4om.contracts import RunError, read_config
 from llm4om.preflight import prepare_run
+from llm4om.task_plugins import prepare_task
 
 
 def main() -> int:
@@ -46,7 +47,9 @@ def main() -> int:
     plugins = commands.add_parser("plugins", help="Inspect supported installed plugins")
     plugins.add_subparsers(dest="plugin_command", required=True).add_parser("list")
     doctor = commands.add_parser("doctor", help="Check compatibility, installed dependencies and admission without a model request")
-    doctor.add_argument("--config", type=Path, required=True)
+    doctor_config = doctor.add_mutually_exclusive_group(required=True)
+    doctor_config.add_argument("--config", type=Path)
+    doctor_config.add_argument("--task-config", type=Path, help="Preflight Task/Evaluator selections without importing source")
     doctor.add_argument("--offline", action="store_true")
     args = parser.parse_args()
     if args.command == "import":
@@ -80,8 +83,12 @@ def main() -> int:
     if args.command == "doctor":
         report: dict[str, Any] = {"schema_version": "0.2.0", "connectivity_checks": {"status": "not_requested"}}
         try:
-            plan = prepare_run(read_config(args.config), offline=args.offline, config_dir=args.config.parent)
-            report.update(preflight_ok=True, execution_plan=plan.snapshot, error=None)
+            if args.task_config:
+                snapshot = prepare_task(args.task_config)
+            else:
+                plan = prepare_run(read_config(args.config), offline=args.offline, config_dir=args.config.parent)
+                snapshot = plan.snapshot
+            report.update(preflight_ok=True, execution_plan=snapshot, error=None)
         except (RunError, OSError) as error:
             report.update(preflight_ok=False, execution_plan=None, error={
                 "code": error.code if isinstance(error, RunError) else "config_unavailable",

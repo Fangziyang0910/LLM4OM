@@ -76,3 +76,5 @@ CoE流程与真实模型、独立原问题检查的开发证据见 [S06-C](devel
 澄清、确认／修订分离及不可变派生运行见 [S05-D2](development/s05-clarification.md)。
 
 独立文本Provider的注册、预检、实际协议与身份恢复见 [S03-C1](development/s03-provider-registry.md)。
+
+Task／Evaluator的共同注册、评分身份与导入密封见 [S03-C2](development/s03-task-registry.md)。

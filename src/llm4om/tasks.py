@@ -62,6 +62,7 @@ class EvaluationCase:
 
 
 class TaskAdapter(Protocol):
+    def import_source(self, config: Path, output: Path, settings: dict[str, Any]) -> Path: ...
     def iter_cases(self, config: Path) -> Iterator[EvaluationCase]: ...
     def load_case(self, config: Path, case_id: str) -> EvaluationCase: ...
 
@@ -86,20 +87,8 @@ def _validate_source(settings: dict[str, Any]) -> None:
 
 def import_dataset(config: Path, output: Path) -> Path:
     """Freeze a supported local task source through its declared adapter."""
-    settings = read_config(config)
-    adapter = settings.get("adapter_id", "llm4om.tasks.nl4opt")
-    if adapter == "llm4om.tasks.mamo":
-        from llm4om.mamo import import_mamo
-        return import_mamo(config, output, settings)
-    if adapter == "llm4om.tasks.nlp4lp":
-        from llm4om.nlp4lp import import_nlp4lp
-        return import_nlp4lp(config, output, settings)
-    if adapter == "llm4om.tasks.checker_fixture":
-        from llm4om.checker_tasks import import_checker_fixture
-        return import_checker_fixture(config, output, settings)
-    if adapter != "llm4om.tasks.nl4opt":
-        raise RunError("invalid_task_config", "import", "Unknown task adapter.")
-    return _import_nl4opt(config, output, settings)
+    from llm4om.task_plugins import import_registered_task
+    return import_registered_task(config, output)
 
 
 def _import_nl4opt(config: Path, output: Path, settings: dict[str, Any]) -> Path:
@@ -206,7 +195,7 @@ def _import_nl4opt(config: Path, output: Path, settings: dict[str, Any]) -> Path
     return output.resolve() / "manifest.json"
 
 
-class _FrozenTaskAdapter:
+class FrozenTaskAdapter:
     def iter_cases(self, config: Path) -> Iterator[EvaluationCase]:
         """Read and verify a frozen snapshot, never expose it to a MethodContext."""
         for case in self._cases(config):
@@ -231,7 +220,12 @@ class _FrozenTaskAdapter:
         raise NotImplementedError
 
 
-class NL4OptAdapter(_FrozenTaskAdapter):
+class NL4OptAdapter(FrozenTaskAdapter):
+    def import_source(self, config: Path, output: Path, settings: dict[str, Any]) -> Path:
+        source = dict(settings)
+        source.pop("adapter_id", None)
+        return _import_nl4opt(config, output, source)
+
     def _cases(self, config: Path) -> Iterator[EvaluationCase]:
         raw = config.read_bytes()
         manifest = parse_reference_json(raw)

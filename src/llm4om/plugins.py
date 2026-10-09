@@ -76,9 +76,10 @@ def discover_plugins() -> dict[tuple[str, str], Plugin]:
     from llm4om.coe import CoEFactory
     from llm4om.feedback_repair import FeedbackRepairFactory
     from llm4om.providers import MockFactory, OpenAICompatibleFactory, AnthropicFactory
+    from llm4om.task_plugins import builtin_factories
     plugins: dict[tuple[str, str], Plugin] = {}
     for builtin in (DirectFactory(), OptimusFactory(), CoEFactory(), FeedbackRepairFactory(),
-                    MockFactory(), OpenAICompatibleFactory(), AnthropicFactory()):
+                    MockFactory(), OpenAICompatibleFactory(), AnthropicFactory(), *builtin_factories()):
         manifest = _manifest(builtin)
         plugin_type = MethodPlugin if manifest["kind"] == "method" else Plugin
         plugins[(manifest["kind"], manifest["plugin_id"])] = plugin_type(manifest, {"kind": "builtin"}, builtin)
@@ -130,8 +131,10 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
     capabilities.update(method_profile=text, supports_checkpoint={"type": "boolean"}, supports_clarification={"type": "boolean"}, cancellation={"const": "cooperative/0.1.0"})
     capabilities.update(provider_profile={"enum": ["http_text/0.1.0", "mock_text/0.1.0"]})
     capabilities.update(usage_semantics=text)
+    capabilities.update(task_profile={"const": "frozen_task/0.1.0"}, evaluator_profile={"const": "frozen_evaluation/0.1.0"},
+        protocol_ids=strings, default_evaluator_id=text, oracle_separation={"const": "separate_public_private/0.1.0"}, evidence_levels=strings)
     fields = {"schema_version": {"const": "0.2.0"}, "plugin_id": {**text,
-              "pattern": r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$"}, "kind": {"enum": ["method", "llm_provider"]},
+              "pattern": r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$"}, "kind": {"enum": ["method", "llm_provider", "task_adapter", "evaluator"]},
               "plugin_version": {"type": "string", "pattern": f"^{stable_version}$", "maxLength": 128},
               "contract_range": {**text, "maxLength": 256}, "display_name": text, "description": text,
               "capabilities": {"type": "object", "properties": capabilities,
@@ -153,6 +156,17 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
         reject_additional_refs(manifest["source"])
         if not callable(factory.create):
             raise TypeError("Factory must create a plugin.")
+        if manifest["kind"] in {"task_adapter", "evaluator"}:
+            caps = manifest["capabilities"]
+            if not caps.get("protocol_ids"):
+                raise ValueError("Frozen tasks and evaluation require explicit protocols.")
+            if manifest["kind"] == "task_adapter" and (
+                caps.get("task_profile") != "frozen_task/0.1.0" or not caps.get("default_evaluator_id")
+                or caps.get("oracle_separation") != "separate_public_private/0.1.0"):
+                raise ValueError("Unsupported Task profile.")
+            if manifest["kind"] == "evaluator" and (caps.get("evaluator_profile") != "frozen_evaluation/0.1.0"
+                    or not caps.get("evidence_levels")):
+                raise ValueError("Unsupported Evaluator profile.")
         if manifest["kind"] == "llm_provider":
             from llm4om.providers import HTTPTextFactory, MockFactory, HTTPTextProvider
             profile = manifest["capabilities"].get("provider_profile")

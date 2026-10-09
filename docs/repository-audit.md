@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-10；SDK／Worker 开发版本：0.18.0。当前包含 196 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-10；SDK／Worker 开发版本：0.19.0。当前包含 202 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -233,3 +233,10 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/plugins/fixture_provider/pyproject.toml` | 独立Provider包声明 | SDK版本、构建与共同entry point |
 | `examples/plugins/fixture_provider/README.md` | 独立Provider安装说明 | 真实构建命令、配置与可信插件边界 |
 | `examples/plugins/fixture_provider/src/llm4om_fixture_provider/__init__.py` | 独立文本协议Adapter | 共同Manifest、自有ID、已有HTTP/Gateway复用 |
+
+| `src/llm4om/task_plugins.py` | 任务／评估注册、冻结选择与公共结果约束 | Registry、私有seal、字段／分母／安全错误 |
+| `tests/test_task_plugins.py` | 独立安装任务与评分器的公共验收 | CLI／HiGHS、身份、私有字段、失败分母 |
+| `docs/development/s03-task-registry.md` | Task／Evaluator切片范围及证据 | 实际接口、旧格式和剩余范围 |
+| `examples/plugins/fixture_task/pyproject.toml` | 独立Task／Evaluator包 | SDK约束及共同entry points |
+| `examples/plugins/fixture_task/README.md` | 独立benchmark插件用法 | 构建、配置hash、公开／私有边界 |
+| `examples/plugins/fixture_task/src/llm4om_fixture_task/__init__.py` | 独立微型任务与数值比较器 | 原输入保留、隐藏参考和共同核验接口 |

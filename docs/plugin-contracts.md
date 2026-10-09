@@ -26,7 +26,7 @@ Manifest 字段：
 
 source 对研究方法另记录研究路线（prompting-based／training-based／hybrid）、接入方式（原流程适配／流程变体）、原模型与实际外部 LLM 的差异，以及可获得的 `paper_url`、`citation_key`、`paper_version`、`upstream_commit`、`variant_id` 与适配差异引用。名称或题目不是唯一身份；论文、模型权重、推理流程与数据集分别关联。考察提交不自动作为已验证接入版本。
 
-内部 registry 键为 `(kind, plugin_id)`，一次环境不允许相同键的多个活动版本。与内置键冲突必须报错，不能以安装顺序覆盖。已实现的method／llm_provider使用entry point分组`llm4om.plugins`；加载第三方Python包会执行可信插件代码，因此安装／加载与生成代码隔离是两个问题。
+内部 registry 键为 `(kind, plugin_id)`，一次环境不允许相同键的多个活动版本。与内置键冲突必须报错，不能以安装顺序覆盖。已实现的method／llm_provider／task_adapter／evaluator使用entry point分组`llm4om.plugins`；加载第三方Python包会执行可信插件代码，因此安装／加载与生成代码隔离是两个问题。
 
 ### 能力声明与匹配规则
 
@@ -1141,3 +1141,17 @@ Decoded replies have exactly text:string, response_id/model/finish_reason:string
 Admission stores provider Manifest and provider_origin; each role_models entry stores its own provider/origin/model/config. Installed origin includes entry point/value, distribution/version and a hash of all distribution-registered files except .pyc caches. Declared dependency versions are saved. Recovery requires the same identities and decoder; no credentials or new requests are required for already-completed work. Source/Manifest/resource changes require a new environment/run rather than silent migration. The SDK/Worker snapshot rule remains in force.
 
 Actual scope, independent example and local evidence: [S03-C1](development/s03-provider-registry.md).
+
+## 24. S03-C2 installed Task and Evaluator (SDK 0.19.0)
+
+The common llm4om.plugins Registry now supports task_adapter and evaluator. A Task factory creates import_source(config:Path,output:Path,settings:dict)->Path, iter_cases(manifest:Path)->Iterator[EvaluationCase] and load_case(manifest:Path,case_id:str)->EvaluationCase. A trusted Evaluator factory creates evaluate(case,outcome:Path)->EvaluationResult. FrozenTaskAdapter and evaluate_outcome expose the existing case/outcome verification behavior for independent adapters. They never enter MethodContext.
+
+Task capabilities require task_profile=frozen_task/0.1.0, oracle_separation=separate_public_private/0.1.0, protocol_ids, default_evaluator_id, input_artifact_kinds=task_source and output_artifact_kinds=evaluation_manifest. Evaluators declare evaluator_profile=frozen_evaluation/0.1.0, protocol_ids, evidence_levels, evaluation_case/run_bundle inputs and evaluation_result output. Their config_schema and dependencies follow the common contract. Constructor/describe do not perform paid calls. doctor --task-config and SDK prepare_task validate selections without reading hidden source or publishing data.
+
+Existing source import config retains its adapter-specific fields. Optional adapter_config defaults to{}; optional evaluation={evaluator_plugin_id,config} defaults to the Task's declared evaluator and{}. Core removes these selection fields before passing settings to import_source. The adapter writes only to assigned staging and returns its manifest.json path. Public problems/case references are validated under public/ and private/ before the directory is published.
+
+Imported privileged manifest adds plugin_bindings0.1.0: runtime SDK version/code hash, Task/Evaluator manifests, installed origins, configs and dependency versions. private/import-seal.json anchors final manifest bytes. Altering the manifest, package or runtime rejects evaluation before construction; it never modifies prior evidence. New data/configs require a new import. Pre-registry built-in snapshots remain read-only and report binding_status=legacy_unbound with current actual identities; installed unbound snapshots reject.
+
+EvaluationResult keeps the existing0.1/0.2 public fields, including NLP4LP reference diagnostics/counts, data-binding policy and variable-mapping availability. Result case_id/protocol_id/manifest_sha256/source/eligibility/counts must match the frozen case. Imported selected/eligible counts must match actual unique case enumeration. Result run_id/run_status match the actual RunBundle; success counts require matching pass statuses. Counters preserve eligibility; zero-denominator rates are null. Values are finite JSON; private oracle fields/refs reject. Actual public run diagnostics may retain verified run_public references. Pass/fail evidence cannot exceed declared evidence_levels. Unknown Evaluator exceptions produce safe checker_error while preserving denominators. Public plugin_identity omits actual privileged config; exact config remains available in the privileged frozen manifest.
+
+Actual support, example and local acceptance: [S03-C2](development/s03-task-registry.md).

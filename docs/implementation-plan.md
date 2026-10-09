@@ -167,3 +167,5 @@ S07-B 当前已贯通 NLP4LP 固定发布导入、公开 JSON 参数／私有参
 S05-C1候选资源见 [记录](development/s05-public-candidates.md)；S05-C2有界修正、解析失败入账、声明变化与Code-only来源复用见 [记录](development/s05-feedback-repair.md)；S05-D2原声明确认、新修订与派生运行见 [记录](development/s05-clarification.md)。独立审阅仍待完成；完整注册、批量／报告、Web及发布验收继续推进。
 
 S03-C1扩展当前Registry到独立文本Provider，见 [记录](development/s03-provider-registry.md)。其余插件种类仍待接入；该切片不替代S08／S09／S10。
+
+S03-C2接入独立Task／Evaluator，见 [记录](development/s03-task-registry.md)。其余插件种类、S08／S09／S10及独立审阅继续推进。

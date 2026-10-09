@@ -67,3 +67,5 @@ S05-C2公开反馈修正见 [实现记录](docs/development/s05-feedback-repair.
 S05-D2澄清与问题修订见 [实现记录](docs/development/s05-clarification.md)。交互通过保存的request_id接受确认；新信息需要显式revision与派生run。本机聚焦检查和一次完整回归为主要验收。
 
 S03-C1独立Provider按已确认的CLI／HTTP／Solver接口验证；本机聚焦red→green、一次必要完整回归和干净wheel为主要验收，见 [记录](docs/development/s03-provider-registry.md)。
+
+S03-C2采用本机CLI／Task／Evaluation／Solver／文件系统验收；隐藏材料仅在导入与评估端，见 [记录](docs/development/s03-task-registry.md)。

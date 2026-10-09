@@ -13,8 +13,8 @@ import jsonschema
 from llm4om.checkers import SolutionChecker, load_checker, checked_solution, _validate
 from llm4om.contracts import RunError, parse_json, parse_reference_json, public_path, validate_problem, validate_data
 from llm4om.storage import RunStore
-from llm4om.tasks import _json, _FrozenTaskAdapter, EvaluationCase
-from llm4om.evaluation import _evaluate_outcome, _read_ref
+from llm4om.tasks import _json, FrozenTaskAdapter, EvaluationCase
+from llm4om.evaluation import evaluate_outcome, _read_ref
 from llm4om.task_policy import supplied_numeric_match
 
 PROTOCOL = "llm4om.eval.checker-v0.1"
@@ -229,7 +229,10 @@ def import_checker_fixture(config: Path, output: Path, settings: dict[str, Any])
     return output.resolve() / "manifest.json"
 
 
-class CheckerFixtureAdapter(_FrozenTaskAdapter):
+class CheckerFixtureAdapter(FrozenTaskAdapter):
+    def import_source(self, config: Path, output: Path, settings: dict[str, Any]) -> Path:
+        return import_checker_fixture(config, output, settings)
+
     def _cases(self, config: Path) -> Iterator[EvaluationCase]:
         raw = config.read_bytes()
         manifest = parse_reference_json(raw)
@@ -358,7 +361,7 @@ class IndependentCheckerEvaluator:
                 observed["verified_solution_rate"] = 0.0 if entry["verified_eligible"] else None
                 observed["independent_feasibility_rate"] = 0.0 if entry["eligible"] else None
 
-        _evaluate_outcome(case, outcome, result, check)
+        evaluate_outcome(case, outcome, result, check)
         if result["checker_error"] is not None and not case.oracle_ref.is_file():
             result["checker_error"] = {"code": "oracle_unavailable", "message": "Frozen privileged evaluation material is missing."}
         return result

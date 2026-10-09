@@ -65,3 +65,5 @@ S06-A 的 [Gurobi 配置](specs/gurobi.yaml)复用人工 Mock LPIR，容器实�
 本地合成 fixture 与真实 Provider 验收状态见 [S05-B](../docs/development/s05b-messages.md)。
 
 独立文本Provider的构建／安装与配置见 [示例](plugins/fixture_provider/README.md)。
+
+独立Task／Evaluator的构建、导入与评分见 [示例](plugins/fixture_task/README.md)。
