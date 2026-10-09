@@ -43,6 +43,7 @@
 | `docs/development/s02-highs.md` | S02-A 实现与真实证据 | 严格 IR、Pyomo／HiGHS、trusted_local、实际状态与未验证条件 |
 | `docs/development/s03-plugins.md` | S03 实现与运行 profile | 独立安装、兼容预检、真实方法来源、SDK 和未实现范围 |
 | `docs/development/s05-provider.md` | S05-A 工作树实现与待验收记录 | 文本 Provider、compact 输出、资源恢复、HTTP 沙箱阻塞与父任务命令 |
+| `docs/development/s06-gurobi-research.md` | S06-A 官方 API／许可证研究与独立临时 SDK 实测 | PyPI 13.0.3、真实 LP/MILP、MPS 往返、无解时限和 10010 受限许可证证据；运行材料留在 /tmp |
 | `docs/development/s07-nl4opt.md` | S07-A 来源研究与本地实现证据；父级验收未完成 | 官方固定提交、文件／记录 hash、域歧义；附公共接口测试、工程 smoke 与剩余验收 |
 | `docs/evaluation.md` | 指标、证据与分母的唯一来源 | 公开检查／隐藏协议、失败分母、未知成本保持原口径 |
 | `docs/implementation-plan.md` | 本地纵向任务与 blocking edges | 24 个任务；首个 CLI、独立 Web、真实支持验收 |
