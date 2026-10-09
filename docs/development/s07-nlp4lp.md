@@ -1,7 +1,7 @@
 # S07-B NLP4LP public input and supplied-reference comparison
 
 Status: SDK/Worker0.11.0 local implementation and actual model/Solver acceptance;
-full local regression and independent review are pending. Delivery: [draft PR25](https://github.com/Fangziyang0910/LLM4OM/pull/25).
+independent review is pending. Delivery: [draft PR25](https://github.com/Fangziyang0910/LLM4OM/pull/25).
 Scope: [Issue21](https://github.com/Fangziyang0910/LLM4OM/issues/21), FR-08–12/28–30,
 DD-06, AC-04/05/25. Source facts: [fixed-source research](s07-benchmark-research.md).
 Interface source: [contracts](../plugin-contracts.md#16-s07-b-nlp4lp-task-interface-sdk-0110).
@@ -78,8 +78,9 @@ eligible denominator. MAMO's five regression cases pass after policy reuse.
 Strict mypy passes29 modules. Logs are under `/tmp/llm4om-s07b/`.
 
 Wheel/sdist and actual Worker build passed; clean installed Python3.11.13 wheel
-passed five NLP4LP cases in6.063s. One complete local integration regression is
-running. Independent
+passed five NLP4LP cases in6.063s. One complete local Python3.12.11 regression passed273 tests in592.598s.
+It includes existing paths and actual Docker/HiGHS/Gurobi; no duplicate full
+version matrix followed this check. Independent
 Standards/Spec review is unavailable due the local Codex CLI usage limit; parent
 self-review will be recorded separately. No cloud CI, package/dataset release
 or full benchmark score is claimed. Whole1.0 remains active.
@@ -118,3 +119,7 @@ The generated release hash table was normalized to two-space JSON/LF. Original
 research metadata artifact SHA was a2f2385b76eaf5bd3f55ae3acabfacf1c14f46fe563ac8c390c72e0025afd1d9;
 normalized metadata SHA is a0a78906086b644156f079db1fdef9d10c6f8855a42ced9ab751e0fd1db49c66.
 All2,127 original source file hashes/sizes/URLs remain unchanged.
+
+Parent Standards/Spec self-review found no remaining actionable P1/P2 in its
+reading. Reports `parent-review-standards.md` / `parent-review-spec.md` in the
+task evidence directory explicitly do not fulfil independent review.
