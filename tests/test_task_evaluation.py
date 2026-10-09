@@ -102,6 +102,15 @@ class TaskEvaluationTests(unittest.TestCase):
             outcome = run_problem(case.public_problem, root / "missing.yaml", output_root=root / "runs")
             evaluation = NL4OptEvaluator().evaluate(case, outcome.bundle_path)
             self.assertEqual(evaluation["run_status"], "failed")
+            from llm4om import CancellationToken
+            cancellation = CancellationToken()
+            cancellation.cancel()
+            cancelled = run_problem(case.public_problem, root / "missing.yaml", output_root=root / "runs", cancellation=cancellation)
+            cancelled_evaluation = NL4OptEvaluator().evaluate(case, cancelled.bundle_path)
+            self.assertEqual(cancelled_evaluation["run_status"], "cancelled")
+            self.assertIsNone(cancelled_evaluation["checker_error"])
+            self.assertEqual(cancelled_evaluation["N_evaluated"], 1)
+
             self.assertEqual(evaluation["objective_match"]["status"], "not_available")
             self.assertEqual(evaluation["N_eligible"], 0)
             self.assertIsNone(evaluation["objective_match_rate"])
@@ -232,3 +241,23 @@ class TaskEvaluationTests(unittest.TestCase):
             broken = NL4OptEvaluator().evaluate(case, outcome)
             self.assertEqual(broken["checker_error"]["code"], "evidence_hash_mismatch")
             self.assertEqual(broken["candidate_primal"]["status"], "error")
+
+
+class ImportResourceTests(unittest.TestCase):
+    def test_frozen_import_does_not_create_live_run_or_leak_descriptors(self) -> None:
+        record={'document':'Fixture problem.','vars':[],'var_mentions':[],'params':[],
+        'var_mention_to_first_var':{},'first_var_to_mentions':{},'obj_declaration':{},'const_declarations':[],
+        'spans':[],'tokens':[],'_input_hash':7,'order_mapping':{}}
+        raw=(json.dumps({'7':record})+'\n').encode()
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'dev.jsonl').write_bytes(raw)
+            cfg={'schema_version':'0.1.0','dataset_id':'fixture-nl4opt','source_kind':'fixture','source_version':'probe-v1',
+            'split':'dev','path':'dev.jsonl','sha256':hashlib.sha256(raw).hexdigest()}
+            (root/'import.json').write_text(json.dumps(cfg))
+            before=len(os.listdir('/proc/self/fd'))
+            manifests=[import_dataset(root/'import.json',root/f'snapshot{i}') for i in range(3)]
+            self.assertEqual(len(os.listdir('/proc/self/fd')),before)
+            for manifest in manifests:
+                self.assertFalse((manifest.parent/'control.json').exists())
+                case=json.loads(manifest.read_text())['cases'][0]
+                self.assertEqual(case['public_ref']['relative_path'],'public/7.json')

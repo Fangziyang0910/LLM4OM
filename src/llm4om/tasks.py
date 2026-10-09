@@ -137,8 +137,10 @@ def import_dataset(config: Path, output: Path) -> Path:
         raise RunError("snapshot_exists", "import", "Frozen snapshots cannot be overwritten.")
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".nl4opt-", dir=output.parent))
+    store: RunStore | None = None
     try:
-        store = RunStore(staging)
+        # Task snapshots are write-once and retain the public/ layout.
+        store = RunStore(staging, versioned=False)
         private = store.path / "private"
         private.mkdir(mode=0o700)
         entries = []
@@ -175,8 +177,13 @@ def import_dataset(config: Path, output: Path) -> Path:
                     "domain_policy": "unspecified", "normalization_policy": "none",
                     "N_selected": len(entries), "N_eligible": 0, "cases": entries}
         store.json("manifest.json", manifest, "manifest")
-        store.path.rename(output)
+        saved_path = store.path
+        store.close()
+        store = None
+        saved_path.rename(output)
     finally:
+        if store is not None:
+            store.close()
         shutil.rmtree(staging)
     return output.resolve() / "manifest.json"
 

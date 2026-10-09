@@ -38,7 +38,8 @@
     ],
     "supports_checkpoint": false,
     "supports_clarification": false,
-    "oracle_requirements": []
+    "oracle_requirements": [],
+    "cancellation": "cooperative/0.1.0"
   },
   "config_schema": {
     "type": "object",

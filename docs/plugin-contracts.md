@@ -309,13 +309,13 @@ run-id/
 
 RunConfig 可以显式选择 trusted_local，config 为空对象；container 由 S04-A 实际执行，也可离线回放，不会自动降级。solve extra 提供 Pyomo／HiGHS，缺失依赖或零 Solver 预算在 Mock 前拒绝。当前 Solver options 只支持 time_limit_s，实际容差和原生数值阈值随结果保存。
 
-真实 bundle mode 为 trusted_local，执行完成为 completed；termination 与 primal 可用性由 SolveResult 分别表达。增加 solve_result_ref、execution_result_ref 和 final_candidate_id；执行错误仍保存已完成阶段。编译前快照与最终候选分别保存，旧事件引用不可失效。Code 的编译检查通过不推导 semantic_validation 通过；infeasible／unbounded 是实际结果。ExecutionResult 的 exit_code、CPU 与内存未测量时为 null。solver_calls 计 Solver 适配器尝试，外部 LLM 请求仍为零；容器资源限制由 S04-A 实施；完整运行预算与恢复按 S04-B／S05 继续落实。
+真实 bundle mode 为 trusted_local，执行完成为 completed；termination 与 primal 可用性由 SolveResult 分别表达。增加 solve_result_ref、execution_result_ref 和 final_candidate_id；执行错误仍保存已完成阶段。编译前快照与最终候选分别保存，旧事件引用不可失效。Code 的编译检查通过不推导 semantic_validation 通过；infeasible／unbounded 是实际结果。ExecutionResult 的 exit_code、CPU 与内存未测量时为 null。solver_calls 计 Solver 适配器尝试，外部 LLM 请求仍为零；容器资源限制由 S04-A 实施；当前取消／恢复与固定预算见 S04-B；完整多方法／batch 预算仍按后续切片落实。
 
 ### S03 已落实的方法 profile 与预检子集
 
 SDK 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对象，当前只装载 method。Manifest 的 capabilities.method_profile 为 grounded_single_candidate/0.1.0；plugin_version 当前为稳定 major.minor.patch，contract_range 为 `>=X.Y.Z,<A.B.C` 并包含核心契约 0.2.0。config_schema 自包含，允许本地片段引用，暂不接受 $id 或远程 $ref／$dynamicRef；dependencies.python 为分发包名称列表，记录已安装版本。source 暂不接受额外 ArtifactRef，研究 URL／固定版本／变体等文字元数据可保存。
 
-当前 async run 返回内存 MethodOutcome：status=candidate_selected、final_candidate_id=001、proposal=ModelProposal(artifact, formulation, structured_ir)。核心验证原问题 hash／revision、五元素和数据绑定，生成实际引用与候选记录；这不是已实现完整的多候选／checkpoint Protocol。MethodContext 当前提供 llm、只读公开 data／预算上限和 problem_sha256；MethodContext 的 LLMResponse 提供 text、call_id、evidence_origin、source_sha256，以及可选 finish_reason；真实 Provider 完整 usage 与身份保存在 Gateway trace。窄 profile 明确版本化，后续增加资源和状态时同步声明。
+当前 async run 返回内存 MethodOutcome：status=candidate_selected、final_candidate_id=001、proposal=ModelProposal(artifact, formulation, structured_ir)。核心验证原问题 hash／revision、五元素和数据绑定，生成实际引用与候选记录；这不是完整的多候选 Protocol；当前内部 checkpoint 扩展见第 12 节。MethodContext 当前提供 llm、只读公开 data／预算上限和 problem_sha256；MethodContext 的 LLMResponse 提供 text、call_id、evidence_origin、source_sha256，以及可选 finish_reason；真实 Provider 完整 usage 与身份保存在 Gateway trace。窄 profile 明确版本化，后续增加资源和状态时同步声明。
 
 doctor 与 run 共用 prepare_run；先验证参数，再匹配当前表示、目标类型、Backend／Solver、Provider 功能和 Executor，再检查分发包与真实求解依赖。缺失能力为未知；请求的资源须被方法声明，当前表示 profile 固定，不能靠枚举并集暗示 native_code 可用。allowed_problem_types 缺省 lp／milp，实际 IR 类型在产出后再次核对。真实运行保存 admission_plan_ref；离线计划只准备回放，不标记 Code／Solve 已执行。未知方法异常与 SystemExit 转为稳定错误和脱敏 frame，原错误参数／源码行与插件 Python 输出不进入公开结果。
 
@@ -339,7 +339,7 @@ openai_compatible 配置为 base_url、credential_env，另有 max_output_tokens
 
 Direct 使用完整公开问题及 CSV 值，外部回复只能是 representation 和 structured_ir 两字段的紧凑数学对象。平台生成 artifact／formulation／IR ID、revision、数据 hash、引用与 provenance。representation 的五元素语义与 GroundedLPIR 数学字段复用本契约；紧凑 IR 只含 problem_type、variables、objective、constraints、assumptions。五元素与 IR 是联合生成，Code 是确定性编译；未取得语义证据时仍为 not_available。finish_reason=length 时 Direct 返回 llm_output_truncated，保留 trace 和用量，不形成 Formulation。旧 Mock packet 与独立方法 fixture 保持有效。
 
-Gateway archive 是共享 run 资源身份。文件锁原子 admission，OS slot 锁限制并发；每次 attempt 使用独立 UUID。省略 request_id 时每次调用使用独立 UUID，相同消息可独立采样。显式 request_id 用于恢复；内容 hash 同时绑定端点／模型／输出上限／消息。预算与 deadline 恢复不重置；不同预算拒绝恢复。已保存成功直接复用，未知身份拒绝重新发送并保留预留。这不提供 CLI resume 或方法 checkpoint。
+Gateway archive 是共享 run 资源身份。文件锁原子 admission，OS slot 锁限制并发；每次 attempt 使用独立 UUID。省略 request_id 时每次调用使用独立 UUID，相同消息可独立采样。显式 request_id 用于恢复；内容 hash 同时绑定端点／模型／输出上限／消息。预算与 deadline 恢复不重置；不同预算拒绝恢复。已保存成功直接复用，未知身份拒绝重新发送并保留预留。S05-A 单独不提供 CLI resume；S04-B 的公开恢复与内部 checkpoint 见第 12 节。
 
 发送前按规范化输入 UTF-8 字节数估算 token，加最大输出预留；实际 total 可用才结算预留。input／output／total／cached／reasoning 缺失均为 null，cached 与 reasoning 不重复计费。无定价时 cost=null。结算后计入未知 attempt 的预留；最后调用实测占用越界返回 token_budget_overrun，并保留成功回复。429／5xx／连接故障有限重试，认证／无效请求／非法响应／超时不重试；失败 charge／usage 未知时保守保留预留。共享绝对 deadline 约束请求 timeout、重试、Docker 检查／create、Worker 启动、容器墙钟和 Solver time_limit（清理允许有界额外时间）；HTTP 在可终止子进程中执行，完整 deadline 覆盖 DNS、TLS 和持续滴流；取消回收进程并保留未知结果的预留。
 
@@ -531,3 +531,39 @@ Finite Pyomo bounds and normalized row RHS must have magnitude below 1e20. This 
 semantic infinity threshold, distinct from `GRB.INFINITY=1e100`. Result numerical limits record both.
 Native row RHS is checked at the same threshold; the native view describes the already-built SDK model.
 A `ModelHandle.decision_map` accepts any Mapping, including a read-only Mapping, under both Backends.
+
+## 12. S04-B cancellation and resume (SDK 0.7.0)
+
+`run_problem(..., cancellation: CancellationToken | None = None)` 保持旧调用兼容。
+`cancel_run(run: Path) -> str` 返回 cancellation_requested／inactive；只写绑定 run_id／owner_uid／owner_id 的控制请求。
+`resume_run(run: Path, *, cancellation=None) -> RunResult` 使用同一运行、预算、私有 Gateway archive 和绝对 deadline。
+CLI 为 `cancel|resume --run-id RUN_ID --output STORE_ROOT`；run／resume 的 SIGINT 走相同协作路径。
+
+核心 checkpoint.json 为 0.1.0 envelope，含 payload 和规范化 JSON 的 SHA-256。
+payload 保存 run_id、不可变 ArtifactRefs、递增事件、当前公开视图的引用、核心阶段状态、原公开输入／配置 hash、
+admission／SDK／Python／包身份、方法内部 checkpoint 和预算／资源位置。
+文件经 fsync／原子 replace 发布；owner.lock 防止并发写者，control.lock 串行化控制身份更新。
+内容文件保存在 history/hash/path，原引用不改写；固定路径为当前公开视图。
+恢复检查引用及视图的实际 bytes；损坏／不兼容返回 checkpoint_incompatible，不忽略 hash 失败。
+不序列化 ModelHandle、Solver SDK 对象、credential、oracle 或 pickle。
+
+MethodContext 兼容增加 cancellation 和可选 save_checkpoint(versioned_json) 回调。
+只有 supports_checkpoint=true 的方法可保存／接收内部 checkpoint；核心阶段恢复与该能力独立。
+Direct 声明 supports_checkpoint=true，仅保存 0.1.0 的 request_id；稳定请求内容仍由 Gateway hash 核对。
+插件可声明 cancellation=cooperative/0.1.0，须让出 async 执行并检查 Token，遵守任务取消；
+未声明时 admission 的 method_cancellation=unknown，不能据资源可取消就宣称插件内部有界。
+独立 fixture 仍 supports_checkpoint=false，声明 cooperative，拒绝非空内部 checkpoint。
+
+未完成方法且没有内部 checkpoint 时返回 checkpoint_unsupported。本版不提供派生重跑；不会静默创建新 run 或付费调用。
+完整 Formulation／Code 阶段直接继续；匹配的 execute_done 复用保存的真实 Execution／SolveResult。
+匹配由已验证的公开 bytes、数据绑定、固定配置／Manifest／包及 Worker 身份共同确定。
+completed／artifact_ready 恢复幂等；其他过期恢复返回 deadline_exhausted。
+solver_calls 在尝试前持久化，取消不退还已开始的 slot；下一尝试需要原预算中剩余 slot。
+
+Gateway admission／settlement 同步保存 checkpoint 的资源 state hash 与账本位置。
+成功回复复用既有 attempt_id；未知结果保留预留并返回 provider_outcome_unknown，不重新提交相同 request_id。
+私有 raw reply 不进入公开 checkpoint。Mock 的同请求工程回复可持久化复用，仍 external_llm_requests=0。
+容器和 HTTP 子进程使用已有有界清理；trusted_local 的严格 IR／运行时检查也在拥有的子进程执行。
+生成的工厂或 native 源码始终只在隔离 Worker 内执行。
+
+S04-B RunBundle 兼容增加 public_problem_ref 和 public_projections（固定路径 → 不可变 ArtifactRef，排除 bundle 自引用）。评估器同时校验版本引用与当前公开视图，接受 cancelled 并保留评测分母；旧 bundle 的固定路径仍可读取。TaskAdapter 的 write-once snapshot 保持原 public/ 与 private/ 布局，资源控制／history 只属于运行。

@@ -60,8 +60,8 @@
 | `docs/spec-validation.md` | 校验证据与适用范围 | 当前可复算命令；不将维护工具当作平台验收 |
 | `examples/README.md` | fixture 用法与独立数学依据 | 方法输入权限、工程 Mock、绑定反例与维护命令 |
 | `examples/plugins/fixture_method/README.md` | 独立方法安装与运行说明 | 实际命令、目标偏移用途和公开接口 |
-| `examples/plugins/fixture_method/pyproject.toml` | 独立方法包与 entry point | SDK >=0.2.0,<0.6.0 依赖、自己的版本／构建和发现入口 |
-| `examples/plugins/fixture_method/src/llm4om_fixture_method/__init__.py` | 第二个实际 Method Adapter | 独立配置、async run、目标常数变体与普通 MethodOutcome |
+| `examples/plugins/fixture_method/pyproject.toml` | 独立方法包与 entry point | SDK >=0.7.0,<0.8.0 依赖、自己的版本／构建和发现入口 |
+| `examples/plugins/fixture_method/src/llm4om_fixture_method/__init__.py` | 第二个实际 Method Adapter | 独立配置、async run、目标常数变体、cooperative 取消与内部 checkpoint 拒绝 |
 | `examples/plugins/fixture_method/src/llm4om_fixture_method/manifest.json` | 独立方法 Manifest | 当前能力、配置 schema、工程来源和变体 |
 | `examples/specs/data/capacities.csv` | 原始容量数据 | 固定字节、表头和 hash；独立整数／LP 核验 |
 | `examples/specs/data/products.csv` | 原始利润和资源数据 | 固定字节、表头和 hash；作为独立绑定依据 |
@@ -148,3 +148,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/specs/gurobi.yaml` | 当前可运行人工 Mock LPIR→容器 Gurobi 配置 | doctor/run 目标13；实际 size_limited，不调用外部 LLM |
 | `docs/development/s06-gurobi.md` | S06-A 实现、支持矩阵和真实环境边界 | CLI/SDK、Backend/Solver 与 Executor 本地验收，报告／证据在任务目录 |
 | `docs/development/s07-benchmark-research.md` | S07-B/C NLP4LP／MAMO 固定来源与字段考察 | 实际提交、文件 hash、样本数量、公开／私有投影、参考损坏与评测边界；尚未集成 |
+
+| `src/llm4om/control.py` | S04-B 协作 CancellationToken | run／owner 身份绑定、CLI／SDK 控制文件，不向宿主 PID 发信号 |
+| `tests/test_resume_run.py` | S04-B CLI／SDK／Provider HTTP／Executor 行为 | 取消、SIGINT、真实 Docker 清理、成功／未知回复、阶段复用、锁、损坏与 deadline |
+| `docs/development/s04-resume.md` | S04-B 当前实现与本机验收范围 | 公开入口、checkpoint／预算／身份、不支持时拒绝及实际支持边界 |

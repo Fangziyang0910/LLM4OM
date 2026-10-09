@@ -3,7 +3,10 @@
 from dataclasses import dataclass
 import hashlib
 import json
-from typing import Any, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol
+from dataclasses import field
+from uuid import uuid4
+from llm4om.control import CancellationToken
 
 from llm4om.contracts import RunError, parse_json
 
@@ -53,6 +56,8 @@ class MethodContext:
     data: Mapping[str, bytes]
     budget: Mapping[str, Any]
     problem_sha256: str
+    cancellation: CancellationToken = field(default_factory=CancellationToken)
+    save_checkpoint: Callable[[dict[str, Any]], None] | None = None
 
 
 class DirectMethod:
@@ -61,8 +66,13 @@ class DirectMethod:
 
     async def run(self, problem: dict[str, Any], context: MethodContext,
                   *, checkpoint: dict[str, Any] | None = None) -> MethodOutcome:
-        if checkpoint is not None:
-            raise RunError("checkpoint_incompatible", "formulation", "This method profile does not support checkpoint.")
+        context.cancellation.check()
+        if checkpoint is not None and (set(checkpoint) != {"schema_version", "request_id"}
+                or checkpoint["schema_version"] != "0.1.0" or not isinstance(checkpoint["request_id"], str)):
+            raise RunError("checkpoint_incompatible", "formulation", "Direct request checkpoint is invalid.")
+        checkpoint = checkpoint or {"schema_version": "0.1.0", "request_id": uuid4().hex}
+        if context.save_checkpoint is not None:
+            context.save_checkpoint(checkpoint)
         instructions = (
             "Return only one JSON object with representation and structured_ir. "
             "representation has exactly sets, parameters, variables, objective, constraints, using five-element schema: "
@@ -102,7 +112,7 @@ class DirectMethod:
             instructions = instructions.replace("python_factory", "native_gurobipy").replace("concrete Pyomo", "native gurobipy")
             instructions = instructions.replace("scalar Pyomo variable", "scalar Gurobi variable (including range slack variables)")
             instructions += " Use gp.Env(empty=True), OutputFlag=0, LogFile=\"\", env.start(), and gp.Model(env=env)."
-        response = await context.llm.complete({"messages": [
+        response = await context.llm.complete({"request_id": checkpoint["request_id"], "messages": [
             {"role": "system", "content": instructions},
             {"role": "user", "content": json.dumps({"problem": problem,
                 "data": {key: value.decode("utf-8") for key, value in context.data.items()}}, ensure_ascii=False)}]})
@@ -165,7 +175,7 @@ class DirectFactory:
     def describe(self) -> dict[str, Any]:
         return {
             "schema_version": "0.2.0", "plugin_id": "llm4om.methods.direct", "kind": "method",
-            "plugin_version": "0.6.0", "contract_range": ">=0.2.0,<0.3.0",
+            "plugin_version": "0.7.0", "contract_range": ">=0.2.0,<0.3.0",
             "display_name": "Direct (declared text output)",
             "description": "One public text response produces a five-element Formulation with grounded LPIR or parameterized Python factory.",
             "capabilities": {"method_profile": "grounded_single_candidate/0.1.0", "problem_types": ["lp", "milp"],
@@ -173,7 +183,7 @@ class DirectFactory:
                 "formulation_representations": ["five_element"], "code_representations": ["python_factory"],
                 "model_backends": ["llm4om.model_backends.pyomo_factory"], "solvers": ["llm4om.solvers.highs", "llm4om.solvers.gurobi"],
                 "llm_features": ["text"], "execution_modes": ["trusted_local", "container"],
-                "supports_checkpoint": False, "supports_clarification": False, "oracle_requirements": []},
+                "supports_checkpoint": True, "cancellation": "cooperative/0.1.0", "supports_clarification": False, "oracle_requirements": []},
             "config_schema": {"type": "object", "properties": {
                 "formulation_mode": {"const": "five_element"}, "output_mode": {"enum": ["lp_ir", "python_factory", "native_gurobipy"]}},
                 "required": ["formulation_mode", "output_mode"], "additionalProperties": False},

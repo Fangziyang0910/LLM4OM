@@ -1,6 +1,6 @@
 # LLM4OM 文档体系
 
-文档修订：0.4.0；日期：2026-10-08。当前交付包含调研、需求与设计，以及 [S01 离线切片](development/s01-offline-run.md)、[S02-A 真实求解](development/s02-highs.md)、[S02-B 参数化工厂](development/s02b-factory.md)、[S03 方法发现／预检](development/s03-plugins.md)、[S04-A 容器执行](development/s04-container.md)、[S05-A 真实文本 LLM](development/s05-provider.md)及 [S07-A NL4Opt 导入／评测](development/s07-nl4opt.md)。
+文档修订：0.4.0；日期：2026-10-08。当前交付包含调研、需求与设计，以及 [S01 离线切片](development/s01-offline-run.md)、[S02-A 真实求解](development/s02-highs.md)、[S02-B 参数化工厂](development/s02b-factory.md)、[S03 方法发现／预检](development/s03-plugins.md)、[S04-A 容器执行](development/s04-container.md)、[S04-B 取消／恢复](development/s04-resume.md)、[S05-A 真实文本 LLM](development/s05-provider.md)及 [S07-A NL4Opt 导入／评测](development/s07-nl4opt.md)。
 
 LLM4OM 面向自动优化建模研究者和开发者。核心用例是输入自然语言问题与数据，选择建模方法和兼容求解配置，获得可检查的建模输出与求解结果。Benchmark 在同一流程上组织批量实验。
 

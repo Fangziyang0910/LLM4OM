@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 import time
+import os
+import sys
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 from pathlib import Path
@@ -9,9 +11,10 @@ from llm4om.providers import credential_environment, provider_factory, MockProvi
 
 import jsonschema
 
-from llm4om.contracts import RunError, validate_config
-from llm4om.solvers import solver_runtime
-from llm4om.executors import worker_runtime
+from llm4om.contracts import RunError, parse_json, validate_config
+from llm4om.executors import worker_runtime, container_runtime, run_owned_process, DEFAULT_IMAGE
+from llm4om.solvers import solver_packages
+from llm4om.control import CancellationToken
 from llm4om.plugins import MethodPlugin, discover_methods
 
 
@@ -19,21 +22,32 @@ from llm4om.plugins import MethodPlugin, discover_methods
 class AdmissionPlan:
     method: MethodPlugin
     snapshot: dict[str, Any]
-    provider: MockProvider | OpenAICompatibleProvider
+    provider: MockProvider | OpenAICompatibleProvider | None
     deadline: float
 
 
-def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: Path | None = None) -> AdmissionPlan:
+def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: Path | None = None,
+                deadline: float | None = None, cancellation: CancellationToken | None = None,
+                expected: dict[str, Any] | None = None, identity_only: bool = False) -> AdmissionPlan:
     started = time.time()
+    if cancellation is not None:
+        cancellation.check()
     validate_config(settings)
+    deadline = deadline if deadline is not None else started + settings["budget"]["wall_time_s"]
+    if time.time() >= deadline:
+        raise RunError("deadline_exhausted", "admission", "The absolute run deadline expired.")
     factory = provider_factory(settings["llm"]["provider_plugin_id"])
     if offline and settings["llm"]["provider_plugin_id"] != "llm4om.providers.mock":
         raise RunError("capability_mismatch", "admission", "Offline replay requires an explicitly configured Mock Provider.")
-    credential_path = (config_dir or Path.cwd()) / ".env"
-    if not credential_path.exists():
-        credential_path = Path.cwd() / ".env"
-    environment = credential_environment(credential_path) if isinstance(factory, OpenAICompatibleFactory) else None
-    provider = factory.create(settings["llm"]["config"], settings["llm"]["model"], environment=environment)
+    provider = None
+    if not identity_only:
+        credential_path = (config_dir or Path.cwd()) / ".env"
+        if not credential_path.exists():
+            credential_path = Path.cwd() / ".env"
+        environment = (dict(os.environ) if isinstance(factory, OpenAICompatibleFactory)
+                       and os.environ.get(settings["llm"]["config"].get("credential_env", ""))
+                       else credential_environment(credential_path) if isinstance(factory, OpenAICompatibleFactory) else None)
+        provider = factory.create(settings["llm"]["config"], settings["llm"]["model"], environment=environment)
     inventory = discover_methods()
     method = inventory.get(("method", settings["method"]["plugin_id"]))
     if method is None:
@@ -86,21 +100,50 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         except PackageNotFoundError as error:
             raise RunError("dependency_missing", "admission", "A declared method dependency is not installed.",
                            details={"distribution": name}) from error
+    if expected is not None:
+        if ({"manifest": method.manifest, "origin": method.origin} != expected["method"]
+                or profile != expected["method_profile"]
+                or any(expected["packages"].get(name) != value for name, value in packages.items())):
+            raise RunError("checkpoint_incompatible", "admission", "Method profile, manifest or package identity changed.")
+        for name, saved_version in expected["packages"].items():
+            if execution_mode != "container" or name in method.manifest["dependencies"].get("python", []):
+                try:
+                    if version(name) != saved_version:
+                        raise RunError("checkpoint_incompatible", "admission", "A saved resource package changed.")
+                except PackageNotFoundError as error:
+                    raise RunError("checkpoint_incompatible", "admission", "A saved resource package is absent.") from error
     if not offline and settings["budget"]["max_solver_calls"] < 1:
         raise RunError("budget_exhausted", "admission", "Real solving requires one Solver call slot.")
     worker = None
     local_runtime: dict[str, Any] = {}
     if not offline:
         if execution_mode == "container":
-            worker = worker_runtime(settings["executor"]["config"], deadline=started + settings["budget"]["wall_time_s"],
-                                    solver_id=settings["solver"]["plugin_id"])
+            if expected is not None:
+                runtime = container_runtime(settings["executor"]["config"].get("image", DEFAULT_IMAGE),
+                                            deadline=deadline, cancellation=cancellation)
+                if runtime["image_id"] != expected["worker"]["image_id"]:
+                    raise RunError("checkpoint_incompatible", "admission", "Worker image identity changed.")
+                worker = expected["worker"]
+            else:
+                worker = worker_runtime(settings["executor"]["config"], deadline=deadline, cancellation=cancellation,
+                                        solver_id=settings["solver"]["plugin_id"])
             packages.update(worker["packages"])
         else:
-            local_runtime = solver_runtime(settings["solver"]["plugin_id"])
+            if expected is not None:
+                local_runtime = {"packages": expected["packages"], "solver_environment": expected.get("solver_environment")}
+            else:
+                solver_packages(settings["solver"]["plugin_id"])
+                out, _, code = run_owned_process([sys.executable, "-m", "llm4om.worker", "--runtime", "--solver", settings["solver"]["plugin_id"]],
+                                                b"", deadline=deadline, cancellation=cancellation or CancellationToken())
+                payload = parse_json(out)
+                if code != 0 or "runtime" not in payload:
+                    runtime_error = payload.get("error", {})
+                    raise RunError(runtime_error.get("code", "dependency_missing"), "admission", "The owned Solver runtime check failed.")
+                local_runtime = payload["runtime"]
             packages.update(local_runtime["packages"])
     return AdmissionPlan(method, {"schema_version": "0.2.0", "mode": "offline_mock" if offline else execution_mode,
         "method": {"manifest": method.manifest, "origin": method.origin},
-        "method_profile": profile, "code_origin": "method_generated" if profile in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0") else "deterministic_compilation",
+        "method_profile": profile, "method_cancellation": capabilities.get("cancellation", "unknown"), "code_origin": "method_generated" if profile in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0") else "deterministic_compilation",
         "compiler_id": settings["compiler"]["plugin_id"] if profile == "grounded_single_candidate/0.1.0" else None, "model_backend_id": settings["model_backend"]["plugin_id"],
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
-        "packages": packages, "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": factory.describe(), "model": settings["llm"]["model"]}, provider, started + settings["budget"]["wall_time_s"])
+        "packages": packages, "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": factory.describe(), "model": settings["llm"]["model"]}, provider, deadline)

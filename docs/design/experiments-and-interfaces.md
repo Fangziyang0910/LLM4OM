@@ -29,7 +29,7 @@ TaskAdapter → 公开 ProblemSpec + 私有 oracle_ref → dataset manifest → 
 
 外部请求先写 call_id 与预算预留；响应先落盘，再结算并记完成事件。未知结果记录 `outcome_unknown`。恢复复用已持久化响应；重新调用策略明确展示可能重复及其预算处理。
 
-方法支持 checkpoint 时，其 run 入口接受可序列化 checkpoint。恢复校验方法、契约、公开输入和配置。版本不兼容则拒绝；不支持 checkpoint 的方法只能创建派生重跑。
+S04-B 当前实现见 [取消与恢复](../development/s04-resume.md)。核心阶段 checkpoint 与方法内部 checkpoint 分开保存。方法支持 checkpoint 时，其 run 入口接受可序列化 checkpoint。恢复校验方法、契约、公开输入和配置。版本不兼容则拒绝；不支持内部 checkpoint 且尚无完整阶段时明确拒绝。将来若提供派生重跑，须显式请求并保留 lineage／已有费用与未知预留。
 
 报告读取已保存结果，不重新选择候选或评分。公开导出包含运行配置、版本、Formulation／Code 引用与可用性、候选、求解和评测记录；排除凭据与私有 oracle。原始 LLM trace 的导出遵循独立访问策略。
 

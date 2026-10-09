@@ -3,10 +3,13 @@
 import argparse
 import json
 import sys
+import signal
 from pathlib import Path
 from typing import Any
 
-from llm4om.application import run_problem
+from llm4om.application import run_problem, resume_run
+from llm4om.storage import cancel_run
+from llm4om.control import CancellationToken
 from llm4om.tasks import import_dataset
 from llm4om.evaluation import evaluate_case
 from llm4om.plugins import discover_methods
@@ -22,6 +25,10 @@ def main() -> int:
     run.add_argument("--config", type=Path, required=True)
     run.add_argument("--output", type=Path, help="Override the configured filesystem store root")
     run.add_argument("--offline", action="store_true", help="Only replay Mock artifacts; skip Code and Solve")
+    for name in ("cancel", "resume"):
+        control = commands.add_parser(name, help=f"{name.capitalize()} a persisted run")
+        control.add_argument("--run-id", required=True)
+        control.add_argument("--output", type=Path, default=Path("runs"), help="Filesystem store root")
     importer = commands.add_parser("import", help="Freeze a local NL4Opt split")
     importer.add_argument("--config", type=Path, required=True)
     importer.add_argument("--output", type=Path, required=True)
@@ -76,11 +83,28 @@ def main() -> int:
                 "details": error.details if isinstance(error, RunError) else None})
         print(json.dumps(report))
         return 0 if report["preflight_ok"] else 1
+    cancellation = CancellationToken()
+    previous = signal.signal(signal.SIGINT, lambda signum, frame: cancellation.cancel())
     try:
-        result = run_problem(args.problem, args.config, offline=args.offline, output_root=args.output)
+        if args.command in ("cancel", "resume"):
+            if len(args.run_id) != 32 or any(char not in "0123456789abcdef" for char in args.run_id):
+                raise RunError("control_incompatible", "control", "Run ID must be a platform UUID.")
+            path = args.output / args.run_id
+            if args.command == "cancel":
+                print(json.dumps({"run_id": args.run_id, "status": cancel_run(path)}))
+                return 0
+            result = resume_run(path, cancellation=cancellation)
+        else:
+            result = run_problem(args.problem, args.config, offline=args.offline,
+                                 output_root=args.output, cancellation=cancellation)
+    except RunError as error:
+        print(json.dumps({"error": {"code": error.code, "stage": error.stage, "message": str(error)}}))
+        return 1
     except OSError:
         print(json.dumps({"error": {"code": "store_unavailable", "stage": "storage",
                                    "message": "Cannot persist run evidence to the selected store."}}), file=sys.stderr)
         return 2
+    finally:
+        signal.signal(signal.SIGINT, previous)
     print(json.dumps({"run_id": result.run_id, "bundle_path": str(result.bundle_path), "status": result.status}))
     return 0 if result.status in {"artifact_ready", "completed"} else 1

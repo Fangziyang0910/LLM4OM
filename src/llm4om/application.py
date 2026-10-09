@@ -5,12 +5,12 @@ import base64
 import json
 import platform
 import time
+import sys
 from copy import deepcopy
 from importlib.metadata import version
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from time import monotonic
-from contextlib import redirect_stdout, redirect_stderr
 from io import StringIO
 from pathlib import Path
 from types import MappingProxyType
@@ -21,13 +21,13 @@ from llm4om.contracts import (
     validate_model_artifact, validate_formulation, validate_bindings, reject_additional_refs,
     validate_worker_response,
 )
+from llm4om.control import CancellationToken
 from llm4om.providers import Gateway
 from llm4om.methods import FactoryCodeProposal, MethodContext, ModelProposal
 from llm4om.preflight import AdmissionPlan, prepare_run
 from llm4om.linear import CompiledCode, compile_ir
-from llm4om.solvers import solve as solve_model
 from llm4om.storage import RunStore
-from llm4om.executors import run_container
+from llm4om.executors import run_container, run_owned_process
 
 
 @dataclass(frozen=True)
@@ -38,32 +38,49 @@ class RunResult:
 
 
 def run_problem(problem: Path, config: Path, *, offline: bool = False,
-                output_root: Path | None = None) -> RunResult:
+                output_root: Path | None = None, cancellation: CancellationToken | None = None) -> RunResult:
+    cancellation = cancellation or CancellationToken()
+    try:
+        settings = read_config(config)
+        root = output_root or config.parent / settings["store"]["config"]["root"]
+    except (OSError, ValueError, KeyError, TypeError):
+        root = output_root or Path.cwd() / "runs"
+    store = RunStore(root, cancellation=cancellation)
+    try:
+        return _run_problem(problem, config, store, offline=offline)
+    finally:
+        store.close()
+
+
+def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool = False,
+                 restored_plan: AdmissionPlan | None = None) -> RunResult:
+    started = time.time()
+    cancellation = store.cancellation
     settings: dict[str, Any] = {}
     config_error: Exception | None = None
     try:
         settings = read_config(config)
-        configured_root = config.parent / settings["store"]["config"]["root"]
     except (OSError, ValueError, KeyError, TypeError) as error:
         config_error = error
-        configured_root = Path.cwd() / "runs"
     mode = "offline_mock" if offline else "not_resolved"
-    store = RunStore(output_root or configured_root)
-    store.emit("run_started", mode=mode)
+    store.emit("run_resumed" if store.state else "run_started", mode=mode)
     ledger: dict[str, Any] = {"schema_version": "0.2.0", "llm_attempts": 0,
                              "solver_calls": 0, "external_llm_requests": 0, "candidates": 0, "total_tokens": None,
                              "cost": 0, "evidence_origin": "mock_fixture"}
     error_record: dict[str, Any] | None = None
-    artifact_ref = None
+    artifact_ref = store.state.get("artifact_ref")
     settings_valid = False
-    solve_ref = None
-    execution_ref = None
+    solve_ref = store.state.get("solve_ref")
+    execution_ref = store.state.get("execution_ref")
     admission_ref = None
     requested_config_ref = None
     code_level = "deterministic_compilation"
     stages: dict[str, Any] = {name: {"status": "not_available", "reason": "Stage has not run."}
               for name in ("formulation", "code", "solve")}
+    ledger = store.state.get("ledger", ledger)
+    stages = store.state.get("stages", stages)
     try:
+        cancellation.check()
         if config_error:
             if isinstance(config_error, RunError):
                 raise config_error
@@ -71,27 +88,72 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
         requested_config_ref = store.json("requested-config.json", settings, "requested-config")
         validate_config(settings)
         settings_valid = True
-        plan = prepare_run(settings, offline=offline, config_dir=config.parent)
+        if not store.state:
+            sources = {str(problem.resolve()): hashlib.sha256(read_public_bytes(problem)).hexdigest(),
+                       str(config.resolve()): hashlib.sha256(read_public_bytes(config)).hexdigest()}
+            public_input = parse_json(read_public_bytes(problem))
+            for data in public_input.get("data_refs", []):
+                path = public_path(problem.parent, data["path"])
+                sources[str(path)] = hashlib.sha256(read_public_bytes(path)).hexdigest()
+            if "response_artifact" in settings["llm"]["config"]:
+                path = public_path(config.parent, settings["llm"]["config"]["response_artifact"])
+                sources[str(path)] = hashlib.sha256(read_public_bytes(path)).hexdigest()
+            store.state.update(problem=str(problem.resolve()), config=str(config.resolve()), sources=sources,
+                               offline=offline, phase="admitted", ledger=ledger, stages=stages,
+                               artifact_ref=None, solve_ref=None, execution_ref=None,
+                               deadline=started + settings["budget"]["wall_time_s"])
+        else:
+            ledger = store.state["ledger"]
+            stages = store.state["stages"]
+            artifact_ref = store.state["artifact_ref"]
+            solve_ref = store.state["solve_ref"]
+            execution_ref = store.state["execution_ref"]
+        plan = restored_plan or prepare_run(settings, offline=offline, config_dir=config.parent,
+                           deadline=store.state["deadline"], cancellation=cancellation, expected=store.state.get("admission"))
+        if "admission" in store.state and plan.snapshot != store.state["admission"]:
+            raise RunError("checkpoint_incompatible", "admission", "Method, package, runtime or resource identity changed.")
         admission_ref = store.json("admission-plan.json", plan.snapshot, "admission-plan")
         mode = plan.snapshot["mode"]
         if plan.snapshot["method_profile"] in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0"):
             code_level = "factory_contract"
-        artifact_ref, stages = _prepare_candidate(store, problem, config, settings, ledger, offline, plan)
+        store.state["admission"] = plan.snapshot
+        store.state["sdk"] = version("llm4om")
+        store.state["host"] = {"python": platform.python_version(), "sdk_sha256": _sdk_sha256(),
+                               "packages": {name: version(name) for name in ("PyYAML", "jsonschema")}}
+        store.checkpoint()
+        if artifact_ref is None:
+            artifact_ref, stages = _prepare_candidate(store, problem, config, settings, ledger, offline, plan)
+            store.state.update(artifact_ref=artifact_ref, stages=stages, phase="method_done")
+            store.checkpoint()
         status = "artifact_ready"
         if not offline:
-            artifact_ref, compiled = _compile_candidate(store, artifact_ref, settings)
+            if store.state["phase"] == "method_done":
+                artifact_ref, compiled = _compile_candidate(store, artifact_ref, settings)
+                stages["code"] = {"status": "available", "reason": None}
+                store.state.update(artifact_ref=artifact_ref, phase="code_done")
+                store.checkpoint()
+            else:
+                compiled = _restored_compilation(store, artifact_ref)
+            cancellation.check()
             stages["code"] = {"status": "available", "reason": None}
-            solve_ref, execution_ref, execution_error = _execute_candidate(store, compiled, artifact_ref, settings, ledger, plan)
-            if compiled is None and solve_ref is not None:
-                artifact_ref = next(ref for ref in store.refs if ref["relative_path"] == "candidates/001/artifact.json")
+            if store.state["phase"] != "execute_done":
+                solve_ref, execution_ref, execution_error = _execute_candidate(store, compiled, artifact_ref, settings, ledger, plan)
+                artifact_ref = store.state.get("executed_artifact_ref", artifact_ref)
+                store.state.update(solve_ref=solve_ref, execution_ref=execution_ref, artifact_ref=artifact_ref,
+                                   phase="execute_done" if solve_ref is not None and execution_error is None else "code_done")
+                store.checkpoint()
+            else:
+                execution_error = None
+                store.emit("execution_reused", solve_result_ref=solve_ref)
             if solve_ref is not None:
                 stages["solve"] = {"status": "available", "reason": None}
             if execution_error is not None:
                 raise execution_error
             stages["solve"] = {"status": "available", "reason": None}
+            cancellation.check()
             status = "completed"
     except (RunError, ValueError, KeyError, TypeError) as error:
-        status = "failed"
+        status = "cancelled" if isinstance(error, RunError) and error.code == "run_cancelled" else "failed"
         error_record = {"code": error.code if isinstance(error, RunError) else "invalid_input",
                         "stage": error.stage if isinstance(error, RunError) else "validation",
                         "message": str(error) if isinstance(error, RunError) else "Cannot process the public input or Mock artifact."}
@@ -103,6 +165,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
                    "code_validation": {"status": "pass", "level": code_level}
                                       if stages["code"]["status"] == "available" else {"status": "not_available"},
                    "semantic_validation": {"status": "not_available"}}, "evaluation")
+    store.state.update(ledger=ledger, stages=stages, artifact_ref=artifact_ref, solve_ref=solve_ref, execution_ref=execution_ref)
     store.json("budget-ledger.json", ledger, "budget")
     store.emit("run_finished", status=status, error=error_record)
     if settings_valid and any(reporter["plugin_id"] == "llm4om.reporters.markdown" for reporter in settings.get("reporters", [])):
@@ -126,6 +189,8 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
                "execution_result_ref": execution_ref,
                "admission_plan_ref": admission_ref,
                "requested_config_ref": requested_config_ref,
+               "public_problem_ref": store.projections.get("public-problem.json"),
+               "public_projections": {name: ref for name, ref in store.projections.items() if name != "bundle.json"},
                "final_candidate_id": "001" if status == "completed" else None,
                "execution_plan": {name: {"requested_plugin_id": settings.get(name, {}).get("plugin_id"),
                     "resolved_plugin_id": settings[name]["plugin_id"] if resource_status[name] != "not_available" else None,
@@ -134,6 +199,8 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
                     if name == "compiler" and code_level == "factory_contract" else "Resource did not complete successfully."}
                     for name in ["compiler", "model_backend", "solver", "executor"]} if settings_valid else {},
                "artifacts": list(store.refs)}, "bundle")
+    store.state["status"] = status
+    store.checkpoint()
     return RunResult(store.run_id, store.path, status)
 
 
@@ -171,16 +238,29 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
                "mode": plan.snapshot["mode"],
                "method": {"manifest": method.manifest, "origin": method.origin},
                "method_variant": (method.manifest["source"] or {}).get("variant_id", "grounded_single_candidate")}, "environment")
+    if plan.provider is None:
+        raise RunError("checkpoint_incompatible", "admission", "Identity-only admission cannot run a method.")
     gateway = plan.provider.gateway(public, hashlib.sha256(source_problem).hexdigest(), store, ledger,
                                     settings["budget"], config.parent, deadline=plan.deadline)
+    def save_method_checkpoint(value: dict[str, Any]) -> None:
+        if not method.manifest["capabilities"].get("supports_checkpoint"):
+            raise RunError("checkpoint_unsupported", "formulation", "Method has no internal checkpoint contract.")
+        value = parse_json(json.dumps(value, allow_nan=False).encode())
+        if not isinstance(value.get("schema_version"), str):
+            raise RunError("checkpoint_incompatible", "formulation", "Method checkpoint must be versioned JSON.")
+        store.state["method_checkpoint"] = value
+        store.checkpoint()
     context = MethodContext(gateway, MappingProxyType(data_content), MappingProxyType(deepcopy(settings["budget"])),
-                            hashlib.sha256(source_problem).hexdigest())
+                            hashlib.sha256(source_problem).hexdigest(), store.cancellation, save_method_checkpoint)
     try:
-        outcome = method.run(deepcopy(settings["method"]["config"]), deepcopy(public), context)
+        outcome = method.run(deepcopy(settings["method"]["config"]), deepcopy(public), context,
+                             checkpoint=store.state.get("method_checkpoint"))
     finally:
         if isinstance(gateway, Gateway):
             ledger.update(gateway.ledger)
             store.json("llm-trace.json", {"schema_version": "0.2.0", "attempts": gateway.trace}, "llm-trace")
+        store.state["ledger"] = ledger
+        store.checkpoint()
     if (outcome.status != "candidate_selected" or outcome.final_candidate_id != "001"
             or not isinstance(outcome.proposal, ModelProposal)):
         raise RunError("invalid_method_outcome", "formulation", "This profile requires one selected candidate with ID 001.")
@@ -297,6 +377,8 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
     solver_options = {**settings["solver"].get("options", {})}
     solver_options["time_limit_s"] = min(solver_options.get("time_limit_s", remaining), remaining)
     ledger["solver_calls"] += 1
+    store.state.update(ledger=ledger, phase="execute_pending")
+    store.checkpoint()
     store.emit("solver_started", solver_id=settings["solver"]["plugin_id"])
     out, err = StringIO(), StringIO()
     error = None
@@ -327,9 +409,11 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
             for data in parse_json(read_public_bytes(store.path / "public-problem.json"))["data_refs"]:
                 inputs[data["path"]] = read_public_bytes(store.path / data["path"])
             container = run_container(["python", "-I", "-m", "llm4om.worker", "--solve", "/input/request.json", "--solver", settings["solver"]["plugin_id"]],
-                inputs, limits, image=plan.snapshot["worker"]["image_id"], deadline=plan.deadline)
+                inputs, limits, image=plan.snapshot["worker"]["image_id"], deadline=plan.deadline, cancellation=store.cancellation)
             out.write(container.stdout.decode(errors="replace"))
             err.write(container.stderr.decode(errors="replace"))
+            if container.status == "cancelled":
+                raise RunError("run_cancelled", "execution", "The isolated Worker was cancelled.")
             if container.status in ("timeout", "oom", "output_limit"):
                 raise RunError(f"execution_{container.status}", "execution", "The isolated Worker exceeded an enforced resource limit.")
             payload = parse_json(container.stdout)
@@ -370,8 +454,26 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
         else:
             if compiled is None:
                 raise RunError("capability_mismatch", "execution", "Factory code cannot execute on the host.")
-            with redirect_stdout(out), redirect_stderr(err):
-                solve = solve_model(compiled, solver_options, settings["solver"]["plugin_id"])
+            artifact = parse_json(read_public_bytes(store.path / artifact_ref["relative_path"]))
+            formulation = parse_json(read_public_bytes(store.path / artifact["formulation_ref"]["relative_path"]))
+            ir = parse_json(read_public_bytes(store.path / formulation["structured_ir_ref"]["relative_path"]))
+            stdout, stderr, exit_code = run_owned_process(
+                [sys.executable, "-m", "llm4om.worker", "--solve-stdin", "--solver", settings["solver"]["plugin_id"]],
+                json.dumps({"ir": ir, "source_sha256": hashlib.sha256(compiled.source.encode()).hexdigest(),
+                            "solver_options": solver_options}, allow_nan=False).encode(),
+                deadline=plan.deadline, cancellation=store.cancellation)
+            out.write(stdout.decode(errors="replace"))
+            err.write(stderr.decode(errors="replace"))
+            payload = parse_json(stdout)
+            if "error" in payload:
+                raise RunError(payload["error"]["code"], payload["error"]["stage"], payload["error"]["message"])
+            if exit_code != 0:
+                raise RunError("solver_error", "solve", "The owned Solver child failed.")
+            validate_worker_response(payload, payload["runtime"], solver_id=settings["solver"]["plugin_id"],
+                                     model_backend=settings["model_backend"]["plugin_id"])
+            solve = payload["result"]
+            resources = payload["resources"]
+            executor_details.update(exit_code=exit_code)
         variables = solve.pop("variables")
         solve["schema_version"] = "0.2.0"
         solve["solution_ref"] = store.json("candidates/001/solution.json", {
@@ -382,7 +484,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
             error = RunError("solver_error", "solve", "Solver reports an execution error.")
     except RunError as failure:
         error = failure
-        if failure.code == "executor_error":
+        if failure.details is not None:
             executor_details = failure.details or {}
             out.write(executor_details.get("stdout", ""))
             err.write(executor_details.get("stderr", ""))
@@ -393,7 +495,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
     output_ref = store.write("candidates/001/stdout.txt", out.getvalue().encode(), "stdout")
     stderr_ref = store.write("candidates/001/stderr.txt", err.getvalue().encode(), "stderr")
     execution_ref = store.json("candidates/001/execution.json", {"schema_version": "0.2.0",
-        "execution_id": "execution-001", "mode": settings["executor"]["plugin_id"].removeprefix("llm4om.executors."), "status": "failed" if error else "completed",
+        "execution_id": "execution-001", "mode": settings["executor"]["plugin_id"].removeprefix("llm4om.executors."), "status": "cancelled" if error and error.code == "run_cancelled" else "failed" if error else "completed",
         "start": started, "end": datetime.now(timezone.utc).isoformat(),
         "worker_status": container.status if container else executor_details.get("status"),
         "exit_code": container.exit_code if container else executor_details.get("exit_code"),
@@ -411,4 +513,61 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
     candidate = parse_json(read_public_bytes(store.path / "candidates/001/candidate-snapshot.json"))
     candidate.update(artifact_ref=artifact_ref, status="executed" if error else "selected")
     store.json("candidates/001/candidate.json", candidate, "001")
+    store.state["executed_artifact_ref"] = artifact_ref
     return solve_ref, execution_ref, error
+
+
+def _restored_compilation(store: RunStore, artifact_ref: dict[str, Any]) -> CompiledCode | None:
+    artifact = parse_json(read_public_bytes(store.path / artifact_ref["relative_path"]))
+    code = parse_json(read_public_bytes(store.path / artifact["code_ref"]["relative_path"]))
+    if code["provenance"]["origin"] != "deterministic_compilation":
+        return None
+    ir = parse_json(read_public_bytes(store.path / code["provenance"]["source_ir_ref"]["relative_path"]))
+    return compile_ir(ir)
+
+
+def _sdk_sha256() -> str:
+    digest = hashlib.sha256()
+    for path in sorted(Path(__file__).parent.glob("*.py")):
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def resume_run(run: Path, *, cancellation: CancellationToken | None = None) -> RunResult:
+    """Restore the same run and frozen resources; unsupported method state is refused."""
+    store = RunStore(run.parent, resume=run, cancellation=cancellation)
+    try:
+        if store.state.get("sdk") != version("llm4om"):
+            raise RunError("checkpoint_incompatible", "admission", "SDK version differs from the saved run.")
+        if "sources" not in store.state or "admission" not in store.state:
+            raise RunError("checkpoint_unsupported", "admission", "Run did not reach a resumable admitted checkpoint.")
+        for path, digest in store.state["sources"].items():
+            if hashlib.sha256(read_public_bytes(Path(path))).hexdigest() != digest:
+                raise RunError("checkpoint_incompatible", "admission", "Original public input or configuration changed.")
+        if "gateway_sha256" in store.state:
+            resource = store.path.parent / ".private" / store.run_id / "state.json"
+            if not resource.is_file() or hashlib.sha256(resource.read_bytes()).hexdigest() != store.state["gateway_sha256"]:
+                raise RunError("checkpoint_incompatible", "admission", "Saved Gateway resource identity changed or is missing.")
+        host = {"python": platform.python_version(), "sdk_sha256": _sdk_sha256(), "packages": {name: version(name) for name in ("PyYAML", "jsonschema")}}
+        if host != store.state.get("host"):
+            raise RunError("checkpoint_incompatible", "admission", "Host Python or package identity changed.")
+        settings = read_config(Path(store.state["config"]))
+        # Completed runs validate identity without consuming a new runtime probe or deadline.
+        saved_deadline = store.state["deadline"]
+        plan = prepare_run(settings, offline=store.state["offline"], config_dir=Path(store.state["config"]).parent,
+                           deadline=max(saved_deadline, time.time() + 5) if store.state.get("status") in ("completed", "artifact_ready") else saved_deadline,
+                           cancellation=store.cancellation, expected=store.state["admission"],
+                           identity_only=store.state.get("status") in ("completed", "artifact_ready"))
+        if plan.snapshot != store.state["admission"]:
+            raise RunError("checkpoint_incompatible", "admission", "Saved resource identity differs from admission.")
+        if store.state.get("status") in ("completed", "artifact_ready"):
+            return RunResult(store.run_id, store.path, store.state["status"])
+        if time.time() >= store.state["deadline"]:
+            raise RunError("deadline_exhausted", "admission", "The original absolute run deadline expired.")
+        if store.state.get("artifact_ref") is None and store.state.get("method_checkpoint") is None:
+            raise RunError("checkpoint_unsupported", "admission", "No completed stage or supported internal method checkpoint exists.")
+        return _run_problem(Path(store.state["problem"]), Path(store.state["config"]), store,
+                            offline=store.state["offline"], restored_plan=plan)
+    finally:
+        store.close()

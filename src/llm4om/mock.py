@@ -51,16 +51,25 @@ class MockGateway:
 
     async def complete(self, request: dict[str, Any]) -> LLMResponse:
         request = parse_json(json.dumps(request, allow_nan=False).encode())
-        if set(request) - {"messages"}:
+        if set(request) - {"messages", "request_id"}:
             raise RunError("capability_mismatch", "admission", "Mock supports text messages only.")
         try:
             jsonschema.Draft202012Validator({"type": "object", "properties": {
+                "request_id": {"type": "string", "minLength": 1},
                 "messages": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {
                     "role": {"enum": ["system", "user", "assistant"]}, "content": {"type": "string"}},
                     "required": ["role", "content"], "additionalProperties": False}}},
                 "required": ["messages"], "additionalProperties": False}).validate(request)
         except jsonschema.ValidationError as error:
             raise RunError("invalid_llm_request", "admission", "Mock requests need role/text messages.") from error
+        self.store.cancellation.check()
+        request_id = request.get("request_id")
+        cached = self.store.state.setdefault("mock_responses", {})
+        if request_id in cached:
+            saved = cached[request_id]
+            response = LLMResponse(saved["text"], saved["call_id"], "mock_fixture", saved["source_sha256"])
+            self.calls.append(response)
+            return response
         if self.ledger["llm_attempts"] >= self.max_attempts:
             raise RunError("budget_exhausted", "admission", "No Mock attempt remains.")
         self.ledger["llm_attempts"] += 1
@@ -70,5 +79,8 @@ class MockGateway:
         text = json.dumps({"artifact": output.artifact, "formulation": output.formulation,
                            "structured_ir": output.structured_ir}, ensure_ascii=False, allow_nan=False)
         response = LLMResponse(text, call_id, "mock_fixture", output.source_sha256)
+        if request_id is not None:
+            cached[request_id] = {"text": text, "call_id": call_id, "source_sha256": output.source_sha256}
+            self.store.checkpoint()
         self.calls.append(response)
         return response

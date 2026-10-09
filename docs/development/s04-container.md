@@ -1,6 +1,6 @@
 # S04-A 容器执行
 
-本页记录已批准 S04-A 的实现与真实验证，关联 [Issue #6](https://github.com/Fangziyang0910/LLM4OM/issues/6)。规范来源为 [执行设计 DD-05](../design/execution.md)、[契约](../plugin-contracts.md)及 [AC-05/14](../acceptance.md)。当前路径为公开 grounded LPIR → 确定性 CodeArtifact → Pyomo／HiGHS；取消与恢复由 S04-B 继续实现。
+本页记录已批准 S04-A 的实现与真实验证，关联 [Issue #6](https://github.com/Fangziyang0910/LLM4OM/issues/6)。规范来源为 [执行设计 DD-05](../design/execution.md)、[契约](../plugin-contracts.md)及 [AC-05/14](../acceptance.md)。当前路径为公开 grounded LPIR → 确定性 CodeArtifact → Pyomo／HiGHS；取消与恢复的当前实现见 [S04-B](s04-resume.md)。
 
 ## 使用
 
@@ -52,4 +52,4 @@ Docker 控制命令各有 2 秒上限，控制输出上限为 1 MiB；本地 CLI
 
 Docker daemon／控制命令卡住使用外部 CLI fixture，覆盖 create、attach、kill、inspect 和 remove，以及后代保留管道、已关闭管道和不完整退出证据。它们验证有限时间返回和失败证据，不替代真实 Docker 资源测试。执行测试均通过公共 CLI／Executor；真实硬件测试不跳过。完整检查、包安装与独立审阅结果见 [校验记录](../spec-validation.md)。
 
-当前没有接入真实 LLM、参数化工厂／原生代码、取消／resume 或 benchmark 调度。Linux 已运行上述真实 fixture；macOS 客户端尚未验收，Windows 不标为已验收。完整 1.0 的完成条件仍由需求规格和验收清单维护。
+S04-A 的首次交付不包含真实 LLM、参数化工厂／原生代码、取消／resume 或 benchmark 调度。后续切片已接入前三类能力及 [S04-B 取消／恢复](s04-resume.md)，batch 仍待实现。Linux 已运行上述真实 fixture；macOS 客户端尚未验收，Windows 不标为已验收。完整 1.0 的完成条件仍由需求规格和验收清单维护。

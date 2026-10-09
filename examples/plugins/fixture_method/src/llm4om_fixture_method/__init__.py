@@ -4,6 +4,7 @@ import json
 from importlib.resources import files
 from typing import Any
 
+from llm4om.contracts import RunError
 from llm4om.methods import MethodContext, MethodOutcome, ModelProposal
 
 
@@ -13,7 +14,11 @@ class FixtureMethod:
 
     async def run(self, problem: dict[str, Any], context: MethodContext,
                   *, checkpoint: dict[str, Any] | None = None) -> MethodOutcome:
+        if checkpoint is not None:
+            raise RunError("checkpoint_unsupported", "formulation", "Fixture has no internal checkpoint.")
+        context.cancellation.check()
         response = await context.llm.complete({"messages": [{"role": "user", "content": problem["description"]}]})
+        context.cancellation.check()
         value = json.loads(response.text)
         value["structured_ir"]["objective"]["expression"]["constant"] += self.offset
         value["formulation"]["representation"]["objective"]["expression_text"] += f" + {self.offset}"

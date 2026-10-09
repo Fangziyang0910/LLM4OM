@@ -1,6 +1,6 @@
 # 1.0 验收清单与需求追踪
 
-以下复选框用于完整 1.0 验收，目前仍未全部通过。[S01](development/s01-offline-run.md) 完成离线工程部分，[S02-A](development/s02-highs.md) 完成严格 IR 与真实 HiGHS 部分；[S03](development/s03-plugins.md) 完成独立方法包与当前兼容路径的预检部分；真实 LLM、Gurobi、隔离、恢复和 Web 保持待验收。
+以下复选框用于完整 1.0 验收，目前仍未全部通过。[S01](development/s01-offline-run.md) 完成离线工程部分，[S02-A](development/s02-highs.md) 完成严格 IR 与真实 HiGHS 部分；[S03](development/s03-plugins.md) 完成独立方法包与当前兼容路径的预检部分；[S04-B](development/s04-resume.md) 完成当前 profile 的取消／恢复部分。各切片的真实 LLM、Gurobi 与隔离证据见实现记录；Web、batch 和完整 1.0 保持待验收。
 
 文档修订：0.4.0。验收覆盖单问题两阶段建模、数据绑定与研究来源；详细流程见 [详细设计](detailed-design.md)。
 

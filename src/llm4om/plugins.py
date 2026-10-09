@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 import asyncio
 import json
+import hashlib
 import re
 import traceback
 import os
@@ -26,7 +27,10 @@ class MethodPlugin:
     def resolve(self, config: dict[str, Any]) -> "MethodPlugin":
         return MethodPlugin(_manifest(self.factory, config), self.origin, self.factory)
 
-    def run(self, config: dict[str, Any], problem: dict[str, Any], context: MethodContext) -> MethodOutcome:
+    def run(self, config: dict[str, Any], problem: dict[str, Any], context: MethodContext,
+            *, checkpoint: dict[str, Any] | None = None) -> MethodOutcome:
+        if checkpoint is not None and not self.manifest["capabilities"].get("supports_checkpoint"):
+            raise RunError("checkpoint_unsupported", "admission", "Method has no internal checkpoint contract.")
         async def invoke() -> MethodOutcome:
             try:
                 with _quiet():
@@ -36,13 +40,35 @@ class MethodPlugin:
                 raise RunError(code, "admission", "Cannot construct the method with this configuration and environment.",
                                details={"plugin_id": self.manifest["plugin_id"], **_exception_details(error)}) from error
             try:
+                async def watched() -> MethodOutcome:
+                    async def method_task() -> MethodOutcome:
+                        try:
+                            result: MethodOutcome = await method.run(problem, context, checkpoint=checkpoint)
+                            return result
+                        except SystemExit as error:
+                            raise RunError("method_error", "formulation", "The installed modeling method failed.",
+                                           details=_exception_details(error)) from error
+                    pending = asyncio.create_task(method_task())
+                    try:
+                        while not pending.done():
+                            context.cancellation.check()
+                            await asyncio.sleep(0.05)
+                        result: MethodOutcome = await pending
+                        return result
+                    finally:
+                        if not pending.done():
+                            pending.cancel()
+                            try:
+                                await pending
+                            except asyncio.CancelledError:
+                                pass
                 with _quiet():
-                    outcome = await method.run(problem, context, checkpoint=None)
+                    outcome = await watched()
                 if not isinstance(outcome, MethodOutcome):
                     raise TypeError("Expected MethodOutcome.")
                 return outcome
             except RunError as error:
-                raise RunError(error.code, error.stage, "The modeling method or its public resource failed.") from error
+                raise RunError(error.code, error.stage, "The modeling method or its public resource failed.", details=error.details) from error
             except (Exception, SystemExit) as error:
                 details = {"plugin_id": self.manifest["plugin_id"], **_exception_details(error)}
                 raise RunError("method_error", "formulation", "The installed modeling method failed.", details=details) from error
@@ -70,7 +96,11 @@ def discover_methods() -> dict[tuple[str, str], MethodPlugin]:
             raise
         origin = {"kind": "installed", "entry_point": entry.name, "value": entry.value,
                   "distribution": entry.dist.name if entry.dist else None,
-                  "distribution_version": entry.dist.version if entry.dist else None}
+                  "distribution_version": entry.dist.version if entry.dist else None,
+                  "package_sha256": hashlib.sha256(b"".join(
+                      str(file).encode() + Path(str(entry.dist.locate_file(file))).read_bytes()
+                      for file in sorted(entry.dist.files or [], key=str) if file.suffix == ".py"
+                  )).hexdigest() if entry.dist else None}
         key = (manifest["kind"], manifest["plugin_id"])
         if key in plugins:
             raise RunError("duplicate_plugin", "admission", "Two active methods share a registry key.")
@@ -85,7 +115,7 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
     capabilities = {name: strings for name in ("problem_types", "input_artifact_kinds", "output_artifact_kinds",
                     "formulation_representations", "code_representations", "model_backends", "solvers", "llm_features",
                     "execution_modes", "oracle_requirements")}
-    capabilities.update(method_profile=text, supports_checkpoint={"type": "boolean"}, supports_clarification={"type": "boolean"})
+    capabilities.update(method_profile=text, supports_checkpoint={"type": "boolean"}, supports_clarification={"type": "boolean"}, cancellation={"const": "cooperative/0.1.0"})
     fields = {"schema_version": {"const": "0.2.0"}, "plugin_id": {**text,
               "pattern": r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$"}, "kind": {"const": "method"},
               "plugin_version": {"type": "string", "pattern": f"^{stable_version}$", "maxLength": 128},

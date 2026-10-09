@@ -15,10 +15,11 @@ from time import monotonic, sleep, time
 from typing import Any, Mapping
 from uuid import uuid4
 
+from llm4om.control import CancellationToken
 from llm4om.contracts import RunError, parse_json
 
 
-DEFAULT_IMAGE = "llm4om-worker:0.6.0"
+DEFAULT_IMAGE = "llm4om-worker:0.7.0"
 _CONTROL_TIMEOUT_S = 2.0
 _REAP_TIMEOUT_S = 0.5
 _CONTROL_OUTPUT_BYTES = 1048576
@@ -73,7 +74,10 @@ def _check_deadline(deadline: float | None) -> None:
         raise RunError("deadline_exhausted", "execution", "No shared run deadline remains for Worker admission.")
 
 
-def _docker(arguments: list[str], diagnostics: list[str], *, deadline: float | None = None) -> bytes:
+def _docker(arguments: list[str], diagnostics: list[str], *, deadline: float | None = None,
+            cancellation: CancellationToken | None = None) -> bytes:
+    if cancellation is not None:
+        cancellation.check()
     _check_deadline(deadline)
     process = subprocess.Popen(["docker", *arguments], stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
@@ -86,6 +90,8 @@ def _docker(arguments: list[str], diagnostics: list[str], *, deadline: float | N
             selector.register(process.stdout, selectors.EVENT_READ, 0)
             selector.register(process.stderr, selectors.EVENT_READ, 1)
             while selector.get_map() or process.poll() is None:
+                if cancellation is not None:
+                    cancellation.check()
                 if monotonic() >= control_deadline:
                     _check_deadline(deadline)
                     raise subprocess.TimeoutExpired(process.args, _CONTROL_TIMEOUT_S)
@@ -106,13 +112,14 @@ def _docker(arguments: list[str], diagnostics: list[str], *, deadline: float | N
         _dispose(process, arguments[0], diagnostics)
 
 
-def container_runtime(image: str = DEFAULT_IMAGE, *, deadline: float | None = None) -> dict[str, Any]:
+def container_runtime(image: str = DEFAULT_IMAGE, *, deadline: float | None = None,
+                      cancellation: CancellationToken | None = None) -> dict[str, Any]:
     diagnostics: list[str] = []
     operation = "version"
     try:
-        version = _docker(["version", "--format", "{{.Server.Version}}"], diagnostics, deadline=deadline).decode().strip()
+        version = _docker(["version", "--format", "{{.Server.Version}}"], diagnostics, deadline=deadline, cancellation=cancellation).decode().strip()
         operation = "image inspect"
-        raw = _docker(["image", "inspect", image], diagnostics, deadline=deadline)
+        raw = _docker(["image", "inspect", image], diagnostics, deadline=deadline, cancellation=cancellation)
         info = json.loads(raw)[0]
         if not version or not isinstance(info["Id"], str) or not info["Id"] or diagnostics:
             raise ValueError("Docker runtime evidence is incomplete.")
@@ -127,9 +134,10 @@ def container_runtime(image: str = DEFAULT_IMAGE, *, deadline: float | None = No
 
 
 def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[str, Any],
-                  *, image: str = DEFAULT_IMAGE, deadline: float | None = None) -> ContainerExecution:
+                  *, image: str = DEFAULT_IMAGE, deadline: float | None = None,
+                  cancellation: CancellationToken | None = None) -> ContainerExecution:
     _validate_request(command, inputs, limits, image, deadline)
-    runtime = container_runtime(image, deadline=deadline)
+    runtime = container_runtime(image, deadline=deadline, cancellation=cancellation)
     name = f"llm4om-{uuid4().hex}"
     maximum_output = limits.get("output_limit_bytes", 1048576)
     pids = limits.get("pids_limit", 64)
@@ -176,7 +184,7 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
                 "--entrypoint", command[0], runtime["image_id"], *command[1:]]
         operation = "create"
         create_attempted = True
-        container_id = _docker(args, diagnostics, deadline=deadline).decode().strip()
+        container_id = _docker(args, diagnostics, deadline=deadline, cancellation=cancellation).decode().strip()
         if not container_id:
             raise ValueError("Docker did not return a container ID.")
         operation = "attach"
@@ -188,6 +196,8 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
             selector.register(process.stdout, selectors.EVENT_READ, 0)
             selector.register(process.stderr, selectors.EVENT_READ, 1)
             while selector.get_map() or process.poll() is None:
+                if status == "completed" and cancellation is not None and cancellation.cancelled:
+                    status = "cancelled"
                 if status == "completed" and monotonic() - started >= wall_time_s:
                     status = "timeout"
                 if status != "completed" and stop_deadline is None:
@@ -268,8 +278,12 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
             "nano_cpus": config["NanoCpus"], "pids_limit": config["PidsLimit"], "cap_drop": config["CapDrop"],
             "security_options": config["SecurityOpt"], "mounts": [{"destination": item["Destination"], "rw": item["RW"]}
                 for item in info["Mounts"]], "output_limit_bytes": maximum_output}
-    except RunError:
-        raise
+    except RunError as error:
+        if error.code not in ("run_cancelled", "deadline_exhausted"):
+            raise
+        status = "cancelled" if error.code == "run_cancelled" else "timeout"
+        failure = error
+        diagnostics.append(f"{operation}: {error.code}.")
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError, TypeError) as error:
         diagnostics.append(_diagnostic(operation, error))
         if status not in ("timeout", "output_limit", "oom"):
@@ -297,7 +311,7 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
             except OSError as error:
                 diagnostics.append(_diagnostic("public inputs cleanup", error))
     if failure is not None or (status == "completed" and diagnostics):
-        raise RunError("executor_error", "execution", "Cannot start, observe or collect the isolated Worker.",
+        raise RunError(failure.code if isinstance(failure, RunError) else "executor_error", "execution", "Cannot start, observe or collect the isolated Worker.",
             details={"status": status, "container_id": container_id, "container_name": name,
                 "image_id": runtime["image_id"], "exit_code": exit_code, "oom_killed": oom_killed, "oom_evidence": oom_evidence,
                 "stdout": bytes(captured[0]).decode(errors="replace"), "stderr": bytes(captured[1]).decode(errors="replace"),
@@ -351,9 +365,12 @@ def _validate_request(command: list[str], inputs: Mapping[str, bytes], limits: d
 
 
 def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
-                   solver_id: str = "llm4om.solvers.highs") -> dict[str, Any]:
+                   solver_id: str = "llm4om.solvers.highs",
+                   cancellation: CancellationToken | None = None) -> dict[str, Any]:
     execution = run_container(["python", "-I", "-m", "llm4om.worker", "--runtime", "--solver", solver_id], {}, limits,
-                              image=limits.get("image", DEFAULT_IMAGE), deadline=deadline)
+                              image=limits.get("image", DEFAULT_IMAGE), deadline=deadline, cancellation=cancellation)
+    if execution.status == "cancelled":
+        raise RunError("run_cancelled", "admission", "Worker admission was cancelled.")
     try:
         data = parse_json(execution.stdout)
         runtime = data["runtime"]
@@ -373,3 +390,32 @@ def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
         return {**runtime, "image_id": execution.image_id, "restrictions": execution.restrictions}
     except (ValueError, KeyError, TypeError) as error:
         raise RunError("executor_unavailable", "admission", "Worker image cannot load the required Solver runtime.") from error
+
+
+def run_owned_process(command: list[str], payload: bytes, *, deadline: float,
+                      cancellation: CancellationToken) -> tuple[bytes, bytes, int]:
+    """Supervise an owned trusted resource child under the same run deadline."""
+    cancellation.check()
+    _check_deadline(deadline)
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, start_new_session=True)
+    diagnostics: list[str] = []
+    partial_out, partial_err = b"", b""
+    try:
+        data: bytes | None = payload
+        while True:
+            cancellation.check()
+            _check_deadline(deadline)
+            try:
+                stdout, stderr = process.communicate(data, timeout=min(0.05, max(0, deadline - time())))
+                return stdout, stderr, process.returncode
+            except subprocess.TimeoutExpired as error:
+                data = None
+                partial_out, partial_err = error.output or b"", error.stderr or b""
+    except RunError as error:
+        raise RunError(error.code, error.stage, str(error), details={
+            "status": "cancelled" if error.code == "run_cancelled" else "timeout",
+            "stdout": partial_out.decode(errors="replace"), "stderr": partial_err.decode(errors="replace"),
+            "exit_code": None, "diagnostics": diagnostics}) from error
+    finally:
+        _dispose(process, 'resource child', diagnostics)

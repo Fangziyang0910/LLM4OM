@@ -315,6 +315,44 @@ asyncio.run(main())
         listing = self.cli("plugins", "list")
         self.assertEqual(json.loads(listing.stdout)["error"]["details"]["entry_point"], "fixture_method")
 
+    def test_cancelled_method_without_internal_checkpoint_refuses_resume(self) -> None:
+        import time
+        import yaml
+        self.install_method(run_body='import asyncio\nawait asyncio.sleep(30)')
+        settings = yaml.safe_load((self.inputs / "solve.yaml").read_text())
+        settings["method"] = {"plugin_id": "llm4om.examples.objective_offset", "config": {"objective_offset": 7}}
+        config = self.inputs / "plugin.yaml"
+        config.write_text(yaml.safe_dump(settings))
+        output = self.root / "runs"
+        process = subprocess.Popen([sys.executable, "-m", "llm4om", "run", "--problem", str(self.inputs / "problem.json"),
+            "--config", str(config), "--output", str(output)], cwd=self.root,
+            env={**os.environ, "PYTHONPATH": os.pathsep.join((str(ROOT / "src"), str(self.packages)))},
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            deadline = time.monotonic() + 6
+            path = None
+            while time.monotonic() < deadline:
+                paths = list(output.glob("*/environment-lock.json"))
+                if paths:
+                    path = paths[0].parent
+                    break
+                time.sleep(0.02)
+            self.assertIsNotNone(path)
+            cancelled = self.cli("cancel", "--run-id", path.name, "--output", str(output))
+            self.assertEqual(cancelled.returncode, 0, cancelled.stderr)
+            stdout, stderr = process.communicate(timeout=4)
+            self.assertEqual(json.loads(stdout)["status"], "cancelled", stderr)
+            history = (path / "events.jsonl").read_bytes()
+            restored = self.cli("resume", "--run-id", path.name, "--output", str(output))
+            self.assertEqual(restored.returncode, 1)
+            self.assertEqual(json.loads(restored.stdout)["error"]["code"], "checkpoint_unsupported")
+            self.assertEqual((path / "events.jsonl").read_bytes(), history)
+            self.assertEqual(len(list(output.glob("*/bundle.json"))), 1)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=2)
+
 
 if __name__ == "__main__":
     unittest.main()

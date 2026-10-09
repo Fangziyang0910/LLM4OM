@@ -52,18 +52,21 @@ class NL4OptEvaluator:
                     or len(oracle_raw) != entry["oracle_ref"]["size_bytes"]):
                 raise RunError("snapshot_hash_mismatch", "evaluation", "Private annotations changed after import.")
             bundle = parse_json((outcome / "bundle.json").read_bytes())
-            if bundle.get("schema_version") != "0.2.0" or bundle.get("status") not in {"failed", "completed", "artifact_ready"}:
+            if bundle.get("schema_version") != "0.2.0" or bundle.get("status") not in {"failed", "cancelled", "completed", "artifact_ready"}:
                 raise RunError("invalid_outcome", "evaluation", "Unsupported application outcome schema or status.")
             result.update(run_id=bundle["run_id"], run_status=bundle["status"], run_error=bundle["error"])
             for ref in bundle["artifacts"]:
                 _verify_ref(outcome, ref)
-            problems = [ref for ref in bundle["artifacts"] if ref["relative_path"] == "public-problem.json"]
+            for name, ref in bundle.get("public_projections", {}).items():
+                _verify_ref(outcome, {**ref, "relative_path": name})
+            problems = ([bundle["public_problem_ref"]] if bundle.get("public_problem_ref") else
+                        [ref for ref in bundle["artifacts"] if ref["relative_path"] == "public-problem.json"])
             if problems:
                 observed = _read_ref(outcome, problems[0])
                 if observed != public:
                     raise RunError("outcome_case_mismatch", "evaluation", "Run belongs to another public problem revision.")
                 result["case_binding"] = {"status": "pass"}
-            elif bundle["status"] != "failed":
+            elif bundle["status"] not in {"failed", "cancelled"}:
                 raise RunError("outcome_case_mismatch", "evaluation", "Successful run must identify its public problem.")
             for stage, field in (("formulation", "formulation_validation"), ("code", "code_validation")):
                 if bundle["stages"][stage]["status"] == "available":

@@ -6,12 +6,14 @@ import json
 import os
 import re
 import subprocess
+import signal
 import sys
 import time
 from contextlib import contextmanager
 from email.message import Message
 from pathlib import Path
-from typing import Any, Iterator, Mapping, Protocol
+from typing import Any, Callable, Iterator, Mapping, Protocol
+from llm4om.control import CancellationToken
 from urllib.error import HTTPError, URLError
 from uuid import uuid4
 from urllib.parse import urlsplit
@@ -84,7 +86,14 @@ class OpenAICompatibleProvider:
 
     def gateway(self, public: dict[str, Any], problem_sha256: str, store: Any,
                 ledger: dict[str, Any], budget: Mapping[str, Any], config_dir: Path, *, deadline: float) -> "Gateway":
-        return Gateway(self, budget, store.path.parent / ".private" / store.run_id, deadline=deadline)
+        archive = store.path.parent / ".private" / store.run_id
+        def saved(digest: str, ledger: dict[str, Any]) -> None:
+            store.state["gateway_sha256"] = digest
+            store.state["ledger"].update(ledger)
+            store.checkpoint()
+        gateway = Gateway(self, budget, archive, deadline=deadline, cancellation=store.cancellation, on_save=saved)
+        saved(hashlib.sha256((archive / "state.json").read_bytes()).hexdigest(), gateway.ledger)
+        return gateway
 
     def _transport_input(self, messages: list[dict[str, str]], timeout: float) -> bytes:
         return json.dumps({"endpoint": self.identity, "model": self.model,
@@ -97,17 +106,17 @@ class OpenAICompatibleProvider:
         started = time.monotonic()
         payload = self._transport_input(messages, timeout)
         with subprocess.Popen(_TRANSPORT_COMMAND, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                              stderr=subprocess.DEVNULL) as process:
+                              stderr=subprocess.DEVNULL, start_new_session=True) as process:
             try:
                 raw, _ = process.communicate(payload,
                                              timeout=max(0, timeout - (time.monotonic() - started)))
             except subprocess.TimeoutExpired:
-                process.kill()
+                os.killpg(process.pid, signal.SIGKILL)
                 process.communicate()
                 raise TimeoutError("Provider request deadline expired.") from None
             finally:
                 if process.poll() is None:
-                    process.kill()
+                    os.killpg(process.pid, signal.SIGKILL)
                     process.communicate()
         return _transport_result(raw)
 
@@ -118,7 +127,7 @@ class OpenAICompatibleProvider:
         payload = self._transport_input(messages, timeout)
         process = await asyncio.create_subprocess_exec(
             *_TRANSPORT_COMMAND, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL)
+            stderr=asyncio.subprocess.DEVNULL, start_new_session=True)
         pending = asyncio.create_task(process.communicate(payload))
         try:
             raw, _ = await asyncio.wait_for(asyncio.shield(pending),
@@ -127,7 +136,7 @@ class OpenAICompatibleProvider:
         finally:
             if process.returncode is None:
                 try:
-                    process.kill()
+                    os.killpg(process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
             try:
@@ -204,7 +213,9 @@ class OpenAICompatibleFactory:
 
 class Gateway:
     """A private archive is the run identity; restore uses that same archive and budget."""
-    def __init__(self, provider: TextProvider, budget: Mapping[str, Any], archive: Path, *, deadline: float | None = None) -> None:
+    def __init__(self, provider: TextProvider, budget: Mapping[str, Any], archive: Path, *, deadline: float | None = None,
+                 cancellation: CancellationToken | None = None,
+                 on_save: Callable[[str, dict[str, Any]], None] | None = None) -> None:
         try:
             jsonschema.Draft202012Validator({"type": "object", "properties": {
                 **{name: {"type": "integer", "minimum": 0} for name in ["max_llm_attempts", "max_total_tokens"]},
@@ -215,13 +226,15 @@ class Gateway:
         except (jsonschema.ValidationError, ValueError, TypeError) as error:
             raise RunError("invalid_config", "admission", "Invalid shared Gateway budget.") from error
         self.provider, self.budget, self.archive = provider, dict(budget), archive
+        self.cancellation = cancellation or CancellationToken()
+        self._on_save = on_save
         self.calls: list[LLMResponse] = []
         archive.mkdir(parents=True, exist_ok=True, mode=0o700)
         archive.chmod(0o700)
         with self._locked():
             if not (archive / "state.json").exists():
                 self._save({"budget": self.budget, "deadline": deadline if deadline is not None else time.time() + budget["wall_time_s"], "attempts": []})
-            if self._load()["budget"] != self.budget:
+            if self._load()["budget"] != self.budget or (deadline is not None and self._load()["deadline"] != deadline):
                 raise RunError("checkpoint_incompatible", "admission", "Gateway budget differs from its saved resource state.")
 
     @contextmanager
@@ -247,6 +260,8 @@ class Gateway:
             os.fsync(directory)
         finally:
             os.close(directory)
+        if self._on_save is not None:
+            self._on_save(hashlib.sha256(raw).hexdigest(), self._ledger(state["attempts"]))
 
     @property
     def trace(self) -> list[dict[str, Any]]:
@@ -257,6 +272,10 @@ class Gateway:
     def ledger(self) -> dict[str, Any]:
         with self._locked():
             attempts = self._load()["attempts"]
+        return self._ledger(attempts)
+
+    @staticmethod
+    def _ledger(attempts: list[dict[str, Any]]) -> dict[str, Any]:
         known = [item["usage"]["total_tokens"] for item in attempts if item["usage"]["total_tokens"] is not None]
         return {"llm_attempts": len(attempts), "external_llm_requests": len(attempts),
                 "total_tokens": sum(known) if len(known) == len(attempts) else None, "known_total_tokens": sum(known),
@@ -264,6 +283,7 @@ class Gateway:
                 "evidence_origin": "external_provider"}
 
     async def complete(self, request: dict[str, Any]) -> LLMResponse:
+        self.cancellation.check()
         if set(request) - {"messages", "request_id", "role"}:
             raise RunError("capability_mismatch", "admission", "Provider supports non-streaming text messages only.")
         try:
@@ -340,8 +360,20 @@ class Gateway:
             code = None
             retryable = False
             try:
-                reply = await self.provider.acomplete(
-                    request["messages"], min(self.provider.timeout_s, state["deadline"] - time.time()))
+                pending = asyncio.create_task(self.provider.acomplete(
+                    request["messages"], min(self.provider.timeout_s, state["deadline"] - time.time())))
+                try:
+                    while not pending.done():
+                        self.cancellation.check()
+                        await asyncio.sleep(0.05)
+                    reply = await pending
+                finally:
+                    if not pending.done():
+                        pending.cancel()
+                        try:
+                            await pending
+                        except asyncio.CancelledError:
+                            pass
             except HTTPError as error:
                 code = "auth_error" if error.code in {401, 403} else "rate_limit" if error.code == 429 else "provider_error" if error.code >= 500 else "invalid_provider_request"
                 retryable = error.code == 429 or 500 <= error.code < 600
@@ -369,6 +401,7 @@ class Gateway:
                 self._save(state)
                 remaining = state["deadline"] - time.time()
             if reply is not None:
+                self.cancellation.check()
                 return self._response(item)
             if not retryable or retry == self.provider.max_retries:
                 raise RunError(code or "provider_error", "llm", "Provider request failed; outcome and charge may be unknown.")

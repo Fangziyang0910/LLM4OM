@@ -1,6 +1,6 @@
 # 1.0 开发计划与接入顺序
 
-文档修订：0.4.0。以下是开发计划；S01／S02-A／S02-B／S03／S04-A／S05-A／S07-A／S06-A 已实现当前范围，S03 使用 [Issue #3](https://github.com/Fangziyang0910/LLM4OM/issues/3)／[#4](https://github.com/Fangziyang0910/LLM4OM/issues/4)，S02-A 使用 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1) 跟踪，未标记为已完成的切片继续按依赖开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
+文档修订：0.4.0。以下是开发计划；S01／S02-A／S02-B／S03／S04-A／S04-B／S05-A／S07-A／S06-A 已实现当前范围，S03 使用 [Issue #3](https://github.com/Fangziyang0910/LLM4OM/issues/3)／[#4](https://github.com/Fangziyang0910/LLM4OM/issues/4)，S02-A 使用 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1) 跟踪，未标记为已完成的切片继续按依赖开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
 
 ## 1. 首批能力矩阵
 
@@ -60,7 +60,7 @@
 | 切片 | What to build／可演示结果 | Blocked by | 公共测试入口与验收 |
 |---|---|---|---|
 | S04-A | CLI 在容器内执行候选，只挂载公开数据，限制网络与资源 | S02-A、S03-B | CLI＋Executor：网络、越界、OOM、timeout；不挂载密钥或 oracle。AC-09/14 |
-| S04-B | 用户取消／resume 已保存运行，复用完成记录并处理未知外部结果 | S04-A | 应用入口：已保存响应不重调；checkpoint 不兼容拒绝；不支持时派生重跑。AC-08/18 |
+| S04-B | 用户取消／resume 已保存运行，复用完成记录并处理未知外部结果 | S04-A | 应用入口：已保存响应不重调；checkpoint 不兼容拒绝；不支持内部状态时明确拒绝；不静默重跑。当前实现见 [S04-B](development/s04-resume.md)。AC-08/18 |
 
 外部调用的未知状态先用确定性资源 fixture 验证，再在 S05 接入真实调用。覆盖 FR-27/33、NFR-04/06；DD-05/07。
 
@@ -150,7 +150,7 @@ flowchart LR
     S09B --> S10
 ```
 
-S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。[S02-B](development/s02b-factory.md) 也已完成当前范围。[S06-A](development/s06-gurobi.md) 已完成当前范围。当前前沿包含 S04-B、S05-B、S06-B／C、S07-B／C／D；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
+S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。[S02-B](development/s02b-factory.md) 也已完成当前范围。[S06-A](development/s06-gurobi.md) 已完成当前范围。[S04-B](development/s04-resume.md) 已实现当前范围，独立审查由父任务处理。当前前沿包含 S05-B、S06-B／C、S07-B／C／D；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
 
 ## 5. 工程默认值与完成边界
 

@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import resource
+import sys
 import platform
 from importlib.metadata import version
 from pathlib import Path
@@ -18,24 +19,25 @@ def main() -> int:
     parser.add_argument("--runtime", action="store_true")
     parser.add_argument("--solver", default="llm4om.solvers.highs")
     parser.add_argument("--solve", type=Path)
+    parser.add_argument("--solve-stdin", action="store_true")
     args = parser.parse_args()
     try:
         runtime = {"python": platform.python_version(), "llm4om": version("llm4om"), **solver_runtime(args.solver)}
         if args.runtime:
             print(json.dumps({"schema_version": "0.2.0", "runtime": runtime}, allow_nan=False))
             return 0
-        if args.solve is None:
+        if args.solve is None and not args.solve_stdin:
             parser.error("--solve or --runtime is required")
-        request = parse_json(read_public_bytes(args.solve))
+        request = parse_json(sys.stdin.buffer.read() if args.solve_stdin else read_public_bytes(args.solve))
         factory = None
-        if request.get("kind") in ("python_factory/0.1.0", "native_gurobipy/0.1.0"):
+        if not args.solve_stdin and request.get("kind") in ("python_factory/0.1.0", "native_gurobipy/0.1.0"):
             from llm4om.factory_worker import solve_factory
             result, factory = solve_factory(args.solve, solver_id=args.solver)
         else:
             if set(request) != {"ir", "source_sha256", "solver_options"}:
                 raise RunError("invalid_worker_request", "execution", "Worker accepts strict IR, source hash and Solver options only.")
             compiled = compile_ir(request["ir"])
-            actual_source = read_public_bytes(args.solve.parent / "model.py")
+            actual_source = compiled.source.encode() if args.solve_stdin else read_public_bytes(args.solve.parent / "model.py")
             if (hashlib.sha256(compiled.source.encode()).hexdigest() != request["source_sha256"]
                     or hashlib.sha256(actual_source).hexdigest() != request["source_sha256"]):
                 raise RunError("code_hash_mismatch", "execution", "CodeArtifact does not match deterministic IR compilation.")
