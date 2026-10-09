@@ -96,3 +96,22 @@ S02-A；Gurobi／native gurobipy、非线性、恢复和一般 benchmark 数学�
   外部模型 factory case 与独立 Standards／Spec review 仍由父任务执行。
 
 完整日志位于任务指定的仓库外目录 `/tmp/llm4om-s02b/`（factory-tests.log、suite312.log、suite311.log、mypy311.log、package-build.log、install311.log、doctor.json）。日志为本任务的本地检查结果，不提交仓库。基线保持 fb7e276；未提交、推送、切换分支或修改 GitHub／CI／可见性。
+
+
+## 父任务真实外部模型验收
+
+2026-10-09，同一公共 CLI 使用用户指定 deepseek-v4-pro-0813，生成参数化 Formulation／Python
+工厂并在容器真实求解。run_id=68a2c5f6774340c39176d776ce16f12f；整数 x[A]=3、x[B]=2、目标13，
+termination=optimal。Code origin=method_generated，输入930、输出8294、total9224；reasoning7109
+包含在 output 中，成本未知。未使用隐藏 oracle／参考代码，也未自动降级。
+
+复用该实际生成的原始代码，以新 CSV 利润 A=2/B=3 和新 revision 经公共 Executor／可信 Worker
+运行，得到整数 x[A]=2、x[B]=3、目标13。源 SHA-256 始终为
+5dae2c057516f5b954ac5b929058a6dbf2c10eb93fa59b6b2dc58c9ec5003165，数据 hash 与绑定变化。
+这次重绑定不再调用 LLM；与首次外部模型生成分别记录。证据在版本控制外的
+/tmp/llm4om-s02b/live 和 /tmp/llm4om-s02b/rebind-result.json。
+
+独立 Standards／Spec 审阅固定 fb7e276…a7a5774：Standards 无具体问题；Spec 有一项 P2，普通
+异常丢失资源具体原因。公共 CLI 负例 ValueError("missing capacity for resource R7") 先失败，补充
+有界 stderr traceback 后通过，仍无 SolveResult。子进程入口也改为调用模块入口函数，消除重复
+执行已导入模块的 runpy 警告。修复为作者 red→green 核验，未冒称独立复审通过。

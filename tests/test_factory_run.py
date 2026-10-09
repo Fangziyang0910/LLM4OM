@@ -292,6 +292,15 @@ print(json.dumps({"bundle_path": str(result.bundle_path)}))
         self.assertEqual(view["objective"]["expression"]["constant"], 7)
         self.assertEqual(view["constraints"][0]["expression"]["constant"], 5)
 
+    def test_factory_exception_preserves_the_resource_specific_reason(self):
+        self.start_provider('def build_model(data):\n    raise ValueError("missing capacity for resource R7")\n')
+        path, bundle = self.run_cli()
+        self.assertEqual(bundle["error"]["code"], "factory_exception")
+        execution = json.loads((path / bundle["execution_result_ref"]["relative_path"]).read_text())
+        diagnostic = (path / execution["stderr_ref"]["relative_path"]).read_text()
+        self.assertIn("missing capacity for resource R7", diagnostic)
+        self.assertIsNone(bundle["solve_result_ref"])
+
     def test_evaluator_reports_factory_contract_without_deterministic_compilation(self):
         from llm4om import import_dataset, NL4OptAdapter, NL4OptEvaluator
         raw = (json.dumps({"7": {"document": "Maximize x over integers 0 <= x <= 3.", "vars": ["HIDDEN-ANNOTATION"],

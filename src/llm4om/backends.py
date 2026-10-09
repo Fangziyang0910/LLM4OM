@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import sys
+import traceback
 from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any, Mapping
@@ -112,6 +113,7 @@ def _main() -> int:
     except RunError as error:
         print(json.dumps({"error": {"code": error.code, "stage": error.stage, "message": str(error)}}))
     except (Exception, SystemExit) as error:
+        traceback.print_exc(file=sys.stderr)
         print(json.dumps({"error": {"code": "factory_exception", "stage": "execution", "message": "Factory construction/export failed: " + type(error).__name__}}))
     return 1
 

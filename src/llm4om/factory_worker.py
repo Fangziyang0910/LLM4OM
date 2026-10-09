@@ -46,7 +46,8 @@ def solve_factory(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     if not isinstance(seconds, (int, float)) or isinstance(seconds, bool) or not 0 < seconds <= 86400:
         raise RunError("invalid_worker_request", "execution", "Invalid factory deadline.")
     output, diagnostic = bytearray(), bytearray()
-    child = subprocess.Popen([sys.executable, "-I", "-m", "llm4om.backends", str(path)],
+    child = subprocess.Popen([sys.executable, "-I", "-c",
+        "from llm4om.backends import _main; raise SystemExit(_main())", str(path)],
         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True,
         start_new_session=True, env={"PATH": os.defpath, "PYTHONDONTWRITEBYTECODE": "1"})
     selector = selectors.DefaultSelector()
