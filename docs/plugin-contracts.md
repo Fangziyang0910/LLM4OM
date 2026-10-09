@@ -553,7 +553,7 @@ checkpoint 的原始 bytes 另存于 checkpoints/hash.json；checkpoint.json 原
 恢复先校验全部不可变 bytes，再确认视图只含已提交或已记录的未提交 bytes，然后重建 checkpoint 视图。
 修复视图前，核心 checkpoint 的 interrupted_publications 保存已验证的中断引用；对应不可变 bytes 纳入 refs。
 未提交的新视图删除，但该收据与不可变历史保留，身份校验失败或再次中断不会丢失唯一恢复证据。
-存储只提供已验证的中断引用及重新发布操作；应用决定哪些记录代表完成的 Execution／Solve。
+存储只提供已验证的中断引用及重新发布操作；应用决定哪些记录代表完成的 Formulation／Code 或 Execution／Solve。
 已提交视图或不可变引用的真实损坏仍返回 checkpoint_incompatible。
 OS atomic rename／fsync 是存储故障注入边界；协作取消测试使用公开 Method／资源和 SDK Token／事件记录。
 不序列化 ModelHandle、Solver SDK 对象、credential、oracle 或 pickle。
@@ -566,7 +566,7 @@ Direct 声明 supports_checkpoint=true，仅保存 0.1.0 的 request_id；稳定
 未声明时 admission 的 method_cancellation=unknown，不能据资源可取消就宣称插件内部有界。
 独立 fixture 仍 supports_checkpoint=false，声明 cooperative，拒绝非空内部 checkpoint。
 
-核心在调用方法前提交 method_started 标记。已开始的方法没有内部 checkpoint 时，continue 返回 checkpoint_unsupported；
+核心在调用方法前提交 method_started 标记。已开始的方法既无完整阶段也无内部 checkpoint 时，continue 返回 checkpoint_unsupported；
 尚未调用方法的 admitted 阶段可以从头进入方法。显式 rerun 可重新执行不支持内部恢复的方法。
 派生运行的 RunBundle.lineage_ref 指向 immutable lineage.json，记录 operation=derived_rerun、parent_run_id、
 input_hashes、父 checkpoint 引用、父公开历史副本、parent_budget_ledger、parent_resource_records 和 reused_records。
@@ -574,6 +574,13 @@ input_hashes、父 checkpoint 引用、父公开历史副本、parent_budget_led
 新 run 使用新的 deadline，但父 paid／unknown 尝试、已知 token、未知 reservation 和 Solver 次数仍计入原配置上限。
 不足时派生 run 明确 budget_exhausted，不能通过重复派生忘记费用或未知预留。rerun 可产生新的付费请求，须由用户显式选择。
 完整 Formulation／Code 阶段直接继续；匹配的 execute_done 复用保存的真实 Execution／SolveResult。
+Formulation 的 artifact_ref、stages、候选计数与 method_done 随 formulation_saved 一起提交。
+Code 的 build 记录先保存，artifact_ref、stages 与 code_done 随 code_saved 一起提交；方法直接提供 Code 时也使用同一顺序。
+完整 ModelArtifact 已发布但核心尚未提交时，先协调已验证的 interrupted_publications，再判断 checkpoint_unsupported。
+协调只读取收据中的不可变 ModelArtifact，验证完整引用图、公开问题、Formulation／数据绑定与准入方法身份；
+方法提供的 Code 保留原 source_formulation_ref、源码引用、后端与来源，不从公开投影拼造 ModelArtifact。
+成功后复用原 artifact_ref，补齐候选及核心状态并提交一次完成事件；不调用方法或 LLM，不消耗新 attempt。
+真正尚未完成的方法仍遵循上述默认拒绝／显式派生重跑规则。SDK 源码身份严格匹配，不承诺旧源码 checkpoint 迁移。
 Execution／SolveResult 引用和 execute_done 在 solver_finished 事件之前一起提交；发布完成事件后的崩溃不再重复求解。
 公开 completed Execution 先于 execute_done 落盘时同样复用。Execution 记录 run_id、execution_id、solver_call、
 input_artifact_ref 与执行后的 artifact_ref，分别绑定核心已准入的尝试、原候选与含提取视图的候选。

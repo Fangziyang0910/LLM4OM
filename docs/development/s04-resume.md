@@ -1,6 +1,6 @@
 # S04-B 取消与恢复
 
-本页记录 Issue 16 的当前实现与本机验收范围。规范来源为 [DD-07](../design/experiments-and-interfaces.md#dd-07-持久化恢复与报告)、[接口契约](../plugin-contracts.md#12-s04-b-cancellation-and-resume-sdk-070) 和 [验收清单](../acceptance.md)。SDK／Worker 为 0.7.0，未发布；四项最终审查修复已通过聚焦验收，最新完整回归与独立审查待 parent 执行。
+本页记录 Issue 16 的当前实现与本机验收范围。规范来源为 [DD-07](../design/experiments-and-interfaces.md#dd-07-持久化恢复与报告)、[接口契约](../plugin-contracts.md#12-s04-b-cancellation-and-resume-sdk-070) 和 [验收清单](../acceptance.md)。SDK／Worker 为 0.7.0，未发布；既有四项修复及后续完整 Formulation 恢复修复分别保留聚焦证据，最新完整回归与独立审查待 parent 执行。
 
 ## 当前入口
 
@@ -19,6 +19,9 @@ CLI 的 SIGINT 设置相同的协作取消信号，返回可检查的 cancelled 
 核心保存 admitted、method_done、code_done、execute_pending、execute_done 的阶段位置；方法内部 JSON checkpoint 独立保存。
 MethodPlugin 传入深拷贝；未显式保存的嵌套修改不会随 Gateway 资源回调提交。
 Direct 的内部 checkpoint 仅保存版本与 request_id，恢复时重新解析已保存的响应，不声称保存了任意方法搜索状态。
+Formulation 的核心引用、阶段和候选计数随 formulation_saved 一起提交；Code 的 build 先保存，阶段随 code_saved 一起提交。
+完整 ModelArtifact 先于核心阶段发布时，恢复使用已验证的中断收据与实际不可变引用，在内部 checkpoint 拒绝前接纳完成阶段。
+共用既有引用图校验；核对原公开问题、方法身份、Formulation／数据绑定和方法提供的 Code 来源，不拼造 ModelArtifact。
 已完成 Formulation／Code 不再运行方法。匹配的 completed Execution／SolveResult 直接复用。
 已经 completed／artifact_ready 的运行保持同一 run_id，事件和输入不变。
 
@@ -94,6 +97,21 @@ Python 3.11.13 使用干净 wheel：11 个崩溃／派生用例、2 个监督用
 新镜像 ID 为 `sha256:f22e9d1f9bf6343887a0b21f82d2bfe8a898fac0e167717b1e8e36593b1a6788`。
 完整回归与独立 Standards／Spec 复审仍待 parent；旧 203 tests 回归不作为这四项修复的验收证据。
 OptiMUS／CoE、Web、batch 与完整 1.0 尚未完成；本切片不更改这些已批准范围。
+
+2026-10-09 后续 Spec P2 修复基线 `2f8fe4802e76a04dca3217bd0d4027e127cf64b2`，证据位于
+`/tmp/llm4om-s04b/formulation-fix-evidence/`。独立 wheel 安装且 supports_checkpoint=false 的 Method，
+在完成 Formulation 事件 checkpoint 与更早完整 ModelArtifact 发布后硬退出，修复前均返回 checkpoint_unsupported；
+修复后原阶段复用。Code 完成事件原先恢复后重复两次，现为一次且 build 记录完整。
+故障注入只使用 OS rename 和规范记录字段；合成 HTTP 下 Method／请求各一次，max_llm_attempts=1 不变。
+工厂与 native 的原 Formulation、Code、源码和数据 hash 保留，真实 HiGHS／微型 Gurobi 目标均为 13。
+本轮 Python 3.12 的 25 个不同聚焦用例通过；干净 Python 3.11.13 wheel 的 8 个关键用例通过（34.168 秒）。
+这些检查包含 cold admission、未完成方法拒绝／派生重跑、内部 checkpoint 所有权、未知预留、deadline、并发／owner lock、
+目录 fsync、私有 head 顺序、双后端 Execution 复用及 importer FD。一次测试命令的 importer 类名错误已用正确入口单独通过。
+strict mypy（22 源码文件）、仓库／引用检查及 wheel／sdist 构建通过。
+源码、wheel 与新 Worker 的 SDK SHA-256 均为 `2784071b28c211d931fa70d06543eda8ad8e416395fc521cd20a916a2e45a0a3`；
+镜像 ID 为 `sha256:2e3472b0f236bc9343aa85a8121c4a9ff1b24d4946cce27039b019115634de64`。
+本轮未运行全套或 CI，未调用付费模型，未发布包；parent 负责最终独立评审、整合与一次完整回归。
+源码身份校验保持严格，不声明旧源码 checkpoint 迁移，也不声明 S04 原 issue 或完整 1.0 全部完成。
 
 恢复要求原公开输入／配置仍在原路径且字节不变；本版不提供移动目录后的自动路径迁移。
 已完成运行的身份校验不加载 Provider 凭据，也不新增模型／Solver API 调用。

@@ -60,6 +60,180 @@ class CrashResumeTests(unittest.TestCase):
         events = [json.loads(line) for line in (path / 'events.jsonl').read_text().splitlines()]
         self.assertEqual(sum(event['kind'] == 'mock_call_started' for event in events), 1)
 
+    def installed_stage_crash(self, condition, *, mode='grounded'):
+        import yaml
+        from test_plugins import PluginTests
+        self.packages = self.root / 'packages'
+        self.method_calls = self.root / 'method-calls'
+        describe = '''manifest = json.loads(files(__package__).joinpath('manifest.json').read_text())
+CAPABILITIES
+return manifest'''
+        capabilities = ''
+        if mode != 'grounded':
+            native = mode == 'native_gurobipy'
+            capabilities = f'''manifest['capabilities'].update(
+    method_profile={'native_single_candidate/0.1.0' if native else 'factory_single_candidate/0.1.0'!r},
+    code_representations={['native_code' if native else 'python_factory']!r},
+    model_backends={['llm4om.model_backends.gurobipy' if native else 'llm4om.model_backends.pyomo_factory']!r},
+    solvers={['llm4om.solvers.gurobi' if native else 'llm4om.solvers.highs']!r}, execution_modes=['container'])'''
+        PluginTests.install_method(self, describe_body=describe.replace('CAPABILITIES', capabilities), run_body=f"""from pathlib import Path
+from hashlib import sha256
+from llm4om import FactoryCodeProposal
+from llm4om.contracts import RunError
+if checkpoint is not None:
+    raise RunError('checkpoint_unsupported', 'formulation', 'No internal checkpoint.')
+with Path({str(self.method_calls)!r}).open('a') as calls:
+    calls.write('called\\n')
+response = await context.llm.complete({{'messages': [{{'role': 'user', 'content': problem['description']}}]}})
+value = json.loads(response.text)
+if 'source' in value:
+    code = FactoryCodeProposal(value['source'], sha256(value['source'].encode()).hexdigest(),
+        value['artifact']['data_bindings'], representation_kind={'native_code' if mode == 'native_gurobipy' else 'python_factory'!r})
+    return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'], value['formulation'], code=code))
+return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'], value['formulation'], value['structured_ir']))""")
+        manifest = json.loads((self.packages / 'llm4om_fixture_method/manifest.json').read_text())
+        self.assertFalse(manifest['capabilities']['supports_checkpoint'])
+        reply = {key: json.loads((self.inputs / filename).read_text()) for key, filename in (
+            ('artifact', 'model-artifact.json'), ('formulation', 'formulation.json'), ('structured_ir', 'model-ir.json'))}
+        if mode != 'grounded':
+            reply.pop('structured_ir')
+            reply['formulation']['structured_ir_ref'] = None
+            reply['source'] = (ROOT / 'examples/factories' /
+                               ('production_gurobi.py' if mode == 'native_gurobipy' else 'production.py')).read_text()
+        config = self.http_config(reply=reply)
+        settings = yaml.safe_load(config.read_text())
+        settings['method'] = {'plugin_id': manifest['plugin_id'], 'config': {'objective_offset': 0}}
+        if mode != 'grounded':
+            from llm4om.executors import DEFAULT_IMAGE
+            settings['executor'] = yaml.safe_load((self.inputs / 'run.yaml').read_text())['executor']
+            settings['executor']['config']['image'] = os.environ.get('S04B_WORKER_IMAGE', DEFAULT_IMAGE)
+            if mode == 'native_gurobipy':
+                settings['model_backend']['plugin_id'] = 'llm4om.model_backends.gurobipy'
+                settings['solver']['plugin_id'] = 'llm4om.solvers.gurobi'
+        config.write_text(yaml.safe_dump(settings))
+        fault = CRASH.replace('record = json.loads(lines[-1])', 'record = json.loads(Path(target).read_text())')
+        start = fault.index('    if "history"')
+        end = fault.index('    return result', start)
+        fault = fault[:start] + '    if ' + condition + ':\n        os._exit(91)\n' + fault[end:]
+        self.plugin_env = {**os.environ, 'PYTHONPATH': os.pathsep.join((str(ROOT / 'src'), str(self.packages)))}
+        output = self.root / 'runs'
+        process = subprocess.run([sys.executable, '-c', fault, 'run',
+            '--problem', str(self.inputs / 'problem.json'), '--config', str(config), '--output', str(output)],
+            env=self.plugin_env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(process.returncode, 91, process.stdout + process.stderr)
+        return next(path for path in output.iterdir() if len(path.name) == 32)
+
+    def assert_installed_stage_resume(self, path):
+        process = subprocess.run([sys.executable, '-m', 'llm4om', 'resume', '--run-id', path.name,
+            '--output', str(path.parent)], env=self.plugin_env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertEqual(self.method_calls.read_text().splitlines(), ['called'])
+        bundle = json.loads((path / 'bundle.json').read_text())
+        self.assertEqual(bundle['status'], 'completed')
+        self.assertEqual(json.loads((path / bundle['solve_result_ref']['relative_path']).read_text())['objective_value'], 13)
+        ledger = json.loads((path / 'budget-ledger.json').read_text())
+        self.assertEqual(ledger['llm_attempts'], 1)
+        self.assertEqual(ledger['external_llm_requests'], 1)
+        self.assertEqual(len(self.requests), 1)
+        self.assertEqual(ledger['solver_calls'], 1)
+        events = [json.loads(line) for line in (path / 'events.jsonl').read_text().splitlines()]
+        for kind in ('formulation_saved', 'code_saved'):
+            self.assertEqual(sum(event['kind'] == kind for event in events), 1, kind)
+        import hashlib
+        for ref in bundle['artifacts']:
+            raw = (path / ref['relative_path']).read_bytes()
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), ref['sha256'])
+            self.assertEqual(len(raw), ref['size_bytes'])
+        return bundle
+
+    def test_installed_noncheckpoint_method_resumes_committed_formulation_event(self):
+        path = self.installed_stage_crash('Path(target).name == "checkpoint.json" and '
+            'any(event["kind"] == "formulation_saved" for event in record["payload"]["events"])')
+        saved = json.loads((path / 'candidates/001/formulation-snapshot.json').read_text())
+        state = json.loads((path / 'checkpoint.json').read_text())['payload']['state']
+        self.assertEqual(state['phase'], 'method_done')
+        self.assertIsNotNone(state['artifact_ref'])
+        self.assert_installed_stage_resume(path)
+        self.assertEqual(json.loads((path / 'candidates/001/formulation-snapshot.json').read_text()), saved)
+
+    def test_installed_noncheckpoint_method_resumes_early_formulation_publication(self):
+        path = self.installed_stage_crash('"history" not in Path(target).parts and '
+            'record.get("stage_status", {}).get("formulation", {}).get("status") == "available" and '
+            '"artifact_id" in record and "formulation_ref" in record')
+        saved = (path / 'candidates/001/formulation-snapshot.json').read_bytes()
+        state = json.loads((path / 'checkpoint.json').read_text())['payload']['state']
+        self.assertIsNone(state['artifact_ref'])
+        self.assert_installed_stage_resume(path)
+        self.assertEqual((path / 'candidates/001/formulation-snapshot.json').read_bytes(), saved)
+
+    def test_completed_code_event_commits_phase_and_is_not_duplicated(self):
+        path = self.installed_stage_crash('Path(target).name == "checkpoint.json" and '
+            'any(event["kind"] == "code_saved" for event in record["payload"]["events"])')
+        saved = (path / 'candidates/001/artifact.json').read_bytes()
+        state = json.loads((path / 'checkpoint.json').read_text())['payload']['state']
+        self.assertEqual(state['phase'], 'code_done')
+        self.assertEqual(state['stages']['code']['status'], 'available')
+        self.assert_installed_stage_resume(path)
+        self.assertEqual((path / 'candidates/001/artifact.json').read_bytes(), saved)
+        self.assertTrue((path / 'candidates/001/build.json').is_file())
+
+    def test_installed_noncheckpoint_method_can_start_from_cold_admission(self):
+        path = self.installed_stage_crash('Path(target).name == "checkpoint.json" and '
+            '"admission" in record["payload"]["state"] and '
+            'not record["payload"]["state"].get("method_started")')
+        self.assertFalse(self.method_calls.exists())
+        self.assertEqual(len(self.requests), 0)
+        self.assert_installed_stage_resume(path)
+
+    def test_completed_formulation_receipt_survives_source_rejection_and_rejects_changed_bytes(self):
+        path = self.installed_stage_crash('"history" not in Path(target).parts and '
+            'record.get("stage_status", {}).get("formulation", {}).get("status") == "available" and '
+            '"artifact_id" in record and "formulation_ref" in record')
+        artifact = json.loads((path / 'candidates/001/formulation-snapshot.json').read_text())
+        problem = self.inputs / 'problem.json'
+        original = problem.read_bytes()
+        problem.write_bytes(original + b' ')
+        for _ in range(2):
+            process = subprocess.run([sys.executable, '-m', 'llm4om', 'resume', '--run-id', path.name,
+                '--output', str(path.parent)], env=self.plugin_env, capture_output=True, text=True, timeout=20)
+            self.assertEqual(json.loads(process.stdout)['error']['code'], 'checkpoint_incompatible')
+        problem.write_bytes(original)
+        immutable = path / artifact['formulation_ref']['relative_path']
+        original = immutable.read_bytes()
+        immutable.write_bytes(original + b' ')
+        process = subprocess.run([sys.executable, '-m', 'llm4om', 'resume', '--run-id', path.name,
+            '--output', str(path.parent)], env=self.plugin_env, capture_output=True, text=True, timeout=20)
+        self.assertEqual(json.loads(process.stdout)['error']['code'], 'checkpoint_incompatible')
+        immutable.write_bytes(original)
+        self.assert_installed_stage_resume(path)
+
+    def test_installed_factory_early_formulation_keeps_original_code_and_data(self):
+        self.check_installed_factory_stage('python_factory', early=True)
+
+    def test_installed_native_early_formulation_keeps_original_code_and_data(self):
+        self.check_installed_factory_stage('native_gurobipy', early=True)
+
+    def test_installed_factory_committed_code_event_keeps_original_code_and_data(self):
+        self.check_installed_factory_stage('python_factory', early=False)
+
+    def check_installed_factory_stage(self, mode, *, early):
+        condition = ('"history" not in Path(target).parts and "artifact_id" in record and '
+            'record.get("stage_status", {}).get("code", {}).get("status") == "available"') if early else (
+            'Path(target).name == "checkpoint.json" and '
+            'any(event["kind"] == "code_saved" for event in record["payload"]["events"])')
+        path = self.installed_stage_crash(condition, mode=mode)
+        saved = (path / 'candidates/001/formulation-snapshot.json').read_bytes()
+        artifact = json.loads(saved)
+        code = json.loads((path / artifact['code_ref']['relative_path']).read_text())
+        source = (path / code['representation_ref']['relative_path']).read_bytes()
+        bundle = self.assert_installed_stage_resume(path)
+        restored = json.loads((path / bundle['model_artifact_ref']['relative_path']).read_text())
+        self.assertEqual(restored['code_ref'], artifact['code_ref'])
+        self.assertEqual(restored['formulation_ref'], artifact['formulation_ref'])
+        self.assertEqual(restored['data_bindings'], artifact['data_bindings'])
+        self.assertEqual((path / code['representation_ref']['relative_path']).read_bytes(), source)
+        self.assertEqual((path / 'candidates/001/formulation-snapshot.json').read_bytes(), saved)
+
     def test_unclean_owner_does_not_allow_corrupt_committed_public_bytes(self):
         path = self.crashed_run()
         (path / 'requested-config.json').write_text('{}')
@@ -67,7 +241,7 @@ class CrashResumeTests(unittest.TestCase):
             resume_run(path)
         self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
 
-    def http_config(self, *, max_attempts=1):
+    def http_config(self, *, max_attempts=1, reply=None):
         import threading
         import yaml
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -75,6 +249,8 @@ class CrashResumeTests(unittest.TestCase):
         ir = json.loads((self.inputs / 'model-ir.json').read_text())
         compact = {'representation': formulation['representation'], 'structured_ir': {
             key: ir[key] for key in ('problem_type', 'variables', 'objective', 'constraints', 'assumptions')}}
+        if reply is not None:
+            compact = reply
         self.requests = []
         requests = self.requests
         class Handler(BaseHTTPRequestHandler):
