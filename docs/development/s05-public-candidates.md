@@ -22,6 +22,6 @@ Python3.12.11主要本机回归321项／762.221秒通过。两处最终修复使
 
 ## 后续范围与审阅
 
-后续 S05-C 实现 feedback_repair 策略、解析失败后的生成修正、数学约束变化诊断及工厂 Code-only 修正与原 Formulation 引用复用。澄清／新问题 revision 属于 S05-D。当前测试验证工程反馈与执行流程，不能据此报告 benchmark 语义正确率。
+这些后续行为现已进入0.16.0的 [S05-C2](s05-feedback-repair.md)：feedback_repair、解析失败修正、声明变化诊断及工厂 Code-only 来源复用。两版本证据分别记录。澄清／新问题 revision 属于 S05-D；工程测试不能据此报告 benchmark 语义正确率。
 
 Standards／Spec 自查和独立审阅分别记录。独立审阅仍受当前 Codex CLI 用量上限影响；PR保持 draft，最终独立审阅验收项保留未勾选。

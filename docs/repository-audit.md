@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-10；SDK／Worker 开发版本：0.15.0。当前包含 184 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-10；SDK／Worker 开发版本：0.16.0。当前包含 188 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -11,6 +11,10 @@
 | `.editorconfig` | 编辑器格式 | UTF-8、LF、缩进；授权原文例外 |
 | `docs/development/s05-public-candidates.md` | 公共候选评估、来源链、预算与最终选择的实际范围 | 本机 CLI／HiGHS／容器、恢复证据与剩余 S05-C 范围 |
 | `tests/test_candidate_feedback.py` | 安装方法使用候选资源的公共行为验收 | 真实 HiGHS、预算、身份、最终选择、硬退出与 publication 恢复 |
+| `docs/development/s05-feedback-repair.md` | 公共反馈修正方法、阶段来源与验收范围 | 本机 HTTP／真实 Solver、预算、声明比较和恢复证据 |
+| `examples/specs/feedback-repair.yaml` | 外部文本模型的反馈修正配置 | 显式 Provider／模型、共享预算、真实隔离及无密钥模板 |
+| `src/llm4om/feedback_repair.py` | 项目自编的有界公开反馈方法 | 共用 Direct 输出约定、候选资源、无 oracle 选择与版本化状态 |
+| `tests/test_feedback_repair.py` | CLI 的真实修正流程验收 | HTTP／HiGHS／Gurobi、失败入账、代码修复、约束变化与崩溃重放 |
 | `.env.example` | 本地 LLM 凭据变量模板 | 无真实密钥；S05-A 非执行加载，进程环境优先 |
 | `.gitattributes` | Git 文本格式 | 全部当前文本类型使用 LF |
 | `.github/ISSUE_TEMPLATE/feature-spec.md` | 功能规格入口 | 完整 spec 字段、用户故事与公共测试入口 |

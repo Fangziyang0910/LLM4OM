@@ -86,15 +86,15 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     execution_mode = settings["executor"]["plugin_id"].removeprefix("llm4om.executors.")
     capabilities = method.manifest["capabilities"]
     profile = capabilities.get("method_profile")
-    if profile not in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0", "factory_single_candidate/0.1.0", "native_single_candidate/0.1.0", "native_script/0.1.0", "native_script/0.2.0"):
+    if profile not in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0", "factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0"):
         raise RunError("capability_mismatch", "admission", "Method profile is not supported.")
     if profile == "grounded_candidates/0.1.0" and offline:
         raise RunError("capability_mismatch", "admission", "Candidate assessment requires an actual Solver execution plan.")
-    if profile in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0", "native_script/0.1.0", "native_script/0.2.0") and (offline or execution_mode != "container"):
+    if profile in ("factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0") and (offline or execution_mode != "container"):
         raise RunError("capability_mismatch", "admission", "Generated factories require container execution, including generation.")
     if profile in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0") and "compiler" not in settings:
         raise RunError("invalid_config", "admission", "Grounded LPIR requires its explicit compiler.")
-    native = profile in ("native_single_candidate/0.1.0", "native_script/0.1.0", "native_script/0.2.0")
+    native = profile in ("native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0")
     if settings["model_backend"]["plugin_id"] != ("llm4om.model_backends.gurobipy" if native else "llm4om.model_backends.pyomo_factory") or native and settings["solver"]["plugin_id"] != "llm4om.solvers.gurobi":
         raise RunError("capability_mismatch", "admission", "The output profile is incompatible with the selected Backend/Solver.")
     required = {"method_profile": profile,
@@ -169,7 +169,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
             packages.update(local_runtime["packages"])
     return AdmissionPlan(method, {"schema_version": "0.2.0", "mode": "offline_mock" if offline else execution_mode,
         "method": {"manifest": method.manifest, "origin": method.origin},
-        "method_profile": profile, "method_cancellation": capabilities.get("cancellation", "unknown"), "code_origin": "method_generated" if profile in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0", "native_script/0.1.0", "native_script/0.2.0") else "deterministic_compilation",
+        "method_profile": profile, "method_cancellation": capabilities.get("cancellation", "unknown"), "code_origin": "method_generated" if profile in ("factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0") else "deterministic_compilation",
         "compiler_id": settings["compiler"]["plugin_id"] if profile in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0") else None, "model_backend_id": settings["model_backend"]["plugin_id"],
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
         "packages": packages, "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": factory.describe(), "model": settings["llm"]["model"],

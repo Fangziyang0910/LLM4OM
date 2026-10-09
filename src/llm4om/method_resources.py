@@ -11,7 +11,7 @@ from typing import Any
 
 from llm4om.contracts import RunError, parse_json, public_path, read_public_bytes, validate_bindings, validate_worker_response
 from llm4om.executors import run_container
-from llm4om.methods import LLMResponse, MethodOutcome, ModelProposal, ScriptCodeProposal
+from llm4om.methods import GenerationFailure, LLMResponse, MethodOutcome, ModelProposal, ScriptCodeProposal
 from llm4om.preflight import AdmissionPlan
 from llm4om.storage import RunStore
 
@@ -22,23 +22,39 @@ class RunMethodResources:
         self.store, self.public, self.settings, self.plan = store, public, settings, plan
         self.responses = responses if responses is not None else []
 
-    async def assess(self, candidate_id: str, proposal: ModelProposal, *, parent_id: str | None = None,
+    def remaining_budget(self) -> dict[str, Any]:
+        ledger, budget = self.store.state["ledger"], self.settings["budget"]
+        result = {name: max(0, budget[limit] - ledger.get(name, 0)) for name, limit in (
+            ("candidates", "max_candidates"), ("repairs", "max_repairs"),
+            ("solver_calls", "max_solver_calls"), ("llm_attempts", "max_llm_attempts"))}
+        result["total_tokens"] = max(0, budget["max_total_tokens"] - ledger.get("known_total_tokens", ledger.get("total_tokens") or 0)
+                                     - ledger.get("reserved_tokens", 0))
+        return {**result, "wall_time_s": max(0, self.plan.deadline - time.time())}
+
+    async def assess(self, candidate_id: str, proposal: ModelProposal | GenerationFailure, *, parent_id: str | None = None,
                      change_reason: str | None = None) -> dict[str, Any]:
         from llm4om.application import _persist_proposal, _compile_candidate, _execute_candidate
 
         store = self.store
         store.cancellation.check()
         if (not isinstance(candidate_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,80}", candidate_id)
-                or not isinstance(proposal, ModelProposal)):
+                or not isinstance(proposal, (ModelProposal, GenerationFailure))):
             raise RunError("invalid_candidate", "formulation", "A candidate needs a bounded ID and a ModelProposal.")
         if store.state["offline"]:
             raise RunError("capability_mismatch", "admission", "Candidate assessment requires an online Solver execution plan.")
-        if self.plan.snapshot["method_profile"] != "grounded_candidates/0.1.0":
+        if self.plan.snapshot["method_profile"] not in ("grounded_candidates/0.1.0", "factory_candidates/0.1.0", "native_candidates/0.1.0"):
             raise RunError("capability_mismatch", "admission", "Candidate assessment requires the admitted grounded_candidates profile.")
         if parent_id is not None and (not isinstance(parent_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,80}", parent_id)):
             raise RunError("invalid_candidate", "formulation", "A repair parent needs a bounded candidate ID.")
         if parent_id is not None and (not isinstance(change_reason, str) or not change_reason.strip() or len(change_reason) > 4096):
             raise RunError("invalid_candidate", "formulation", "A repair needs a public change reason.")
+        if isinstance(proposal, GenerationFailure) and (
+                proposal.code not in ("invalid_json", "invalid_object", "invalid_method_outcome", "llm_output_truncated")
+                or proposal.stage not in ("formulation", "code")
+                or not isinstance(proposal.message, str) or not proposal.message or len(proposal.message) > 4096
+                or not any(response.call_id == proposal.call_id and response.source_sha256 == proposal.response_sha256
+                           for response in self.responses)):
+            raise RunError("invalid_generation_failure", "formulation", "Decoder feedback must name an actual response and a supported public failure.")
         def encode(value: Any) -> dict[str, str]:
             if not isinstance(value, bytes):
                 raise TypeError("Unsupported candidate value.")
@@ -80,10 +96,12 @@ class RunMethodResources:
         path = "candidates/" + candidate_id + "/"
         proposal_ref = store.write(path + "supplied-proposal.txt", raw, candidate_id + "-supplied-proposal")
         error = None
-        artifact_ref = solve_ref = execution_ref = None
+        artifact_ref = solve_ref = execution_ref = changes_ref = None
         stages: dict[str, Any] = {name: {"status": "not_available", "reason": "Stage has not run."}
                   for name in ("formulation", "code", "solve")}
         try:
+            if isinstance(proposal, GenerationFailure):
+                raise RunError(proposal.code, proposal.stage, proposal.message)
             public_ref = store.projections["public-problem.json"]
             replay = {"mode": self.responses[-1].evidence_origin if self.responses else "no_calls",
                       "call_ids": [response.call_id for response in self.responses],
@@ -91,6 +109,12 @@ class RunMethodResources:
             artifact_ref, stages = _persist_proposal(store, proposal, self.public, public_ref,
                 hashlib.sha256(read_public_bytes(Path(store.state["problem"]))).hexdigest(),
                 self.settings, False, self.plan, replay)
+            if parent_id is not None:
+                parent = self._load(records[parent_id]["result_ref"])
+                changes = self._formulation_changes(parent_id, parent, proposal)
+                changes_ref = store.json(path + "formulation-changes.json", changes, candidate_id + "-changes")
+                if changes["requirements_lost"]:
+                    raise RunError("requirement_coverage_lost", "formulation", "Repair lost an existing public requirement trace; it cannot win by deleting that coverage.")
             artifact_ref, compiled = _compile_candidate(store, artifact_ref, self.settings)
             stages["code"] = {"status": "available", "reason": None}
             store.state.update(artifact_ref=artifact_ref, phase="code_done")
@@ -104,14 +128,20 @@ class RunMethodResources:
             if failure.code == "run_cancelled":
                 raise
             error = failure
+        if parent_id is not None and isinstance(proposal, ModelProposal) and changes_ref is None:
+            parent = self._load(records[parent_id]["result_ref"])
+            changes_ref = store.json(path + "formulation-changes.json",
+                self._formulation_changes(parent_id, parent, proposal), candidate_id + "-changes")
         solve = self._load(solve_ref) if solve_ref is not None else None
         result = {"schema_version": "0.1.0", "candidate_id": candidate_id, "proposal_sha256": identity,
                   "proposal_ref": proposal_ref,
+                  "formulation_changes_ref": changes_ref,
                   "status": "invalid" if error is not None and execution_ref is None else "executed",
                   "stages": stages, "artifact_ref": artifact_ref, "execution_result_ref": execution_ref,
                   "solve_result_ref": solve_ref, "has_primal_solution": solve["has_primal_solution"] if solve else False,
                   "termination": solve["termination"] if solve else None,
-                  "diagnostics": [{"code": error.code, "stage": error.stage, "message": str(error)}] if error else []}
+                  "diagnostics": [{"code": error.code, "stage": error.stage, "message": str(error),
+                      "origin": "method_decoder" if isinstance(proposal, GenerationFailure) else "engine"}] if error else []}
         candidate_ref = store.projections.get(path + "candidate-snapshot.json")
         candidate = self._load(candidate_ref) if candidate_ref else {
             "schema_version": "0.2.0", "candidate_id": candidate_id, "run_id": store.run_id,
@@ -128,6 +158,44 @@ class RunMethodResources:
         store.checkpoint()
         store.emit("candidate_assessed", candidate_id=candidate_id, assessment_ref=records[candidate_id]["result_ref"])
         return deepcopy(result)
+
+    def _formulation_changes(self, parent_id: str, parent: dict[str, Any], proposal: ModelProposal) -> dict[str, Any]:
+        raw = read_public_bytes(public_path(self.store.path, parent["proposal_ref"]["relative_path"]))
+        previous = parse_json(raw)["proposal"]
+        old_formulation = previous.get("formulation") if isinstance(previous.get("formulation"), dict) else {}
+        new_formulation = proposal.formulation if isinstance(proposal.formulation, dict) else {}
+        before, after = old_formulation.get("representation", {}), new_formulation.get("representation", {})
+        before = before if isinstance(before, dict) else {}
+        after = after if isinstance(after, dict) else {}
+        old_ir = previous.get("structured_ir") if isinstance(previous.get("structured_ir"), dict) else {}
+        new_ir = proposal.structured_ir if isinstance(proposal.structured_ir, dict) else {}
+        def requirements(value: Any) -> set[str]:
+            result: set[str] = set()
+            if isinstance(value, dict):
+                refs = value.get("requirement_ids", [])
+                if isinstance(refs, list):
+                    result.update(ref for ref in refs if isinstance(ref, str))
+                for item in value.values():
+                    result.update(requirements(item))
+            elif isinstance(value, list):
+                for item in value:
+                    result.update(requirements(item))
+            return result
+        def ids(value: Any) -> set[str]:
+            return {item["id"] for item in value if isinstance(item, dict) and isinstance(item.get("id"), str)} if isinstance(value, list) else set()
+        lost = ((requirements(before) - requirements(after)) | (requirements(old_ir) - requirements(new_ir)))
+        public_ids = {r["id"] for r in self.public["requirements"]}
+        return {"schema_version": "0.1.0", "origin": "declared_output_comparison",
+                "parent_candidate_id": parent_id, "parent_proposal_ref": parent["proposal_ref"],
+                "changed_sections": [key for key in ("sets", "parameters", "variables", "objective", "constraints")
+                                     if before.get(key) != after.get(key)],
+                "ir_changed_sections": [key for key in ("problem_type", "variables", "objective", "constraints", "assumptions")
+                                        if old_ir.get(key) != new_ir.get(key)],
+                "requirements_lost": sorted(lost & public_ids),
+                "constraint_ids_removed": sorted(ids(before.get("constraints")) - ids(after.get("constraints"))),
+                "constraint_ids_added": sorted(ids(after.get("constraints")) - ids(before.get("constraints"))),
+                "source_formulation_available": bool(old_formulation),
+                "semantic_validation": "not_proven_by_declaration_comparison"}
 
     def select(self, candidate_id: str, *, rule: str, reason: str) -> MethodOutcome:
         store = self.store

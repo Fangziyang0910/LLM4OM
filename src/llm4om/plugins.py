@@ -67,8 +67,9 @@ class MethodPlugin:
 
 def discover_methods() -> dict[tuple[str, str], MethodPlugin]:
     from llm4om.coe import CoEFactory
+    from llm4om.feedback_repair import FeedbackRepairFactory
     plugins = {}
-    for builtin in (DirectFactory(), OptimusFactory(), CoEFactory()):
+    for builtin in (DirectFactory(), OptimusFactory(), CoEFactory(), FeedbackRepairFactory()):
         manifest = _manifest(builtin)
         plugins[(manifest["kind"], manifest["plugin_id"])] = MethodPlugin(manifest, {"kind": "builtin"}, builtin)
     for entry in sorted(entry_points(group="llm4om.plugins"), key=lambda item: (item.name, item.value)):

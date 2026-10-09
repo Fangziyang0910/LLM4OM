@@ -170,4 +170,4 @@ CoE专家路由与原生函数的开发实现、真实外部模型／原问题�
 
 角色模型覆盖与共享预算的0.14.0开发行为见 [记录](docs/development/s05-role-models.md)。
 
-公共候选评估、来源链与最终选择的0.15.0开发行为见 [S05-C1](docs/development/s05-public-candidates.md)。验收以本机测试与实际 HiGHS 为依据；完整修正策略仍在后续范围。
+公共候选评估、来源链与最终选择的0.15.0证据见 [S05-C1](docs/development/s05-public-candidates.md)；0.16.0新增 [反馈修正方法](docs/development/s05-feedback-repair.md)，覆盖解析失败入账、阶段变化、Code-only来源复用和共享预算。本机与实际资源验收分别记录。

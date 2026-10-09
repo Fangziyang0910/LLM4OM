@@ -1,0 +1,45 @@
+# Public-feedback baseline. Set base_url/model for the intended Provider before running.
+schema_version: "0.2.0"
+method:
+  plugin_id: "llm4om.methods.feedback_repair"
+  config:
+    formulation_mode: "five_element"
+    output_mode: "lp_ir"
+llm:
+  provider_plugin_id: "llm4om.providers.openai_compatible"
+  model: "deepseek-v4-pro-0813"
+  config:
+    base_url: "https://api.example.com/v1"
+    credential_env: "LLM4OM_LLM_API_KEY"
+    max_output_tokens: 8192
+    max_retries: 0
+    timeout_s: 180
+compiler:
+  plugin_id: "llm4om.compilers.lp_ir_to_pyomo"
+model_backend:
+  plugin_id: "llm4om.model_backends.pyomo_factory"
+solver:
+  plugin_id: "llm4om.solvers.highs"
+  options:
+    time_limit_s: 15
+executor:
+  plugin_id: "llm4om.executors.container"
+  config:
+    network: false
+    cpu_limit: 1
+    memory_limit_mb: 512
+    wall_time_s: 30
+budget:
+  max_llm_attempts: 3
+  max_total_tokens: 60000
+  max_candidates: 3
+  max_repairs: 2
+  max_solver_calls: 3
+  wall_time_s: 600
+  max_concurrency: 1
+store:
+  plugin_id: "llm4om.stores.filesystem"
+  config:
+    root: "../../runs"
+reporters:
+  - plugin_id: "llm4om.reporters.markdown"

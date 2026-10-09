@@ -1004,5 +1004,71 @@ and frozen before method reentry; recovery does not ask the method to choose aga
 Methods need their declared versioned checkpoint to resume unfinished reasoning.
 An admitted assessment with no completed receipt is execution_outcome_unknown;
 it is never automatically executed again. SDK/source/Worker identity checks stay
-strict across resume. The optional feedback_repair method and factory Code-only
-repair/Formulation reuse remain subsequent S05-C work.
+strict across resume. SDK0.16.0 implements the feedback method and factory Code-only
+reuse in section21; SDK0.15.0 evidence remains version-specific.
+
+## 21. S05-C2 bounded feedback repair (SDK 0.16.0)
+
+The project-authored `llm4om.methods.feedback_repair` baseline reuses Direct's
+compact five-element output. Configuration keeps formulation_mode and output_mode;
+lp_ir uses grounded_candidates/0.1.0, python_factory uses factory_candidates/0.1.0,
+and native_gurobipy uses native_candidates/0.1.0. Factory profiles require container
+execution. Native candidates require gurobipy/Gurobi; unsupported matrices reject
+preflight before generation. Offline candidate profiles remain unsupported.
+
+`MethodResources.remaining_budget()` returns remaining candidates, repairs,
+solver_calls, llm_attempts, conservative total_tokens and wall_time_s. It reads the
+shared ledger and original deadline. Gateway still owns atomic LLM admission and
+unknown reservations; this view is not an independent allocation. The sequential
+baseline checks it before new generation. A pending request resumes only through
+Gateway's existing same-identity replay/unknown rules and assessment receipts.
+
+`GenerationFailure(call_id, response_sha256, code, stage, message)` extends assess's
+proposal input. Supported decoder failures are invalid_json, invalid_object,
+invalid_method_outcome and llm_output_truncated; stage is formulation or code.
+The resource verifies that the response actually exists in its Gateway responses,
+and bounds the public diagnostic. It charges the candidate/repair just like a
+ModelProposal, stores diagnostic origin=method_decoder and leaves Formulation,
+Code and Solve unavailable. Raw reply text is not in the failure object, public
+checkpoint or repair prompt. This records a method decoder observation, not an
+independent semantic judgment. Transport/auth/unknown failures are not fabricated
+as malformed mathematical candidates.
+
+Repair requests use logical role=repair; the initial request uses formulation.
+The original public problem/data remain the generation input. Feedback contains
+the previous public assessment and declared output. A successful repair response
+adds repair_stage=formulation|code and a bounded nonempty change_reason. LPIR
+corrections declare formulation because LPIR is executable mathematical output.
+Factory Code-only repair may omit representation and reuse the previous source
+Formulation. A supplied changed mathematical representation cannot be hidden by
+the code label.
+
+The core checks Code-only Formulation/problem/revision/data identity against the
+parent's actual source Formulation reference. It reuses that exact reference;
+the new Code's generation provenance identifies the new actual call. Mathematical
+repairs receive a new Formulation reference and matching Code. Old single-candidate
+profiles do not activate the new Code-only parent semantics by a provenance label.
+
+Each modeled child saves formulation-changes0.1.0: changed five-element chapters,
+changed LPIR chapters, constraint IDs added/removed, existing public requirement
+traces lost, parent proposal reference and source availability. Comparison is of
+actual declarations, not mathematical equivalence. Loss of a previously covered
+public requirement is requirement_coverage_lost and prevents execution/selection.
+Changed domains/objectives/coefficients remain observable with a change reason;
+preserved IDs do not certify correct natural-language modeling.
+
+Selection rule legal-primal-completeness-latest/0.1.0 prefers legal trusted primals,
+then available public stages and latest attempt. It does not compare candidate
+objectives or use reference answers. A trusted legal infeasible/unbounded outcome
+can remain selected. The method stops on its first legal primal or shared limits.
+No legal candidate yields MethodOutcome exhausted and a saved method_exhausted
+Run error/outcome; attempts remain public. Failed outcomes similarly retain
+method_failed, rather than being mislabeled invalid_method_outcome.
+
+The versioned method checkpoint stores a stable request_id, request_pending,
+assessments and public feedback. It is saved before requesting and after accepting
+an assessment. Replaying a completed but not yet accepted assessment consumes no
+extra call or candidate; completed primals are selected before any new generation.
+Core selection receipt recovery freezes a completed choice before method reentry.
+No unknown admitted execution or LLM request is silently repeated. Existing
+cancellation, private archive and strict SDK/source/Worker identity rules apply.

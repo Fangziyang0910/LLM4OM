@@ -51,11 +51,12 @@ class MockGateway:
 
     async def complete(self, request: dict[str, Any]) -> LLMResponse:
         request = parse_json(json.dumps(request, allow_nan=False).encode())
-        if set(request) - {"messages", "request_id"}:
+        if set(request) - {"messages", "request_id", "role"}:
             raise RunError("capability_mismatch", "admission", "Mock supports text messages only.")
         try:
             jsonschema.Draft202012Validator({"type": "object", "properties": {
                 "request_id": {"type": "string", "minLength": 1},
+                "role": {"type": "string", "minLength": 1},
                 "messages": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {
                     "role": {"enum": ["system", "user", "assistant"]}, "content": {"type": "string"}},
                     "required": ["role", "content"], "additionalProperties": False}}},

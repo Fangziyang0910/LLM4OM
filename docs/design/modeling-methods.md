@@ -65,6 +65,8 @@ sequenceDiagram
 
 ### feedback_repair（可选对照）
 
+0.16.0 的项目自编实现与实际支持见 [S05-C2](../development/s05-feedback-repair.md)。下列策略通过共用候选资源执行；数学声明比较与原问题独立验证分别记录。
+
 ```text
 生成并保存候选
 执行候选，读取公开 parse/compile/execution/solver 反馈

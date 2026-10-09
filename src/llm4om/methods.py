@@ -1,6 +1,7 @@
 """The grounded single-candidate method profile and built-in direct method."""
 
 from dataclasses import dataclass
+from copy import deepcopy
 import hashlib
 import json
 from typing import Any, Callable, Mapping, Protocol
@@ -18,6 +19,17 @@ class LLMResponse:
     evidence_origin: str
     source_sha256: str
     finish_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class GenerationFailure:
+    """Method-reported decoder failure bound to a real response, without raw text."""
+
+    call_id: str
+    response_sha256: str
+    code: str
+    stage: str
+    message: str
 
 
 class LLMGateway(Protocol):
@@ -48,7 +60,8 @@ class ScriptCodeProposal:
 
 
 class MethodResources(Protocol):
-    async def assess(self, candidate_id: str, proposal: "ModelProposal", *, parent_id: str | None = None,
+    def remaining_budget(self) -> dict[str, Any]: ...
+    async def assess(self, candidate_id: str, proposal: "ModelProposal | GenerationFailure", *, parent_id: str | None = None,
                      change_reason: str | None = None) -> dict[str, Any]: ...
     def select(self, candidate_id: str, *, rule: str, reason: str) -> "MethodOutcome": ...
     async def execute(self, execution_id: str, code: ScriptCodeProposal) -> dict[str, Any]: ...
@@ -89,7 +102,8 @@ class DirectMethod:
         self.output_mode = output_mode
 
     async def run(self, problem: dict[str, Any], context: MethodContext,
-                  *, checkpoint: dict[str, Any] | None = None) -> MethodOutcome:
+                  *, checkpoint: dict[str, Any] | None = None, feedback: dict[str, Any] | None = None,
+                  role: str | None = None) -> MethodOutcome:
         context.cancellation.check()
         if checkpoint is not None and (set(checkpoint) != {"schema_version", "request_id"}
                 or checkpoint["schema_version"] != "0.1.0" or not isinstance(checkpoint["request_id"], str)):
@@ -136,70 +150,108 @@ class DirectMethod:
             instructions = instructions.replace("python_factory", "native_gurobipy").replace("concrete Pyomo", "native gurobipy")
             instructions = instructions.replace("scalar Pyomo variable", "scalar Gurobi variable (including range slack variables)")
             instructions += " Use gp.Env(empty=True), OutputFlag=0, LogFile=\"\", env.start(), and gp.Model(env=env)."
-        response = await context.llm.complete({"request_id": checkpoint["request_id"], "messages": [
+        if feedback is not None:
+            instructions += (" Repair the previous candidate using only the public feedback. "
+                "Also return repair_stage (formulation or code) and a nonempty change_reason. "
+                "Preserve every business requirement, variable domain and data binding. "
+                "Do not delete or relax requirements just to obtain a feasible model. "
+                "A Solver primal does not prove the original problem is correctly modeled.")
+            if self.output_mode in ("python_factory", "native_gurobipy"):
+                instructions += " For repair_stage=code you may omit representation to reuse the source Formulation."
+            else:
+                instructions += " Grounded LPIR corrections use repair_stage=formulation because LPIR is the executable mathematical representation."
+        payload = {"problem": problem, "data": {key: value.decode("utf-8") for key, value in context.data.items()}}
+        if feedback is not None:
+            payload["feedback"] = feedback
+        response = await context.llm.complete({"request_id": checkpoint["request_id"], **({"role": role} if role else {}), "messages": [
             {"role": "system", "content": instructions},
-            {"role": "user", "content": json.dumps({"problem": problem,
-                "data": {key: value.decode("utf-8") for key, value in context.data.items()}}, ensure_ascii=False)}]})
-        if response.finish_reason == "length":
-            raise RunError("llm_output_truncated", "formulation", "The LLM reached its output limit before completing the formulation.")
-        value = parse_json(response.text.encode())
-        if self.output_mode in ("python_factory", "native_gurobipy"):
-            source_key = self.output_mode
-            if set(value) != {"representation", source_key} or not isinstance(value[source_key], str):
-                raise RunError("invalid_method_outcome", "code", "Direct requires representation and Python factory source.")
-            bindings = [{"data_id": item["data_id"], "sha256": item["sha256"]} for item in problem["data_refs"]]
-            provenance = {"origin": response.evidence_origin, "call_id": response.call_id,
-                          "response_sha256": response.source_sha256,
-                          "code_relationship": "method_generated_from_source_formulation"}
-            formulation = {"schema_version": "0.2.0", "formulation_id": "direct-formulation-001",
-                           "problem_id": problem["problem_id"], "problem_revision": problem["revision"],
-                           "representation_kind": "five_element", "representation": value["representation"],
-                           "data_bindings": bindings, "structured_ir_ref": None, "provenance": provenance}
-            artifact = {"schema_version": "0.2.0", "artifact_id": "direct-artifact-001",
-                        "problem_ref": {"sha256": context.problem_sha256}, "formulation_ref": {}, "code_ref": None,
-                        "data_bindings": bindings, "assumptions": [], "requirement_traces": [],
-                        "diagnostics": [], "warnings": [], "optional_views": [], "provenance": provenance,
-                        "stage_status": {"formulation": {"status": "available", "reason": None},
-                                         "code": {"status": "pending", "reason": "Factory contract has not been checked."}}}
-            code = FactoryCodeProposal(value[source_key], hashlib.sha256(value[source_key].encode()).hexdigest(), bindings,
-                                       representation_kind="native_code" if self.output_mode == "native_gurobipy" else "python_factory")
-            return MethodOutcome("candidate_selected", "001", ModelProposal(artifact, formulation, code=code))
-        if "artifact" in value:
-            if response.evidence_origin != "mock_fixture":
-                raise RunError("invalid_method_outcome", "formulation", "External Direct requires the compact mathematical output.")
-            proposal = ModelProposal(value["artifact"], value["formulation"], value["structured_ir"])
-        else:
-            if set(value) != {"representation", "structured_ir"} or not isinstance(value["structured_ir"], dict):
-                raise RunError("invalid_method_outcome", "formulation", "Direct requires representation and structured_ir.")
-            ir = value["structured_ir"]
-            if set(ir) != {"problem_type", "variables", "objective", "constraints", "assumptions"}:
-                raise RunError("invalid_method_outcome", "formulation", "Direct IR contains unsupported or missing mathematical fields.")
-            bindings = [{"data_id": item["data_id"], "sha256": item["sha256"]} for item in problem["data_refs"]]
-            provenance = {"origin": response.evidence_origin, "call_id": response.call_id,
-                          "response_sha256": response.source_sha256,
-                          "ir_relationship": "jointly_generated_not_compiled_from_text"}
-            ir.update(schema_version="0.1.0", ir_kind="grounded_lp", model_id="direct-ir-001",
-                      problem_id=problem["problem_id"], problem_revision=problem["revision"],
-                      data_bindings=bindings, provenance=provenance)
-            formulation = {"schema_version": "0.2.0", "formulation_id": "direct-formulation-001",
-                           "problem_id": problem["problem_id"], "problem_revision": problem["revision"],
-                           "representation_kind": "five_element", "representation": value["representation"],
-                           "data_bindings": bindings, "structured_ir_ref": {}, "provenance": provenance}
-            artifact = {"schema_version": "0.2.0", "artifact_id": "direct-artifact-001",
-                        "problem_ref": {"sha256": context.problem_sha256}, "formulation_ref": {}, "code_ref": None,
-                        "data_bindings": bindings, "assumptions": ir["assumptions"], "requirement_traces": [],
-                        "diagnostics": [], "warnings": [], "optional_views": [], "provenance": provenance,
-                        "stage_status": {"formulation": {"status": "available", "reason": None},
-                                         "code": {"status": "pending", "reason": "Deterministic compilation has not run."}}}
-            proposal = ModelProposal(artifact, formulation, ir)
-        return MethodOutcome("candidate_selected", "001", proposal)
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]})
+        try:
+            if response.finish_reason == "length":
+                raise RunError("llm_output_truncated", "formulation", "The LLM reached its output limit before completing the formulation.")
+            value = parse_json(response.text.encode())
+            repair = None
+            if feedback is not None:
+                repair = {"stage": value.pop("repair_stage", None), "reason": value.pop("change_reason", None)}
+                if repair["stage"] not in ("formulation", "code") or not isinstance(repair["reason"], str) or not repair["reason"].strip():
+                    raise RunError("invalid_method_outcome", "formulation", "Repair output needs a stage and a nonempty change reason.")
+                if self.output_mode == "lp_ir" and repair["stage"] == "code":
+                    raise RunError("invalid_method_outcome", "formulation", "Grounded LPIR corrections must declare the formulation stage.")
+                if repair["stage"] == "code" and self.output_mode in ("python_factory", "native_gurobipy") and "representation" not in value:
+                    previous = feedback.get("previous_output")
+                    if not isinstance(previous, dict) or previous.get("representation") is None:
+                        raise RunError("invalid_method_outcome", "formulation", "Code-only repair needs an existing source Formulation.")
+                    value["representation"] = previous["representation"]
+            if self.output_mode in ("python_factory", "native_gurobipy"):
+                source_key = self.output_mode
+                if set(value) != {"representation", source_key} or not isinstance(value[source_key], str):
+                    raise RunError("invalid_method_outcome", "code", "Direct requires representation and Python factory source.")
+                bindings = [{"data_id": item["data_id"], "sha256": item["sha256"]} for item in problem["data_refs"]]
+                provenance = {"origin": response.evidence_origin, "call_id": response.call_id,
+                              "response_sha256": response.source_sha256,
+                              "code_relationship": "method_generated_from_source_formulation"}
+                formulation = {"schema_version": "0.2.0", "formulation_id": "direct-formulation-001",
+                               "problem_id": problem["problem_id"], "problem_revision": problem["revision"],
+                               "representation_kind": "five_element", "representation": value["representation"],
+                               "data_bindings": bindings, "structured_ir_ref": None, "provenance": provenance}
+                if repair is not None and repair["stage"] == "code" and feedback is not None:
+                    previous = feedback.get("previous_output")
+                    if (isinstance(previous, dict) and isinstance(previous.get("source_formulation"), dict)
+                            and value["representation"] == previous["source_formulation"]["representation"]):
+                        formulation = deepcopy(previous["source_formulation"])
+                artifact: dict[str, Any] = {"schema_version": "0.2.0", "artifact_id": "direct-artifact-001",
+                            "problem_ref": {"sha256": context.problem_sha256}, "formulation_ref": {}, "code_ref": None,
+                            "data_bindings": bindings, "assumptions": [], "requirement_traces": [],
+                            "diagnostics": [], "warnings": [], "optional_views": [], "provenance": provenance,
+                            "stage_status": {"formulation": {"status": "available", "reason": None},
+                                             "code": {"status": "pending", "reason": "Factory contract has not been checked."}}}
+                code = FactoryCodeProposal(value[source_key], hashlib.sha256(value[source_key].encode()).hexdigest(), bindings,
+                                           representation_kind="native_code" if self.output_mode == "native_gurobipy" else "python_factory")
+                if repair is not None:
+                    artifact["provenance"]["repair"] = repair
+                return MethodOutcome("candidate_selected", "001", ModelProposal(artifact, formulation, code=code))
+            if "artifact" in value:
+                if response.evidence_origin != "mock_fixture":
+                    raise RunError("invalid_method_outcome", "formulation", "External Direct requires the compact mathematical output.")
+                proposal = ModelProposal(value["artifact"], value["formulation"], value["structured_ir"])
+            else:
+                if set(value) != {"representation", "structured_ir"} or not isinstance(value["structured_ir"], dict):
+                    raise RunError("invalid_method_outcome", "formulation", "Direct requires representation and structured_ir.")
+                ir = value["structured_ir"]
+                if set(ir) != {"problem_type", "variables", "objective", "constraints", "assumptions"}:
+                    raise RunError("invalid_method_outcome", "formulation", "Direct IR contains unsupported or missing mathematical fields.")
+                bindings = [{"data_id": item["data_id"], "sha256": item["sha256"]} for item in problem["data_refs"]]
+                provenance = {"origin": response.evidence_origin, "call_id": response.call_id,
+                              "response_sha256": response.source_sha256,
+                              "ir_relationship": "jointly_generated_not_compiled_from_text"}
+                ir.update(schema_version="0.1.0", ir_kind="grounded_lp", model_id="direct-ir-001",
+                          problem_id=problem["problem_id"], problem_revision=problem["revision"],
+                          data_bindings=bindings, provenance=provenance)
+                formulation = {"schema_version": "0.2.0", "formulation_id": "direct-formulation-001",
+                               "problem_id": problem["problem_id"], "problem_revision": problem["revision"],
+                               "representation_kind": "five_element", "representation": value["representation"],
+                               "data_bindings": bindings, "structured_ir_ref": {}, "provenance": provenance}
+                artifact = {"schema_version": "0.2.0", "artifact_id": "direct-artifact-001",
+                            "problem_ref": {"sha256": context.problem_sha256}, "formulation_ref": {}, "code_ref": None,
+                            "data_bindings": bindings, "assumptions": ir["assumptions"], "requirement_traces": [],
+                            "diagnostics": [], "warnings": [], "optional_views": [], "provenance": provenance,
+                            "stage_status": {"formulation": {"status": "available", "reason": None},
+                                             "code": {"status": "pending", "reason": "Deterministic compilation has not run."}}}
+                proposal = ModelProposal(artifact, formulation, ir)
+            if repair is not None:
+                proposal.artifact["provenance"]["repair"] = repair
+            return MethodOutcome("candidate_selected", "001", proposal)
+        except RunError as error:
+            raise RunError(error.code, error.stage, str(error),
+                details={"call_id": response.call_id, "response_sha256": response.source_sha256}) from error
+
 
 
 class DirectFactory:
     def describe(self) -> dict[str, Any]:
         return {
             "schema_version": "0.2.0", "plugin_id": "llm4om.methods.direct", "kind": "method",
-            "plugin_version": "0.15.0", "contract_range": ">=0.2.0,<0.3.0",
+            "plugin_version": "0.16.0", "contract_range": ">=0.2.0,<0.3.0",
             "display_name": "Direct (declared text output)",
             "description": "One public text response produces a five-element Formulation with grounded LPIR or parameterized Python factory.",
             "capabilities": {"method_profile": "grounded_single_candidate/0.1.0", "problem_types": ["lp", "milp"],
