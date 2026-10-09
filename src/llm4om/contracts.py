@@ -330,12 +330,15 @@ def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) ->
     validate_bindings(formulation, public)
 
 
-def validate_worker_response(payload: dict[str, Any], expected_runtime: dict[str, Any]) -> None:
+def validate_worker_response(payload: dict[str, Any], expected_runtime: dict[str, Any], *,
+                             solver_id: str = "llm4om.solvers.highs",
+                             model_backend: str = "llm4om.model_backends.pyomo_factory") -> None:
+    gurobi = solver_id == "llm4om.solvers.gurobi"
     number = {"type": ["number", "null"]}
     result = _object({
-        "solver_id": {"const": "llm4om.solvers.highs"},
-        "solver_version": {"const": expected_runtime["packages"]["highspy"]},
-        "model_backend": {"const": "llm4om.model_backends.pyomo_factory"},
+        "solver_id": {"const": solver_id},
+        "solver_version": {"const": expected_runtime["packages"]["gurobipy" if gurobi else "highspy"]},
+        "model_backend": {"const": model_backend},
         "raw_status": TEXT, "termination": {"enum": ["optimal", "feasible", "infeasible", "unbounded",
             "infeasible_or_unbounded", "time_limit", "interrupted", "error", "unknown"]},
         "has_primal_solution": {"type": "boolean"},
@@ -345,13 +348,14 @@ def validate_worker_response(payload: dict[str, Any], expected_runtime: dict[str
         "solve_time_s": {"type": "number", "minimum": 0},
         "options": _object({"time_limit_s": {"type": "number", "minimum": 0}}, []),
         "effective_options": {"type": "object"}, "numerical_limits": {"type": "object"},
-        "diagnostics": {"type": "array"}, "evidence_origin": {"const": "trusted_highs_api"},
+        "diagnostics": {"type": "array"}, "evidence_origin": {"const": "trusted_gurobi_api" if gurobi else "trusted_highs_api"},
     })
     schema = {"oneOf": [
         _object({"schema_version": {"const": "0.2.0"}, "error": _object({"code": TEXT, "stage": TEXT, "message": TEXT})}),
         _object({"schema_version": {"const": "0.2.0"}, "runtime": {"const": expected_runtime}, "result": result,
                  "resources": _object({"cpu_time_s": {"type": "number", "minimum": 0}, "peak_memory_bytes": NONNEGATIVE}),
-                 "factory": _object({"instance": {"type": "object"}, "decision_map": {"type": "object"}, "source_sha256": HASH})},
+                 "factory": _object({"instance": {"type": "object"}, "decision_map": {"type": "object"}, "source_sha256": HASH, "model_mps": TEXT},
+                                    ["instance", "decision_map", "source_sha256"])},
                  ["schema_version", "runtime", "result", "resources"]),
     ]}
     try:
@@ -371,9 +375,9 @@ def validate_config(settings: dict[str, Any]) -> None:
         "method": _object({"plugin_id": TEXT, "config": {"type": "object"}}),
         "llm": _object({"provider_plugin_id": TEXT, "model": TEXT, "config": {"type": "object"}}),
         "compiler": _object({"plugin_id": {"const": "llm4om.compilers.lp_ir_to_pyomo"}}),
-        "model_backend": _object({"plugin_id": {"const": "llm4om.model_backends.pyomo_factory"}}),
-        "solver": _object({"plugin_id": {"const": "llm4om.solvers.highs"}, "options": _object({
-            "time_limit_s": {"type": "number", "exclusiveMinimum": 0}}, [])}, ["plugin_id"]),
+        "model_backend": _object({"plugin_id": {"enum": ["llm4om.model_backends.pyomo_factory", "llm4om.model_backends.gurobipy"]}}),
+        "solver": _object({"plugin_id": {"enum": ["llm4om.solvers.highs", "llm4om.solvers.gurobi"]}, "options": _object({
+            "time_limit_s": {"type": "number", "minimum": 0}}, [])}, ["plugin_id"]),
         "executor": {"anyOf": [
             _object({"plugin_id": {"const": "llm4om.executors.container"}, "config": _object({
                 "network": {"const": False}, "cpu_limit": POSITIVE, "memory_limit_mb": POSITIVE,

@@ -1,6 +1,6 @@
 # 1.0 开发计划与接入顺序
 
-文档修订：0.4.0。以下是开发计划；S01／S02-A／S03／S04-A／S05-A 已实现当前范围，S03 使用 [Issue #3](https://github.com/Fangziyang0910/LLM4OM/issues/3)／[#4](https://github.com/Fangziyang0910/LLM4OM/issues/4)，S02-A 使用 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1) 跟踪，当前支持与验收范围见各切片记录；其余任务待开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
+文档修订：0.4.0。以下是开发计划；S01／S02-A／S02-B／S03／S04-A／S05-A／S07-A／S06-A 已实现当前范围，S03 使用 [Issue #3](https://github.com/Fangziyang0910/LLM4OM/issues/3)／[#4](https://github.com/Fangziyang0910/LLM4OM/issues/4)，S02-A 使用 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1) 跟踪，当前支持与验收范围见各切片记录；其余任务待开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
 
 ## 1. 首批能力矩阵
 
@@ -44,7 +44,7 @@
 
 以 CSV 为独立依据核验决策；交换利润的候选按原目标应为 12。覆盖 FR-21～25/29；DD-04/05。独立检查器是后续验收要求，不声称一般语义等价。
 
-状态：S02-A 已实现，见 [支持范围与真实证据](development/s02-highs.md)；S02-B 当前参数化工厂／HiGHS 路径已完成真实外部模型、重绑定与独立审阅后修复验收，见 [实现记录](development/s02b-factory.md)。HiGHS 与 S04-A 容器路径已验证；Gurobi 和完整求解终止矩阵仍按后续任务验收。
+状态：S02-A 已实现，见 [支持范围与真实证据](development/s02-highs.md)；S02-B 当前参数化工厂／HiGHS 路径已完成真实外部模型、重绑定与独立审阅后修复验收，见 [实现记录](development/s02b-factory.md)。HiGHS 与 S04-A 容器路径已验证；S06-A 当前 Gurobi 微型路径与实际终止状态见 [实现记录](development/s06-gurobi.md)。
 
 ### S03 插件发现、配置与预检
 
@@ -84,6 +84,8 @@
 | S06-A | 固定微型工厂／原生 gurobipy 候选经 Gurobi 求解并抽取结果 | S03-B、S04-A、S02-B | CLI＋Solver：真实许可证环境、状态与解向量；native→HiGHS 拒绝。AC-11/12/13 |
 | S06-B | 指定 optimus 经通用外部 LLM 跑同一单问题流程，保存阶段记录、上游锁与 fidelity report | S06-A、S05-A | CLI：与固定上游 reference run 对照，缺失证据如实标记。AC-12/13/25 |
 | S06-C | 指定 coe，保留专家路由与协作，经同一外部 LLM Gateway 输出阶段记录与原生实现 | S06-A、S05-A | CLI：固定上游流程对照；code_example 权限与原模型差异可查。AC-05/06/12/25 |
+
+S06-A 已实现当前微型 LPIR／Pyomo／native gurobipy 的真实 Gurobi 路径，限实际 size-limited 环境；验收与剩余范围见 [S06-A](development/s06-gurobi.md)。
 
 OptiMUS 与 CoE 的工作项互不阻塞；共享原生执行和外部 LLM 入口。优先复核 [optimus-v0.3 源码考察](references/source-inspection.md)，正式接入另锁实际版本。保留上游策略，改变行为使用 variant。覆盖 FR-14/22～26、NFR-12；DD-03/05。
 

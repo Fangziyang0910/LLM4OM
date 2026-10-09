@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm4om"
-version = "0.5.0"
+version = "0.6.0"
 description = "A platform for automated optimization modeling"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -13,6 +13,7 @@ dependencies = ["PyYAML==6.0.1", "jsonschema==4.10.3"]
 
 [project.optional-dependencies]
 solve = ["Pyomo==6.10.1", "highspy==1.15.1"]
+gurobi = ["Pyomo==6.10.1", "gurobipy==13.0.3", "packaging==25.0"]
 dev = ["mypy==2.4.0", "types-PyYAML==6.0.12.20260906", "types-jsonschema==4.26.0.20261006"]
 
 [project.scripts]
@@ -27,7 +28,7 @@ strict = true
 files = ["src/llm4om"]
 
 [[tool.mypy.overrides]]
-module = ["pyomo.*", "highspy.*"]
+module = ["pyomo.*", "highspy.*", "gurobipy.*"]
 ignore_missing_imports = true
 
 [[tool.uv.index]]

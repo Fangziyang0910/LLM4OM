@@ -2,7 +2,7 @@
   "schema_version": "0.2.0",
   "plugin_id": "llm4om.methods.direct",
   "kind": "method",
-  "plugin_version": "0.5.0",
+  "plugin_version": "0.6.0",
   "contract_range": ">=0.2.0,<0.3.0",
   "display_name": "Direct (declared text output)",
   "description": "One public text response produces a five-element Formulation with grounded LPIR or parameterized Python factory.",
@@ -28,7 +28,8 @@
       "llm4om.model_backends.pyomo_factory"
     ],
     "solvers": [
-      "llm4om.solvers.highs"
+      "llm4om.solvers.highs",
+      "llm4om.solvers.gurobi"
     ],
     "llm_features": [
       "text"
@@ -50,7 +51,8 @@
       "output_mode": {
         "enum": [
           "lp_ir",
-          "python_factory"
+          "python_factory",
+          "native_gurobipy"
         ]
       }
     },

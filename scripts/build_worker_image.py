@@ -23,7 +23,7 @@ def main() -> int:
             wheels.mkdir()
             subprocess.run(["uv", "build", "--wheel", "--out-dir", str(wheels),
                             *(["--offline"] if args.offline else [])], cwd=ROOT, check=True)
-            subprocess.run(["uv", "export", "--locked", "--extra", "solve", "--no-dev", "--no-emit-project", "--no-header",
+            subprocess.run(["uv", "export", "--locked", "--extra", "solve", "--extra", "gurobi", "--no-dev", "--no-emit-project", "--no-header",
                             "--output-file", str(context / "runtime-requirements.txt"),
                             *(["--offline"] if args.offline else [])], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
             shutil.copyfile(ROOT / "docker/worker.Dockerfile", context / "Dockerfile")

@@ -18,7 +18,7 @@ from uuid import uuid4
 from llm4om.contracts import RunError, parse_json
 
 
-DEFAULT_IMAGE = "llm4om-worker:0.5.0"
+DEFAULT_IMAGE = "llm4om-worker:0.6.0"
 _CONTROL_TIMEOUT_S = 2.0
 _REAP_TIMEOUT_S = 0.5
 _CONTROL_OUTPUT_BYTES = 1048576
@@ -350,19 +350,26 @@ def _validate_request(command: list[str], inputs: Mapping[str, bytes], limits: d
         raise RunError("invalid_execution_request", "admission", "Container command, public files or limits are invalid.") from error
 
 
-def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None) -> dict[str, Any]:
-    execution = run_container(["python", "-I", "-m", "llm4om.worker", "--runtime"], {}, limits,
+def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
+                   solver_id: str = "llm4om.solvers.highs") -> dict[str, Any]:
+    execution = run_container(["python", "-I", "-m", "llm4om.worker", "--runtime", "--solver", solver_id], {}, limits,
                               image=limits.get("image", DEFAULT_IMAGE), deadline=deadline)
     try:
         data = parse_json(execution.stdout)
         runtime = data["runtime"]
         if (execution.status != "completed" or execution.exit_code != 0 or data["schema_version"] != "0.2.0"
-                or not isinstance(runtime, dict) or set(runtime) != {"python", "llm4om", "packages"}
+                or not isinstance(runtime, dict) or set(runtime) != ({"python", "llm4om", "packages", "solver_environment"} if solver_id == "llm4om.solvers.gurobi" else {"python", "llm4om", "packages"})
                 or runtime["llm4om"] != version("llm4om") or not isinstance(runtime["python"], str)
                 or not runtime["python"].startswith(("3.11.", "3.12."))
-                or not isinstance(runtime["packages"], dict) or set(runtime["packages"]) != {"Pyomo", "highspy"}
+                or not isinstance(runtime["packages"], dict) or set(runtime["packages"]) != ({"Pyomo", "gurobipy"} if solver_id == "llm4om.solvers.gurobi" else {"Pyomo", "highspy"})
                 or not all(isinstance(value, str) and value for value in runtime["packages"].values())):
             raise ValueError("Worker did not pass dependency preflight.")
+        if solver_id == "llm4om.solvers.gurobi":
+            capability = runtime["solver_environment"]
+            if runtime["packages"]["gurobipy"] != "13.0.3" or capability not in (
+                    {"availability": "size_limited", "micro_model_verified": True, "size_boundary_error": 10010},
+                    {"availability": "micro_model_available_size_limit_not_observed", "micro_model_verified": True, "size_boundary_error": None}):
+                raise ValueError("Worker did not report a supported Gurobi environment.")
         return {**runtime, "image_id": execution.image_id, "restrictions": execution.restrictions}
     except (ValueError, KeyError, TypeError) as error:
         raise RunError("executor_unavailable", "admission", "Worker image cannot load the required Solver runtime.") from error

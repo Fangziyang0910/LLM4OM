@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-09；设计基线：0.4.0。当前包含 102 个源文件，维护科研设计、文档工具、已交付 S05-A／S07-A／S02-B 当前范围。
+日期：2026-10-09；设计基线：0.4.0。当前包含 116 个源文件，维护科研设计、文档工具、已交付 S05-A／S07-A／S02-B／S06-A 当前范围。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -133,9 +133,17 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 
 新增或删除源文件时同步本表，检查工具拒绝漏项与陈旧路径。领域定义、字段契约、评测口径和工作流程分别在其事实来源维护；当前草案可以直接修正，无需兼容未实现的旧设计。
 
-| `src/llm4om/backends.py` | S02-B Worker-local ModelHandle／Pyomo 工厂构建与线性实例导出 | CLI/SDK 的真实容器验收；域／表达式／决策映射失败 |
-| `src/llm4om/factory_worker.py` | 隔离工厂子进程与可信 HiGHS 收集器 | 原始 bytes／hash、父进程保护、有界子输出、重新校验与独立求解 |
+| `src/llm4om/backends.py` | Worker-local ModelHandle／Pyomo 与 native gurobipy 构建及模型导出 | CLI/SDK 的真实容器验收；域／表达式／决策映射失败 |
+| `src/llm4om/factory_worker.py` | 隔离工厂子进程与可信选中 Solver 收集器 | 原始 bytes／hash、父进程保护、有界子输出、重新校验与独立求解 |
 | `tests/test_factory_run.py` | S02-B 公开 CLI/SDK 验收 | HTTP fixture、真实 Docker/HiGHS、独立安装方法、revision、伪造攻击与失败保留 |
 | `examples/factories/production.py` | 真正按公开 CSV 构建模型的参数化工厂 fixture | 同源模板交换利润改变整数解；明确手工来源 |
 | `docs/adr/0005-factory-collector-isolation.md` | 工厂构建与求解证据隔离取舍 | 子进程导出、可信重构求解、不声称语义等价 |
-| `docs/development/s02b-factory.md` | S02-B 实现、验收与实际限制 | 公共 seams 的 red/green、Docker 数值证据、外部模型与独立审阅交父任务 |
+| `docs/development/s02b-factory.md` | S02-B 实现、验收与实际限制 | 公共 seams 的 red/green、Docker 数值证据、已完成外部模型／重绑定与独立审阅后修复 |
+
+| `src/llm4om/gurobi.py` | 可选实际 Gurobi LP/MILP API、许可证微型分类与原生 MPS 读取／检查 | Solver/Backend 手算 LP/MILP、真实状态、原生结构／map、派生视图 |
+| `src/llm4om/solvers.py` | 两个实际 Solver 的选择与依赖 runtime | 同一 CLI/SDK 与 Worker 的 HiGHS/Gurobi 路径，无空 registry |
+| `tests/test_gurobi_solver.py` | 真实 SDK 的 Solver／Backend 行为 | 手算常数／域／range、结构拒绝、真实 infeasible/unbounded/time_limit 与 incumbent |
+| `tests/test_gurobi_run.py` | Gurobi 的 CLI/SDK／隔离 Worker 验收 | 三路径、数据绑定、原生来源、可信结果、攻击／资源失败与提前拒绝 |
+| `examples/factories/production_gurobi.py` | 手工 native gurobipy 参数化 fixture | 公开 CSV／显式每变量 map，保留源码，不自报解 |
+| `examples/specs/gurobi.yaml` | 当前可运行人工 Mock LPIR→容器 Gurobi 配置 | doctor/run 目标13；实际 size_limited，不调用外部 LLM |
+| `docs/development/s06-gurobi.md` | S06-A 实现、支持矩阵和真实环境边界 | CLI/SDK、Backend/Solver 与 Executor 本地验收，报告／证据在任务目录 |

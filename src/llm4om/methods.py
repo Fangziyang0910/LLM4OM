@@ -29,6 +29,7 @@ class FactoryCodeProposal:
     source_sha256: str
     data_bindings: list[dict[str, Any]]
     schema_version: str = "0.1.0"
+    representation_kind: str = "python_factory"
 
 
 @dataclass(frozen=True)
@@ -80,7 +81,7 @@ class DirectMethod:
             "Do not generate platform IDs, references, hashes, provenance, code, or answers. "
             "Five-element text and grounded LPIR must express the same model."
         )
-        if self.output_mode == "python_factory":
+        if self.output_mode in ("python_factory", "native_gurobipy"):
             instructions = (
                 "Return only one JSON object with representation and python_factory (a Python source string). "
                 "representation is the five-element schema: sets=[{id,elements or source:{data_id,column}}], "
@@ -97,6 +98,10 @@ class DirectMethod:
                 "Do not solve or report answers, read files/environment, or create platform hashes/references. "
                 "Source Formulation and factory must express the same public problem."
             )
+        if self.output_mode == "native_gurobipy":
+            instructions = instructions.replace("python_factory", "native_gurobipy").replace("concrete Pyomo", "native gurobipy")
+            instructions = instructions.replace("scalar Pyomo variable", "scalar Gurobi variable (including range slack variables)")
+            instructions += " Use gp.Env(empty=True), OutputFlag=0, LogFile=\"\", env.start(), and gp.Model(env=env)."
         response = await context.llm.complete({"messages": [
             {"role": "system", "content": instructions},
             {"role": "user", "content": json.dumps({"problem": problem,
@@ -104,8 +109,9 @@ class DirectMethod:
         if response.finish_reason == "length":
             raise RunError("llm_output_truncated", "formulation", "The LLM reached its output limit before completing the formulation.")
         value = parse_json(response.text.encode())
-        if self.output_mode == "python_factory":
-            if set(value) != {"representation", "python_factory"} or not isinstance(value["python_factory"], str):
+        if self.output_mode in ("python_factory", "native_gurobipy"):
+            source_key = self.output_mode
+            if set(value) != {"representation", source_key} or not isinstance(value[source_key], str):
                 raise RunError("invalid_method_outcome", "code", "Direct requires representation and Python factory source.")
             bindings = [{"data_id": item["data_id"], "sha256": item["sha256"]} for item in problem["data_refs"]]
             provenance = {"origin": response.evidence_origin, "call_id": response.call_id,
@@ -121,7 +127,8 @@ class DirectMethod:
                         "diagnostics": [], "warnings": [], "optional_views": [], "provenance": provenance,
                         "stage_status": {"formulation": {"status": "available", "reason": None},
                                          "code": {"status": "pending", "reason": "Factory contract has not been checked."}}}
-            code = FactoryCodeProposal(value["python_factory"], hashlib.sha256(value["python_factory"].encode()).hexdigest(), bindings)
+            code = FactoryCodeProposal(value[source_key], hashlib.sha256(value[source_key].encode()).hexdigest(), bindings,
+                                       representation_kind="native_code" if self.output_mode == "native_gurobipy" else "python_factory")
             return MethodOutcome("candidate_selected", "001", ModelProposal(artifact, formulation, code=code))
         if "artifact" in value:
             if response.evidence_origin != "mock_fixture":
@@ -158,17 +165,17 @@ class DirectFactory:
     def describe(self) -> dict[str, Any]:
         return {
             "schema_version": "0.2.0", "plugin_id": "llm4om.methods.direct", "kind": "method",
-            "plugin_version": "0.5.0", "contract_range": ">=0.2.0,<0.3.0",
+            "plugin_version": "0.6.0", "contract_range": ">=0.2.0,<0.3.0",
             "display_name": "Direct (declared text output)",
             "description": "One public text response produces a five-element Formulation with grounded LPIR or parameterized Python factory.",
             "capabilities": {"method_profile": "grounded_single_candidate/0.1.0", "problem_types": ["lp", "milp"],
                 "input_artifact_kinds": ["public_problem"], "output_artifact_kinds": ["model_artifact"],
                 "formulation_representations": ["five_element"], "code_representations": ["python_factory"],
-                "model_backends": ["llm4om.model_backends.pyomo_factory"], "solvers": ["llm4om.solvers.highs"],
+                "model_backends": ["llm4om.model_backends.pyomo_factory"], "solvers": ["llm4om.solvers.highs", "llm4om.solvers.gurobi"],
                 "llm_features": ["text"], "execution_modes": ["trusted_local", "container"],
                 "supports_checkpoint": False, "supports_clarification": False, "oracle_requirements": []},
             "config_schema": {"type": "object", "properties": {
-                "formulation_mode": {"const": "five_element"}, "output_mode": {"enum": ["lp_ir", "python_factory"]}},
+                "formulation_mode": {"const": "five_element"}, "output_mode": {"enum": ["lp_ir", "python_factory", "native_gurobipy"]}},
                 "required": ["formulation_mode", "output_mode"], "additionalProperties": False},
             "dependencies": {"python": []}, "source": None,
         }
@@ -177,6 +184,10 @@ class DirectFactory:
         capabilities: dict[str, Any] = self.describe()["capabilities"]
         if config["output_mode"] == "python_factory":
             capabilities.update(method_profile="factory_single_candidate/0.1.0", execution_modes=["container"])
+        if config["output_mode"] == "native_gurobipy":
+            capabilities.update(method_profile="native_single_candidate/0.1.0", execution_modes=["container"],
+                code_representations=["native_code"], model_backends=["llm4om.model_backends.gurobipy"],
+                solvers=["llm4om.solvers.gurobi"])
         return capabilities
 
     def create(self, config: dict[str, Any]) -> DirectMethod:

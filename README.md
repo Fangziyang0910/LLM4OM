@@ -12,11 +12,11 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 ## 当前状态
 
-已交付 **S01 离线回放、S02-A 真实 HiGHS、S02-B 参数化 Pyomo 工厂、S03 方法发现与预检、S04-A 容器执行、S05-A 真实文本 LLM、S07-A 原始 NL4Opt 导入／单样本评测（Python 包 0.5.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web 与论文方法仍按开发计划接入。
+已交付 **S01 离线回放、S02-A 真实 HiGHS、S02-B 参数化 Pyomo 工厂、S03 方法发现与预检、S04-A 容器执行、S05-A 真实文本 LLM、S07-A 原始 NL4Opt 导入／单样本评测、S06-A 微型真实 Gurobi／native gurobipy（Python 包 0.6.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web 与论文方法仍按开发计划接入。
 
 仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
 
-S05-A 提供 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（最初交付包 0.4.0，当前 SDK 为 0.5.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
+S05-A 提供 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（最初交付包 0.4.0，当前 SDK 为 0.6.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
 
 GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache-2.0。私有可见性与开源许可证分别管理。
 
@@ -90,7 +90,7 @@ llm4om report --experiment-id EXPERIMENT_ID --format markdown
 
 每个插件必须声明能力和兼容矩阵，不允许自动降级后仍把结果标成原方法；每个评估结论必须说明证据级别。**求解器报告最优，只表示候选模型被求解，不证明模型符合业务需求。**
 
-已完成 S01／S02-A／S02-B／S03／S04-A／S05-A／S07-A 当前范围；当前前沿与后续依赖见 [开发计划](docs/implementation-plan.md)。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+已完成 S01／S02-A／S02-B／S03／S04-A／S05-A／S07-A／S06-A 当前范围；当前前沿与后续依赖见 [开发计划](docs/implementation-plan.md)。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 本地 NL4Opt 导入与单样本评测（S07-A）
 
@@ -112,10 +112,30 @@ SDK 导出 `import_dataset`、`NL4OptAdapter`、`EvaluationCase`、`TaskAdapter`
 
 ## 参数化工厂（S02-B）
 
-SDK／Worker 0.5.0 新增 Direct `output_mode: python_factory` 与版本化独立方法 Code proposal。
+S02-B 在 SDK／Worker 0.5.0 新增 Direct `output_mode: python_factory` 与版本化独立方法 Code proposal。
 公开 CSV bytes 按 data ID 传入 `build_model(data)`；只在容器子进程构建 Pyomo ModelHandle，
 可信 Worker 校验导出实例后独立调用 HiGHS。换数据／revision 可复用相同工厂源模板，形成新的
 绑定与实际解。原 Formulation 与 method-generated Code 保留，提取实例不冒充语义证明。
 旧 LPIR、trusted_local 与独立安装 fixture 行为保持。配置、工厂返回值与独立安装示例见
 [契约](docs/plugin-contracts.md#10-s02-b-parameterized-factory-interface-sdk-050)及
-[本地验收记录](docs/development/s02b-factory.md)；外部模型验收由父任务完成。
+[本地验收记录](docs/development/s02b-factory.md)；真实外部模型、重绑定与独立审阅后修复已验收，见该实现记录。
+
+
+## Gurobi 与原生 Code（S06-A）
+
+SDK／默认 Worker 0.6.0（未发布）支持 LPIR→Pyomo→Gurobi、参数化 Pyomo→Gurobi 和
+native gurobipy→Gurobi。真实 SDK 13.0.3 与无许可证挂载的 Linux Docker 已验证微型 LP/MILP；
+当前实际 availability 为 size_limited，不代表完整学术／商业许可证或 1.0 完成。
+
+```bash
+uv sync --locked --extra dev --extra solve --extra gurobi
+uv run --locked python scripts/build_worker_image.py
+uv run --locked llm4om doctor --config examples/specs/gurobi.yaml
+uv run --locked llm4om run --problem examples/specs/problem.json --config examples/specs/gurobi.yaml
+```
+
+基础 SDK 可不安装 Gurobi，通过容器运行；选中宿主求解则需可选 gurobi extra。
+Direct 的 `output_mode: native_gurobipy` 对应 gurobipy Backend／Gurobi Solver／container。
+原生源码和 Formulation 保留，可信 Worker 重新读取 SDK MPS 并独立求解；提取视图不证明语义。
+能力矩阵、公开 proposal／返回值、许可证分类和真实验收边界见
+[S06-A 实现记录](docs/development/s06-gurobi.md)与[契约](docs/plugin-contracts.md#11-s06-a-gurobi-and-native-code-sdk-060)。

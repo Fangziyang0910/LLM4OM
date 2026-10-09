@@ -54,3 +54,5 @@ s.t. 2A + B <= 8
 ## 3. 数据绑定错误的设计反例
 
 若把产品利润绑定为 A=2、B=3，候选模型会选择 A=2、B=3，并报告目标 13。该解满足原资源约束，但按原问题利润计算为 12。候选自报目标与参考数值同为 13，独立原目标计算仍能发现错误。这是拟加入验收的绑定反例，不能当作已经运行的结果。
+
+S06-A 的 [Gurobi 配置](specs/gurobi.yaml)复用人工 Mock LPIR，容器实际求解目标13；原生参数化代码见 [fixture](factories/production_gurobi.py)。使用与实际 size-limited 范围见 [S06-A](../docs/development/s06-gurobi.md)。

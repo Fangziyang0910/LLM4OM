@@ -19,9 +19,9 @@
 | 产物与配置 | 计划结果 |
 |---|---|
 | grounded LPIR → lp_ir_to_pyomo → pyomo_factory → HiGHS | 首批必须实现的结构化路径 |
-| 相同 IR → Pyomo → Gurobi | 需独立真实验收 |
+| 相同 IR → Pyomo → Gurobi | S06-A 已验证当前微型 LP/MILP |
 | Pyomo 工厂 → HiGHS 或 Gurobi | 由工厂声明与实际模型类型决定 |
-| native gurobipy → Gurobi | 原生路径，需要可信结果提取 |
+| native gurobipy → Gurobi | S06-A SDK MPS／可信 API 提取，限当前线性子集 |
 | native gurobipy → HiGHS | `CAPABILITY_MISMATCH` |
 | 原生脚本无法提取解向量 | 可执行，但独立解检查证据不足 |
 
@@ -91,4 +91,14 @@ Direct 的输出模式与独立方法的 profile 通过方法声明解析，不�
 线性实例后，经既有严格 IR／HiGHS 路径独立求解。构建与收集隔离见 [ADR-0005](../adr/0005-factory-collector-isolation.md)。
 原 Code 的来源是 method_generated；导出实例只形成 factory_exported_instance 派生视图，
 不覆盖源 Formulation。数据 revision 与 hash 随实例变化，源模板可保持相同 hash。
-本地验收与待父任务完成的外部模型／独立审阅见 [实现记录](../development/s02b-factory.md)。
+本地与真实外部模型、重绑定、独立审阅后修复验收见 [实现记录](../development/s02b-factory.md)。
+
+
+### S06-A 已实现的 Gurobi／native 路径
+
+[实际支持与证据](../development/s06-gurobi.md)明确限定 size-limited 微型 LP/MILP。
+Pyomo 参数化工厂复用已有隔离导出和重建；native gurobipy 通过 SDK MPS 在可信收集器读取新模型，
+实际 API 检查结构、每个变量的映射和独立求解。二者保留原 Code／Formulation。
+原生提取视图标为 native_exported_instance；不能据此宣称源代码／原问题的语义等价。
+原生→HiGHS 及 generated Code→宿主／离线在生成前拒绝。实际未支持结构在优化前拒绝。
+Runtime doctor 与 run 共用选中 SDK／Worker 和许可证微型可用性检查，不输出许可证身份或日志。

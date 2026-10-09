@@ -48,3 +48,5 @@ LLM4OM 面向自动优化建模研究者和开发者。核心用例是输入自�
 | 全仓库维护 | [规范](../CODING_STANDARDS.md)、[整理记录](repository-audit.md) | 当前可执行检查与逐文件覆盖 |
 
 参考资料的元数据和注释在 catalog 维护，资料页与 BibTeX 生成。正文综述负责比较机制与设计依据；检索记录负责出处与读取限制；源码记录负责固定提交观察。
+
+S06-A 微型真实 Gurobi／native 路径与限制见 [实现记录](development/s06-gurobi.md)。

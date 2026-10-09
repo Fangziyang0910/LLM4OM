@@ -60,6 +60,21 @@ wheels = [
 ]
 
 [[package]]
+name = "gurobipy"
+version = "13.0.3"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/be/fe67fc5f40ad0ba5f3deba934020647d2c9bb26ca14c1004b2fb1f8cc367/gurobipy-13.0.3-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:ce2dd649e6859eeee350d2c22120f2180799696eba3cdf6b2810f6a695d2761c", size = 16090038, upload-time = "2026-08-25T06:30:08.434Z" },
+    { url = "https://files.pythonhosted.org/packages/43/2f/f20c630fd415333d02934dcefd9f45a2bdb280252a3dd1becd0a0ab5967f/gurobipy-13.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:8ce3da52cceaa06eee4d4bbe02db873076aa731fc6a66b59d92446be704921b5", size = 15092764, upload-time = "2026-08-25T06:30:35.194Z" },
+    { url = "https://files.pythonhosted.org/packages/79/bf/b1e92403a1678e24e1f864a71ab34ac70582c4aa201ad6611e932f11a45f/gurobipy-13.0.3-cp311-cp311-manylinux_2_26_aarch64.whl", hash = "sha256:2f82af72e5eaf4bdce0162a05ca8c5a57a49f6dc9e3fcf79329dd8e4f79bf43c", size = 87436437, upload-time = "2026-08-25T06:33:06.908Z" },
+    { url = "https://files.pythonhosted.org/packages/6b/25/c764398fe14e97e40af0d7f8fd6340f896f6dae7d2622dd4d2b0800e2075/gurobipy-13.0.3-cp311-cp311-win_amd64.whl", hash = "sha256:5a13eec9f02ca3ba54e59ea3802f93bfc596c402a0a7ecb2396cfadecb17c82c", size = 11132751, upload-time = "2026-08-25T06:33:18.871Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/87/ada84ac49ccc8478ad50b4938ef61122719d64f224a2c5312ad4bccbdb20/gurobipy-13.0.3-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:ee439774ed56dca173cddf0017f1cb854d7f79dfcc12abc4fe5d83a7f22bb9b3", size = 15987021, upload-time = "2026-08-25T06:33:48.381Z" },
+    { url = "https://files.pythonhosted.org/packages/62/8b/df51ea9593c9434ae736bd528586777d6978ae3842e8252c053ec88e3656/gurobipy-13.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:34f0b9528edfbf29e96a74e0b69b8cc832375d43342d6376754fd436c570bb2a", size = 14865983, upload-time = "2026-08-25T06:34:19.194Z" },
+    { url = "https://files.pythonhosted.org/packages/98/cf/b94bcddb78e3fc7cb9eb26251db33da1e45772ab0e6df2d5cf5b8df00d1e/gurobipy-13.0.3-cp312-cp312-manylinux_2_26_aarch64.whl", hash = "sha256:3d4611c247850379e416daafd9a7ad624d94e7b2b416746c382a3a54c1ef89d7", size = 87206647, upload-time = "2026-08-25T06:36:38.821Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/ca/e2f677a1f7b91e3f1dfda3043c9810cff38ea8901007a4abea6a53c904fb/gurobipy-13.0.3-cp312-cp312-win_amd64.whl", hash = "sha256:11ae3f75a17265e095695229a3ccbf14a8fe6fa9a4bc17a11e2698bedc16b28a", size = 10983444, upload-time = "2026-08-25T06:36:51.628Z" },
+]
+
+[[package]]
 name = "highspy"
 version = "1.15.1"
 source = { registry = "https://pypi.org/simple" }
@@ -144,7 +159,7 @@ wheels = [
 
 [[package]]
 name = "llm4om"
-version = "0.5.0"
+version = "0.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
@@ -157,6 +172,11 @@ dev = [
     { name = "types-jsonschema" },
     { name = "types-pyyaml" },
 ]
+gurobi = [
+    { name = "gurobipy" },
+    { name = "packaging" },
+    { name = "pyomo" },
+]
 solve = [
     { name = "highspy" },
     { name = "pyomo" },
@@ -164,15 +184,18 @@ solve = [
 
 [package.metadata]
 requires-dist = [
+    { name = "gurobipy", marker = "extra == 'gurobi'", specifier = "==13.0.3" },
     { name = "highspy", marker = "extra == 'solve'", specifier = "==1.15.1" },
     { name = "jsonschema", specifier = "==4.10.3" },
     { name = "mypy", marker = "extra == 'dev'", specifier = "==2.4.0" },
+    { name = "packaging", marker = "extra == 'gurobi'", specifier = "==25.0" },
+    { name = "pyomo", marker = "extra == 'gurobi'", specifier = "==6.10.1" },
     { name = "pyomo", marker = "extra == 'solve'", specifier = "==6.10.1" },
     { name = "pyyaml", specifier = "==6.0.1" },
     { name = "types-jsonschema", marker = "extra == 'dev'", specifier = "==4.26.0.20261006" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = "==6.0.12.20260906" },
 ]
-provides-extras = ["solve", "dev"]
+provides-extras = ["solve", "gurobi", "dev"]
 
 [[package]]
 name = "mypy"
@@ -271,6 +294,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/db/35e1c2d38b04cbd5b731f9d71495e055e813197669d22b612f11748d2ff9/numpy-2.5.3-cp312-cp312-win32.whl", hash = "sha256:bf63afbe037eb5d2fe87fbcc7778e61da53ebaf21d938a4515aa73b62532a5d4", size = 6133378, upload-time = "2026-09-06T16:24:51.915Z" },
     { url = "https://files.pythonhosted.org/packages/3c/a1/accf6d4f0c80c5d9ba9735d6b1550e444180599f34dec69ca01360f717ad/numpy-2.5.3-cp312-cp312-win_amd64.whl", hash = "sha256:0a59a421a32580a009e8a1751345bf829631b990dc1794b80514ab722b435def", size = 12567828, upload-time = "2026-09-06T16:24:54.255Z" },
     { url = "https://files.pythonhosted.org/packages/22/43/1764aff32e4652526ae2f71fa8b3efd8d25c8a3d6926914454e47138ed1e/numpy-2.5.3-cp312-cp312-win_arm64.whl", hash = "sha256:ccb32e0525d29e8b0572eb84c9a57af0e7a4e615726927506f55063c62414034", size = 10485432, upload-time = "2026-09-06T16:24:57.278Z" },
+]
+
+[[package]]
+name = "packaging"
+version = "25.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/d4/1fc4078c65507b51b96ca8f8c3ba19e6a61c8253c72794544580a7b6c24d/packaging-25.0.tar.gz", hash = "sha256:d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f", size = 165727, upload-time = "2025-04-19T11:48:59.673Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/20/12/38679034af332785aac8774540895e234f4d07f7545804097de4b666afd8/packaging-25.0-py3-none-any.whl", hash = "sha256:29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484", size = 66469, upload-time = "2025-04-19T11:48:57.875Z" },
 ]
 
 [[package]]

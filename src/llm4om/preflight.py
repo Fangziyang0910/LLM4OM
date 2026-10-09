@@ -10,7 +10,7 @@ from llm4om.providers import credential_environment, provider_factory, MockProvi
 import jsonschema
 
 from llm4om.contracts import RunError, validate_config
-from llm4om.highs import runtime_versions
+from llm4om.solvers import solver_runtime
 from llm4om.executors import worker_runtime
 from llm4om.plugins import MethodPlugin, discover_methods
 
@@ -50,15 +50,18 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     execution_mode = settings["executor"]["plugin_id"].removeprefix("llm4om.executors.")
     capabilities = method.manifest["capabilities"]
     profile = capabilities.get("method_profile")
-    if profile not in ("grounded_single_candidate/0.1.0", "factory_single_candidate/0.1.0"):
+    if profile not in ("grounded_single_candidate/0.1.0", "factory_single_candidate/0.1.0", "native_single_candidate/0.1.0"):
         raise RunError("capability_mismatch", "admission", "Method profile is not supported.")
-    if profile == "factory_single_candidate/0.1.0" and (offline or execution_mode != "container"):
+    if profile in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0") and (offline or execution_mode != "container"):
         raise RunError("capability_mismatch", "admission", "Generated factories require container execution, including generation.")
     if profile == "grounded_single_candidate/0.1.0" and "compiler" not in settings:
         raise RunError("invalid_config", "admission", "Grounded LPIR requires its explicit compiler.")
+    native = profile == "native_single_candidate/0.1.0"
+    if settings["model_backend"]["plugin_id"] != ("llm4om.model_backends.gurobipy" if native else "llm4om.model_backends.pyomo_factory") or native and settings["solver"]["plugin_id"] != "llm4om.solvers.gurobi":
+        raise RunError("capability_mismatch", "admission", "The output profile is incompatible with the selected Backend/Solver.")
     required = {"method_profile": profile,
                 "input_artifact_kinds": ["public_problem"], "output_artifact_kinds": ["model_artifact"],
-                "formulation_representations": ["five_element"], "code_representations": ["python_factory"],
+                "formulation_representations": ["five_element"], "code_representations": ["native_code" if native else "python_factory"],
                 "model_backends": [settings["model_backend"]["plugin_id"]], "solvers": [settings["solver"]["plugin_id"]],
                 "llm_features": ["text"], "oracle_requirements": []}
     if not offline:
@@ -86,15 +89,18 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     if not offline and settings["budget"]["max_solver_calls"] < 1:
         raise RunError("budget_exhausted", "admission", "Real solving requires one Solver call slot.")
     worker = None
+    local_runtime: dict[str, Any] = {}
     if not offline:
         if execution_mode == "container":
-            worker = worker_runtime(settings["executor"]["config"], deadline=started + settings["budget"]["wall_time_s"])
+            worker = worker_runtime(settings["executor"]["config"], deadline=started + settings["budget"]["wall_time_s"],
+                                    solver_id=settings["solver"]["plugin_id"])
             packages.update(worker["packages"])
         else:
-            packages.update(runtime_versions())
+            local_runtime = solver_runtime(settings["solver"]["plugin_id"])
+            packages.update(local_runtime["packages"])
     return AdmissionPlan(method, {"schema_version": "0.2.0", "mode": "offline_mock" if offline else execution_mode,
         "method": {"manifest": method.manifest, "origin": method.origin},
-        "method_profile": profile, "code_origin": "method_generated" if profile == "factory_single_candidate/0.1.0" else "deterministic_compilation",
+        "method_profile": profile, "code_origin": "method_generated" if profile in ("factory_single_candidate/0.1.0", "native_single_candidate/0.1.0") else "deterministic_compilation",
         "compiler_id": settings["compiler"]["plugin_id"] if profile == "grounded_single_candidate/0.1.0" else None, "model_backend_id": settings["model_backend"]["plugin_id"],
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
-        "packages": packages, "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": factory.describe(), "model": settings["llm"]["model"]}, provider, started + settings["budget"]["wall_time_s"])
+        "packages": packages, "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": factory.describe(), "model": settings["llm"]["model"]}, provider, started + settings["budget"]["wall_time_s"])

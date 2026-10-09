@@ -1,6 +1,6 @@
 # 贡献与开发流程
 
-本仓库维护 LLM4OM 的研究设计和平台实现。已交付 [S01](docs/development/s01-offline-run.md) 离线单问题流程与 [S02-A](docs/development/s02-highs.md) 真实 HiGHS 求解、[S03](docs/development/s03-plugins.md) 方法发现／预检及 [S04-A](docs/development/s04-container.md) 容器执行及 [S05-A](docs/development/s05-provider.md) 真实文本 LLM及 [S07-A](docs/development/s07-nl4opt.md) NL4Opt 导入／评测；每个任务交付可演示的纵向行为。[S02-B](docs/development/s02b-factory.md) 已实现参数化工厂的本地 CLI/SDK／容器验收，外部模型与独立审阅交父任务。
+本仓库维护 LLM4OM 的研究设计和平台实现。已交付 [S01](docs/development/s01-offline-run.md) 离线单问题流程与 [S02-A](docs/development/s02-highs.md) 真实 HiGHS 求解、[S03](docs/development/s03-plugins.md) 方法发现／预检及 [S04-A](docs/development/s04-container.md) 容器执行及 [S05-A](docs/development/s05-provider.md) 真实文本 LLM及 [S07-A](docs/development/s07-nl4opt.md) NL4Opt 导入／评测；每个任务交付可演示的纵向行为。[S02-B](docs/development/s02b-factory.md) 已实现参数化工厂的本地 CLI/SDK／容器验收，真实外部模型／重绑定与独立审阅后修复已验收。S06-A 新增实际微型 Gurobi／native Code，见 [实现记录](docs/development/s06-gurobi.md)。
 
 规范见 [CODING_STANDARDS](CODING_STANDARDS.md)，领域词见 [GLOSSARY](GLOSSARY.md)。按 [文档导航](docs/README.md)读取当前任务涉及的 FR/NFR、契约、详细设计与验收。方法或 benchmark 接入另读 [资料库](docs/references/README.md)及 [源码考察](docs/references/source-inspection.md)。
 
@@ -25,18 +25,18 @@
 当前平台使用 Python 3.11／3.12。依赖声明由 pyproject.toml 维护，完整解析由 uv.lock 固定；维护工具复用其中的 PyYAML／jsonschema。推荐执行：
 
 ```bash
-uv sync --locked --extra dev --extra solve
-uv run --locked --extra dev --extra solve mypy
+uv sync --locked --extra dev --extra solve --extra gurobi
+uv run --locked --extra dev --extra solve --extra gurobi mypy
 uv run --locked python scripts/build_worker_image.py
-uv run --locked --extra dev --extra solve python scripts/render_references.py --check
-uv run --locked --extra dev --extra solve python scripts/check_repository.py
-uv run --locked --extra dev --extra solve python -m unittest discover -s tests -v
+uv run --locked --extra dev --extra solve --extra gurobi python scripts/render_references.py --check
+uv run --locked --extra dev --extra solve --extra gurobi python scripts/check_repository.py
+uv run --locked --extra dev --extra solve --extra gurobi python -m unittest discover -s tests -v
 uv build
 ```
 
-修改 `docs/references/catalog.json` 后先运行 `uv run --locked --extra dev --extra solve python scripts/render_references.py` 生成资料页与 BibTeX，再执行检查。JSON 使用两空格布局；CSV 和授权原文保持字节稳定。所有纳入仓库的文件都在 [逐文件整理记录](docs/repository-audit.md)中说明职责与校验方式，新增文件同步记录。
+修改 `docs/references/catalog.json` 后先运行 `uv run --locked --extra dev --extra solve --extra gurobi python scripts/render_references.py` 生成资料页与 BibTeX，再执行检查。JSON 使用两空格布局；CSV 和授权原文保持字节稳定。所有纳入仓库的文件都在 [逐文件整理记录](docs/repository-audit.md)中说明职责与校验方式，新增文件同步记录。
 
-仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。容器测试要求可访问的 Docker daemon 和已构建的 Worker 镜像；真实测试不自动跳过。Linux 为当前完整隔离验证环境，macOS／Windows 尚未验收。平台测试从 CLI／SDK 与编译／Solver 公共接口验证离线、真实求解、独立方法安装及预检；维护检查不替代真实隔离测试、完整预算执行、恢复或 benchmark 验收。基础安装可省略 solve extra，但完整测试必须安装它。
+仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。容器测试要求可访问的 Docker daemon 和已构建的 Worker 镜像；真实测试不自动跳过。Linux 为当前完整隔离验证环境，macOS／Windows 尚未验收。平台测试从 CLI／SDK 与编译／Solver 公共接口验证离线、真实求解、独立方法安装及预检；维护检查不替代真实隔离测试、完整预算执行、恢复或 benchmark 验收。基础安装可省略 solve extra，完整测试须安装 solve 与 gurobi extras；Gurobi 实测仅证明当前 size-limited 微型环境。
 
 ## 4. Review 与交付
 

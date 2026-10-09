@@ -1,6 +1,7 @@
-"""Trusted collector: bounded child export, validated IR, independent HiGHS solve."""
+"""Trusted collector: bounded child export and independent selected Solver API."""
 
 import ctypes
+from contextlib import ExitStack
 import hashlib
 import os
 from pathlib import Path
@@ -12,15 +13,18 @@ from typing import Any
 
 from llm4om.contracts import RunError, parse_json, read_public_bytes, validate_bindings, validate_csv, validate_formulation, validate_problem
 from llm4om.linear import compile_ir
-from llm4om.highs import solve_highs
+from llm4om.solvers import solve
 
 
-def solve_factory(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+def solve_factory(path: Path, *, solver_id: str = "llm4om.solvers.highs") -> tuple[dict[str, Any], dict[str, Any]]:
     request = parse_json(read_public_bytes(path))
     fields = {"kind", "source_sha256", "solver_options", "problem", "formulation", "data_bindings",
               "data_refs", "allowed_problem_types", "wall_time_s", "output_limit_bytes"}
-    if set(request) != fields or request["kind"] != "python_factory/0.1.0":
+    if set(request) != fields or request["kind"] not in ("python_factory/0.1.0", "native_gurobipy/0.1.0"):
         raise RunError("invalid_worker_request", "execution", "Factory request does not match version 0.1.0.")
+    native = request["kind"] == "native_gurobipy/0.1.0"
+    if native and solver_id != "llm4om.solvers.gurobi":
+        raise RunError("capability_mismatch", "admission", "Native gurobipy requires Gurobi.")
     public = request["problem"]
     validate_problem(public)
     validate_formulation(request["formulation"], public)
@@ -95,26 +99,34 @@ def solve_factory(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         raise RunError(value["code"], value["stage"], value["message"])
     if child.returncode != 0 or set(exported) != {"instance"} or not isinstance(exported["instance"], dict):
         raise RunError("invalid_factory_export", "execution", "Factory did not successfully export an instance.")
-    instance = exported["instance"]
-    if set(instance) != {"variables", "objective", "constraints", "decision_map", "problem_type"}:
-        raise RunError("invalid_factory_export", "execution", "Factory export contains unsupported fields.")
-    decisions = instance.pop("decision_map")
-    if (not isinstance(decisions, dict) or any(not isinstance(value, str) or not value for value in decisions.values())
-            or len(set(decisions.values())) != len(decisions)):
-        raise RunError("invalid_decision_map", "execution", "Export must contain an explicit one-to-one decision map.")
-    instance.update(schema_version="0.1.0", ir_kind="grounded_lp", model_id="factory-instance-001",
-        problem_id=public["problem_id"], problem_revision=public["revision"], data_bindings=request["data_bindings"],
-        assumptions=[], provenance={"origin": "factory_exported_instance", "source_sha256": request["source_sha256"],
-        "relationship": "extracted_instance_not_source_formulation_or_semantic_proof"})
-    compiled = compile_ir(instance)
-    if set(decisions) != set(compiled.symbol_map["variables"]):
-        raise RunError("invalid_decision_map", "execution", "Exported decision map differs from the validated variables.")
-    if instance["problem_type"] not in request["allowed_problem_types"]:
-        raise RunError("capability_mismatch", "execution", "Factory instance type is outside the admitted types.")
-    remaining = seconds - (time.monotonic() - timer)
-    if remaining <= 0:
-        raise RunError("execution_timeout", "execution", "No Worker deadline remains for independent solving.")
-    options = dict(request["solver_options"])
-    options["time_limit_s"] = min(options.get("time_limit_s", remaining), remaining)
-    result = solve_highs(compiled, options)
-    return result, {"instance": instance, "decision_map": decisions, "source_sha256": request["source_sha256"]}
+    with ExitStack() as stack:
+        transport = exported["instance"]
+        if native:
+            from llm4om.gurobi import read_native, native_instance, solve_native
+            handle = stack.enter_context(read_native(transport))
+            instance = native_instance(handle)
+        else:
+            instance = transport
+        if set(instance) != {"variables", "objective", "constraints", "decision_map", "problem_type"}:
+            raise RunError("invalid_factory_export", "execution", "Factory export contains unsupported fields.")
+        decisions = instance.pop("decision_map")
+        if (not isinstance(decisions, dict) or any(not isinstance(value, str) or not value for value in decisions.values())
+                or len(set(decisions.values())) != len(decisions)):
+            raise RunError("invalid_decision_map", "execution", "Export must contain an explicit one-to-one decision map.")
+        instance.update(schema_version="0.1.0", ir_kind="grounded_lp", model_id="factory-instance-001",
+            problem_id=public["problem_id"], problem_revision=public["revision"], data_bindings=request["data_bindings"],
+            assumptions=[], provenance={"origin": "native_exported_instance" if native else "factory_exported_instance", "source_sha256": request["source_sha256"],
+            "relationship": "extracted_instance_not_source_formulation_or_semantic_proof"})
+        compiled = compile_ir(instance)
+        if set(decisions) != set(compiled.symbol_map["variables"]):
+            raise RunError("invalid_decision_map", "execution", "Exported decision map differs from the validated variables.")
+        if instance["problem_type"] not in request["allowed_problem_types"]:
+            raise RunError("capability_mismatch", "execution", "Factory instance type is outside the admitted types.")
+        remaining = seconds - (time.monotonic() - timer)
+        if remaining <= 0:
+            raise RunError("execution_timeout", "execution", "No Worker deadline remains for independent solving.")
+        options = dict(request["solver_options"])
+        options["time_limit_s"] = min(options.get("time_limit_s", remaining), remaining)
+        result = solve_native(handle, options) if native else solve(compiled, options, solver_id)
+        return result, {"instance": instance, "decision_map": decisions, "source_sha256": request["source_sha256"],
+                        **({"model_mps": transport["model_mps"]} if native else {})}

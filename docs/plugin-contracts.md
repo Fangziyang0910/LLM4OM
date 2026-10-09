@@ -347,7 +347,7 @@ Gateway archive 是共享 run 资源身份。文件锁原子 admission，OS slot
 
 ## 7. S07-A local Task / Evaluation interface (implemented)
 
-S07-A was delivered in unreleased 0.4.0; current SDK is 0.5.0. `TaskAdapter.iter_cases(config: Path)` yields frozen
+S07-A was delivered in unreleased 0.4.0; current SDK is 0.6.0. `TaskAdapter.iter_cases(config: Path)` yields frozen
 `EvaluationCase` values. For `NL4OptAdapter`, config is the imported `manifest.json`.
 The case carries `case_id`, public ProblemSpec path, privileged `oracle_ref`, frozen manifest
 bytes and frozen entry bytes. Pass only `case.public_problem` to `run_problem`; never pass
@@ -394,7 +394,7 @@ Result retains protocol, source, manifest/record hashes, projection/domain/norma
 policies, exclusion reason, reference quality, selected/eligible counts, run error and separate
 structural, execution and solver-reported candidate primal evidence. It contains no oracle
 paths or annotations. Structural evidence is not semantic verification. S07-A itself introduced no new method
-or execution contract; S02-B now uses Worker image 0.5.0.
+or execution contract; S02-B originally used Worker image 0.5.0; the current image is 0.6.0.
 
 ## 10. S02-B parameterized factory interface (SDK 0.5.0)
 
@@ -410,7 +410,7 @@ HiGHS, public data only, and container execution. Both `doctor` and `run` reject
 trusted_local before generation. Grounded profile stays `grounded_single_candidate/0.1.0`.
 The compiler selection is required only for grounded LPIR. It is unused for supplied Code;
 admission records `compiler_id=null`, `code_origin=method_generated` for factories.
-SDK and default Worker tag are 0.5.0; core objects remain 0.2.0 and grounded LPIR 0.1.0.
+S02-B introduced SDK/Worker 0.5.0; current tag is 0.6.0; core objects remain 0.2.0 and grounded LPIR 0.1.0.
 
 An independently installed method returns:
 
@@ -475,3 +475,59 @@ creates a SolveResult. Exceptions, invalid handles/maps, nonlinear/domain errors
 bindings and unsupported versions preserve supplied artifacts and diagnostics; preflight
 failures happen before a method can produce new artifacts. Missing Docker never falls back
 to local Python. See [S02-B evidence and limits](development/s02b-factory.md).
+
+
+## 11. S06-A Gurobi and native Code (SDK 0.6.0)
+
+Current support and actual local evidence: [S06-A](development/s06-gurobi.md).
+Core objects remain 0.2.0; LPIR and proposal schema remain 0.1.0. SDK/Worker are 0.6.0.
+RunConfig Solver IDs accept `llm4om.solvers.highs|llm4om.solvers.gurobi`; Backend IDs accept
+`llm4om.model_backends.pyomo_factory|llm4om.model_backends.gurobipy`.
+`time_limit_s` is finite and nonnegative (zero requests an immediate limit). No arbitrary SDK options
+or license parameters are admitted. Effective options and native numerical limits accompany results.
+
+The resolved grounded and Pyomo factory profiles may declare Gurobi; installed methods must declare
+it explicitly. `native_single_candidate/0.1.0` requires five_element Formulation, `native_code`,
+gurobipy Backend, Gurobi Solver, public data only and container execution. Direct resolves this profile
+only for its declared `output_mode=native_gurobipy`. Core never infers plugin config or branches on
+method IDs. Both doctor and run use this compatibility/dependency seam before generation.
+
+`FactoryCodeProposal` adds `representation_kind` with default `python_factory`; native methods set
+`representation_kind="native_code"`. Source/hash/bindings/version remain required. The representation
+must match the resolved capabilities. Native persisted CodeArtifact retains `representation_kind=native_code`,
+`factory_contract=native_gurobipy/0.1.0`, `entry_point=build_model`, native Backend and original source
+Formulation. Direct's native compact response is exactly `{representation, native_gurobipy}`.
+Neither original source nor Formulation is replaced by an LLM-written universal IR.
+
+`GurobiFactoryBackend.load(source, data)` uses the same isolated Worker-only build_model(data) entry;
+`export(handle)` writes SDK MPS and maps explicit decision IDs to every unique scalar variable name.
+The child protocol contains base64 MPS bytes and mapping, never a solution. Names with whitespace
+are rejected for MPS transport. The trusted collector uses a fresh SDK environment/model to read,
+validate and optimize the native model; it does not call candidate optimize or read candidate X/ObjVal.
+`ModelHandle` stays Worker-local. Supported native structure is single-objective linear LP/MILP;
+quadratic/general/nonlinear/multiobjective/scenario/SOS/PWL and semi-domains fail before optimization.
+Range slack variables must be explicitly mapped. SDK model constants, sense, bounds, types and linear rows are preserved in MPS transport. MPS cannot confer semantic equivalence to source or business requirements.
+
+Optional views retain `factory-instance.json`, `decision-map.json` and native `native-model.mps` with
+origin `native_exported_instance`, source hash, bindings/revision and relationship
+`extracted_instance_not_source_formulation_or_semantic_proof`. Pyomo view origin remains
+`factory_exported_instance`. Code validation level remains `factory_contract`, distinct from deterministic
+compilation or semantic correctness. The Evaluator recognizes both actual Code contracts.
+
+Gurobi API results use `trusted_gurobi_api` internally and `trusted_container_worker` in persisted
+container results. The Worker protocol validates selected Solver, package version, Backend, runtime,
+primal consistency and fields. Raw status is the SDK integer rendered as a string. Statuses 2/3/4/5/9/11
+map to optimal/infeasible/infeasible_or_unbounded/unbounded/time_limit/interrupted; others remain unknown.
+SolCount gates primal/vector/objective. Unavailable or nonfinite bound/gap is null. Runtime is actual SDK
+Runtime. Options come from the platform, not candidate state or a model-file settings file.
+
+Selected Gurobi runtime packages are Pyomo/gurobipy; optional SDK discovery and bounded doctor probes
+record `solver_environment={availability,micro_model_verified,size_boundary_error}`. Availability is
+`size_limited` on actual SDK error10010, otherwise `micro_model_available_size_limit_not_observed`.
+No full-license conclusion follows. Public output excludes license identities/details/logs.
+Base-only SDK installation can use container solving; host Gurobi absence does not break HiGHS/offline.
+
+Finite Pyomo bounds and normalized row RHS must have magnitude below 1e20. This is the SDK
+semantic infinity threshold, distinct from `GRB.INFINITY=1e100`. Result numerical limits record both.
+Native row RHS is checked at the same threshold; the native view describes the already-built SDK model.
+A `ModelHandle.decision_map` accepts any Mapping, including a read-only Mapping, under both Backends.

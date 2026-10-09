@@ -1,4 +1,4 @@
-"""Worker-local Pyomo factory handle and linear instance export."""
+"""Worker-local Pyomo/native handles and isolated model export."""
 
 from dataclasses import dataclass
 import hashlib
@@ -91,6 +91,23 @@ class PyomoFactoryBackend:
                 "decision_map": symbols, "problem_type": "milp" if any(row["domain"] != "continuous" for row in records) else "lp"}
 
 
+class GurobiFactoryBackend(PyomoFactoryBackend):
+    """Native construction child; SDK model file contains no solution or options."""
+
+    def export(self, handle: ModelHandle) -> dict[str, Any]:
+        import base64
+        import tempfile
+        from llm4om.gurobi import validate_native
+        validate_native(handle)
+        names = {key: var.VarName for key, var in handle.decision_map.items()}
+        if any(any(char.isspace() for char in name) for name in names.values()):
+            raise RunError("invalid_decision_map", "execution", "Native MPS transport requires names without whitespace.")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.mps"
+            handle.model.write(str(path))
+            return {"model_mps": base64.b64encode(read_public_bytes(path)).decode("ascii"), "decision_map": names}
+
+
 def _main() -> int:
     try:
         path = Path(sys.argv[1])
@@ -105,7 +122,7 @@ def _main() -> int:
                 raise RunError("data_hash_mismatch", "execution", "Factory data bytes do not match the binding.")
             data[ref["data_id"]] = raw
         from llm4om.backends import PyomoFactoryBackend as FactoryBackend
-        backend = FactoryBackend()
+        backend = GurobiFactoryBackend() if request["kind"] == "native_gurobipy/0.1.0" else FactoryBackend()
         with redirect_stdout(sys.stderr):
             exported = backend.export(backend.load(source.decode("utf-8"), data))
         print(json.dumps({"instance": exported}, allow_nan=False))
@@ -113,7 +130,8 @@ def _main() -> int:
     except RunError as error:
         print(json.dumps({"error": {"code": error.code, "stage": error.stage, "message": str(error)}}))
     except (Exception, SystemExit) as error:
-        traceback.print_exc(file=sys.stderr)
+        if not type(error).__module__.startswith("gurobipy"):
+            traceback.print_exc(file=sys.stderr)
         print(json.dumps({"error": {"code": "factory_exception", "stage": "execution", "message": "Factory construction/export failed: " + type(error).__name__}}))
     return 1
 
