@@ -98,3 +98,20 @@ recorded separately at `parent-review-standards.md` and `parent-review-spec.md`
 in the task evidence directory. No remaining actionable P1/P2 was found in that
 parent reading; it does not fulfil independent review. No remote CI, package publication or dataset redistribution
 was used. Whole1.0 remains incomplete.
+
+## Final installed delivery
+
+Source SDK hash:
+`b45e3b7f45bb2b7be7eb109109d8ec7c82fcf9b504a1c10f8010cbbbad6882e2`.
+The full regression used image
+`sha256:445e14fe70f2f291dc5e247b32ad96de3b7b261025f1045ef1363e0378befd3e`.
+After README metadata synchronization, final wheel/Worker retain the identical
+SDK source. Final image:
+`sha256:3e7f2212d2612374fbbb57e374786d4190dfc7c32d9a7484ad594d589132daef`.
+The final Python3.11 wheel matches that source and independently evaluates the
+canonical run's supplied numeric answer as pass. Root SDK0.10.0 also passed an
+actual final-image Gurobi run (objective13) and canonical completed resume;
+project `.env` remains unchanged0600/ignored. No duplicate full suite followed
+these metadata-only changes. Final scans and source/image checks are recorded
+in `final-verification.log`; root evidence is `root-smoke/verification.json`
+under `/tmp/llm4om-s07c/`.
