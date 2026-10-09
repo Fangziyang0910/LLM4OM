@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-09；设计基线：0.4.0。当前包含 116 个源文件，维护科研设计、文档工具、已交付 S05-A／S07-A／S02-B／S06-A 当前范围。
+日期：2026-10-10；SDK／Worker 开发版本：0.12.0。当前包含 169 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -199,3 +199,9 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/task_policy.py` | MAMO／NLP4LP 公开数学评阅与数值容差共用规则 | 公共问题／参数绑定、范围／舍入、原始参考不改写；实际边界回归 |
 | `tests/test_nlp4lp.py` | NLP4LP Task／Evaluation 的公开行为验收 | nested JSON／类型／原始 bytes／私有隔离、故障、资格、真实 HiGHS与绑定 |
 | `docs/development/s07-nlp4lp.md` | S07-B 实现与实际证据范围 | 来源／公开私有投影／指标分母／本机验收与剩余条件 |
+| `docs/development/s07-checkers.md` | 原问题独立检查与有限探测实现 | 公共 Task/Evaluation、真实 Solver、分母与本机验收 |
+| `examples/specs/import-checker.json` | 独立原问题生产任务导入配置 | 公开问题／私有 policy hash 与不可覆盖快照 |
+| `src/llm4om/checker_tasks.py` | 冻结原问题任务与评测 | 私有映射／参考边界、分层状态、有限点与分母 |
+| `src/llm4om/checkers.py` | 原问题检查与受信任扩展接口 | 独立 CSV／Decimal 规则、版本／来源与输出校验 |
+| `tests/test_checker_evaluation.py` | 公共导入／评测与真实求解反例 | HiGHS／Gurobi、CLI 安装插件、错误状态与私有隔离 |
+| `tests/test_checkers.py` | 独立原问题数学检查 | 原始业务域／容量／利润与多最优解 |

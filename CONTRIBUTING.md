@@ -4,7 +4,7 @@
 
 SDK／Worker 0.8.0 已完成 [S04-B 取消／恢复](docs/development/s04-resume.md)和 [S05-B Messages](docs/development/s05b-messages.md)集成验收；241项本机回归与独立审阅通过，包未发布。
 
-S06-B 正在验收 SDK/Worker0.9.0 的完整固定 OptiMUS 主流程；支持与证据见 [实现记录](docs/development/s06b-optimus.md)。已验收0.8.0 基线与开发版本分别记录。
+S06-B 已完成完整固定 OptiMUS 主流程的真实运行／本机回归；独立审阅仍待完成。支持与证据见 [实现记录](docs/development/s06b-optimus.md)。已验收0.8.0 基线与开发版本分别记录。
 
 规范见 [CODING_STANDARDS](CODING_STANDARDS.md)，领域词见 [GLOSSARY](GLOSSARY.md)。按 [文档导航](docs/README.md)读取当前任务涉及的 FR/NFR、契约、详细设计与验收。方法或 benchmark 接入另读 [资料库](docs/references/README.md)及 [源码考察](docs/references/source-inspection.md)。
 
@@ -53,3 +53,5 @@ Review 分开回答两个问题：Standards 是否符合开发规范和相关契
 S07-C 的 SDK/Worker0.10.0 开发实现、固定数据来源和本机数值验收见 [MAMO 记录](docs/development/s07-mamo.md)。
 
 S07-B 的 SDK/Worker0.11.0 开发实现与固定 NLP4LP 数据、公开参数绑定和私有参考边界见 [实现记录](docs/development/s07-nlp4lp.md)。
+
+S07-D 的 SDK/Worker0.12.0 原问题检查与有限探测见 [实现记录](docs/development/s07-checkers.md)。沿用本机聚焦测试→一次完整回归；GitHub Actions 仅手动补充。

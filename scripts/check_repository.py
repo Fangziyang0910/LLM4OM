@@ -224,8 +224,11 @@ def check_fixture_semantics() -> list[str]:
         if not condition:
             errors.append(f"fixture invariant failed: {message}")
 
-    require(all(item["problem_id"] == problem["problem_id"] for item in [model, oracle, expected]), "problem identity")
-    require(model["problem_revision"] == oracle["problem_revision"] == problem["revision"], "problem revision")
+    require(all(item["problem_id"] == problem["problem_id"] for item in [model, expected]), "problem identity")
+    require(model["problem_revision"] == problem["revision"], "problem revision")
+    imported = json.loads((fixture / "import-checker.json").read_text())["cases"][0]
+    require(all(hashlib.sha256((fixture / imported[key + "_path"]).read_bytes()).hexdigest() == imported[key + "_sha256"]
+                for key in ("problem", "evaluation")), "frozen checker source hashes")
     bindings = {ref["data_id"]: ref["sha256"] for ref in problem["data_refs"]}
     require({ref["data_id"]: ref["sha256"] for ref in model["data_bindings"]} == bindings, "data binding hashes")
     variables = {variable["id"]: variable["name"] for variable in model["variables"]}
@@ -251,7 +254,7 @@ def check_fixture_semantics() -> list[str]:
     profit = lambda x: sum(x[key] * int(row["profit"]) for key, row in products.items())
     best = max(feasible, key=profit)
     require(profit(best) == oracle["reference_objective"]["value"] == expected["expected"]["candidate_objective"] == 13, "integer optimum")
-    require(best == oracle["reference_solution"]["decisions"] == expected["expected"]["mapped_original_decisions"], "reference solution")
+    require(best == expected["expected"]["mapped_original_decisions"], "reference solution")
     swapped = max(feasible, key=lambda x: 2 * x["A"] + 3 * x["B"])
     require(swapped == {"A": 2, "B": 3} and profit(swapped) == 12, "wrong-binding counterexample")
     relaxation = expected["lp_relaxation_expected"]
@@ -263,7 +266,9 @@ def check_fixture_semantics() -> list[str]:
     require(sum(weights[r] * cap for r, cap in capacities.items()) == profit(point), "LP primal-dual bound")
     require(expected["record_kind"] == "expected_fixture_assertions_not_actual_results", "expected fixture label")
     require(expected["expected"]["is_real_llm_benchmark"] is False and expected["expected"]["semantic_equivalence"] == "not_available", "evidence boundary")
-    require(oracle["access"] == "evaluator_only" and oracle["independent_checker"]["implementation_status"] == "planned", "oracle boundary")
+    require(oracle["checker"] == {"plugin_id": "llm4om.checkers.production", "version": "0.1.0", "config": {}}
+            and oracle["decision_mapping"] == {"A": "qty_A", "B": "qty_B"}
+            and oracle["reference_objective"]["quality"] == "proven_optimum", "oracle boundary")
     return errors
 
 

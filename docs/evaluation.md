@@ -1,6 +1,6 @@
 # 评测协议与正确性证据
 
-协议草案：`llm4om.eval.public-v0.1`、`llm4om.eval.objective-v0.1` 与 `llm4om.eval.checker-v0.1`；文档修订：0.4.0。以下为设计要求，当前没有实验结果。单问题用户运行可以没有 oracle；benchmark 评测在同一运行流程上增加独立参考材料和汇总。
+协议：`llm4om.eval.public-v0.1`、`llm4om.eval.objective-v0.1` 与 `llm4om.eval.checker-v0.1`；文档修订：0.12.0。本文维护评测规则；实际接入和验收范围分别见各切片记录。单问题用户运行可以没有 oracle；benchmark 评测在同一运行流程上增加独立参考材料和汇总。
 
 ## 1. 必须分开的判断
 
@@ -34,6 +34,12 @@
 适用于具有受信任原问题检查器的实例。主指标命名为 **verified_solution_rate**：检查器成功确认原问题可行性，且原问题目标满足预先规定的准确／质量阈值。
 
 只有可行检查器而无参考最优值时，可报告 independent_feasibility_rate，不能称 optimal accuracy。没有完整决策映射时为 unknown，而不是猜测变量名并认为检查通过。
+
+S07-D 的 [独立检查实现](development/s07-checkers.md)分别保存候选自报目标匹配、原问题目标、原问题目标质量、独立可行性和 verified solution。候选目标存在单位差异时，只应用运行前明确的正比例／偏移映射；不根据结果拟合比例。verified solution 表示当前解满足原问题及参考质量要求，不表示整个模型等价。有限性质探测独立报告反例；恒零目标下的一个正确解仍可来自错误可行域。
+
+该实现分别冻结 `N_independent_eligible` 和 `N_verified_eligible`。后者还要求已声明的参考质量／阈值。评测错误、无 primal 和事后材料丢失保留对应分母。未提供或事先不可用的检查器、缺决策映射及无参考质量分别报告，零分母的率为 null。
+
+性质探测当前检查与 Code 有确定性来源关联的 grounded LPIR。原始点和数据替换规则在运行前冻结于私有 policy。数据扰动作用于原问题数据，候选模型保持固定；它不证明方法已支持重新绑定或重新建模。报告只导出探测数量、覆盖和反例索引，不导出私有点坐标／替换内容。有限点集不构成完整语义证明。
 
 ## 3. 样本与分母
 
@@ -148,7 +154,7 @@ execution status and `solver_reported_candidate_feasibility` are separate observ
 Candidate reported objective is retained without comparing it to declaration coefficients.
 No upstream declaration scorer/parser is used. `N_selected` is the frozen split count;
 `N_evaluated=1` describes this single-case result, not completion of the whole split.
-Derived reference models and independent solution checking remain S07-D. Local HTTP
+Derived reference models remain unimplemented; original-fixture independent solution checks are implemented in S07-D. Local HTTP
 fixtures exercise engineering behavior only; they do not establish external-model accuracy.
 
 ### S02-B Code 来源证据

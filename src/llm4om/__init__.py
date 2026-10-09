@@ -9,9 +9,13 @@ from llm4om.tasks import EvaluationCase, TaskAdapter, Evaluator, NL4OptAdapter, 
 from llm4om.evaluation import NL4OptEvaluator, evaluate_case
 from llm4om.mamo import MAMOAdapter, MAMOEvaluator
 from llm4om.nlp4lp import NLP4LPAdapter, NLP4LPEvaluator
+from llm4om.checkers import SolutionChecker, ProductionChecker, UnitCapChecker
+from llm4om.checker_tasks import CheckerFixtureAdapter, IndependentCheckerEvaluator
 
 __all__ = [
     "ModelHandle", "FactoryCodeProposal", "ScriptCodeProposal", "MethodContext", "MethodResources", "MethodOutcome", "ModelProposal",
     "CancellationToken", "RunResult", "run_problem", "resume_run", "cancel_run", "EvaluationCase", "TaskAdapter", "Evaluator",
-    "NL4OptAdapter", "MAMOAdapter", "NLP4LPAdapter", "import_dataset", "NL4OptEvaluator", "MAMOEvaluator", "NLP4LPEvaluator", "evaluate_case",
+    "NL4OptAdapter", "MAMOAdapter", "NLP4LPAdapter", "CheckerFixtureAdapter", "import_dataset",
+    "NL4OptEvaluator", "MAMOEvaluator", "NLP4LPEvaluator", "IndependentCheckerEvaluator", "evaluate_case",
+    "SolutionChecker", "ProductionChecker", "UnitCapChecker",
 ]

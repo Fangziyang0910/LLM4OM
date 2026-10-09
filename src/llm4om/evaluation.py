@@ -128,11 +128,12 @@ def evaluate_case(manifest: Path, case_id: str, outcome: Path, output: Path) -> 
 
     from llm4om.mamo import MAMOAdapter, MAMOEvaluator
     from llm4om.nlp4lp import NLP4LPAdapter, NLP4LPEvaluator
+    from llm4om.checker_tasks import CheckerFixtureAdapter, IndependentCheckerEvaluator
     adapter_id = parse_reference_json(manifest.read_bytes()).get("adapter_id")
     adapters: dict[str, type[TaskAdapter]] = {"llm4om.tasks.nl4opt": NL4OptAdapter, "llm4om.tasks.mamo": MAMOAdapter,
-                                          "llm4om.tasks.nlp4lp": NLP4LPAdapter}
+                                          "llm4om.tasks.nlp4lp": NLP4LPAdapter, "llm4om.tasks.checker_fixture": CheckerFixtureAdapter}
     evaluators: dict[str, type[Evaluator]] = {"llm4om.tasks.nl4opt": NL4OptEvaluator, "llm4om.tasks.mamo": MAMOEvaluator,
-                                          "llm4om.tasks.nlp4lp": NLP4LPEvaluator}
+                                          "llm4om.tasks.nlp4lp": NLP4LPEvaluator, "llm4om.tasks.checker_fixture": IndependentCheckerEvaluator}
     if adapter_id not in adapters:
         raise RunError("invalid_manifest", "evaluation", "Unknown task adapter.")
     case = adapters[adapter_id]().load_case(manifest, case_id)

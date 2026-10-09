@@ -11,7 +11,8 @@
 | [formulation.json](specs/formulation.json) | 五元素 Formulation，引用人工 LPIR | Mock 流程显式使用；非真实方法输出 |
 | [model-artifact.json](specs/model-artifact.json) | 共同封装：表述可用、Code 尚待生成 | 工程 Mock 响应；后续编译才生成 CodeArtifact |
 | [model-ir.json](specs/model-ir.json) | 人工构造的目标模型，仅用于工程 fixture | 真实基准建模时否；Mock 流程可显式使用 |
-| [oracle.json](specs/oracle.json) | 自建参考目标与独立规则说明 | 否；Evaluator 读取 |
+| [oracle.json](specs/oracle.json) | 已实现原问题检查器的私有 policy、参考质量、映射与有限点 | 否；Evaluator 读取 |
+| [import-checker.json](specs/import-checker.json) | S07-D 冻结公开问题／数据与私有 policy | 否；Task 导入入口使用 |
 | [plugin-manifest.json](specs/plugin-manifest.json) | direct 插件 Manifest 草案 | 配置／发现元信息 |
 | [experiment.yaml](specs/experiment.yaml) | 离线示例配置草案 | 公开部分可以；oracle 由 TaskAdapter 私有处理 |
 | [run.yaml](specs/run.yaml) | S04-A 容器求解／S01 离线配置 | 全部为公开配置；仍是工程 Mock |

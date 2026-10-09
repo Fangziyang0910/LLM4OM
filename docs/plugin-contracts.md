@@ -832,3 +832,56 @@ experiment aggregation remains S08; one case rate is not a full benchmark rate.
 Direct prompts now describe provided CSV/JSON data and the public problem;
 factory Code parses the declared raw-byte format. This does not introduce
 JSON column metadata or prove per-parameter mathematical binding automatically.
+
+## 17. S07-D SolutionChecker (SDK 0.12.0)
+
+`SolutionChecker.describe() -> dict` declares schema0.1.0, checker_id/version,
+required_decisions, public_data_ids, scope, objective_sense and coverage.
+`check(public_problem, public_data_bytes, mapped_business_decisions) -> dict`
+returns schema0.1.0, finite original_objective, objective_sense and
+independent_feasibility={status:pass|fail,violations,coverage,level}.
+The level is independent_original_business_rules. Violations belong to coverage;
+a passing status requires no violations. Input is privileged evaluation-only;
+it excludes candidate reported objective, reference target and candidate constraints.
+
+Installed trusted entry points use group llm4om.checkers, name=checker_id,
+and factory(config)->SolutionChecker. Source/version/entry-point/package identity
+and the SDK checker source hash are frozen at admission and compared at evaluation.
+Dataset paths cannot load a checker module. Invalid manifests/outputs and plugin
+exceptions produce saved errors; output and exceptions cannot publish private diagnostics.
+This is a trusted Python extension seam, not an untrusted-code sandbox.
+
+The checker_fixture import config0.2.0 contains adapter_id,
+dataset_id, source_version, cases and selected. Each case has problem_path,
+problem_sha256, evaluation_path and evaluation_sha256; a null evaluation path
+means no supplied checker policy. Public ProblemSpec/data refs retain original
+identity/schema/hash; snapshot paths are normalized. Private policy0.1.0 has exactly
+checker={plugin_id,version,config}|null, decision_mapping|null,
+reported_objective_mapping={scale>0,offset}|null, reference_objective|null,
+probe_points and data_perturbations, plus schema_version.
+The reference has value,sense,quality=proven_optimum|best_known|feasible,
+source,abs_tol,rel_tol. Decision mapping is an explicit one-to-one business ID
+→candidate solution ID mapping. Missing or incomplete mapping is unknown.
+
+Probe points map all original decisions to finite numbers. Data perturbations
+have id, replacement_data={public_data_id:UTF-8-content}, and probe_points.
+At most5000 total points and50 perturbations are accepted. The original public
+schema also validates replacement bytes. These policies stay in task_private.
+Public results show counts, coverage and counterexample indexes; point coordinates,
+replacement contents and private references are not exported. Probe output is
+finite_predeclared_grounded_instance_probes, complete_semantic_proof=false,
+data_rebinding_tested=false. The inspectable IR must be the actual deterministic
+Code source. Opaque or auxiliary-variable cases without complete mapping are
+not_available; no arbitrary code, pickle or expression evaluation is used.
+
+Protocol llm4om.eval.checker-v0.1 snapshots have N_selected,
+N_independent_eligible and N_verified_eligible. The latter also requires a declared
+reference threshold. Results separately record reported_objective_match,
+original_objective, original_objective_quality, objective_consistency,
+independent_feasibility, verified_solution and property_checks. Each solution
+rate has its own numerator/denominator; unavailable admission evidence yields
+null rates, while admitted failures retain their denominator. Original quality
+and feasibility determine verified_solution. Reported units and finite model
+probes do not redefine that solution metric. Missing primal/oracle and checker
+errors cannot become semantic_verified; limited evidence never proves complete
+Formulation or Code equivalence.

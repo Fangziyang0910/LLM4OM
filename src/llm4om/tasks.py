@@ -94,6 +94,9 @@ def import_dataset(config: Path, output: Path) -> Path:
     if adapter == "llm4om.tasks.nlp4lp":
         from llm4om.nlp4lp import import_nlp4lp
         return import_nlp4lp(config, output, settings)
+    if adapter == "llm4om.tasks.checker_fixture":
+        from llm4om.checker_tasks import import_checker_fixture
+        return import_checker_fixture(config, output, settings)
     if adapter != "llm4om.tasks.nl4opt":
         raise RunError("invalid_task_config", "import", "Unknown task adapter.")
     return _import_nl4opt(config, output, settings)

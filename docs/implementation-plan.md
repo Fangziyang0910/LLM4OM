@@ -73,7 +73,7 @@
 | S05-C | 公共阶段反馈支持 Formulation／Code 定位、有界修正和选择；feedback_repair 可选对照 | S05-A、S04-B | 应用入口：max_repairs=0、预算停止、约束变化记录、选择理由。AC-06/07/09/12 |
 | S05-D | 交互运行提出澄清、恢复或形成派生 run，并支持角色模型配置 | S05-C | 应用入口：批量 unresolved；新业务规则不改写原输入。AC-06/08/23 |
 
-状态：S05-A 当前文本范围已实现，见 [实际支持与真实证据](development/s05-provider.md)和 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)；S05-B 本地工程实现见 [Messages](development/s05b-messages.md)，真实指定模型验收与独立审查待完成；S05-C/D 待实现。
+状态：S05-A 当前文本范围已实现，见 [实际支持与真实证据](development/s05-provider.md)和 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)；S05-B 本地工程实现见 [Messages](development/s05b-messages.md)，真实指定模型验收与独立审查已完成；S05-C/D 待实现。
 
 覆盖 FR-14～19；DD-02/07。S05-B 使用 S05-A 已验证的共享 Gateway；这不是模型质量的依赖。
 
@@ -150,7 +150,7 @@ flowchart LR
     S09B --> S10
 ```
 
-S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。[S02-B](development/s02b-factory.md) 也已完成当前范围。[S06-A](development/s06-gurobi.md) 已完成当前范围。[S04-B](development/s04-resume.md)与 [S05-B](development/s05b-messages.md)已完成当前范围，本机241项集成回归及独立审查通过。[S06-B](development/s06b-optimus.md) 已实现固定源码默认流程，真实模型／Solver 和干净 wheel 安装已验收，263项完整本机回归已通过，独立审阅因本机 Codex CLI 用量上限尚未完成。当前前沿包含 S06-B／C、S07-B／C／D；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
+S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。[S02-B](development/s02b-factory.md) 也已完成当前范围。[S06-A](development/s06-gurobi.md) 已完成当前范围。[S04-B](development/s04-resume.md)与 [S05-B](development/s05b-messages.md)已完成当前范围，本机241项集成回归及独立审查通过。[S06-B](development/s06b-optimus.md) 已实现固定源码默认流程，真实模型／Solver 和干净 wheel 安装已验收，263项完整本机回归已通过，独立审阅因本机 Codex CLI 用量上限尚未完成。S07-B/C 已接入并完成本机验收，独立审阅仍待完成。S07-D 原问题检查实现见 [记录](development/s07-checkers.md)。未完成范围仍包括 S05-C/D、S06-C、完整插件／角色路由、S08、S09 与 S10；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
 
 ## 5. 工程默认值与完成边界
 

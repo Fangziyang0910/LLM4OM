@@ -23,7 +23,7 @@ S05-B 新增独立 Messages Adapter（SDK／Worker 0.8.0）。本地工程实现
 真实指定模型端到端验收、最新修复的241项本机集成回归和独立审查均已通过。
 既有小探针不替代平台验收，SDK／Worker 0.8.0 仍未发布。
 
-S06-B 的 OptiMUS 固定源码流程已进入 SDK/Worker0.9.0 开发版本，保留原生 Formulation、脚本及执行驱动修正；支持 gurobipy/Gurobi 容器路径。本机流程验证和剩余验收见 [实现记录](docs/development/s06b-optimus.md)，公开输入见 [示例](examples/optimus/README.md)。0.8.0 是已验收基线；0.9.0 尚未完成全部验收。
+S06-B 的 OptiMUS 固定源码流程已完成真实外部模型／Gurobi 验收，见 [实现记录](docs/development/s06b-optimus.md)。[MAMO](docs/development/s07-mamo.md) 和 [NLP4LP](docs/development/s07-nlp4lp.md) 已接入冻结任务与数值评测；NLP4LP 已用指定外部模型／HiGHS 验收一个公开实例。近期切片的独立审阅仍待完成。
 
 GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache-2.0。私有可见性与开源许可证分别管理。
 
@@ -163,3 +163,5 @@ Direct 的 `output_mode: native_gurobipy` 对应 gurobipy Backend／Gurobi Solve
 MAMO Task／Evaluation 已进入 SDK/Worker0.10.0 开发版本：保留全部优化问题、公开题面资格评阅和私有数值答案，单样本失败仍计入分母。实际支持与剩余验收见 [S07-C](docs/development/s07-mamo.md)；全量基准成绩未生成。
 
 NLP4LP Task／Evaluation 已进入 SDK/Worker0.11.0 开发版本：完整保留361个公开描述与参数，参考缺失／损坏分别记录，资格按公开问题与数据评阅冻结。实际支持与待验收条件见 [S07-B](docs/development/s07-nlp4lp.md)。
+
+SDK／Worker0.12.0 的原问题独立可行性、原目标重算与有限探测见 [S07-D](docs/development/s07-checkers.md)。Web／批量实验仍按完整1.0计划实施。

@@ -1,41 +1,36 @@
 {
-  "schema_version": "0.2.0",
-  "problem_id": "fixture-production-milp-001",
-  "problem_revision": "1",
+  "schema_version": "0.1.0",
+  "checker": {
+    "plugin_id": "llm4om.checkers.production",
+    "version": "0.1.0",
+    "config": {}
+  },
+  "decision_mapping": {
+    "A": "qty_A",
+    "B": "qty_B"
+  },
+  "reported_objective_mapping": null,
   "reference_objective": {
     "value": 13,
     "sense": "max",
-    "reference_termination": "optimal",
+    "quality": "proven_optimum",
+    "source": "independent_finite_integer_enumeration",
     "abs_tol": 1e-06,
-    "rel_tol": 1e-05,
-    "source": "independent_finite_integer_enumeration"
+    "rel_tol": 1e-05
   },
-  "reference_solution": {
-    "decisions": {
+  "probe_points": [
+    {
       "A": 3,
       "B": 2
     },
-    "comparison": "feasibility_and_objective_not_exact_vector"
-  },
-  "independent_checker": {
-    "checker_id": "llm4om.fixtures.production",
-    "version": "0.1.0",
-    "implementation_status": "planned",
-    "required_decisions": [
-      "A",
-      "B"
-    ],
-    "rules": [
-      "A and B are nonnegative integers",
-      "2*A + B <= 8",
-      "A + 2*B <= 8"
-    ],
-    "objective": "3*A + 2*B",
-    "rule_format": "human_readable_specification_not_eval_code"
-  },
-  "source": {
-    "kind": "original_fixture",
-    "license_ref": "Apache-2.0"
-  },
-  "access": "evaluator_only"
+    {
+      "A": 0,
+      "B": 8
+    },
+    {
+      "A": 2.6666666666666665,
+      "B": 2.6666666666666665
+    }
+  ],
+  "data_perturbations": []
 }

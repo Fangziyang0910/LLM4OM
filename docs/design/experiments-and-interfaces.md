@@ -23,6 +23,8 @@ TaskAdapter → 公开 ProblemSpec + 私有 oracle_ref → dataset manifest → 
 默认比较 direct、OptiMUS、CoE 在同一通用外部 LLM、样本、可比执行条件与预算下的方法流程；角色模型覆盖必须显式记录。以后具备原推荐模型时可另比较完整系统，当前不将缺少训练权重的流程变体列为该原系统。不同比较条件分表，不能将后一种解释为纯方法效果。实际预算消耗、模型调用重试和求解次数都留存。
 
 对应 FR-08～12/18/28～34；AC-04/05/15～17/22。
+DD-06 的原问题检查已接入公共 Task／Evaluation 入口，见 [S07-D](../development/s07-checkers.md)。独立程序用原始公开数据重算业务可行性和目标；私有 policy 只在运行结束后使用。有限探测检查确定性 Code 的 grounded IR，和当前解的 verified solution 分开报告。
+
 ## DD-07 持久化、恢复与报告
 
 运行事件按递增 sequence_no 排序。写入阶段产物后，再发布引用该产物的完成事件；使用临时文件与原子替换，避免报告读到半份 JSON。文件 hash 与事件引用校验失败应报错，不能忽略。
