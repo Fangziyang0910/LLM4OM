@@ -1,6 +1,6 @@
 # S02-B 参数化工厂实现与验收
 
-状态：SDK／Worker 0.5.0 本地实现，关联 [Issue #12](https://github.com/Fangziyang0910/LLM4OM/issues/12)；真实外部模型工厂与独立审阅由父任务验收。
+状态：S02-B 当前 HiGHS／容器范围已实现并通过本地验收；SDK／Worker 0.5.0 未发布，关联 [Issue #12](https://github.com/Fangziyang0910/LLM4OM/issues/12)。真实模型、独立审阅与最终结果见本页。
 规范来源是 [插件契约](../plugin-contracts.md#10-s02-b-parameterized-factory-interface-sdk-050)、
 [执行设计](../design/execution.md)、[ADR-0004](../adr/0004-formulation-and-code.md)与
 [ADR-0005](../adr/0005-factory-collector-isolation.md)。覆盖 FR-21～25/29、DD-04/05、AC-03/10/13/24 的当前 HiGHS 路径。
@@ -115,3 +115,16 @@ termination=optimal。Code origin=method_generated，输入930、输出8294、to
 异常丢失资源具体原因。公共 CLI 负例 ValueError("missing capacity for resource R7") 先失败，补充
 有界 stderr traceback 后通过，仍无 SolveResult。子进程入口也改为调用模块入口函数，消除重复
 执行已导入模块的 runpy 警告。修复为作者 red→green 核验，未冒称独立复审通过。
+
+
+## 最终父任务检查
+
+修复后 Python 3.12.3／3.11.13 各完整 155 项测试通过（176.617s／176.065s）。19 模块 strict mypy、
+109 源文件、参考导出、diff 检查通过。wheel／sdist 和 Worker 构建通过；不安装 Pyomo／highspy 的
+干净基础 SDK 环境，免费 doctor 通过，并经公共 Executor 真正完成上述真实代码的新数据求解。
+运行公开文件、wheel／sdist 不含实际凭据值。最终 Worker 为
+sha256:2e7c6b2bf1fa02d2afd753ee227bf5e190cb4ee2151e6ef57f1f105a70e8b011。
+
+当前切片完成不代表 1.0 完成。固定变量及非线性仍不在此工厂导出子集；支持矩阵按实际边界记录。
+S06 的 [Gurobi 环境考察](s06-gurobi-research.md) 已独立验证 size-limited 本机微型 LP/MILP；
+平台 Gurobi／native 接入仍需实现和真实验收。Actions 仍仅手动触发。

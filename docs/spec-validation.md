@@ -210,3 +210,16 @@ S05 首轮 CI 的 Python 3.12 失败来自滴流 fixture 的 150 ms 冷启动窗
 指定外部模型在真实 dev 样本完成 CLI→Formulation/IR→Code→容器 HiGHS，候选连续 LP 的目标为 8000/9。独立检查仍不可用，不把候选最优声明为 benchmark 准确率。run_id、来源、实际用量、上下界手算、隐私、独立两轴 review 与 red→green 修复统一见 [S07-A 记录](development/s07-nl4opt.md)。
 
 最终本机 Python 3.11.13/3.12.3 各完整 143 项测试通过；17 模块 strict mypy、102 源文件、参考导出和 diff 检查通过。wheel/sdist、Worker 构建及干净基础 SDK 安装通过，免费 doctor 与已有真实样本的评测再次通过。没有重复付费请求，没有触发远程 CI。完整 1.0 仍按既定计划推进。
+
+
+## 12. S02-B 参数化工厂本机验收
+
+SDK／Worker 0.5.0 未发布。方法通过声明接口提供 FactoryCodeProposal；提供的 Python 只在容器
+子进程构建 ModelHandle，可信父进程验证导出的具体 LP/MILP，再调用实际 HiGHS。源 Code、原
+Formulation、数据绑定和导出视图分别保留，不把方法生成代码标为确定性编译或语义验证。
+
+指定外部模型生成真实工厂，目标13／A=3/B=2；同源代码读取新的利润 CSV 后目标13／A=2/B=3，
+无重复模型请求。独立 Standards 无具体问题，Spec 的具体异常原因丢失问题已通过 CLI 复现并修复。
+本机 Python 3.11／3.12 各155项测试、19模块 mypy、109源文件、参考导出、diff、包／Worker构建和
+SDK-only实际工厂求解通过。精确 run_id、用量、hash、镜像、支持限制见 [S02-B](development/s02b-factory.md)。
+未触发远程 CI；Gurobi 已完成独立环境研究，平台接入与其他1.0任务继续按计划实施。
