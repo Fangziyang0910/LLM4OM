@@ -50,3 +50,5 @@ LLM4OM 面向自动优化建模研究者和开发者。核心用例是输入自�
 参考资料的元数据和注释在 catalog 维护，资料页与 BibTeX 生成。正文综述负责比较机制与设计依据；检索记录负责出处与读取限制；源码记录负责固定提交观察。
 
 S06-A 微型真实 Gurobi／native 路径与限制见 [实现记录](development/s06-gurobi.md)。
+
+S07-B/C 的固定数据格式与参考可用性见 [来源考察](development/s07-benchmark-research.md)；此记录不是已集成声明。

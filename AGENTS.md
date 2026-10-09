@@ -1,6 +1,6 @@
 # LLM4OM 工作约定
 
-本仓库已实现 S01 离线、S02-A 严格 LPIR／HiGHS、S02-B 参数化工厂、S03 方法发现与预检、S04-A 容器执行、S05-A 文本 Provider、S07-A NL4Opt 导入／评测；当前能力见 README，切片证据见开发计划。文档完成与功能完成分别记录。
+本仓库维护 LLM4OM 的研究设计与平台实现。当前能力见 README，切片证据见开发计划。文档完成与功能完成分别记录。
 
 - 开工前阅读 README、GLOSSARY 及相关需求和 ADR；按可演示的纵向切片交付。
 - 用户的明确指令优先于这些工程默认值；常规实现选择无需新增审批。
@@ -14,7 +14,7 @@
 - 使用确定性 fixture 验证工程流程，真实 Provider／Solver 的支持声明必须有真实验收。
 - 密钥、运行数据和商业许可证不提交版本控制；当前 private 可见性不自动更改。
 
-修改文件前读 [CODING_STANDARDS.md](CODING_STANDARDS.md)；执行开发、校验或交付时读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+修改文件前读 [CODING_STANDARDS.md](CODING_STANDARDS.md)；执行开发、校验或交付时读 [CONTRIBUTING.md](CONTRIBUTING.md)中的本机验收流程。
 
 ## Agent skills
 
