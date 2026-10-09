@@ -62,9 +62,10 @@ class ProviderTests(unittest.TestCase):
     def test_slow_drip_obeys_request_and_run_deadlines(self):
         for run_limit in [False, True]:
             with self.subTest(run_limit=run_limit):
-                self.config['timeout_s'] = 2 if run_limit else 0.15
-                self.budget['wall_time_s'] = 0.15 if run_limit else 10
-                self.responses = [(200, {'fixture_drip': 0.02, 'choices': []})]
+                self.config['timeout_s'] = 5 if run_limit else 1
+                self.budget['wall_time_s'] = 1 if run_limit else 10
+                # Leave time for a cold Python process, then keep the body dripping past the limit.
+                self.responses = [(200, {'fixture_drip': 0.02, 'choices': [], 'padding': 'x' * 1000})]
                 provider = OpenAICompatibleFactory().create(self.config, 'deepseek-v4-pro-0813',
                                                             environment={'S05_TEST_KEY': 'synthetic-secret'})
                 gateway = Gateway(provider, self.budget, self.root / str(run_limit))
@@ -73,7 +74,7 @@ class ProviderTests(unittest.TestCase):
                     asyncio.run(gateway.complete({'messages': [{'role': 'user', 'content': 'drip'}]}))
                 self.assertEqual(caught.exception.code, 'provider_timeout')
                 self.assertEqual(len(self.requests), 1 + int(run_limit))
-                self.assertLess(time.monotonic() - started, 0.8)
+                self.assertLess(time.monotonic() - started, 2)
                 self.assertGreater(gateway.ledger['reserved_tokens'], 0)
 
     def test_cancellation_reaps_transport_and_preserves_unknown_reservation(self):

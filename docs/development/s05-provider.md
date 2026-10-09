@@ -91,3 +91,5 @@ Standards：2 项契约问题，另有 1 项 possible Duplicated Code 判断。W
 Spec：2 项实现问题，1 项交付证据缺口，无范围蔓延。Worker deadline 问题同上；结算现将未知 attempt 预留与已知 total 同时计入占用。503 后成功实测 9900 的负例先错误返回成功，再 token_budget_overrun，保存回复恢复仍拒绝越界且不重发。两版本回归、安装和审阅证据在本页与校验记录补齐。修复目前为作者 TDD 核验，不把它表述为审阅者复审通过。
 
 草稿 [PR #9](https://github.com/Fangziyang0910/LLM4OM/pull/9) 基于 S04-A 分支，关联 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)。远程 CI 不使用真实密钥或付费请求；实际网关证据来自上述本地验收。
+
+首轮 7fd1141 的 push／PR CI 在 Python 3.12 同样失败：150 ms 滴流测试窗口内 transport 尚未发出 HTTP，deadline 已使它退出，断言却要求服务器收到请求。预算执行没有越界。fixture 现给冷启动 1 秒，并将 drip body 延长到超过该窗口；继续验证真实请求、有限结束和未知预留，两版本 Provider 回归后重跑 CI。
