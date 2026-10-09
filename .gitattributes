@@ -1,4 +1,5 @@
 * text=auto eol=lf
+src/llm4om/optimus_source/*.txt whitespace=-blank-at-eol
 *.md text
 *.json text
 *.yaml text
