@@ -376,13 +376,17 @@ it contains oracle references. Public export means the public directory and publ
 bundle, never the whole snapshot. Manifest schema 0.1.0 locks projection, protocol, source,
 line/record hashes, public/private artifact hashes, reference quality, eligibility and reasons.
 Import cannot overwrite an existing snapshot. Iteration checks content hashes.
+`NL4OptAdapter.load_case(manifest, case_id)` loads validated frozen metadata for evaluation;
+material checks run inside the Evaluator so changed or missing files produce saved error results.
 
 `Evaluator.evaluate(case: EvaluationCase, outcome: Path) -> dict` consumes a persisted
 run directory after modeling. `NL4OptEvaluator` implements raw-declaration protocol
 `llm4om.eval.nl4opt-raw-v0.1`. `evaluate_case(manifest, case_id, outcome, output)` and CLI
 `evaluate` save one public result to a new file; existing output is not overwritten.
 Failures remain results; malformed or changed evidence produces `checker_error` and error
-states, never a pass. Unknown case/invalid snapshot is an admission error. A failed run
+states, never a pass. All declared run artifacts are hash/size checked before using stage
+validation flags. Unknown case/invalid manifest metadata is an admission error; changed or
+missing case material is a persisted evaluation error. A failed run
 before public-input persistence has `case_binding=not_available`; it is an attempted case
 association, not verified input identity. Otherwise the exact public revision must match.
 

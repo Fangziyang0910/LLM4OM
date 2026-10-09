@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-09；设计基线：0.4.0。当前包含 102 个源文件，维护科研设计、文档工具、已交付切片与待验收 S05-A 实现。
+日期：2026-10-09；设计基线：0.4.0。当前包含 102 个源文件，维护科研设计、文档工具、已交付 S05-A 切片与当前 S07-A 实现。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -14,7 +14,7 @@
 | `.github/ISSUE_TEMPLATE/feature-spec.md` | 功能规格入口 | 完整 spec 字段、用户故事与公共测试入口 |
 | `.github/ISSUE_TEMPLATE/vertical-slice.md` | 纵向工作项入口 | parent、行为、验收与实际 blockers |
 | `.github/PULL_REQUEST_TEMPLATE.md` | PR 交付入口 | Summary、Evidence、Door／Blast Radius |
-| `.github/workflows/checks.yml` | 平台 CI | Python 3.11／3.12；构建 Worker、真实隔离／HiGHS、锁定依赖、类型、仓库和包构建 |
+| `.github/workflows/checks.yml` | 平台 CI | 仅手动触发；本机验收为主。Python 3.11／3.12；构建 Worker、真实隔离／HiGHS、锁定依赖、类型、仓库和包构建 |
 | `.gitignore` | 本地与运行产物边界 | 密钥、运行数据、缓存、下载材料保持忽略 |
 | `AGENTS.md` | 常驻项目约束与技能路由 | 保留科研项目约束；单个 Agent skills 块与按需指针 |
 | `CODING_STANDARDS.md` | 开发规范 | 深模块、真实 Seam、单一来源、格式、测试与 review |

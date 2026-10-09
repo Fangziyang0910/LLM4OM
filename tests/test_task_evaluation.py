@@ -114,6 +114,26 @@ class TaskEvaluationTests(unittest.TestCase):
                                   "--output", str(root / "evaluation.json")], capture_output=True, text=True)
             self.assertEqual(cli.returncode, 0, cli.stderr)
             self.assertEqual(json.loads((root / "evaluation.json").read_text())["run_status"], "failed")
+            for name, file, missing in [("public", case.public_problem, False), ("private", case.oracle_ref, False),
+                                        ("missing-public", case.public_problem, True), ("missing-private", case.oracle_ref, True)]:
+                with self.subTest(changed_snapshot=name):
+                    original = file.read_bytes()
+                    if missing:
+                        file.unlink()
+                    else:
+                        file.write_bytes(b"{}\n")
+                    output = root / f"{name}-error.json"
+                    result = subprocess.run([sys.executable, "-m", "llm4om", "evaluate", "--manifest", str(manifest),
+                        "--case-id", case.case_id, "--run", str(outcome.bundle_path), "--output", str(output)],
+                        capture_output=True, text=True)
+                    file.write_bytes(original)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertTrue(output.is_file(), result.stdout)
+                    error = json.loads(output.read_text())
+                    self.assertIsNotNone(error["checker_error"])
+                    self.assertEqual(error["N_selected"], 1)
+                    self.assertEqual(error["N_eligible"], 0)
+                    self.assertNotIn("oracle_ref", json.dumps(error))
 
     def test_imported_case_http_container_outcome_keeps_evidence_separate_and_private(self) -> None:
         repo = Path(__file__).resolve().parents[1]
@@ -197,6 +217,16 @@ class TaskEvaluationTests(unittest.TestCase):
             version_error = NL4OptEvaluator().evaluate(case, outcome)
             self.assertEqual(version_error["checker_error"]["code"], "invalid_outcome")
             (outcome / "bundle.json").write_text(original_bundle)
+            for name in ["artifact.json", "formulation.json", "structured-ir.json", "model.py"]:
+                with self.subTest(changed_evidence=name):
+                    file = outcome / "candidates/001" / name
+                    original = file.read_bytes()
+                    file.write_bytes(b"corrupted evidence\n")
+                    broken = NL4OptEvaluator().evaluate(case, outcome)
+                    file.write_bytes(original)
+                    self.assertIsNotNone(broken["checker_error"])
+                    self.assertEqual(broken["formulation_validation"]["status"], "error")
+                    self.assertEqual(broken["code_validation"]["status"], "error")
             # Corrupted evidence is a retained checker error, never a pass.
             (outcome / "candidates/001/solve-result.json").write_text("{}")
             broken = NL4OptEvaluator().evaluate(case, outcome)

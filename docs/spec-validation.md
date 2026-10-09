@@ -201,3 +201,12 @@ SDK 0.4.0 未发布，核心 schema 0.2.0、IR 0.1.0、方法 profile 0.1.0。97
 S05 首轮 CI 的 Python 3.12 失败来自滴流 fixture 的 150 ms 冷启动窗口（服务器收到 0 次请求）；Provider 按截止终止。fixture 调为 1 秒窗口与更长滴流响应，仍验证 HTTP 已发生且准时终止。修复只改变测试校准，未扩大生产预算或改写未知调用语义。
 
 用户已明确要求以本机验证为主。GitHub Actions 改为 workflow_dispatch，移除 push／PR 自动全面回归和临时 OOM 诊断步骤；不再频繁触发远程矩阵。629d01f 的 PR CI 两版本 success，push CI 仍在 OOM fixture 得到 137／false；该远程环境差异尚未定位。本机真实隔离测试与求解证据保持独立。OOM fixture 使用逐步内存压力，仍要求原生 OOM 证据，未用 137 代替判断。
+
+
+## 11. S07-A 本机验收
+
+原始 NL4Opt 固定提交的 train/dev/test 分别为 713/99/289 条，原始文件 hash、ID 与许可已核验。TaskAdapter 冻结 manifest，公开原文与私有标注分开；Evaluator 在建模完成后检查证据，原始数值参考条件不成立时 N_eligible=0、率为 null。
+
+指定外部模型在真实 dev 样本完成 CLI→Formulation/IR→Code→容器 HiGHS，候选连续 LP 的目标为 8000/9。独立检查仍不可用，不把候选最优声明为 benchmark 准确率。run_id、来源、实际用量、上下界手算、隐私、独立两轴 review 与 red→green 修复统一见 [S07-A 记录](development/s07-nl4opt.md)。
+
+最终本机 Python 3.11.13/3.12.3 各完整 143 项测试通过；17 模块 strict mypy、102 源文件、参考导出和 diff 检查通过。wheel/sdist、Worker 构建及干净基础 SDK 安装通过，免费 doctor 与已有真实样本的评测再次通过。没有重复付费请求，没有触发远程 CI。完整 1.0 仍按既定计划推进。

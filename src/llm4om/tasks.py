@@ -184,6 +184,23 @@ def import_dataset(config: Path, output: Path) -> Path:
 class NL4OptAdapter:
     def iter_cases(self, config: Path) -> Iterator[EvaluationCase]:
         """Read and verify a frozen snapshot, never expose it to a MethodContext."""
+        for case in self._cases(config):
+            entry = parse_reference_json(case.entry)
+            for name, path in (("public_ref", case.public_problem), ("oracle_ref", case.oracle_ref)):
+                ref = entry[name]
+                content = path.read_bytes()
+                if len(content) != ref["size_bytes"] or hashlib.sha256(content).hexdigest() != ref["sha256"]:
+                    raise RunError("snapshot_hash_mismatch", "evaluation", "Frozen case bytes changed.")
+            yield case
+
+    def load_case(self, config: Path, case_id: str) -> EvaluationCase:
+        """Load frozen metadata; the Evaluator records material read/validation failures."""
+        case = next((case for case in self._cases(config) if case.case_id == case_id), None)
+        if case is None:
+            raise RunError("unknown_case", "evaluation", "Case ID is absent from the frozen manifest.")
+        return case
+
+    def _cases(self, config: Path) -> Iterator[EvaluationCase]:
         raw = config.read_bytes()
         manifest = parse_reference_json(raw)
         if (manifest.get("schema_version") != "0.1.0" or manifest.get("protocol_id") != PROTOCOL
@@ -210,9 +227,6 @@ class NL4OptAdapter:
             paths = []
             for name in ("public_ref", "oracle_ref"):
                 ref = entry[name]
-                path = public_path(config.parent, ref["relative_path"])
-                content = path.read_bytes()
-                if len(content) != ref["size_bytes"] or hashlib.sha256(content).hexdigest() != ref["sha256"]:
-                    raise RunError("snapshot_hash_mismatch", "evaluation", "Frozen case bytes changed.")
+                path = public_path(config.parent, ref["relative_path"], require_file=False)
                 paths.append(path)
             yield EvaluationCase(entry["case_id"], paths[0], paths[1], raw, _json(entry))

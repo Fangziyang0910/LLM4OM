@@ -138,13 +138,13 @@ NONNEGATIVE = {"type": "integer", "minimum": 0}
 HASH = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
 
 
-def public_path(root: Path, relative: str) -> Path:
+def public_path(root: Path, relative: str, *, require_file: bool = True) -> Path:
     path = Path(relative)
     if path.is_absolute() or ".." in path.parts or "\\" in relative:
         raise RunError("unsafe_path", "validation", "Public references must stay inside their source directory.")
     try:
         resolved = (root / path).resolve()
-        contained = resolved.is_relative_to(root.resolve()) and resolved.is_file()
+        contained = resolved.is_relative_to(root.resolve()) and (not require_file or resolved.is_file())
     except (RuntimeError, OSError, ValueError) as error:
         raise RunError("unsafe_path", "validation", "Cannot resolve a public reference inside its source directory.") from error
     if not contained:

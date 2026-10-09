@@ -148,7 +148,7 @@ flowchart LR
     S09B --> S10
 ```
 
-S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 已完成当前范围。当前前沿包含 S02-B、S04-B、S05-B 和 S07-A；NL4Opt 本地导入／单样本评测已实现并记录于 [S07-A 证据](development/s07-nl4opt.md)；真实外部模型与独立审阅仍待父任务验收。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
+S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。当前前沿包含 S02-B、S04-B、S05-B、S07-B／C／D；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
 
 ## 5. 工程默认值与完成边界
 

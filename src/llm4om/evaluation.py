@@ -9,11 +9,15 @@ from llm4om.contracts import RunError, parse_json, parse_reference_json, public_
 from llm4om.tasks import EvaluationCase, PROTOCOL
 
 
-def _read_ref(root: Path, ref: dict[str, Any]) -> dict[str, Any]:
+def _verify_ref(root: Path, ref: dict[str, Any]) -> bytes:
     raw = public_path(root, ref["relative_path"]).read_bytes()
     if hashlib.sha256(raw).hexdigest() != ref["sha256"] or len(raw) != ref["size_bytes"]:
         raise RunError("evidence_hash_mismatch", "evaluation", "Evidence bytes differ from their frozen reference.")
-    return parse_json(raw)
+    return raw
+
+
+def _read_ref(root: Path, ref: dict[str, Any]) -> dict[str, Any]:
+    return parse_json(_verify_ref(root, ref))
 
 
 class NL4OptEvaluator:
@@ -51,6 +55,8 @@ class NL4OptEvaluator:
             if bundle.get("schema_version") != "0.2.0" or bundle.get("status") not in {"failed", "completed", "artifact_ready"}:
                 raise RunError("invalid_outcome", "evaluation", "Unsupported application outcome schema or status.")
             result.update(run_id=bundle["run_id"], run_status=bundle["status"], run_error=bundle["error"])
+            for ref in bundle["artifacts"]:
+                _verify_ref(outcome, ref)
             problems = [ref for ref in bundle["artifacts"] if ref["relative_path"] == "public-problem.json"]
             if problems:
                 observed = _read_ref(outcome, problems[0])
@@ -83,9 +89,7 @@ def evaluate_case(manifest: Path, case_id: str, outcome: Path, output: Path) -> 
     """Persist one public evaluation result without exporting oracle references."""
     from llm4om.tasks import NL4OptAdapter
 
-    case = next((item for item in NL4OptAdapter().iter_cases(manifest) if item.case_id == case_id), None)
-    if case is None:
-        raise RunError("unknown_case", "evaluation", "Case ID is absent from the frozen manifest.")
+    case = NL4OptAdapter().load_case(manifest, case_id)
     result = NL4OptEvaluator().evaluate(case, outcome)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("x", encoding="utf-8") as stream:

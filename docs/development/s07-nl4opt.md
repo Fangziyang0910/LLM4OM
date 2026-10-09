@@ -1,6 +1,6 @@
 # S07-A NL4Opt import and evaluator research
 
-Research only, 2026-10-09; no implementation or acceptance claim. Normative sources: [contracts](../plugin-contracts.md), [evaluation](../evaluation.md), [S07-A](../implementation-plan.md#s07-基准导入与独立评测), and [oracle isolation](../adr/0002-oracle-isolation.md). README, GLOSSARY, coding/contribution rules, relevant requirements and evaluation design were read.
+Purpose: fixed-source research and S07-A implementation/acceptance, 2026-10-09. SDK 0.4.0 remains unpublished. Source inspection and runtime evidence are distinguished below. Normative sources: [contracts](../plugin-contracts.md), [evaluation](../evaluation.md), [S07-A](../implementation-plan.md#s07-基准导入与独立评测), and [oracle isolation](../adr/0002-oracle-isolation.md). README, GLOSSARY, coding/contribution rules, relevant requirements and evaluation design were read.
 
 The smallest honest import exposes the original document and privately preserves formulation annotations. Official NL4Opt supplies **reference declarations, not solved reference objectives or solutions**. A numerical objective evaluator requires separately reviewed, derived reference models and real solver evidence.
 
@@ -50,7 +50,7 @@ Scoring uses exact array equality, deduplicates predicted constraints, and retur
 
 S07-A can honestly demonstrate import/isolation, public execution evidence, and separately labelled annotation comparison. A reviewed derived model can later support independent feasibility and objective recomputation with a verified decision mapping. A reference optimum additionally needs an actual reference solve and termination evidence. For raw supplied data, numerical-objective eligibility is zero: rates are null/not_available. Preserve import/checker errors and admitted run failures; never shrink denominators after outcomes.
 
-Remaining: full per-record mathematical/domain review, cross-split duplicate analysis, supported numeric grammar, decision mapping, derived-model validation and real solver acceptance. No implementation, tests, installs, paid calls, private traces, credentials, git operations or publication were performed.
+Remaining: full per-record mathematical/domain review, cross-split duplicate analysis, supported numeric grammar, decision mapping, derived-model validation and real solver acceptance. The source-inspection phase performed no implementation, tests, installs, paid calls, private trace/credential reads, Git operations or publication; implementation evidence follows.
 
 ## S07-A implementation evidence (2026-10-09)
 
@@ -123,5 +123,34 @@ cached/reasoning fields were absent and remain null. These counts are preserved 
 reported, including their non-additive total; cost is unknown. The run and evaluation
 are stored outside version control at `/tmp/llm4om-s07/live`.
 
-Independent Standards / Spec review is still pending. Validation is local by user
+Independent Standards / Spec review and author fixes are recorded below. Validation is local by user
 instruction; GitHub Actions is manual, and no cloud test is required for this acceptance.
+
+## Independent review and fixes
+
+Two independent read-only reviewers compared 8cef3fb…806c6d0. Standards found one
+hard boundary violation; Spec found that same defect and one error-persistence defect.
+Neither found concrete scope creep or a justified code-smell issue.
+
+The evaluator had trusted stage flags without checking the supporting model files.
+Public tests changed artifact, Formulation, IR and Python source independently: all four
+initially retained pass, then correctly returned checker_error/error after verifying every
+declared run artifact's hash and size. The CLI had rejected changed snapshot files before
+saving an evaluation result. Metadata selection now precedes evaluator material checks;
+public/private file changes and deletion first reproduced missing output, then produced
+saved error records with frozen counts. Modeling iteration still verifies snapshot bytes.
+These fixes have author red→green verification, not a second independent-review claim.
+
+Actual LP acceptance can be checked from the public text: 50x+30y =
+(40/9)(10x+8y)−(50/9)(y−x) ≤ 8000/9; x=y=100/9 attains the bound.
+Public run/evaluation scans contain neither the actual credential value nor annotations,
+oracle references or the local source JSONL path. Raw benchmark independent evidence
+remains not_available.
+
+Final parent acceptance: Python 3.11.13/3.12.3 each passed 143 tests (126.509s/126.562s),
+including real Docker; 17 modules passed strict mypy, 102 source files and reference exports
+passed checks. Final wheel/sdist and Worker rebuild succeeded; SDK-only wheel installation
+passed free doctor and re-evaluated the preserved real sample without another model call.
+Worker image `sha256:428036c9d57880f3ee79afb35889ecc319c8b19469dfef7963230a2cbb7c269e`.
+The actual upstream LICENSE bytes match the copied notice. S07-A's current raw-data scope
+is accepted; numerical accuracy, derived reference models and remaining 1.0 work stay separate.
