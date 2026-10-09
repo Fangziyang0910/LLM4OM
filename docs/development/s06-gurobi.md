@@ -1,7 +1,7 @@
 # S06-A actual Gurobi paths
 
 Status: local implementation and genuine SDK/Worker validation, SDK 0.6.0 (unreleased).
-Scope: Issue #14, FR-21–27, DD-03/04/05 and AC-11/12/13. The
+Scope: [Issue #14](https://github.com/Fangziyang0910/LLM4OM/issues/14), FR-21–27, DD-03/04/05 and AC-11/12/13. Delivery: [draft PR #15](https://github.com/Fangziyang0910/LLM4OM/pull/15), stacked on #13. The
 [research note](s06-gurobi-research.md) records official APIs and the earlier independent probe.
 Contracts are defined in [plugin-contracts](../plugin-contracts.md#11-s06-a-gurobi-and-native-code-sdk-060).
 
@@ -143,3 +143,5 @@ runtime evidence. Report: `review-spec.md`. Source-only research for S07-B/C is 
 
 Standard/Spec reports and parent corrections are kept distinct. No remote CI or paid LLM call was
 used for this slice; package remains unpublished and full 1.0 remains in the approved plan.
+
+Parent credential-value scan passed for tracked files, rebuilt wheel/sdist and selected public Gurobi bundles. The project .env remains ignored with mode0600; its value was not printed.
