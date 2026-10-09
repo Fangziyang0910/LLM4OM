@@ -194,11 +194,30 @@ class ProviderTests(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 0.8)
         self.assertEqual(len(self.requests), 1)
 
+    def test_restored_provider_pins_prepared_credentials_through_transport_and_retry(self):
+        environment = {'S05_TEST_KEY': 'synthetic-secret'}
+        def consume_environment():
+            values = dict(environment)
+            environment.clear()
+            return values
+        provider = OpenAICompatibleFactory().restore(self.config, 'deepseek-v4-pro-0813',
+                                                     environment=consume_environment)
+        self.responses.insert(0, (429, {}))
+        gateway = Gateway(provider, self.budget, self.root / 'private')
+        reply = asyncio.run(gateway.complete({'messages': [{'role': 'user', 'content': 'retry'}]}))
+        self.assertEqual(reply.text, 'hello')
+        self.assertEqual(gateway.ledger['external_llm_requests'], 2)
+        self.assertEqual(len(self.requests), 2)
+        self.assertTrue(all(headers['Authorization'] == 'Bearer synthetic-secret' for headers, _ in self.requests))
+
     def test_success_usage_and_saved_response_replay(self):
         request = {'request_id': 'saved-success', 'messages': [{'role': 'user', 'content': 'public problem'}]}
         gateway = self.gateway()
         first = asyncio.run(gateway.complete(request))
-        restored = self.gateway()
+        def no_credentials():
+            raise AssertionError('Saved replies must not resolve credentials')
+        restored = Gateway(OpenAICompatibleFactory().restore(self.config, 'deepseek-v4-pro-0813',
+                            environment=no_credentials), self.budget, gateway.archive)
         second = asyncio.run(restored.complete(request))
         self.assertEqual(first, second)
         self.assertEqual(len(self.requests), 1)
@@ -279,7 +298,10 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'provider_timeout')
         reserved = gateway.ledger['reserved_tokens']
         self.assertGreater(reserved, 0)
-        restored = self.gateway()
+        def no_credentials():
+            raise AssertionError('Unknown requests must not resolve credentials')
+        restored = Gateway(OpenAICompatibleFactory().restore(self.config, 'deepseek-v4-pro-0813',
+                            environment=no_credentials), self.budget, gateway.archive)
         with self.assertRaises(ValueError) as caught:
             asyncio.run(restored.complete(request))
         self.assertEqual(caught.exception.code, 'provider_outcome_unknown')
@@ -393,6 +415,31 @@ class CredentialAdmissionTests(unittest.TestCase):
 
 
 class GatewayAdmissionTests(unittest.TestCase):
+    def test_credential_preparation_obeys_deadline_and_cancellation_before_admission(self):
+        from llm4om import CancellationToken
+        from llm4om.contracts import RunError
+        from unittest.mock import patch
+        config = {'base_url': 'http://127.0.0.1:1/v1', 'credential_env': 'KEY'}
+        budget = {'max_llm_attempts': 1, 'max_total_tokens': 10000, 'wall_time_s': 10, 'max_concurrency': 1}
+        for stop in ('deadline_exhausted', 'run_cancelled'):
+            with self.subTest(stop=stop), tempfile.TemporaryDirectory() as directory, patch('time.time', return_value=100) as clock:
+                cancellation = CancellationToken()
+                def environment():
+                    if stop == 'deadline_exhausted':
+                        clock.return_value = 111
+                    else:
+                        cancellation.cancel()
+                    return {'KEY': 'synthetic-key'}
+                provider = OpenAICompatibleFactory().restore(config, 'synthetic', environment=environment)
+                gateway = Gateway(provider, budget, Path(directory) / 'archive', cancellation=cancellation)
+                with patch('asyncio.create_subprocess_exec', side_effect=AssertionError('No HTTP child')):
+                    with self.assertRaises(RunError) as caught:
+                        asyncio.run(gateway.complete({'messages': [{'role': 'user', 'content': 'public'}]}))
+                self.assertEqual(caught.exception.code, stop)
+                self.assertEqual(gateway.trace, [])
+                self.assertEqual(gateway.ledger['external_llm_requests'], 0)
+                self.assertEqual(gateway.ledger['reserved_tokens'], 0)
+
     def test_invalid_requests_budget_and_deadline_never_reach_http(self):
         from llm4om.contracts import RunError
         import time

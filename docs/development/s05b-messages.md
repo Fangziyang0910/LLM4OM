@@ -20,6 +20,8 @@ llm4om run --problem examples/specs/problem.json --config /path/to/messages.yaml
 SDK 使用相同 `run_problem(problem, config)`／`resume_run(run)`，不添加新的客户端入口或依赖。
 Doctor 不发送 HTTP。普通新运行缺少凭据则 admission 失败；已保存回复恢复和 completed 身份检查
 无需 API key，不加载凭据文件。确需新 HTTP 的恢复仍使用原预算，并在发送前加载与校验凭据。
+凭据校验先于 Gateway 的 attempt／token 预留落盘。缺少或非法本地凭据不计外部请求，
+不会制造 unknown outcome；补回凭据后可按原 run／request_id 继续。两种 HTTP Adapter 共用此规则。
 
 | 能力 | 当前行为 |
 |---|---|
@@ -47,6 +49,13 @@ OS 硬退出覆盖成功 private commit 先于 core 回调和 journal 先于 mut
 已保存 red→green 记录：注册／真实 wire；数组文本块；doctor 能力诊断；两处硬崩溃后的无凭据回放；
 解码后嵌套凭据回显。执行命令、最终本机回归、干净 Python3.11 wheel、包与 source-matched Worker
 证据汇总在 `/tmp/llm4om-s05b/implementation-evidence/author-report.md`。
+
+后续 admission 回归在 Direct 保存请求 checkpoint、Gateway 尚未 admission 时硬退出。
+缺失、空值、控制字符和非 ASCII 凭据均保持零 attempt／HTTP 子进程／预留与空 trace；
+补回合成凭据后，两种协议各以同一请求的一次 loopback HTTP 和一次真实 HiGHS 求解得到目标13。
+Gateway 准备期间的取消与 deadline 也在 admission 前拒绝；成功回复与未知请求仍免凭据恢复。
+此次修复证据单独保存在 `/tmp/llm4om-s05b/admission-fix-evidence/author-report.md`；
+以下220项为修复前基线，不证明新修复。新全量回归留待 parent 独立审查和最新核心修复集成后执行。
 
 SDK、Direct Manifest、默认 Worker 和 lock 同步0.8.0；独立 fixture 方法的依赖范围扩至<0.9.0。
 OpenAI 旧 journal 的字段布局保持，完整 run 的精确 SDK／源码身份检查不放宽。
