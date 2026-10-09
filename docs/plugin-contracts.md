@@ -327,6 +327,6 @@ container 配置必须包含 network=false、正 cpu_limit、整数 memory_limit
 
 公开 Executor 为 run_container(command: list[str], inputs: Mapping[str, bytes], limits, *, image) → ContainerExecution。输入只能是安全相对路径与公开 bytes；方法 Context 不获得此低层接口。实际求解由核心选择可信 Worker 入口，仅发送严格 IR、实际编译代码、Solver options 和公开 CSV。Worker 验证 IR／实际 CodeArtifact 的 hash，并经平台 Solver API 产生结果。
 
-ExecutionResult 增加可选 worker_status、image_id、container_id、container_name、oom_killed、restrictions 和 executor_diagnostics；stdout／stderr 为有界文件引用。资源超限为 execution_timeout／execution_oom／execution_output_limit，SolveResult 缺失；已生成 Formulation／Code 保留。Docker 控制失败为 executor_error，缺环境为 executor_unavailable，非法直接 Executor 输入为 invalid_execution_request。控制与清理有界，失败保留实际退出／输出／容器身份和诊断，不用默认值伪造缺失测量。
+ExecutionResult 增加可选 worker_status、image_id、container_id、container_name、oom_killed、oom_evidence、restrictions 和 executor_diagnostics；stdout／stderr 为有界文件引用。oom_evidence 为 docker_state／docker_event 或 null；只使用实际标记或同容器的 daemon 事件，不从 137 推断原因。资源超限为 execution_timeout／execution_oom／execution_output_limit，SolveResult 缺失；已生成 Formulation／Code 保留。Docker 控制失败为 executor_error，缺环境为 executor_unavailable，非法直接 Executor 输入为 invalid_execution_request。控制与清理有界，失败保留实际退出／输出／容器身份和诊断，不用默认值伪造缺失测量。
 
 固定策略、真实测试与当前限制见 [S04-A](development/s04-container.md)。它只交付 grounded LPIR 的容器路径和可复用 Executor；参数化工厂、原生代码、完整预算、取消／恢复均仍按开发计划实现。

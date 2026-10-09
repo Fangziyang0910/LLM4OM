@@ -8,6 +8,7 @@ import signal
 import subprocess
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from importlib.metadata import version
 from pathlib import Path, PurePosixPath
 from time import monotonic, sleep
@@ -36,6 +37,7 @@ class ContainerExecution:
     container_id: str
     restrictions: dict[str, Any]
     diagnostics: tuple[str, ...] = ()
+    oom_evidence: str | None = None
 
 
 def _diagnostic(operation: str, error: Exception) -> str:
@@ -123,6 +125,7 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
     maximum_output = limits.get("output_limit_bytes", 1048576)
     pids = limits.get("pids_limit", 64)
     started = monotonic()
+    event_start = datetime.now(timezone.utc).isoformat()
     status = "completed"
     captured = [bytearray(), bytearray()]
     total = 0
@@ -130,6 +133,7 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
     container_id = ""
     exit_code: int | None = None
     oom_killed: bool | None = None
+    oom_evidence = None
     restrictions: dict[str, Any] = {"output_limit_bytes": maximum_output}
     failure: Exception | None = None
     operation = "public inputs"
@@ -208,8 +212,10 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
         if not isinstance(state["OOMKilled"], bool):
             raise ValueError("Docker returned invalid exit evidence.")
         oom_killed = state["OOMKilled"]
+        oom_evidence = "docker_state" if oom_killed else None
         if status == "completed" and oom_killed:
             status = "oom"
+            oom_evidence = "docker_state"
         if (isinstance(state["ExitCode"], bool) or not isinstance(state["ExitCode"], int)
                 or not isinstance(state["Running"], bool)):
             raise ValueError("Docker returned invalid exit evidence.")
@@ -226,8 +232,21 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
                     raise ValueError("Docker returned invalid OOM evidence.")
                 if observed:
                     oom_killed = True
+                    oom_evidence = "docker_state"
                     status = "oom"
                     break
+            if not oom_killed:
+                events = _docker(["events", "--since", event_start, "--until", datetime.now(timezone.utc).isoformat(),
+                    "--filter", f"container={container_id}", "--filter", "event=oom", "--format", "{{json .}}"], diagnostics)
+                for line in events.splitlines():
+                    event = json.loads(line)
+                    if not isinstance(event, dict) or not isinstance(event.get("Actor"), dict):
+                        raise ValueError("Docker returned invalid event evidence.")
+                    if event.get("Type") == "container" and event.get("Action") == "oom" and event["Actor"].get("ID") == container_id:
+                        oom_killed = True
+                        oom_evidence = "docker_event"
+                        status = "oom"
+                        break
         if status == "completed":
             if attach_code != 0 or exit_code != 0:
                 status = "failed"
@@ -266,13 +285,13 @@ def run_container(command: list[str], inputs: Mapping[str, bytes], limits: dict[
     if failure is not None or (status == "completed" and diagnostics):
         raise RunError("executor_error", "execution", "Cannot start, observe or collect the isolated Worker.",
             details={"status": status, "container_id": container_id, "container_name": name,
-                "image_id": runtime["image_id"], "exit_code": exit_code, "oom_killed": oom_killed,
+                "image_id": runtime["image_id"], "exit_code": exit_code, "oom_killed": oom_killed, "oom_evidence": oom_evidence,
                 "stdout": bytes(captured[0]).decode(errors="replace"), "stderr": bytes(captured[1]).decode(errors="replace"),
                 "output_truncated": total > maximum_output, "restrictions": restrictions,
                 "diagnostics": diagnostics}) from failure
     return ContainerExecution(status, exit_code, bytes(captured[0]), bytes(captured[1]),
         monotonic() - started, total > maximum_output, oom_killed, runtime["image_id"], container_id,
-        restrictions, tuple(diagnostics))
+        restrictions, tuple(diagnostics), oom_evidence)
 
 
 def _validate_request(command: list[str], inputs: Mapping[str, bytes], limits: dict[str, Any], image: str) -> None:

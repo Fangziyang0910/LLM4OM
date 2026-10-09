@@ -182,3 +182,7 @@ Standards 共 3 项、Spec 共 2 项，分别保留并已处理。后续修复�
 b32682f 的 PR CI success，push CI 再现该失败，新增诊断显示 exit=137、OOMKilled=false、stderr 为空。这与终止和 OOM 证据发布顺序不一致的解释相符；仅改变内存分配方式没有解决问题。执行器现对正常收集到的 137／false 最多复查 2 秒，仅在实际观察到 OOMKilled=true 时报告 OOM。外部 CLI fixture 复现“首次 false、随后 true”，先 red 再 green；独立负例确认 SIGKILL／false 仍为 failed。已知 timeout／output_limit 的终态不被改写。
 
 该修复在 Python 3.12.3／3.11.13 各完整 107 项测试通过，14 模块 strict mypy、93 文件与参考导出通过；公开 Worker 构建命令通过，更新镜像 ID 为 sha256:7dd854d34c3775721343ae16cf06573138f2dfd364dc1fa32b16295ed97da885。后续 CI 验证这次执行器修复。
+
+1413b35 的 PR CI success，但 push CI 再次得到 137／false，表明等待标记不足以覆盖该环境。新增 Docker 事件查询，以本次时段和容器 ID 核对 oom 事件，来源单独保存；只依赖实际 daemon 证据，不依据退出码或脚本 stdout 推断 OOM。真实本机 OOM 在容器删除后仍查到匹配事件；外部 CLI 负例覆盖缺失 inspect 标记以及其他容器的 OOM 不能解释本任务。Docker [事件说明](https://docs.docker.com/reference/cli/docker/system/events/)明确其历史只保留最近 256 条，因此没有事件仍保留失败／未知原因。
+
+事件收集修复后，两版本各完整 109 项测试通过，strict mypy、仓库与 diff 检查通过；Worker 更新为 sha256:1942df5b0c4cc507bdc858d93340d25e01153ca37325903be7a9881609d04a18。新增两个公共 Executor 测试分别验证匹配事件和拒绝其他容器事件。远程 CI 将继续核对此环境差异。

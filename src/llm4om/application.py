@@ -311,6 +311,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode, artifact_ref: di
         "container_id": container.container_id if container else executor_details.get("container_id"),
         "container_name": executor_details.get("container_name"),
         "oom_killed": container.oom_killed if container else executor_details.get("oom_killed"),
+        "oom_evidence": container.oom_evidence if container else executor_details.get("oom_evidence"),
         "restrictions": container.restrictions if container else executor_details.get("restrictions"),
         "executor_diagnostics": list(container.diagnostics) if container else executor_details.get("diagnostics", []),
         "solve_result_ref": solve_ref, "stdout_ref": output_ref,

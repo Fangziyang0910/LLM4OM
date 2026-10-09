@@ -97,6 +97,8 @@ elif operation == "inspect":
         observed = Path(__file__).with_name("observed")
         state["OOMKilled"] = observed.exists()
         observed.write_text("inspected")
+    if "event_oom" in scenario:
+        state["OOMKilled"] = False
     if "inspect_missing_exit" in scenario:
         del state["ExitCode"]
     if "inspect_missing_config" in scenario:
@@ -108,6 +110,8 @@ elif operation == "inspect":
         "CapDrop": ["ALL"], "SecurityOpt": ["no-new-privileges"]}, "Mounts": []}]))
 elif operation == "rm" and "rm_error" in scenario:
     sys.exit(1)
+elif operation == "events" and "event_oom" in scenario:
+    print(json.dumps({"Type": "container", "Action": "oom", "Actor": {"ID": "other" if "wrong" in scenario else "fixture-container"}}))
 ''')
             docker.chmod(0o755)
             source = '''import json
@@ -225,6 +229,12 @@ except RunError as error:
         self.assertEqual(result["exit_code"], 137)
         self.assertTrue(result["output_truncated"])
 
+    def test_other_containers_oom_event_cannot_explain_sigkill(self) -> None:
+        result = self.run_hanging_docker("event_oom_wrong")
+        self.assertEqual(result["status"], "failed")
+        self.assertFalse(result["oom_killed"])
+        self.assertEqual(result["exit_code"], 137)
+
     def test_oom_evidence_is_retained_when_cleanup_hangs(self) -> None:
         result = self.run_hanging_docker("oom+rm")
         self.assertEqual(result["status"], "oom")
@@ -243,6 +253,12 @@ except RunError as error:
         self.assertEqual(result["status"], "failed")
         self.assertFalse(result["oom_killed"])
         self.assertEqual(result["exit_code"], 137)
+
+    def test_docker_oom_event_is_evidence_when_inspect_flag_is_missing(self) -> None:
+        result = self.run_hanging_docker("event_oom")
+        self.assertEqual(result["status"], "oom")
+        self.assertTrue(result["oom_killed"])
+        self.assertEqual(result["oom_evidence"], "docker_event")
 
     def test_oom_exit_evidence_survives_incomplete_inspect_and_cleanup_hang(self) -> None:
         result = self.run_hanging_docker("oom+inspect_missing_config+rm")
