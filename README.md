@@ -108,7 +108,7 @@ SDK 导出 `import_dataset`、`NL4OptAdapter`、`EvaluationCase`、`TaskAdapter`
 `NL4OptEvaluator` 和 `evaluate_case`；已有 `run_problem` 直接接受 case 的公开问题路径。
 只导出 `public/` 和公开 run bundle；manifest 与 `private/` 留在导入／评测端。
 原始标注不是参考最优值。数值目标评测不可用，eligible 分母为零，候选求解证据独立保存。
-实际外部模型 smoke 与独立审阅仍待父任务验收，见 [实现证据](docs/development/s07-nl4opt.md)。
+实际外部模型样本与独立审阅后修复已验收；数值参考条件与其余范围见 [实现证据](docs/development/s07-nl4opt.md)。
 
 ## 参数化工厂（S02-B）
 

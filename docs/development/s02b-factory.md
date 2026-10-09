@@ -65,10 +65,10 @@ PositiveReals 测试揭示开放域会被静默变成闭界，增加端点 membe
 
 完整最终检查结果在本文件末尾记录。
 
-## 限制与父任务验收
+## 作者工程验证阶段与支持限制
 
-未调用付费 LLM，未读取实际 .env、密钥、私有运行 archive、其他代理日志或商业许可证。
-真实外部模型 factory case 和独立 Standards／Spec 审阅由父任务执行。
+作者工程实现阶段未调用付费 LLM，未读取实际 .env、密钥、私有运行 archive、其他代理日志或商业许可证。
+后续父任务已经执行真实外部模型 factory case 和独立 Standards／Spec 审阅，证据见下文。
 本次只做本地 Standards／Spec 自查；不启动其他代理、不提交／推送、不改 GitHub／CI／可见性。
 
 工厂导出的实例是候选证据；任意工厂可构建或导出错误业务模型，因此不证明原 Formulation、Python
