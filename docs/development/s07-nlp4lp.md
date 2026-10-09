@@ -1,6 +1,7 @@
 # S07-B NLP4LP public input and supplied-reference comparison
 
-Status: SDK/Worker0.11.0 development implementation; final acceptance is pending.
+Status: SDK/Worker0.11.0 local implementation and actual model/Solver acceptance;
+full local regression and independent review are pending. Delivery: [draft PR25](https://github.com/Fangziyang0910/LLM4OM/pull/25).
 Scope: [Issue21](https://github.com/Fangziyang0910/LLM4OM/issues/21), FR-08–12/28–30,
 DD-06, AC-04/05/25. Source facts: [fixed-source research](s07-benchmark-research.md).
 Interface source: [contracts](../plugin-contracts.md#16-s07-b-nlp4lp-task-interface-sdk-0110).
@@ -76,8 +77,44 @@ snapshot/run data and private material become persisted errors with the same
 eligible denominator. MAMO's five regression cases pass after policy reuse.
 Strict mypy passes29 modules. Logs are under `/tmp/llm4om-s07b/`.
 
-Actual configured model/container acceptance, package/Worker/independent wheel
-checks and one complete local integration regression remain pending. Independent
+Wheel/sdist and actual Worker build passed; clean installed Python3.11.13 wheel
+passed five NLP4LP cases in6.063s. One complete local integration regression is
+running. Independent
 Standards/Spec review is unavailable due the local Codex CLI usage limit; parent
 self-review will be recorded separately. No cloud CI, package/dataset release
 or full benchmark score is claimed. Whole1.0 remains active.
+
+
+## Real configured model acceptance (2026-10-10)
+
+Actual `deepseek-v4-pro-0813` first request failed with provider_connection_error
+and no response. Run `b65d78dd88614454bfa05d3e34298113` retains that attempt,
+unknown19800token reservation, null usage/cost and an eligible failed-case
+comparison denominator1. It was not resumed as an automatic unknown replay.
+After an unpaid endpoint HTTP200 check, a declared two-repeat pilot admitted
+one fresh second run, retaining both attempts and the unknown first usage.
+
+Second run `23429a27c47e402f9192f0811292f9a6` completed: one actual external
+request,1998reported total tokens (cost unknown), one actual container HiGHS
+solve, objective684000 and investments152000/608000. Supplied-reference numeric
+match passed. Inspection of the actual IR confirmed continuous nonnegative
+variables, public objective,760000budget,0.8C-0.2D>=0 and20000detached minimum;
+the public upper-bound proof supports that concrete model. The benchmark's
+independent-feasibility/full-semantic/vector-mapping layers remain unavailable.
+This is a one-question/two-attempt pilot, not a full benchmark score.
+
+All361 original public descriptions/parameters remain. Source163/public804/
+package128 actual-project-key scans passed; all public projections omit hidden
+source fields. Private snapshot and raw response storage stay0700/0600.
+Actual container was removed; credential-free completed resume added zero
+model/Solver calls. SDK source/wheel/Worker hash:
+`1112f1e47d8af5d57ebacdecb0c0a3881318d6922b3ded8064bcc85211052d63`.
+Worker image:
+`sha256:214c85fe9d27f31f8bed13152b1ad6dba5b39dee1cbb1a2682aa060fdca15a21`.
+Retained wheel/sdist, public proof, both original attempts, pilot budget and
+verification are under `/tmp/llm4om-s07b/real-acceptance/`.
+
+The generated release hash table was normalized to two-space JSON/LF. Original
+research metadata artifact SHA was a2f2385b76eaf5bd3f55ae3acabfacf1c14f46fe563ac8c390c72e0025afd1d9;
+normalized metadata SHA is a0a78906086b644156f079db1fdef9d10c6f8855a42ced9ab751e0fd1db49c66.
+All2,127 original source file hashes/sizes/URLs remain unchanged.
