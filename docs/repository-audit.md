@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-09；设计基线：0.4.0。当前包含 97 个源文件，维护科研设计、文档工具、已交付切片与待验收 S05-A 实现。
+日期：2026-10-09；设计基线：0.4.0。当前包含 102 个源文件，维护科研设计、文档工具、已交付切片与待验收 S05-A 实现。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -43,6 +43,7 @@
 | `docs/development/s02-highs.md` | S02-A 实现与真实证据 | 严格 IR、Pyomo／HiGHS、trusted_local、实际状态与未验证条件 |
 | `docs/development/s03-plugins.md` | S03 实现与运行 profile | 独立安装、兼容预检、真实方法来源、SDK 和未实现范围 |
 | `docs/development/s05-provider.md` | S05-A 工作树实现与待验收记录 | 文本 Provider、compact 输出、资源恢复、HTTP 沙箱阻塞与父任务命令 |
+| `docs/development/s07-nl4opt.md` | S07-A 来源研究与本地实现证据；父级验收未完成 | 官方固定提交、文件／记录 hash、域歧义；附公共接口测试、工程 smoke 与剩余验收 |
 | `docs/evaluation.md` | 指标、证据与分母的唯一来源 | 公开检查／隐藏协议、失败分母、未知成本保持原口径 |
 | `docs/implementation-plan.md` | 本地纵向任务与 blocking edges | 24 个任务；首个 CLI、独立 Web、真实支持验收 |
 | `docs/plugin-contracts.md` | 接口、字段、版本和错误的唯一来源 | 目标 Protocol、小 Interface、能力与错误语义；统一术语 |
@@ -82,6 +83,10 @@
 | `scripts/render_references.py` | 公开参考资料生成 CLI | catalog 生成两份导出；check 模式只读 |
 | `src/llm4om/__init__.py` | 公开应用导出 | RunResult／run_problem；CLI 与后续 Web 共用入口 |
 | `src/llm4om/__main__.py` | 模块 CLI 入口 | 与安装后的 console script 使用同一命令 |
+| `src/llm4om/tasks.py` | S07-A 公共 Task/Evaluation 接口与固定 NL4Opt 快照 | CLI/SDK 导入、来源身份、hash、重复 ID、隔离测试 |
+| `src/llm4om/evaluation.py` | S07-A 单样本后置评测 | 公共运行结果、失败、checker error、零 eligible 与无 oracle 导出 |
+| `tests/test_task_evaluation.py` | S07-A 公共接口验收 | 独立 fixture 身份、实际 HTTP／Docker／HiGHS、篡改与失败记录 |
+| `examples/tasks/nl4opt-import.yaml` | 官方固定 dev split 的本地导入配置 | 已下载源字节 hash；路径以配置目录为根，不自动 fetch |
 | `src/llm4om/application.py` | 单问题应用流程 | 公开输入、Mock 输出、候选、阶段与成功／失败证据 |
 | `src/llm4om/cli.py` | 用户 CLI | 参数解析、离线显式选择、JSON 摘要与退出码 |
 | `src/llm4om/contracts.py` | 运行边界校验 | 严格 JSON／YAML、CSV、路径、引用、五元素、输入绑定与 Worker 响应 |

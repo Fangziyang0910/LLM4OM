@@ -133,3 +133,20 @@ Code 隔离实验的固定表述可来自人工参考，但该实验明确标 as
 有限实例的数据扰动可以检验具体性质，不能升级为所有参数下的模型等价证明。模型级评估器必须说明等价关系、变量映射与覆盖范围。可参考 [图编辑距离评测](https://aclanthology.org/2024.lrec-main.1438/)与 [EquivaMap](https://arxiv.org/abs/2502.14760)，接入前分别验收。
 
 单问题没有独立参考时，报告可以展示候选模型求解状态和假设、需求／数据来源，但不会给出未知的原问题正确率。相关研究分类见 [研究综述](research-landscape.md)，完整流程见 DD-06。
+
+## 12. Implemented S07-A raw NL4Opt protocol
+
+`llm4om.eval.nl4opt-raw-v0.1` freezes original-description projection before runs.
+Raw official annotations are `incomplete_declarations`: no variable domains, independent
+checker, reference solution or solved reference optimum. Every selected case has
+`eligible=false`, reason `no_reference_objective_or_variable_domains`. `N_eligible=0` and
+`objective_match_rate=null`; objective match, independent feasibility and semantic evidence
+are `not_available`, including when candidate HiGHS termination is optimal.
+
+The evaluator retains failed runs and checker errors. Formulation/Code structural evidence,
+execution status and `solver_reported_candidate_feasibility` are separate observations.
+Candidate reported objective is retained without comparing it to declaration coefficients.
+No upstream declaration scorer/parser is used. `N_selected` is the frozen split count;
+`N_evaluated=1` describes this single-case result, not completion of the whole split.
+Derived reference models and independent solution checking remain S07-D. Local HTTP
+fixtures exercise engineering behavior only; they do not establish external-model accuracy.

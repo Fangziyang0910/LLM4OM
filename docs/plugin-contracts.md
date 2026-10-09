@@ -344,3 +344,50 @@ Gateway archive 是共享 run 资源身份。文件锁原子 admission，OS slot
 发送前按规范化输入 UTF-8 字节数估算 token，加最大输出预留；实际 total 可用才结算预留。input／output／total／cached／reasoning 缺失均为 null，cached 与 reasoning 不重复计费。无定价时 cost=null。结算后计入未知 attempt 的预留；最后调用实测占用越界返回 token_budget_overrun，并保留成功回复。429／5xx／连接故障有限重试，认证／无效请求／非法响应／超时不重试；失败 charge／usage 未知时保守保留预留。共享绝对 deadline 约束请求 timeout、重试、Docker 检查／create、Worker 启动、容器墙钟和 Solver time_limit（清理允许有界额外时间）；HTTP 在可终止子进程中执行，完整 deadline 覆盖 DNS、TLS 和持续滴流；取消回收进程并保留未知结果的预留。
 
 公开 llm-trace.json 只包含身份／hash、模型／role、start／end、finish_reason、usage、reservation 和稳定诊断。原始回复与恢复状态存于公开运行目录之外的 .private/run_id，目录 0700、文件 0600，不列入 bundle。详细字段、配置、限制与验收命令见 [S05-A 实现记录](development/s05-provider.md)。已有本地 HTTP 接缝与两个真实外部模型／容器案例；具体证据见实现记录。完整 1.0 仍按开发计划验收。
+
+## 7. S07-A local Task / Evaluation interface (implemented)
+
+Package version remains unreleased 0.4.0. `TaskAdapter.iter_cases(config: Path)` yields frozen
+`EvaluationCase` values. For `NL4OptAdapter`, config is the imported `manifest.json`.
+The case carries `case_id`, public ProblemSpec path, privileged `oracle_ref`, frozen manifest
+bytes and frozen entry bytes. Pass only `case.public_problem` to `run_problem`; never pass
+an EvaluationCase or its manifest to a method, Gateway or Worker.
+
+`import_dataset(config: Path, output: Path) -> Path` returns a frozen manifest path.
+The import config is schema 0.1.0 with exactly `dataset_id`, `source_kind`
+(official/fixture/fork), `source_version`, `split` (train/dev/test), `path`, and `sha256`.
+Paths are relative to the config directory and must remain within it. Official identity is
+`nl4opt` at competition commit `49f1e0d66b7fdcd33305a7f281c2a7c13f5620ea`, with the fixed
+split hashes in [source research](development/s07-nl4opt.md). Fixtures/forks must use a
+separate dataset ID and version. No fetch, source-directory mounting or registry is added.
+
+Import validates the whole split before acceptance: exact byte hash, UTF-8 LF JSONL,
+unique JSON keys, finite values, one signed decimal original ID per record, unique IDs,
+upstream ID consistency and the known record field/type schema. Unknown record fields
+are rejected. Annotations are preserved, not translated into mathematics. The original
+`document` alone supplies the description; domains are unspecified and type hint is unknown.
+Public ProblemSpec 0.2.0 contains source identity but no case/oracle references or source paths.
+
+Snapshot layout: `public/<sample-id>.json`, `private/<sample-id>.json`, `manifest.json`.
+Official snapshots also retain the fixed MIT `LICENSE`; redistribute it with public projections.
+Public/private references have `task_public` / `task_private` namespaces and schema versions.
+The private directory has mode 0700, annotations 0600. The manifest is privileged because
+it contains oracle references. Public export means the public directory and public run
+bundle, never the whole snapshot. Manifest schema 0.1.0 locks projection, protocol, source,
+line/record hashes, public/private artifact hashes, reference quality, eligibility and reasons.
+Import cannot overwrite an existing snapshot. Iteration checks content hashes.
+
+`Evaluator.evaluate(case: EvaluationCase, outcome: Path) -> dict` consumes a persisted
+run directory after modeling. `NL4OptEvaluator` implements raw-declaration protocol
+`llm4om.eval.nl4opt-raw-v0.1`. `evaluate_case(manifest, case_id, outcome, output)` and CLI
+`evaluate` save one public result to a new file; existing output is not overwritten.
+Failures remain results; malformed or changed evidence produces `checker_error` and error
+states, never a pass. Unknown case/invalid snapshot is an admission error. A failed run
+before public-input persistence has `case_binding=not_available`; it is an attempted case
+association, not verified input identity. Otherwise the exact public revision must match.
+
+Result retains protocol, source, manifest/record hashes, projection/domain/normalization
+policies, exclusion reason, reference quality, selected/eligible counts, run error and separate
+structural, execution and solver-reported candidate primal evidence. It contains no oracle
+paths or annotations. Structural evidence is not semantic verification. No new method
+or execution contract is introduced; Worker image remains 0.4.0.

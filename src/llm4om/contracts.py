@@ -45,11 +45,17 @@ def read_config(path: Path) -> dict[str, Any]:
 
 
 def parse_json(raw: bytes) -> dict[str, Any]:
+    value = parse_reference_json(raw)
+    _reject_private_fields(value)
+    return value
+
+
+def parse_reference_json(raw: bytes) -> dict[str, Any]:
+    """Strict JSON parsing for privileged import/evaluation boundaries only."""
     try:
         value = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object,
                            parse_constant=_reject_constant)
         _finite_numbers(value)
-        _reject_private_fields(value)
     except RunError:
         raise
     except (ValueError, RecursionError) as error:

@@ -1,0 +1,93 @@
+"""Post-run evidence for raw NL4Opt; declarations are not independent optima."""
+
+import hashlib
+import json
+from pathlib import Path
+from typing import Any
+
+from llm4om.contracts import RunError, parse_json, parse_reference_json, public_path
+from llm4om.tasks import EvaluationCase, PROTOCOL
+
+
+def _read_ref(root: Path, ref: dict[str, Any]) -> dict[str, Any]:
+    raw = public_path(root, ref["relative_path"]).read_bytes()
+    if hashlib.sha256(raw).hexdigest() != ref["sha256"] or len(raw) != ref["size_bytes"]:
+        raise RunError("evidence_hash_mismatch", "evaluation", "Evidence bytes differ from their frozen reference.")
+    return parse_json(raw)
+
+
+class NL4OptEvaluator:
+    def evaluate(self, case: EvaluationCase, outcome: Path) -> dict[str, Any]:
+        """Consume one frozen case and actual persisted application outcome."""
+        manifest = parse_reference_json(case.manifest)
+        entry = parse_reference_json(case.entry)
+        if (manifest.get("protocol_id") != PROTOCOL or manifest.get("N_eligible") != 0
+                or entry not in manifest["cases"] or entry["case_id"] != case.case_id):
+            raise RunError("invalid_case", "evaluation", "Case must belong to the frozen raw NL4Opt protocol.")
+        unavailable = {"status": "not_available", "reason": "Raw declarations lack independent domains, solution and optimum evidence."}
+        result: dict[str, Any] = {
+            "schema_version": "0.1.0", "protocol_id": PROTOCOL, "case_id": case.case_id,
+            "manifest_sha256": hashlib.sha256(case.manifest).hexdigest(), "source": manifest["source"],
+            "projection_revision": manifest["projection_revision"], "domain_policy": manifest["domain_policy"],
+            "normalization_policy": manifest["normalization_policy"], "raw_record_sha256": entry["raw_record_sha256"],
+            "reference_quality": entry["reference_quality"], "eligible": False,
+            "exclusion_reason": entry["exclusion_reason"], "N_selected": manifest["N_selected"], "N_eligible": 0,
+            "N_evaluated": 1, "objective_match_rate": None,
+            "independent_feasibility": dict(unavailable), "objective_match": dict(unavailable),
+            "semantic_validation": dict(unavailable),
+            "formulation_validation": {"status": "not_available"}, "code_validation": {"status": "not_available"},
+            "execution": {"status": "not_available"}, "candidate_primal": {"status": "not_available"},
+            "case_binding": {"status": "not_available"}, "run_id": None, "run_status": "unknown", "run_error": None, "checker_error": None,
+        }
+        try:
+            public = _read_ref(case.public_problem.parent.parent, entry["public_ref"])
+            if public["problem_id"] != case.case_id:
+                raise RunError("case_identity_mismatch", "evaluation", "Public problem differs from the selected case.")
+            oracle_raw = case.oracle_ref.read_bytes()
+            if (hashlib.sha256(oracle_raw).hexdigest() != entry["oracle_ref"]["sha256"]
+                    or len(oracle_raw) != entry["oracle_ref"]["size_bytes"]):
+                raise RunError("snapshot_hash_mismatch", "evaluation", "Private annotations changed after import.")
+            bundle = parse_json((outcome / "bundle.json").read_bytes())
+            if bundle.get("schema_version") != "0.2.0" or bundle.get("status") not in {"failed", "completed", "artifact_ready"}:
+                raise RunError("invalid_outcome", "evaluation", "Unsupported application outcome schema or status.")
+            result.update(run_id=bundle["run_id"], run_status=bundle["status"], run_error=bundle["error"])
+            problems = [ref for ref in bundle["artifacts"] if ref["relative_path"] == "public-problem.json"]
+            if problems:
+                observed = _read_ref(outcome, problems[0])
+                if observed != public:
+                    raise RunError("outcome_case_mismatch", "evaluation", "Run belongs to another public problem revision.")
+                result["case_binding"] = {"status": "pass"}
+            elif bundle["status"] != "failed":
+                raise RunError("outcome_case_mismatch", "evaluation", "Successful run must identify its public problem.")
+            for stage, field in (("formulation", "formulation_validation"), ("code", "code_validation")):
+                if bundle["stages"][stage]["status"] == "available":
+                    result[field] = {"status": "pass", "level": "structural" if stage == "formulation" else "deterministic_compilation"}
+            if bundle["execution_result_ref"]:
+                execution = _read_ref(outcome, bundle["execution_result_ref"])
+                result["execution"] = {"status": execution["status"], "mode": execution["mode"]}
+            if bundle["solve_result_ref"]:
+                solve = _read_ref(outcome, bundle["solve_result_ref"])
+                result["candidate_primal"] = {
+                    "status": "available" if solve["has_primal_solution"] else "not_available",
+                    "level": "solver_reported_candidate_feasibility", "termination": solve["termination"],
+                    "has_primal_solution": solve["has_primal_solution"], "reported_objective": solve["objective_value"]}
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            result["checker_error"] = {"code": error.code if isinstance(error, RunError) else "checker_error",
+                                       "message": str(error) if isinstance(error, RunError) else "Cannot read valid frozen evaluation evidence."}
+            for field in ("formulation_validation", "code_validation", "execution", "candidate_primal"):
+                result[field] = {"status": "error"}
+        return result
+
+
+def evaluate_case(manifest: Path, case_id: str, outcome: Path, output: Path) -> dict[str, Any]:
+    """Persist one public evaluation result without exporting oracle references."""
+    from llm4om.tasks import NL4OptAdapter
+
+    case = next((item for item in NL4OptAdapter().iter_cases(manifest) if item.case_id == case_id), None)
+    if case is None:
+        raise RunError("unknown_case", "evaluation", "Case ID is absent from the frozen manifest.")
+    result = NL4OptEvaluator().evaluate(case, outcome)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("x", encoding="utf-8") as stream:
+        stream.write(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
+    return result

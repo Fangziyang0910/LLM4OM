@@ -91,3 +91,21 @@ llm4om report --experiment-id EXPERIMENT_ID --format markdown
 每个插件必须声明能力和兼容矩阵，不允许自动降级后仍把结果标成原方法；每个评估结论必须说明证据级别。**求解器报告最优，只表示候选模型被求解，不证明模型符合业务需求。**
 
 已完成 S01／S02-A／S03／S04-A／S05-A 当前范围；当前前沿与后续依赖见 [开发计划](docs/implementation-plan.md)。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 本地 NL4Opt 导入与单样本评测（S07-A）
+
+导入固定官方 snapshot，不自动下载。将 [导入配置](examples/tasks/nl4opt-import.yaml)
+复制到本地 competition snapshot 根目录，已有 `generation_data/dev.jsonl` 的原始字节须匹配配置 hash。
+
+```bash
+uv run --locked llm4om import --config /path/to/snapshot/nl4opt-import.yaml --output runs/nl4opt-dev
+uv run --locked llm4om run --problem runs/nl4opt-dev/public/-640645082.json --config /path/to/public-run.yaml
+uv run --locked llm4om evaluate --manifest runs/nl4opt-dev/manifest.json --case-id 'nl4opt:49f1e0d66b7fdcd33305a7f281c2a7c13f5620ea:dev:-640645082' --run runs/RUN_ID --output runs/evaluation-RUN_ID.json
+```
+
+运行配置使用现有 Direct／文本 Provider／容器接口，见 [S05-A](docs/development/s05-provider.md)。
+SDK 导出 `import_dataset`、`NL4OptAdapter`、`EvaluationCase`、`TaskAdapter`、`Evaluator`、
+`NL4OptEvaluator` 和 `evaluate_case`；已有 `run_problem` 直接接受 case 的公开问题路径。
+只导出 `public/` 和公开 run bundle；manifest 与 `private/` 留在导入／评测端。
+原始标注不是参考最优值。数值目标评测不可用，eligible 分母为零，候选求解证据独立保存。
+实际外部模型 smoke 与独立审阅仍待父任务验收，见 [实现证据](docs/development/s07-nl4opt.md)。
