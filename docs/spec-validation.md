@@ -144,3 +144,5 @@ Standards／Spec 使用两个独立只读 Codex CLI 进程，固定比较 7a0d78
 4. P3：S03 审阅证据仍指向待补章节。现补齐实际两路发现、修复、验证范围及独立安装证据。源码没有伪报真实 LLM、原生路径或容器已实现。
 
 Standards 共 4 项、Spec 共 4 项，分别保留并已处理；最后修复由作者在公开入口回归，未再次启动独立审阅。S03 工程示例 run_id 为 3c8f0b29cadb42d38038a4f9c9e22d14，来源为独立方法 0.1.0、SDK 0.2.0 和人工 Mock；目标偏移有意为 20，语义验证为 not_available。GitHub #4 已用 native blocked_by 关联 #3；没有关闭或修改父工作项。
+
+S03 代码提交 b5b3ef5 的 [push CI](https://github.com/Fangziyang0910/LLM4OM/actions/runs/37884375652) 已 success；草稿 [PR #5](https://github.com/Fangziyang0910/LLM4OM/pull/5) 基于 S02 的 codex/s02-highs，独立展示 S03 差异。PR CI 的最终状态以 GitHub Checks 为准。
