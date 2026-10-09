@@ -22,7 +22,7 @@ from llm4om.contracts import (
     validate_worker_response,
 )
 from llm4om.control import CancellationToken
-from llm4om.providers import Gateway, _resource_state, _resource_bytes
+from llm4om.providers import Gateway
 from llm4om.methods import FactoryCodeProposal, MethodContext, ModelProposal
 from llm4om.preflight import AdmissionPlan, prepare_run
 from llm4om.linear import CompiledCode, compile_ir
@@ -139,9 +139,6 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
             if store.state["phase"] != "execute_done":
                 solve_ref, execution_ref, execution_error = _execute_candidate(store, compiled, artifact_ref, settings, ledger, plan)
                 artifact_ref = store.state.get("executed_artifact_ref", artifact_ref)
-                store.state.update(solve_ref=solve_ref, execution_ref=execution_ref, artifact_ref=artifact_ref,
-                                   phase="execute_done" if solve_ref is not None and execution_error is None else "code_done")
-                store.checkpoint()
             else:
                 execution_error = None
                 store.emit("execution_reused", solve_result_ref=solve_ref)
@@ -253,6 +250,8 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
         store.checkpoint()
     context = MethodContext(gateway, MappingProxyType(data_content), MappingProxyType(deepcopy(settings["budget"])),
                             hashlib.sha256(source_problem).hexdigest(), store.cancellation, save_method_checkpoint)
+    store.state["method_started"] = True
+    store.checkpoint()
     try:
         outcome = method.run(deepcopy(settings["method"]["config"]), deepcopy(public), context,
                              checkpoint=store.state.get("method_checkpoint"))
@@ -480,7 +479,6 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
         solve["solution_ref"] = store.json("candidates/001/solution.json", {
             "schema_version": "0.2.0", "variables": variables, "evidence_origin": solve["evidence_origin"]}, "solution") if variables is not None else None
         solve_ref = store.json("candidates/001/solve-result.json", solve, "solve-result")
-        store.emit("solver_finished", solve_result_ref=solve_ref, termination=solve["termination"])
         if solve["termination"] == "error":
             error = RunError("solver_error", "solve", "Solver reports an execution error.")
     except RunError as failure:
@@ -514,7 +512,12 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
     candidate = parse_json(read_public_bytes(store.path / "candidates/001/candidate-snapshot.json"))
     candidate.update(artifact_ref=artifact_ref, status="executed" if error else "selected")
     store.json("candidates/001/candidate.json", candidate, "001")
-    store.state["executed_artifact_ref"] = artifact_ref
+    store.state.update(executed_artifact_ref=artifact_ref, artifact_ref=artifact_ref,
+                       solve_ref=solve_ref, execution_ref=execution_ref,
+                       phase="execute_done" if solve_ref is not None and error is None else "code_done")
+    store.checkpoint()
+    if solve_ref is not None:
+        store.emit("solver_finished", solve_result_ref=solve_ref, termination=solve["termination"])
     return solve_ref, execution_ref, error
 
 
@@ -550,20 +553,17 @@ def resume_run(run: Path, *, cancellation: CancellationToken | None = None,
             if hashlib.sha256(read_public_bytes(Path(path))).hexdigest() != digest:
                 raise RunError("checkpoint_incompatible", "admission", "Original public input or configuration changed.")
         resource_records: list[dict[str, Any]] = []
+        settings = read_config(Path(store.state["config"]))
         if "gateway_sha256" in store.state:
             archive = store.path.parent / ".private" / store.run_id
-            resource = _resource_state(archive, expected=store.state["gateway_sha256"])
-            settings = read_config(Path(store.state["config"]))
-            if (resource["budget"] != settings["budget"] or resource["deadline"] != store.state["deadline"]
-                    or resource["inherited_ledger"] != store.state.get("inherited_ledger", {})):
-                raise RunError("checkpoint_incompatible", "admission", "Resource budget or deadline changed.")
-            store.state["ledger"].update(Gateway._ledger(resource["attempts"], resource["inherited_ledger"]))
-            resource_records = [{key: value for key, value in item.items() if key not in {"reply", "raw_reply"}}
-                                for item in resource["attempts"]]
+            resources = Gateway.recover(archive, expected_sha256=store.state["gateway_sha256"],
+                budget=settings["budget"], deadline=store.state["deadline"],
+                inherited_ledger=store.state.get("inherited_ledger", {}))
+            store.state["ledger"].update(resources.ledger)
+            resource_records = resources.trace
         host = {"python": platform.python_version(), "sdk_sha256": _sdk_sha256(), "packages": {name: version(name) for name in ("PyYAML", "jsonschema")}}
         if host != store.state.get("host"):
             raise RunError("checkpoint_incompatible", "admission", "Host Python or package identity changed.")
-        settings = read_config(Path(store.state["config"]))
         # Completed runs validate identity without consuming a new runtime probe or deadline.
         saved_deadline = store.state["deadline"]
         plan = prepare_run(settings, offline=store.state["offline"], config_dir=Path(store.state["config"]).parent,
@@ -596,7 +596,8 @@ def resume_run(run: Path, *, cancellation: CancellationToken | None = None,
             return RunResult(store.run_id, store.path, store.state["status"])
         if time.time() >= store.state["deadline"]:
             raise RunError("deadline_exhausted", "admission", "The original absolute run deadline expired.")
-        if store.state.get("artifact_ref") is None and store.state.get("method_checkpoint") is None:
+        if (store.state.get("artifact_ref") is None and store.state.get("method_checkpoint") is None
+                and store.state.get("method_started")):
             raise RunError("checkpoint_unsupported", "admission", "No completed stage or supported internal method checkpoint exists.")
         return _run_problem(Path(store.state["problem"]), Path(store.state["config"]), store,
                             offline=store.state["offline"], restored_plan=plan)

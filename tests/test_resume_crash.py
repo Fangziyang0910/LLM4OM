@@ -149,6 +149,24 @@ class CrashResumeTests(unittest.TestCase):
         self.assertEqual(len(self.requests), 1)
         self.assertEqual(json.loads((path / 'budget-ledger.json').read_text())['total_tokens'], 500)
 
+    def test_genesis_journal_before_first_head_recovers_without_losing_admission(self):
+        config = self.http_config()
+        fault = CRASH.replace('record = json.loads(lines[-1])', 'record = json.loads(Path(target).read_text())')
+        start = fault.index('    if "history"')
+        end = fault.index('    return result', start)
+        fault = fault[:start] + (
+            '    if Path(target).parent.name == "journal" and not record["state"]["attempts"]:\n'
+            '        os._exit(91)\n') + fault[end:]
+        process = subprocess.run([sys.executable, '-c', fault, 'run',
+            '--problem', str(self.inputs / 'problem.json'), '--config', str(config),
+            '--output', str(self.root / 'runs')], capture_output=True, text=True, timeout=15)
+        self.assertEqual(process.returncode, 91, process.stderr)
+        path = next(path for path in (self.root / 'runs').iterdir() if len(path.name) == 32)
+        self.assertEqual(len(self.requests), 0)
+        self.assertEqual(resume_run(path).status, 'completed')
+        self.assertEqual(len(self.requests), 1)
+        self.assertEqual(json.loads((path / 'budget-ledger.json').read_text())['external_llm_requests'], 1)
+
     def test_explicit_semantic_rerun_keeps_unknown_parent_usage_and_reservations_visible(self):
         path = self.resource_crash('unknown', max_attempts=3)
         checkpoint = (path / 'checkpoint.json').read_bytes()
@@ -214,6 +232,22 @@ class CrashResumeTests(unittest.TestCase):
         self.assertEqual(ledger['solver_calls'], 2)
         self.assertEqual(ledger['llm_attempts'], 1)
 
+    def test_completed_solve_hard_crash_reuses_result_with_exhausted_solver_cap(self):
+        process = subprocess.run([sys.executable, '-c', CRASH.replace('formulation_saved', 'solver_finished'),
+            'run', '--problem', str(self.inputs / 'problem.json'),
+            '--config', str(self.inputs / 'solve.yaml'), '--output', str(self.root / 'runs')],
+            capture_output=True, text=True, timeout=15)
+        self.assertEqual(process.returncode, 91, process.stderr)
+        path = next(path for path in (self.root / 'runs').iterdir() if len(path.name) == 32)
+        result = resume_run(path)
+        self.assertEqual(result.status, 'completed', json.loads((path / 'bundle.json').read_text()).get('error'))
+        ledger = json.loads((path / 'budget-ledger.json').read_text())
+        self.assertEqual(ledger['solver_calls'], 1)
+        self.assertEqual(json.loads((path / 'candidates/001/solve-result.json').read_text())['objective_value'], 13)
+        events = [json.loads(line) for line in (path / 'events.jsonl').read_text().splitlines()]
+        self.assertEqual(sum(event['kind'] == 'solver_started' for event in events), 1)
+        self.assertEqual(sum(event['kind'] == 'execution_reused' for event in events), 1)
+
     def test_corrupt_private_head_and_immutable_response_are_refused_before_http(self):
         import hashlib
         path = self.resource_crash('success')
@@ -225,6 +259,12 @@ class CrashResumeTests(unittest.TestCase):
             resume_run(path)
         self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
         head.write_bytes(original)
+        head.unlink()
+        with self.assertRaises(RunError) as caught:
+            resume_run(path)
+        self.assertEqual(caught.exception.code, 'checkpoint_incompatible')
+        head.write_bytes(original)
+        head.chmod(0o600)
         version = archive / 'journal' / (hashlib.sha256(original).hexdigest() + '.json')
         record = json.loads(version.read_text())
         record['state']['attempts'][0]['reply'] = 'corrupt response'

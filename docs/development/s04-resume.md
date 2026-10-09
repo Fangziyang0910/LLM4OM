@@ -22,6 +22,7 @@ Direct 的内部 checkpoint 仅保存版本与 request_id，恢复时重新解�
 已经 completed／artifact_ready 的运行保持同一 run_id，事件和输入不变。
 
 默认 continue 对不支持内部 checkpoint 且尚无完整阶段的插件返回 checkpoint_unsupported。
+尚未调用方法的 admitted 阶段可以开始执行；核心在调用前保存 method_started，避免把已开始但无 checkpoint 的方法当作首次调用。
 显式 rerun 创建新的运行并重新执行方法，保存 lineage_ref、父输入 hash、checkpoint／公开历史副本、累计费用与未知预留。
 它可以产生新付费请求；不把父成功响应或 Solve 当作新方法输出。已有成功响应在 continue 中仍复用。
 新运行使用新的 deadline；已有 paid／unknown 尝试、token／reservation 和 Solver 次数继续计入配置上限。
@@ -37,6 +38,8 @@ checkpoint.json 的 bytes 另存不可变 checkpoints/hash.json。视图替换�
 Gateway 保存的成功响应只复用，不新增 HTTP attempt。未知结果保留 reservation，request_id 不重发。
 私有 archive 仍位于 store/.private/run_id；不可变 journal 连接每次 admission／settlement，state.json 必须精确匹配链中版本。
 恢复从核心已知 hash 验证整条资源链，保留先于核心回调落盘的成功回复或未知预留；不声称跨文件系统事务。
+首次 head 尚未创建时，仅恢复有效的空 genesis；已提交 head 的丢失或损坏仍拒绝。
+Gateway.recover 负责完整校验，向应用返回 ledger 和明确字段列表投影的公开 trace，应用不解析私有日志。
 目录 0700、文件 0600。checkpoint 只保存 hash／公开资源位置，不导出 raw reply 或凭据。
 同一运行的总预算和绝对 deadline 不重置；过期恢复拒绝。已开始的 Solver 尝试仍计数，取消后再执行需要原预算中剩余的 slot。
 
@@ -63,13 +66,16 @@ Docker 清理继续使用既有有界 kill／inspect／remove；daemon 故障时
 手工候选验证目标 13、40/3 和 3；参数化 Pyomo 与 native Gurobi 的恢复不再发 HTTP 或最终重复求解。
 合成 HTTP fixture 不证明某个付费模型的质量；Gurobi 仍只声明既有 size-limited 微型环境。
 
-2026-10-09 本机 Python 3.12.11 完整回归：200 tests，379.359 秒，全部通过。
+2026-10-09 修复基线 f82b8e2 本机 Python 3.12.11 完整回归：200 tests，379.359 秒，全部通过。
 strict mypy 检查 22 个源码文件；仓库／参考检查、wheel／sdist 构建通过。
 Python 3.11.13 使用干净 wheel：11 个崩溃／派生用例、2 个监督用例、1 个 Provider 复用用例通过；没有重复完整矩阵。
 新 Worker 实际求解目标 13，容器已删除；镜像 ID 为 `sha256:995a1957f3eb8817fc94c7178c30478bb03351665a2b0ea56206de85fd88d391`。
 容器与本机 SDK 源码 hash 都为 `eff6ca3ac5731a30ce2155919ffc62689be956f0718c0e422582d506576febcf`。
 证据位于 `/tmp/llm4om-s04b/fix-evidence/`。旧 SDK 的两个崩溃用例独立复现失败，新实现通过；
 验收覆盖进程硬退出与 OS 文件发布失败，未验证物理断电。没有付费模型请求或云端 CI。
+后续独立复审发现并修复完成状态提交、首次 genesis 恢复、转义凭据和私有日志耦合问题。
+求解完成状态在 solver_finished 之前提交，已用耗尽 Solver 上限的硬退出／恢复用例验证复用目标 13。
+最新修复的完整回归、镜像一致性及复审仍待验收，以上基线包／镜像证据不替代最新源码验收。
 OptiMUS／CoE、Web、batch 与完整 1.0 尚未完成；本切片不更改这些已批准范围。
 
 恢复要求原公开输入／配置仍在原路径且字节不变；本版不提供移动目录后的自动路径迁移。

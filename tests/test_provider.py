@@ -31,10 +31,13 @@ class ProviderTests(unittest.TestCase):
                 import time
                 time.sleep(body.pop('fixture_delay', 0))
                 drip = body.pop('fixture_drip', 0)
+                escape_secret = body.pop('fixture_escape_secret', False)
                 self.send_response(status)
                 self.end_headers()
                 try:
                     raw = json.dumps(body).encode()
+                    if escape_secret:
+                        raw = raw.replace(b'synthetic-secret', b'\\u0073ynthetic-secret')
                     if drip:
                         for byte in raw:
                             self.wfile.write(bytes([byte]))
@@ -67,6 +70,17 @@ class ProviderTests(unittest.TestCase):
             asyncio.run(gateway.complete({'messages': [{'role': 'user', 'content': 'hello'}]}))
         self.assertEqual(caught.exception.code, 'invalid_provider_response')
         self.assertTrue(all(b'synthetic-secret' not in path.read_bytes()
+                            for path in gateway.archive.rglob('*') if path.is_file()))
+
+    def test_escaped_credential_in_nested_metadata_is_not_archived(self):
+        from llm4om.contracts import RunError
+        self.responses[0][1].update(fixture_escape_secret=True,
+                                   debug_metadata={'nested': ['synthetic-secret']})
+        gateway = self.gateway()
+        with self.assertRaises(RunError) as caught:
+            asyncio.run(gateway.complete({'messages': [{'role': 'user', 'content': 'hello'}]}))
+        self.assertEqual(caught.exception.code, 'invalid_provider_response')
+        self.assertTrue(all(b'\\u0073ynthetic-secret' not in path.read_bytes()
                             for path in gateway.archive.rglob('*') if path.is_file()))
 
     def test_slow_drip_obeys_request_and_run_deadlines(self):

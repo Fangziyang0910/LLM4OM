@@ -10,6 +10,7 @@ import signal
 import sys
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from email.message import Message
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Protocol
@@ -81,6 +82,17 @@ def _reply_usage(value: dict[str, Any]) -> dict[str, Any]:
             "total_tokens": usage.get("total_tokens"),
             "cached_tokens": (usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
             "reasoning_tokens": (usage.get("completion_tokens_details") or {}).get("reasoning_tokens")}
+
+
+def _contains_credential(value: Any, credential: str) -> bool:
+    if isinstance(value, str):
+        return credential in value
+    if isinstance(value, dict):
+        return any(_contains_credential(key, credential) or _contains_credential(item, credential)
+                   for key, item in value.items())
+    if isinstance(value, list):
+        return any(_contains_credential(item, credential) for item in value)
+    return False
 
 
 class OpenAICompatibleProvider:
@@ -170,6 +182,8 @@ class OpenAICompatibleProvider:
             if self._credential.encode() in raw:
                 raise ValueError("Response contains a credential.")
             value = parse_json(raw)
+            if _contains_credential(value, self._credential):
+                raise ValueError("Decoded response contains a credential.")
             choices = value["choices"]
             content = choices[0]["message"]["content"]
             if not isinstance(content, str) or self._credential in content:
@@ -224,12 +238,36 @@ def _resource_bytes(state: dict[str, Any]) -> bytes:
     return json.dumps(state, allow_nan=False).encode()
 
 
-def _resource_state(archive: Path, *, expected: str | None = None) -> dict[str, Any]:
+@contextmanager
+def _resource_lock(archive: Path) -> Iterator[None]:
+    descriptor = os.open(archive / "lock", os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(descriptor, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def _public_trace(attempts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    fields = ("attempt_id", "request_id", "request_sha256", "provider", "endpoint_sha256",
+              "requested_model", "role", "start", "end", "reservation", "estimated_input_tokens",
+              "diagnostic", "status", "response_id", "response_sha256", "model", "finish_reason",
+              "provider_request_id", "cost", "usage")
+    return [{field: item[field] for field in fields} for item in attempts]
+
+
+@dataclass(frozen=True)
+class RecoveredResources:
+    ledger: dict[str, Any]
+    trace: list[dict[str, Any]]
+
+
+def _resource_state(archive: Path, *, expected: str | None = None,
+                    allow_unpublished_genesis: bool = False) -> dict[str, Any]:
     """Verify the entire immutable chain, including the mutable head and core anchor."""
     # ponytail: full snapshots suit bounded runs; use incremental records for large search budgets.
     try:
-        current = read_public_bytes(archive / "state.json")
-        current_hash = hashlib.sha256(current).hexdigest()
+        head = archive / "state.json"
+        current = read_public_bytes(head) if head.exists() else None
+        current_hash = hashlib.sha256(current).hexdigest() if current is not None else None
         versions: dict[str, dict[str, Any]] = {}
         children: dict[str | None, str] = {}
         for path in (archive / "journal").glob("*.json"):
@@ -242,7 +280,9 @@ def _resource_state(archive: Path, *, expected: str | None = None) -> dict[str, 
                 raise ValueError("Invalid resource chain.")
             versions[digest] = state
             children[previous] = digest
-        if current_hash not in versions or (expected is not None and expected not in versions):
+        if ((current_hash is not None and current_hash not in versions)
+                or (expected is not None and expected not in versions)
+                or (current_hash is None and not allow_unpublished_genesis)):
             raise ValueError("Missing resource anchor or invalid mutable bytes.")
         previous_state = None
         seen = set()
@@ -308,6 +348,8 @@ def _resource_state(archive: Path, *, expected: str | None = None) -> dict[str, 
             if following is None:
                 if len(seen) != len(versions):
                     raise ValueError("Disconnected resource chain.")
+                if current_hash is None and (len(versions) != 1 or attempts or expected is not None):
+                    raise ValueError("Only an unpublished empty genesis can lack its head.")
                 return state
             cursor = following
         raise ValueError("Missing resource genesis.")
@@ -337,9 +379,12 @@ class Gateway:
         self.calls: list[LLMResponse] = []
         archive.mkdir(parents=True, exist_ok=True, mode=0o700)
         archive.chmod(0o700)
-        with self._locked():
+        with _resource_lock(self.archive):
             if not (archive / "state.json").exists():
-                self._save({"budget": self.budget, "deadline": deadline if deadline is not None else time.time() + budget["wall_time_s"], "attempts": [], "inherited_ledger": self.inherited_ledger, "archive_id": archive.name,
+                if any((archive / "journal").glob("*.json")):
+                    _atomic(archive / "state.json", _resource_bytes(_resource_state(archive, allow_unpublished_genesis=True)))
+                else:
+                    self._save({"budget": self.budget, "deadline": deadline if deadline is not None else time.time() + budget["wall_time_s"], "attempts": [], "inherited_ledger": self.inherited_ledger, "archive_id": archive.name,
                             "provider_identity": {"plugin_id": provider.plugin_id, "model": provider.model,
                                 "endpoint_sha256": hashlib.sha256(provider.identity.encode()).hexdigest(),
                                 "max_output_tokens": provider.max_output_tokens}})
@@ -351,12 +396,20 @@ class Gateway:
                 raise RunError("checkpoint_incompatible", "admission", "Gateway identity or budget differs from its saved resource state.")
             _atomic(archive / "state.json", _resource_bytes(state))
 
-    @contextmanager
-    def _locked(self) -> Iterator[None]:
-        descriptor = os.open(self.archive / "lock", os.O_CREAT | os.O_RDWR, 0o600)
-        with os.fdopen(descriptor, "a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            yield
+    @classmethod
+    def recover(cls, archive: Path, *, expected_sha256: str, budget: Mapping[str, Any],
+                deadline: float, inherited_ledger: Mapping[str, Any]) -> RecoveredResources:
+        """Verify durable usage without credentials; return only public resource evidence."""
+        try:
+            with _resource_lock(archive):
+                state = _resource_state(archive, expected=expected_sha256)
+                if (state["budget"] != dict(budget) or state["deadline"] != deadline
+                        or state["inherited_ledger"] != dict(inherited_ledger)):
+                    raise RunError("checkpoint_incompatible", "admission", "Resource budget or deadline changed.")
+                return RecoveredResources(cls._ledger(state["attempts"], state["inherited_ledger"]),
+                                          _public_trace(state["attempts"]))
+        except (OSError, KeyError, TypeError) as error:
+            raise RunError("checkpoint_incompatible", "admission", "Cannot recover saved resource evidence.") from error
 
     def _load(self) -> dict[str, Any]:
         return _resource_state(self.archive)
@@ -381,12 +434,12 @@ class Gateway:
 
     @property
     def trace(self) -> list[dict[str, Any]]:
-        with self._locked():
-            return [{key: value for key, value in item.items() if key not in {"reply", "raw_reply"}} for item in self._load()["attempts"]]
+        with _resource_lock(self.archive):
+            return _public_trace(self._load()["attempts"])
 
     @property
     def ledger(self) -> dict[str, Any]:
-        with self._locked():
+        with _resource_lock(self.archive):
             attempts = self._load()["attempts"]
         return self._ledger(attempts, self.inherited_ledger)
 
@@ -420,7 +473,7 @@ class Gateway:
             raise RunError("invalid_llm_request", "admission", "Requests require role/text messages.") from error
         request_hash = hashlib.sha256(raw).hexdigest()
         request_id = request.get("request_id", uuid4().hex)
-        with self._locked():
+        with _resource_lock(self.archive):
             state = self._load()
             for item in state["attempts"]:
                 if item["request_id"] == request_id:
@@ -449,7 +502,7 @@ class Gateway:
 
     async def _attempts(self, request: dict[str, Any], request_id: str, request_hash: str, estimate: int) -> LLMResponse:
         for retry in range(self.provider.max_retries + 1):
-            with self._locked():
+            with _resource_lock(self.archive):
                 state = self._load()
                 for previous in state["attempts"]:
                     if (previous["request_id"] == request_id and previous["request_sha256"] == request_hash
@@ -494,7 +547,7 @@ class Gateway:
             except RunError as error:
                 code = error.code
                 retryable = code in {"rate_limit", "provider_error", "provider_connection_error"}
-            with self._locked():
+            with _resource_lock(self.archive):
                 state = self._load()
                 item = next(item for item in state["attempts"] if item["attempt_id"] == attempt_id)
                 item.update(end=time.time(), diagnostic=code, status="success" if reply is not None else "unknown")
