@@ -113,7 +113,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
                   "Structural checks do not establish semantic correctness.\n")
         if solve_ref is not None:
             solve_summary = parse_json(read_public_bytes(store.path / solve_ref["relative_path"]))
-            report += f"\nHiGHS: {solve_summary['termination']}. Objective: {solve_summary['objective_value']}.\n"
+            report += f"\n{solve_summary['solver_id']}: {solve_summary['termination']}. Objective: {solve_summary['objective_value']}.\n"
         if error_record:
             report += f"\nError: {error_record['code']} ({error_record['stage']}).\n"
         store.write("reports/report.md", report.encode(), "report")
