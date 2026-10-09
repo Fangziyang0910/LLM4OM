@@ -93,3 +93,5 @@ Spec：2 项实现问题，1 项交付证据缺口，无范围蔓延。Worker de
 草稿 [PR #9](https://github.com/Fangziyang0910/LLM4OM/pull/9) 基于 S04-A 分支，关联 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)。远程 CI 不使用真实密钥或付费请求；实际网关证据来自上述本地验收。
 
 首轮 7fd1141 的 push／PR CI 在 Python 3.12 同样失败：150 ms 滴流测试窗口内 transport 尚未发出 HTTP，deadline 已使它退出，断言却要求服务器收到请求。预算执行没有越界。fixture 现给冷启动 1 秒，并将 drip body 延长到超过该窗口；继续验证真实请求、有限结束和未知预留，两版本 Provider 回归后重跑 CI。
+
+后续验收按用户要求以本机必要检查和真实运行为主。GitHub Actions 仅手动触发；远程 OOM 证据差异未定因，不反复以云端矩阵推进开发。临时诊断输出已清理，实际未知原因仍保留 failed。

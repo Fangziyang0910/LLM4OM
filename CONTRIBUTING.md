@@ -42,6 +42,6 @@ uv build
 
 Review 分开回答两个问题：Standards 是否符合开发规范和相关契约；Spec 是否完成用户要求或 issue。显式调用 code-review 时按技能执行独立审阅；若当前环境无法运行独立审阅者，说明实际采用的自查范围。
 
-交付先完成对应检查，再报告变化、证据和剩余条件。PR 使用 [仓库模板](.github/PULL_REQUEST_TEMPLATE.md)说明 Summary、Evidence 与 Merge Danger。用户请求提交或 PR 时保存完整改动并关联工作项；CI 构建 Worker 镜像并覆盖离线、真实 HiGHS 与容器故障，本地验证包构建；发布标签与公开包发布依据真实验收和用户授权进行。
+交付先完成对应检查，再报告变化、证据和剩余条件。PR 使用 [仓库模板](.github/PULL_REQUEST_TEMPLATE.md)说明 Summary、Evidence 与 Merge Danger。用户请求提交或 PR 时保存完整改动并关联工作项。日常验收以本机测试和真实 Provider／Solver 运行为依据：开发中运行聚焦测试，切片交付时运行一次所需完整回归、类型／仓库检查和包构建；只有新改动或未解决故障才重复。GitHub Actions 仅手动触发，供必要的环境交叉验证；push／PR 不自动重跑完整矩阵，也不将远程 CI 作为每次开发推进的门槛。发布标签与公开包发布依据真实验收和用户授权进行。
 
 技能选择与触发条件见 [任务工作流](docs/agents/workflow.md)。常规实现选择无需额外审批；用户明确指令优先于工程默认值。

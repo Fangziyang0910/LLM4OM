@@ -199,3 +199,5 @@ SDK 0.4.0 未发布，核心 schema 0.2.0、IR 0.1.0、方法 profile 0.1.0。97
 独立 Standards／Spec 固定比较 ce9cdad…f9cfe21；各轴问题、red→green 修复、run_id、用量、镜像与限制统一见 [S05-A 记录](development/s05-provider.md)。修复提交为 7fd1141，草稿 [PR #9](https://github.com/Fangziyang0910/LLM4OM/pull/9) stacked on #7；远程 CI 结果单独记录。完整恢复、协议、方法、benchmark 与 Web 仍按原计划推进，未宣称 1.0 完成。
 
 S05 首轮 CI 的 Python 3.12 失败来自滴流 fixture 的 150 ms 冷启动窗口（服务器收到 0 次请求）；Provider 按截止终止。fixture 调为 1 秒窗口与更长滴流响应，仍验证 HTTP 已发生且准时终止。修复只改变测试校准，未扩大生产预算或改写未知调用语义。
+
+用户已明确要求以本机验证为主。GitHub Actions 改为 workflow_dispatch，移除 push／PR 自动全面回归和临时 OOM 诊断步骤；不再频繁触发远程矩阵。629d01f 的 PR CI 两版本 success，push CI 仍在 OOM fixture 得到 137／false；该远程环境差异尚未定位。本机真实隔离测试与求解证据保持独立。OOM fixture 使用逐步内存压力，仍要求原生 OOM 证据，未用 137 代替判断。

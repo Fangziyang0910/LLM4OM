@@ -450,10 +450,7 @@ print(json.dumps(checks))
     def test_memory_limit_reports_real_oom(self) -> None:
         from llm4om.executors import run_container
         # Gradual pressure leaves time for the runtime's asynchronous OOM monitor.
-        source = '''import json,mmap,time
-from pathlib import Path
-print("[DEBUG-oom-s05]", json.dumps({name: (Path("/sys/fs/cgroup") / name).read_text()
-    for name in ["memory.max", "memory.current", "memory.events"]}), flush=True)
+        source = '''import mmap,time
 time.sleep(0.5)
 r=mmap.mmap(-1,256*1024*1024,flags=mmap.MAP_PRIVATE|mmap.MAP_ANONYMOUS)
 for start in range(0,len(r),4*1024*1024):
