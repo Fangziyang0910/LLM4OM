@@ -10,6 +10,7 @@ import signal
 import sys
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from email.message import Message
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Protocol
@@ -36,9 +37,9 @@ class TextProvider(Protocol):
     max_retries: int
     timeout_s: float
 
-    def complete(self, messages: list[dict[str, str]], timeout: float) -> dict[str, Any]: ...
+    def complete(self, messages: list[dict[str, Any]], timeout: float) -> dict[str, Any]: ...
 
-    async def acomplete(self, messages: list[dict[str, str]], timeout: float) -> dict[str, Any]: ...
+    async def acomplete(self, messages: list[dict[str, Any]], timeout: float) -> dict[str, Any]: ...
 
 
 def credential_environment(path: Path | None, environment: Mapping[str, str] | None = None) -> dict[str, str]:
@@ -65,6 +66,13 @@ def credential_environment(path: Path | None, environment: Mapping[str, str] | N
     return values
 
 
+def _credential_value(config: dict[str, Any], environment: Mapping[str, str]) -> str:
+    credential = environment.get(config["credential_env"])
+    if not credential or any(ord(character) < 32 or ord(character) > 126 for character in credential):
+        raise RunError("auth_error", "admission", "Provider requires a valid credential environment variable.")
+    return credential
+
+
 class _NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
         return None
@@ -83,16 +91,30 @@ def _reply_usage(value: dict[str, Any]) -> dict[str, Any]:
             "reasoning_tokens": (usage.get("completion_tokens_details") or {}).get("reasoning_tokens")}
 
 
-class OpenAICompatibleProvider:
-    plugin_id = "llm4om.providers.openai_compatible"
+def _contains_credential(value: Any, credential: str) -> bool:
+    if isinstance(value, str):
+        return credential in value
+    if isinstance(value, dict):
+        return any(_contains_credential(key, credential) or _contains_credential(item, credential)
+                   for key, item in value.items())
+    if isinstance(value, list):
+        return any(_contains_credential(item, credential) for item in value)
+    return False
 
-    def __init__(self, config: dict[str, Any], model: str, credential: str) -> None:
+
+class HTTPTextProvider:
+    plugin_id: str
+    endpoint_path: str
+    request_id_header: str
+
+    def __init__(self, config: dict[str, Any], model: str, credential: str | Callable[[], str]) -> None:
         self.model = model
-        self.identity = config["base_url"].rstrip("/") + "/chat/completions"
+        self.identity = config["base_url"].rstrip("/") + self.endpoint_path
         self.max_output_tokens = config.get("max_output_tokens", 1024)
         self.max_retries = config.get("max_retries", 2)
         self.timeout_s = float(config.get("timeout_s", 30))
-        self._credential = credential
+        self._credential = credential if isinstance(credential, str) else ""
+        self._load_credential = credential if callable(credential) else None
 
     def gateway(self, public: dict[str, Any], problem_sha256: str, store: Any,
                 ledger: dict[str, Any], budget: Mapping[str, Any], config_dir: Path, *, deadline: float) -> "Gateway":
@@ -106,12 +128,14 @@ class OpenAICompatibleProvider:
         saved(hashlib.sha256((archive / "state.json").read_bytes()).hexdigest(), gateway.ledger)
         return gateway
 
-    def _transport_input(self, messages: list[dict[str, str]], timeout: float) -> bytes:
-        return json.dumps({"endpoint": self.identity, "model": self.model,
+    def _transport_input(self, messages: list[dict[str, Any]], timeout: float) -> bytes:
+        if self._load_credential is not None:
+            self._credential = self._load_credential()
+        return json.dumps({"provider": self.plugin_id, "endpoint": self.identity, "model": self.model,
                            "max_output_tokens": self.max_output_tokens, "credential": self._credential,
                            "messages": messages, "timeout": timeout}, allow_nan=False).encode()
 
-    def complete(self, messages: list[dict[str, str]], timeout: float) -> dict[str, Any]:
+    def complete(self, messages: list[dict[str, Any]], timeout: float) -> dict[str, Any]:
         if timeout <= 0:
             raise TimeoutError("Provider request deadline expired.")
         started = time.monotonic()
@@ -131,7 +155,7 @@ class OpenAICompatibleProvider:
                     process.communicate()
         return _transport_result(raw)
 
-    async def acomplete(self, messages: list[dict[str, str]], timeout: float) -> dict[str, Any]:
+    async def acomplete(self, messages: list[dict[str, Any]], timeout: float) -> dict[str, Any]:
         if timeout <= 0:
             raise TimeoutError("Provider request deadline expired.")
         started = time.monotonic()
@@ -155,41 +179,121 @@ class OpenAICompatibleProvider:
             finally:
                 await process.wait()
 
-    def _http_complete(self, messages: list[dict[str, str]], timeout: float) -> dict[str, Any]:
-        body = json.dumps({"model": self.model, "messages": messages,
-                           "max_tokens": self.max_output_tokens, "stream": False}, allow_nan=False).encode()
-        request = Request(self.identity, body, {"Content-Type": "application/json",
-                          "Authorization": "Bearer " + self._credential}, method="POST")
-        # Redirects could expose Authorization to a different origin; proxies are not part of this profile.
-        with build_opener(_NoRedirect(), ProxyHandler({})).open(request, timeout=timeout) as response:
-            provider_request_id = response.headers.get("x-request-id")
+    def _request(self, messages: list[dict[str, Any]]) -> Request:
+        raise NotImplementedError
+
+    @staticmethod
+    def decode_reply(value: dict[str, Any]) -> dict[str, Any]:
+        """Decode protocol evidence identically for HTTP and credential-free restoration."""
+        raise NotImplementedError
+
+    def _http_complete(self, messages: list[dict[str, Any]], timeout: float) -> dict[str, Any]:
+        # Redirects could expose credentials to another origin; no environment proxies.
+        with build_opener(_NoRedirect(), ProxyHandler({})).open(self._request(messages), timeout=timeout) as response:
+            provider_request_id = response.headers.get(self.request_id_header)
             raw = response.read(8 * 1024 * 1024 + 1)
         if len(raw) > 8 * 1024 * 1024:
             raise RunError("invalid_provider_response", "llm", "Provider response exceeds the supported size.")
         try:
-            if self._credential.encode() in raw:
-                raise ValueError("Response contains a credential.")
             value = parse_json(raw)
-            choices = value["choices"]
-            content = choices[0]["message"]["content"]
-            if not isinstance(content, str) or self._credential in content:
-                raise ValueError("Invalid content.")
-            fields = _reply_usage(value)
-            if any(token is not None and (type(token) is not int or token < 0) for token in fields.values()):
-                raise ValueError("Invalid usage.")
-            def safe(field: Any) -> str | None:
-                return field if isinstance(field, str) and self._credential not in field else None
-            return {"text": content, "response_id": safe(value.get("id")), "model": safe(value.get("model")),
-                    "provider_request_id": safe(provider_request_id),
-                    "finish_reason": safe(choices[0].get("finish_reason")), "usage": fields,
+            if (self._credential.encode() in raw or _contains_credential(value, self._credential)
+                    or self._credential in (provider_request_id or "")):
+                raise ValueError("Response contains a credential.")
+            return {**self.decode_reply(value), "provider_request_id": provider_request_id,
                     "response_sha256": hashlib.sha256(raw).hexdigest(), "raw_reply": raw.decode("utf-8")}
         except (RunError, ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
             raise RunError("invalid_provider_response", "llm", "Provider returned an invalid text response.") from error
 
 
-class OpenAICompatibleFactory:
+class OpenAICompatibleProvider(HTTPTextProvider):
+    plugin_id = "llm4om.providers.openai_compatible"
+    endpoint_path = "/chat/completions"
+    request_id_header = "x-request-id"
+
+    def _request(self, messages: list[dict[str, Any]]) -> Request:
+        body = json.dumps({"model": self.model, "messages": messages,
+                           "max_tokens": self.max_output_tokens, "stream": False}, allow_nan=False).encode()
+        return Request(self.identity, body, {"Content-Type": "application/json",
+                       "Authorization": "Bearer " + self._credential}, method="POST")
+
+    @staticmethod
+    def decode_reply(value: dict[str, Any]) -> dict[str, Any]:
+        choice = value["choices"][0]
+        content = choice["message"]["content"]
+        if not isinstance(content, str):
+            raise ValueError("Invalid text.")
+        fields = _reply_usage(value)
+        if any(token is not None and (type(token) is not int or token < 0) for token in fields.values()):
+            raise ValueError("Invalid usage.")
+        def optional(field: Any) -> str | None:
+            return field if isinstance(field, str) else None
+        return {"text": content, "response_id": optional(value.get("id")), "model": optional(value.get("model")),
+                "finish_reason": optional(choice.get("finish_reason")), "usage": fields}
+
+
+class AnthropicProvider(HTTPTextProvider):
+    plugin_id = "llm4om.providers.anthropic"
+    endpoint_path = "/messages"
+    request_id_header = "request-id"
+
+    def _request(self, messages: list[dict[str, Any]]) -> Request:
+        system = [block for message in messages if message["role"] == "system"
+                  for block in ([{"type": "text", "text": message["content"]}]
+                                if isinstance(message["content"], str) else message["content"])]
+        body = {"model": self.model, "max_tokens": self.max_output_tokens, "stream": False,
+                "messages": [message for message in messages if message["role"] != "system"]}
+        if system:
+            body["system"] = system
+        return Request(self.identity, json.dumps(body, allow_nan=False).encode(), {
+            "Content-Type": "application/json", "x-api-key": self._credential,
+            "anthropic-version": "2023-06-01"}, method="POST")
+
+    @staticmethod
+    def decode_reply(value: dict[str, Any]) -> dict[str, Any]:
+        if value["type"] != "message" or value["role"] != "assistant":
+            raise ValueError("Invalid Messages response.")
+        blocks = value["content"]
+        if not isinstance(blocks, list) or not blocks:
+            raise ValueError("Missing content blocks.")
+        text = []
+        for block in blocks:
+            kind = block["type"]
+            if kind == "text" and isinstance(block["text"], str):
+                text.append(block["text"])
+            elif kind == "thinking" and isinstance(block["thinking"], str):
+                continue
+            elif kind == "redacted_thinking" and isinstance(block["data"], str):
+                continue
+            else:
+                raise ValueError("Unsupported or invalid content block.")
+        stop = value.get("stop_reason")
+        if not text and stop != "max_tokens":
+            raise ValueError("Missing text response.")
+        usage = value.get("usage")
+        if usage is None:
+            usage = {}
+        if not isinstance(usage, dict):
+            raise ValueError("Invalid usage.")
+        counts = [usage.get(key) for key in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")]
+        if any(count is not None and (type(count) is not int or count < 0) for count in counts):
+            raise ValueError("Invalid usage count.")
+        def known_sum(values: list[Any]) -> int | None:
+            return sum(values) if all(value is not None for value in values) else None
+        for key in ("id", "model", "stop_reason"):
+            if value.get(key) is not None and not isinstance(value[key], str):
+                raise ValueError("Invalid response identity.")
+        return {"text": "".join(text), "response_id": value.get("id"), "model": value.get("model"),
+                "stop_reason": stop, "finish_reason": {"end_turn": "stop", "stop_sequence": "stop", "max_tokens": "length"}.get(stop, stop) if isinstance(stop, str) else None,
+                "usage": {"input_tokens": known_sum(counts[:3]), "output_tokens": counts[3],
+                          "cached_tokens": known_sum(counts[1:3]), "total_tokens": known_sum(counts),
+                          "reasoning_tokens": None}}
+
+
+class HTTPTextFactory:
+    provider_type: type[HTTPTextProvider]
+
     def describe(self) -> dict[str, Any]:
-        return {"plugin_id": "llm4om.providers.openai_compatible", "features": ["text"],
+        return {"plugin_id": self.provider_type.plugin_id, "features": ["text"],
                 "usage_semantics": "total includes cached input and reasoning output; missing fields are unknown",
                 "config_schema": {"type": "object", "properties": {
                     "base_url": {"type": "string", "minLength": 1},
@@ -199,8 +303,7 @@ class OpenAICompatibleFactory:
                     "timeout_s": {"type": "number", "exclusiveMinimum": 0}},
                     "required": ["base_url", "credential_env"], "additionalProperties": False}}
 
-    def create(self, config: dict[str, Any], model: str, *,
-               environment: Mapping[str, str] | None = None) -> OpenAICompatibleProvider:
+    def validate(self, config: dict[str, Any], model: str) -> None:
         try:
             jsonschema.Draft202012Validator(self.describe()["config_schema"]).validate(config)
             address = urlsplit(config["base_url"])
@@ -214,22 +317,72 @@ class OpenAICompatibleFactory:
                 raise ValueError("Model required.")
         except (jsonschema.ValidationError, ValueError) as error:
             raise RunError("invalid_config", "admission", "Invalid text Provider configuration.") from error
-        credential = (os.environ if environment is None else environment).get(config["credential_env"])
-        if not credential or any(ord(character) < 32 or ord(character) > 126 for character in credential):
-            raise RunError("auth_error", "admission", "Provider requires a valid credential environment variable.")
-        return OpenAICompatibleProvider(config, model, credential)
+
+    def create(self, config: dict[str, Any], model: str, *,
+               environment: Mapping[str, str] | None = None) -> HTTPTextProvider:
+        self.validate(config, model)
+        return self.provider_type(config, model, _credential_value(config, os.environ if environment is None else environment))
+
+    def restore(self, config: dict[str, Any], model: str, *,
+                environment: Callable[[], Mapping[str, str]]) -> HTTPTextProvider:
+        """Resolve credentials only if restored work actually needs another HTTP attempt."""
+        self.validate(config, model)
+        return self.provider_type(config, model, lambda: _credential_value(config, environment()))
+
+
+class OpenAICompatibleFactory(HTTPTextFactory):
+    provider_type = OpenAICompatibleProvider
+
+
+class AnthropicFactory(HTTPTextFactory):
+    provider_type = AnthropicProvider
+
+    def validate(self, config: dict[str, Any], model: str) -> None:
+        if set(config) & {"tools", "response_schema", "images", "stream"}:
+            raise RunError("capability_mismatch", "admission", "Messages Adapter supports non-streaming text only.")
+        super().validate(config, model)
+
+    def describe(self) -> dict[str, Any]:
+        return {**super().describe(), "usage_semantics":
+                "input = uncached + cache creation + cache read; cached is their cache subset; "
+                "total = input + output; missing components and reasoning are unknown"}
 
 
 def _resource_bytes(state: dict[str, Any]) -> bytes:
     return json.dumps(state, allow_nan=False).encode()
 
 
-def _resource_state(archive: Path, *, expected: str | None = None) -> dict[str, Any]:
+@contextmanager
+def _resource_lock(archive: Path) -> Iterator[None]:
+    descriptor = os.open(archive / "lock", os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(descriptor, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def _public_trace(attempts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    fields = ("attempt_id", "request_id", "request_sha256", "provider", "endpoint_sha256",
+              "requested_model", "role", "start", "end", "reservation", "estimated_input_tokens",
+              "diagnostic", "status", "response_id", "response_sha256", "model", "finish_reason",
+              "provider_request_id", "cost", "usage")
+    return [{**{field: item[field] for field in fields},
+             **({"stop_reason": item["stop_reason"]} if "stop_reason" in item else {})} for item in attempts]
+
+
+@dataclass(frozen=True)
+class RecoveredResources:
+    ledger: dict[str, Any]
+    trace: list[dict[str, Any]]
+
+
+def _resource_state(archive: Path, *, expected: str | None = None,
+                    allow_unpublished_genesis: bool = False) -> dict[str, Any]:
     """Verify the entire immutable chain, including the mutable head and core anchor."""
     # ponytail: full snapshots suit bounded runs; use incremental records for large search budgets.
     try:
-        current = read_public_bytes(archive / "state.json")
-        current_hash = hashlib.sha256(current).hexdigest()
+        head = archive / "state.json"
+        current = read_public_bytes(head) if head.exists() else None
+        current_hash = hashlib.sha256(current).hexdigest() if current is not None else None
         versions: dict[str, dict[str, Any]] = {}
         children: dict[str | None, str] = {}
         for path in (archive / "journal").glob("*.json"):
@@ -242,7 +395,9 @@ def _resource_state(archive: Path, *, expected: str | None = None) -> dict[str, 
                 raise ValueError("Invalid resource chain.")
             versions[digest] = state
             children[previous] = digest
-        if current_hash not in versions or (expected is not None and expected not in versions):
+        if ((current_hash is not None and current_hash not in versions)
+                or (expected is not None and expected not in versions)
+                or (current_hash is None and not allow_unpublished_genesis)):
             raise ValueError("Missing resource anchor or invalid mutable bytes.")
         previous_state = None
         seen = set()
@@ -267,7 +422,7 @@ def _resource_state(archive: Path, *, expected: str | None = None) -> dict[str, 
                         continue
                     changed += 1
                     mutable = {"end", "diagnostic", "status", "response_id", "response_sha256", "model",
-                               "finish_reason", "provider_request_id", "usage", "reservation", "reply", "raw_reply"}
+                               "finish_reason", "stop_reason", "provider_request_id", "usage", "reservation", "reply", "raw_reply"}
                     if (before["status"] != "unknown" or before["end"] is not None
                             or any(after.get(key) != value for key, value in before.items() if key not in mutable)
                             or (after["status"] != "success" and after["reservation"] != before["reservation"])):
@@ -292,10 +447,12 @@ def _resource_state(archive: Path, *, expected: str | None = None) -> dict[str, 
                     raise ValueError("Invalid immutable request identity.")
                 if item["status"] == "success":
                     raw = item["raw_reply"].encode()
-                    reply = parse_json(raw)
+                    factory = provider_factory(identity["plugin_id"])
+                    if not isinstance(factory, HTTPTextFactory):
+                        raise ValueError("Resource Provider has no response decoder.")
+                    decoded = factory.provider_type.decode_reply(parse_json(raw))
                     if (hashlib.sha256(raw).hexdigest() != item["response_sha256"]
-                            or reply["choices"][0]["message"]["content"] != item["reply"]
-                            or _reply_usage(reply) != item["usage"]
+                            or any(item.get("reply" if key == "text" else key) != value for key, value in decoded.items())
                             or (item["usage"]["total_tokens"] is not None and item["reservation"] != 0)):
                         raise ValueError("Invalid response bytes or settlement.")
                 if (item["usage"]["total_tokens"] is None
@@ -308,6 +465,8 @@ def _resource_state(archive: Path, *, expected: str | None = None) -> dict[str, 
             if following is None:
                 if len(seen) != len(versions):
                     raise ValueError("Disconnected resource chain.")
+                if current_hash is None and (len(versions) != 1 or attempts or expected is not None):
+                    raise ValueError("Only an unpublished empty genesis can lack its head.")
                 return state
             cursor = following
         raise ValueError("Missing resource genesis.")
@@ -337,9 +496,12 @@ class Gateway:
         self.calls: list[LLMResponse] = []
         archive.mkdir(parents=True, exist_ok=True, mode=0o700)
         archive.chmod(0o700)
-        with self._locked():
+        with _resource_lock(self.archive):
             if not (archive / "state.json").exists():
-                self._save({"budget": self.budget, "deadline": deadline if deadline is not None else time.time() + budget["wall_time_s"], "attempts": [], "inherited_ledger": self.inherited_ledger, "archive_id": archive.name,
+                if any((archive / "journal").glob("*.json")):
+                    _atomic(archive / "state.json", _resource_bytes(_resource_state(archive, allow_unpublished_genesis=True)))
+                else:
+                    self._save({"budget": self.budget, "deadline": deadline if deadline is not None else time.time() + budget["wall_time_s"], "attempts": [], "inherited_ledger": self.inherited_ledger, "archive_id": archive.name,
                             "provider_identity": {"plugin_id": provider.plugin_id, "model": provider.model,
                                 "endpoint_sha256": hashlib.sha256(provider.identity.encode()).hexdigest(),
                                 "max_output_tokens": provider.max_output_tokens}})
@@ -351,12 +513,20 @@ class Gateway:
                 raise RunError("checkpoint_incompatible", "admission", "Gateway identity or budget differs from its saved resource state.")
             _atomic(archive / "state.json", _resource_bytes(state))
 
-    @contextmanager
-    def _locked(self) -> Iterator[None]:
-        descriptor = os.open(self.archive / "lock", os.O_CREAT | os.O_RDWR, 0o600)
-        with os.fdopen(descriptor, "a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            yield
+    @classmethod
+    def recover(cls, archive: Path, *, expected_sha256: str, budget: Mapping[str, Any],
+                deadline: float, inherited_ledger: Mapping[str, Any]) -> RecoveredResources:
+        """Verify durable usage without credentials; return only public resource evidence."""
+        try:
+            with _resource_lock(archive):
+                state = _resource_state(archive, expected=expected_sha256)
+                if (state["budget"] != dict(budget) or state["deadline"] != deadline
+                        or state["inherited_ledger"] != dict(inherited_ledger)):
+                    raise RunError("checkpoint_incompatible", "admission", "Resource budget or deadline changed.")
+                return RecoveredResources(cls._ledger(state["attempts"], state["inherited_ledger"]),
+                                          _public_trace(state["attempts"]))
+        except (OSError, KeyError, TypeError) as error:
+            raise RunError("checkpoint_incompatible", "admission", "Cannot recover saved resource evidence.") from error
 
     def _load(self) -> dict[str, Any]:
         return _resource_state(self.archive)
@@ -381,12 +551,12 @@ class Gateway:
 
     @property
     def trace(self) -> list[dict[str, Any]]:
-        with self._locked():
-            return [{key: value for key, value in item.items() if key not in {"reply", "raw_reply"}} for item in self._load()["attempts"]]
+        with _resource_lock(self.archive):
+            return _public_trace(self._load()["attempts"])
 
     @property
     def ledger(self) -> dict[str, Any]:
-        with self._locked():
+        with _resource_lock(self.archive):
             attempts = self._load()["attempts"]
         return self._ledger(attempts, self.inherited_ledger)
 
@@ -406,10 +576,17 @@ class Gateway:
         self.cancellation.check()
         if set(request) - {"messages", "request_id", "role"}:
             raise RunError("capability_mismatch", "admission", "Provider supports non-streaming text messages only.")
+        for message in request.get("messages", []) if isinstance(request.get("messages"), list) else []:
+            if isinstance(message, dict) and isinstance(message.get("content"), list):
+                if any(isinstance(block, dict) and block.get("type") != "text" for block in message["content"]):
+                    raise RunError("capability_mismatch", "admission", "Provider supports text blocks only.")
         try:
             jsonschema.Draft202012Validator({"type": "object", "properties": {
                 "messages": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {
-                    "role": {"enum": ["system", "user", "assistant"]}, "content": {"type": "string"}},
+                    "role": {"enum": ["system", "user", "assistant"]}, "content": {"oneOf": [
+                        {"type": "string"}, {"type": "array", "minItems": 1, "items": {
+                            "type": "object", "properties": {"type": {"const": "text"}, "text": {"type": "string"}},
+                            "required": ["type", "text"], "additionalProperties": False}}]}},
                     "required": ["role", "content"], "additionalProperties": False}},
                 "request_id": {"type": "string", "minLength": 1}, "role": {"type": "string", "minLength": 1}},
                 "required": ["messages"], "additionalProperties": False}).validate(request)
@@ -420,7 +597,7 @@ class Gateway:
             raise RunError("invalid_llm_request", "admission", "Requests require role/text messages.") from error
         request_hash = hashlib.sha256(raw).hexdigest()
         request_id = request.get("request_id", uuid4().hex)
-        with self._locked():
+        with _resource_lock(self.archive):
             state = self._load()
             for item in state["attempts"]:
                 if item["request_id"] == request_id:
@@ -449,7 +626,7 @@ class Gateway:
 
     async def _attempts(self, request: dict[str, Any], request_id: str, request_hash: str, estimate: int) -> LLMResponse:
         for retry in range(self.provider.max_retries + 1):
-            with self._locked():
+            with _resource_lock(self.archive):
                 state = self._load()
                 for previous in state["attempts"]:
                     if (previous["request_id"] == request_id and previous["request_sha256"] == request_hash
@@ -494,7 +671,7 @@ class Gateway:
             except RunError as error:
                 code = error.code
                 retryable = code in {"rate_limit", "provider_error", "provider_connection_error"}
-            with self._locked():
+            with _resource_lock(self.archive):
                 state = self._load()
                 item = next(item for item in state["attempts"] if item["attempt_id"] == attempt_id)
                 item.update(end=time.time(), diagnostic=code, status="success" if reply is not None else "unknown")
@@ -556,9 +733,10 @@ class MockFactory:
         return MockProvider(config)
 
 
-def provider_factory(plugin_id: str) -> OpenAICompatibleFactory | MockFactory:
-    factories: dict[str, OpenAICompatibleFactory | MockFactory] = {
-        "llm4om.providers.mock": MockFactory(), "llm4om.providers.openai_compatible": OpenAICompatibleFactory()}
+def provider_factory(plugin_id: str) -> HTTPTextFactory | MockFactory:
+    factories: dict[str, HTTPTextFactory | MockFactory] = {
+        "llm4om.providers.mock": MockFactory(), "llm4om.providers.openai_compatible": OpenAICompatibleFactory(),
+        "llm4om.providers.anthropic": AnthropicFactory()}
     factory = factories.get(plugin_id)
     if factory is None:
         raise RunError("unknown_plugin", "admission", "Requested Provider is not installed.")
@@ -582,9 +760,12 @@ def _transport_result(raw: bytes) -> dict[str, Any]:
 
 def _transport_main() -> None:
     value = json.loads(sys.stdin.buffer.read())
-    provider = OpenAICompatibleProvider({"base_url": value["endpoint"].removesuffix("/chat/completions"),
-                                        "max_output_tokens": value["max_output_tokens"]},
-                                       value["model"], value["credential"])
+    factory = provider_factory(value["provider"])
+    if not isinstance(factory, HTTPTextFactory):
+        raise ValueError("Provider has no HTTP transport.")
+    provider = factory.provider_type({"base_url": value["endpoint"].removesuffix(factory.provider_type.endpoint_path),
+                                      "max_output_tokens": value["max_output_tokens"]},
+                                     value["model"], value["credential"])
     try:
         result: dict[str, Any] = {"reply": provider._http_complete(value["messages"], value["timeout"])}
     except HTTPError as error:

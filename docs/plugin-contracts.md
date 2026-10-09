@@ -560,13 +560,15 @@ Direct 声明 supports_checkpoint=true，仅保存 0.1.0 的 request_id；稳定
 未声明时 admission 的 method_cancellation=unknown，不能据资源可取消就宣称插件内部有界。
 独立 fixture 仍 supports_checkpoint=false，声明 cooperative，拒绝非空内部 checkpoint。
 
-未完成方法且没有内部 checkpoint 时，continue 返回 checkpoint_unsupported。显式 rerun 可执行此方法。
+核心在调用方法前提交 method_started 标记。已开始的方法没有内部 checkpoint 时，continue 返回 checkpoint_unsupported；
+尚未调用方法的 admitted 阶段可以从头进入方法。显式 rerun 可重新执行不支持内部恢复的方法。
 派生运行的 RunBundle.lineage_ref 指向 immutable lineage.json，记录 operation=derived_rerun、parent_run_id、
 input_hashes、父 checkpoint 引用、父公开历史副本、parent_budget_ledger、parent_resource_records 和 reused_records。
 语义重跑不复用父模型回复／Solve，reused_records 为空；已有证据副本不冒充新方法输出。
 新 run 使用新的 deadline，但父 paid／unknown 尝试、已知 token、未知 reservation 和 Solver 次数仍计入原配置上限。
 不足时派生 run 明确 budget_exhausted，不能通过重复派生忘记费用或未知预留。rerun 可产生新的付费请求，须由用户显式选择。
 完整 Formulation／Code 阶段直接继续；匹配的 execute_done 复用保存的真实 Execution／SolveResult。
+Execution／SolveResult 引用和 execute_done 在 solver_finished 事件之前一起提交；发布完成事件后的崩溃不再重复求解。
 匹配由已验证的公开 bytes、数据绑定、固定配置／Manifest／包及 Worker 身份共同确定。
 completed／artifact_ready 恢复幂等；其他过期恢复返回 deadline_exhausted。
 solver_calls 在尝试前持久化，取消不退还已开始的 slot；下一尝试需要原预算中剩余 slot。
@@ -579,7 +581,49 @@ Gateway admission／settlement 先写 journal/hash.json 不可变版本（0.1.0�
 archive／journal 目录为 0700，私有文件为 0600，不保存 API credential；只公开脱敏 trace 与累计资源账本。
 成功回复复用既有 attempt_id；未知结果保留预留并返回 provider_outcome_unknown，不重新提交相同 request_id。
 私有 raw reply 不进入公开 checkpoint。Mock 的同请求工程回复可持久化复用，仍 external_llm_requests=0。
+首次 journal 已提交而 state.json 尚不存在时，只恢复经过验证、没有请求的单个 genesis 版本；已提交资源的 head 缺失仍拒绝。
+Gateway.recover(archive, expected_sha256, budget, deadline, inherited_ledger) 在资源锁内校验日志与预算，
+返回 RecoveredResources(ledger, trace)，不要求 API key。公开 trace 使用明确字段列表，应用层不读取私有响应／日志字段。
+HTTP 响应的解码 JSON 键和所有字符串值也检查凭据回显，包括转义后的内容；检测到回显先于归档失败。
 容器和 HTTP 子进程使用已有有界清理；trusted_local 的严格 IR／运行时检查也在拥有的子进程执行。
 生成的工厂或 native 源码始终只在隔离 Worker 内执行。
 
 S04-B RunBundle 兼容增加 public_problem_ref 和 public_projections（固定路径 → 不可变 ArtifactRef，排除 bundle 自引用）。评估器同时校验版本引用与当前公开视图，接受 cancelled 并保留评测分母；旧 bundle 的固定路径仍可读取。TaskAdapter 的 write-once snapshot 保持原 public/ 与 private/ 布局，资源控制／history 只属于运行。
+
+## 13. S05-B Messages Adapter (SDK 0.8.0)
+
+`llm4om.providers.anthropic` 是独立的非流式文本 Messages Adapter，与 OpenAI-compatible 共用
+HTTP 子进程和 Gateway。`provider_factory(id)` 返回声明 `provider_type` 的 HTTPTextFactory；
+该 Adapter 的 `decode_reply(value)` 同时用于实际响应与 journal 校验。核心恢复不按 Provider ID
+切换解码规则，也不读取凭据来校验已保存的响应。原 OpenAI 解码和 journal 布局保持兼容；
+完整 run 仍要求原 SDK 版本、源码 hash、Python／依赖及 Worker 身份一致，不自动迁移旧运行。
+
+配置字段与 OpenAI 文本路径相同：base_url、credential_env、max_output_tokens、max_retries、timeout_s。
+Messages 发送 POST `base_url/messages`，带 `anthropic-version: 2023-06-01` 和 `x-api-key`。
+system 消息按出现顺序移到顶层 system 文本块；user／assistant 的顺序与文本块边界保留。
+共同 Gateway 的 messages.content 接受字符串或非空 `{type: text, text: string}` 数组。
+不支持工具、response_schema、图片或流式请求；Messages 的 doctor 配置和 Gateway 请求均以
+capability_mismatch 提前拒绝这些能力。其他未知配置仍为 invalid_config，不做自动 fallback。
+
+响应必须是 assistant message，包含合法 content 数组。text 块按顺序拼接；thinking 和
+redacted_thinking 仅保留在私有原始响应，不冒充公开文本或 reasoning token 测量。
+未知／畸形块、缺失 content 和非法 usage 以 invalid_provider_response 失败，不重试。
+仅有 thinking 的 max_tokens 响应可保存为空文本，并让 Direct 返回 llm_output_truncated。
+stop_reason 原样记录；end_turn／stop_sequence 映射 finish_reason=stop，max_tokens 映射 length，
+其余字符串原样保留，缺失为 null。实际 message id、model 和 request-id header 可未知；不补写请求模型。
+原始响应 SHA-256 按 HTTP body bytes 计算。响应 body、解码后的键／值和 request-id 中含凭据则失败，
+不写入响应 archive 或公开 trace。错误 body 不存储、不回显。
+
+Messages usage 归一化为：input_tokens = input_tokens + cache_creation_input_tokens + cache_read_input_tokens；
+cached_tokens = cache_creation_input_tokens + cache_read_input_tokens，是输入子集；
+output_tokens 使用实际 output_tokens；total_tokens = 归一化 input_tokens + output_tokens。
+任一加数缺失／null，则对应和为 null；0 是真实已知值。非法类型、负值、非有限值拒绝。
+reasoning_tokens 与无定价来源的 cost 恒为 null；不能由 thinking 文本或模型名字推测。
+原始各分量留在私有响应，可由响应 hash 核对。
+
+Gateway 保留既有 attempt／并发／token 预留／绝对 deadline／取消所有权。429、5xx（包括529）和
+连接错误按 max_retries 有界退避；400 等请求错误、401／403（共同 auth_error）、超时和非法响应不重试。
+成功缺少 total 仍保留预留，失败／取消保留未知结果。已持久化成功在 core 回调之前或 mutable head
+之前崩溃，仍经不可变链校验后复用；未知 request_id 不重发；真实损坏拒绝。
+已完成身份校验不构造凭据 Provider；未完成恢复通过 factory.restore 延迟凭据解析，仅真正新增
+HTTP attempt 时读取。成功回复回放不要求 API key。显式 rerun 的既有累计资源语义不变。

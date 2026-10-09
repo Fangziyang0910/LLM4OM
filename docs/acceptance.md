@@ -100,3 +100,9 @@ S07-A 本地导入与单样本证据见 [实现记录](development/s07-nl4opt.md
 域和表达式、输出／时间限制，以及打印和修改 Solver 的攻击。公开 CLI/SDK 使用同一入口；
 旧 grounded profile 与独立安装 fixture 保持有效。真实外部模型工厂与独立 Standards／Spec 审阅
 由父任务另行验收；这些本地记录不标记完整 1.0 或一般语义正确性通过。
+
+## S05-B 本地工程范围
+
+[Messages 实现](development/s05b-messages.md)覆盖 AC-07/08/18 的协议、usage、资源控制与恢复工程验证，
+保留 AC-12 的实际方法来源要求。合成 HTTP／真实本机 Solver 不等同真实模型生成。
+真实指定服务／模型端到端结果及独立审查仍由 parent 补齐，不勾选完整1.0发布验收。

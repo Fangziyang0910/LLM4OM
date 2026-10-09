@@ -69,11 +69,11 @@
 | 切片 | What to build／可演示结果 | Blocked by | 公共测试入口与验收 |
 |---|---|---|---|
 | S05-A | direct 经 openai_compatible 真实生成并求解，记录 retry、usage、预算与脱敏 trace | S03-B、S04-A | CLI＋Provider：成功、超时、未知 usage、恢复结算、隐藏材料未入提示。AC-06/07/08/09 |
-| S05-B | 同一个 run 改用 anthropic 协议，保留相同调用及错误语义 | S05-A | CLI＋Provider：真实成功、能力不支持、usage 和错误映射。AC-06/12 |
+| S05-B | 独立 Messages Adapter，经相同 CLI/SDK 与 Gateway 生成并求解，保留协议、usage 与恢复证据 | S05-A、S04-B | CLI/SDK＋HTTP/OS：真实成功、能力拒绝、usage、错误、取消与 journal 恢复。AC-07/08/12 |
 | S05-C | 公共阶段反馈支持 Formulation／Code 定位、有界修正和选择；feedback_repair 可选对照 | S05-A、S04-B | 应用入口：max_repairs=0、预算停止、约束变化记录、选择理由。AC-06/07/09/12 |
 | S05-D | 交互运行提出澄清、恢复或形成派生 run，并支持角色模型配置 | S05-C | 应用入口：批量 unresolved；新业务规则不改写原输入。AC-06/08/23 |
 
-状态：S05-A 当前文本范围已实现，见 [实际支持与真实证据](development/s05-provider.md)和 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)；其他 S05 切片待实现。
+状态：S05-A 当前文本范围已实现，见 [实际支持与真实证据](development/s05-provider.md)和 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)；S05-B 本地工程实现见 [Messages](development/s05b-messages.md)，真实指定模型验收与独立审查待完成；S05-C/D 待实现。
 
 覆盖 FR-14～19；DD-02/07。S05-B 使用 S05-A 已验证的共享 Gateway；这不是模型质量的依赖。
 

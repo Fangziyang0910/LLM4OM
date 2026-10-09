@@ -60,7 +60,7 @@
 | `docs/spec-validation.md` | 校验证据与适用范围 | 当前可复算命令；不将维护工具当作平台验收 |
 | `examples/README.md` | fixture 用法与独立数学依据 | 方法输入权限、工程 Mock、绑定反例与维护命令 |
 | `examples/plugins/fixture_method/README.md` | 独立方法安装与运行说明 | 实际命令、目标偏移用途和公开接口 |
-| `examples/plugins/fixture_method/pyproject.toml` | 独立方法包与 entry point | SDK >=0.7.0,<0.8.0 依赖、自己的版本／构建和发现入口 |
+| `examples/plugins/fixture_method/pyproject.toml` | 独立方法包与 entry point | SDK >=0.7.0,<0.9.0 依赖、自己的版本／构建和发现入口 |
 | `examples/plugins/fixture_method/src/llm4om_fixture_method/__init__.py` | 第二个实际 Method Adapter | 独立配置、async run、目标常数变体、cooperative 取消与内部 checkpoint 拒绝 |
 | `examples/plugins/fixture_method/src/llm4om_fixture_method/manifest.json` | 独立方法 Manifest | 当前能力、配置 schema、工程来源和变体 |
 | `examples/specs/data/capacities.csv` | 原始容量数据 | 固定字节、表头和 hash；独立整数／LP 核验 |
@@ -156,4 +156,8 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `docs/development/s06c-coe-source.md` | 固定 CoE 角色路由、协作／反思、函数输出与输入分类研究 | 30 份源文件 hash、真实选择／反馈语义、无许可材料的观察与原生接口需求；未集成 |
 | `tests/test_resume_crash.py` | S04-B 真实硬崩溃与派生恢复 | 公共 CLI／SDK、OS 原子存储边界、HTTP 次数、累计资源与完整性 |
 | `tests/test_async_control.py` | 公共 Method 任务监督行为 | 取消等待清理、SystemExit 诊断与 Python 3.11 兼容 |
-| `docs/development/s05b-anthropic-research.md` | Anthropic Messages 官方协议与已配置服务的真实小探针 | 同一指定模型、Messages HTTP200、真实 usage／未知成本、私有原始回复；Adapter 尚未实现 |
+| `docs/development/s05b-anthropic-research.md` | Anthropic Messages 官方协议与已配置服务的真实小探针 | 同一指定模型、Messages HTTP200、真实 usage／未知成本、私有原始回复；仅探针证据，实现另见 S05-B |
+
+| `tests/test_anthropic.py` | S05-B 独立 Messages 协议与应用行为 | 真实 loopback HTTP、CLI/SDK、OS 硬退出、未知用量／预算、凭据回显与损坏拒绝 |
+| `examples/specs/messages.yaml` | Messages 文本配置模板 | 指定模型、占位 HTTPS 端点、共同预算与 container 路径；doctor 不付费 |
+| `docs/development/s05b-messages.md` | S05-B 实现与实际支持 | 本地 red/green、SDK/Worker 版本与真实验收／独立审查的待办边界 |

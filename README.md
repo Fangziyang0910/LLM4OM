@@ -12,11 +12,15 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 ## 当前状态
 
-已交付 **S01 离线回放、S02-A 真实 HiGHS、S02-B 参数化 Pyomo 工厂、S03 方法发现与预检、S04-A 容器执行、S04-B 取消／恢复、S05-A 真实文本 LLM、S07-A 原始 NL4Opt 导入／单样本评测、S06-A 微型真实 Gurobi／native gurobipy（Python 包 0.7.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web 与论文方法仍按开发计划接入。
+已交付 **S01 离线回放、S02-A 真实 HiGHS、S02-B 参数化 Pyomo 工厂、S03 方法发现与预检、S04-A 容器执行、S04-B 取消／恢复、S05-A 真实文本 LLM、S07-A 原始 NL4Opt 导入／单样本评测、S06-A 微型真实 Gurobi／native gurobipy（Python 包 0.8.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web 与论文方法仍按开发计划接入。
 
 仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
 
-S05-A 提供 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（最初交付包 0.4.0，当前 SDK 为 0.7.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
+S05-A 提供 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（最初交付包 0.4.0，当前 SDK 为 0.8.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
+
+S05-B 新增独立 Messages Adapter（SDK／Worker 0.8.0）。本地工程实现与支持范围见
+[实现记录](docs/development/s05b-messages.md)和[配置示例](examples/specs/messages.yaml)；
+真实指定模型的端到端验收与独立审查仍待完成，既有小探针不替代平台验收。
 
 GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache-2.0。私有可见性与开源许可证分别管理。
 
@@ -134,7 +138,7 @@ S02-B 在 SDK／Worker 0.5.0 新增 Direct `output_mode: python_factory` 与版�
 
 ## Gurobi 与原生 Code（S06-A）
 
-SDK／默认 Worker 0.7.0（未发布）支持 LPIR→Pyomo→Gurobi、参数化 Pyomo→Gurobi 和
+SDK／默认 Worker 0.8.0（未发布）支持 LPIR→Pyomo→Gurobi、参数化 Pyomo→Gurobi 和
 native gurobipy→Gurobi。真实 SDK 13.0.3 与无许可证挂载的 Linux Docker 已验证微型 LP/MILP；
 当前实际 availability 为 size_limited，不代表完整学术／商业许可证或 1.0 完成。
 

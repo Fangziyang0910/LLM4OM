@@ -95,3 +95,7 @@ Spec：2 项实现问题，1 项交付证据缺口，无范围蔓延。Worker de
 首轮 7fd1141 的 push／PR CI 在 Python 3.12 同样失败：150 ms 滴流测试窗口内 transport 尚未发出 HTTP，deadline 已使它退出，断言却要求服务器收到请求。预算执行没有越界。fixture 现给冷启动 1 秒，并将 drip body 延长到超过该窗口；继续验证真实请求、有限结束和未知预留，两版本 Provider 回归后重跑 CI。
 
 后续验收按用户要求以本机必要检查和真实运行为主。GitHub Actions 仅手动触发；远程 OOM 证据差异未定因，不反复以云端矩阵推进开发。临时诊断输出已清理，实际未知原因仍保留 failed。
+
+S05-B 在 SDK0.8.0 增加独立 Messages 协议，复用本页 Gateway 资源语义；OpenAI 行为保留。
+两协议均在恢复时使用注册 Adapter 的响应解码器，无凭据回放、转义后的凭据回显拒绝和
+新增文本块请求的契约见 [S05-B](s05b-messages.md)。

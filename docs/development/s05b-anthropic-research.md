@@ -1,6 +1,6 @@
 # S05-B Anthropic Messages protocol investigation
 
-Date: 2026-10-09. Status: protocol research and one real compatibility probe; **Provider adapter not implemented**. Scope follows [S05-B](../implementation-plan.md#s05-真实-llm-与反馈修正), [LLM contracts](../plugin-contracts.md), and [S05-A](s05-provider.md). These observations prepare the second protocol Adapter; they are not platform integration acceptance.
+Date: 2026-10-09. Status: protocol research and one real compatibility probe; **probe is not platform acceptance**; the subsequent local Adapter implementation is recorded in [S05-B](s05b-messages.md). Scope follows [S05-B](../implementation-plan.md#s05-真实-llm-与反馈修正), [LLM contracts](../plugin-contracts.md), and [S05-A](s05-provider.md). These observations prepare the second protocol Adapter; they are not platform integration acceptance.
 
 ## Protocol and accounting
 

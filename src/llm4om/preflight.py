@@ -7,7 +7,7 @@ import sys
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 from pathlib import Path
-from llm4om.providers import credential_environment, provider_factory, MockProvider, OpenAICompatibleProvider, OpenAICompatibleFactory
+from llm4om.providers import credential_environment, provider_factory, MockProvider, HTTPTextProvider, HTTPTextFactory
 
 import jsonschema
 
@@ -22,7 +22,7 @@ from llm4om.plugins import MethodPlugin, discover_methods
 class AdmissionPlan:
     method: MethodPlugin
     snapshot: dict[str, Any]
-    provider: MockProvider | OpenAICompatibleProvider | None
+    provider: MockProvider | HTTPTextProvider | None
     deadline: float
 
 
@@ -39,15 +39,20 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     factory = provider_factory(settings["llm"]["provider_plugin_id"])
     if offline and settings["llm"]["provider_plugin_id"] != "llm4om.providers.mock":
         raise RunError("capability_mismatch", "admission", "Offline replay requires an explicitly configured Mock Provider.")
-    provider = None
+    provider: MockProvider | HTTPTextProvider | None = None
     if not identity_only:
-        credential_path = (config_dir or Path.cwd()) / ".env"
-        if not credential_path.exists():
-            credential_path = Path.cwd() / ".env"
-        environment = (dict(os.environ) if isinstance(factory, OpenAICompatibleFactory)
-                       and os.environ.get(settings["llm"]["config"].get("credential_env", ""))
-                       else credential_environment(credential_path) if isinstance(factory, OpenAICompatibleFactory) else None)
-        provider = factory.create(settings["llm"]["config"], settings["llm"]["model"], environment=environment)
+        def environment() -> dict[str, str]:
+            if os.environ.get(settings["llm"]["config"].get("credential_env", "")):
+                return dict(os.environ)
+            credential_path = (config_dir or Path.cwd()) / ".env"
+            if not credential_path.exists():
+                credential_path = Path.cwd() / ".env"
+            return credential_environment(credential_path)
+        if isinstance(factory, HTTPTextFactory):
+            provider = (factory.restore(settings["llm"]["config"], settings["llm"]["model"], environment=environment)
+                        if expected is not None else factory.create(settings["llm"]["config"], settings["llm"]["model"], environment=environment()))
+        else:
+            provider = factory.create(settings["llm"]["config"], settings["llm"]["model"])
     inventory = discover_methods()
     method = inventory.get(("method", settings["method"]["plugin_id"]))
     if method is None:
