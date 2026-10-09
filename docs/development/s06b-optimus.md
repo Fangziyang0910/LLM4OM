@@ -1,7 +1,7 @@
 # S06-B OptiMUS fixed source workflow
 
-Status: local implementation in SDK/Worker 0.9.0, unpublished; final integration
-acceptance is pending. Scope: [Issue17](https://github.com/Fangziyang0910/LLM4OM/issues/17),
+Status: implementation and actual local acceptance in SDK/Worker 0.9.0,
+unpublished; independent review is pending. Delivery: [draft PR23](https://github.com/Fangziyang0910/LLM4OM/pull/23). Scope: [Issue17](https://github.com/Fangziyang0910/LLM4OM/issues/17),
 FR-14/22–26, DD-03/05, AC-12/13/25. The [source investigation](s06b-optimus-source.md)
 records the upstream behavior; [contracts](../plugin-contracts.md#14-s06-b-native-script-resources-sdk-090)
 define the implemented interface. This record distinguishes local workflow
@@ -85,7 +85,9 @@ builds passed; a clean Python3.11.13 wheel installation passed nine source-tape
 cases and an actual SDK/container Gurobi run (objective12), including final
 execution reuse. Strict mypy passed26 modules; repository checks passed155
 files, including thirteen maintenance CLI tests and fixed-source mutation
-rejection. One complete local integration regression is running.
+rejection. One complete local Python3.12.11 integration regression passed263 tests in
+571.935s. It covers existing paths plus the new resources, source workflow and
+actual Docker/HiGHS/Gurobi behavior; no duplicate full matrix was run.
 
 ## Real configured model acceptance (2026-10-10)
 
@@ -119,5 +121,7 @@ left the ledger unchanged.
 Independent Standards/Spec review cannot currently run: the local Codex
 review/author CLI reached its account usage limit. Parent self-review is not
 labeled independent review. No remote CI or public package release is part
-of this evidence. Full integration acceptance remains pending that review
-and the running local regression.
+of this evidence. Final independent integration acceptance remains pending
+that review. Parent Standards/Spec self-review found no remaining actionable
+P1/P2 in its reading; reports are separately retained as
+`/tmp/llm4om-s06b/parent-review-standards.md` and `parent-review-spec.md`.
