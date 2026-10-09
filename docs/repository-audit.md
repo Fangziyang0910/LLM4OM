@@ -101,7 +101,7 @@
 | `tests/test_linear_solver.py` | 编译／Solver 公共行为测试 | 独立微型 LP/MILP，真实常数、域、状态和数值拒绝 |
 | `tests/test_plugins.py` | S03 公共 CLI／SDK 行为测试 | 真实独立包构建／安装、预检、预算、坏输出、来源与异常 |
 | `tests/test_provider.py` | S05-A 公共 Provider／Gateway 测试 | 外部本地 HTTP fixture 与凭据、预算、deadline、usage、重试、共享恢复和隐私 |
-| `tests/test_provider_pipeline.py` | S05-A 公共 CLI 测试 | 未付费 doctor admission、LP13／无数据 LP 的 HTTP fixture 到真实 HiGHS |
+| `tests/test_provider_pipeline.py` | S05-A 公共 CLI 测试 | 未付费 doctor admission、MILP=13／无数据 LP 的 HTTP fixture 到真实 HiGHS、截断与嵌套配置凭据 |
 | `tests/test_repository_checks.py` | 维护工具公共入口测试 | 临时副本；坏链接、hash、配置、绑定、重复键、引用漂移、五元素与阶段引用 |
 | `tests/test_solve_run.py` | S02-A 公共 CLI 行为测试 | 真实 MILP／LP、缺依赖、预算、失败阶段与证据引用 |
 | `uv.lock` | 完整依赖解析 | 由 uv 生成；PyPI 来源、版本和校验值；locked 安装 |

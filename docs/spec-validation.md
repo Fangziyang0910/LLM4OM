@@ -1,6 +1,6 @@
 # 调研、需求与设计校验记录
 
-日期：2026-10-09；设计基线：0.4.0。本记录验证科研设计、维护工具与 S01／S02-A／S03／S04-A 实现；完整平台验收由 [AC 清单](acceptance.md)维护。实际范围见 [S01](development/s01-offline-run.md)／[S02-A](development/s02-highs.md)／[S03](development/s03-plugins.md)／[S04-A](development/s04-container.md)。
+日期：2026-10-09；设计基线：0.4.0。本记录验证科研设计、维护工具与 S01／S02-A／S03／S04-A／S05-A 实现；完整平台验收由 [AC 清单](acceptance.md)维护。实际范围见 [S01](development/s01-offline-run.md)／[S02-A](development/s02-highs.md)／[S03](development/s03-plugins.md)／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md)。
 
 ## 1. 可复算的当前命令
 
@@ -186,3 +186,14 @@ b32682f 的 PR CI success，push CI 再现该失败，新增诊断显示 exit=13
 1413b35 的 PR CI success，但 push CI 再次得到 137／false，表明等待标记不足以覆盖该环境。新增 Docker 事件查询，以本次时段和容器 ID 核对 oom 事件，来源单独保存；只依赖实际 daemon 证据，不依据退出码或脚本 stdout 推断 OOM。真实本机 OOM 在容器删除后仍查到匹配事件；外部 CLI 负例覆盖缺失 inspect 标记以及其他容器的 OOM 不能解释本任务。Docker [事件说明](https://docs.docker.com/reference/cli/docker/system/events/)明确其历史只保留最近 256 条，因此没有事件仍保留失败／未知原因。
 
 事件收集修复后，两版本各完整 109 项测试通过，strict mypy、仓库与 diff 检查通过；Worker 更新为 sha256:1942df5b0c4cc507bdc858d93340d25e01153ca37325903be7a9881609d04a18。新增两个公共 Executor 测试分别验证匹配事件和拒绝其他容器事件。远程 CI 将继续核对此环境差异。
+
+
+ce9cdad 的 [push CI](https://github.com/Fangziyang0910/LLM4OM/actions/runs/37898451972) 与 [PR CI](https://github.com/Fangziyang0910/LLM4OM/actions/runs/37898456304) 均 success，Python 3.11／3.12 均通过。立即制造 OOM 的 fixture 现在先等待 0.5 秒让运行时监控就绪；仍须实际 daemon 标记／事件才报告 OOM，没有弱化分类规则。
+
+## 10. S05-A 真实文本 LLM 交付
+
+SDK 0.4.0 未发布，核心 schema 0.2.0、IR 0.1.0、方法 profile 0.1.0。97 源文件、参考导出、diff 检查与 15 模块 strict mypy 通过；Python 3.11.13／3.12.3 各完整 139 项测试通过，包含真实 Docker 与本地 HTTP seam。wheel／sdist 构建、干净基础 SDK 安装、外部配置免费 doctor 与容器求解目标 13 通过。公开 bundle 和包不含实际凭据值。
+
+指定 deepseek-v4-pro-0813 经用户网关完成两个独立可核验 LP/MILP，目标分别为 13 和 6，真实用量与模型标识保留。首次 output cap=4096 仅 reasoning 耗尽，失败未进入 Formulation；现返回 llm_output_truncated。无定价时成本为 null，结构／求解通过不推导业务语义通过。
+
+独立 Standards／Spec 固定比较 ce9cdad…f9cfe21；各轴问题、red→green 修复、run_id、用量、镜像与限制统一见 [S05-A 记录](development/s05-provider.md)。修复提交为 7fd1141，草稿 [PR #9](https://github.com/Fangziyang0910/LLM4OM/pull/9) stacked on #7；远程 CI 结果单独记录。完整恢复、协议、方法、benchmark 与 Web 仍按原计划推进，未宣称 1.0 完成。

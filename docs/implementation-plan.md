@@ -1,6 +1,6 @@
 # 1.0 开发计划与接入顺序
 
-文档修订：0.4.0。以下是开发计划；S01／S02-A／S03 已实现，S03 使用 [Issue #3](https://github.com/Fangziyang0910/LLM4OM/issues/3)／[#4](https://github.com/Fangziyang0910/LLM4OM/issues/4)，S02-A 使用 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1) 跟踪，其余任务待开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
+文档修订：0.4.0。以下是开发计划；S01／S02-A／S03／S04-A／S05-A 已实现当前范围，S03 使用 [Issue #3](https://github.com/Fangziyang0910/LLM4OM/issues/3)／[#4](https://github.com/Fangziyang0910/LLM4OM/issues/4)，S02-A 使用 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1) 跟踪，当前支持与验收范围见各切片记录；其余任务待开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
 
 ## 1. 首批能力矩阵
 
@@ -44,7 +44,7 @@
 
 以 CSV 为独立依据核验决策；交换利润的候选按原目标应为 12。覆盖 FR-21～25/29；DD-04/05。独立检查器是后续验收要求，不声称一般语义等价。
 
-状态：S02-A 已实现，见 [支持范围与真实证据](development/s02-highs.md)；S02-B 待实现。HiGHS 部分已验证，Gurobi、容器与完整 time_limit 验收仍未完成。
+状态：S02-A 已实现，见 [支持范围与真实证据](development/s02-highs.md)；S02-B 待实现。HiGHS 与 S04-A 容器路径已验证；Gurobi 和完整求解终止矩阵仍按后续任务验收。
 
 ### S03 插件发现、配置与预检
 
@@ -72,6 +72,8 @@
 | S05-B | 同一个 run 改用 anthropic 协议，保留相同调用及错误语义 | S05-A | CLI＋Provider：真实成功、能力不支持、usage 和错误映射。AC-06/12 |
 | S05-C | 公共阶段反馈支持 Formulation／Code 定位、有界修正和选择；feedback_repair 可选对照 | S05-A、S04-B | 应用入口：max_repairs=0、预算停止、约束变化记录、选择理由。AC-06/07/09/12 |
 | S05-D | 交互运行提出澄清、恢复或形成派生 run，并支持角色模型配置 | S05-C | 应用入口：批量 unresolved；新业务规则不改写原输入。AC-06/08/23 |
+
+状态：S05-A 当前文本范围已实现，见 [实际支持与真实证据](development/s05-provider.md)和 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)；其他 S05 切片待实现。
 
 覆盖 FR-14～19；DD-02/07。S05-B 使用 S05-A 已验证的共享 Gateway；这不是模型质量的依赖。
 
@@ -146,7 +148,7 @@ flowchart LR
     S09B --> S10
 ```
 
-S01／S02-A／S03／[S04-A](development/s04-container.md) 已完成当前范围。当前前沿包含 S02-B、S04-B、S05-A 和 S07-A；优先 S05-A 真实 LLM，以验证自然语言到容器求解。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
+S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 已完成当前范围。当前前沿包含 S02-B、S04-B、S05-B 和 S07-A；NL4Opt 源码研究已开始。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
 
 ## 5. 工程默认值与完成边界
 

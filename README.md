@@ -12,11 +12,11 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 ## 当前状态
 
-已交付 **S01 离线回放、S02-A 真实 HiGHS、S03 方法发现与预检、S04-A 容器执行（Python 包 0.3.0）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web 与论文方法仍按开发计划接入。
+已交付 **S01 离线回放、S02-A 真实 HiGHS、S03 方法发现与预检、S04-A 容器执行、S05-A 真实文本 LLM（Python 包 0.4.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web 与论文方法仍按开发计划接入。
 
 仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
 
-当前工作树增加 S05-A 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（包 0.4.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
+S05-A 提供 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（包 0.4.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
 
 GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache-2.0。私有可见性与开源许可证分别管理。
 
@@ -90,4 +90,4 @@ llm4om report --experiment-id EXPERIMENT_ID --format markdown
 
 每个插件必须声明能力和兼容矩阵，不允许自动降级后仍把结果标成原方法；每个评估结论必须说明证据级别。**求解器报告最优，只表示候选模型被求解，不证明模型符合业务需求。**
 
-已完成 S01／S02-A／S03／S04-A 当前范围；当前前沿与后续依赖见 [开发计划](docs/implementation-plan.md)。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+已完成 S01／S02-A／S03／S04-A／S05-A 当前范围；当前前沿与后续依赖见 [开发计划](docs/implementation-plan.md)。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
