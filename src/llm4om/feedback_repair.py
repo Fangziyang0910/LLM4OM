@@ -19,11 +19,19 @@ class FeedbackRepairMethod:
         if context.resources is None:
             raise RunError("capability_mismatch", "admission", "Public candidate resources are required.")
         state = deepcopy(checkpoint) if checkpoint is not None else {
-            "schema_version": "0.1.0", "request_id": uuid4().hex, "request_pending": False, "attempts": [], "feedback": None}
-        if (set(state) != {"schema_version", "request_id", "request_pending", "attempts", "feedback"}
-                or state["schema_version"] != "0.1.0" or not isinstance(state["request_id"], str)
-                or not isinstance(state["attempts"], list) or type(state["request_pending"]) is not bool):
+            "schema_version": "0.2.0", "request_id": uuid4().hex, "request_pending": False, "attempts": [], "feedback": None,
+            "clarification": None, "clarification_count": 0}
+        if (set(state) != {"schema_version", "request_id", "request_pending", "attempts", "feedback", "clarification", "clarification_count"}
+                or state["schema_version"] != "0.2.0" or not isinstance(state["request_id"], str)
+                or not isinstance(state["attempts"], list) or type(state["request_pending"]) is not bool
+                or type(state["clarification_count"]) is not int or state["clarification_count"] < 0
+                or state["clarification"] is not None and not isinstance(state["clarification"], dict)):
             raise RunError("checkpoint_incompatible", "formulation", "Invalid public repair checkpoint.")
+        if state["clarification"] is not None:
+            if len(context.clarifications) <= state["clarification_count"]:
+                return MethodOutcome("needs_input", None, None, state["clarification"])
+            state.update(clarification=None, clarification_count=len(context.clarifications), request_id=uuid4().hex,
+                         request_pending=False)
         while (len(state["attempts"]) < min(context.budget["max_candidates"], context.budget["max_repairs"] + 1)
                 and not any(not a["diagnostics"] and a["has_primal_solution"] for a in state["attempts"])):
             context.cancellation.check()
@@ -39,7 +47,12 @@ class FeedbackRepairMethod:
             try:
                 outcome = await DirectMethod(self.output_mode).run(problem, replace(context, save_checkpoint=None),
                     checkpoint={"schema_version": "0.1.0", "request_id": state["request_id"]},
-                    feedback=state["feedback"], role="repair" if state["feedback"] is not None else "formulation")
+                    feedback=state["feedback"], role="repair" if state["feedback"] is not None else "formulation", allow_clarification=True)
+                if outcome.status == "needs_input":
+                    state.update(clarification=outcome.clarification, clarification_count=len(context.clarifications), request_pending=False)
+                    if context.save_checkpoint is not None:
+                        context.save_checkpoint(state)
+                    return outcome
                 if outcome.proposal is None:
                     raise RunError("invalid_method_outcome", "formulation", "Generation did not produce a proposal.")
                 proposal = outcome.proposal
@@ -86,10 +99,12 @@ class FeedbackRepairFactory:
             description="Bounded project-authored repair from public stage diagnostics and trusted Solver evidence.",
             source={"kind": "engineering_baseline", "variant_id": "public_feedback_repair/0.1.0"})
         manifest["capabilities"]["method_profile"] = "grounded_candidates/0.1.0"
+        manifest["capabilities"]["supports_clarification"] = True
         return manifest
 
     def resolve_capabilities(self, config: dict[str, Any]) -> dict[str, Any]:
         capabilities = DirectFactory().resolve_capabilities(config)
+        capabilities["supports_clarification"] = True
         capabilities["method_profile"] = {"lp_ir": "grounded_candidates/0.1.0",
             "python_factory": "factory_candidates/0.1.0", "native_gurobipy": "native_candidates/0.1.0"}[config["output_mode"]]
         return capabilities

@@ -25,9 +25,12 @@ def main() -> int:
     run.add_argument("--config", type=Path, required=True)
     run.add_argument("--output", type=Path, help="Override the configured filesystem store root")
     run.add_argument("--offline", action="store_true", help="Only replay Mock artifacts; skip Code and Solve")
+    run.add_argument("--interactive", action="store_true", help="Persist needs_input for public clarification instead of unresolved")
     for name in ("cancel", "resume"):
         control = commands.add_parser(name, help=f"{name.capitalize()} a persisted run")
         if name == "resume":
+            control.add_argument("--answers", type=Path, help="Versioned response to the saved public clarification")
+            control.add_argument("--revised-problem", type=Path, help="Explicit new ProblemSpec revision for newly supplied rules/data")
             control.add_argument("--strategy", choices=("continue", "rerun"), default="continue",
                                  help="Continue saved work, or explicitly rerun with parent usage still counted")
         control.add_argument("--run-id", required=True)
@@ -96,10 +99,11 @@ def main() -> int:
             if args.command == "cancel":
                 print(json.dumps({"run_id": args.run_id, "status": cancel_run(path)}))
                 return 0
-            result = resume_run(path, cancellation=cancellation, strategy=args.strategy)
+            result = resume_run(path, cancellation=cancellation, strategy=args.strategy, answers=args.answers,
+                                revised_problem=args.revised_problem)
         else:
             result = run_problem(args.problem, args.config, offline=args.offline,
-                                 output_root=args.output, cancellation=cancellation)
+                                 output_root=args.output, cancellation=cancellation, interactive=args.interactive)
     except RunError as error:
         print(json.dumps({"error": {"code": error.code, "stage": error.stage, "message": str(error)}}))
         return 1
@@ -110,4 +114,4 @@ def main() -> int:
     finally:
         signal.signal(signal.SIGINT, previous)
     print(json.dumps({"run_id": result.run_id, "bundle_path": str(result.bundle_path), "status": result.status}))
-    return 0 if result.status in {"artifact_ready", "completed"} else 1
+    return 0 if result.status in {"artifact_ready", "completed", "needs_input"} else 1

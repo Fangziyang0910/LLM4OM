@@ -1072,3 +1072,58 @@ extra call or candidate; completed primals are selected before any new generatio
 Core selection receipt recovery freezes a completed choice before method reentry.
 No unknown admitted execution or LLM request is silently repeated. Existing
 cancellation, private archive and strict SDK/source/Worker identity rules apply.
+
+## 22. S05-D2 clarification (SDK 0.17.0)
+
+MethodOutcome adds optional clarification. A needs_input outcome requires no
+selected candidate/proposal, declared supports_clarification and a saved versioned
+method checkpoint. FeedbackRepair implements this capability; legacy manifests
+retain their own declarations. Direct's optional compact decoder accepts
+`{clarification:{questions:[...]}}` only when its caller enables clarification.
+
+Questions have question_id, kind=confirm_existing|new_information, question and
+statement_ref. IDs are unique bounded identifiers; up to8 questions, each text
+up to4096 characters, and total declared request metadata up to65536 bytes.
+Confirmation anchors are exact public requirement/assumption kind+id; the core
+adds the original statement text. New information uses a null statement_ref and
+cannot be relabeled confirmation of an existing declaration.
+
+ClarificationRequest0.1.0 stores platform request_id, run_id, sequence_no,
+problem_id/revision/raw SHA, canonical questions and declared provenance. The ID
+is deterministically bound to those request inputs, allowing completed-publication
+recovery without another response or another ID. New rounds have a new sequence.
+Full Provider replies remain private.
+
+`run_problem(..., interactive=False)` is backward-compatible at the application
+entry. True is explicit via SDK or CLI --interactive. A valid request produces
+needs_input in interactive mode or unresolved in noninteractive mode, with no
+fabricated Formulation/Code/Solve. RunBundle retains clarification_request_ref
+and clarification_response_refs. CLI needs_input returns0; unresolved returns1.
+Repeated resume without an answer returns the persisted status without new work.
+
+`resume_run(..., answers:Path|None, revised_problem:Path|None)` reads a strict
+ClarificationResponse0.1.0: schema_version, saved request_id, action=confirm|revise
+and exactly one answer per question. Values are boolean or bounded public text;
+question order is canonicalized. Confirmation requires every question to be
+confirm_existing and every value exactly true. False or new facts require an
+explicit revision. Accepted confirmations are immutable and versioned, enter only
+public MethodContext.clarifications, and resume fresh generation from the method's
+saved clarification state. The original same-run deadline stays fixed.
+
+New business rules/data require action=revise and a supplied validated ProblemSpec
+with the same problem_id and a changed revision. Revision data are validated/hash
+checked before derived admission. The core uses its existing derived-run machinery:
+new run/deadline, lineage.operation=clarification_revision, public parent history
+copies, response reference and carried prior usage/unknown reservations. Parent
+problem, candidates, responses and scoring are not rewritten; a private derivation
+coordinator records the operation. Different content/answers cannot rebind the same
+request+problem+revision operation. Identical retries resume the existing child.
+Revised problems do not inherit stale confirmation records as fresh problem facts.
+
+Core request/answer publications and method checkpoints remain separate. A completed
+confirmation receipt is validated and accepted on resume; a persisted child
+initialization identity permits recovery after derivation registration but before
+model work. Unfinished/unknown external work still uses the existing Gateway and
+execution rules. Revised input cannot be scored as the original frozen benchmark
+case merely because it has the same problem_id. No hidden evaluator/oracle or
+credential is added to MethodContext.

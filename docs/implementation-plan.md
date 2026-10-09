@@ -73,7 +73,7 @@
 | S05-C | 公共阶段反馈支持 Formulation／Code 定位、有界修正和选择；feedback_repair 可选对照 | S05-A、S04-B | 应用入口：max_repairs=0、预算停止、约束变化记录、选择理由。AC-06/07/09/12 |
 | S05-D | 交互运行提出澄清、恢复或形成派生 run，并支持角色模型配置 | S05-C | 应用入口：批量 unresolved；新业务规则不改写原输入。AC-06/08/23 |
 
-状态：S05-A 当前文本范围已实现，见 [实际支持与真实证据](development/s05-provider.md)和 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)；S05-B 实现与验收见 [Messages](development/s05b-messages.md)。[S05-C1候选资源](development/s05-public-candidates.md)及 [S05-C2修正方法](development/s05-feedback-repair.md)已有真实行为，独立审阅仍待完成；S05-D澄清仍待实现。
+状态：S05-A 当前文本范围已实现，见 [实际支持与真实证据](development/s05-provider.md)和 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)；S05-B 实现与验收见 [Messages](development/s05b-messages.md)。[S05-C1候选资源](development/s05-public-candidates.md)、[S05-C2修正方法](development/s05-feedback-repair.md)及 [S05-D2澄清](development/s05-clarification.md)已有真实行为，独立审阅仍待完成。
 
 覆盖 FR-14～19；DD-02/07。S05-B 使用 S05-A 已验证的共享 Gateway；这不是模型质量的依赖。
 
@@ -164,4 +164,4 @@ S07-B 当前已贯通 NLP4LP 固定发布导入、公开 JSON 参数／私有参
 
 [S05-D1角色模型配置](development/s05-role-models.md)已通过实际指定模型／Messages角色覆盖、HiGHS和314项本机回归，独立审阅仍待完成。该组件不替代S05-D澄清；公共反馈与修正的实现由S05-C1/C2记录。
 
-S05-C1候选资源见 [记录](development/s05-public-candidates.md)；S05-C2有界修正、解析失败入账、声明变化与Code-only来源复用见 [记录](development/s05-feedback-repair.md)。独立审阅仍待完成；S05-D澄清是下一项实现范围。
+S05-C1候选资源见 [记录](development/s05-public-candidates.md)；S05-C2有界修正、解析失败入账、声明变化与Code-only来源复用见 [记录](development/s05-feedback-repair.md)；S05-D2原声明确认、新修订与派生运行见 [记录](development/s05-clarification.md)。独立审阅仍待完成；完整注册、批量／报告、Web及发布验收继续推进。

@@ -171,3 +171,5 @@ CoE专家路由与原生函数的开发实现、真实外部模型／原问题�
 角色模型覆盖与共享预算的0.14.0开发行为见 [记录](docs/development/s05-role-models.md)。
 
 公共候选评估、来源链与最终选择的0.15.0证据见 [S05-C1](docs/development/s05-public-candidates.md)；0.16.0新增 [反馈修正方法](docs/development/s05-feedback-repair.md)，覆盖解析失败入账、阶段变化、Code-only来源复用和共享预算。本机与实际资源验收分别记录。
+
+0.17.0 的 [澄清流程](docs/development/s05-clarification.md)支持显式交互、原声明确认和新问题修订。非交互任务保留unresolved，不从隐藏答案补齐。

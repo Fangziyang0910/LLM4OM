@@ -83,6 +83,7 @@ class MethodOutcome:
     status: str
     final_candidate_id: str | None
     proposal: ModelProposal | None
+    clarification: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,7 @@ class MethodContext:
     save_checkpoint: Callable[[dict[str, Any]], None] | None = None
     resources: MethodResources | None = None
     deadline: float | None = None
+    clarifications: tuple[dict[str, Any], ...] = ()
 
 
 class DirectMethod:
@@ -103,7 +105,7 @@ class DirectMethod:
 
     async def run(self, problem: dict[str, Any], context: MethodContext,
                   *, checkpoint: dict[str, Any] | None = None, feedback: dict[str, Any] | None = None,
-                  role: str | None = None) -> MethodOutcome:
+                  role: str | None = None, allow_clarification: bool = False) -> MethodOutcome:
         context.cancellation.check()
         if checkpoint is not None and (set(checkpoint) != {"schema_version", "request_id"}
                 or checkpoint["schema_version"] != "0.1.0" or not isinstance(checkpoint["request_id"], str)):
@@ -160,7 +162,12 @@ class DirectMethod:
                 instructions += " For repair_stage=code you may omit representation to reuse the source Formulation."
             else:
                 instructions += " Grounded LPIR corrections use repair_stage=formulation because LPIR is the executable mathematical representation."
-        payload = {"problem": problem, "data": {key: value.decode("utf-8") for key, value in context.data.items()}}
+        payload: dict[str, Any] = {"problem": problem, "data": {key: value.decode("utf-8") for key, value in context.data.items()}}
+        if allow_clarification:
+            instructions += (" If a business rule is missing, return only {clarification:{questions:[{question_id,kind,question,statement_ref}]}}. "
+                "kind is confirm_existing or new_information. Confirm existing requirement/assumption by statement_ref={kind:requirement|assumption,id}; "
+                "new_information uses statement_ref=null. Do not guess missing rules. Confirmed clarification records are public input.")
+            payload["clarifications"] = list(context.clarifications)
         if feedback is not None:
             payload["feedback"] = feedback
         response = await context.llm.complete({"request_id": checkpoint["request_id"], **({"role": role} if role else {}), "messages": [
@@ -170,6 +177,9 @@ class DirectMethod:
             if response.finish_reason == "length":
                 raise RunError("llm_output_truncated", "formulation", "The LLM reached its output limit before completing the formulation.")
             value = parse_json(response.text.encode())
+            if allow_clarification and set(value) == {"clarification"} and isinstance(value["clarification"], dict):
+                return MethodOutcome("needs_input", None, None, {**value["clarification"], "provenance": {
+                    "origin": response.evidence_origin, "call_id": response.call_id, "response_sha256": response.source_sha256}})
             repair = None
             if feedback is not None:
                 repair = {"stage": value.pop("repair_stage", None), "reason": value.pop("change_reason", None)}
@@ -251,7 +261,7 @@ class DirectFactory:
     def describe(self) -> dict[str, Any]:
         return {
             "schema_version": "0.2.0", "plugin_id": "llm4om.methods.direct", "kind": "method",
-            "plugin_version": "0.16.0", "contract_range": ">=0.2.0,<0.3.0",
+            "plugin_version": "0.17.0", "contract_range": ">=0.2.0,<0.3.0",
             "display_name": "Direct (declared text output)",
             "description": "One public text response produces a five-element Formulation with grounded LPIR or parameterized Python factory.",
             "capabilities": {"method_profile": "grounded_single_candidate/0.1.0", "problem_types": ["lp", "milp"],

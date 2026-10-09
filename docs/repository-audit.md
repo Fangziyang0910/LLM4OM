@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-10；SDK／Worker 开发版本：0.16.0。当前包含 188 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-10；SDK／Worker 开发版本：0.17.0。当前包含 191 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -9,6 +9,9 @@
 | 文件 | 职责／事实来源 | 核验方式与保留理由 |
 |---|---|---|
 | `.editorconfig` | 编辑器格式 | UTF-8、LF、缩进；授权原文例外 |
+| `docs/development/s05-clarification.md` | 澄清、原声明确认与显式修订的实际支持 | CLI／SDK、真实Solver、父历史与恢复证据 |
+| `src/llm4om/clarification.py` | 公开请求、锚点与回答的信任边界 | 有界／唯一／原文绑定、确认与新信息分开 |
+| `tests/test_clarification.py` | 公共交互、修订及落盘恢复验收 | HTTP、HiGHS、拒绝、unresolved与OS硬退出 |
 | `docs/development/s05-public-candidates.md` | 公共候选评估、来源链、预算与最终选择的实际范围 | 本机 CLI／HiGHS／容器、恢复证据与剩余 S05-C 范围 |
 | `tests/test_candidate_feedback.py` | 安装方法使用候选资源的公共行为验收 | 真实 HiGHS、预算、身份、最终选择、硬退出与 publication 恢复 |
 | `docs/development/s05-feedback-repair.md` | 公共反馈修正方法、阶段来源与验收范围 | 本机 HTTP／真实 Solver、预算、声明比较和恢复证据 |

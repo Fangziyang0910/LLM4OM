@@ -58,7 +58,7 @@ class FeedbackRepairTests(unittest.TestCase):
         (self.inputs / "solve.yaml").write_text(yaml.safe_dump(self.settings))
         entry = [sys.executable, "-c", crash_script] if crash_script is not None else [sys.executable, "-m", "llm4om"]
         environment = {**os.environ, "REPAIR_TEST_KEY": "synthetic-repair-key", "PYTHONPATH": str(ROOT / "src")}
-        result = subprocess.run([*entry, "run", "--problem", str(self.inputs / "problem.json"),
+        result = subprocess.run([*entry, "run", *getattr(self, "run_arguments", []), "--problem", str(self.inputs / "problem.json"),
             "--config", str(self.inputs / "solve.yaml"), "--output", str(self.root / "runs")],
             env=environment,
             cwd=self.root, capture_output=True, text=True, timeout=100)

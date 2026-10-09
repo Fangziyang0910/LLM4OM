@@ -72,3 +72,5 @@ CoE流程与真实模型、独立原问题检查的开发证据见 [S06-C](devel
 公共候选评估、修正来源链和执行复用见 [S05-C1](development/s05-public-candidates.md)。
 
 有界反馈修正方法、数学变化与 Code-only 来源复用见 [S05-C2](development/s05-feedback-repair.md)。
+
+澄清、确认／修订分离及不可变派生运行见 [S05-D2](development/s05-clarification.md)。

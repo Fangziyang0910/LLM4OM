@@ -29,6 +29,7 @@ from llm4om.preflight import AdmissionPlan, prepare_run
 from llm4om.linear import CompiledCode, compile_ir
 from llm4om.storage import RunStore
 from llm4om.executors import run_container, run_owned_process
+from llm4om.clarification import prepare_clarification, validate_clarification_response
 
 
 @dataclass(frozen=True)
@@ -39,7 +40,10 @@ class RunResult:
 
 
 def run_problem(problem: Path, config: Path, *, offline: bool = False,
-                output_root: Path | None = None, cancellation: CancellationToken | None = None) -> RunResult:
+                output_root: Path | None = None, cancellation: CancellationToken | None = None,
+                interactive: bool = False) -> RunResult:
+    if type(interactive) is not bool:
+        raise RunError("invalid_config", "admission", "Interactive mode must be an explicit boolean.")
     cancellation = cancellation or CancellationToken()
     try:
         settings = read_config(config)
@@ -47,6 +51,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
     except (OSError, ValueError, KeyError, TypeError):
         root = output_root or Path.cwd() / "runs"
     store = RunStore(root, cancellation=cancellation)
+    store.state["interactive"] = interactive
     try:
         return _run_problem(problem, config, store, offline=offline)
     finally:
@@ -160,6 +165,9 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
                         "message": str(error) if isinstance(error, RunError) else "Cannot process the public input or Mock artifact."}
         if isinstance(error, RunError) and error.details is not None:
             error_record["details_ref"] = store.json("diagnostics/plugin-error.json", error.details, "plugin-error")
+        if isinstance(error, RunError) and error.code == "clarification_required":
+            status = "needs_input" if store.state.get("interactive", False) else "unresolved"
+            error_record = None
     if stages["formulation"]["status"] == "available" or stages["code"]["status"] == "available":
         store.json("evaluation.json", {"schema_version": "0.2.0", "protocol_id": "llm4om.eval.public-v0.1",
                    "formulation_validation": {"status": "pass", "level": "structural"}
@@ -193,6 +201,8 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
                "requested_config_ref": requested_config_ref,
                "public_problem_ref": store.projections.get("public-problem.json"),
                "lineage_ref": store.state.get("lineage_ref"),
+               "clarification_request_ref": store.state.get("clarification_request_ref"),
+               "clarification_response_refs": store.state.get("clarification_response_refs", []),
                "public_projections": {name: ref for name, ref in store.projections.items() if name != "bundle.json"},
                "final_candidate_id": store.state.get("candidate_id", "001") if status == "completed" else None,
                "execution_plan": {name: {"requested_plugin_id": settings.get(name, {}).get("plugin_id"),
@@ -255,7 +265,8 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
         store.checkpoint()
     context = MethodContext(gateway, MappingProxyType(data_content), MappingProxyType(deepcopy(settings["budget"])),
                             hashlib.sha256(source_problem).hexdigest(), store.cancellation, save_method_checkpoint,
-                            RunMethodResources(store, public, settings, plan, responses=gateway.calls), plan.deadline)
+                            RunMethodResources(store, public, settings, plan, responses=gateway.calls), plan.deadline,
+                            tuple(deepcopy(store.state.get("clarification_responses", []))))
     store.state["method_started"] = True
     store.checkpoint()
     try:
@@ -267,6 +278,17 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
             store.json("llm-trace.json", {"schema_version": "0.2.0", "attempts": gateway.trace}, "llm-trace")
         store.state["ledger"] = ledger
         store.checkpoint()
+    if outcome.status == "needs_input":
+        if (not method.manifest["capabilities"].get("supports_clarification") or outcome.proposal is not None
+                or outcome.final_candidate_id is not None or outcome.clarification is None
+                or store.state.get("method_checkpoint") is None):
+            raise RunError("invalid_method_outcome", "formulation", "Clarification requires a declared capability, request and versioned method checkpoint.")
+        request = prepare_clarification(outcome.clarification, public, store.run_id, context.problem_sha256,
+                                        sequence_no=len(store.state.get("clarification_responses", [])) + 1)
+        ref = store.json("clarifications/" + request["request_id"] + "/request.json", request, request["request_id"])
+        store.state.update(clarification_request_ref=ref, clarification_answered=False, phase="needs_input")
+        store.emit("clarification_requested", request_ref=ref)
+        raise RunError("clarification_required", "formulation", "Public clarification is required.")
     if outcome.status in ("failed", "exhausted") and outcome.final_candidate_id is None and outcome.proposal is None:
         store.json("method/outcome.json", {"schema_version": "0.1.0", "status": outcome.status,
             "final_candidate_id": None}, "method-outcome")
@@ -751,11 +773,15 @@ def _sdk_sha256() -> str:
 
 
 def resume_run(run: Path, *, cancellation: CancellationToken | None = None,
-               strategy: str = "continue") -> RunResult:
+               strategy: str = "continue", answers: Path | None = None,
+               revised_problem: Path | None = None) -> RunResult:
     """Continue fixed work, or explicitly start a derived semantic rerun with carried usage."""
     if strategy not in {"continue", "rerun"}:
         raise RunError("invalid_resume_strategy", "admission", "Resume strategy must be continue or rerun.")
-    store = RunStore(run.parent, resume=run, cancellation=cancellation if strategy == "continue" else None)
+    if revised_problem is not None and answers is None:
+        raise RunError("invalid_clarification_response", "admission", "A problem revision needs a bound clarification response.")
+    store = RunStore(run.parent, resume=run,
+                     cancellation=cancellation if strategy == "continue" and revised_problem is None else None)
     try:
         if store.state.get("sdk") != version("llm4om"):
             raise RunError("checkpoint_incompatible", "admission", "SDK version differs from the saved run.")
@@ -779,31 +805,40 @@ def resume_run(run: Path, *, cancellation: CancellationToken | None = None,
         # Completed runs validate identity without consuming a new runtime probe or deadline.
         saved_deadline = store.state["deadline"]
         plan = prepare_run(settings, offline=store.state["offline"], config_dir=Path(store.state["config"]).parent,
-                           deadline=max(saved_deadline, time.time() + 5) if strategy == "rerun" or store.state.get("status") in ("completed", "artifact_ready") else saved_deadline,
+                           deadline=max(saved_deadline, time.time() + 5) if strategy == "rerun" or revised_problem is not None or store.state.get("status") in ("completed", "artifact_ready") else saved_deadline,
                            cancellation=store.cancellation, expected=store.state["admission"],
-                           identity_only=strategy == "rerun" or store.state.get("status") in ("completed", "artifact_ready"))
+                           identity_only=strategy == "rerun" or revised_problem is not None or store.state.get("status") in ("completed", "artifact_ready"))
         if plan.snapshot != store.state["admission"]:
             raise RunError("checkpoint_incompatible", "admission", "Saved resource identity differs from admission.")
+        if store.state.get("clarification_request_ref") is not None:
+            request = _load_verified_record(store, store.state["clarification_request_ref"])
+            receipts = store.interrupted_publications.get("clarifications/" + request["request_id"] + "/response.json", [])
+            if receipts:
+                response = validate_clarification_response(_load_verified_record(store, receipts[-1]), request)
+                if response["action"] != "confirm":
+                    raise RunError("checkpoint_incompatible", "admission", "A same-run response receipt must confirm existing declarations.")
+                store.accept_publications()
+                _accept_clarification_response(store, request, response, receipts[-1])
+        if answers is not None:
+            if strategy != "continue" or store.state.get("clarification_request_ref") is None:
+                raise RunError("invalid_clarification_response", "admission", "Answers need an existing clarification and the continue strategy.")
+            request = _load_verified_record(store, store.state["clarification_request_ref"])
+            response = validate_clarification_response(parse_json(read_public_bytes(answers)), request)
+            if response["action"] == "revise":
+                if revised_problem is None:
+                    raise RunError("problem_revision_required", "admission", "Revised information requires a new public problem revision.")
+                revised = parse_json(read_public_bytes(revised_problem))
+                validate_problem(revised)
+                if revised["problem_id"] != request["problem_id"] or revised["revision"] == request["problem_revision"]:
+                    raise RunError("invalid_problem_revision", "admission", "Revision must retain problem identity and change revision explicitly.")
+                return _derive_run(store, resource_records, cancellation=cancellation, problem=revised_problem, response=response)
+            if revised_problem is not None:
+                raise RunError("invalid_problem_revision", "admission", "Confirmation cannot carry a changed problem.")
+            _accept_clarification_response(store, request, response)
+        if strategy == "continue" and store.state.get("status") in ("needs_input", "unresolved") and not store.state.get("clarification_answered"):
+            return RunResult(store.run_id, store.path, store.state["status"])
         if strategy == "rerun":
-            child = RunStore(run.parent, cancellation=cancellation)
-            try:
-                parent_refs = [child.write("parent/" + store.run_id + "/" + ref["relative_path"],
-                    read_public_bytes(public_path(store.path, ref["relative_path"])), ref["artifact_id"],
-                    ref.get("schema_version")) for ref in store.refs]
-                parent_checkpoint_ref = child.write("parent/" + store.run_id + "/checkpoint.json",
-                    read_public_bytes(store.path / "checkpoint.json"), "parent-checkpoint", "0.1.0")
-                ledger = deepcopy(store.state["ledger"])
-                lineage_ref = child.json("lineage.json", {"schema_version": "0.1.0",
-                    "operation": "derived_rerun", "parent_run_id": store.run_id,
-                    "parent_budget_ledger": ledger, "input_hashes": store.state["sources"],
-                    "parent_checkpoint_ref": parent_checkpoint_ref,
-                    "parent_artifacts": parent_refs, "parent_resource_records": resource_records, "reused_records": [],
-                    "policy": "Fresh method execution; previous paid/unknown usage and reservations count against the configured caps."}, "lineage")
-                child.state.update(lineage_ref=lineage_ref, inherited_ledger=ledger, ledger=deepcopy(ledger))
-                return _run_problem(Path(store.state["problem"]), Path(store.state["config"]), child,
-                                    offline=store.state["offline"])
-            finally:
-                child.close()
+            return _derive_run(store, resource_records, cancellation=cancellation)
         if store.state.get("status") in ("completed", "artifact_ready"):
             return RunResult(store.run_id, store.path, store.state["status"])
         if time.time() >= store.state["deadline"]:
@@ -821,3 +856,85 @@ def resume_run(run: Path, *, cancellation: CancellationToken | None = None,
                             offline=store.state["offline"], restored_plan=plan)
     finally:
         store.close()
+
+
+def _accept_clarification_response(store: RunStore, request: dict[str, Any], response: dict[str, Any],
+                                   receipt: dict[str, Any] | None = None) -> None:
+    records = store.state.setdefault("clarification_responses", [])
+    prior = next((r for r in records if r["request_id"] == response["request_id"]), None)
+    if prior is not None and prior != response:
+        raise RunError("clarification_response_conflict", "admission", "An accepted answer is immutable.")
+    if prior is None:
+        ref = receipt or store.json("clarifications/" + request["request_id"] + "/response.json", response, request["request_id"] + "-response")
+        records.append(response)
+        store.state.setdefault("clarification_response_refs", []).append(ref)
+        store.state.update(clarification_answered=True, phase="method_pending")
+        store.checkpoint()
+
+
+def _derive_run(store: RunStore, resource_records: list[dict[str, Any]], *,
+                cancellation: CancellationToken | None = None, problem: Path | None = None,
+                response: dict[str, Any] | None = None) -> RunResult:
+    operation_key = identity = None
+    if problem is not None and response is not None:
+        raw = read_public_bytes(problem)
+        revised = parse_json(raw)
+        sources = {}
+        for ref in revised["data_refs"]:
+            data = read_public_bytes(public_path(problem.parent, ref["path"]))
+            validate_data(data, ref)
+            digest = hashlib.sha256(data).hexdigest()
+            if ref["sha256"] and ref["sha256"] != digest:
+                raise RunError("data_hash_mismatch", "admission", "Revised data differs from its declared identity.")
+            sources[ref["data_id"]] = digest
+        operation_key = hashlib.sha256(json.dumps({"request_id": response["request_id"],
+            "problem_id": revised["problem_id"], "revision": revised["revision"]}, sort_keys=True).encode()).hexdigest()
+        identity = hashlib.sha256(json.dumps({"problem_sha256": hashlib.sha256(raw).hexdigest(),
+            "response": response, "data_sha256": sources}, sort_keys=True).encode()).hexdigest()
+        existing = store.state.get("clarification_derivations", {}).get(operation_key)
+        if existing is not None:
+            if existing["identity"] != identity:
+                raise RunError("problem_revision_conflict", "admission", "A recorded problem revision cannot be rebound to different input or answers.")
+            child_path = store.path.parent / existing["run_id"]
+            with_state = parse_json(read_public_bytes(child_path / "checkpoint.json"))["payload"]["state"]
+            if "sources" not in with_state:
+                child = RunStore(store.path.parent, resume=child_path, cancellation=cancellation)
+                try:
+                    if child.state.get("derivation_identity") != identity:
+                        raise RunError("checkpoint_incompatible", "admission", "Derived initialization identity changed.")
+                    child.accept_publications()
+                    return _initialize_derived_run(child, store, resource_records, problem=problem, response=response)
+                finally:
+                    child.close()
+            return resume_run(child_path, cancellation=cancellation)
+    child = RunStore(store.path.parent, cancellation=cancellation)
+    try:
+        if operation_key is not None:
+            child.state["derivation_identity"] = identity
+            child.checkpoint()
+            store.state.setdefault("clarification_derivations", {})[operation_key] = {"identity": identity, "run_id": child.run_id}
+            store.checkpoint()
+        return _initialize_derived_run(child, store, resource_records, problem=problem, response=response)
+    finally:
+        child.close()
+
+
+def _initialize_derived_run(child: RunStore, store: RunStore, resource_records: list[dict[str, Any]], *,
+                            problem: Path | None = None, response: dict[str, Any] | None = None) -> RunResult:
+    parent_refs = [child.write("parent/" + store.run_id + "/" + ref["relative_path"],
+        read_public_bytes(public_path(store.path, ref["relative_path"])), ref["artifact_id"],
+        ref.get("schema_version")) for ref in store.refs]
+    parent_checkpoint_ref = child.write("parent/" + store.run_id + "/checkpoint.json",
+        read_public_bytes(store.path / "checkpoint.json"), "parent-checkpoint", "0.1.0")
+    ledger = deepcopy(store.state["ledger"])
+    response_ref = child.json("clarification-response.json", response, "revision-response") if response is not None else None
+    lineage_ref = child.json("lineage.json", {"schema_version": "0.1.0",
+        "operation": "clarification_revision" if problem is not None else "derived_rerun", "parent_run_id": store.run_id,
+        "clarification_response_ref": response_ref,
+        "parent_budget_ledger": ledger, "input_hashes": store.state["sources"],
+        "parent_checkpoint_ref": parent_checkpoint_ref,
+        "parent_artifacts": parent_refs, "parent_resource_records": resource_records, "reused_records": [],
+        "policy": "Fresh method execution; previous paid/unknown usage and reservations count against the configured caps."}, "lineage")
+    child.state.update(lineage_ref=lineage_ref, inherited_ledger=ledger, ledger=deepcopy(ledger), interactive=store.state.get("interactive", False))
+    return _run_problem(problem or Path(store.state["problem"]), Path(store.state["config"]), child,
+                        offline=store.state["offline"])

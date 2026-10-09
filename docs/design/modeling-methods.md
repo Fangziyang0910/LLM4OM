@@ -87,6 +87,8 @@ sequenceDiagram
 
 ### 澄清与恢复
 
+0.17.0的CLI／SDK实现与真实证据见 [S05-D2](../development/s05-clarification.md)。确认仅接受原问题声明的true回答；新信息需要用户提供新revision，不由模型偷偷改写。
+
 交互模式保存 ClarificationRequest 后暂停。确认已有声明可写入澄清记录并按方法支持恢复；新增或改写业务规则、数据、模型配置时创建新 ProblemSpec revision 和派生 run。原 run 的输入、候选和评分不改写。批量模式不从参考答案补齐，终态为 `unresolved`。
 
 对应 FR-13～19/28/32/33；AC-06/08/09/12。
