@@ -59,7 +59,7 @@
 | `docs/spec-validation.md` | 校验证据与适用范围 | 当前可复算命令；不将维护工具当作平台验收 |
 | `examples/README.md` | fixture 用法与独立数学依据 | 方法输入权限、工程 Mock、绑定反例与维护命令 |
 | `examples/plugins/fixture_method/README.md` | 独立方法安装与运行说明 | 实际命令、目标偏移用途和公开接口 |
-| `examples/plugins/fixture_method/pyproject.toml` | 独立方法包与 entry point | SDK 0.2.0 依赖、自己的版本／构建和发现入口 |
+| `examples/plugins/fixture_method/pyproject.toml` | 独立方法包与 entry point | SDK >=0.2.0,<0.6.0 依赖、自己的版本／构建和发现入口 |
 | `examples/plugins/fixture_method/src/llm4om_fixture_method/__init__.py` | 第二个实际 Method Adapter | 独立配置、async run、目标常数变体与普通 MethodOutcome |
 | `examples/plugins/fixture_method/src/llm4om_fixture_method/manifest.json` | 独立方法 Manifest | 当前能力、配置 schema、工程来源和变体 |
 | `examples/specs/data/capacities.csv` | 原始容量数据 | 固定字节、表头和 hash；独立整数／LP 核验 |
@@ -84,10 +84,10 @@
 | `src/llm4om/__init__.py` | 公开应用导出 | RunResult／run_problem；CLI 与后续 Web 共用入口 |
 | `src/llm4om/__main__.py` | 模块 CLI 入口 | 与安装后的 console script 使用同一命令 |
 | `src/llm4om/tasks.py` | S07-A 公共 Task/Evaluation 接口与固定 NL4Opt 快照 | CLI/SDK 导入、来源身份、hash、重复 ID、隔离测试 |
-| `src/llm4om/evaluation.py` | S07-A 单样本后置评测 | 公共运行结果、失败、checker error、零 eligible 与无 oracle 导出 |
+| `src/llm4om/evaluation.py` | S07-A 单样本后置评测 | 公共运行结果、Code 实际来源、失败、checker error、零 eligible 与无 oracle 导出 |
 | `tests/test_task_evaluation.py` | S07-A 公共接口验收 | 独立 fixture 身份、实际 HTTP／Docker／HiGHS、篡改与失败记录 |
 | `examples/tasks/nl4opt-import.yaml` | 官方固定 dev split 的本地导入配置 | 已下载源字节 hash；路径以配置目录为根，不自动 fetch |
-| `src/llm4om/application.py` | 单问题应用流程 | 公开输入、Mock 输出、候选、阶段与成功／失败证据 |
+| `src/llm4om/application.py` | 单问题应用流程 | 公开输入、IR／参数化工厂、候选、阶段来源与成功／失败证据 |
 | `src/llm4om/cli.py` | 用户 CLI | 参数解析、离线显式选择、JSON 摘要与退出码 |
 | `src/llm4om/contracts.py` | 运行边界校验 | 严格 JSON／YAML、CSV、路径、引用、五元素、输入绑定与 Worker 响应 |
 | `src/llm4om/executors.py` | 真实容器执行 Module | 公共 bytes、权限与资源、有界控制／清理、真实限制证据 |
@@ -131,3 +131,10 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 ## 4. 维护规则
 
 新增或删除源文件时同步本表，检查工具拒绝漏项与陈旧路径。领域定义、字段契约、评测口径和工作流程分别在其事实来源维护；当前草案可以直接修正，无需兼容未实现的旧设计。
+
+| `src/llm4om/backends.py` | S02-B Worker-local ModelHandle／Pyomo 工厂构建与线性实例导出 | CLI/SDK 的真实容器验收；域／表达式／决策映射失败 |
+| `src/llm4om/factory_worker.py` | 隔离工厂子进程与可信 HiGHS 收集器 | 原始 bytes／hash、父进程保护、有界子输出、重新校验与独立求解 |
+| `tests/test_factory_run.py` | S02-B 公开 CLI/SDK 验收 | HTTP fixture、真实 Docker/HiGHS、独立安装方法、revision、伪造攻击与失败保留 |
+| `examples/factories/production.py` | 真正按公开 CSV 构建模型的参数化工厂 fixture | 同源模板交换利润改变整数解；明确手工来源 |
+| `docs/adr/0005-factory-collector-isolation.md` | 工厂构建与求解证据隔离取舍 | 子进程导出、可信重构求解、不声称语义等价 |
+| `docs/development/s02b-factory.md` | S02-B 实现、验收与实际限制 | 公共 seams 的 red/green、Docker 数值证据、外部模型与独立审阅交父任务 |

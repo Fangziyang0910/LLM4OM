@@ -44,7 +44,7 @@
 
 以 CSV 为独立依据核验决策；交换利润的候选按原目标应为 12。覆盖 FR-21～25/29；DD-04/05。独立检查器是后续验收要求，不声称一般语义等价。
 
-状态：S02-A 已实现，见 [支持范围与真实证据](development/s02-highs.md)；S02-B 待实现。HiGHS 与 S04-A 容器路径已验证；Gurobi 和完整求解终止矩阵仍按后续任务验收。
+状态：S02-A 已实现，见 [支持范围与真实证据](development/s02-highs.md)；S02-B 本地参数化工厂路径已实现，见 [实现记录](development/s02b-factory.md)；外部模型与独立审阅待父任务验收。HiGHS 与 S04-A 容器路径已验证；Gurobi 和完整求解终止矩阵仍按后续任务验收。
 
 ### S03 插件发现、配置与预检
 
@@ -148,7 +148,7 @@ flowchart LR
     S09B --> S10
 ```
 
-S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。当前前沿包含 S02-B、S04-B、S05-B、S07-B／C／D；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
+S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。当前前沿包含 S02-B 的父任务外部验收、S04-B、S05-B、S07-B／C／D；NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
 
 ## 5. 工程默认值与完成边界
 

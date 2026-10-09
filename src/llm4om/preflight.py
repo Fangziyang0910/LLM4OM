@@ -46,9 +46,17 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     except (jsonschema.exceptions.RefResolutionError, RecursionError) as error:
         raise RunError("invalid_plugin_manifest", "admission", "Method configuration schema cannot be resolved or evaluated.",
                        details={"path": ["method", "config_schema"]}) from error
+    method = method.resolve(settings["method"]["config"])
     execution_mode = settings["executor"]["plugin_id"].removeprefix("llm4om.executors.")
     capabilities = method.manifest["capabilities"]
-    required = {"method_profile": "grounded_single_candidate/0.1.0",
+    profile = capabilities.get("method_profile")
+    if profile not in ("grounded_single_candidate/0.1.0", "factory_single_candidate/0.1.0"):
+        raise RunError("capability_mismatch", "admission", "Method profile is not supported.")
+    if profile == "factory_single_candidate/0.1.0" and (offline or execution_mode != "container"):
+        raise RunError("capability_mismatch", "admission", "Generated factories require container execution, including generation.")
+    if profile == "grounded_single_candidate/0.1.0" and "compiler" not in settings:
+        raise RunError("invalid_config", "admission", "Grounded LPIR requires its explicit compiler.")
+    required = {"method_profile": profile,
                 "input_artifact_kinds": ["public_problem"], "output_artifact_kinds": ["model_artifact"],
                 "formulation_representations": ["five_element"], "code_representations": ["python_factory"],
                 "model_backends": [settings["model_backend"]["plugin_id"]], "solvers": [settings["solver"]["plugin_id"]],
@@ -86,6 +94,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
             packages.update(runtime_versions())
     return AdmissionPlan(method, {"schema_version": "0.2.0", "mode": "offline_mock" if offline else execution_mode,
         "method": {"manifest": method.manifest, "origin": method.origin},
-        "compiler_id": settings["compiler"]["plugin_id"], "model_backend_id": settings["model_backend"]["plugin_id"],
+        "method_profile": profile, "code_origin": "method_generated" if profile == "factory_single_candidate/0.1.0" else "deterministic_compilation",
+        "compiler_id": settings["compiler"]["plugin_id"] if profile == "grounded_single_candidate/0.1.0" else None, "model_backend_id": settings["model_backend"]["plugin_id"],
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
         "packages": packages, "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": factory.describe(), "model": settings["llm"]["model"]}, provider, started + settings["budget"]["wall_time_s"])

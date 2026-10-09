@@ -1,6 +1,7 @@
 """The grounded single-candidate method profile and built-in direct method."""
 
 from dataclasses import dataclass
+import hashlib
 import json
 from typing import Any, Mapping, Protocol
 
@@ -21,10 +22,21 @@ class LLMGateway(Protocol):
 
 
 @dataclass(frozen=True)
+class FactoryCodeProposal:
+    """Versioned method output; source bytes are never executed on the host."""
+
+    source: str
+    source_sha256: str
+    data_bindings: list[dict[str, Any]]
+    schema_version: str = "0.1.0"
+
+
+@dataclass(frozen=True)
 class ModelProposal:
     artifact: dict[str, Any]
     formulation: dict[str, Any]
-    structured_ir: dict[str, Any]
+    structured_ir: dict[str, Any] | None = None
+    code: FactoryCodeProposal | None = None
 
 
 @dataclass(frozen=True)
@@ -43,6 +55,9 @@ class MethodContext:
 
 
 class DirectMethod:
+    def __init__(self, output_mode: str = "lp_ir") -> None:
+        self.output_mode = output_mode
+
     async def run(self, problem: dict[str, Any], context: MethodContext,
                   *, checkpoint: dict[str, Any] | None = None) -> MethodOutcome:
         if checkpoint is not None:
@@ -65,6 +80,23 @@ class DirectMethod:
             "Do not generate platform IDs, references, hashes, provenance, code, or answers. "
             "Five-element text and grounded LPIR must express the same model."
         )
+        if self.output_mode == "python_factory":
+            instructions = (
+                "Return only one JSON object with representation and python_factory (a Python source string). "
+                "representation is the five-element schema: sets=[{id,elements or source:{data_id,column}}], "
+                "parameters=[{id,index_sets,value or source:{data_id,column,key_column}}], "
+                "variables=[{id,index_sets,domain,lower_bound,upper_bound,requirement_ids}], "
+                "objective={sense:min|max,expression_text,requirement_ids}, "
+                "constraints=[{id,expression_text,requirement_ids}]. "
+                "Use parameterized expressions referring to public CSV columns, not stale literal data. "
+                "python_factory defines build_model(data), where data maps each public data_id to raw CSV bytes. "
+                "Build a concrete Pyomo LP/MILP, and return llm4om.backends.ModelHandle(model, decision_map). "
+                "decision_map maps explicit stable decision IDs to every scalar Pyomo variable, one to one. "
+                "Only real/integer/binary interval domains and finite linear expressions are supported. "
+                "Exactly one active objective is required; preserve objective and constraint constants. "
+                "Do not solve or report answers, read files/environment, or create platform hashes/references. "
+                "Source Formulation and factory must express the same public problem."
+            )
         response = await context.llm.complete({"messages": [
             {"role": "system", "content": instructions},
             {"role": "user", "content": json.dumps({"problem": problem,
@@ -72,6 +104,25 @@ class DirectMethod:
         if response.finish_reason == "length":
             raise RunError("llm_output_truncated", "formulation", "The LLM reached its output limit before completing the formulation.")
         value = parse_json(response.text.encode())
+        if self.output_mode == "python_factory":
+            if set(value) != {"representation", "python_factory"} or not isinstance(value["python_factory"], str):
+                raise RunError("invalid_method_outcome", "code", "Direct requires representation and Python factory source.")
+            bindings = [{"data_id": item["data_id"], "sha256": item["sha256"]} for item in problem["data_refs"]]
+            provenance = {"origin": response.evidence_origin, "call_id": response.call_id,
+                          "response_sha256": response.source_sha256,
+                          "code_relationship": "method_generated_from_source_formulation"}
+            formulation = {"schema_version": "0.2.0", "formulation_id": "direct-formulation-001",
+                           "problem_id": problem["problem_id"], "problem_revision": problem["revision"],
+                           "representation_kind": "five_element", "representation": value["representation"],
+                           "data_bindings": bindings, "structured_ir_ref": None, "provenance": provenance}
+            artifact = {"schema_version": "0.2.0", "artifact_id": "direct-artifact-001",
+                        "problem_ref": {"sha256": context.problem_sha256}, "formulation_ref": {}, "code_ref": None,
+                        "data_bindings": bindings, "assumptions": [], "requirement_traces": [],
+                        "diagnostics": [], "warnings": [], "optional_views": [], "provenance": provenance,
+                        "stage_status": {"formulation": {"status": "available", "reason": None},
+                                         "code": {"status": "pending", "reason": "Factory contract has not been checked."}}}
+            code = FactoryCodeProposal(value["python_factory"], hashlib.sha256(value["python_factory"].encode()).hexdigest(), bindings)
+            return MethodOutcome("candidate_selected", "001", ModelProposal(artifact, formulation, code=code))
         if "artifact" in value:
             if response.evidence_origin != "mock_fixture":
                 raise RunError("invalid_method_outcome", "formulation", "External Direct requires the compact mathematical output.")
@@ -107,9 +158,9 @@ class DirectFactory:
     def describe(self) -> dict[str, Any]:
         return {
             "schema_version": "0.2.0", "plugin_id": "llm4om.methods.direct", "kind": "method",
-            "plugin_version": "0.4.0", "contract_range": ">=0.2.0,<0.3.0",
-            "display_name": "Direct (grounded text profile)",
-            "description": "One public text response produces a five-element Formulation and grounded LPIR.",
+            "plugin_version": "0.5.0", "contract_range": ">=0.2.0,<0.3.0",
+            "display_name": "Direct (declared text output)",
+            "description": "One public text response produces a five-element Formulation with grounded LPIR or parameterized Python factory.",
             "capabilities": {"method_profile": "grounded_single_candidate/0.1.0", "problem_types": ["lp", "milp"],
                 "input_artifact_kinds": ["public_problem"], "output_artifact_kinds": ["model_artifact"],
                 "formulation_representations": ["five_element"], "code_representations": ["python_factory"],
@@ -117,10 +168,16 @@ class DirectFactory:
                 "llm_features": ["text"], "execution_modes": ["trusted_local", "container"],
                 "supports_checkpoint": False, "supports_clarification": False, "oracle_requirements": []},
             "config_schema": {"type": "object", "properties": {
-                "formulation_mode": {"const": "five_element"}, "output_mode": {"const": "lp_ir"}},
+                "formulation_mode": {"const": "five_element"}, "output_mode": {"enum": ["lp_ir", "python_factory"]}},
                 "required": ["formulation_mode", "output_mode"], "additionalProperties": False},
             "dependencies": {"python": []}, "source": None,
         }
 
+    def resolve_capabilities(self, config: dict[str, Any]) -> dict[str, Any]:
+        capabilities: dict[str, Any] = self.describe()["capabilities"]
+        if config["output_mode"] == "python_factory":
+            capabilities.update(method_profile="factory_single_candidate/0.1.0", execution_modes=["container"])
+        return capabilities
+
     def create(self, config: dict[str, Any]) -> DirectMethod:
-        return DirectMethod()
+        return DirectMethod(config["output_mode"])

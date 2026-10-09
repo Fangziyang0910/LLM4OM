@@ -150,3 +150,12 @@ No upstream declaration scorer/parser is used. `N_selected` is the frozen split 
 `N_evaluated=1` describes this single-case result, not completion of the whole split.
 Derived reference models and independent solution checking remain S07-D. Local HTTP
 fixtures exercise engineering behavior only; they do not establish external-model accuracy.
+
+### S02-B Code 来源证据
+
+SDK 0.5.0 的参数化工厂 Code 标记为 `method_generated`，公开 Code 检查等级为
+`factory_contract`。它证明已验证 Code proposal 的契约、源 hash、Formulation 关联与数据绑定，
+不声称提供的 Python 已经确定性编译，也不证明语义正确。运行成功后附加
+`factory_exported_instance` 具体实例视图与稳定决策映射；HiGHS 只证明这个校验后实例的求解结果。
+NL4Opt 后置评测依据真实 CodeArtifact 来源区分该等级和已有 `deterministic_compilation`。
+失败、未知资源和 `not_available` 的分母规则不变。细节见 [契约](plugin-contracts.md#10-s02-b-parameterized-factory-interface-sdk-050)。

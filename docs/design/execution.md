@@ -82,3 +82,13 @@ ModelArtifact 是共同封装，formulation_ref 与 code_ref 分别指向数学�
 具体原始状态依据锁定版本的适配器表映射。[Gurobi 官方状态说明](https://docs.gurobi.com/projects/optimizer/en/current/reference/numericcodes/statuscodes.html)仅说明求解器语义，不替代实际适配验收。
 
 对应 FR-21～27；AC-10～14。
+
+### S02-B 已实现的参数化工厂路径
+
+Direct 的输出模式与独立方法的 profile 通过方法声明解析，不由核心猜测配置。
+当前公开契约见 [S02-B 接口](../plugin-contracts.md#10-s02-b-parameterized-factory-interface-sdk-050)。
+工厂在容器子进程用当前公开 CSV bytes 构建 Worker-local ModelHandle；父进程校验导出的具体
+线性实例后，经既有严格 IR／HiGHS 路径独立求解。构建与收集隔离见 [ADR-0005](../adr/0005-factory-collector-isolation.md)。
+原 Code 的来源是 method_generated；导出实例只形成 factory_exported_instance 派生视图，
+不覆盖源 Formulation。数据 revision 与 hash 随实例变化，源模板可保持相同 hash。
+本地验收与待父任务完成的外部模型／独立审阅见 [实现记录](../development/s02b-factory.md)。

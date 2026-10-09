@@ -12,11 +12,11 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 ## 当前状态
 
-已交付 **S01 离线回放、S02-A 真实 HiGHS、S03 方法发现与预检、S04-A 容器执行、S05-A 真实文本 LLM、S07-A 原始 NL4Opt 导入／单样本评测（Python 包 0.4.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web 与论文方法仍按开发计划接入。
+已交付 **S01 离线回放、S02-A 真实 HiGHS、S03 方法发现与预检、S04-A 容器执行、S05-A 真实文本 LLM、S07-A 原始 NL4Opt 导入／单样本评测（Python 包 0.5.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web 与论文方法仍按开发计划接入。
 
 仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
 
-S05-A 提供 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（包 0.4.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
+S05-A 提供 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（最初交付包 0.4.0，当前 SDK 为 0.5.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
 
 GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache-2.0。私有可见性与开源许可证分别管理。
 
@@ -109,3 +109,13 @@ SDK 导出 `import_dataset`、`NL4OptAdapter`、`EvaluationCase`、`TaskAdapter`
 只导出 `public/` 和公开 run bundle；manifest 与 `private/` 留在导入／评测端。
 原始标注不是参考最优值。数值目标评测不可用，eligible 分母为零，候选求解证据独立保存。
 实际外部模型 smoke 与独立审阅仍待父任务验收，见 [实现证据](docs/development/s07-nl4opt.md)。
+
+## 参数化工厂（S02-B）
+
+SDK／Worker 0.5.0 新增 Direct `output_mode: python_factory` 与版本化独立方法 Code proposal。
+公开 CSV bytes 按 data ID 传入 `build_model(data)`；只在容器子进程构建 Pyomo ModelHandle，
+可信 Worker 校验导出实例后独立调用 HiGHS。换数据／revision 可复用相同工厂源模板，形成新的
+绑定与实际解。原 Formulation 与 method-generated Code 保留，提取实例不冒充语义证明。
+旧 LPIR、trusted_local 与独立安装 fixture 行为保持。配置、工厂返回值与独立安装示例见
+[契约](docs/plugin-contracts.md#10-s02-b-parameterized-factory-interface-sdk-050)及
+[本地验收记录](docs/development/s02b-factory.md)；外部模型验收由父任务完成。

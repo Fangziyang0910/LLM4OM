@@ -106,7 +106,10 @@ class OfflineRunTests(unittest.TestCase):
                 result = self.run_cli(inputs / "problem.json", inputs / "run.yaml", "--offline")
                 self.assertEqual(result.returncode, 1)
                 path, bundle = self.bundle(result)
-                self.assertIn(bundle["error"]["code"], {"invalid_config", "unsupported_config", "unknown_plugin"})
+                if key == "method" and value.get("config", {}).get("output_mode") == "python_factory":
+                    self.assertEqual(bundle["error"]["code"], "capability_mismatch")
+                else:
+                    self.assertIn(bundle["error"]["code"], {"invalid_config", "unsupported_config", "unknown_plugin"})
                 self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["llm_attempts"], 0)
 
     def test_zero_solver_budget_is_valid_for_the_offline_profile(self) -> None:

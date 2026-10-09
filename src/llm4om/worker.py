@@ -27,17 +27,25 @@ def main() -> int:
         if args.solve is None:
             parser.error("--solve or --runtime is required")
         request = parse_json(read_public_bytes(args.solve))
-        if set(request) != {"ir", "source_sha256", "solver_options"}:
-            raise RunError("invalid_worker_request", "execution", "Worker accepts strict IR, source hash and Solver options only.")
-        compiled = compile_ir(request["ir"])
-        actual_source = read_public_bytes(args.solve.parent / "model.py")
-        if (hashlib.sha256(compiled.source.encode()).hexdigest() != request["source_sha256"]
-                or hashlib.sha256(actual_source).hexdigest() != request["source_sha256"]):
-            raise RunError("code_hash_mismatch", "execution", "CodeArtifact does not match deterministic IR compilation.")
-        result = solve_highs(compiled, request["solver_options"])
+        factory = None
+        if request.get("kind") == "python_factory/0.1.0":
+            from llm4om.factory_worker import solve_factory
+            result, factory = solve_factory(args.solve)
+        else:
+            if set(request) != {"ir", "source_sha256", "solver_options"}:
+                raise RunError("invalid_worker_request", "execution", "Worker accepts strict IR, source hash and Solver options only.")
+            compiled = compile_ir(request["ir"])
+            actual_source = read_public_bytes(args.solve.parent / "model.py")
+            if (hashlib.sha256(compiled.source.encode()).hexdigest() != request["source_sha256"]
+                    or hashlib.sha256(actual_source).hexdigest() != request["source_sha256"]):
+                raise RunError("code_hash_mismatch", "execution", "CodeArtifact does not match deterministic IR compilation.")
+            result = solve_highs(compiled, request["solver_options"])
         usage = resource.getrusage(resource.RUSAGE_SELF)
+        children = resource.getrusage(resource.RUSAGE_CHILDREN)
         print(json.dumps({"schema_version": "0.2.0", "runtime": runtime, "result": result,
-            "resources": {"cpu_time_s": usage.ru_utime + usage.ru_stime, "peak_memory_bytes": usage.ru_maxrss * 1024}},
+            "resources": {"cpu_time_s": usage.ru_utime + usage.ru_stime + children.ru_utime + children.ru_stime,
+                          "peak_memory_bytes": max(usage.ru_maxrss, children.ru_maxrss) * 1024},
+            **({"factory": factory} if factory is not None else {})},
             ensure_ascii=False, allow_nan=False))
         return 0
     except RunError as error:

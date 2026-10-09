@@ -92,3 +92,11 @@
 验收记录应包含 requirement_ids、AC ID、run／测试结果引用、环境、日期、审查结论。单元测试通过不替代外部接入验收；文档链接正确不替代平台功能实现。
 
 S07-A 本地导入与单样本证据见 [实现记录](development/s07-nl4opt.md)。公共接口、隔离与真实本地容器求解已有工程验证；真实外部模型和独立审阅未完成，不据此勾选完整 benchmark 发布验收。
+
+## S02-B 本地切片验收
+
+[实现记录](development/s02b-factory.md)覆盖 AC-03/10/13/24 的参数化工厂部分：真实 Docker／HiGHS，
+同源模板的新 CSV revision、独立改变的决策、稳定映射、Code／Formulation 来源、工厂异常／非法
+域和表达式、输出／时间限制，以及打印和修改 Solver 的攻击。公开 CLI/SDK 使用同一入口；
+旧 grounded profile 与独立安装 fixture 保持有效。真实外部模型工厂与独立 Standards／Spec 审阅
+由父任务另行验收；这些本地记录不标记完整 1.0 或一般语义正确性通过。

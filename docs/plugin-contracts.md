@@ -347,7 +347,7 @@ Gateway archive 是共享 run 资源身份。文件锁原子 admission，OS slot
 
 ## 7. S07-A local Task / Evaluation interface (implemented)
 
-Package version remains unreleased 0.4.0. `TaskAdapter.iter_cases(config: Path)` yields frozen
+S07-A was delivered in unreleased 0.4.0; current SDK is 0.5.0. `TaskAdapter.iter_cases(config: Path)` yields frozen
 `EvaluationCase` values. For `NL4OptAdapter`, config is the imported `manifest.json`.
 The case carries `case_id`, public ProblemSpec path, privileged `oracle_ref`, frozen manifest
 bytes and frozen entry bytes. Pass only `case.public_problem` to `run_problem`; never pass
@@ -393,5 +393,85 @@ association, not verified input identity. Otherwise the exact public revision mu
 Result retains protocol, source, manifest/record hashes, projection/domain/normalization
 policies, exclusion reason, reference quality, selected/eligible counts, run error and separate
 structural, execution and solver-reported candidate primal evidence. It contains no oracle
-paths or annotations. Structural evidence is not semantic verification. No new method
-or execution contract is introduced; Worker image remains 0.4.0.
+paths or annotations. Structural evidence is not semantic verification. S07-A itself introduced no new method
+or execution contract; S02-B now uses Worker image 0.5.0.
+
+## 10. S02-B parameterized factory interface (SDK 0.5.0)
+
+`DirectFactory` accepts `output_mode=lp_ir|python_factory`. Its optional public declaration
+`resolve_capabilities(config) -> dict` receives schema-validated method config and returns
+**the full capabilities object** for that configuration. Discovery still uses `describe()`;
+preflight validates and records the resolved declaration. Other installed factories may use
+this same seam, or a static factory profile. Old factories without it retain their existing
+Manifest behavior. Core does not inspect method IDs or plugin-specific config keys.
+
+`factory_single_candidate/0.1.0` requires five-element Formulation, python_factory, Pyomo,
+HiGHS, public data only, and container execution. Both `doctor` and `run` reject offline or
+trusted_local before generation. Grounded profile stays `grounded_single_candidate/0.1.0`.
+The compiler selection is required only for grounded LPIR. It is unused for supplied Code;
+admission records `compiler_id=null`, `code_origin=method_generated` for factories.
+SDK and default Worker tag are 0.5.0; core objects remain 0.2.0 and grounded LPIR 0.1.0.
+
+An independently installed method returns:
+
+```python
+from hashlib import sha256
+from llm4om import FactoryCodeProposal, ModelProposal, MethodOutcome
+
+code = FactoryCodeProposal(
+    source=source,  # exact UTF-8 Python source, not an IR fixture
+    source_sha256=sha256(source.encode("utf-8")).hexdigest(),
+    data_bindings=bindings,  # current public data IDs and raw byte hashes
+    schema_version="0.1.0",
+)
+proposal = ModelProposal(artifact, formulation, code=code)
+return MethodOutcome("candidate_selected", "001", proposal)
+```
+
+Artifact input uses existing pending-Code envelope. Source Formulation has
+`structured_ir_ref=null`, the current problem ID/revision, and validated public bindings.
+Factory profile requires Code alone, not a jointly supplied original IR. Source/hash, version,
+Formulation and data bindings are validated without running source on the host. Supplied
+source, Formulation and proposal metadata are saved before binding/contract rejection.
+Persisted CodeArtifact has `factory_contract=python_factory/0.1.0`, `entry_point=build_model`,
+exact `representation_ref`, `source_formulation_ref`, backend, bindings and method-generated
+provenance, including the actual method declaration and generation provenance. Generation
+can be hand-authored fixture or external Provider; method-generated does not imply an LLM
+was called. No supplied Python is relabelled deterministic compilation.
+
+Direct's compact external reply is exactly `{representation, python_factory}`;
+`python_factory` is a source string. In grounded mode it remains `{representation, structured_ir}`.
+A factory defines `build_model(data)` with `data: Mapping[str, bytes]`, keyed by public
+`data_id`; no credential, oracle, host path or backend object is sent through that mapping.
+It returns `llm4om.backends.ModelHandle(model, decision_map)` in the factory child.
+The handle contains a constructed Pyomo ConcreteModel and a one-to-one mapping from
+explicit stable decision IDs to **every** active scalar variable. Only closed real/integer
+intervals and binary domains, finite supported numbers, linear expressions, bounded
+constraint rows and exactly one active objective are accepted. Fixed variables, open or
+noninterval domains, nonlinear expressions and unknown active components are rejected.
+Ranged constraints become two rows; objective and constraint constants are preserved.
+
+`PyomoFactoryBackend.load(source, data)` and `export(handle)` are Worker-local construction
+interfaces. Host application never invokes them. The child exports only a versioned-request
+instance view and decision component names; no Python model or handle is serialized back.
+The trusted collector validates exported LPIR, checks problem/revision/data/source identity
+and allowed LP/MILP type, then builds a fresh deterministic model and obtains evidence from
+the existing native HiGHS interface. Child stdout is never a SolveResult channel. Child
+prints go to bounded diagnostics; malformed or forged exports fail validation. The read-only
+container prevents installed Solver code modification; parent dumpability is disabled to
+prevent same-UID child access to collector memory and `/proc` parent fds. See [ADR-0005](adr/0005-factory-collector-isolation.md).
+
+The bundle retains original Formulation/Code, plus an `optional_views` reference to
+`factory-instance.json` and `decision-map.json`. Their origin is `factory_exported_instance`,
+with source hash, current bindings and problem revision. This is an extracted candidate
+instance, not original Formulation, deterministic compilation of supplied Python, or semantic
+proof. Code validation level is `factory_contract`; successful solver evidence remains
+`trusted_container_worker`. Structural checks and independently checked business semantics
+remain separate. The NL4Opt evaluator derives Code level from its actual provenance.
+
+Construction and solving share container wall time, memory, CPU, PID and total output limits.
+Child capture is additionally bounded, with timeout and process-group cleanup. No failure
+creates a SolveResult. Exceptions, invalid handles/maps, nonlinear/domain errors, stale
+bindings and unsupported versions preserve supplied artifacts and diagnostics; preflight
+failures happen before a method can produce new artifacts. Missing Docker never falls back
+to local Python. See [S02-B evidence and limits](development/s02b-factory.md).

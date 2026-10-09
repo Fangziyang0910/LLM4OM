@@ -67,7 +67,18 @@ class NL4OptEvaluator:
                 raise RunError("outcome_case_mismatch", "evaluation", "Successful run must identify its public problem.")
             for stage, field in (("formulation", "formulation_validation"), ("code", "code_validation")):
                 if bundle["stages"][stage]["status"] == "available":
-                    result[field] = {"status": "pass", "level": "structural" if stage == "formulation" else "deterministic_compilation"}
+                    level = "structural"
+                    if stage == "code":
+                        artifact = _read_ref(outcome, bundle["model_artifact_ref"])
+                        code = _read_ref(outcome, artifact["code_ref"])
+                        origin = code["provenance"]["origin"]
+                        if origin == "deterministic_compilation":
+                            level = "deterministic_compilation"
+                        elif origin == "method_generated" and code.get("factory_contract") == "python_factory/0.1.0":
+                            level = "factory_contract"
+                        else:
+                            raise RunError("invalid_code_evidence", "evaluation", "Code origin is not supported by this evaluator.")
+                    result[field] = {"status": "pass", "level": level}
             if bundle["execution_result_ref"]:
                 execution = _read_ref(outcome, bundle["execution_result_ref"])
                 result["execution"] = {"status": execution["status"], "mode": execution["mode"]}

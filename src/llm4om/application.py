@@ -21,7 +21,7 @@ from llm4om.contracts import (
     validate_worker_response,
 )
 from llm4om.providers import Gateway
-from llm4om.methods import MethodContext, ModelProposal
+from llm4om.methods import FactoryCodeProposal, MethodContext, ModelProposal
 from llm4om.preflight import AdmissionPlan, prepare_run
 from llm4om.linear import CompiledCode, compile_ir
 from llm4om.highs import solve_highs
@@ -59,6 +59,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
     execution_ref = None
     admission_ref = None
     requested_config_ref = None
+    code_level = "deterministic_compilation"
     stages: dict[str, Any] = {name: {"status": "not_available", "reason": "Stage has not run."}
               for name in ("formulation", "code", "solve")}
     try:
@@ -72,12 +73,16 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
         plan = prepare_run(settings, offline=offline, config_dir=config.parent)
         admission_ref = store.json("admission-plan.json", plan.snapshot, "admission-plan")
         mode = plan.snapshot["mode"]
+        if plan.snapshot["method_profile"] == "factory_single_candidate/0.1.0":
+            code_level = "factory_contract"
         artifact_ref, stages = _prepare_candidate(store, problem, config, settings, ledger, offline, plan)
         status = "artifact_ready"
         if not offline:
             artifact_ref, compiled = _compile_candidate(store, artifact_ref, settings)
             stages["code"] = {"status": "available", "reason": None}
             solve_ref, execution_ref, execution_error = _execute_candidate(store, compiled, artifact_ref, settings, ledger, plan)
+            if compiled is None and solve_ref is not None:
+                artifact_ref = next(ref for ref in store.refs if ref["relative_path"] == "candidates/001/artifact.json")
             if solve_ref is not None:
                 stages["solve"] = {"status": "available", "reason": None}
             if execution_error is not None:
@@ -94,7 +99,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
     if stages["formulation"]["status"] == "available":
         store.json("evaluation.json", {"schema_version": "0.2.0", "protocol_id": "llm4om.eval.public-v0.1",
                    "formulation_validation": {"status": "pass", "level": "structural"},
-                   "code_validation": {"status": "pass", "level": "deterministic_compilation"}
+                   "code_validation": {"status": "pass", "level": code_level}
                                       if stages["code"]["status"] == "available" else {"status": "not_available"},
                    "semantic_validation": {"status": "not_available"}}, "evaluation")
     store.json("budget-ledger.json", ledger, "budget")
@@ -111,7 +116,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
         if error_record:
             report += f"\nError: {error_record['code']} ({error_record['stage']}).\n"
         store.write("reports/report.md", report.encode(), "report")
-    resource_status = {"compiler": "available" if stages["code"]["status"] == "available" else "not_available",
+    resource_status = {"compiler": "available" if code_level == "deterministic_compilation" and stages["code"]["status"] == "available" else "not_available",
                        **{name: "available" if solve_ref is not None else "failed" if execution_ref is not None else "not_available"
                           for name in ("model_backend", "solver", "executor")}}
     store.json("bundle.json", {"schema_version": "0.2.0", "run_id": store.run_id,
@@ -124,7 +129,8 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
                "execution_plan": {name: {"requested_plugin_id": settings.get(name, {}).get("plugin_id"),
                     "resolved_plugin_id": settings[name]["plugin_id"] if resource_status[name] != "not_available" else None,
                     "status": resource_status[name],
-                    "reason": None if resource_status[name] == "available" else "Resource did not complete successfully."}
+                    "reason": None if resource_status[name] == "available" else "Method supplied Code; compiler is not used."
+                    if name == "compiler" and code_level == "factory_contract" else "Resource did not complete successfully."}
                     for name in ["compiler", "model_backend", "solver", "executor"]} if settings_valid else {},
                "artifacts": list(store.refs)}, "bundle")
     return RunResult(store.run_id, store.path, status)
@@ -180,25 +186,56 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     output = outcome.proposal
     artifact = parse_json(json.dumps(output.artifact, allow_nan=False).encode())
     formulation = parse_json(json.dumps(output.formulation, allow_nan=False).encode())
-    ir = parse_json(json.dumps(output.structured_ir, allow_nan=False).encode())
+    factory_profile = plan.snapshot["method_profile"] == "factory_single_candidate/0.1.0"
+    source_ref = None
+    if factory_profile and isinstance(output.code, FactoryCodeProposal) and isinstance(output.code.source, str):
+        source_ref = store.write("candidates/001/model.py", output.code.source.encode(), "method-source")
+        store.json("candidates/001/supplied-formulation.json", formulation, "supplied-formulation")
+        store.json("candidates/001/supplied-code.json", {
+            "schema_version": output.code.schema_version, "source_ref": source_ref,
+            "source_sha256": output.code.source_sha256, "data_bindings": output.code.data_bindings}, "supplied-code")
     validate_model_artifact(artifact)
     validate_bindings(artifact, public)
     validate_formulation(formulation, public)
-    reject_additional_refs(ir)
-    validate_bindings(ir, public)
-    if (artifact["problem_ref"].get("sha256") != hashlib.sha256(source_problem).hexdigest()
-            or ir.get("problem_id") != public["problem_id"] or ir.get("problem_revision") != public["revision"]):
+    if artifact["problem_ref"].get("sha256") != hashlib.sha256(source_problem).hexdigest():
         raise RunError("artifact_problem_mismatch", "formulation", "Method output belongs to another public input.")
-    if (ir.get("schema_version") != "0.1.0" or ir.get("ir_kind") != "grounded_lp"
-            or not isinstance(ir.get("model_id"), str) or not ir["model_id"]):
-        raise RunError("invalid_method_outcome", "formulation", "Method must supply an identified grounded LPIR 0.1.0.")
-    if ir.get("problem_type") not in plan.snapshot["allowed_problem_types"]:
-        raise RunError("capability_mismatch", "formulation", "Actual IR type is outside the admitted problem types.")
-    formulation["structured_ir_ref"] = store.json(
-        "candidates/001/structured-ir.json", ir, ir["model_id"])
+    if factory_profile:
+        if (output.structured_ir is not None or not isinstance(output.code, FactoryCodeProposal)
+                or source_ref is None or output.code.schema_version != "0.1.0" or not output.code.source):
+            raise RunError("invalid_method_outcome", "code", "Factory profile requires only a versioned Code proposal.")
+        if source_ref["sha256"] != output.code.source_sha256:
+            raise RunError("code_hash_mismatch", "code", "Factory proposal source hash differs from its bytes.")
+        validate_bindings({"data_bindings": output.code.data_bindings}, public)
+        if formulation["structured_ir_ref"] is not None:
+            raise RunError("invalid_method_outcome", "formulation", "Factory source Formulation must not claim an original grounded IR.")
+    else:
+        if output.code is not None or output.structured_ir is None:
+            raise RunError("invalid_method_outcome", "formulation", "Grounded profile requires LPIR, not provided Code.")
+        ir = parse_json(json.dumps(output.structured_ir, allow_nan=False).encode())
+        reject_additional_refs(ir)
+        validate_bindings(ir, public)
+        if ir.get("problem_id") != public["problem_id"] or ir.get("problem_revision") != public["revision"]:
+            raise RunError("artifact_problem_mismatch", "formulation", "Method output belongs to another public input.")
+        if (ir.get("schema_version") != "0.1.0" or ir.get("ir_kind") != "grounded_lp"
+                or not isinstance(ir.get("model_id"), str) or not ir["model_id"]):
+            raise RunError("invalid_method_outcome", "formulation", "Method must supply an identified grounded LPIR 0.1.0.")
+        if ir.get("problem_type") not in plan.snapshot["allowed_problem_types"]:
+            raise RunError("capability_mismatch", "formulation", "Actual IR type is outside the admitted problem types.")
+        formulation["structured_ir_ref"] = store.json("candidates/001/structured-ir.json", ir, ir["model_id"])
     formulation_ref = store.json("candidates/001/formulation.json", formulation, formulation["formulation_id"])
     artifact["problem_ref"] = problem_ref
     artifact["formulation_ref"] = formulation_ref
+    if factory_profile:
+        assert isinstance(output.code, FactoryCodeProposal)
+        code_ref = store.json("candidates/001/code-artifact.json", {
+            "schema_version": "0.2.0", "code_id": "method-code-001", "representation_kind": "python_factory",
+            "factory_contract": "python_factory/0.1.0", "entry_point": "build_model",
+            "representation_ref": source_ref, "model_backend": settings["model_backend"]["plugin_id"],
+            "source_formulation_ref": formulation_ref, "data_bindings": output.code.data_bindings,
+            "provenance": {"origin": "method_generated", "method": method.manifest,
+                           "generation": formulation["provenance"]}}, "method-code-001")
+        artifact["code_ref"] = code_ref
+        artifact["stage_status"]["code"] = {"status": "available", "reason": None}
     call_ids = [call.call_id for call in gateway.calls]
     artifact["provenance"]["replay"] = {"mode": gateway.calls[-1].evidence_origin if gateway.calls else "no_calls", "call_ids": call_ids,
                                         "response_sha256": gateway.calls[-1].source_sha256 if gateway.calls else None}
@@ -216,9 +253,12 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     return artifact_ref, stages
 
 
-def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: dict[str, Any]) -> tuple[dict[str, Any], CompiledCode]:
+def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: dict[str, Any]) -> tuple[dict[str, Any], CompiledCode | None]:
     artifact = parse_json(read_public_bytes(store.path / artifact_ref["relative_path"]))
     formulation = parse_json(read_public_bytes(store.path / artifact["formulation_ref"]["relative_path"]))
+    if artifact["code_ref"] is not None:
+        store.emit("code_saved", artifact_ref=artifact_ref, evidence_origin="method_generated")
+        return artifact_ref, None
     ir_ref = formulation["structured_ir_ref"]
     ir = parse_json(read_public_bytes(store.path / ir_ref["relative_path"]))
     compiled = compile_ir(ir)
@@ -243,7 +283,7 @@ def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: 
     return artifact_ref, compiled
 
 
-def _execute_candidate(store: RunStore, compiled: CompiledCode, artifact_ref: dict[str, Any],
+def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_ref: dict[str, Any],
                        settings: dict[str, Any], ledger: dict[str, Any], plan: AdmissionPlan) -> tuple[dict[str, Any] | None, dict[str, Any], RunError | None]:
     started = datetime.now(timezone.utc).isoformat()
     timer = monotonic()
@@ -266,13 +306,22 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode, artifact_ref: di
         if settings["executor"]["plugin_id"] == "llm4om.executors.container":
             artifact = parse_json(read_public_bytes(store.path / artifact_ref["relative_path"]))
             formulation = parse_json(read_public_bytes(store.path / artifact["formulation_ref"]["relative_path"]))
-            ir = parse_json(read_public_bytes(store.path / formulation["structured_ir_ref"]["relative_path"]))
-            request = {"ir": ir, "source_sha256": hashlib.sha256(compiled.source.encode()).hexdigest(),
-                       "solver_options": solver_options}
             limits = {**settings["executor"]["config"]}
             limits["wall_time_s"] = min(limits["wall_time_s"], remaining)
-            inputs = {"request.json": json.dumps(request, ensure_ascii=False, allow_nan=False).encode(),
-                      "model.py": compiled.source.encode()}
+            if compiled is None:
+                code = parse_json(read_public_bytes(store.path / artifact["code_ref"]["relative_path"]))
+                source = read_public_bytes(store.path / code["representation_ref"]["relative_path"])
+                public = parse_json(read_public_bytes(store.path / "public-problem.json"))
+                request = {"kind": code["factory_contract"], "source_sha256": code["representation_ref"]["sha256"],
+                    "problem": public, "formulation": formulation, "data_bindings": code["data_bindings"],
+                    "data_refs": public["data_refs"], "allowed_problem_types": plan.snapshot["allowed_problem_types"],
+                    "solver_options": solver_options, "wall_time_s": limits["wall_time_s"],
+                    "output_limit_bytes": min(limits.get("output_limit_bytes", 1024 * 1024), 8 * 1024 * 1024)}
+            else:
+                ir = parse_json(read_public_bytes(store.path / formulation["structured_ir_ref"]["relative_path"]))
+                source = compiled.source.encode()
+                request = {"ir": ir, "source_sha256": hashlib.sha256(source).hexdigest(), "solver_options": solver_options}
+            inputs = {"request.json": json.dumps(request, ensure_ascii=False, allow_nan=False).encode(), "model.py": source}
             for data in parse_json(read_public_bytes(store.path / "public-problem.json"))["data_refs"]:
                 inputs[data["path"]] = read_public_bytes(store.path / data["path"])
             container = run_container(["python", "-I", "-m", "llm4om.worker", "--solve", "/input/request.json"],
@@ -287,10 +336,32 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode, artifact_ref: di
                 raise RunError(payload["error"]["code"], payload["error"]["stage"], payload["error"]["message"])
             if container.status != "completed" or container.exit_code != 0:
                 raise RunError("executor_error", "execution", "The isolated Worker failed.")
+            if compiled is None:
+                exported = payload["factory"]
+                instance = exported["instance"]
+                compile_ir(instance)
+                validate_bindings(instance, public)
+                if (exported["source_sha256"] != request["source_sha256"]
+                        or instance["problem_id"] != public["problem_id"] or instance["problem_revision"] != public["revision"]
+                        or instance["provenance"]["origin"] != "factory_exported_instance"
+                        or set(exported["decision_map"]) != {v["id"] for v in instance["variables"]}):
+                    raise RunError("worker_protocol_error", "execution", "Factory instance evidence differs from the admitted binding.")
+                view_ref = store.json("candidates/001/factory-instance.json", instance, instance["model_id"])
+                map_ref = store.json("candidates/001/decision-map.json", {
+                    "schema_version": "0.1.0", "decisions": exported["decision_map"],
+                    "source_sha256": exported["source_sha256"], "data_bindings": artifact["data_bindings"],
+                    "problem_revision": public["revision"], "origin": "factory_exported_instance"}, "decision-map")
+                artifact["optional_views"].append({"origin": "factory_exported_instance", "artifact_ref": view_ref,
+                    "decision_map_ref": map_ref, "source_code_ref": artifact["code_ref"]})
+                artifact_ref = store.json("candidates/001/artifact.json", artifact, artifact["artifact_id"])
+            elif "factory" in payload:
+                raise RunError("worker_protocol_error", "execution", "Grounded solving must not claim a factory export.")
             solve = payload["result"]
             solve["evidence_origin"] = "trusted_container_worker"
             resources = payload["resources"]
         else:
+            if compiled is None:
+                raise RunError("capability_mismatch", "execution", "Factory code cannot execute on the host.")
             with redirect_stdout(out), redirect_stderr(err):
                 solve = solve_highs(compiled, solver_options)
         variables = solve.pop("variables")

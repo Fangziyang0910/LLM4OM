@@ -23,6 +23,9 @@ class MethodPlugin:
     origin: dict[str, Any]
     factory: Any
 
+    def resolve(self, config: dict[str, Any]) -> "MethodPlugin":
+        return MethodPlugin(_manifest(self.factory, config), self.origin, self.factory)
+
     def run(self, config: dict[str, Any], problem: dict[str, Any], context: MethodContext) -> MethodOutcome:
         async def invoke() -> MethodOutcome:
             try:
@@ -75,7 +78,7 @@ def discover_methods() -> dict[tuple[str, str], MethodPlugin]:
     return plugins
 
 
-def _manifest(factory: Any) -> dict[str, Any]:
+def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, Any]:
     stable_version = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
     text = {"type": "string", "minLength": 1}
     strings = {"type": "array", "items": text, "uniqueItems": True}
@@ -95,7 +98,10 @@ def _manifest(factory: Any) -> dict[str, Any]:
               "source": {"type": ["object", "null"]}}
     try:
         with _quiet():
-            manifest = parse_json(json.dumps(factory.describe(), allow_nan=False).encode())
+            value = factory.describe()
+            if config is not None and callable(getattr(factory, "resolve_capabilities", None)):
+                value["capabilities"] = factory.resolve_capabilities(config)
+            manifest = parse_json(json.dumps(value, allow_nan=False).encode())
         jsonschema.Draft202012Validator({"type": "object", "properties": fields,
             "required": list(fields), "additionalProperties": False}).validate(manifest)
         jsonschema.Draft202012Validator.check_schema(manifest["config_schema"])

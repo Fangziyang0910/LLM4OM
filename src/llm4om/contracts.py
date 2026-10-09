@@ -297,7 +297,7 @@ def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) ->
             "objective": {"type": "object", "required": ["sense", "expression_text"], "properties": {
                 "sense": {"enum": ["min", "max"]}, "expression_text": TEXT}}}),
         "data_bindings": {"type": "array"}, "provenance": {"type": "object"},
-        "structured_ir_ref": {"type": "object"},
+        "structured_ir_ref": {"type": ["object", "null"]},
     })
     schema["$defs"] = {"parameter_value": {"anyOf": [
         {"type": "number"},
@@ -350,7 +350,9 @@ def validate_worker_response(payload: dict[str, Any], expected_runtime: dict[str
     schema = {"oneOf": [
         _object({"schema_version": {"const": "0.2.0"}, "error": _object({"code": TEXT, "stage": TEXT, "message": TEXT})}),
         _object({"schema_version": {"const": "0.2.0"}, "runtime": {"const": expected_runtime}, "result": result,
-                 "resources": _object({"cpu_time_s": {"type": "number", "minimum": 0}, "peak_memory_bytes": NONNEGATIVE})}),
+                 "resources": _object({"cpu_time_s": {"type": "number", "minimum": 0}, "peak_memory_bytes": NONNEGATIVE}),
+                 "factory": _object({"instance": {"type": "object"}, "decision_map": {"type": "object"}, "source_sha256": HASH})},
+                 ["schema_version", "runtime", "result", "resources"]),
     ]}
     try:
         jsonschema.Draft202012Validator(schema).validate(payload)
@@ -392,7 +394,7 @@ def validate_config(settings: dict[str, Any]) -> None:
                                "evaluator_plugin_id": {"const": "llm4om.evaluators.structural"}}),
         "allowed_problem_types": {"type": "array", "minItems": 1, "uniqueItems": True,
                                   "items": {"enum": ["lp", "milp"]}},
-    }, ["schema_version", "method", "llm", "compiler", "model_backend", "solver", "executor", "budget", "store"])
+    }, ["schema_version", "method", "llm", "model_backend", "solver", "executor", "budget", "store"])
     try:
         jsonschema.Draft202012Validator(schema).validate(settings)
     except jsonschema.ValidationError as error:
