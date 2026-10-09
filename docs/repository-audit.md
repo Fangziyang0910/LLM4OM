@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-10；SDK／Worker 开发版本：0.17.0。当前包含 191 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-10；SDK／Worker 开发版本：0.18.0。当前包含 196 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -227,3 +227,9 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `docs/development/s05-role-models.md` | 角色模型配置与共享资源证据 | 公共配置／Gateway／HTTP／SDK、身份与预算验收 |
 | `tests/test_role_models.py` | 角色模型配置与共享资源证据 | 公共配置／Gateway／HTTP／SDK、身份与预算验收 |
 | `tests/test_role_pipeline.py` | 角色模型配置与共享资源证据 | 公共配置／Gateway／HTTP／SDK、身份与预算验收 |
+
+| `tests/test_provider_plugins.py` | 独立Provider公共入口验收 | CLI、HTTP、真实HiGHS、恢复与安全诊断 |
+| `docs/development/s03-provider-registry.md` | Provider注册支持与本机证据 | 安装、协议、包身份与剩余范围 |
+| `examples/plugins/fixture_provider/pyproject.toml` | 独立Provider包声明 | SDK版本、构建与共同entry point |
+| `examples/plugins/fixture_provider/README.md` | 独立Provider安装说明 | 真实构建命令、配置与可信插件边界 |
+| `examples/plugins/fixture_provider/src/llm4om_fixture_provider/__init__.py` | 独立文本协议Adapter | 共同Manifest、自有ID、已有HTTP/Gateway复用 |

@@ -63,3 +63,5 @@ S06-A 的 [Gurobi 配置](specs/gurobi.yaml)复用人工 Mock LPIR，容器实�
 [Messages 配置](specs/messages.yaml)使用独立协议 Adapter、指定 deepseek-v4-pro-0813 和占位 HTTPS 端点。
 填入已授权端点与环境凭据后可用 doctor 免费预检；实际调用会消耗模型预算。
 本地合成 fixture 与真实 Provider 验收状态见 [S05-B](../docs/development/s05b-messages.md)。
+
+独立文本Provider的构建／安装与配置见 [示例](plugins/fixture_provider/README.md)。

@@ -65,3 +65,5 @@ S05-C1公共候选资源见 [实现记录](docs/development/s05-public-candidate
 S05-C2公开反馈修正见 [实现记录](docs/development/s05-feedback-repair.md)。解析、阶段来源与实际 Solver 行为从 CLI 验证；不使用隐藏评分指导修正或选择。
 
 S05-D2澄清与问题修订见 [实现记录](docs/development/s05-clarification.md)。交互通过保存的request_id接受确认；新信息需要显式revision与派生run。本机聚焦检查和一次完整回归为主要验收。
+
+S03-C1独立Provider按已确认的CLI／HTTP／Solver接口验证；本机聚焦red→green、一次必要完整回归和干净wheel为主要验收，见 [记录](docs/development/s03-provider-registry.md)。

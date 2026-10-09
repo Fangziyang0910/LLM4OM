@@ -1,6 +1,6 @@
 # S03：方法发现与运行预检
 
-日期：2026-10-09。SDK 0.2.0 的 S03-A／B 实现范围；工作项为 [#3](https://github.com/Fangziyang0910/LLM4OM/issues/3)／[#4](https://github.com/Fangziyang0910/LLM4OM/issues/4)。规范字段见 [插件契约](../plugin-contracts.md)，目标流程见 [DD-03](../design/execution.md#dd-03-插件接入与兼容路径)，完整发布条件见 [验收清单](../acceptance.md)。
+日期：2026-10-09。本页保存SDK0.2.0的S03-A／B初始验收范围；当前Provider扩展见 [S03-C1](s03-provider-registry.md)。工作项为 [#3](https://github.com/Fangziyang0910/LLM4OM/issues/3)／[#4](https://github.com/Fangziyang0910/LLM4OM/issues/4)。规范字段见 [插件契约](../plugin-contracts.md)，目标流程见 [DD-03](../design/execution.md#dd-03-插件接入与兼容路径)，完整发布条件见 [验收清单](../acceptance.md)。
 
 ## 当前公共入口
 

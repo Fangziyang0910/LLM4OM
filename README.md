@@ -12,7 +12,7 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 ## 当前状态
 
-已交付 **S01 离线回放、S02-A 真实 HiGHS、S02-B 参数化 Pyomo 工厂、S03 方法发现与预检、S04-A 容器执行、S04-B 取消／恢复、S05-A 真实文本 LLM、S05-B Messages 协议、S07-A 原始 NL4Opt 导入／单样本评测、S06-A 微型真实 Gurobi／native gurobipy（Python 包 0.8.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web 与论文方法仍按开发计划接入。
+已交付 **S01 离线回放、S02-A 真实 HiGHS、S02-B 参数化 Pyomo 工厂、S03 方法发现与预检、S04-A 容器执行、S04-B 取消／恢复、S05-A 真实文本 LLM、S05-B Messages 协议、S07-A 原始 NL4Opt 导入／单样本评测、S06-A 微型真实 Gurobi／native gurobipy（Python 包 0.8.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web按开发计划接入；经典方法的实际支持见下方S06实现记录。
 
 仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
 
@@ -173,3 +173,5 @@ CoE专家路由与原生函数的开发实现、真实外部模型／原问题�
 公共候选评估、来源链与最终选择的0.15.0证据见 [S05-C1](docs/development/s05-public-candidates.md)；0.16.0新增 [反馈修正方法](docs/development/s05-feedback-repair.md)，覆盖解析失败入账、阶段变化、Code-only来源复用和共享预算。本机与实际资源验收分别记录。
 
 0.17.0 的 [澄清流程](docs/development/s05-clarification.md)支持显式交互、原声明确认和新问题修订。非交互任务保留unresolved，不从隐藏答案补齐。
+
+0.18.0的独立文本Provider注册、真实HTTP执行与恢复见 [S03-C1](docs/development/s03-provider-registry.md)；其他插件种类继续按计划接入。

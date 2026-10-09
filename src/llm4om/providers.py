@@ -10,6 +10,7 @@ import signal
 import sys
 import time
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import dataclass
 from email.message import Message
 from pathlib import Path
@@ -104,12 +105,24 @@ def _contains_credential(value: Any, credential: str) -> bool:
     return False
 
 
+def _validate_reply(value: dict[str, Any]) -> None:
+    text = {"type": ["string", "null"]}
+    usage = {name: {"type": ["integer", "null"], "minimum": 0} for name in
+             ("input_tokens", "output_tokens", "total_tokens", "cached_tokens", "reasoning_tokens")}
+    fields = {"text": {"type": "string"}, "response_id": text, "model": text, "finish_reason": text,
+              "usage": {"type": "object", "properties": usage, "required": list(usage), "additionalProperties": False}}
+    jsonschema.Draft202012Validator({"type": "object", "properties": {**fields, "stop_reason": text},
+        "required": list(fields), "additionalProperties": False}).validate(value)
+    json.dumps(value, allow_nan=False)
+
+
 class HTTPTextProvider:
     plugin_id: str
     endpoint_path: str
     request_id_header: str
 
     def __init__(self, config: dict[str, Any], model: str, credential: str | Callable[[], str]) -> None:
+        self.config = deepcopy(config)
         self.model = model
         self.identity = config["base_url"].rstrip("/") + self.endpoint_path
         self.max_output_tokens = config.get("max_output_tokens", 1024)
@@ -140,6 +153,7 @@ class HTTPTextProvider:
     def _transport_input(self, messages: list[dict[str, Any]], timeout: float) -> bytes:
         self.prepare()
         return json.dumps({"provider": self.plugin_id, "endpoint": self.identity, "model": self.model,
+                           "config": self.config,
                            "max_output_tokens": self.max_output_tokens, "credential": self._credential,
                            "messages": messages, "timeout": timeout}, allow_nan=False).encode()
 
@@ -207,9 +221,13 @@ class HTTPTextProvider:
             if (self._credential.encode() in raw or _contains_credential(value, self._credential)
                     or self._credential in (provider_request_id or "")):
                 raise ValueError("Response contains a credential.")
-            return {**self.decode_reply(value), "provider_request_id": provider_request_id,
+            reply = self.decode_reply(value)
+            _validate_reply(reply)
+            if _contains_credential(reply, self._credential):
+                raise ValueError("Decoded response contains a credential.")
+            return {**reply, "provider_request_id": provider_request_id,
                     "response_sha256": hashlib.sha256(raw).hexdigest(), "raw_reply": raw.decode("utf-8")}
-        except (RunError, ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
+        except (Exception, SystemExit) as error:
             raise RunError("invalid_provider_response", "llm", "Provider returned an invalid text response.") from error
 
 
@@ -301,8 +319,15 @@ class HTTPTextFactory:
     provider_type: type[HTTPTextProvider]
 
     def describe(self) -> dict[str, Any]:
-        return {"plugin_id": self.provider_type.plugin_id, "features": ["text"],
-                "usage_semantics": "total includes cached input and reasoning output; missing fields are unknown",
+        return {"schema_version": "0.2.0", "kind": "llm_provider", "plugin_version": "0.1.0",
+                "contract_range": ">=0.2.0,<0.3.0", "display_name": self.provider_type.__name__,
+                "description": "Non-streaming HTTP text Adapter with shared Gateway accounting.",
+                "capabilities": {"provider_profile": "http_text/0.1.0", "problem_types": [],
+                    "input_artifact_kinds": ["text_messages"], "output_artifact_kinds": ["text_response"],
+                    "llm_features": ["text"], "usage_semantics":
+                        "total includes cached input and reasoning output; missing fields are unknown"},
+                "dependencies": {"python": []}, "source": None,
+                "plugin_id": self.provider_type.plugin_id,
                 "config_schema": {"type": "object", "properties": {
                     "base_url": {"type": "string", "minLength": 1},
                     "credential_env": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z_0-9]*$"},
@@ -351,9 +376,11 @@ class AnthropicFactory(HTTPTextFactory):
         super().validate(config, model)
 
     def describe(self) -> dict[str, Any]:
-        return {**super().describe(), "usage_semantics":
+        manifest = super().describe()
+        manifest["capabilities"]["usage_semantics"] = (
                 "input = uncached + cache creation + cache read; cached is their cache subset; "
-                "total = input + output; missing components and reasoning are unknown"}
+                "total = input + output; missing components and reasoning are unknown")
+        return manifest
 
 
 def _resource_bytes(state: dict[str, Any]) -> bytes:
@@ -388,6 +415,7 @@ def _resource_state(archive: Path, *, expected: str | None = None,
     """Verify the entire immutable chain, including the mutable head and core anchor."""
     # ponytail: full snapshots suit bounded runs; use incremental records for large search budgets.
     try:
+        decoders: dict[str, type[HTTPTextProvider]] = {}
         head = archive / "state.json"
         current = read_public_bytes(head) if head.exists() else None
         current_hash = hashlib.sha256(current).hexdigest() if current is not None else None
@@ -458,10 +486,15 @@ def _resource_state(archive: Path, *, expected: str | None = None,
                     raise ValueError("Invalid immutable request identity.")
                 if item["status"] == "success":
                     raw = item["raw_reply"].encode()
-                    factory = provider_factory(identity["plugin_id"])
-                    if not isinstance(factory, HTTPTextFactory):
-                        raise ValueError("Resource Provider has no response decoder.")
-                    decoded = factory.provider_type.decode_reply(parse_json(raw))
+                    if identity["plugin_id"] not in decoders:
+                        factory = provider_factory(identity["plugin_id"])
+                        if not isinstance(factory, HTTPTextFactory):
+                            raise ValueError("Resource Provider has no response decoder.")
+                        decoders[identity["plugin_id"]] = factory.provider_type
+                    from llm4om.plugins import _quiet
+                    with _quiet():
+                        decoded = decoders[identity["plugin_id"]].decode_reply(parse_json(raw))
+                    _validate_reply(decoded)
                     if (hashlib.sha256(raw).hexdigest() != item["response_sha256"]
                             or any(item.get("reply" if key == "text" else key) != value for key, value in decoded.items())
                             or (item["usage"]["total_tokens"] is not None and item["reservation"] != 0)):
@@ -481,7 +514,7 @@ def _resource_state(archive: Path, *, expected: str | None = None,
                 return state
             cursor = following
         raise ValueError("Missing resource genesis.")
-    except (OSError, RunError, ValueError, KeyError, TypeError, IndexError, AttributeError) as error:
+    except (Exception, SystemExit) as error:
         raise RunError("checkpoint_incompatible", "admission", "Cannot verify the private resource journal and committed bytes.") from error
 
 
@@ -747,7 +780,13 @@ class MockProvider:
 
 class MockFactory:
     def describe(self) -> dict[str, Any]:
-        return {"plugin_id": "llm4om.providers.mock", "features": ["text"], "config_schema": {
+        return {"schema_version": "0.2.0", "kind": "llm_provider", "plugin_version": "0.1.0",
+            "contract_range": ">=0.2.0,<0.3.0", "display_name": "Mock",
+            "description": "Explicit replay of a public hand-authored artifact.",
+            "capabilities": {"provider_profile": "mock_text/0.1.0", "problem_types": [],
+                "input_artifact_kinds": ["text_messages"], "output_artifact_kinds": ["text_response"],
+                "llm_features": ["text"]}, "dependencies": {"python": []}, "source": None,
+            "plugin_id": "llm4om.providers.mock", "config_schema": {
             "type": "object", "properties": {"response_artifact": {"type": "string", "minLength": 1}},
             "required": ["response_artifact"], "additionalProperties": False}}
 
@@ -760,12 +799,13 @@ class MockFactory:
 
 
 def provider_factory(plugin_id: str) -> HTTPTextFactory | MockFactory:
-    factories: dict[str, HTTPTextFactory | MockFactory] = {
-        "llm4om.providers.mock": MockFactory(), "llm4om.providers.openai_compatible": OpenAICompatibleFactory(),
-        "llm4om.providers.anthropic": AnthropicFactory()}
-    factory = factories.get(plugin_id)
-    if factory is None:
+    from llm4om.plugins import discover_plugins
+    plugin = discover_plugins().get(("llm_provider", plugin_id))
+    if plugin is None:
         raise RunError("unknown_plugin", "admission", "Requested Provider is not installed.")
+    factory = plugin.factory
+    if not isinstance(factory, (HTTPTextFactory, MockFactory)):
+        raise RunError("invalid_plugin_manifest", "admission", "Provider factory has no supported text profile.")
     return factory
 
 
@@ -789,11 +829,11 @@ def _transport_main() -> None:
     factory = provider_factory(value["provider"])
     if not isinstance(factory, HTTPTextFactory):
         raise ValueError("Provider has no HTTP transport.")
-    provider = factory.provider_type({"base_url": value["endpoint"].removesuffix(factory.provider_type.endpoint_path),
-                                      "max_output_tokens": value["max_output_tokens"]},
-                                     value["model"], value["credential"])
+    provider = factory.provider_type(value["config"], value["model"], value["credential"])
     try:
-        result: dict[str, Any] = {"reply": provider._http_complete(value["messages"], value["timeout"])}
+        from llm4om.plugins import _quiet
+        with _quiet():
+            result: dict[str, Any] = {"reply": provider._http_complete(value["messages"], value["timeout"])}
     except HTTPError as error:
         status = error.code
         error.close()

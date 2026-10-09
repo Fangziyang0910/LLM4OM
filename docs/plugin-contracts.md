@@ -26,7 +26,7 @@ Manifest 字段：
 
 source 对研究方法另记录研究路线（prompting-based／training-based／hybrid）、接入方式（原流程适配／流程变体）、原模型与实际外部 LLM 的差异，以及可获得的 `paper_url`、`citation_key`、`paper_version`、`upstream_commit`、`variant_id` 与适配差异引用。名称或题目不是唯一身份；论文、模型权重、推理流程与数据集分别关联。考察提交不自动作为已验证接入版本。
 
-内部 registry 键为 `(kind, plugin_id)`，一次环境不允许相同键的多个活动版本。与内置键冲突必须报错，不能以安装顺序覆盖。entry point 名称规划为 `llm4om.plugins`；加载第三方 Python 包会执行可信插件代码，因此安装／加载与生成代码隔离是两个问题。
+内部 registry 键为 `(kind, plugin_id)`，一次环境不允许相同键的多个活动版本。与内置键冲突必须报错，不能以安装顺序覆盖。已实现的method／llm_provider使用entry point分组`llm4om.plugins`；加载第三方Python包会执行可信插件代码，因此安装／加载与生成代码隔离是两个问题。
 
 ### 能力声明与匹配规则
 
@@ -313,7 +313,7 @@ RunConfig 可以显式选择 trusted_local，config 为空对象；container 由
 
 ### S03 已落实的方法 profile 与预检子集
 
-SDK 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对象，当前只装载 method。Manifest 的 capabilities.method_profile 为 grounded_single_candidate/0.1.0；plugin_version 当前为稳定 major.minor.patch，contract_range 为 `>=X.Y.Z,<A.B.C` 并包含核心契约 0.2.0。config_schema 自包含，允许本地片段引用，暂不接受 $id 或远程 $ref／$dynamicRef；dependencies.python 为分发包名称列表，记录已安装版本。source 暂不接受额外 ArtifactRef，研究 URL／固定版本／变体等文字元数据可保存。
+SDK 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对象，S03-A／B初始版本只装载method；SDK0.18.0的Provider扩展见第23节。Manifest 的 capabilities.method_profile 为 grounded_single_candidate/0.1.0；plugin_version 当前为稳定 major.minor.patch，contract_range 为 `>=X.Y.Z,<A.B.C` 并包含核心契约 0.2.0。config_schema 自包含，允许本地片段引用，暂不接受 $id 或远程 $ref／$dynamicRef；dependencies.python 为分发包名称列表，记录已安装版本。source 暂不接受额外 ArtifactRef，研究 URL／固定版本／变体等文字元数据可保存。
 
 当前 async run 返回内存 MethodOutcome：status=candidate_selected、final_candidate_id=001、proposal=ModelProposal(artifact, formulation, structured_ir)。核心验证原问题 hash／revision、声明的 Formulation 和数据绑定，生成实际引用与候选记录；多 revision／原生脚本资源见第 14 节，内部 checkpoint 扩展见第 12 节。MethodContext 提供 llm、只读公开 data／预算上限和 problem_sha256，以及可选运行资源。LLMResponse 提供 text、call_id、evidence_origin、source_sha256，以及可选 finish_reason；真实 Provider 完整 usage 与身份保存在 Gateway trace。
 
@@ -333,7 +333,7 @@ ExecutionResult 增加可选 worker_status、image_id、container_id、container
 
 ### S05-A 文本 Provider 子集
 
-公共接口保持 LLMGateway.complete(request) 与 MethodOutcome／ModelProposal。Provider factory 由 provider_plugin_id 选择并独立校验 config、text 能力和凭据，不依赖方法 ID。当前 factory 仅内置 Mock 与 openai_compatible；第三方 entry point 仍只装载 method。Provider 的 stdlib HTTP adapter 是窄 TextProvider，同步 complete(messages, timeout) 返回规范化文本和 usage；Gateway 提供方法使用的 async 接口并拥有资源控制。
+公共接口保持 LLMGateway.complete(request) 与 MethodOutcome／ModelProposal。Provider factory 由 provider_plugin_id 选择并独立校验 config、text 能力和凭据，不依赖方法 ID。S05-A初始factory内置Mock与openai_compatible；后续Messages见S05-B，SDK0.18.0独立Provider见第23节。Provider 的 stdlib HTTP adapter 是窄 TextProvider，同步 complete(messages, timeout) 返回规范化文本和 usage；Gateway 提供方法使用的 async 接口并拥有资源控制。
 
 openai_compatible 配置为 base_url、credential_env，另有 max_output_tokens（默认 1024）、max_retries（默认 2，范围 0～5）、timeout_s（默认 30）。只接受非流式 text；请求字段仅 messages、可选 request_id／role。doctor 优先读取配置目录 literal .env，不存在时读取当前工作目录 .env；进程环境优先，但不发请求。Credential、header 与 URL 凭据在公开投影边界拒绝，凭据值不进入配置快照、Context 数据或 Worker。
 
@@ -1127,3 +1127,17 @@ model work. Unfinished/unknown external work still uses the existing Gateway and
 execution rules. Revised input cannot be scored as the original frozen benchmark
 case merely because it has the same problem_id. No hidden evaluator/oracle or
 credential is added to MethodContext.
+
+## 23. S03-C1 installed text Providers (SDK 0.18.0)
+
+The common Manifest0.2.0 now applies to method and llm_provider factories in the installed llm4om.plugins group. Other kinds remain planned. discover_plugins()->dict[(kind,plugin_id),Plugin] is the SDK inventory; discover_methods() filters MethodPlugin instances. Every active manifest is validated before use; invalid installed plugins reject discovery instead of silently disappearing.
+
+Provider factories declare capabilities.provider_profile=http_text/0.1.0 or the built-in mock_text/0.1.0; llm_features contains only actually supported text features. input_artifact_kinds=text_messages, output_artifact_kinds=text_response; problem_types=[] means the transport makes no optimization-family claim. Optional capabilities.usage_semantics explains token accounting. All common fields, stable SemVer, core contract interval, self-contained config_schema and dependencies.python follow section1. Field validation precedes credential lookup and external requests.
+
+Installed HTTP factories implement the existing HTTPTextFactory contract: provider_type is a subclass of HTTPTextProvider with the same declared plugin_id, endpoint_path, request_id_header, _request(messages) and decode_reply(value). create(config,model,environment=...)/restore(config,model,environment=callable) retain the SDK credential, URL and request-limit semantics. Initialization and describe must not send paid requests. The owned transport forwards the validated public config, model and privately supplied credential, including protocol-specific config fields; it imports the installed factory; generated-code containers do not mount its package or credentials.
+
+Decoded replies have exactly text:string, response_id/model/finish_reason:string|null, usage:{input_tokens,output_tokens,total_tokens,cached_tokens,reasoning_tokens}:nonnegative integer|null, and optional stop_reason:string|null. Booleans are not token counts. Raw HTTP and decoded responses are checked for credential content; invalid replies retain an unknown outcome and reservation. Import, Manifest and constructor diagnostics suppress plugin stdout/stderr and exception messages. This is failure hygiene for trusted code, not a sandbox for arbitrary installed Python.
+
+Admission stores provider Manifest and provider_origin; each role_models entry stores its own provider/origin/model/config. Installed origin includes entry point/value, distribution/version and a hash of all distribution-registered files except .pyc caches. Declared dependency versions are saved. Recovery requires the same identities and decoder; no credentials or new requests are required for already-completed work. Source/Manifest/resource changes require a new environment/run rather than silent migration. The SDK/Worker snapshot rule remains in force.
+
+Actual scope, independent example and local evidence: [S03-C1](development/s03-provider-registry.md).

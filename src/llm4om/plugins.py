@@ -1,4 +1,4 @@
-"""Discover installed method factories through the declared entry-point seam."""
+"""Discover trusted factories through the common installed entry-point seam."""
 
 from dataclasses import dataclass
 from copy import deepcopy
@@ -22,11 +22,14 @@ from llm4om.contracts import RunError, parse_json, reject_additional_refs
 
 
 @dataclass(frozen=True)
-class MethodPlugin:
+class Plugin:
     manifest: dict[str, Any]
     origin: dict[str, Any]
     factory: Any
 
+
+@dataclass(frozen=True)
+class MethodPlugin(Plugin):
     def resolve(self, config: dict[str, Any]) -> "MethodPlugin":
         return MethodPlugin(_manifest(self.factory, config), self.origin, self.factory)
 
@@ -66,18 +69,25 @@ class MethodPlugin:
 
 
 def discover_methods() -> dict[tuple[str, str], MethodPlugin]:
+    return {key: plugin for key, plugin in discover_plugins().items() if isinstance(plugin, MethodPlugin)}
+
+
+def discover_plugins() -> dict[tuple[str, str], Plugin]:
     from llm4om.coe import CoEFactory
     from llm4om.feedback_repair import FeedbackRepairFactory
-    plugins = {}
-    for builtin in (DirectFactory(), OptimusFactory(), CoEFactory(), FeedbackRepairFactory()):
+    from llm4om.providers import MockFactory, OpenAICompatibleFactory, AnthropicFactory
+    plugins: dict[tuple[str, str], Plugin] = {}
+    for builtin in (DirectFactory(), OptimusFactory(), CoEFactory(), FeedbackRepairFactory(),
+                    MockFactory(), OpenAICompatibleFactory(), AnthropicFactory()):
         manifest = _manifest(builtin)
-        plugins[(manifest["kind"], manifest["plugin_id"])] = MethodPlugin(manifest, {"kind": "builtin"}, builtin)
+        plugin_type = MethodPlugin if manifest["kind"] == "method" else Plugin
+        plugins[(manifest["kind"], manifest["plugin_id"])] = plugin_type(manifest, {"kind": "builtin"}, builtin)
     for entry in sorted(entry_points(group="llm4om.plugins"), key=lambda item: (item.name, item.value)):
         try:
             with _quiet():
                 factory = entry.load()
         except (Exception, SystemExit) as error:
-            raise RunError("plugin_load_error", "admission", "Cannot import an installed method factory.",
+            raise RunError("plugin_load_error", "admission", "Cannot import an installed plugin factory.",
                            details={"entry_point": entry.name, "value": entry.value, **_exception_details(error)}) from error
         try:
             manifest = _manifest(factory)
@@ -85,17 +95,28 @@ def discover_methods() -> dict[tuple[str, str], MethodPlugin]:
             if error.details is not None:
                 error.details.update(entry_point=entry.name, value=entry.value)
             raise
-        origin = {"kind": "installed", "entry_point": entry.name, "value": entry.value,
+        try:
+            digest = hashlib.sha256()
+            if entry.dist is not None:
+                for file in sorted(entry.dist.files or [], key=str):
+                    if file.suffix == ".pyc":
+                        continue
+                    digest.update(str(file).encode())
+                    with Path(str(entry.dist.locate_file(file))).open("rb") as stream:
+                        for chunk in iter(lambda: stream.read(65536), b""):
+                            digest.update(chunk)
+            origin = {"kind": "installed", "entry_point": entry.name, "value": entry.value,
                   "distribution": entry.dist.name if entry.dist else None,
                   "distribution_version": entry.dist.version if entry.dist else None,
-                  "package_sha256": hashlib.sha256(b"".join(
-                      str(file).encode() + Path(str(entry.dist.locate_file(file))).read_bytes()
-                      for file in sorted(entry.dist.files or [], key=str) if file.suffix == ".py"
-                  )).hexdigest() if entry.dist else None}
+                  "package_sha256": digest.hexdigest() if entry.dist else None}
+        except (Exception, SystemExit) as error:
+            raise RunError("plugin_load_error", "admission", "Cannot verify installed plugin distribution files.",
+                           details={"entry_point": entry.name, **_exception_details(error)}) from error
         key = (manifest["kind"], manifest["plugin_id"])
         if key in plugins:
-            raise RunError("duplicate_plugin", "admission", "Two active methods share a registry key.")
-        plugins[key] = MethodPlugin(manifest, origin, factory)
+            raise RunError("duplicate_plugin", "admission", "Two active plugins share a registry key.")
+        plugin_type = MethodPlugin if manifest["kind"] == "method" else Plugin
+        plugins[key] = plugin_type(manifest, origin, factory)
     return plugins
 
 
@@ -107,8 +128,10 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
                     "formulation_representations", "code_representations", "model_backends", "solvers", "llm_features",
                     "execution_modes", "oracle_requirements")}
     capabilities.update(method_profile=text, supports_checkpoint={"type": "boolean"}, supports_clarification={"type": "boolean"}, cancellation={"const": "cooperative/0.1.0"})
+    capabilities.update(provider_profile={"enum": ["http_text/0.1.0", "mock_text/0.1.0"]})
+    capabilities.update(usage_semantics=text)
     fields = {"schema_version": {"const": "0.2.0"}, "plugin_id": {**text,
-              "pattern": r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$"}, "kind": {"const": "method"},
+              "pattern": r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$"}, "kind": {"enum": ["method", "llm_provider"]},
               "plugin_version": {"type": "string", "pattern": f"^{stable_version}$", "maxLength": 128},
               "contract_range": {**text, "maxLength": 256}, "display_name": text, "description": text,
               "capabilities": {"type": "object", "properties": capabilities,
@@ -129,13 +152,26 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
         _local_schema(manifest["config_schema"])
         reject_additional_refs(manifest["source"])
         if not callable(factory.create):
-            raise TypeError("Factory must create a method.")
+            raise TypeError("Factory must create a plugin.")
+        if manifest["kind"] == "llm_provider":
+            from llm4om.providers import HTTPTextFactory, MockFactory, HTTPTextProvider
+            profile = manifest["capabilities"].get("provider_profile")
+            if isinstance(factory, HTTPTextFactory):
+                if (profile != "http_text/0.1.0" or not issubclass(factory.provider_type, HTTPTextProvider)
+                        or factory.provider_type.plugin_id != manifest["plugin_id"]
+                        or factory.provider_type._request is HTTPTextProvider._request
+                        or factory.provider_type.decode_reply is HTTPTextProvider.decode_reply):
+                    raise ValueError("Unsupported HTTP Provider profile.")
+            elif not isinstance(factory, MockFactory) or profile != "mock_text/0.1.0":
+                raise ValueError("Unsupported Provider factory.")
+            if not set(manifest["capabilities"].get("llm_features", [])) <= {"text"}:
+                raise ValueError("This Provider profile supports only text.")
     except (Exception, SystemExit) as error:
-        raise RunError("invalid_plugin_manifest", "admission", "Installed method Manifest or factory does not match the current profile.",
+        raise RunError("invalid_plugin_manifest", "admission", "Plugin Manifest or factory does not match a supported profile.",
                        details=_exception_details(error)) from error
     interval = re.fullmatch(f">=(?P<lower>{stable_version}),\\s*<(?P<upper>{stable_version})", manifest["contract_range"])
     if interval is None or not (tuple(map(int, interval["lower"].split("."))) <= (0, 2, 0) < tuple(map(int, interval["upper"].split(".")))):
-        raise RunError("incompatible_contract", "admission", "Method contract_range does not include core 0.2.0.")
+        raise RunError("incompatible_contract", "admission", "Plugin contract_range does not include core 0.2.0.")
     return manifest
 
 

@@ -11,6 +11,7 @@ from llm4om.mamo import MAMOAdapter, MAMOEvaluator
 from llm4om.nlp4lp import NLP4LPAdapter, NLP4LPEvaluator
 from llm4om.checkers import SolutionChecker, ProductionChecker, UnitCapChecker
 from llm4om.checker_tasks import CheckerFixtureAdapter, IndependentCheckerEvaluator
+from llm4om.plugins import discover_plugins, discover_methods
 
 __all__ = [
     "ModelHandle", "FactoryCodeProposal", "ScriptCodeProposal", "GenerationFailure", "MethodContext", "MethodResources", "MethodOutcome", "ModelProposal",
@@ -18,4 +19,5 @@ __all__ = [
     "NL4OptAdapter", "MAMOAdapter", "NLP4LPAdapter", "CheckerFixtureAdapter", "import_dataset",
     "NL4OptEvaluator", "MAMOEvaluator", "NLP4LPEvaluator", "IndependentCheckerEvaluator", "evaluate_case",
     "SolutionChecker", "ProductionChecker", "UnitCapChecker",
+    "discover_plugins", "discover_methods",
 ]

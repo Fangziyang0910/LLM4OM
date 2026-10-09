@@ -12,7 +12,7 @@ from llm4om.storage import cancel_run
 from llm4om.control import CancellationToken
 from llm4om.tasks import import_dataset
 from llm4om.evaluation import evaluate_case
-from llm4om.plugins import discover_methods
+from llm4om.plugins import discover_plugins
 from llm4om.contracts import RunError, read_config
 from llm4om.preflight import prepare_run
 
@@ -43,7 +43,7 @@ def main() -> int:
     evaluator.add_argument("--case-id", required=True)
     evaluator.add_argument("--run", type=Path, required=True)
     evaluator.add_argument("--output", type=Path, required=True)
-    plugins = commands.add_parser("plugins", help="Inspect installed modeling methods")
+    plugins = commands.add_parser("plugins", help="Inspect supported installed plugins")
     plugins.add_subparsers(dest="plugin_command", required=True).add_parser("list")
     doctor = commands.add_parser("doctor", help="Check compatibility, installed dependencies and admission without a model request")
     doctor.add_argument("--config", type=Path, required=True)
@@ -69,7 +69,7 @@ def main() -> int:
             return 1
     if args.command == "plugins":
         try:
-            inventory = discover_methods()
+            inventory = discover_plugins()
         except RunError as error:
             print(json.dumps({"schema_version": "0.2.0", "plugins": [], "error": {
                 "code": error.code, "stage": error.stage, "message": str(error), "details": error.details}}))
