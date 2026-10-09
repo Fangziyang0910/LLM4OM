@@ -40,4 +40,8 @@ snapshot 和 score 不覆盖已有文件。私有目录为0700、policy 为0600�
 
 本机公共 Task／Evaluation／CLI／SDK／SolutionChecker 和实际 HiGHS／Gurobi 测试覆盖：正确模型、整数域遗漏、资源约束遗漏、交换利润导致自报13但原目标12、未声明缩放、恒零目标偶合、多最优解、无 primal、缺 oracle／checker／mapping／reference、插件异常及非法输出。检查器异常不导出其私有异常文本。
 
-测试使用预定 HTTP fixture 验证 Provider 工程通路；本切片没有新增付费模型调用，也不将 fixture 结果当作模型准确率。一次完整本机回归、wheel／Worker 和最终实际 CLI 证据在交付前记录。独立 Standards／Spec 审阅受本机 Codex CLI 配额限制，当前未完成；自查不能替代独立审阅。GitHub CI 未触发，包和 Worker 未公开发布。
+测试使用预定 HTTP fixture 验证 Provider 工程通路；本切片没有新增付费模型调用，也不将 fixture 结果当作模型准确率。本机 Python3.12.11 完整回归290项／666.828秒通过；干净 Python3.11 wheel 的15项聚焦任务／评测测试通过。mypy31个模块、仓库169文件、参考资料／diff 和 wheel／sdist 检查通过。独立 Standards／Spec 审阅受本机 Codex CLI 配额限制，当前未完成；自查不能替代独立审阅。GitHub CI 未触发，包和 Worker 未公开发布。
+
+实际 CLI HiGHS run `2766a72c24914649a2eb62d44c2f8c77` 与容器 Gurobi run `e3982c820de143228bd56b0e194e0024` 均通过原问题可行性、目标13和有限点检查。第一次将 byte-bound Mock 用于路径规范化后任务的 run `8e8345df305744589f0ccc578dd01af7` 被正确拒绝；失败评测保留分母1／率0，独立重复成功不改写它。
+
+最终源码／wheel／Worker 代码 hash 为 `ed102dd514d443867bd4d1f53e4dfaccca2b9c5dd63b65e933d70372239cbd63`。Worker0.12.0 镜像为 `sha256:00bae627774a1e8850c9c67368a2cf98d622af3c32ec21eb34150702eda073ea`；0.11.0 标签仍保留。169个源文件、197个公开运行／评分文件与52个 wheel 条目通过实际密钥扫描；运行与包均不含 oracle 文件。完整本机材料保存在 `/tmp/llm4om-s07d/verification.json` 及其相邻日志，不纳入版本控制。
