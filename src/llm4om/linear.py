@@ -22,16 +22,17 @@ def compile_ir(ir: dict[str, Any]) -> CompiledCode:
     model = deepcopy({key: ir[key] for key in ("variables", "objective", "constraints")})
     expressions = [model["objective"]["expression"], *[row["expression"] for row in model["constraints"]]]
     for expression in expressions:
-        groups: dict[str, list[float]] = {}
+        groups: dict[str, list[int | float]] = {}
         for term in expression["terms"]:
-            groups.setdefault(term["variable_id"], []).append(float(term["coefficient"]))
+            groups.setdefault(term["variable_id"], []).append(term["coefficient"])
         try:
-            expression["terms"] = [{"variable_id": key, "coefficient": math.fsum(values)}
+            expression["terms"] = [{"variable_id": key,
+                                    "coefficient": sum(values) if all(isinstance(value, int) for value in values) else math.fsum(values)}
                                    for key, values in groups.items()]
             for term in expression["terms"]:
                 _finite(term["coefficient"])
         except (ValueError, OverflowError) as error:
-            raise RunError("invalid_ir", "code", "Merged coefficients exceed finite solver numbers.") from error
+            raise RunError("invalid_ir", "code", "Merged coefficients exceed supported solver numbers.") from error
     payload = json.dumps(model, ensure_ascii=False, allow_nan=False, sort_keys=True)
     source = '''"""Deterministically compiled grounded LPIR; data revision is fixed."""
 import json
@@ -128,5 +129,6 @@ def _validate_ir(ir: dict[str, Any]) -> None:
 
 
 def _finite(value: int | float) -> None:
-    if not math.isfinite(float(value)):
-        raise ValueError("Solver numbers must be finite doubles.")
+    number = float(value)
+    if not math.isfinite(number) or isinstance(value, int) and number != value:
+        raise ValueError("Solver numbers must be finite doubles without rounding integer literals.")

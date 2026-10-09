@@ -21,17 +21,17 @@ CLI 返回 `status=completed` 和运行目录。SDK 使用同一 `run_problem(pr
 | 执行 | 显式 trusted_local | 同进程执行平台编译产物；container 请求不自动降级 |
 | 评估 | 公开结构与编译检查 | semantic_validation=not_available |
 
-编译器保留常数、目标方向、连续／整数／二元域、界和重复项。未知变量、重复 ID、非线性字段、非有限数值和矛盾边界在 Code 阶段拒绝。原变量不参与目标或约束时也保留。没有原变量的常数模型使用固定为零的内部变量，symbol map 显式标明且不出现在业务解向量中。
+编译器保留常数、目标方向、连续／整数／二元域、界和重复项。未知变量、重复 ID、非线性字段、非有限数值、不能准确转为 double 的整数字面值和矛盾边界在 Code 阶段拒绝。原变量不参与目标或约束时也保留。没有原变量的常数模型使用固定为零的内部变量，symbol map 显式标明且不出现在业务解向量中。
 
 `build_model(data)` 当前是固定数据 revision 的 grounded 工厂；数值来自已校验 IR，data 参数不执行重新绑定。参数化工厂与换数据行为归 S02-B。自由文本／LaTeX 不直接传给编译器；原生用户代码与 LLM 代码尚不接入执行。
 
-HiGHS 的数值阈值会把超大有限界解释为无穷、忽略极小矩阵系数。适配器读取原生阈值并拒绝这些输入，保存 unsupported_numeric_range，避免模型被静默改变。阈值与有效容差随结果保存，不进行隐式缩放。
+HiGHS 的数值阈值会把超大有限界解释为无穷、忽略极小矩阵系数；极小目标系数也可能落入 dual feasibility tolerance，使无界模型被报告为 optimal。适配器读取原生阈值，拒绝超界数值及不大于 dual tolerance 的非零目标系数，保存 unsupported_numeric_range。当前不自动缩放问题。阈值与有效容差随结果保存，不进行隐式缩放。
 
 ## 运行证据与失败语义
 
 运行目录增加 `model.py`、CodeArtifact、symbol map、BuildArtifact、ExecutionResult、SolveResult 及可用时的 solution。编译前快照与最终候选分别存储，事件中的旧引用保持有效。environment-lock 保存真实 Python／依赖版本；执行计划按实际阶段记录资源状态。Candidate 在执行后选中，bundle 的 final_candidate_id 为 001；失败时不选择最终候选。
 
-`completed` 表示执行完成；是否 optimal、infeasible、unbounded 或 time_limit 由 SolveResult 单独判断。没有可行 primal 时，solution_ref 与 objective_value 为 null。解、目标、原始状态、求解时间、MIP bound／gap、选项与 evidence_origin 来自原生 API。没有采集的 CPU／峰值内存为 null；同进程执行没有子进程 exit_code。
+`completed` 表示执行完成；是否 optimal、infeasible、unbounded 或 time_limit 由 SolveResult 单独判断。没有可行 primal 时，solution_ref 与 objective_value 为 null。解、目标、原始状态、求解时间、可用的 MIP bound／gap、选项与 evidence_origin 来自原生 API。未执行 MIP 求解时，不把原生默认 bound=0 当作证据；没有采集的 CPU／峰值内存为 null；同进程执行没有子进程 exit_code。
 
 可选依赖缺失和零 Solver 预算在 Mock 回放前拒绝。非法 IR 不调用 Solver。原生数值 admission 失败仍保存已编译代码与失败 ExecutionResult；存储 OSError 保留 SDK／CLI 原有边界。solver_calls 计适配器调用尝试，external_llm_requests 为 0。time_limit_s 由 HiGHS 执行；总墙钟、内存限制、取消／恢复与容器隔离仍归 S04，当前不声称执行这些限制。
 

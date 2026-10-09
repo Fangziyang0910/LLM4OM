@@ -20,8 +20,12 @@ def runtime_versions() -> dict[str, str]:
 
 def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
     limit = options.get("time_limit_s", 0)
+    try:
+        seconds = float(limit) if not isinstance(limit, bool) and isinstance(limit, (int, float)) else math.nan
+    except OverflowError:
+        seconds = math.nan
     if (set(options) - {"time_limit_s"} or isinstance(limit, bool)
-            or not isinstance(limit, (int, float)) or not math.isfinite(limit) or limit < 0):
+            or not math.isfinite(seconds) or seconds < 0):
         raise RunError("invalid_solver_options", "admission", "Only a finite nonnegative time_limit_s is supported.")
     import highspy
     import pyomo.environ as pyo
@@ -37,9 +41,9 @@ def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
     checked(solver.setOptionValue("output_flag", False))
     checked(solver.setOptionValue("threads", 1))
     if "time_limit_s" in options:
-        checked(solver.setOptionValue("time_limit", options["time_limit_s"]))
+        checked(solver.setOptionValue("time_limit", seconds))
     limits = {name: float(solver.getOptionValue(name)[1]) for name in
-              ("infinite_bound", "infinite_cost", "small_matrix_value", "large_matrix_value")}
+              ("infinite_bound", "infinite_cost", "small_matrix_value", "large_matrix_value", "dual_feasibility_tolerance")}
     def finite_bound(value: Any) -> float:
         result = float(value)
         if not math.isfinite(result) or abs(result) >= limits["infinite_bound"]:
@@ -55,8 +59,9 @@ def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
     objective = generate_standard_repn(model.objective.expr)
     checked(solver.changeObjectiveOffset(float(objective.constant)))
     for variable, coefficient in zip(objective.linear_vars, objective.linear_coefs):
-        if not math.isfinite(float(coefficient)) or abs(coefficient) >= limits["infinite_cost"]:
-            raise RunError("unsupported_numeric_range", "solve", "A finite cost exceeds HiGHS numerical limits.")
+        if (not math.isfinite(float(coefficient)) or abs(coefficient) >= limits["infinite_cost"]
+                or 0 < abs(coefficient) <= limits["dual_feasibility_tolerance"]):
+            raise RunError("unsupported_numeric_range", "solve", "A cost is outside the supported HiGHS numerical range.")
         checked(solver.changeColCost(columns[id(variable)], float(coefficient)))
     checked(solver.changeObjectiveSense(highspy.ObjSense.kMinimize if model.objective.sense == pyo.minimize else highspy.ObjSense.kMaximize))
     for row in model.constraints.values():
@@ -77,12 +82,13 @@ def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
                    "kSolveError": "error", "kPostsolveError": "error", "kMemoryLimit": "error"}.get(raw_status, "unknown")
     info = solver.getInfo()
     primal = solver.getSolution()
-    has_primal = primal.value_valid and info.primal_solution_status == highspy.SolutionStatus.kSolutionStatusFeasible
+    has_primal = info.valid and primal.value_valid and info.primal_solution_status == highspy.SolutionStatus.kSolutionStatusFeasible
     values = {name: float(primal.col_value[index]) for name, index in code.symbol_map["variables"].items()} if has_primal else None
     objective_value = float(info.objective_function_value) if has_primal else None
     mip = any(variable.is_integer() for variable in model.variables.values())
-    bound = float(info.mip_dual_bound) if mip else objective_value if termination == "optimal" else None
-    gap = float(info.mip_gap) if mip else None
+    mip_stats = info.valid and mip and info.mip_node_count >= 0 and termination in ("optimal", "time_limit", "interrupted", "feasible")
+    bound = float(info.mip_dual_bound) if mip_stats else objective_value if termination == "optimal" else None
+    gap = float(info.mip_gap) if mip_stats and has_primal else None
     effective = {name: solver.getOptionValue(name)[1] for name in
                  ("threads", "primal_feasibility_tolerance", "dual_feasibility_tolerance", "mip_feasibility_tolerance", "mip_rel_gap")}
     return {"solver_id": "llm4om.solvers.highs", "solver_version": solver.version(),

@@ -82,10 +82,11 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
         error_record = {"code": error.code if isinstance(error, RunError) else "invalid_input",
                         "stage": error.stage if isinstance(error, RunError) else "validation",
                         "message": str(error) if isinstance(error, RunError) else "Cannot process the public input or Mock artifact."}
-    if stages["code"]["status"] == "available":
+    if stages["formulation"]["status"] == "available":
         store.json("evaluation.json", {"schema_version": "0.2.0", "protocol_id": "llm4om.eval.public-v0.1",
                    "formulation_validation": {"status": "pass", "level": "structural"},
-                   "code_validation": {"status": "pass", "level": "deterministic_compilation"},
+                   "code_validation": {"status": "pass", "level": "deterministic_compilation"}
+                                      if stages["code"]["status"] == "available" else {"status": "not_available"},
                    "semantic_validation": {"status": "not_available"}}, "evaluation")
     store.json("budget-ledger.json", ledger, "budget")
     store.emit("run_finished", status=status, error=error_record)
@@ -170,10 +171,6 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     store.emit("formulation_saved", artifact_ref=artifact_ref, call_id="mock-1", evidence_origin="mock_fixture")
     stages = {**artifact["stage_status"], "solve": {
         "status": "not_available", "reason": "Solve has not run."}}
-    store.json("evaluation.json", {"schema_version": "0.2.0", "protocol_id": "llm4om.eval.public-v0.1",
-               "formulation_validation": {"status": "pass", "level": "structural"},
-               "code_validation": {"status": "not_available"},
-               "semantic_validation": {"status": "not_available"}}, "evaluation")
     return artifact_ref, stages
 
 

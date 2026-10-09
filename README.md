@@ -87,4 +87,4 @@ llm4om report --experiment-id EXPERIMENT_ID --format markdown
 
 每个插件必须声明能力和兼容矩阵，不允许自动降级后仍把结果标成原方法；每个评估结论必须说明证据级别。**求解器报告最优，只表示候选模型被求解，不证明模型符合业务需求。**
 
-已完成 [S01](docs/implementation-plan.md#s01-统一问题契约与离线纵向流程)，下一步为 S02-A 真实 IR 编译与 HiGHS 求解。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+已完成 S01／S02-A；当前前沿与后续依赖见 [开发计划](docs/implementation-plan.md)。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
