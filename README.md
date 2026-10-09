@@ -165,3 +165,5 @@ MAMO Task／Evaluation 已进入 SDK/Worker0.10.0 开发版本：保留全部优
 NLP4LP Task／Evaluation 已进入 SDK/Worker0.11.0 开发版本：完整保留361个公开描述与参数，参考缺失／损坏分别记录，资格按公开问题与数据评阅冻结。实际支持与待验收条件见 [S07-B](docs/development/s07-nlp4lp.md)。
 
 SDK／Worker0.12.0 的原问题独立可行性、原目标重算与有限探测见 [S07-D](docs/development/s07-checkers.md)。Web／批量实验仍按完整1.0计划实施。
+
+CoE专家路由与原生函数的开发实现、真实外部模型／原问题检查和剩余验收见 [S06-C](docs/development/s06-coe.md)。

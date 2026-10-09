@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-10；SDK／Worker 开发版本：0.12.0。当前包含 169 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-10；SDK／Worker 开发版本：0.13.0。当前包含 179 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -205,3 +205,13 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/checkers.py` | 原问题检查与受信任扩展接口 | 独立 CSV／Decimal 规则、版本／来源与输出校验 |
 | `tests/test_checker_evaluation.py` | 公共导入／评测与真实求解反例 | HiGHS／Gurobi、CLI 安装插件、错误状态与私有隔离 |
 | `tests/test_checkers.py` | 独立原问题数学检查 | 原始业务域／容量／利润与多最优解 |
+| `docs/development/s06-coe.md` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
+| `examples/coe/README.md` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
+| `examples/coe/data/capacities.csv` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
+| `examples/coe/data/products.csv` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
+| `examples/coe/problem.json` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
+| `examples/coe/public-interface.json` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
+| `examples/coe/run.yaml` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
+| `src/llm4om/coe.py` | CoE 原创流程与原生调用 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
+| `tests/test_coe_method.py` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
+| `tests/test_coe_run.py` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |

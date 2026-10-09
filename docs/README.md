@@ -64,3 +64,5 @@ MAMO 固定优化问题导入及数值比较的开发实现与实际证据见 [S
 NLP4LP 的公开描述／具体 JSON 参数与私有参考分离、实际来源和验收见 [S07-B](development/s07-nlp4lp.md)。
 
 原问题独立解检查、参考质量与有限反例探测见 [S07-D](development/s07-checkers.md)。
+
+CoE流程与真实模型、独立原问题检查的开发证据见 [S06-C](development/s06-coe.md)。

@@ -89,7 +89,7 @@ class RunMethodResources:
                 store.checkpoint()
             store.emit("method_execution_reused", execution_id=execution_id)
             return deepcopy(result)
-        if plan.snapshot["method_profile"] != "native_script/0.1.0":
+        if plan.snapshot["method_profile"] not in ("native_script/0.1.0", "native_script/0.2.0"):
             raise RunError("capability_mismatch", "execution", "The admitted method has no raw-script execution profile.")
         ledger = store.state["ledger"]
         remaining = plan.deadline - time.time()

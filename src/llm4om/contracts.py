@@ -261,15 +261,18 @@ def validate_model_artifact(artifact: dict[str, Any]) -> None:
     arrays = {name: {"type": "array"} for name in
               ["data_bindings", "assumptions", "requirement_traces", "diagnostics", "warnings", "optional_views"]}
     schema = _object({"schema_version": {"const": "0.2.0"}, "artifact_id": TEXT,
-        "problem_ref": {"type": "object"}, "formulation_ref": {"type": "object"},
+        "problem_ref": {"type": "object"}, "formulation_ref": {"type": ["object", "null"]},
         "code_ref": {"type": "null"}, "provenance": {"type": "object"}, **arrays,
         "stage_status": _object({
-            "formulation": _object({"status": {"const": "available"}, "reason": {"type": "null"}}),
+            "formulation": {"anyOf": [_object({"status": {"const": "available"}, "reason": {"type": "null"}}),
+                _object({"status": {"const": "not_available"}, "reason": TEXT})]},
             "code": _object({"status": {"enum": ["pending", "not_available"]}, "reason": TEXT})})})
     try:
         jsonschema.Draft202012Validator(schema).validate(artifact)
-    except jsonschema.ValidationError as error:
-        raise RunError("invalid_model_artifact", "formulation", "S01 accepts a Formulation with Code explicitly unavailable or pending.") from error
+        if (artifact["formulation_ref"] is None) != (artifact["stage_status"]["formulation"]["status"] == "not_available"):
+            raise ValueError("Formulation reference and availability differ.")
+    except (jsonschema.ValidationError, ValueError) as error:
+        raise RunError("invalid_model_artifact", "formulation", "Artifact stage availability and references must agree.") from error
 
 
 def validate_bindings(artifact: dict[str, Any], public: dict[str, Any]) -> None:

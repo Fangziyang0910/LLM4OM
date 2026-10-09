@@ -1,0 +1,24 @@
+{
+  "code_example": "def prob_production(profits, resource_usage, capacities):\n    \"\"\"Use nonnegative integer quantities named qty_A and qty_B. Return total profit.\"\"\"\n    pass\n",
+  "entry_point": "prob_production",
+  "input": {
+    "profits": [
+      3,
+      2
+    ],
+    "resource_usage": [
+      [
+        2,
+        1
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "capacities": [
+      8,
+      8
+    ]
+  }
+}

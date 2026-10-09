@@ -885,3 +885,37 @@ and feasibility determine verified_solution. Reported units and finite model
 probes do not redefine that solution metric. Missing primal/oracle and checker
 errors cannot become semantic_verified; limited evidence never proves complete
 Formulation or Code equivalence.
+
+## 18. S06-C native Code without Formulation (SDK 0.13.0)
+
+The native_script/0.2.0 method profile declares formulation_representations=[],
+code_representations=[native_script] and gurobipy/Gurobi/container support.
+ModelProposal.formulation is null only when the admitted profile permits this
+and ModelArtifact.formulation_ref=null with an explicit not_available reason.
+A supplied Formulation must match the admitted representation and available stage.
+Code source_formulation_ref is null in this case; its generation provenance comes
+from the real method output. Public evaluation does not label missing Formulation
+structurally passed. Core completed-Code recovery verifies the nullable reference
+and the actual Code/source/method/data identities. Earlier profiles retain their
+required Formulation contract. No method-ID branch is added to orchestration.
+
+CoE public_contract_data_id is optional/null. The default is an original public
+prob_problem() stub. A selected public JSON contract has exactly code_example,
+entry_point and input keyword arguments. Config defaults are collaboration3,
+reflection=false, trials3 and seed0; actual routing seed/resolved behavior are
+recorded. The interface file is public input, never benchmark reference code.
+The method preserves all original native function bytes and appends a declared
+isolated invocation driver. Public reflection uses first-alphabetical prob_*
+discovery and generated public arguments, ignores returned values and may feed
+bounded source errors back to experts. Its diagnostics are untrusted source
+feedback, separate from trusted Solver evidence.
+
+Final execution uses the original declared entry_point and input, not a generated
+test's arguments. Reflection therefore has a separately counted final execution;
+only the matching final receipt is reused as the Run's SolveResult. Original
+source bytes, trial inputs/executions, reflections, last reducer selection and
+fidelity differences remain inspectable. No opaque return value or public test
+success creates independent original-problem correctness. Original prompts,
+one-import adaptation, seeded fallback and configured Provider sampling/caps are
+named changes; source-exact prompt/runtime and paper-score reproduction are not
+claimed.
