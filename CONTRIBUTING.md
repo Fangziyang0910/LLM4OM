@@ -1,6 +1,6 @@
 # 贡献与开发流程
 
-本仓库维护 LLM4OM 的研究设计和平台实现。已交付 [S01](docs/development/s01-offline-run.md) 离线单问题流程与 [S02-A](docs/development/s02-highs.md) 真实 HiGHS 求解；每个任务交付可演示的纵向行为。
+本仓库维护 LLM4OM 的研究设计和平台实现。已交付 [S01](docs/development/s01-offline-run.md) 离线单问题流程与 [S02-A](docs/development/s02-highs.md) 真实 HiGHS 求解及 [S03](docs/development/s03-plugins.md) 方法发现／预检；每个任务交付可演示的纵向行为。
 
 规范见 [CODING_STANDARDS](CODING_STANDARDS.md)，领域词见 [GLOSSARY](GLOSSARY.md)。按 [文档导航](docs/README.md)读取当前任务涉及的 FR/NFR、契约、详细设计与验收。方法或 benchmark 接入另读 [资料库](docs/references/README.md)及 [源码考察](docs/references/source-inspection.md)。
 
@@ -35,7 +35,7 @@ uv build
 
 修改 `docs/references/catalog.json` 后先运行 `uv run --locked --extra dev --extra solve python scripts/render_references.py` 生成资料页与 BibTeX，再执行检查。JSON 使用两空格布局；CSV 和授权原文保持字节稳定。所有纳入仓库的文件都在 [逐文件整理记录](docs/repository-audit.md)中说明职责与校验方式，新增文件同步记录。
 
-仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。平台测试从 CLI 与编译／Solver 公共接口验证离线和真实求解路径；维护检查不替代隔离、完整预算执行、恢复或 benchmark 验收。基础安装可省略 solve extra，但完整测试必须安装它。
+仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。平台测试从 CLI／SDK 与编译／Solver 公共接口验证离线、真实求解、独立方法安装及预检；维护检查不替代隔离、完整预算执行、恢复或 benchmark 验收。基础安装可省略 solve extra，但完整测试必须安装它。
 
 ## 4. Review 与交付
 

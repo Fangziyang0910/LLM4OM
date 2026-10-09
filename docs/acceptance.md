@@ -1,6 +1,6 @@
 # 1.0 验收清单与需求追踪
 
-以下复选框用于完整 1.0 验收，目前仍未全部通过。[S01](development/s01-offline-run.md) 完成离线工程部分，[S02-A](development/s02-highs.md) 完成严格 IR 与真实 HiGHS 部分；真实 LLM、Gurobi、隔离、恢复和 Web 保持待验收。
+以下复选框用于完整 1.0 验收，目前仍未全部通过。[S01](development/s01-offline-run.md) 完成离线工程部分，[S02-A](development/s02-highs.md) 完成严格 IR 与真实 HiGHS 部分；[S03](development/s03-plugins.md) 完成独立方法包与当前兼容路径的预检部分；真实 LLM、Gurobi、隔离、恢复和 Web 保持待验收。
 
 文档修订：0.4.0。验收覆盖单问题两阶段建模、数据绑定与研究来源；详细流程见 [详细设计](detailed-design.md)。
 
@@ -67,7 +67,7 @@
 - [ ] direct／OptiMUS／CoE 的 Manifest、外部 LLM 配置、两阶段可用性、上游流程差异与真实兼容路径。
 - [ ] 两类真实 Provider、两个真实求解器的日期／版本／环境验收记录。
 - [ ] NL4Opt／NLP4LP／MAMO LP/MILP 三个基准的来源、子集与版本 Manifest，不含违规复制或隐藏答案公开导出。
-- [ ] 第三方插件包接入示例与契约测试结果。
+- [x] 第三方方法包的当前 grounded_single_candidate profile 接入示例与公共测试结果；其他插件种类仍待验收。
 - [ ] CLI／SDK／Web 端到端记录和公开 RunBundle 样本。
 - [ ] 隔离、预算、失败恢复、版本校验和报告重建记录。
 - [ ] 首份真实 pilot 实验，包含样本 ID、预算、分母、证据覆盖与失败分析。

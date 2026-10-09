@@ -15,7 +15,8 @@
 | [plugin-manifest.json](specs/plugin-manifest.json) | direct 插件 Manifest 草案 | 配置／发现元信息 |
 | [experiment.yaml](specs/experiment.yaml) | 离线示例配置草案 | 公开部分可以；oracle 由 TaskAdapter 私有处理 |
 | [run.yaml](specs/run.yaml) | S01 无 oracle 离线配置 | 全部为公开配置；仍是工程 Mock |
-| [solve.yaml](specs/solve.yaml) | S02-A trusted_local 真实 HiGHS 配置 | 人工 Formulation／IR → Code → Solve；不调用 LLM |
+| [solve.yaml](specs/solve.yaml) | S02-A trusted_local 真实 HiGHS 配置 | 人工 Formulation／IR → Code → Solve；不调用真实 LLM |
+| [plugin-run.yaml](specs/plugin-run.yaml) | S03 独立方法配置 | 需先安装 [工程插件](plugins/fixture_method/README.md)；有意偏移目标，非业务正确性验收 |
 | [expected-evaluation.json](specs/expected-evaluation.json) | 预期结果断言 | 否；不能冒充真实 run 输出 |
 
 例子将 oracle 放在同一源码目录是为了文档可读；运行时只能挂载明确的公开数据文件，不能把整份 examples／源码目录挂进生成代码容器。

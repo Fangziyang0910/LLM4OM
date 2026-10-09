@@ -1,0 +1,62 @@
+{
+  "schema_version": "0.2.0",
+  "plugin_id": "llm4om.examples.objective_offset",
+  "kind": "method",
+  "plugin_version": "0.1.0",
+  "contract_range": ">=0.2.0,<0.3.0",
+  "display_name": "Engineering Objective Offset",
+  "description": "An independently installed method; intentionally shifts a fixture objective to expose the integration path.",
+  "capabilities": {
+    "method_profile": "grounded_single_candidate/0.1.0",
+    "problem_types": [
+      "lp",
+      "milp"
+    ],
+    "input_artifact_kinds": [
+      "public_problem"
+    ],
+    "output_artifact_kinds": [
+      "model_artifact"
+    ],
+    "formulation_representations": [
+      "five_element"
+    ],
+    "code_representations": [
+      "python_factory"
+    ],
+    "model_backends": [
+      "llm4om.model_backends.pyomo_factory"
+    ],
+    "solvers": [
+      "llm4om.solvers.highs"
+    ],
+    "llm_features": [
+      "text"
+    ],
+    "execution_modes": [
+      "trusted_local"
+    ],
+    "supports_checkpoint": false,
+    "supports_clarification": false,
+    "oracle_requirements": []
+  },
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "objective_offset": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "objective_offset"
+    ],
+    "additionalProperties": false
+  },
+  "dependencies": {
+    "python": []
+  },
+  "source": {
+    "kind": "engineering_example",
+    "variant_id": "engineering_objective_offset"
+  }
+}

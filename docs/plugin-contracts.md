@@ -1,6 +1,6 @@
 # 插件、接口与数据契约
 
-核心对象／配置／Manifest 草案：0.2.0；GroundedLPIR：0.1.0；文档修订：0.4.0。本文定义当前开发契约；S01 已落实离线输入与公开产物，S02-A 已落实严格 IR 编译与真实 HiGHS；实际范围见 [S01](development/s01-offline-run.md)／[S02-A](development/s02-highs.md)。Protocol 是接口示意，数据对象在对应纵向切片落实并验证。领域含义见 [GLOSSARY](../GLOSSARY.md)，调用顺序见 [详细设计](detailed-design.md)。
+核心对象／配置／Manifest 草案：0.2.0；GroundedLPIR：0.1.0；文档修订：0.4.0。本文定义当前开发契约；S01 已落实离线输入与公开产物，S02-A 已落实严格 IR 编译与真实 HiGHS；S03 落实单候选方法 profile 与当前路径预检；实际范围见 [S01](development/s01-offline-run.md)／[S02-A](development/s02-highs.md)／[S03](development/s03-plugins.md)。Protocol 是接口示意，数据对象在对应纵向切片落实并验证。领域含义见 [GLOSSARY](../GLOSSARY.md)，调用顺序见 [详细设计](detailed-design.md)。
 
 ## 1. 所有插件的共同契约
 
@@ -310,3 +310,13 @@ run-id/
 RunConfig 可以显式选择 trusted_local，config 为空对象；container 配置只在离线回放时接受为目标配置，不会自动降级。solve extra 提供 Pyomo／HiGHS，缺失依赖或零 Solver 预算在 Mock 前拒绝。当前 Solver options 只支持 time_limit_s，实际容差和原生数值阈值随结果保存。
 
 真实 bundle mode 为 trusted_local，执行完成为 completed；termination 与 primal 可用性由 SolveResult 分别表达。增加 solve_result_ref、execution_result_ref 和 final_candidate_id；执行错误仍保存已完成阶段。编译前快照与最终候选分别保存，旧事件引用不可失效。Code 的编译检查通过不推导 semantic_validation 通过；infeasible／unbounded 是实际结果。ExecutionResult 的 exit_code、CPU 与内存未测量时为 null。solver_calls 计 Solver 适配器尝试，外部 LLM 请求仍为零；总墙钟强制中断、资源隔离与恢复待 S04。
+
+### S03 已落实的方法 profile 与预检子集
+
+SDK 0.2.0 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对象，当前只装载 method。Manifest 的 capabilities.method_profile 为 grounded_single_candidate/0.1.0；plugin_version 当前为稳定 major.minor.patch，contract_range 为 `>=X.Y.Z,<A.B.C` 并包含核心契约 0.2.0。config_schema 自包含，允许本地片段引用，暂不接受 $id 或远程 $ref／$dynamicRef；dependencies.python 为分发包名称列表，记录已安装版本。source 暂不接受额外 ArtifactRef，研究 URL／固定版本／变体等文字元数据可保存。
+
+当前 async run 返回内存 MethodOutcome：status=candidate_selected、final_candidate_id=001、proposal=ModelProposal(artifact, formulation, structured_ir)。核心验证原问题 hash／revision、五元素和数据绑定，生成实际引用与候选记录；这不是已实现完整的多候选／checkpoint Protocol。MethodContext 当前提供 llm、只读公开 data／预算上限和 problem_sha256；Mock LLMResponse 提供 text、call_id、evidence_origin、source_sha256，仍不是完整真实 Provider 响应验收。窄 profile 明确版本化，后续增加资源和状态时同步声明。
+
+doctor 与 run 共用 prepare_run；先验证参数，再匹配当前表示、目标类型、Backend／Solver、Provider 功能和 Executor，再检查分发包与真实求解依赖。缺失能力为未知；请求的资源须被方法声明，当前表示 profile 固定，不能靠枚举并集暗示 native_code 可用。allowed_problem_types 缺省 lp／milp，实际 IR 类型在产出后再次核对。真实运行保存 admission_plan_ref；离线计划只准备回放，不标记 Code／Solve 已执行。未知方法异常与 SystemExit 转为稳定错误和脱敏 frame，原错误参数／源码行与插件 Python 输出不进入公开结果。
+
+示例、字段级诊断、实际版本和未实现项见 [S03](development/s03-plugins.md)。当前不执行真实连通性检查，不加载 .env；包版本与核心对象 0.2.0、IR 0.1.0 和 profile 0.1.0 分别管理。

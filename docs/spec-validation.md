@@ -1,6 +1,6 @@
 # 调研、需求与设计校验记录
 
-日期：2026-10-09；设计基线：0.4.0。本记录验证科研设计、维护工具与 S01／S02-A 实现；完整平台验收由 [AC 清单](acceptance.md)维护。实际范围见 [S01](development/s01-offline-run.md)／[S02-A](development/s02-highs.md)。
+日期：2026-10-09；设计基线：0.4.0。本记录验证科研设计、维护工具与 S01／S02-A／S03 实现；完整平台验收由 [AC 清单](acceptance.md)维护。实际范围见 [S01](development/s01-offline-run.md)／[S02-A](development/s02-highs.md)／[S03](development/s03-plugins.md)。
 
 ## 1. 可复算的当前命令
 
@@ -18,7 +18,9 @@ git diff --check
 
 S01 交付时的结果：参考导出与 69 个源文件校验通过；7 个运行模块的 strict mypy 通过；39 个测试通过（12 个维护 CLI＋27 个平台 CLI）。Python 3.12.3 与 3.11.13 两个独立环境分别运行全部 39 个测试及类型检查，均通过。sdist／wheel 构建通过；wheel 在干净的 Python 3.12.3 环境安装后，从仓库外工作目录分别运行 console script 和 SDK，均返回 artifact_ready。diff 空白检查通过。
 
-S02-A 当前结果：76 个源文件与参考导出通过检查；9 个模块的 strict mypy 通过。Python 3.12.3／3.11.13 分别运行完整 57 个测试，均通过（12 个维护 CLI、27 个离线 CLI、7 个真实求解 CLI、11 个编译／Solver）。solve extra 锁定 Pyomo 6.10.1／highspy 1.15.1；缺 Solver 的独立基础环境仍验证稳定 admission 失败，原离线测试全部保留。
+S02-A 交付结果：76 个源文件与参考导出通过检查；9 个模块的 strict mypy 通过。Python 3.12.3／3.11.13 分别运行完整 57 个测试，均通过（12 个维护 CLI、27 个离线 CLI、7 个真实求解 CLI、11 个编译／Solver）。solve extra 锁定 Pyomo 6.10.1／highspy 1.15.1；缺 Solver 的独立基础环境仍验证稳定 admission 失败，原离线测试全部保留。
+
+S03 当前结果：86 个源文件检查通过，12 个模块在 Python 3.12.3／3.11.13 的 strict mypy 通过；两个环境分别完整 72 tests passed（原 57 项＋15 项安装／方法／预检 CLI／SDK 行为）。独立方法通过真实 wheel 构建／安装发现，不 mock entry_points。SDK 0.2.0 的 sdist／wheel 构建通过；干净基础安装在仓库外验证离线 doctor／SDK，真实 doctor 在缺 solve extra 时稳定拒绝。其余真实安装与独立审阅记录在第 8 节补齐。
 
 sdist／wheel 构建通过，wheel 在干净的 Python 3.12.3 环境安装后，从仓库外运行 console script 和 SDK，均 completed；真实结果为目标 13、A=3／B=2。项目内演示 run_id 为 `cc1b7c7366a4451d9e6512a84fa668ce`，产物位于忽略的 runs 目录；LP=40/3、常数／域／失败状态另有独立微型测试。公开运行产物扫描不含凭据／oracle sentinel。`.env` 权限为 0600，被 Git 忽略，未提交。
 
@@ -26,10 +28,10 @@ sdist／wheel 构建通过，wheel 在干净的 Python 3.12.3 环境安装后，
 
 ## 2. 文档与任务结构
 
-- 当前 38 份 Markdown、8 份 JSON、4 份 YAML 文件均进入检查；所有源文件进入 [逐文件记录](repository-audit.md)。本地链接、标题／显式锚点、围栏、UTF-8、LF 和结尾换行通过检查。
+- 当前 40 份 Markdown、9 份 JSON、5 份 YAML 文件均进入检查；所有源文件进入 [逐文件记录](repository-audit.md)。本地链接、标题／显式锚点、围栏、UTF-8、LF 和结尾换行通过检查。
 - 36 FR、12 NFR、25 AC 编号连续且无重复。LP/MILP 执行范围保留；首批方法调整为 direct／OptiMUS／CoE，基准调整为 NL4Opt／NLP4LP／MAMO LP/MILP 子集。
 - DD-01～DD-08 用于需求追踪，详细设计按方法、执行、实验／入口分支读取。
-- S01～S10 保持阶段编号，拆为 24 个纵向任务。每项有可观察结果、公共测试入口与直接 blockers；S01 已完成离线工程范围；S02-A 已完成严格 IR 与真实 HiGHS 范围；当前前沿为 S02-B／S03-A。
+- S01～S10 保持阶段编号，拆为 24 个纵向任务。每项有可观察结果、公共测试入口与直接 blockers；S01 已完成离线工程范围；S02-A 已完成严格 IR 与真实 HiGHS 范围；S03 当前方法发现／预检已完成；当前前沿为 S02-B／S04-A。
 - AGENTS 只有一个 Agent skills 块；glossary 是领域定义来源，四份简短 ADR 记录当前取舍，ADR-0004 明确两阶段选择。
 - 5 个 Mermaid 图块的源码围栏已检查。本次没有运行专用渲染器。
 
@@ -37,9 +39,9 @@ sdist／wheel 构建通过，wheel 在干净的 Python 3.12.3 环境安装后，
 
 ## 3. 配置与数学 fixture
 
-JSON 检查拒绝重复键、NaN／Infinity 与格式漂移。三份示例 YAML 使用 safe_load；direct 参数按 Manifest 的 JSON Schema 验证。预算的计数、正数墙钟时间、至少一个并发及实验 repeats 按契约核对。
+JSON 检查拒绝重复键、NaN／Infinity 与格式漂移。四份示例 YAML 使用 safe_load；三个 direct 配置与独立工程方法分别按各自 Manifest 的 JSON Schema 验证。预算的计数、正数墙钟时间、至少一个并发及实验 repeats 按契约核对。
 
-单问题 run.yaml／solve.yaml 没有 task、methods 列表、experiment_id、repeats 或 oracle_path。三份配置使用同一 direct 参数与统一的 Mock response_artifact 名称。Mock 来源和隐藏参考入口分别标识。
+单问题 run.yaml／solve.yaml／plugin-run.yaml 没有 task、methods 列表、experiment_id、repeats 或 oracle_path。三个原配置使用同一 direct 参数；plugin-run.yaml 使用独立工程方法；四份配置均为统一的 Mock response_artifact。Mock 来源和隐藏参考入口分别标识。
 
 核心对象／配置／Manifest 使用草案 0.2.0，LPIR 保持 0.1.0。新增五元素 Formulation 与共同封装，源问题／表述／IR 引用的 hash、大小、revision 和 schema 一致。源 fixture 的 Code 为 pending；S02-A 在运行目录中产生 available 的真实 CodeArtifact，不改写人工源文件。
 
@@ -61,7 +63,7 @@ catalog 中的 29 个资料 ID 和 citation_key 唯一；资料页与 29 个 Bib
 
 ## 5. 验证边界
 
-维护工具验证科研设计与 fixture；平台测试验证 S01 离线行为与 S02-A 严格 IR 编译／真实 HiGHS。真实 Provider、Gurobi、隔离、完整预算执行、恢复与方法效果仍须按 AC 验证。维护工具的数学核验只针对固定生产实例；运行编译器另行校验通用的当前 grounded LPIR 结构。五元素与 LPIR 是人工示例，未实现自由文本到 IR 的转换，也不提供一般语义等价证明。
+维护工具验证科研设计与 fixture；平台测试验证 S01 离线、S02-A 严格 IR／真实 HiGHS，以及 S03 独立方法安装／预检。真实 Provider、Gurobi、隔离、完整预算执行、恢复与方法效果仍须按 AC 验证。维护工具的数学核验只针对固定生产实例；运行编译器另行校验通用的当前 grounded LPIR 结构。五元素与 LPIR 是人工示例，未实现自由文本到 IR 的转换，也不提供一般语义等价证明。
 
 S01 交付时 GitHub CLI 返回 HTTP 401。用户重新登录后已验证仓库读取、ADMIN 权限和 PRIVATE 可见性，并按 to-tickets 将 S02-A 发布为 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1)，使用 enhancement／ready-for-agent 标签。没有变更仓库可见性；Git 提交与同步状态以仓库记录为准。设计基线此前采用作者自查；S01 实现新增两个独立只读审阅进程，结果见下一节。
 

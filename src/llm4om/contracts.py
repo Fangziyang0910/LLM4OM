@@ -15,10 +15,11 @@ import yaml
 
 
 class RunError(ValueError):
-    def __init__(self, code: str, stage: str, message: str) -> None:
+    def __init__(self, code: str, stage: str, message: str, *, details: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.stage = stage
+        self.details = details
 
 
 class _ConfigLoader(yaml.SafeLoader):
@@ -34,11 +35,12 @@ def read_config(path: Path) -> dict[str, Any]:
             raise ValueError("Expected an object.")
         _finite_numbers(value)
         _reject_private_fields(value)
+        json.dumps(value, allow_nan=False)
         return value
     except RunError:
         raise
-    except (yaml.YAMLError, ValueError, RecursionError) as error:
-        raise RunError("invalid_config", "admission", "YAML must have unique keys and finite values without recursive aliases.") from error
+    except (yaml.YAMLError, ValueError, TypeError, RecursionError) as error:
+        raise RunError("invalid_config", "admission", "YAML must have unique keys and finite JSON values without recursive aliases.") from error
 
 
 def parse_json(raw: bytes) -> dict[str, Any]:
@@ -319,8 +321,7 @@ def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) ->
 def validate_config(settings: dict[str, Any]) -> None:
     schema = _object({
         "schema_version": {"const": "0.2.0"},
-        "method": _object({"plugin_id": {"const": "llm4om.methods.direct"}, "config": _object({
-            "formulation_mode": {"const": "five_element"}, "output_mode": {"const": "lp_ir"}})}),
+        "method": _object({"plugin_id": TEXT, "config": {"type": "object"}}),
         "llm": _object({"provider_plugin_id": {"const": "llm4om.providers.mock"}, "model": TEXT,
                         "config": _object({"response_artifact": TEXT})}),
         "compiler": _object({"plugin_id": {"const": "llm4om.compilers.lp_ir_to_pyomo"}}),
@@ -343,6 +344,8 @@ def validate_config(settings: dict[str, Any]) -> None:
             "enum": ["llm4om.reporters.jsonl", "llm4om.reporters.markdown"]}})},
         "evaluation": _object({"protocol_id": {"const": "llm4om.eval.public-v0.1"},
                                "evaluator_plugin_id": {"const": "llm4om.evaluators.structural"}}),
+        "allowed_problem_types": {"type": "array", "minItems": 1, "uniqueItems": True,
+                                  "items": {"enum": ["lp", "milp"]}},
     }, ["schema_version", "method", "llm", "compiler", "model_backend", "solver", "executor", "budget", "store"])
     try:
         jsonschema.Draft202012Validator(schema).validate(settings)

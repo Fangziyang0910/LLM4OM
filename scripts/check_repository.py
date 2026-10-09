@@ -117,15 +117,18 @@ def check_configs() -> list[str]:
     jsonschema.Draft202012Validator.check_schema(manifest["config_schema"])
     errors = []
     configs = []
-    for name in ["run.yaml", "experiment.yaml", "solve.yaml"]:
+    for name in ["run.yaml", "experiment.yaml", "solve.yaml", "plugin-run.yaml"]:
         config = yaml.safe_load((fixture / name).read_text())
         configs.append(config)
         if config["schema_version"] != manifest["schema_version"]:
             errors.append(f"{name}: fixture schema version mismatch")
         methods = config["methods"] if name == "experiment.yaml" else [config["method"]]
+        selected_manifest = manifest if name != "plugin-run.yaml" else json.loads(
+            (ROOT / "examples/plugins/fixture_method/src/llm4om_fixture_method/manifest.json").read_text())
+        selected_validator = validator if name != "plugin-run.yaml" else jsonschema.Draft202012Validator(selected_manifest["config_schema"])
         for method in methods:
-            if method["plugin_id"] == manifest["plugin_id"]:
-                for error in validator.iter_errors(method["config"]):
+            if method["plugin_id"] == selected_manifest["plugin_id"]:
+                for error in selected_validator.iter_errors(method["config"]):
                     errors.append(f"{name}: invalid method config at {list(error.path)}")
         if name != "experiment.yaml" and (
             {"task", "methods", "experiment_id", "repeats"} & config.keys()

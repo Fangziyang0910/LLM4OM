@@ -1,6 +1,6 @@
 # 1.0 开发计划与接入顺序
 
-文档修订：0.4.0。以下是开发计划；S01／S02-A 已实现，S02-A 使用 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1) 跟踪，其余任务待开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
+文档修订：0.4.0。以下是开发计划；S01／S02-A／S03 已实现，S03 使用 [Issue #3](https://github.com/Fangziyang0910/LLM4OM/issues/3)／[#4](https://github.com/Fangziyang0910/LLM4OM/issues/4)，S02-A 使用 [Issue #1](https://github.com/Fangziyang0910/LLM4OM/issues/1) 跟踪，其余任务待开发。阶段 S01–S10 保持原编号；较大阶段拆成可独立演示的纵向切片。工期在人员和资源明确后估算。
 
 ## 1. 首批能力矩阵
 
@@ -53,7 +53,7 @@
 | S03-A | 单独安装第三方方法，通过 plugins list 和 run 使用 | S01 | CLI：不改内核、ID 冲突、版本与配置错误。AC-01/02/21 |
 | S03-B | doctor 给出实际兼容路径、环境缺失与预算 admission 结果 | S03-A、S02-A | CLI：不兼容组合在付费调用前拒绝，未知能力不当作支持。AC-02/07/12 |
 
-run 命令已由 S01 提供；本阶段扩展发现与预检。覆盖 FR-01～06/17、NFR-01/08/10；DD-03。
+状态：S03-A／B 已实现当前方法子集，见 [运行 profile 与实际证据](development/s03-plugins.md)。独立方法经安装／发现／run 使用，doctor 与 run 共用预检；其他插件种类、原生路径与真实连通性仍待接入。覆盖 FR-01～06/17、NFR-01/08/10 的当前部分；DD-03。
 
 ### S04 隔离执行与恢复
 
@@ -146,7 +146,7 @@ flowchart LR
     S09B --> S10
 ```
 
-S01／S02-A 已完成，当前可执行前沿是 S02-B 和 S03-A。GitHub Issues 认证已恢复，S02-A 的工作项为 #1。完成后关联真实证据；互不阻塞的任务可以并行。
+S01／S02-A／S03 已完成当前范围，当前前沿是 S02-B 和 S04-A；优先 S04-A 隔离执行，为 S05-A 真实 LLM 准备执行环境。GitHub Issues 认证已恢复，S02-A 的工作项为 #1。完成后关联真实证据；互不阻塞的任务可以并行。
 
 ## 5. 工程默认值与完成边界
 

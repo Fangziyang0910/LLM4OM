@@ -1,6 +1,7 @@
 """Replay a public Formulation and optionally compile and solve its grounded IR."""
 
 import hashlib
+import json
 import platform
 from copy import deepcopy
 from importlib.metadata import version
@@ -10,14 +11,18 @@ from time import monotonic
 from contextlib import redirect_stdout, redirect_stderr
 from io import StringIO
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from llm4om.contracts import (
     RunError, parse_json, public_path, read_config, read_public_bytes, validate_config, validate_csv, validate_problem,
+    validate_model_artifact, validate_formulation, validate_bindings, reject_additional_refs,
 )
-from llm4om.mock import load_mock_output
+from llm4om.mock import MockGateway
+from llm4om.methods import MethodContext, ModelProposal
+from llm4om.preflight import AdmissionPlan, prepare_run
 from llm4om.linear import CompiledCode, compile_ir
-from llm4om.highs import runtime_versions, solve_highs
+from llm4om.highs import solve_highs
 from llm4om.storage import RunStore
 
 
@@ -44,11 +49,12 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
     ledger: dict[str, Any] = {"schema_version": "0.2.0", "llm_attempts": 0,
                              "solver_calls": 0, "external_llm_requests": 0, "candidates": 0, "total_tokens": None,
                              "cost": 0, "evidence_origin": "mock_fixture"}
-    error_record = None
+    error_record: dict[str, Any] | None = None
     artifact_ref = None
     settings_valid = False
     solve_ref = None
     execution_ref = None
+    admission_ref = None
     stages: dict[str, Any] = {name: {"status": "not_available", "reason": "Stage has not run."}
               for name in ("formulation", "code", "solve")}
     try:
@@ -58,14 +64,10 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
             raise RunError("invalid_config", "validation", "Cannot read a valid RunConfig.")
         validate_config(settings)
         settings_valid = True
-        if not offline and settings["executor"]["plugin_id"] != "llm4om.executors.trusted_local":
-            raise RunError("offline_required", "admission", "Select trusted_local to compile and solve, or use offline mode.")
-        if not offline and settings["budget"]["max_solver_calls"] < 1:
-            raise RunError("budget_exhausted", "admission", "Real solving requires one Solver call slot.")
-        if not offline:
-            runtime_versions()
-            mode = "trusted_local"
-        artifact_ref, stages = _prepare_candidate(store, problem, config, settings, ledger, offline)
+        plan = prepare_run(settings, offline=offline)
+        admission_ref = store.json("admission-plan.json", plan.snapshot, "admission-plan")
+        mode = plan.snapshot["mode"]
+        artifact_ref, stages = _prepare_candidate(store, problem, config, settings, ledger, offline, plan)
         status = "artifact_ready"
         if not offline:
             artifact_ref, compiled = _compile_candidate(store, artifact_ref, settings)
@@ -82,6 +84,8 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
         error_record = {"code": error.code if isinstance(error, RunError) else "invalid_input",
                         "stage": error.stage if isinstance(error, RunError) else "validation",
                         "message": str(error) if isinstance(error, RunError) else "Cannot process the public input or Mock artifact."}
+        if isinstance(error, RunError) and error.details is not None:
+            error_record["details_ref"] = store.json("diagnostics/plugin-error.json", error.details, "plugin-error")
     if stages["formulation"]["status"] == "available":
         store.json("evaluation.json", {"schema_version": "0.2.0", "protocol_id": "llm4om.eval.public-v0.1",
                    "formulation_validation": {"status": "pass", "level": "structural"},
@@ -94,7 +98,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
         report = (f"# LLM4OM run {store.run_id}\n\nMode: {mode}. Status: {status}.\n\n"
                   "| Stage | Status |\n|---|---|\n" +
                   "".join(f"| {name} | {stage['status']} |\n" for name, stage in stages.items()) +
-                  "\nFormulation source: hand-authored Mock fixture. External LLM requests: 0.\n"
+                  f"\nMethod: {settings['method']['plugin_id']}. Provider: Mock. External LLM requests: 0.\n"
                   "Structural checks do not establish semantic correctness.\n")
         if solve_ref is not None:
             solve_summary = parse_json(read_public_bytes(store.path / solve_ref["relative_path"]))
@@ -109,6 +113,7 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
                "mode": mode, "status": status, "stages": stages,
                "error": error_record, "model_artifact_ref": artifact_ref, "solve_result_ref": solve_ref,
                "execution_result_ref": execution_ref,
+               "admission_plan_ref": admission_ref,
                "final_candidate_id": "001" if status == "completed" else None,
                "execution_plan": {name: {"requested_plugin_id": settings.get(name, {}).get("plugin_id"),
                     "resolved_plugin_id": settings[name]["plugin_id"] if resource_status[name] != "not_available" else None,
@@ -120,11 +125,13 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
 
 
 def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: dict[str, Any],
-                 ledger: dict[str, Any], offline: bool) -> tuple[dict[str, Any], dict[str, Any]]:
+                 ledger: dict[str, Any], offline: bool, plan: AdmissionPlan) -> tuple[dict[str, Any], dict[str, Any]]:
+    method = plan.method
     source_problem = read_public_bytes(problem)
     public = parse_json(source_problem)
     validate_problem(public)
     data_refs = []
+    data_content = {}
     for index, data in enumerate(public["data_refs"]):
         raw = read_public_bytes(public_path(problem.parent, data["path"]))
         if data["sha256"] and hashlib.sha256(raw).hexdigest() != data["sha256"]:
@@ -132,6 +139,7 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
         validate_csv(raw, data["schema"])
         ref = store.write(f"data/{index}.csv", raw, data["data_id"])
         data_refs.append(ref)
+        data_content[data["data_id"]] = raw
         data["path"] = ref["relative_path"]
         data["sha256"] = ref["sha256"]
     problem_ref = store.json("public-problem.json", public, public["problem_id"])
@@ -145,30 +153,54 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     store.json("environment-lock.json", {"schema_version": "0.2.0", "python": platform.python_version(),
                "llm4om": version("llm4om"),
                "packages": {**{name: version(name) for name in ["PyYAML", "jsonschema"]},
-                            **(runtime_versions() if not offline else {})},
+                            **plan.snapshot["packages"]},
                "mode": "offline_mock" if offline else "trusted_local",
-               "method_variant": "hand_authored_fixture_replay"}, "environment")
-    ledger["llm_attempts"] += 1
-    store.emit("mock_call_started", call_id="mock-1")
+               "method": {"manifest": method.manifest, "origin": method.origin},
+               "method_variant": (method.manifest["source"] or {}).get("variant_id", "grounded_single_candidate")}, "environment")
     response = public_path(config.parent, settings["llm"]["config"]["response_artifact"])
-    output = load_mock_output(response, public, hashlib.sha256(source_problem).hexdigest())
-    artifact, formulation = output.artifact, output.formulation
+    gateway = MockGateway(response, public, hashlib.sha256(source_problem).hexdigest(), store, ledger,
+                          settings["budget"]["max_llm_attempts"])
+    context = MethodContext(gateway, MappingProxyType(data_content), MappingProxyType(deepcopy(settings["budget"])),
+                            hashlib.sha256(source_problem).hexdigest())
+    outcome = method.run(deepcopy(settings["method"]["config"]), deepcopy(public), context)
+    if (outcome.status != "candidate_selected" or outcome.final_candidate_id != "001"
+            or not isinstance(outcome.proposal, ModelProposal)):
+        raise RunError("invalid_method_outcome", "formulation", "This profile requires one selected candidate with ID 001.")
+    output = outcome.proposal
+    artifact = parse_json(json.dumps(output.artifact, allow_nan=False).encode())
+    formulation = parse_json(json.dumps(output.formulation, allow_nan=False).encode())
+    ir = parse_json(json.dumps(output.structured_ir, allow_nan=False).encode())
+    validate_model_artifact(artifact)
+    validate_bindings(artifact, public)
+    validate_formulation(formulation, public)
+    reject_additional_refs(ir)
+    validate_bindings(ir, public)
+    if (artifact["problem_ref"].get("sha256") != hashlib.sha256(source_problem).hexdigest()
+            or ir.get("problem_id") != public["problem_id"] or ir.get("problem_revision") != public["revision"]):
+        raise RunError("artifact_problem_mismatch", "formulation", "Method output belongs to another public input.")
+    if (ir.get("schema_version") != "0.1.0" or ir.get("ir_kind") != "grounded_lp"
+            or not isinstance(ir.get("model_id"), str) or not ir["model_id"]):
+        raise RunError("invalid_method_outcome", "formulation", "Method must supply an identified grounded LPIR 0.1.0.")
+    if ir.get("problem_type") not in plan.snapshot["allowed_problem_types"]:
+        raise RunError("capability_mismatch", "formulation", "Actual IR type is outside the admitted problem types.")
     ir_ref = formulation["structured_ir_ref"]
     formulation["structured_ir_ref"] = store.json(
-        "candidates/001/structured-ir.json", output.structured_ir, ir_ref["artifact_id"])
+        "candidates/001/structured-ir.json", ir, ir["model_id"])
     formulation_ref = store.json("candidates/001/formulation.json", formulation, formulation["formulation_id"])
     artifact["problem_ref"] = problem_ref
     artifact["formulation_ref"] = formulation_ref
-    artifact["provenance"]["replay"] = {"mode": "offline_mock", "call_id": "mock-1",
-                                        "response_sha256": output.source_sha256}
+    call_ids = [call.call_id for call in gateway.calls]
+    artifact["provenance"]["replay"] = {"mode": "offline_mock", "call_ids": call_ids,
+                                        "response_sha256": gateway.calls[-1].source_sha256 if gateway.calls else None}
+    artifact["provenance"]["method"] = {"manifest": method.manifest, "origin": method.origin}
     artifact_ref = store.json("candidates/001/artifact.json" if offline else "candidates/001/formulation-snapshot.json", artifact, artifact["artifact_id"])
     store.json("candidates/001/candidate.json" if offline else "candidates/001/candidate-snapshot.json", {"schema_version": "0.2.0", "candidate_id": "001",
                "run_id": store.run_id, "parent_ids": [], "sequence_no": 1, "artifact_ref": artifact_ref,
-               "created_by": {"method_id": settings["method"]["plugin_id"], "method_version": "0.1.0",
-                              "variant_id": "hand_authored_fixture_replay", "call_ids": ["mock-1"],
+               "created_by": {"method_id": settings["method"]["plugin_id"], "method_version": method.manifest["plugin_version"],
+                              "variant_id": (method.manifest["source"] or {}).get("variant_id", "grounded_single_candidate"), "call_ids": call_ids,
                               "prompt_hash": None, "role": "formulation"}, "status": "proposed"}, "001")
     ledger["candidates"] = 1
-    store.emit("formulation_saved", artifact_ref=artifact_ref, call_id="mock-1", evidence_origin="mock_fixture")
+    store.emit("formulation_saved", artifact_ref=artifact_ref, call_ids=call_ids, evidence_origin="method_output")
     stages = {**artifact["stage_status"], "solve": {
         "status": "not_available", "reason": "Solve has not run."}}
     return artifact_ref, stages

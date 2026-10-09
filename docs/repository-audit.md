@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-09；设计基线：0.4.0。当前包含 76 个源文件，维护科研设计、文档工具和 S01／S02-A 平台切片。
+日期：2026-10-09；设计基线：0.4.0。当前包含 86 个源文件，维护科研设计、文档工具和 S01／S02-A／S03 平台切片。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -41,6 +41,7 @@
 | `docs/detailed-design.md` | 详细设计索引与需求编号 | DD-01～08 用于需求追踪，按需进入三个页面 |
 | `docs/development/s01-offline-run.md` | S01 实现与交付记录 | 实际支持范围、CLI／SDK、证据与下一可执行任务 |
 | `docs/development/s02-highs.md` | S02-A 实现与真实证据 | 严格 IR、Pyomo／HiGHS、trusted_local、实际状态与未验证条件 |
+| `docs/development/s03-plugins.md` | S03 实现与运行 profile | 独立安装、兼容预检、真实方法来源、SDK 和未实现范围 |
 | `docs/evaluation.md` | 指标、证据与分母的唯一来源 | 公开检查／隐藏协议、失败分母、未知成本保持原口径 |
 | `docs/implementation-plan.md` | 本地纵向任务与 blocking edges | 24 个任务；首个 CLI、独立 Web、真实支持验收 |
 | `docs/plugin-contracts.md` | 接口、字段、版本和错误的唯一来源 | 目标 Protocol、小 Interface、能力与错误语义；统一术语 |
@@ -55,6 +56,10 @@
 | `docs/research-landscape.md` | 机制比较与设计依据 | 论文观察、源码观察与设计判断分开；保持来源 |
 | `docs/spec-validation.md` | 校验证据与适用范围 | 当前可复算命令；不将维护工具当作平台验收 |
 | `examples/README.md` | fixture 用法与独立数学依据 | 方法输入权限、工程 Mock、绑定反例与维护命令 |
+| `examples/plugins/fixture_method/README.md` | 独立方法安装与运行说明 | 实际命令、目标偏移用途和公开接口 |
+| `examples/plugins/fixture_method/pyproject.toml` | 独立方法包与 entry point | SDK 0.2.0 依赖、自己的版本／构建和发现入口 |
+| `examples/plugins/fixture_method/src/llm4om_fixture_method/__init__.py` | 第二个实际 Method Adapter | 独立配置、async run、目标常数变体与普通 MethodOutcome |
+| `examples/plugins/fixture_method/src/llm4om_fixture_method/manifest.json` | 独立方法 Manifest | 当前能力、配置 schema、工程来源和变体 |
 | `examples/specs/data/capacities.csv` | 原始容量数据 | 固定字节、表头和 hash；独立整数／LP 核验 |
 | `examples/specs/data/products.csv` | 原始利润和资源数据 | 固定字节、表头和 hash；作为独立绑定依据 |
 | `examples/specs/expected-evaluation.json` | 预期断言 | 两阶段预期断言；不是实际 run；semantic not_available |
@@ -64,6 +69,7 @@
 | `examples/specs/model-ir.json` | 人工 grounded LPIR | 两空格布局；变量域、数据绑定、系数和引用核验 |
 | `examples/specs/oracle.json` | 私有参考规格 | 两空格布局；参考数值与规则说明；checker 仍 planned |
 | `examples/specs/plugin-manifest.json` | direct 能力与配置草案 | 0.2.0 能力与阶段配置；JSON Schema 拒绝不支持模式 |
+| `examples/specs/plugin-run.yaml` | S03 独立方法运行配置 | 安装后使用当前公开输入，目标常数偏移明确标记 |
 | `examples/specs/problem.json` | 公开问题规格 | 两空格布局；revision、需求与数据 hash 核验 |
 | `examples/specs/run.yaml` | S01 单问题配置 | --offline 回放两阶段封装；无实验／oracle 字段 |
 | `examples/specs/solve.yaml` | S02-A 真实求解配置 | 显式 trusted_local，人工表述／IR 与真实 HiGHS 分别标明 |
@@ -78,9 +84,13 @@
 | `src/llm4om/highs.py` | 真实 Solver 边界 | Pyomo 线性表示转原生 HiGHS；域、数值阈值、状态、解与版本 |
 | `src/llm4om/linear.py` | 严格 IR 公共编译入口 | 结构／数值校验、重复项合并、固定工厂与 symbol map |
 | `src/llm4om/mock.py` | 离线方法响应读取 | 明确 fixture、来源与数据 revision；不执行代码或读取参考答案 |
+| `src/llm4om/methods.py` | 当前方法公共 profile | ModelProposal／MethodOutcome／Context／LLMResponse 和实际 direct Adapter |
+| `src/llm4om/plugins.py` | 方法发现与运行 Module | 动态 factory、版本／唯一键、JSON schema、同步／异步桥接与脱敏异常 |
+| `src/llm4om/preflight.py` | 共用运行 admission | 方法配置、实际能力、依赖、预算和固定计划；不调用 Provider |
 | `src/llm4om/storage.py` | 运行文件存储 | 独立目录、原子替换、内容 hash 和递增事件 |
 | `tests/test_cli_run.py` | S01 公共 CLI 行为测试 | 成功、失败、数据、路径、引用、配置、隐私、报告和存储 |
 | `tests/test_linear_solver.py` | 编译／Solver 公共行为测试 | 独立微型 LP/MILP，真实常数、域、状态和数值拒绝 |
+| `tests/test_plugins.py` | S03 公共 CLI／SDK 行为测试 | 真实独立包构建／安装、预检、预算、坏输出、来源与异常 |
 | `tests/test_repository_checks.py` | 维护工具公共入口测试 | 临时副本；坏链接、hash、配置、绑定、重复键、引用漂移、五元素与阶段引用 |
 | `tests/test_solve_run.py` | S02-A 公共 CLI 行为测试 | 真实 MILP／LP、缺依赖、预算、失败阶段与证据引用 |
 | `uv.lock` | 完整依赖解析 | 由 uv 生成；PyPI 来源、版本和校验值；locked 安装 |

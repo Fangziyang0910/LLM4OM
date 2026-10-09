@@ -71,11 +71,12 @@ class RepositoryChecksTest(unittest.TestCase):
         self.assertIn("duplicate JSON key: revision", result.stdout)
 
     def test_rejects_unsupported_method_config(self) -> None:
-        for name in ("run.yaml", "solve.yaml"):
+        for name in ("run.yaml", "solve.yaml", "plugin-run.yaml"):
             with self.subTest(config=name):
                 path = self.repo / "examples/specs" / name
                 original = path.read_text()
-                path.write_text(original.replace('output_mode: "lp_ir"', 'output_mode: "unsupported"'))
+                path.write_text(original.replace('output_mode: "lp_ir"', 'output_mode: "unsupported"')
+                               if name != "plugin-run.yaml" else original.replace('objective_offset: 7', 'objective_offset: invalid'))
                 result = self.check_repository()
                 self.assertEqual(result.returncode, 1)
                 self.assertIn(f"{name}: invalid method config", result.stdout)

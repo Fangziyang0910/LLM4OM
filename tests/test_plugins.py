@@ -1,0 +1,263 @@
+"""Exercise installed method discovery and preflight through the CLI."""
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import shutil
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class PluginTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.packages = self.root / "packages"
+        self.inputs = self.root / "input"
+        shutil.copytree(ROOT / "examples/specs", self.inputs)
+
+    def install_method(self) -> None:
+        project = self.root / "method"
+        shutil.copytree(ROOT / "examples/plugins/fixture_method", project)
+        subprocess.run(["uv", "build", "--offline", "--wheel", "--out-dir", str(self.root / "dist")],
+                       cwd=project, check=True, capture_output=True, text=True)
+        wheel = next((self.root / "dist").glob("*.whl"))
+        subprocess.run(["uv", "pip", "install", "--no-deps", "--target", str(self.packages), str(wheel)],
+                       check=True, capture_output=True, text=True)
+
+    def configured_run(self) -> tuple[subprocess.CompletedProcess[str], Path, dict]:
+        import yaml
+        settings = yaml.safe_load((self.inputs / "solve.yaml").read_text())
+        settings["method"] = {"plugin_id": "llm4om.examples.objective_offset", "config": {"objective_offset": 7}}
+        (self.inputs / "solve.yaml").write_text(yaml.safe_dump(settings))
+        result = self.cli("run", "--problem", str(self.inputs / "problem.json"), "--config", str(self.inputs / "solve.yaml"),
+                          "--output", str(self.root / "runs"))
+        self.assertTrue(result.stdout, result.stderr)
+        path = Path(json.loads(result.stdout)["bundle_path"])
+        return result, path, json.loads((path / "bundle.json").read_text())
+
+    def cli(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([sys.executable, "-m", "llm4om", *arguments],
+                              env={**os.environ, "PYTHONPATH": os.pathsep.join((str(ROOT / "src"), str(self.packages)))},
+                              capture_output=True, text=True, cwd=self.root)
+
+    def test_plugins_list_reports_the_actual_builtin_method_profile(self) -> None:
+        result = self.cli("plugins", "list")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads(result.stdout)["plugins"][0]
+        self.assertEqual(record["manifest"]["plugin_id"], "llm4om.methods.direct")
+        self.assertEqual(record["manifest"]["capabilities"]["method_profile"], "grounded_single_candidate/0.1.0")
+        self.assertEqual(record["origin"]["kind"], "builtin")
+
+    def test_independently_installed_method_is_discovered_and_used_by_run(self) -> None:
+        import yaml
+        self.install_method()
+        listing = self.cli("plugins", "list")
+        self.assertEqual(listing.returncode, 0, listing.stderr)
+        external = [item for item in json.loads(listing.stdout)["plugins"]
+                    if item["manifest"]["plugin_id"] == "llm4om.examples.objective_offset"][0]
+        self.assertEqual(external["origin"]["distribution"], "llm4om-fixture-method")
+        settings = yaml.safe_load((self.inputs / "solve.yaml").read_text())
+        settings["method"] = {"plugin_id": "llm4om.examples.objective_offset", "config": {"objective_offset": 7}}
+        (self.inputs / "solve.yaml").write_text(yaml.safe_dump(settings))
+        result = self.cli("run", "--problem", str(self.inputs / "problem.json"), "--config", str(self.inputs / "solve.yaml"),
+                          "--output", str(self.root / "runs"))
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        path = Path(json.loads(result.stdout)["bundle_path"])
+        bundle = json.loads((path / "bundle.json").read_text())
+        solve = json.loads((path / bundle["solve_result_ref"]["relative_path"]).read_text())
+        self.assertAlmostEqual(solve["objective_value"], 20)
+        candidate = json.loads((path / "candidates/001/candidate.json").read_text())
+        self.assertEqual(candidate["created_by"]["method_id"], "llm4om.examples.objective_offset")
+
+    def test_installed_method_cannot_override_a_builtin_registry_key(self) -> None:
+        self.install_method()
+        path = self.packages / "llm4om_fixture_method/manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["plugin_id"] = "llm4om.methods.direct"
+        path.write_text(json.dumps(manifest))
+        result = self.cli("plugins", "list")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout)["error"]["code"], "duplicate_plugin")
+
+    def test_manifest_and_contract_versions_fail_before_method_execution(self) -> None:
+        self.install_method()
+        path = self.packages / "llm4om_fixture_method/manifest.json"
+        original = json.loads(path.read_text())
+        for key, value, code in [("schema_version", "99.0.0", "invalid_plugin_manifest"),
+                                 ("plugin_version", "unversioned", "invalid_plugin_manifest"),
+                                 ("plugin_id", "not-namespaced", "invalid_plugin_manifest"),
+                                 ("contract_range", ">=0.3.0,<0.4.0", "incompatible_contract"),
+                                 ("config_schema", {"$ref": "https://example.invalid/schema.json"}, "invalid_plugin_manifest"),
+                                 ("kind", "solver_backend", "invalid_plugin_manifest")]:
+            with self.subTest(field=key):
+                path.write_text(json.dumps({**original, key: value}))
+                result = self.cli("plugins", "list")
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(json.loads(result.stdout)["error"]["code"], code)
+
+    def test_unknown_method_exception_has_safe_public_diagnostics(self) -> None:
+        self.install_method()
+        module = self.packages / "llm4om_fixture_method/__init__.py"
+        original = module.read_text()
+        for exception in ("RuntimeError", "SystemExit"):
+            with self.subTest(exception=exception):
+                text = original.replace('        response = await',
+                       f'        print("PRIVATE-METHOD-ERROR-SENTINEL")\n        raise {exception}("PRIVATE-METHOD-ERROR-SENTINEL")\n        response = await')
+                module.write_text(text)
+                result, path, bundle = self.configured_run()
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(bundle["error"]["code"], "method_error")
+                diagnostic = json.loads((path / bundle["error"]["details_ref"]["relative_path"]).read_text())
+                self.assertTrue(diagnostic["frames"])
+                self.assertNotIn("PRIVATE-METHOD-ERROR-SENTINEL", result.stderr + result.stdout)
+                for file in path.rglob("*"):
+                    if file.is_file():
+                        self.assertNotIn(b"PRIVATE-METHOD-ERROR-SENTINEL", file.read_bytes())
+
+    def test_method_calls_cannot_bypass_the_shared_mock_budget(self) -> None:
+        self.install_method()
+        module = self.packages / "llm4om_fixture_method/__init__.py"
+        text = module.read_text().replace('        value = json.loads(response.text)',
+                    '        await context.llm.complete({"messages": [{"role": "user", "content": "second"}]})\n        value = json.loads(response.text)')
+        module.write_text(text)
+        result, path, bundle = self.configured_run()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(bundle["error"]["code"], "budget_exhausted")
+        ledger = json.loads((path / "budget-ledger.json").read_text())
+        self.assertEqual(ledger["llm_attempts"], 1)
+        self.assertEqual(ledger["solver_calls"], 0)
+
+    def test_method_output_cannot_change_the_public_problem_binding(self) -> None:
+        self.install_method()
+        module = self.packages / "llm4om_fixture_method/__init__.py"
+        text = module.read_text().replace('        value["structured_ir"]["objective"]',
+                    '        value["structured_ir"]["problem_id"] = "another-problem"\n        value["structured_ir"]["objective"]')
+        module.write_text(text)
+        result, path, bundle = self.configured_run()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(bundle["error"]["code"], "artifact_problem_mismatch")
+        self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["solver_calls"], 0)
+
+    def test_doctor_reports_the_compatible_path_without_creating_a_run(self) -> None:
+        result = self.cli("doctor", "--config", str(self.inputs / "solve.yaml"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertTrue(report["preflight_ok"])
+        self.assertEqual(report["execution_plan"]["mode"], "trusted_local")
+        self.assertEqual(report["execution_plan"]["solver_id"], "llm4om.solvers.highs")
+        self.assertEqual(report["connectivity_checks"]["status"], "not_requested")
+        self.assertFalse((self.root / "runs").exists())
+
+    def test_doctor_and_run_reject_unknown_or_incompatible_method_capabilities(self) -> None:
+        self.install_method()
+        path = self.packages / "llm4om_fixture_method/manifest.json"
+        original = json.loads(path.read_text())
+        for field, value in [("code_representations", ["native_code"]), ("model_backends", None),
+                             ("problem_types", []), ("llm_features", ["tools"]), ("oracle_requirements", ["reference_objective"])]:
+            with self.subTest(capability=field):
+                manifest = json.loads(json.dumps(original))
+                if value is None:
+                    del manifest["capabilities"][field]
+                else:
+                    manifest["capabilities"][field] = value
+                path.write_text(json.dumps(manifest))
+                result, run_path, bundle = self.configured_run()
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(bundle["error"]["code"], "capability_mismatch")
+                self.assertEqual(json.loads((run_path / "budget-ledger.json").read_text())["llm_attempts"], 0)
+                report = self.cli("doctor", "--config", str(self.inputs / "solve.yaml"))
+                self.assertEqual(report.returncode, 1)
+                self.assertEqual(json.loads(report.stdout)["error"]["code"], "capability_mismatch")
+
+    def test_doctor_reports_missing_dependencies_and_zero_budget_before_calls(self) -> None:
+        import yaml
+        self.install_method()
+        manifest_path = self.packages / "llm4om_fixture_method/manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["dependencies"]["python"] = ["llm4om-absent-test-dependency"]
+        manifest_path.write_text(json.dumps(manifest))
+        result, path, bundle = self.configured_run()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(bundle["error"]["code"], "dependency_missing")
+        self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["llm_attempts"], 0)
+        report = self.cli("doctor", "--config", str(self.inputs / "solve.yaml"))
+        self.assertEqual(json.loads(report.stdout)["error"]["code"], "dependency_missing")
+        manifest["dependencies"]["python"] = []
+        manifest_path.write_text(json.dumps(manifest))
+        settings = yaml.safe_load((self.inputs / "solve.yaml").read_text())
+        settings["budget"]["max_solver_calls"] = 0
+        (self.inputs / "solve.yaml").write_text(yaml.safe_dump(settings))
+        report = self.cli("doctor", "--config", str(self.inputs / "solve.yaml"))
+        self.assertEqual(report.returncode, 1)
+        self.assertEqual(json.loads(report.stdout)["error"]["code"], "budget_exhausted")
+
+    def test_malformed_method_outcome_still_saves_a_failed_bundle(self) -> None:
+        self.install_method()
+        module = self.packages / "llm4om_fixture_method/__init__.py"
+        module.write_text(module.read_text().replace('ModelProposal(value["artifact"], value["formulation"], value["structured_ir"])', '{}'))
+        result, path, bundle = self.configured_run()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(bundle["error"]["code"], "invalid_method_outcome")
+        self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["solver_calls"], 0)
+
+    def test_method_cannot_request_undeclared_provider_features(self) -> None:
+        self.install_method()
+        module = self.packages / "llm4om_fixture_method/__init__.py"
+        module.write_text(module.read_text().replace('context.llm.complete({"messages":', 'context.llm.complete({"tools": [], "messages":'))
+        result, path, bundle = self.configured_run()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(bundle["error"]["code"], "capability_mismatch")
+        self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["llm_attempts"], 0)
+
+    def test_sync_sdk_runs_an_async_method_inside_an_existing_event_loop(self) -> None:
+        script = '''import asyncio, json, sys
+from pathlib import Path
+from llm4om import run_problem
+async def main():
+    result = run_problem(Path(sys.argv[1]), Path(sys.argv[2]), output_root=Path(sys.argv[3]))
+    print(json.dumps({"status": result.status}))
+asyncio.run(main())
+'''
+        result = subprocess.run([sys.executable, "-c", script, str(self.inputs / "problem.json"),
+                                 str(self.inputs / "solve.yaml"), str(self.root / "runs")],
+                                 env={**os.environ, "PYTHONPATH": str(ROOT / "src")}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "completed")
+
+    def test_doctor_rejects_yaml_values_that_are_not_json_configuration(self) -> None:
+        self.install_method()
+        manifest_path = self.packages / "llm4om_fixture_method/manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["config_schema"]["additionalProperties"] = True
+        manifest_path.write_text(json.dumps(manifest))
+        self.configured_run()
+        path = self.inputs / "solve.yaml"
+        path.write_text(path.read_text().replace('  config:\n    objective_offset: 7', '  config:\n    objective_offset: 7\n    date: 2026-10-09'))
+        result = self.cli("doctor", "--config", str(path))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout)["error"]["code"], "invalid_config")
+
+    def test_requested_resources_match_a_subset_of_method_capabilities(self) -> None:
+        self.install_method()
+        path = self.packages / "llm4om_fixture_method/manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["capabilities"]["solvers"].append("llm4om.solvers.gurobi")
+        manifest["capabilities"]["execution_modes"].append("container")
+        path.write_text(json.dumps(manifest))
+        result, run_path, bundle = self.configured_run()
+        self.assertEqual(result.returncode, 0)
+        plan = json.loads((run_path / bundle["admission_plan_ref"]["relative_path"]).read_text())
+        self.assertEqual(plan["solver_id"], "llm4om.solvers.highs")
+        report = self.cli("doctor", "--config", str(self.inputs / "solve.yaml"))
+        self.assertTrue(json.loads(report.stdout)["preflight_ok"])
+
+
+if __name__ == "__main__":
+    unittest.main()
