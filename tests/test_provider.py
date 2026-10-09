@@ -62,6 +62,34 @@ class ProviderTests(unittest.TestCase):
                                                     environment={'S05_TEST_KEY': 'synthetic-secret'})
         return Gateway(provider, self.budget, self.root / 'private')
 
+    def test_plugin_working_checkpoint_cannot_change_resource_callback_commit(self):
+        from llm4om.methods import DirectFactory, MethodContext, MethodOutcome
+        from llm4om.plugins import MethodPlugin
+        core = {'method_checkpoint': {'schema_version': '0.1.0', 'step': {'value': 'old'}}}
+        committed = self.root / 'committed.json'
+        def save_resource(digest, ledger):
+            core.update(resource_sha256=digest, ledger=ledger)
+            committed.write_text(json.dumps(core))
+        provider = OpenAICompatibleFactory().create(self.config, 'synthetic',
+            environment={'S05_TEST_KEY': 'synthetic-secret'})
+        gateway = Gateway(provider, self.budget, self.root / 'private', on_save=save_resource)
+        class Method:
+            async def run(self, problem, context, *, checkpoint=None):
+                checkpoint['step']['value'] = 'unfinished'
+                await context.llm.complete({'messages': [{'role': 'user', 'content': 'hello'}]})
+                return MethodOutcome('failed', None, None)
+        class Factory:
+            def create(self, config):
+                return Method()
+        plugin = MethodPlugin(DirectFactory().describe(), {'kind': 'fixture'}, Factory())
+        plugin.run({}, {}, MethodContext(gateway, {}, self.budget, 'synthetic'),
+                   checkpoint=core['method_checkpoint'])
+        self.assertEqual(len(self.requests), 1)
+        self.assertEqual(json.loads(committed.read_text())['ledger']['external_llm_requests'], 1)
+        self.assertEqual(json.loads(committed.read_text())['method_checkpoint'],
+                         {'schema_version': '0.1.0', 'step': {'value': 'old'}})
+        self.assertEqual(core['method_checkpoint']['step']['value'], 'old')
+
     def test_success_metadata_cannot_persist_the_api_credential(self):
         from llm4om.contracts import RunError
         self.responses[0][1]['debug_metadata'] = 'synthetic-secret'

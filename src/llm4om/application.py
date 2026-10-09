@@ -377,7 +377,8 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
     solver_options = {**settings["solver"].get("options", {})}
     solver_options["time_limit_s"] = min(solver_options.get("time_limit_s", remaining), remaining)
     ledger["solver_calls"] += 1
-    store.state.update(ledger=ledger, phase="execute_pending")
+    input_artifact_ref = artifact_ref
+    store.state.update(ledger=ledger, phase="execute_pending", execution_id="execution-001")
     store.checkpoint()
     store.emit("solver_started", solver_id=settings["solver"]["plugin_id"])
     out, err = StringIO(), StringIO()
@@ -494,6 +495,8 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
     output_ref = store.write("candidates/001/stdout.txt", out.getvalue().encode(), "stdout")
     stderr_ref = store.write("candidates/001/stderr.txt", err.getvalue().encode(), "stderr")
     execution_ref = store.json("candidates/001/execution.json", {"schema_version": "0.2.0",
+        "run_id": store.run_id, "input_artifact_ref": input_artifact_ref, "artifact_ref": artifact_ref,
+        "solver_call": ledger["solver_calls"],
         "execution_id": "execution-001", "mode": settings["executor"]["plugin_id"].removeprefix("llm4om.executors."), "status": "cancelled" if error and error.code == "run_cancelled" else "failed" if error else "completed",
         "start": started, "end": datetime.now(timezone.utc).isoformat(),
         "worker_status": container.status if container else executor_details.get("status"),
@@ -528,6 +531,72 @@ def _restored_compilation(store: RunStore, artifact_ref: dict[str, Any]) -> Comp
         return None
     ir = parse_json(read_public_bytes(store.path / code["provenance"]["source_ir_ref"]["relative_path"]))
     return compile_ir(ir)
+
+
+def _reconcile_execution(store: RunStore, settings: dict[str, Any]) -> None:
+    records = store.interrupted_publications.get("candidates/001/execution.json", [])
+    if store.state["phase"] != "execute_pending" or not records:
+        return
+    try:
+        visited: set[str] = set()
+        def verify(value: Any) -> None:
+            if isinstance(value, dict):
+                if {"relative_path", "namespace", "sha256"} <= value.keys():
+                    if value not in store.refs or value.get("namespace") != "run_public":
+                        raise ValueError("Result refers to an unverified artifact.")
+                    if value["relative_path"] not in visited:
+                        visited.add(value["relative_path"])
+                        if value["media_type"] == "application/json":
+                            verify(load(value))
+                else:
+                    for item in value.values():
+                        verify(item)
+            elif isinstance(value, list):
+                for item in value:
+                    verify(item)
+        def load(ref: dict[str, Any]) -> dict[str, Any]:
+            return parse_json(read_public_bytes(public_path(store.path, ref["relative_path"])))
+        execution_ref = records[-1]
+        verify(execution_ref)
+        execution = load(execution_ref)
+        if execution["status"] != "completed":
+            return
+        artifact_ref = execution["artifact_ref"]
+        artifact = load(artifact_ref)
+        original = load(store.state["artifact_ref"])
+        mode = settings["executor"]["plugin_id"].removeprefix("llm4om.executors.")
+        if (execution["run_id"] != store.run_id or execution["execution_id"] != store.state["execution_id"]
+                or execution["solver_call"] != store.state["ledger"]["solver_calls"]
+                or execution["input_artifact_ref"] != store.state["artifact_ref"]
+                or {key: value for key, value in artifact.items() if key != "optional_views"}
+                   != {key: value for key, value in original.items() if key != "optional_views"}
+                or execution["mode"] != mode or execution["exit_code"] != 0
+                or execution["diagnostics"]):
+            raise ValueError("Completed execution identity differs from the admitted candidate.")
+        solve_ref = execution["solve_result_ref"]
+        solve = load(solve_ref)
+        expected_origin = ("trusted_container_worker" if mode == "container" else
+                           "trusted_gurobi_api" if settings["solver"]["plugin_id"] == "llm4om.solvers.gurobi" else "trusted_highs_api")
+        if solve["termination"] == "error" or solve["evidence_origin"] != expected_origin:
+            raise ValueError("Execution has no completed trusted Solver result.")
+        runtime = {"packages": store.state["admission"]["packages"]}
+        if mode == "container" and execution["image_id"] != store.state["admission"]["worker"]["image_id"]:
+            raise ValueError("Completed execution used another Worker.")
+        result = {key: value for key, value in solve.items() if key not in ("schema_version", "solution_ref")}
+        result["variables"] = load(solve["solution_ref"])["variables"] if solve["solution_ref"] is not None else None
+        result["evidence_origin"] = "trusted_gurobi_api" if settings["solver"]["plugin_id"] == "llm4om.solvers.gurobi" else "trusted_highs_api"
+        validate_worker_response({"schema_version": "0.2.0", "runtime": runtime, "result": result,
+                                  "resources": execution["resources"]}, runtime,
+                                 solver_id=settings["solver"]["plugin_id"], model_backend=settings["model_backend"]["plugin_id"])
+        store.accept_publications()
+        candidate = load(store.projections["candidates/001/candidate-snapshot.json"])
+        candidate.update(artifact_ref=artifact_ref, status="selected")
+        store.json("candidates/001/candidate.json", candidate, "001")
+        store.state.update(artifact_ref=artifact_ref, executed_artifact_ref=artifact_ref,
+                           solve_ref=solve_ref, execution_ref=execution_ref, phase="execute_done")
+        store.checkpoint()
+    except (RunError, ValueError, KeyError, TypeError) as error:
+        raise RunError("checkpoint_incompatible", "admission", "Cannot reconcile the completed candidate execution.") from error
 
 
 def _sdk_sha256() -> str:
@@ -599,6 +668,8 @@ def resume_run(run: Path, *, cancellation: CancellationToken | None = None,
         if (store.state.get("artifact_ref") is None and store.state.get("method_checkpoint") is None
                 and store.state.get("method_started")):
             raise RunError("checkpoint_unsupported", "admission", "No completed stage or supported internal method checkpoint exists.")
+        _reconcile_execution(store, settings)
+        store.interrupted_publications = {}
         return _run_problem(Path(store.state["problem"]), Path(store.state["config"]), store,
                             offline=store.state["offline"], restored_plan=plan)
     finally:

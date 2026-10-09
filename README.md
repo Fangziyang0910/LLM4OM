@@ -78,6 +78,8 @@ CLI 和未来 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK、支�
 
 ## 取消与恢复
 
+S04-B 最终审查的四项修复已通过聚焦验收；最新完整回归与独立复审待 parent 完成，见 [实现记录](docs/development/s04-resume.md)。
+
 ```bash
 llm4om cancel --run-id RUN_ID --output runs
 llm4om resume --run-id RUN_ID --output runs

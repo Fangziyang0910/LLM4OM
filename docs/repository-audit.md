@@ -88,7 +88,7 @@
 | `src/llm4om/evaluation.py` | S07-A 单样本后置评测 | 公共运行结果、Code 实际来源、失败、checker error、零 eligible 与无 oracle 导出 |
 | `tests/test_task_evaluation.py` | S07-A 公共接口验收 | 独立 fixture 身份、实际 HTTP／Docker／HiGHS、篡改与失败记录 |
 | `examples/tasks/nl4opt-import.yaml` | 官方固定 dev split 的本地导入配置 | 已下载源字节 hash；路径以配置目录为根，不自动 fetch |
-| `src/llm4om/application.py` | 单问题应用流程 | 公开输入、IR／参数化工厂、候选、阶段来源与成功／失败证据 |
+| `src/llm4om/application.py` | 单问题应用流程 | 公开输入、候选与阶段；校验中断 Execution 的候选／绑定／Solver 身份并复用完成结果 |
 | `src/llm4om/cli.py` | 用户 CLI | 参数解析、离线显式选择、JSON 摘要与退出码 |
 | `src/llm4om/contracts.py` | 运行边界校验 | 严格 JSON／YAML、CSV、路径、引用、五元素、输入绑定与 Worker 响应 |
 | `src/llm4om/executors.py` | 真实容器执行 Module | 公共 bytes、权限与资源、有界控制／清理、真实限制证据 |
@@ -99,14 +99,14 @@
 | `src/llm4om/plugins.py` | 方法发现与运行 Module | 动态 factory、版本／唯一键、JSON schema、同步／异步桥接与脱敏异常 |
 | `src/llm4om/preflight.py` | 共用运行 admission | 方法配置、实际能力、依赖、预算和固定计划；不发 Provider HTTP 请求 |
 | `src/llm4om/providers.py` | Provider 与共享 Gateway | 公共 HTTP seam、literal 凭据加载、原子资源／恢复和私有回复 |
-| `src/llm4om/storage.py` | 运行文件存储 | 独立目录、原子替换、内容 hash 和递增事件 |
+| `src/llm4om/storage.py` | 运行文件存储 | 独占目录、祖先项 fsync、不可变引用与中断发布收据；不解释 Execution／Solve 语义 |
 | `src/llm4om/worker.py` | 镜像可信入口 | 严格 IR／实际代码 hash 核对、后端 API 求解、资源测量 |
 | `tests/test_cli_run.py` | S01 公共 CLI 行为测试 | 成功、失败、数据、路径、引用、配置、隐私、报告和存储 |
 | `tests/test_container_executor.py` | S04-A 公共 Executor 测试 | 真实网络／文件／资源／清理；控制命令外部 fixture 验证有限返回 |
 | `tests/test_container_run.py` | S04-A 公共 CLI／Worker 测试 | 真实目标 13、代码替换拒绝、超限保留证据而无伪造解 |
 | `tests/test_linear_solver.py` | 编译／Solver 公共行为测试 | 独立微型 LP/MILP，真实常数、域、状态和数值拒绝 |
 | `tests/test_plugins.py` | S03 公共 CLI／SDK 行为测试 | 真实独立包构建／安装、预检、预算、坏输出、来源与异常 |
-| `tests/test_provider.py` | S05-A 公共 Provider／Gateway 测试 | 外部本地 HTTP fixture 与凭据、预算、deadline、usage、重试、共享恢复和隐私 |
+| `tests/test_provider.py` | S05-A 公共 Provider／Gateway 测试 | 本地 HTTP、预算／隐私；公共 MethodPlugin 未保存 checkpoint 修改不污染资源提交 |
 | `tests/test_provider_pipeline.py` | S05-A 公共 CLI 测试 | 未付费 doctor admission、MILP=13／无数据 LP 的 HTTP fixture 到真实 HiGHS、截断与嵌套配置凭据 |
 | `tests/test_repository_checks.py` | 维护工具公共入口测试 | 临时副本；坏链接、hash、配置、绑定、重复键、引用漂移、五元素与阶段引用 |
 | `tests/test_solve_run.py` | S02-A 公共 CLI 行为测试 | 真实 MILP／LP、缺依赖、预算、失败阶段与证据引用 |
@@ -154,7 +154,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `docs/development/s04-resume.md` | S04-B 当前实现与本机验收范围 | 公开入口、checkpoint／预算／身份、默认拒绝／显式派生及实际支持边界 |
 | `docs/development/s06b-optimus-source.md` | 固定 OptiMUS 0.3 主流程、提示、原生输出与适配接缝研究 | 19 份源码／文档 hash、16 份检索资源 hash、真实默认模式与 paper/source 区分；未集成 |
 | `docs/development/s06c-coe-source.md` | 固定 CoE 角色路由、协作／反思、函数输出与输入分类研究 | 30 份源文件 hash、真实选择／反馈语义、无许可材料的观察与原生接口需求；未集成 |
-| `tests/test_resume_crash.py` | S04-B 真实硬崩溃与派生恢复 | 公共 CLI／SDK、OS 原子存储边界、HTTP 次数、累计资源与完整性 |
+| `tests/test_resume_crash.py` | S04-B 真实硬崩溃与派生恢复 | CLI／SDK、OS 目录 fsync／rename；早期 completed Execution 复用、收据保留、head 回滚拒绝与累计资源 |
 | `tests/test_async_control.py` | 公共 Method 任务监督行为 | 取消等待清理、SystemExit 诊断与 Python 3.11 兼容 |
 | `docs/development/s05b-anthropic-research.md` | Anthropic Messages 官方协议与已配置服务的真实小探针 | 同一指定模型、Messages HTTP200、真实 usage／未知成本、私有原始回复；仅探针证据，实现另见 S05-B |
 

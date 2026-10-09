@@ -544,17 +544,23 @@ CLI 为 `cancel|resume --run-id RUN_ID --output STORE_ROOT`；resume 可加 `--s
 payload 保存 run_id、不可变 ArtifactRefs、递增事件、当前公开视图的引用、核心阶段状态、原公开输入／配置 hash、
 admission／SDK／Python／包身份、方法内部 checkpoint 和预算／资源位置。
 文件经 fsync／原子 replace 发布；owner.lock 防止并发写者，control.lock 串行化控制身份更新。
+新建 run、history、checkpoint、私有 archive／journal 的每层目录项先在其父目录 fsync，再发布引用其文件的记录。
+原文件权限与新 run 的独占创建保持不变；OS fd／rename 验证不等于物理断电验收。
 内容文件保存在 history/hash/path，原引用不改写；固定路径为当前公开视图。
 checkpoint 的原始 bytes 另存于 checkpoints/hash.json；checkpoint.json 原子提交选择当前一致版本。
 公开视图替换前，publication.json 保存基于该 checkpoint hash 的写入意图与 owner_id、目标不可变引用。
 只有 owner 锁已释放、control 仍 active、owner_id 与基线 hash 均匹配的中断，才允许协调未提交视图。
 恢复先校验全部不可变 bytes，再确认视图只含已提交或已记录的未提交 bytes，然后重建 checkpoint 视图。
-未提交的新视图删除，但不可变历史保留。已提交视图或不可变引用的真实损坏仍返回 checkpoint_incompatible。
+修复视图前，核心 checkpoint 的 interrupted_publications 保存已验证的中断引用；对应不可变 bytes 纳入 refs。
+未提交的新视图删除，但该收据与不可变历史保留，身份校验失败或再次中断不会丢失唯一恢复证据。
+存储只提供已验证的中断引用及重新发布操作；应用决定哪些记录代表完成的 Execution／Solve。
+已提交视图或不可变引用的真实损坏仍返回 checkpoint_incompatible。
 OS atomic rename／fsync 是存储故障注入边界；协作取消测试使用公开 Method／资源和 SDK Token／事件记录。
 不序列化 ModelHandle、Solver SDK 对象、credential、oracle 或 pickle。
 
 MethodContext 兼容增加 cancellation 和可选 save_checkpoint(versioned_json) 回调。
 只有 supports_checkpoint=true 的方法可保存／接收内部 checkpoint；核心阶段恢复与该能力独立。
+MethodPlugin 向方法传入 checkpoint 的深拷贝。插件的原地修改只有经 save_checkpoint 才提交；Gateway 的资源回调不能隐式提交未保存的方法步骤。
 Direct 声明 supports_checkpoint=true，仅保存 0.1.0 的 request_id；稳定请求内容仍由 Gateway hash 核对。
 插件可声明 cancellation=cooperative/0.1.0，须让出 async 执行并检查 Token，遵守任务取消；
 未声明时 admission 的 method_cancellation=unknown，不能据资源可取消就宣称插件内部有界。
@@ -569,6 +575,10 @@ input_hashes、父 checkpoint 引用、父公开历史副本、parent_budget_led
 不足时派生 run 明确 budget_exhausted，不能通过重复派生忘记费用或未知预留。rerun 可产生新的付费请求，须由用户显式选择。
 完整 Formulation／Code 阶段直接继续；匹配的 execute_done 复用保存的真实 Execution／SolveResult。
 Execution／SolveResult 引用和 execute_done 在 solver_finished 事件之前一起提交；发布完成事件后的崩溃不再重复求解。
+公开 completed Execution 先于 execute_done 落盘时同样复用。Execution 记录 run_id、execution_id、solver_call、
+input_artifact_ref 与执行后的 artifact_ref，分别绑定核心已准入的尝试、原候选与含提取视图的候选。
+恢复先验证中断引用及实际不可变依赖，再核对原候选、Code／Formulation／数据绑定、Solver 结果结构／版本／来源和 Worker 身份。
+通过后重新发布记录并提交 execute_done；不新增 Solver admission，也不从任意公开文件或 stdout 取结果。
 匹配由已验证的公开 bytes、数据绑定、固定配置／Manifest／包及 Worker 身份共同确定。
 completed／artifact_ready 恢复幂等；其他过期恢复返回 deadline_exhausted。
 solver_calls 在尝试前持久化，取消不退还已开始的 slot；下一尝试需要原预算中剩余 slot。
@@ -577,6 +587,7 @@ Gateway admission／settlement 先写 journal/hash.json 不可变版本（0.1.0�
 再原子更新私有 state.json，最后回调保存核心资源 hash／账本。两处存储不声称跨文件系统事务。
 恢复验证完整单链、核心已知 hash 位于链上、当前 state.json 精确匹配链中版本、固定 archive／Provider／
 预算／deadline／请求身份、只追加 attempt 与一次结算、usage／reservation 和 raw response hash。
+按链顺序检查 mutable head 必须等于或晚于核心已提交 hash；有效的旧 genesis 也不能覆盖已提交 settlement。
 已验证的新 journal head 可前进于核心引用或 mutable head；其预留和成功回复仍保留。破坏链或实际 bytes 仍拒绝。
 archive／journal 目录为 0700，私有文件为 0600，不保存 API credential；只公开脱敏 trace 与累计资源账本。
 成功回复复用既有 attempt_id；未知结果保留预留并返回 provider_outcome_unknown，不重新提交相同 request_id。

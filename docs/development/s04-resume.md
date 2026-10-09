@@ -1,6 +1,6 @@
 # S04-B 取消与恢复
 
-本页记录 Issue 16 的当前实现与本机验收范围。规范来源为 [DD-07](../design/experiments-and-interfaces.md#dd-07-持久化恢复与报告)、[接口契约](../plugin-contracts.md#12-s04-b-cancellation-and-resume-sdk-070) 和 [验收清单](../acceptance.md)。SDK／Worker 为 0.7.0，未发布；本机验收已通过，修复后的独立审查仍待完成。
+本页记录 Issue 16 的当前实现与本机验收范围。规范来源为 [DD-07](../design/experiments-and-interfaces.md#dd-07-持久化恢复与报告)、[接口契约](../plugin-contracts.md#12-s04-b-cancellation-and-resume-sdk-070) 和 [验收清单](../acceptance.md)。SDK／Worker 为 0.7.0，未发布；四项最终审查修复已通过聚焦验收，最新完整回归与独立审查待 parent 执行。
 
 ## 当前入口
 
@@ -17,6 +17,7 @@ CLI 的 SIGINT 设置相同的协作取消信号，返回可检查的 cancelled 
 ## 实际恢复行为
 
 核心保存 admitted、method_done、code_done、execute_pending、execute_done 的阶段位置；方法内部 JSON checkpoint 独立保存。
+MethodPlugin 传入深拷贝；未显式保存的嵌套修改不会随 Gateway 资源回调提交。
 Direct 的内部 checkpoint 仅保存版本与 request_id，恢复时重新解析已保存的响应，不声称保存了任意方法搜索状态。
 已完成 Formulation／Code 不再运行方法。匹配的 completed Execution／SolveResult 直接复用。
 已经 completed／artifact_ready 的运行保持同一 run_id，事件和输入不变。
@@ -33,10 +34,15 @@ Python／依赖版本、Worker 镜像与资源配置。校验失败先于 Provid
 公开路径保留原始输入身份；内容版本存于 history，原事件引用不会因新摘要而失效。
 checkpoint.json 的 bytes 另存不可变 checkpoints/hash.json。视图替换前持久化以旧 checkpoint／owner 为基线的写入意图。
 验证中断 owner 和不可变记录后，恢复只重建未提交视图；真正损坏的已提交公开 bytes 仍拒绝。
+重建前把已验证的中断引用写入不可变核心 checkpoint；后续身份校验失败仍保留该收据。
+应用核对已完成 Execution 的 run／attempt、输入与执行后候选、Code／数据绑定、Solver／Worker 身份和所有实际引用，
+在核心仍为 execute_pending 时复用真实结果。即使 max_solver_calls=1 已耗尽，也不重新求解或转为 budget_exhausted。
+新建 run／history／checkpoint／archive／journal 的全部目录祖先项在记录发布前持久化；文件权限与独占创建保持。
 同一 run 的文件锁只允许一个写者。控制文件绑定 run_id、UID 和随机 owner_id；cancel 不向持久化 PID 发信号。
 
 Gateway 保存的成功响应只复用，不新增 HTTP attempt。未知结果保留 reservation，request_id 不重发。
 私有 archive 仍位于 store/.private/run_id；不可变 journal 连接每次 admission／settlement，state.json 必须精确匹配链中版本。
+state.json 所处版本不得早于核心已提交 hash；有效旧 genesis 覆盖已提交 settlement 同样拒绝。
 恢复从核心已知 hash 验证整条资源链，保留先于核心回调落盘的成功回复或未知预留；不声称跨文件系统事务。
 首次 head 尚未创建时，仅恢复有效的空 genesis；已提交 head 的丢失或损坏仍拒绝。
 Gateway.recover 负责完整校验，向应用返回 ledger 和明确字段列表投影的公开 trace，应用不解析私有日志。
@@ -75,7 +81,18 @@ Python 3.11.13 使用干净 wheel：11 个崩溃／派生用例、2 个监督用
 验收覆盖进程硬退出与 OS 文件发布失败，未验证物理断电。没有付费模型请求或云端 CI。
 后续独立复审发现并修复完成状态提交、首次 genesis 恢复、转义凭据和私有日志耦合问题。
 求解完成状态在 solver_finished 之前提交，已用耗尽 Solver 上限的硬退出／恢复用例验证复用目标 13。
-最新修复的完整回归、镜像一致性及复审仍待验收，以上基线包／镜像证据不替代最新源码验收。
+以上旧基线包／镜像证据不替代本轮源码验收。
+最终四项修复以 dc511e3594de353136c37b5bf70ddc9000071c3b 为基线，证据位于
+`/tmp/llm4om-s04b/final-fix-evidence/`；四个主行为分别保存 red／green 日志。
+新测试从公共 MethodPlugin／Gateway、CLI／SDK 与 OS mkdir／fsync／rename 观察行为，
+覆盖 completed Execution 公开投影的早期硬退出、重复失败恢复、收据提交中断、不可变结果损坏和绑定不匹配。
+本轮 Python 3.12 聚焦：20 项崩溃／派生测试、1 项绑定拒绝、1 项双后端容器恢复、24 项 Provider 和 8 项兼容性测试通过。
+干净 Python 3.11.13 wheel 的 10 项新用例通过（38.809 秒）；strict mypy、仓库／引用检查、wheel／sdist 构建通过。
+新 Worker 对参数化 Pyomo 与 native Gurobi 的早期发布崩溃后 CLI 恢复均得到目标 13，HTTP／Solver 各一次。
+另存 grounded Worker 实跑 bundle，目标 13，全部引用校验通过，实际执行容器已删除。
+源码／wheel／Worker 的 SDK SHA-256 均为 `6cb4db6ba2b6b802e5d8f06bfe1f378083629fc123acfdd693c243564616c22c`；
+新镜像 ID 为 `sha256:f22e9d1f9bf6343887a0b21f82d2bfe8a898fac0e167717b1e8e36593b1a6788`。
+完整回归与独立 Standards／Spec 复审仍待 parent；旧 203 tests 回归不作为这四项修复的验收证据。
 OptiMUS／CoE、Web、batch 与完整 1.0 尚未完成；本切片不更改这些已批准范围。
 
 恢复要求原公开输入／配置仍在原路径且字节不变；本版不提供移动目录后的自动路径迁移。

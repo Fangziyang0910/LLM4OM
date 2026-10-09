@@ -1,6 +1,7 @@
 """Discover installed method factories through the declared entry-point seam."""
 
 from dataclasses import dataclass
+from copy import deepcopy
 import asyncio
 import json
 import hashlib
@@ -43,7 +44,7 @@ class MethodPlugin:
             try:
                 async def method_task() -> MethodOutcome:
                     try:
-                        result: MethodOutcome = await method.run(problem, context, checkpoint=checkpoint)
+                        result: MethodOutcome = await method.run(problem, context, checkpoint=deepcopy(checkpoint))
                         return result
                     except SystemExit as error:
                         raise RunError("method_error", "formulation", "The installed modeling method failed.",

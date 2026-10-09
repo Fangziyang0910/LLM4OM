@@ -31,7 +31,13 @@ TaskAdapter → 公开 ProblemSpec + 私有 oracle_ref → dataset manifest → 
 
 S04-B 当前实现见 [取消与恢复](../development/s04-resume.md)。核心阶段 checkpoint 与方法内部 checkpoint 分开保存。方法支持 checkpoint 时，其 run 入口接受可序列化 checkpoint。恢复校验方法、契约、公开输入和配置。版本不兼容则拒绝；不支持内部 checkpoint 且尚无完整阶段时，默认 continue 明确拒绝；显式 rerun 创建派生运行，保留 lineage、父公开历史副本、已有费用与未知预留，并继续计入配置上限。新 run 的 deadline 与同一 run 的原 deadline 分别记录。
 
-核心以不可变 checkpoint 和写入意图校验未提交公开视图，验证中断 owner 后重建。Gateway 以不可变资源单链连接 admission／settlement；私有 mutable head 必须匹配链中版本，核心已知 hash 必须在链上。恢复先验证 bytes、请求与资源不变量，再协调两处提交；不声称跨文件系统事务。
+核心以不可变 checkpoint 和写入意图校验未提交公开视图，验证中断 owner 后先保存可重复恢复的引用收据，再重建视图。
+存储负责引用与持久化；应用核对 completed Execution 的尝试身份、候选／Code／数据绑定和真实 Solver 结果，
+在新 Solver admission 前复用已发布但尚未进入 execute_done 的结果。失败的身份校验不消耗该恢复收据。
+新建目录的祖先项先在父目录 fsync，随后才能发布引用其内容的记录。方法收到 checkpoint 深拷贝，只通过显式回调提交步骤。
+Gateway 以不可变资源单链连接 admission／settlement；私有 mutable head 必须匹配链中版本，且等于或晚于核心已知 hash。
+head／核心锚点仍在旧版本而 journal 已有新 settlement 是合法崩溃窗口；head 倒退到已提交核心锚点之前则拒绝。
+恢复先验证 bytes、请求与资源不变量，再协调两处提交；不声称跨文件系统事务。
 
 报告读取已保存结果，不重新选择候选或评分。公开导出包含运行配置、版本、Formulation／Code 引用与可用性、候选、求解和评测记录；排除凭据与私有 oracle。原始 LLM trace 的导出遵循独立访问策略。
 
