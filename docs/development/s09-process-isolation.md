@@ -14,8 +14,10 @@ doctor临时配置位于原工作目录，保持相对配置资源的解析规�
 
 公共HTTP验收同时提交两个问题，Provider用两方barrier确认调用真实重叠；两次运行分别通过实际HiGHS。之后验证已完成继续没有新模型请求，问题revision与Code编辑保留父bytes与累计预算，再取消正在等待HTTP响应的第三任务并检查终态bundle。它使用合成Provider响应，不作为真实模型准确率。已有真实DeepSeek证据继续由前序切片维护。
 
-浏览器视觉、完整压力／故障报告和独立Standards／Spec审阅仍待完成；完整1.0未完成。本轮不运行GitHub Actions或重复全量回归。
+浏览器桌面／手机布局、方法选择、doctor、历史结果与批量配置入口已验收；完整压力／故障报告和独立Standards／Spec审阅仍待完成；完整1.0未完成。本轮不运行GitHub Actions或重复全量回归。
 
 公共HTTP并发／恢复／编辑／取消验收22.485s通过；同源／远程IPv4/token检查0.278s通过。资源取消原行为检查与应用进程合作／拒绝合作检查通过，后者0.310s。mypy41模块、仓库241文件和diff检查通过。
 
 最终源码／Worker代码hash为72b2f0d37365b3f32a94fdcb4cb73eef8c8d174bea159f385afe9a3a460a6b03；最终镜像sha256:35403f20b47bb16326e0facb49c5e6a294debb521ecc9e06a856267ec6fe7d3a。网页批量／取消／继续的既有实际HiGHS路径18.472s通过，见本机batch-check.log。Standards／Spec由父代理自查，不能替代独立双路审阅；PR保持draft，不合并、不公开发布。
+
+本机Chrome通过真实10.150.68.218:8767页面验收，桌面1440×1100与手机390×844截图已查看。OptiMUS inline选择同步到Gurobi，doctor实际预检通过，四个历史job可读取，批量编辑器可打开；页面脚本错误为零。此次浏览器检查没有提交新模型任务。截图和运行脚本保存在/tmp/llm4om-s09-process-evidence；Cua控制接口没有提供浏览器，本次使用本机现有Playwright／Chrome，不将HTTP检查代称为浏览器验收。
