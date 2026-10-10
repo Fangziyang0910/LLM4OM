@@ -337,6 +337,10 @@ function showArtifact(value) {
     UI.candidates($("model-view"), snapshot);
     return;
   }
+  if (activeTab === "diagnostics") {
+    UI.runtimeDetails($("model-view"), snapshot);
+    return;
+  }
   if (
     value === undefined &&
     ["running", "queued", "needs_input"].includes(snapshot?.job?.status)

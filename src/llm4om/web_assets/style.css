@@ -773,8 +773,20 @@ details textarea {
   background: #f8fcf9;
 }
 .candidate-card,
-.candidate-selection {
+.candidate-selection,
+.runtime-card {
   grid-column: 1 / -1;
+}
+.runtime-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+  gap: 10px;
+  margin: 15px 0;
+}
+.runtime-metrics small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
 }
 .candidate-selection,
 .final-candidate {

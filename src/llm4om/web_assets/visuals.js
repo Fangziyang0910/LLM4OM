@@ -923,6 +923,162 @@ const UI = (() => {
       ),
     );
   }
+  function runtimeDetails(container, snapshot) {
+    container.replaceChildren();
+    const contents = snapshot?.contents || {};
+    const ledger = contents["budget-ledger.json"] || {};
+    const budget = contents["public-config.json"]?.budget || {};
+    const shown = (value) => (value == null ? "未提供" : format(value));
+    const usage = card(
+      "资源使用",
+      "累计资源来自保存的账本，可包含父版本消耗。",
+    );
+    usage.classList.add("runtime-card");
+    const metrics = node("div", "runtime-metrics");
+    for (const [label, key, limit] of [
+      ["模型尝试", "llm_attempts", "max_llm_attempts"],
+      ["外部模型请求", "external_llm_requests"],
+      ["候选", "candidates", "max_candidates"],
+      ["求解", "solver_calls", "max_solver_calls"],
+    ]) {
+      const box = node("div", "metric");
+      box.append(
+        node("span", "", label),
+        node("strong", "", shown(ledger[key])),
+      );
+      if (budget[limit] != null)
+        box.append(node("small", "", "总上限 " + format(budget[limit])));
+      metrics.append(box);
+    }
+    usage.append(metrics);
+    list(
+      usage,
+      [
+        [
+          "总Token",
+          ledger.total_tokens == null ? "未知" : format(ledger.total_tokens),
+        ],
+        ["已知Token", shown(ledger.known_total_tokens ?? ledger.total_tokens)],
+        ["未知用量预留", shown(ledger.reserved_tokens)],
+        ["Token总上限", shown(budget.max_total_tokens)],
+        ["修正轮数", shown(ledger.repairs)],
+        ["新运行时间上限（秒）", shown(budget.wall_time_s)],
+        ["费用", shown(ledger.cost)],
+      ],
+      [
+        ["项目", (row) => row[0]],
+        ["记录", (row) => row[1]],
+      ],
+    );
+    container.append(usage);
+    const solve =
+      contents[artifactKey(snapshot, snapshot?.bundle?.solve_result_ref)];
+    const execution =
+      contents[artifactKey(snapshot, snapshot?.bundle?.execution_result_ref)];
+    if (solve || execution) {
+      const section = card(
+        "最终候选的求解与执行",
+        "耗时与资源按记录来源分别呈现；Gap保留求解器报告原值。",
+      );
+      section.classList.add("runtime-card");
+      list(
+        section,
+        [
+          ["求解器", solve?.solver_id || "未提供"],
+          ["终止状态", solve ? status(solve.termination) : "未提供"],
+          ["原始状态", solve?.raw_status || "未提供"],
+          [
+            "候选模型可行解",
+            solve ? (solve.has_primal_solution ? "有" : "无") : "未提供",
+          ],
+          ["目标值", shown(solve?.objective_value)],
+          ["Best bound", shown(solve?.best_bound)],
+          ["报告Gap", shown(solve?.reported_gap)],
+          ["求解耗时（秒）", shown(solve?.solve_time_s)],
+          ["执行耗时（秒）", shown(execution?.wall_time_s)],
+          ["CPU时间（秒）", shown(execution?.resources?.cpu_time_s)],
+          [
+            "峰值内存（MiB）",
+            execution?.resources?.peak_memory_bytes == null
+              ? "未提供"
+              : format(execution.resources.peak_memory_bytes / 1048576),
+          ],
+        ],
+        [
+          ["项目", (row) => row[0]],
+          ["记录", (row) => row[1]],
+        ],
+      );
+      container.append(section);
+    }
+    const attempts = new Map();
+    for (const [name, trace] of Object.entries(contents).sort(
+      ([a], [b]) =>
+        Number(b === "llm-trace.json") - Number(a === "llm-trace.json"),
+    )) {
+      if (!/(?:^|\/)llm-trace\.json$/.test(name)) continue;
+      (trace.attempts || []).forEach((item, index) => {
+        const key = item.attempt_id || name + "#" + index;
+        if (!attempts.has(key))
+          attempts.set(key, {
+            ...item,
+            source: name.startsWith("parent/")
+              ? "父版本 " + name.split("/")[1].slice(0, 8)
+              : "当前版本",
+          });
+      });
+    }
+    if (attempts.size) {
+      const section = card(
+        "已保存的模型调用",
+        "每次尝试分别记录，可包含父版本。未知Token和费用不记为零。",
+      );
+      section.classList.add("runtime-card");
+      list(
+        section,
+        [...attempts.values()],
+        [
+          ["来源", (item) => item.source],
+          ["角色", (item) => roleLabel(item.role || "模型调用")],
+          ["模型", (item) => item.model || item.requested_model || "未提供"],
+          [
+            "状态",
+            (item) =>
+              ({ success: "成功", response_unknown: "响应未确认" })[
+                item.status
+              ] || status(item.status),
+          ],
+          [
+            "耗时（秒）",
+            (item) =>
+              item.start != null && item.end != null
+                ? format(item.end - item.start)
+                : "未提供",
+          ],
+          [
+            "Token",
+            (item) =>
+              item.usage?.total_tokens == null
+                ? "未知"
+                : format(item.usage.total_tokens),
+          ],
+          ["预留", (item) => shown(item.reservation)],
+        ],
+      );
+      container.append(section);
+    }
+    const events = snapshot?.events || [];
+    if (events.length) {
+      const section = node("details", "model-card runtime-card");
+      section.append(node("summary", "", "查看最近运行事件"));
+      list(section, events.slice(-30), [
+        ["顺序", (item) => item.sequence_no],
+        ["事件", (item) => item.kind],
+        ["状态", (item) => status(item.status || item.method_event?.status)],
+      ]);
+      container.append(section);
+    }
+  }
   function timeline(snapshot) {
     const container = document.getElementById("method-timeline");
     if (!container) return;
@@ -1131,7 +1287,10 @@ const UI = (() => {
     }
     document.getElementById("process-state").textContent = status(job.status);
     document.getElementById("process-summary").textContent =
-      shortMethod(job.method) +
+      shortMethod(
+        snapshot.contents?.["public-config.json"]?.method?.plugin_id ||
+          job.method,
+      ) +
       " · " +
       (job.status === "running"
         ? "正在执行方法步骤"
@@ -1872,6 +2031,7 @@ const UI = (() => {
     artifactLabel,
     artifactKey,
     candidates,
+    runtimeDetails,
     records,
     timeline,
     decision,
