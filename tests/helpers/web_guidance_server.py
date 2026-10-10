@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import threading
+import time
 
 from llm4om.web import serve_web
 
@@ -16,6 +17,7 @@ def main() -> None:
     parser.add_argument('--workspace', type=Path, required=True, help='An empty disposable directory.')
     parser.add_argument('--port', type=int, default=8774)
     parser.add_argument('--provider-port', type=int, default=8775)
+    parser.add_argument('--response-delay', type=float, default=0, help='Delay local replies to observe live modeling.')
     args = parser.parse_args()
     workspace = args.workspace.resolve()
     if workspace.exists() and any(workspace.iterdir()):
@@ -32,6 +34,7 @@ def main() -> None:
 
     class Provider(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
+            time.sleep(max(0, args.response_delay))
             request = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
             payload = json.loads(request['messages'][-1]['content'])
             revised = [item['id'] for item in payload['problem']['requirements'] if item['id'].startswith('CLARIFY-')]

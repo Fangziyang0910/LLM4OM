@@ -1680,7 +1680,11 @@ const UI = (() => {
       calculate();
     };
     const controls = node("details", "decision-controls");
-    controls.append(node("summary", "", "调整决策值 · 交互试算"), fields, reset);
+    controls.append(
+      node("summary", "", "调整决策值 · 交互试算"),
+      fields,
+      reset,
+    );
     section.append(output, controls);
     container.append(section);
     calculate();
@@ -1690,6 +1694,66 @@ const UI = (() => {
     const failed = failure(container, snapshot);
     if (!solve) {
       if (failed) return;
+      const state = snapshot?.job?.status;
+      if (["queued", "running", "needs_input"].includes(state)) {
+        const step = activeStep(snapshot);
+        const live = node("div", "live-modeling " + state);
+        live.setAttribute("role", "status");
+        live.setAttribute("aria-live", "polite");
+        const symbol = node("div", "modeling-orbit", "∑");
+        symbol.setAttribute("aria-hidden", "true");
+        const copy = node("div", "modeling-copy");
+        copy.append(
+          node(
+            "span",
+            "eyebrow",
+            shortMethod(
+              snapshot.contents?.["public-config.json"]?.method?.plugin_id ||
+                snapshot.job.method,
+            ),
+          ),
+          node(
+            "h2",
+            "",
+            state === "queued"
+              ? "问题已提交，等待执行"
+              : state === "needs_input"
+                ? "等待你补充问题信息"
+                : step
+                  ? roleLabel(step.label)
+                  : "正在准备建模",
+          ),
+          node(
+            "p",
+            "hint",
+            state === "needs_input"
+              ? "请完成下方问题，模型将依据你的回答继续。"
+              : state === "queued"
+                ? "开始执行后，这里会显示实际建模步骤。"
+                : "正在执行所选方法。步骤与模型输出会自动更新。",
+          ),
+        );
+        if (step && state === "running") {
+          const detail = node("div", "modeling-detail");
+          detail.append(
+            node(
+              "span",
+              "pill",
+              {
+                formulation: "Formulation · 数学表述",
+                code: "Code · 求解实现",
+                solve: "Solve · 数值求解",
+                coordination: "方法协作",
+              }[step.phase],
+            ),
+            node("span", "hint", roleLabel(step.actor)),
+          );
+          copy.append(detail);
+        }
+        live.append(symbol, copy);
+        container.append(live);
+        return;
+      }
       empty(
         container,
         "求解结果将在这里出现",
@@ -1736,7 +1800,10 @@ const UI = (() => {
     container.append(meta);
     const values = Object.entries(solution?.variables || {});
     const variableNames = new Map(
-      (solvedIR?.variables || []).map((item) => [item.id, item.name || item.id]),
+      (solvedIR?.variables || []).map((item) => [
+        item.id,
+        item.name || item.id,
+      ]),
     );
     if (values.length) {
       const bars = node("div", "decision-bars"),
@@ -1745,7 +1812,11 @@ const UI = (() => {
         const row = node("button", "decision-row");
         row.type = "button";
         row.setAttribute("aria-pressed", "false");
-        const label = node("span", "decision-name", variableNames.get(name) || name);
+        const label = node(
+          "span",
+          "decision-name",
+          variableNames.get(name) || name,
+        );
         if (variableNames.get(name) && variableNames.get(name) !== name)
           label.append(node("small", "decision-id", name));
         row.append(label);
@@ -1772,8 +1843,11 @@ const UI = (() => {
     }
     const expression = solvedIR?.objective?.expression;
     if (
-      solve.has_primal_solution && expression &&
-      expression.terms.every((term) => Number.isFinite(solution?.variables?.[term.variable_id]))
+      solve.has_primal_solution &&
+      expression &&
+      expression.terms.every((term) =>
+        Number.isFinite(solution?.variables?.[term.variable_id]),
+      )
     ) {
       const breakdown = node("section", "model-card objective-breakdown");
       breakdown.append(node("h3", "", "目标值如何构成"));
@@ -1782,18 +1856,32 @@ const UI = (() => {
         const quantity = solution.variables[term.variable_id];
         const item = node("div", "contribution-item");
         item.append(
-          node("span", "", variableNames.get(term.variable_id) || term.variable_id),
+          node(
+            "span",
+            "",
+            variableNames.get(term.variable_id) || term.variable_id,
+          ),
           node("strong", "", format(term.coefficient * quantity)),
-          node("small", "hint", `${format(term.coefficient)} × ${format(quantity)}`),
+          node(
+            "small",
+            "hint",
+            `${format(term.coefficient)} × ${format(quantity)}`,
+          ),
         );
         contributions.append(item);
       }
       if (expression.constant !== 0) {
         const constant = node("div", "contribution-item");
-        constant.append(node("span", "", "常数项"), node("strong", "", format(expression.constant)));
+        constant.append(
+          node("span", "", "常数项"),
+          node("strong", "", format(expression.constant)),
+        );
         contributions.append(constant);
       }
-      breakdown.append(contributions, node("p", "hint", "各项来自已求解的目标函数；负数表示负贡献。"));
+      breakdown.append(
+        contributions,
+        node("p", "hint", "各项来自已求解的目标函数；负数表示负贡献。"),
+      );
       container.append(breakdown);
     }
     if (solve.has_primal_solution)
@@ -1806,6 +1894,27 @@ const UI = (() => {
         "以上是当前候选模型的求解结果。原问题的独立验证以已保存的检查证据为准。",
       ),
     );
+  }
+  function activeStep(snapshot) {
+    const current = new Map();
+    let solver = null;
+    for (const event of snapshot.events || []) {
+      const step = event.method_event;
+      if (step?.type === "modeling_step")
+        current.set(step.step_id, { ...step, sequence: event.sequence_no });
+      if (event.kind === "solver_started")
+        solver = {
+          phase: "solve",
+          label: "正在求解候选模型",
+          actor: "求解器",
+          sequence: event.sequence_no,
+          status: "running",
+        };
+      if (event.kind === "solver_finished") solver = null;
+    }
+    return [...current.values(), ...(solver ? [solver] : [])]
+      .filter((step) => step.status === "running")
+      .sort((a, b) => b.sequence - a.sequence)[0];
   }
   function revision(container, template, ledger) {
     container.replaceChildren();
@@ -2115,6 +2224,7 @@ const UI = (() => {
     shortMethod,
     artifactLabel,
     artifactKey,
+    activeStep,
     candidates,
     runtimeDetails,
     connectivity,

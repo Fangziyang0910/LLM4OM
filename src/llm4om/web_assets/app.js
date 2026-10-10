@@ -488,6 +488,7 @@ async function refreshRun() {
   $("run-meta").textContent =
     `${UI.status(job.status)} · ${bundle?.assisted && methodId !== "llm4om.methods.assisted" ? "人工辅助 · " : ""}${UI.shortMethod(methodId)} · ${job.run_id || "正在准备"}`;
   $("stages").replaceChildren();
+  const runningStep = job.status === "running" ? UI.activeStep(snapshot) : null;
   for (const stage of ["formulation", "code", "solve"]) {
     const box = document.createElement("div");
     box.className = "stage";
@@ -498,15 +499,14 @@ async function refreshRun() {
       solve: "03 求解结果",
     }[stage];
     const status = document.createElement("span");
-    const runningStep = snapshot.events?.findLast(
-      (event) => event.method_event?.type === "modeling_step",
-    )?.method_event;
     const state =
-      bundle?.stages?.[stage]?.status ||
-      (job.status === "running" &&
-      (runningStep?.phase || "formulation") === stage
+      runningStep?.phase === stage
         ? "running"
-        : "pending");
+        : ["running", "queued"].includes(job.status) &&
+            (!bundle?.stages?.[stage]?.status ||
+              bundle.stages[stage].status === "not_available")
+          ? "pending"
+          : bundle?.stages?.[stage]?.status || "pending";
     status.textContent = UI.status(state);
     box.classList.add(state);
     box.append(title, status);

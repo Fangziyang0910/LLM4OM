@@ -64,14 +64,37 @@ assert.ok(workspace, "A disposable fixture workspace is required.");
           timeout_s: 30,
         },
       };
-      await page.locator(".settings-panel details summary").click();
+      await page.locator("details:has(#config-json) > summary").click();
       await page.locator("#config-json").fill(JSON.stringify(config));
       await page.click("#apply-config");
-      await page.locator(".settings-panel details summary").click();
+      await page.locator("details:has(#config-json) > summary").click();
       await page.click("#submit");
+      if (process.env.LLM4OM_WEB_TEST_LIVE_PROGRESS) {
+        await page
+          .locator(".live-modeling.running .modeling-detail")
+          .waitFor({ timeout: 20000 });
+        assert.match(
+          await page.locator(".modeling-detail").innerText(),
+          /Formulation/,
+        );
+        assert.equal(await page.locator(".stage.running").count(), 1);
+        if (process.env.LLM4OM_WEB_SCREENSHOTS)
+          await page
+            .locator("#decision")
+            .screenshot({
+              path: path.join(
+                process.env.LLM4OM_WEB_SCREENSHOTS,
+                "live-modeling.png",
+              ),
+            });
+      }
       await page.waitForSelector("#clarification:not([hidden])", {
         timeout: 20000,
       });
+      assert.match(
+        await page.locator(".live-modeling.needs_input").innerText(),
+        /等待你补充/,
+      );
       const before = await page.evaluate(() => ({
         job: snapshot.job.job_id,
         run: snapshot.job.run_id,

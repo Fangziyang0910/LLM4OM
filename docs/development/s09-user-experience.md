@@ -174,3 +174,13 @@ SDK0.36.0的结果页直接展示严格IR目标函数中各变量的贡献卡片
 约束活动值、关系、余量与适用的资源用量条在结果页默认可见。交互输入折叠在同一卡片下；展开后可代入新决策，恢复按钮回到保存解。保存目标和贡献卡片始终对应Solver结果，试算目标在单独区域更新。
 
 本机Chrome读取已有真实Direct／HiGHS记录：目标13的贡献为9与4；交互试算得到10／19并显示超限，恢复得到13。轮询保留输入，390px无横向溢出／页面错误，零POST、零新模型或Solver调用。沿用`tests/web_decision_flow.cjs`，未新增浏览器框架或执行全量回归。截图与本机输出位于`/tmp/llm4om-decision-visuals-evidence`。
+
+## 动态建模状态卡片
+
+运行中的结果区显示方法名称、实际步骤、阶段和执行角色。步骤直接读取已保存的modeling_step生命周期事件，按step_id保留最新状态；已完成步骤不再冒充当前活动。核心solver_started／solver_finished事件形成独立求解状态。排队和等待用户回答分别呈现，不显示推测百分比。
+
+顶部阶段栏复用相同活动事件。实际运行阶段优先显示“进行中”，尚未执行的阶段显示“等待中”；终止运行仍按保存的阶段可用性展示。动态图标遵守prefers-reduced-motion。没有修改方法流程、Provider或求解接口。
+
+本机浏览器以延迟4秒的确定性HTTP回复观察实际运行，再执行两条公开交互：确认原规则后HiGHS目标13；增加A≤2的规则后派生目标12，父bundle保持。检查动态步骤、Formulation活动阶段、等待补充卡片、恢复、390px无溢出与页面无错误。入口沿用`tests/web_clarification_flow.cjs`，设置`LLM4OM_WEB_TEST_LIVE_PROGRESS=1`；`tests/helpers/web_guidance_server.py --response-delay 4`只延迟本机fixture回复。证据位于`/tmp/llm4om-live-modeling-evidence`。
+
+这次使用本机工程回复与真实容器HiGHS，未新增外部模型调用，未运行全量回归、batch或Actions。SDK／Worker保持0.36.0，生产的既有运行不用于修改测试。

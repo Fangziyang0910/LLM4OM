@@ -639,6 +639,68 @@ details textarea {
   align-items: center;
   gap: 15px;
 }
+.live-modeling {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 210px;
+  padding: 12px;
+}
+.modeling-orbit {
+  display: grid;
+  place-items: center;
+  flex: 0 0 80px;
+  height: 80px;
+  border: 1px solid #b9dbce;
+  border-radius: 50%;
+  background: var(--soft);
+  box-shadow: 0 0 0 10px #f3f9f6;
+  color: var(--accent);
+  font-size: 36px;
+}
+.running .modeling-orbit {
+  animation: modeling-pulse 2s ease-in-out infinite;
+}
+.modeling-copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.modeling-copy h2 {
+  margin-bottom: 10px;
+}
+.modeling-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+@keyframes modeling-pulse {
+  50% {
+    box-shadow: 0 0 0 17px #f3f9f6;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .running .modeling-orbit {
+    animation: none;
+  }
+}
+@media (max-width: 600px) {
+  .live-modeling {
+    flex-direction: column;
+    text-align: center;
+    gap: 20px;
+    padding: 20px 0;
+  }
+  .modeling-orbit {
+    flex: 0 0 64px;
+    width: 64px;
+    height: 64px;
+    font-size: 28px;
+  }
+  .modeling-detail {
+    justify-content: center;
+  }
+}
 .decision-hero h2 {
   font-size: 18px;
 }
