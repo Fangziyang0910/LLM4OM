@@ -325,4 +325,5 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/web_decision_flow.cjs` | 当前候选模型的决策试算交互 | 已保存真实解、目标／约束代入、恢复、轮询保持、窄屏，零POST |
 | `tests/web_candidates_flow.cjs` | 候选与修正的本机浏览器验收 | 实际双候选、最终选择、声明变化、模型／代码定位、完整列表与窄屏，零POST |
 | `tests/web_model_edit_flow.cjs` | 严格IR普通表单的浏览器验收 | 数值编辑／表述同步、派生版本、真实容器HiGHS、父记录与预算保持、窄屏 |
+| `tests/web_links_flow.cjs` | 运行页面链接的本机浏览器验收 | 固定版本链接、刷新恢复产物与导出、最新选择、新问题与窄屏，零POST |
 | `docs/development/s05-connection-diagnostics.md` | 连接观察、诊断支持与证据 | 原运行不改写、免费GET与生成验收区别、公共固定类别和未知预算 |

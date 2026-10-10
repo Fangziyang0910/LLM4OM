@@ -280,8 +280,9 @@ async function refreshJobs() {
     $("jobs").append(button);
   }
 }
-async function openJob(id) {
-  selectedRun = null;
+async function openJob(id, runId = null) {
+  selectedRun = runId;
+  artifactSelectedByUser = false;
   $("assisted-editor").hidden = true;
   $("step-output").hidden = true;
   snapshot = null;
@@ -297,6 +298,22 @@ async function openJob(id) {
   if (snapshot?.bundle?.stages?.formulation?.status === "not_available")
     document.querySelector('[data-tab="code"]').click();
   await refreshJobs();
+}
+function updateRunLink() {
+  const address = (runId) => {
+    const url = new URL("/", location.origin);
+    if (currentJob) {
+      url.searchParams.set("job", currentJob);
+      if (runId) url.searchParams.set("run", runId);
+      if (activeTab !== "formulation") url.searchParams.set("tab", activeTab);
+      if (artifactSelectedByUser && $("artifact-choice").value)
+        url.searchParams.set("artifact", $("artifact-choice").value);
+    }
+    return url;
+  };
+  history.replaceState(null, "", address(selectedRun));
+  $("run-link").hidden = !currentJob || !snapshot?.job?.run_id;
+  $("run-link").href = address(snapshot?.job?.run_id);
 }
 function artifactEntries() {
   const contents = snapshot?.contents || {};
@@ -407,9 +424,11 @@ function renderArtifact() {
   const selected = () =>
     entries.find(([name]) => name === $("artifact-choice").value)?.[1];
   showArtifact(selected());
+  updateRunLink();
   $("artifact-choice").onchange = () => {
     artifactSelectedByUser = true;
     showArtifact(selected());
+    updateRunLink();
   };
 }
 function metric(label, value) {
@@ -717,6 +736,7 @@ document.querySelectorAll(".tab").forEach(
 );
 async function start() {
   try {
+    const params = new URLSearchParams(location.search);
     const result = await api("/api/bootstrap");
     token = result.token;
     config = result.config;
@@ -724,6 +744,27 @@ async function start() {
     showConfig();
     $("environment-content").textContent = pretty(result.plugins);
     await refreshJobs();
+    const job = params.get("job"),
+      run = params.get("run");
+    if (job) {
+      if (!/^[a-f0-9]{32}$/.test(job) || (run && !/^[a-f0-9]{32}$/.test(run)))
+        throw new Error("运行链接中的标识无效。");
+      await openJob(job, run);
+      const tab = [...document.querySelectorAll(".tab")].find(
+        (button) => button.dataset.tab === params.get("tab"),
+      );
+      if (tab) tab.click();
+      const artifact = params.get("artifact");
+      if (
+        artifact &&
+        [...$("artifact-choice").options].some(
+          (option) => option.value === artifact,
+        )
+      ) {
+        $("artifact-choice").value = artifact;
+        $("artifact-choice").dispatchEvent(new Event("change"));
+      }
+    }
   } catch (error) {
     notice(error.message, true);
   }
@@ -792,6 +833,7 @@ async function refreshTasks() {
 }
 async function openExperiment(id) {
   currentJob = null;
+  updateRunLink();
   currentExperiment = id;
   $("editor").hidden = true;
   $("result").hidden = true;
@@ -853,6 +895,7 @@ async function refreshExperiment() {
 }
 $("new-experiment").onclick = async () => {
   currentJob = null;
+  updateRunLink();
   currentExperiment = null;
   $("editor").hidden = true;
   $("result").hidden = true;
