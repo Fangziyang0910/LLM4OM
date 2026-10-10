@@ -381,6 +381,7 @@ def report_experiment(output: Path) -> dict[str, Any]:
                 'repeat': repeat, 'protocol_id': cell['protocol_id'], 'source': cell['source'],
                 'N_selected': len(selected), 'N_completed': sum(row['status'] == 'completed' for row in selected),
                 'N_reused': sum(row.get('result_reused', False) for row in selected),
+                'N_assisted': sum(row.get('evidence_origin') == 'assisted' for row in selected),
                 'statuses': {status: sum(row['status'] == status for row in selected) for status in sorted({row['status'] for row in selected})},
                 'evidence_origins': sorted({row['evidence_origin'] for row in selected})}
             for metric in METRICS:
@@ -400,7 +401,7 @@ def report_experiment(output: Path) -> dict[str, Any]:
     summary = {'schema_version': '0.1.0', 'experiment_id': snapshot['experiment_id'], 'groups': groups,
                'excluded_cells': [cell for cell in snapshot['cells'] if cell['status'] == 'excluded'],
                'budget': snapshot['budget'], 'reserved_run_caps': state['reserved'], 'elapsed_s': state.get('elapsed_s'),
-               'policy': 'Groups keep protocol/source/config/repeat separate. Mock is engineering evidence. Unknown costs/tokens are null. Unfinished and failed jobs retain frozen denominators.'}
+               'policy': 'Groups keep protocol/source/config/repeat separate. Mock is engineering evidence; assisted results require a separate human-assisted comparison. Unknown costs/tokens are null. Unfinished and failed jobs retain frozen denominators.'}
     reports = output / 'reports'
     reports.mkdir(exist_ok=True)
     (reports / 'results.jsonl').write_text(''.join(json.dumps(row, ensure_ascii=False, allow_nan=False) + '\n' for row in rows), encoding='utf-8')

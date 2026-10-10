@@ -1241,3 +1241,11 @@ fixture, not a new research method. Local evidence is recorded in
 SDK／Worker0.25.0提供`cancel_experiment(output)`，绑定当前invocation的公开control identity。`run_experiment`在持有排他锁后接受新invocation，清除上一invocation的取消请求；完成样本复用和未完成继续分别记录。调度器优先合作取消拥有的RunStore，短暂等待后才终止仍未退出的资源进程。中断恢复保留先前结果历史和硬预算；已过期原deadline或缺少可用方法checkpoint时明确拒绝继续。
 
 Web`/api/tasks`列已冻结任务的公开元数据；`/api/experiments`列出／提交变体矩阵，`/api/experiments/{id}`读取状态和公共结果，`/cancel`、`/resume`调用共同调度控制，`/export`只导出公开实验配置和报告。任务仅从项目runs或工作区tasks发现；没有公开任意服务器路径读取入口。
+
+## 人工辅助编辑
+
+SDK0.26.0的`export_edit(run, operation)`与`edit_run(run, edits)`使用公开EditSpec0.1.0。必需字段为schema_version、operation、reason、budget、problem、formulation、structured_ir、code、model_metadata。operation为problem/formulation/code；reason说明修改，budget明确包含父消耗的新总上限。Code对象为representation_kind/source/data_json；model_metadata保存assumptions/requirement_traces/warnings。原始数据不在此编辑入口替换。
+
+人工修改建立新run和assisted_revision lineage，保存parent_run_id、父checkpoint/公开产物、parent_budget_ledger、parent_resource_records与编辑原因。问题编辑需新revision，Code-only不改来源数学表述。父候选和付费/未知预算继承，新增候选计数；新总上限显式变化记入lineage。RunBundle.assisted与budget-ledger.evidence_origin=assisted、方法human_assisted声明区分手工辅助和自动建模；分组报告N_assisted保留该区别。
+
+公开源代码通过共同表示契约与容器执行。CompiledCode的原ConcreteModel工厂在编辑模板中公开加入保存symbol-map的ModelHandle适配，原bytes仍在父记录；人工编辑不伪称原确定性编译。CodeArtifact.provenance.generation记录user_edited，严格IR新编译仍记录真实Compiler来源。

@@ -17,6 +17,7 @@ from llm4om.contracts import RunError, read_config
 from llm4om.preflight import prepare_run
 from llm4om.task_plugins import prepare_task
 from llm4om.experiments import run_experiment, report_experiment
+from llm4om.assisted import edit_run, export_edit
 
 
 def main() -> int:
@@ -33,6 +34,11 @@ def main() -> int:
     benchmark.add_argument("--resume", action="store_true", help="Keep saved completed cases and continue unfinished work")
     report_command = commands.add_parser("report", help="Export public per-case and grouped experiment reports")
     report_command.add_argument("--experiment", type=Path, required=True)
+    edit = commands.add_parser("edit", help="Export or execute an explicit assisted revision")
+    edit.add_argument("--run-id", required=True)
+    edit.add_argument("--output", type=Path, default=Path("runs"))
+    edit.add_argument("--operation", choices=("problem", "formulation", "code"), default="code")
+    edit.add_argument("--edits", type=Path, help="Execute the edited JSON document; omission exports its template")
     run = commands.add_parser("run", help="Generate Formulation and Code; solve supported LP/MILP")
     run.add_argument("--problem", type=Path, required=True)
     run.add_argument("--config", type=Path, required=True)
@@ -64,6 +70,25 @@ def main() -> int:
     doctor_config.add_argument("--task-config", type=Path, help="Preflight Task/Evaluator selections without importing source")
     doctor.add_argument("--offline", action="store_true")
     args = parser.parse_args()
+    if args.command == "edit":
+        cancellation = CancellationToken()
+        previous = signal.signal(signal.SIGINT, lambda signum, frame: cancellation.cancel())
+        try:
+            if len(args.run_id) != 32 or any(char not in "0123456789abcdef" for char in args.run_id):
+                raise RunError("control_incompatible", "control", "Run ID must be a platform UUID.")
+            path = args.output / args.run_id
+            if args.edits is None:
+                print(json.dumps(export_edit(path, operation=args.operation), ensure_ascii=False, indent=2))
+                return 0
+            edited = edit_run(path, args.edits, cancellation=cancellation)
+            print(json.dumps({"run_id": edited.run_id, "bundle_path": str(edited.bundle_path), "status": edited.status, "assisted": True}))
+            return 0 if edited.status == "completed" else 1
+        except (RunError, OSError, KeyError, TypeError, ValueError) as error:
+            print(json.dumps({"error": {"code": error.code if isinstance(error, RunError) else "invalid_edit",
+                "message": str(error) if isinstance(error, RunError) else "Cannot create this assisted revision."}}))
+            return 1
+        finally:
+            signal.signal(signal.SIGINT, previous)
     if args.command in ("benchmark", "report"):
         cancellation = CancellationToken()
         previous = signal.signal(signal.SIGINT, lambda signum, frame: cancellation.cancel())

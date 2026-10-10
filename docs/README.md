@@ -90,3 +90,5 @@ DataLoader的共同注册、原始数据与有限视图分别记录，见 [S03-C
 批量冻结任务、实验矩阵、继续执行与公共报告见 [S08](development/s08-benchmark.md)。
 
 网页批量提交、进度、逐样本比较与公共导出见 [S09-B](development/s09-batch-web.md)。
+
+人工辅助修订、父历史和编辑预算见 [S09-C](development/s09-assisted-edits.md)。

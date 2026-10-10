@@ -189,3 +189,5 @@ CoE专家路由与原生函数的开发实现、真实外部模型／原问题�
 批量冻结任务运行、断点继续和 JSONL／CSV／Markdown／HTML 报告见 [S08](docs/development/s08-benchmark.md)。示例先导入任务，再执行 `llm4om benchmark --config examples/specs/experiment.yaml --output runs/production-batch`；配置明确选择真实外部模型，不属于离线 Mock。
 
 网页也已接入批量提交、进度、逐样本结果和公共报告下载，见 [S09-B](docs/development/s09-batch-web.md)。从页面“批量实验与比较”进入；先将任务冻结导入项目runs或工作区tasks。
+
+公开问题／建模输出的人工派生编辑见 [S09-C](docs/development/s09-assisted-edits.md)：CLI使用`llm4om edit`导出文档并执行新版本，网页使用“编辑并创建派生版本”。父产物和预算保留，结果明确标记人工辅助。

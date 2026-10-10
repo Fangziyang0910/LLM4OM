@@ -25,6 +25,7 @@ from llm4om.contracts import RunError, parse_json, public_path, read_public_byte
 from llm4om.control import CancellationToken
 from llm4om.executors import run_owned_process
 from llm4om.experiments import cancel_experiment
+from llm4om.assisted import export_edit, edit_run
 from llm4om.plugins import discover_plugins
 from llm4om.preflight import prepare_run
 from llm4om.providers import credential_environment
@@ -228,7 +229,7 @@ class WebWorkspace:
                 if run is not None:
                     job['run_id'] = run.name
                     if (run / 'bundle.json').is_file():
-                        job['status'] = parse_json((run / 'bundle.json').read_bytes())['status']
+                        job['status'] = job['status'] if job['job_id'] in self.active or job.get('error') else parse_json((run / 'bundle.json').read_bytes())['status']
                 jobs.append(job)
             except (RunError, OSError, KeyError):
                 continue
@@ -242,9 +243,32 @@ class WebWorkspace:
 
     def _run_path(self, job_id: str) -> Path | None:
         job = self._job(job_id)
+        record = parse_json((job / 'job.json').read_bytes())
         candidates = [path for path in (job / 'runs').glob('*') if path.is_dir()
             and len(path.name) == 32 and all(char in '0123456789abcdef' for char in path.name)]
+        if job_id in self.active and record.get('prior_runs') is not None:
+            candidates = [path for path in candidates if path.name not in record['prior_runs']]
+        elif record.get('run_id'):
+            saved = job / 'runs' / _identifier(record['run_id'])
+            if saved.is_dir():
+                return saved
         return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
+
+    def edit_template(self, job_id: str, operation: str) -> dict[str, Any]:
+        run = self._run_path(job_id)
+        if run is None:
+            raise RunError('not_found', 'web', 'No saved run is available to edit.')
+        return export_edit(run, operation=operation)
+
+    def submit_edit(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        job = self._job(job_id)
+        run = self._run_path(job_id)
+        if run is None:
+            raise RunError('not_found', 'web', 'No saved run is available to edit.')
+        if not isinstance(payload.get('edits'), dict):
+            raise RunError('invalid_edit', 'web', 'Submit a public edit document.')
+        self._start(job_id, 'edit', options={'edits': payload['edits'], 'parent_run_id': run.name})
+        return {'job_id': job_id, 'parent_run_id': run.name, 'status': 'queued'}
 
     def submit(self, payload: dict[str, Any]) -> dict[str, Any]:
         config = deepcopy(payload['config'])
@@ -310,8 +334,17 @@ class WebWorkspace:
             record = parse_json((job / 'job.json').read_bytes())
             try:
                 record['status'] = 'running'
+                if action == 'edit':
+                    record['prior_runs'] = [path.name for path in (job / 'runs').glob('*') if path.is_dir()]
+                    record['parent_run_id'] = (options or {})['parent_run_id']
                 _json_file(job / 'job.json', record)
-                if action == 'run':
+                if action == 'edit':
+                    opts = options or {}
+                    edits_path = job / ('edits-' + uuid4().hex + '.json')
+                    _json_file(edits_path, opts['edits'])
+                    result = edit_run(job / 'runs' / _identifier(opts['parent_run_id']), edits_path, cancellation=token)
+                    record['description'] = opts['edits']['problem']['description']
+                elif action == 'run':
                     result = run_problem(job / 'input/problem.json', job / 'input/config.json', output_root=job / 'runs',
                         cancellation=token, interactive=True)
                 else:
@@ -330,11 +363,13 @@ class WebWorkspace:
                     result = resume_run(run, cancellation=token, strategy=opts.get('strategy', 'continue'),
                         answers=answers, revised_problem=revised)
                 record.update(status=result.status, run_id=result.run_id)
+                record.pop('prior_runs', None)
                 record.pop('error', None)
             except (Exception, SystemExit) as error:
                 record.update(status='failed', error={'code': error.code if isinstance(error, RunError) else 'web_run_error',
                     'message': str(error) if isinstance(error, RunError) else 'Cannot finish the local application request.'})
             finally:
+                record.pop('prior_runs', None)
                 _json_file(job / 'job.json', record)
                 with self.lock:
                     self.active.pop(job_id, None)
@@ -386,7 +421,7 @@ class WebWorkspace:
                 if ref['media_type'] == 'application/json' or key.endswith('.py') or key.endswith('.md'):
                     raw = self.read_ref(run, ref)
                     contents[key] = parse_json(raw) if ref['media_type'] == 'application/json' else raw.decode('utf-8', errors='replace')
-        record.update(run_id=run.name, status=bundle['status'] if bundle else record['status'])
+        record.update(run_id=run.name, status=bundle['status'] if bundle and job_id not in self.active and not record.get('error') else record['status'])
         return {'job': record, 'bundle': bundle, 'events': events, 'artifacts': refs, 'contents': contents}
 
     def export(self, job_id: str) -> bytes:
@@ -508,6 +543,12 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                     job_id = _identifier(parts[2])
                     if len(parts) == 3 and not mutation:
                         result = workspace.inspect(job_id)
+                    elif len(parts) == 4 and parts[3] == 'edit-template' and not mutation:
+                        from urllib.parse import parse_qs
+                        operation = parse_qs(address.query).get('operation', ['code'])[0]
+                        result = workspace.edit_template(job_id, operation)
+                    elif len(parts) == 4 and parts[3] == 'edit' and mutation:
+                        result = workspace.submit_edit(job_id, payload)
                     elif len(parts) == 4 and parts[3] == 'cancel' and mutation:
                         result = workspace.cancel(job_id)
                     elif len(parts) == 4 and parts[3] == 'resume' and mutation:

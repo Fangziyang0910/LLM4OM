@@ -121,6 +121,8 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
             raise RunError("checkpoint_incompatible", "admission", "Method, package, runtime or resource identity changed.")
         admission_ref = store.json("admission-plan.json", plan.snapshot, "admission-plan")
         mode = plan.snapshot["mode"]
+        if plan.method.manifest["capabilities"].get("human_assisted"):
+            store.state["assisted"] = True
         if plan.snapshot["method_profile"] in ("factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0"):
             code_level = "native_script_contract" if plan.snapshot["method_profile"] in ("native_script/0.1.0", "native_script/0.2.0") else "factory_contract"
         if plan.snapshot["method_profile"] in ("native_script/0.1.0", "native_script/0.2.0") and "admission" not in store.state:
@@ -177,6 +179,8 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
                                       if stages["code"]["status"] == "available" else {"status": "not_available"},
                    "semantic_validation": {"status": "not_available"}}, "evaluation")
     store.state.update(ledger=ledger, stages=stages, artifact_ref=artifact_ref, solve_ref=solve_ref, execution_ref=execution_ref)
+    if store.state.get("assisted"):
+        ledger["evidence_origin"] = "assisted"
     store.json("budget-ledger.json", ledger, "budget")
     store.emit("run_finished", status=status, error=error_record)
     if settings_valid and any(reporter["plugin_id"] == "llm4om.reporters.markdown" for reporter in settings.get("reporters", [])):
@@ -195,6 +199,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
                        **{name: "available" if solve_ref is not None else "failed" if execution_ref is not None else "not_available"
                           for name in ("model_backend", "solver", "executor")}}
     store.json("bundle.json", {"schema_version": "0.2.0", "run_id": store.run_id,
+               "assisted": store.state.get("assisted", False),
                "mode": mode, "status": status, "stages": stages,
                "error": error_record, "model_artifact_ref": artifact_ref, "solve_result_ref": solve_ref,
                "execution_result_ref": execution_ref,
@@ -946,7 +951,8 @@ def _derive_run(store: RunStore, resource_records: list[dict[str, Any]], *,
 
 
 def _initialize_derived_run(child: RunStore, store: RunStore, resource_records: list[dict[str, Any]], *,
-                            problem: Path | None = None, response: dict[str, Any] | None = None) -> RunResult:
+                            problem: Path | None = None, response: dict[str, Any] | None = None,
+                            config: Path | None = None, edit: dict[str, Any] | None = None) -> RunResult:
     parent_refs = [child.write("parent/" + store.run_id + "/" + ref["relative_path"],
         read_public_bytes(public_path(store.path, ref["relative_path"])), ref["artifact_id"],
         ref.get("schema_version")) for ref in store.refs]
@@ -955,12 +961,16 @@ def _initialize_derived_run(child: RunStore, store: RunStore, resource_records: 
     ledger = deepcopy(store.state["ledger"])
     response_ref = child.json("clarification-response.json", response, "revision-response") if response is not None else None
     lineage_ref = child.json("lineage.json", {"schema_version": "0.1.0",
-        "operation": "clarification_revision" if problem is not None else "derived_rerun", "parent_run_id": store.run_id,
+        "operation": "assisted_revision" if edit is not None else "clarification_revision" if problem is not None else "derived_rerun", "parent_run_id": store.run_id,
+        **({"edit": edit} if edit is not None else {}),
         "clarification_response_ref": response_ref,
         "parent_budget_ledger": ledger, "input_hashes": store.state["sources"],
         "parent_checkpoint_ref": parent_checkpoint_ref,
         "parent_artifacts": parent_refs, "parent_resource_records": resource_records, "reused_records": [],
         "policy": "Fresh method execution; previous paid/unknown usage and reservations count against the configured caps."}, "lineage")
     child.state.update(lineage_ref=lineage_ref, inherited_ledger=ledger, ledger=deepcopy(ledger), interactive=store.state.get("interactive", False))
-    return _run_problem(problem or Path(store.state["problem"]), Path(store.state["config"]), child,
-                        offline=store.state["offline"])
+    if edit is not None:
+        child.state["assisted"] = True
+        child.state["ledger"]["candidates"] += 1
+    return _run_problem(problem or Path(store.state["problem"]), config or Path(store.state["config"]), child,
+                        offline=False if edit is not None else store.state["offline"])

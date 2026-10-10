@@ -111,8 +111,9 @@ def discover_plugins() -> dict[tuple[str, str], Plugin]:
     from llm4om.backends import PyomoBackendFactory, GurobiBackendFactory
     from llm4om.solvers import HighsSolverFactory, GurobiSolverFactory
     from llm4om.data_loaders import PublicDataFactory
+    from llm4om.assisted import AssistedFactory
     plugins: dict[tuple[str, str], Plugin] = {}
-    for builtin in (DirectFactory(), OptimusFactory(), CoEFactory(), FeedbackRepairFactory(),
+    for builtin in (DirectFactory(), OptimusFactory(), CoEFactory(), FeedbackRepairFactory(), AssistedFactory(),
                     MockFactory(), OpenAICompatibleFactory(), AnthropicFactory(), *builtin_factories(), LPIRPyomoFactory(),
                     PyomoBackendFactory(), GurobiBackendFactory(), HighsSolverFactory(), GurobiSolverFactory(), PublicDataFactory()):
         manifest = _manifest(builtin)
@@ -170,7 +171,7 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
     capabilities = {name: strings for name in ("problem_types", "input_artifact_kinds", "output_artifact_kinds",
                     "formulation_representations", "code_representations", "model_backends", "solvers", "llm_features",
                     "execution_modes", "oracle_requirements")}
-    capabilities.update(method_profile=text, supports_checkpoint={"type": "boolean"}, supports_clarification={"type": "boolean"}, cancellation={"const": "cooperative/0.1.0"})
+    capabilities.update(method_profile=text, supports_checkpoint={"type": "boolean"}, human_assisted={"type": "boolean"}, supports_clarification={"type": "boolean"}, cancellation={"const": "cooperative/0.1.0"})
     capabilities.update(provider_profile={"enum": ["http_text/0.1.0", "mock_text/0.1.0"]})
     capabilities.update(usage_semantics=text)
     capabilities.update(data_loader_profile={"const": "public_bytes/0.1.0"},

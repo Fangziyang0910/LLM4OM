@@ -36,7 +36,9 @@ async function api(path, value) {
 }
 function fillSelect(id, kind, selected) {
   $(id).replaceChildren();
-  for (const item of plugins.filter((p) => p.manifest.kind === kind)) {
+  for (const item of plugins.filter(
+    (p) => p.manifest.kind === kind && !p.manifest.capabilities.human_assisted,
+  )) {
     const option = document.createElement("option");
     option.value = item.manifest.plugin_id;
     option.textContent = item.manifest.display_name;
@@ -662,3 +664,41 @@ setInterval(async () => {
   }
 }, 3000);
 refreshExperiments().catch((error) => notice(error.message, true));
+
+async function loadEditTemplate() {
+  if (!currentJob) return;
+  const document = await api(
+    `/api/jobs/${currentJob}/edit-template?operation=${$("edit-operation").value}`,
+  );
+  $("assisted-document").value = pretty(document);
+}
+$("edit-run").onclick = async () => {
+  try {
+    $("assisted-editor").hidden = false;
+    await loadEditTemplate();
+  } catch (error) {
+    notice(error.message, true);
+  }
+};
+$("load-edit-template").onclick = async () => {
+  try {
+    await loadEditTemplate();
+  } catch (error) {
+    notice(error.message, true);
+  }
+};
+$("submit-edit").onclick = async () => {
+  try {
+    $("submit-edit").disabled = true;
+    await api(`/api/jobs/${currentJob}/edit`, {
+      edits: JSON.parse($("assisted-document").value),
+    });
+    $("assisted-editor").hidden = true;
+    notice("人工修订已提交。原运行保留，新结果会记录父运行和预算。");
+    await refreshRun();
+  } catch (error) {
+    notice(error.message, true);
+  } finally {
+    $("submit-edit").disabled = false;
+  }
+};
