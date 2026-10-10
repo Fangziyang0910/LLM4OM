@@ -21,6 +21,9 @@ from llm4om.task_plugins import prepare_task
 def main() -> int:
     parser = argparse.ArgumentParser(prog="llm4om")
     commands = parser.add_subparsers(dest="command", required=True)
+    web = commands.add_parser("serve", help="Open the local single-user optimization workbench")
+    web.add_argument("--workspace", type=Path, default=Path("runs/web"))
+    web.add_argument("--port", type=int, default=8765)
     run = commands.add_parser("run", help="Generate Formulation and Code; solve supported LP/MILP")
     run.add_argument("--problem", type=Path, required=True)
     run.add_argument("--config", type=Path, required=True)
@@ -52,6 +55,10 @@ def main() -> int:
     doctor_config.add_argument("--task-config", type=Path, help="Preflight Task/Evaluator selections without importing source")
     doctor.add_argument("--offline", action="store_true")
     args = parser.parse_args()
+    if args.command == "serve":
+        from llm4om.web import serve_web
+        serve_web(args.workspace, port=args.port)
+        return 0
     if args.command == "import":
         try:
             manifest = import_dataset(args.config, args.output)

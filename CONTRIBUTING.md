@@ -76,3 +76,5 @@ S03-C2采用本机CLI／Task／Evaluation／Solver／文件系统验收；隐藏
 S03-C3a的独立Compiler在CLI／Compiler／Worker／真实Solver接口验收，可信插件wheel进入不可变镜像，见 [记录](docs/development/s03-compiler-registry.md)。
 
 S03-C4使用CLI／SDK、MethodContext、公开HTTP、Task和OS接口验收原始数据与有限视图；本机聚焦测试、干净wheel和真实容器求解见 [记录](docs/development/s03-data-loader.md)。GitHub Actions仅手动补充。
+
+按用户2026-10-10的明确指令，当前先编写并交付可使用的功能代码，再逐渐补齐细节与聚焦测试。必要信任边界校验与错误处理保持完整；不会因每个小改动重复运行整套回归。

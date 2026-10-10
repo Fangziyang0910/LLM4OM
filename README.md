@@ -183,3 +183,5 @@ CoE专家路由与原生函数的开发实现、真实外部模型／原问题�
 0.21.0的Backend／Solver共同注册已完成本机验收，实际grounded／factory／native路径与独立审阅条件见 [S03-C3b](docs/development/s03-solver-registry.md)。
 
 0.22.0的数据加载与有限视图正在本机验收，见 [S03-C4](docs/development/s03-data-loader.md)。原始数据绑定与LLM视图分别记录。
+
+本地Web首版见 [S09-A](docs/development/s09-web.md)：`llm4om serve --workspace runs/web --port 8767`。网页接口已真实调用指定DeepSeek并经容器HiGHS求得13；页面视觉与其余交互继续完善。

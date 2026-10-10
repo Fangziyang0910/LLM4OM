@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-10；SDK／Worker 开发版本：0.22.0。当前包含 221 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-10；SDK／Worker 开发版本：0.23.0。当前包含 226 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -262,3 +262,9 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/plugins/fixture_data_loader/pyproject.toml` | 独立wheel／entry point／SDK范围 | 真实安装与完整来源身份 |
 | `examples/plugins/fixture_data_loader/src/llm4om_fixture_data_loader/__init__.py` | 真正改变CSV暴露列顺序的工程Adapter | 配置生效、路径无关输入、核心独立校验 |
 | `tests/test_data_loader_plugins.py` | 公开数据加载与真实LLM视图验收 | HTTP、HiGHS／容器、原始检查、拒绝与恢复 |
+
+| `src/llm4om/web.py` | 本地Web工作区与公共HTTP接口 | 复用核心运行／恢复、限制公开引用、凭据留服务端 |
+| `src/llm4om/web_assets/index.html` | 结构化本地研究工作台 | 原生控件、问题／配置／阶段／候选与结果 |
+| `src/llm4om/web_assets/app.js` | 公共接口调用与已保存结果展示 | 安全文本渲染、事件轮询、上传和控制 |
+| `src/llm4om/web_assets/style.css` | 本地工作台布局与响应式样式 | 焦点、表格与阶段卡片；视觉验收继续补齐 |
+| `docs/development/s09-web.md` | Web功能与真实运行支持记录 | 真实Provider／Solver与未验证范围分开 |

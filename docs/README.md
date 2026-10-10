@@ -84,3 +84,5 @@ Task／Evaluator的共同注册、评分身份与导入密封见 [S03-C2](develo
 Backend／Solver共同注册的开发状态与实际路径见 [S03-C3b](development/s03-solver-registry.md)。
 
 DataLoader的共同注册、原始数据与有限视图分别记录，见 [S03-C4](development/s03-data-loader.md)。
+
+本地单问题工作台的功能、启动命令与真实运行见 [S09-A](development/s09-web.md)。

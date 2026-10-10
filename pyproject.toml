@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm4om"
-version = "0.22.0"
+version = "0.23.0"
 description = "A platform for automated optimization modeling"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -36,4 +36,4 @@ url = "https://pypi.org/simple"
 default = true
 
 [tool.setuptools.package-data]
-llm4om = ["optimus_source/*.txt", "optimus_source/*.json", "nlp4lp_source.json"]
+llm4om = ["optimus_source/*.txt", "optimus_source/*.json", "nlp4lp_source.json", "web_assets/*.html", "web_assets/*.css", "web_assets/*.js"]

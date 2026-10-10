@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LLM4OM · 优化建模工作台</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="/">LLM<span>4</span>OM</a>
+      <p class="subtitle">Optimization Modeling</p>
+      <button id="new-run" class="nav active">＋ 新建问题</button>
+      <h2 class="small-heading">运行记录</h2>
+      <div id="jobs" aria-label="运行记录"></div>
+      <p class="sidebar-footer">
+        本地科研工作台<br />Formulation → Code → Solve
+      </p>
+    </aside>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">RESEARCH WORKBENCH</p>
+          <h1>从问题描述到可检查的优化模型</h1>
+        </div>
+        <span class="badge">本地 · 单用户</span>
+      </header>
+      <div id="notice" role="status" hidden></div>
+      <section id="editor" class="editor-grid">
+        <div class="panel problem-panel">
+          <div class="panel-title">
+            <h2>问题与公开数据</h2>
+            <label class="file-button"
+              >导入 ProblemSpec<input
+                id="problem-file"
+                type="file"
+                accept=".json"
+            /></label>
+          </div>
+          <label for="description">自然语言问题</label>
+          <textarea
+            id="description"
+            rows="9"
+            placeholder="描述决策变量、目标、业务规则，以及公开数据的含义。例如：决定产品 A、B 的生产数量，在资源容量限制下最大化总利润，数量为非负整数。"
+          ></textarea>
+          <div class="upload-line">
+            <label class="file-button"
+              >＋ 添加 CSV / JSON<input
+                id="data-files"
+                type="file"
+                accept=".csv,.json"
+                multiple /></label
+            ><span>原始数据保存并绑定到本次运行</span>
+          </div>
+          <div id="uploads"></div>
+          <details>
+            <summary>完整公开问题规格</summary>
+            <textarea
+              id="problem-json"
+              rows="12"
+              aria-label="完整公开问题规格"
+              placeholder="可导入或编辑 ProblemSpec；留空时根据上述描述创建。"
+            ></textarea>
+          </details>
+        </div>
+        <div class="panel settings-panel">
+          <h2>建模与求解配置</h2>
+          <div class="field-grid">
+            <label>建模方法<select id="method"></select></label>
+            <label>LLM 提供方<select id="provider"></select></label>
+            <label class="wide"
+              >模型<input id="model" placeholder="模型 ID"
+            /></label>
+            <label>建模后端<select id="backend"></select></label>
+            <label>求解器<select id="solver"></select></label>
+            <label class="wide"
+              >Provider URL<input id="base-url" type="url"
+            /></label>
+            <label
+              >总 Token 预算<input id="token-budget" type="number" min="1"
+            /></label>
+            <label
+              >总时间（秒）<input id="wall-budget" type="number" min="1"
+            /></label>
+          </div>
+          <p class="hint">凭据由本机环境或 .env 读取。页面不接收 API key。</p>
+          <details>
+            <summary>完整 RunConfig（方法参数、角色模型、预算）</summary>
+            <textarea
+              id="config-json"
+              rows="15"
+              aria-label="完整 RunConfig"
+            ></textarea
+            ><button id="apply-config" class="secondary">应用完整配置</button>
+          </details>
+          <div class="actions">
+            <button id="doctor" class="secondary">检查环境与兼容性</button
+            ><button id="submit" class="primary">开始建模与求解 →</button>
+          </div>
+        </div>
+      </section>
+      <section id="result" hidden>
+        <div class="run-heading">
+          <div>
+            <h2 id="run-title">运行</h2>
+            <p id="run-meta"></p>
+          </div>
+          <div class="actions">
+            <button id="cancel" class="secondary">取消</button
+            ><button id="resume" class="secondary">继续恢复</button
+            ><button id="rerun" class="secondary">派生重跑</button
+            ><a id="export" class="secondary" href="#">下载公开结果</a>
+          </div>
+        </div>
+        <div id="stages" class="stage-grid"></div>
+        <div id="decision" class="panel"></div>
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="formulation">Formulation</button
+          ><button class="tab" data-tab="code">Code</button
+          ><button class="tab" data-tab="candidates">候选与来源</button
+          ><button class="tab" data-tab="diagnostics">事件与诊断</button
+          ><button class="tab" data-tab="data">数据与绑定</button>
+        </div>
+        <div class="panel">
+          <select id="artifact-choice" aria-label="选择阶段记录"></select>
+          <div id="model-view" class="model-grid"></div>
+          <pre id="artifact-content"></pre>
+        </div>
+        <div id="clarification" class="panel" hidden>
+          <h2>需要澄清</h2>
+          <pre id="clarification-request"></pre>
+          <label for="answers">版本化回答 JSON</label
+          ><textarea id="answers" rows="8"></textarea
+          ><button id="answer-submit" class="primary">提交回答并恢复</button>
+        </div>
+      </section>
+      <details id="environment" class="panel">
+        <summary>插件能力与环境检查</summary>
+        <pre id="environment-content"></pre>
+      </details>
+    </main>
+  </body>
+</html>
