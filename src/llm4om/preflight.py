@@ -8,6 +8,7 @@ import sys
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Callable
 from pathlib import Path
+from urllib.error import HTTPError
 from llm4om.providers import credential_environment, MockProvider, HTTPTextProvider, HTTPTextFactory
 
 import jsonschema
@@ -235,6 +236,41 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
             "role_resource_comparison": "different_role_resources" if any(
                 any(selection[key] != settings["llm"][key] for key in ("provider_plugin_id", "model", "config"))
             for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers, compiler, execution, data_loader, tuple(reporters))
+
+
+def check_model_connectivity(plan: AdmissionPlan) -> dict[str, Any]:
+    """Explicit bounded metadata checks; admission itself remains network-free."""
+    deadline = min(plan.deadline, time.time() + 20)
+    checks = []
+    providers = {"default": plan.provider, **plan.role_providers}
+    for role, provider in providers.items():
+        item: dict[str, Any] = {"role": role, "provider": getattr(provider, "plugin_id", None),
+            "model": getattr(provider, "model", None), "status": "not_supported", "http_attempts": 0}
+        if isinstance(provider, MockProvider):
+            item["status"] = "not_applicable"
+        elif isinstance(provider, HTTPTextProvider) and provider.connectivity_profile == "models_get/0.1.0":
+            timeout = min(provider.timeout_s, 10, deadline - time.time())
+            if timeout <= 0:
+                item["status"] = "not_checked"
+            else:
+                started = time.monotonic()
+                item["http_attempts"] = 1
+                try:
+                    item.update(provider.check_connectivity(timeout))
+                except HTTPError as error:
+                    item.update(status="not_supported" if error.code in {404, 405} else "failed", http_status=error.code)
+                    error.close()
+                except (RunError, TimeoutError) as error:
+                    item.update(status="failed", diagnostic=error.code if isinstance(error, RunError) else "provider_timeout")
+                    if isinstance(error, RunError) and error.details and error.details.get("connection_diagnostic"):
+                        item["connection_diagnostic"] = error.details["connection_diagnostic"]
+                item["duration_s"] = time.monotonic() - started
+        checks.append(item)
+    states = {item["status"] for item in checks}
+    status = ("passed" if states <= {"reachable", "not_applicable"} and "reachable" in states else
+              "not_applicable" if states == {"not_applicable"} else
+              "failed" if "failed" in states else "not_available")
+    return {"status": status, "checks": checks, "generation_requests": 0}
 
 
 def _validate_plugin_config(plugin: Plugin, config: dict[str, Any], path: list[str]) -> None:

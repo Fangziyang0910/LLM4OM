@@ -783,6 +783,31 @@ details textarea {
   gap: 10px;
   margin: 15px 0;
 }
+.connectivity-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.connectivity-option input {
+  width: auto;
+}
+.doctor-result {
+  margin-top: 15px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fcf9;
+  overflow-wrap: anywhere;
+}
+.connectivity-row {
+  display: grid;
+  gap: 5px;
+  margin: 15px 0;
+  font-size: 12px;
+}
 .runtime-metrics small {
   display: block;
   margin-top: 4px;

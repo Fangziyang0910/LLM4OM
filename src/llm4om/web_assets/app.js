@@ -655,12 +655,24 @@ $("problem-file").onchange = async (event) => {
 };
 $("doctor").onclick = async () => {
   try {
+    $("doctor").disabled = true;
     notice("正在检查实际环境与兼容路径…");
-    const result = await api("/api/doctor", { config: readConfig() });
+    const result = await api("/api/doctor", {
+      config: readConfig(),
+      check_connectivity: $("check-connectivity").checked,
+    });
     $("environment-content").textContent = pretty(result);
-    notice("环境与兼容检查通过。");
+    UI.connectivity($("doctor-result"), result);
+    notice(
+      result.connectivity_checks.status === "failed"
+        ? "配置检查通过，模型接口检查未通过。"
+        : "配置检查完成。",
+      result.connectivity_checks.status === "failed",
+    );
   } catch (error) {
     notice(error.message, true);
+  } finally {
+    $("doctor").disabled = false;
   }
 };
 $("submit").onclick = async () => {

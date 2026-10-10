@@ -175,6 +175,7 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
     capabilities.update(method_profile=text, supports_checkpoint={"type": "boolean"}, human_assisted={"type": "boolean"}, supports_clarification={"type": "boolean"}, cancellation={"const": "cooperative/0.1.0"})
     capabilities.update(provider_profile={"enum": ["http_text/0.1.0", "mock_text/0.1.0"]})
     capabilities.update(usage_semantics=text)
+    capabilities.update(connectivity_check={"const": "models_get/0.1.0"})
     capabilities.update(reporter_profile={"const": "public_results/0.1.0"},
         report_scopes={"type": "array", "items": {"enum": ["run", "experiment"]}, "minItems": 1, "uniqueItems": True},
         report_filenames={"type": "array", "items": {"type": "string", "pattern": r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"},

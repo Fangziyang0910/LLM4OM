@@ -200,4 +200,6 @@ Web并发应用进程与合作取消见[S09](docs/development/s09-process-isolat
 
 结果页支持决策试算、候选修正浏览和运行版本选择。“编辑新版本”可以修改问题、代码或已有严格线性模型；数值表单编辑后复用Compiler／Solver创建人工辅助版本，保留父记录与累计预算。
 
+SDK／Worker0.35.0支持`llm4om doctor --config RUN_CONFIG --check-connectivity`；网页对应配置区的显式目录检查开关。检查默认关闭，只读取模型目录，不发起文本生成。范围与真实网络观察见 [连通性检查](docs/development/s03-connectivity.md)。
+
 模型接口需要本机HTTP代理时，可在服务端`.env`填写`LLM4OM_LLM_PROXY_URL=http://127.0.0.1:7890`。CLI／SDK使用LLM配置的`proxy_url`；默认仍为直连。地址不包含代理凭据，实际支持见 [显式代理](docs/development/s05-explicit-proxy.md)。

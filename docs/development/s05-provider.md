@@ -20,7 +20,7 @@ llm:
 
 base_url 必须替换为实际端点。明示模型不从环境自动替换。发送到 base_url/chat/completions，使用 max_tokens、stream=false。该请求选项必须由真实网关验收；不能由 OpenAI 文档推断第三方支持。HTTPS 支持远程端点，HTTP 仅支持 loopback fixture。拒绝 URL 用户信息、query、fragment 和重定向；不使用环境代理。text 是唯一能力，tools、response_schema、stream 与任意 generation options 均不支持。
 
-凭据优先从 RunConfig 所在目录的 .env 读取；文件不存在时读取当前工作目录的 .env，再由进程环境覆盖。这样在项目根目录执行命令时可以复用项目私有凭据。仅解析 literal KEY=value，可带 export 和成对引号；不执行命令、不插值、不修改进程环境。当前不支持多行值、转义或行尾注释。只把配置指定的 credential_env 值交给 Provider；方法、公开配置、Worker 和 trace 不获得认证 header。doctor 只做 admission，不发送 HTTP。缺凭据或不支持的参数在方法运行前拒绝；offline 只接受显式 Mock。没有自动 fallback。
+凭据优先从 RunConfig 所在目录的 .env 读取；文件不存在时读取当前工作目录的 .env，再由进程环境覆盖。这样在项目根目录执行命令时可以复用项目私有凭据。仅解析 literal KEY=value，可带 export 和成对引号；不执行命令、不插值、不修改进程环境。当前不支持多行值、转义或行尾注释。只把配置指定的 credential_env 值交给 Provider；方法、公开配置、Worker 和 trace 不获得认证 header。doctor默认只做admission；SDK／Worker0.35.0可显式启用[模型目录检查](s03-connectivity.md)，不发送生成请求。缺凭据或不支持的参数在方法运行前拒绝；offline只接受显式Mock。没有自动fallback。
 
 本地 HTTP 验证必须显式选 trusted_local；生产 container 测试仍要求真实 Docker，测试不自动跳过。token 预算需容纳完整输入的 UTF-8 字节估算与最大输出预留；微型示例测试使用 max_total_tokens=30000、wall_time_s=300。修改配置后，从项目根目录运行 `llm4om doctor --config PATH` 做免费预检，再运行 `llm4om run --problem examples/specs/problem.json --config PATH`。
 

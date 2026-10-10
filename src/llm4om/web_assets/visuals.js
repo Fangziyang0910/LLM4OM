@@ -923,6 +923,56 @@ const UI = (() => {
       ),
     );
   }
+  function connectivity(container, report) {
+    container.hidden = false;
+    container.replaceChildren();
+    container.append(node("strong", "", "配置与兼容性检查通过"));
+    const result = report.connectivity_checks;
+    const labels = {
+      reachable: "接口可达",
+      failed: "检查未通过",
+      not_supported: "不支持目录检查",
+      not_checked: "未执行",
+      not_applicable: "无需网络检查",
+    };
+    if (result.status === "not_requested") {
+      container.append(
+        node("p", "hint", "未请求网络检查。勾选上方选项后可读取模型目录。"),
+      );
+      return;
+    }
+    for (const item of result.checks || []) {
+      const row = node("div", "connectivity-row");
+      row.append(
+        node(
+          "span",
+          "",
+          (item.role === "default" ? "默认模型" : item.role) +
+            " · " +
+            (item.model || ""),
+        ),
+        node("strong", "", labels[item.status] || item.status),
+      );
+      if (item.model_listed != null)
+        row.append(
+          node(
+            "small",
+            "",
+            item.model_listed ? "该页目录包含此模型" : "该页目录未列出此模型",
+          ),
+        );
+      if (item.http_status)
+        row.append(node("small", "", "HTTP " + item.http_status));
+      container.append(row);
+    }
+    container.append(
+      node(
+        "p",
+        "hint",
+        "只读取目录，不发起文本生成。目录可能分页或使用别名；生成能力以实际运行结果为准。",
+      ),
+    );
+  }
   function runtimeDetails(container, snapshot) {
     container.replaceChildren();
     const contents = snapshot?.contents || {};
@@ -2032,6 +2082,7 @@ const UI = (() => {
     artifactKey,
     candidates,
     runtimeDetails,
+    connectivity,
     records,
     timeline,
     decision,

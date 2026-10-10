@@ -142,6 +142,7 @@ class HTTPTextProvider:
     plugin_id: str
     endpoint_path: str
     request_id_header: str
+    connectivity_profile: str | None = None
 
     def __init__(self, config: dict[str, Any], model: str, credential: str | Callable[[], str]) -> None:
         self.config = deepcopy(config)
@@ -172,18 +173,27 @@ class HTTPTextProvider:
             self._credential = self._load_credential()
             self._load_credential = None
 
-    def _transport_input(self, messages: list[dict[str, Any]], timeout: float) -> bytes:
+    def _transport_input(self, messages: list[dict[str, Any]], timeout: float,
+                         *, operation: str = "complete") -> bytes:
         self.prepare()
         return json.dumps({"provider": self.plugin_id, "endpoint": self.identity, "model": self.model,
                            "config": self.config,
                            "max_output_tokens": self.max_output_tokens, "credential": self._credential,
-                           "messages": messages, "timeout": timeout}, allow_nan=False).encode()
+                           "messages": messages, "timeout": timeout, "operation": operation}, allow_nan=False).encode()
 
     def complete(self, messages: list[dict[str, Any]], timeout: float) -> dict[str, Any]:
+        return self._transport_call(messages, timeout)
+
+    def check_connectivity(self, timeout: float) -> dict[str, Any]:
+        """Read protocol metadata without submitting a generation request."""
+        return self._transport_call([], timeout, operation="models_get")
+
+    def _transport_call(self, messages: list[dict[str, Any]], timeout: float,
+                        *, operation: str = "complete") -> dict[str, Any]:
         if timeout <= 0:
             raise TimeoutError("Provider request deadline expired.")
         started = time.monotonic()
-        payload = self._transport_input(messages, timeout)
+        payload = self._transport_input(messages, timeout, operation=operation)
         with subprocess.Popen(_TRANSPORT_COMMAND, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                               stderr=subprocess.DEVNULL, start_new_session=True) as process:
             try:
@@ -226,6 +236,28 @@ class HTTPTextProvider:
     def _request(self, messages: list[dict[str, Any]]) -> Request:
         raise NotImplementedError
 
+    def _models_request(self) -> Request | None:
+        return None
+
+    def _http_connectivity(self, timeout: float) -> dict[str, Any]:
+        request = self._models_request()
+        if request is None:
+            return {"status": "not_supported"}
+        proxy = self.config.get("proxy_url")
+        with build_opener(_NoRedirect(), ProxyHandler({"http": proxy, "https": proxy} if proxy else {})).open(request, timeout=timeout) as response:
+            raw = response.read(1024 * 1024 + 1)
+        try:
+            if len(raw) > 1024 * 1024:
+                raise ValueError("Oversized metadata.")
+            value = parse_json(raw)
+            models = value["data"]
+            if (not isinstance(models, list) or _contains_credential(value, self._credential)
+                    or any(not isinstance(item, dict) or not isinstance(item.get("id"), str) for item in models)):
+                raise ValueError("Invalid model list.")
+            return {"status": "reachable", "model_listed": any(item["id"] == self.model for item in models)}
+        except (RunError, ValueError, KeyError, TypeError):
+            raise RunError("invalid_provider_response", "admission", "Model directory returned invalid metadata.") from None
+
     @staticmethod
     def decode_reply(value: dict[str, Any]) -> dict[str, Any]:
         """Decode protocol evidence identically for HTTP and credential-free restoration."""
@@ -259,6 +291,11 @@ class OpenAICompatibleProvider(HTTPTextProvider):
     plugin_id = "llm4om.providers.openai_compatible"
     endpoint_path = "/chat/completions"
     request_id_header = "x-request-id"
+    connectivity_profile = "models_get/0.1.0"
+
+    def _models_request(self) -> Request:
+        return Request(self.config["base_url"].rstrip("/") + "/models",
+                       headers={"Authorization": "Bearer " + self._credential}, method="GET")
 
     def _request(self, messages: list[dict[str, Any]]) -> Request:
         body = json.dumps({"model": self.model, "messages": messages,
@@ -285,6 +322,11 @@ class AnthropicProvider(HTTPTextProvider):
     plugin_id = "llm4om.providers.anthropic"
     endpoint_path = "/messages"
     request_id_header = "request-id"
+    connectivity_profile = "models_get/0.1.0"
+
+    def _models_request(self) -> Request:
+        return Request(self.config["base_url"].rstrip("/") + "/models",
+                       headers={"x-api-key": self._credential, "anthropic-version": "2023-06-01"}, method="GET")
 
     def _request(self, messages: list[dict[str, Any]]) -> Request:
         system = [block for message in messages if message["role"] == "system"
@@ -348,7 +390,8 @@ class HTTPTextFactory:
                 "description": "Non-streaming HTTP text Adapter with shared Gateway accounting.",
                 "capabilities": {"provider_profile": "http_text/0.1.0", "problem_types": [],
                     "input_artifact_kinds": ["text_messages"], "output_artifact_kinds": ["text_response"],
-                    "llm_features": ["text"], "usage_semantics":
+                    "llm_features": ["text"],
+                    **({"connectivity_check": self.provider_type.connectivity_profile} if self.provider_type.connectivity_profile else {}), "usage_semantics":
                         "total includes cached input and reasoning output; missing fields are unknown"},
                 "dependencies": {"python": []}, "source": None,
                 "plugin_id": self.provider_type.plugin_id,
@@ -883,7 +926,8 @@ def _transport_main() -> None:
     try:
         from llm4om.plugins import _quiet
         with _quiet():
-            result: dict[str, Any] = {"reply": provider._http_complete(value["messages"], value["timeout"])}
+            result: dict[str, Any] = {"reply": provider._http_connectivity(value["timeout"])
+                if value.get("operation") == "models_get" else provider._http_complete(value["messages"], value["timeout"])}
     except HTTPError as error:
         status = error.code
         error.close()

@@ -14,7 +14,7 @@ from llm4om.tasks import import_dataset
 from llm4om.evaluation import evaluate_case
 from llm4om.plugins import discover_plugins
 from llm4om.contracts import RunError, read_config
-from llm4om.preflight import prepare_run
+from llm4om.preflight import prepare_run, check_model_connectivity
 from llm4om.task_plugins import prepare_task
 from llm4om.experiments import run_experiment, report_experiment
 from llm4om.assisted import edit_run, export_edit
@@ -71,6 +71,7 @@ def main() -> int:
     doctor_config.add_argument("--config", type=Path)
     doctor_config.add_argument("--task-config", type=Path, help="Preflight Task/Evaluator selections without importing source")
     doctor.add_argument("--offline", action="store_true")
+    doctor.add_argument("--check-connectivity", action="store_true", help="Explicitly GET the model directory without generating text")
     args = parser.parse_args()
     if args.command == "edit":
         cancellation = CancellationToken()
@@ -144,9 +145,13 @@ def main() -> int:
         try:
             if args.task_config:
                 snapshot = prepare_task(args.task_config)
+                if args.check_connectivity:
+                    report["connectivity_checks"] = {"status": "not_applicable", "checks": [], "generation_requests": 0}
             else:
                 plan = prepare_run(read_config(args.config), offline=args.offline, config_dir=args.config.parent)
                 snapshot = plan.snapshot
+                if args.check_connectivity:
+                    report["connectivity_checks"] = check_model_connectivity(plan)
             report.update(preflight_ok=True, execution_plan=snapshot, error=None)
         except (RunError, OSError) as error:
             report.update(preflight_ok=False, execution_plan=None, error={
@@ -154,7 +159,7 @@ def main() -> int:
                 "stage": "admission", "message": str(error) if isinstance(error, RunError) else "Cannot read RunConfig.",
                 "details": error.details if isinstance(error, RunError) else None})
         print(json.dumps(report))
-        return 0 if report["preflight_ok"] else 1
+        return 0 if report["preflight_ok"] and report["connectivity_checks"]["status"] in {"not_requested", "passed", "not_applicable"} else 1
     cancellation = CancellationToken()
     previous = signal.signal(signal.SIGINT, lambda signum, frame: cancellation.cancel())
     try:

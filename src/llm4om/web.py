@@ -68,7 +68,7 @@ class WebWorkspace:
         self.active: dict[str, CancellationToken] = {}
 
     def bootstrap(self) -> dict[str, Any]:
-        environment = credential_environment(Path.cwd() / '.env') if (Path.cwd() / '.env').exists() else {}
+        environment = credential_environment(Path.cwd() / '.env')
         config: dict[str, Any] = {'schema_version': '0.2.0',
             'method': {'plugin_id': 'llm4om.methods.direct', 'config': {'formulation_mode': 'five_element', 'output_mode': 'lp_ir'}},
             'llm': {'provider_plugin_id': 'llm4om.providers.openai_compatible',
@@ -89,12 +89,14 @@ class WebWorkspace:
             config['llm']['config']['proxy_url'] = environment['LLM4OM_LLM_PROXY_URL']
         return {'config': config, 'plugins': inventory['plugins'], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
 
-    def doctor(self, config: dict[str, Any]) -> dict[str, Any]:
+    def doctor(self, config: dict[str, Any], *, check_connectivity: bool = False) -> dict[str, Any]:
+        if type(check_connectivity) is not bool:
+            raise RunError('invalid_request', 'web', 'Connectivity selection must be a boolean.')
         validate_config(config)
         with tempfile.NamedTemporaryFile(prefix='.llm4om-web-doctor-', suffix='.json', dir=Path.cwd()) as temporary:
             path = Path(temporary.name)
             path.write_text(json.dumps(config, ensure_ascii=False, allow_nan=False))
-            return _application(['doctor', '--config', str(path)], deadline=time.time() + 30,
+            return _application(['doctor', '--config', str(path), *(['--check-connectivity'] if check_connectivity else [])], deadline=time.time() + 45,
                                 cancellation=CancellationToken())
 
     def _tasks(self) -> dict[str, Path]:
@@ -649,7 +651,7 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                 elif address.path == '/api/jobs' and not mutation:
                     result = {'jobs': workspace.list_jobs()}
                 elif address.path == '/api/doctor' and mutation:
-                    result = workspace.doctor(payload['config'])
+                    result = workspace.doctor(payload['config'], check_connectivity=payload.get('check_connectivity', False))
                 elif address.path == '/api/jobs' and mutation:
                     result = workspace.submit(payload)
                 elif len(parts) >= 3 and parts[:2] == ['api', 'jobs']:

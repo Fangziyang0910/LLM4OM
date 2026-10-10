@@ -1,6 +1,6 @@
 # S09 用户建模界面
 
-用途：记录面向用户的单问题 Web 流程、实际支持和验收。状态：SDK／Worker0.34.0 开发实现。规范来源为 [插件契约](../plugin-contracts.md)、[阶段设计](../adr/0004-formulation-and-code.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。
+用途：记录面向用户的单问题 Web 流程、实际支持和验收。状态：SDK／Worker0.35.0 开发实现。规范来源为 [插件契约](../plugin-contracts.md)、[阶段设计](../adr/0004-formulation-and-code.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。
 
 ## 用户流程
 
@@ -164,3 +164,5 @@ SDK／Worker0.34.0新增脱敏连接诊断，网页可以按已保存的attempt�
 公开父历史中的调用按attempt_id去重；当前版本记录优先，来源显示当前／父版本。过程区方法名也读取选定版本的public-config，不把原始job方法名当作人工修订的方法。
 
 本机Chrome以既有真实13／派生7记录核对累计调用／预算、Best bound／Gap、CPU／内存、父调用来源和版本切换；合成公开UI输入核对总Token未知、已知0、预留37和费用未提供，缺失求解记录不补造求解摘要。390px无溢出／页面无错误通过。入口tests/web_runtime_flow.cjs，截图位于/tmp/llm4om-web-runtime-evidence；零POST／模型／Solver调用，SDK／Worker0.34.0不变，未运行全量回归或Actions。
+
+SDK／Worker0.35.0的配置区支持显式[模型目录检查](s03-connectivity.md)，CLI与Web共享预检和目录读取；默认不发HTTP，目录结果不冒充生成能力。浏览器本机fixture验证了零默认请求／一次显式GET，未生成文本或提交任务。

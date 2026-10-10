@@ -319,7 +319,7 @@ SDK 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对�
 
 doctor 与 run 共用 prepare_run；先验证参数，再匹配当前表示、目标类型、Backend／Solver、Provider 功能和 Executor，再检查分发包与真实求解依赖。缺失能力为未知；请求的资源须被方法声明，当前表示 profile 固定，不能靠枚举并集暗示 native_code 可用。allowed_problem_types 缺省 lp／milp，实际 IR 类型在产出后再次核对。真实运行保存 admission_plan_ref；离线计划只准备回放，不标记 Code／Solve 已执行。未知方法异常与 SystemExit 转为稳定错误和脱敏 frame，原错误参数／源码行与插件 Python 输出不进入公开结果。
 
-示例、字段级诊断、实际版本和未实现项见 [S03](development/s03-plugins.md)。S03 不执行真实连通性检查，不加载 .env；后续 Provider 工作树实现见 S05-A 子集。SDK 包、核心对象 0.2.0、IR 0.1.0 和 profile 0.1.0 分别管理。
+示例、字段级诊断与实际版本见 [S03](development/s03-plugins.md)。SDK／Worker0.35.0的显式模型目录检查见 [连通性检查](development/s03-connectivity.md)：默认不联系模型端点；HTTP Provider可声明`connectivity_check: models_get/0.1.0`并实现`check_connectivity(timeout)`。返回`status: reachable | not_supported`及可选布尔`model_listed`，不返回目录原文或凭据。目录可达与文本生成能力分别呈现。SDK 包、核心对象0.2.0、IR0.1.0和各profile版本分别管理。
 
 ### S04-A 已落实的容器子集
 

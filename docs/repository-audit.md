@@ -327,4 +327,8 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/web_model_edit_flow.cjs` | 严格IR普通表单的浏览器验收 | 数值编辑／表述同步、派生版本、真实容器HiGHS、父记录与预算保持、窄屏 |
 | `tests/web_links_flow.cjs` | 运行页面链接的本机浏览器验收 | 固定版本链接、刷新恢复产物与导出、最新选择、新问题与窄屏，零POST |
 | `tests/web_runtime_flow.cjs` | 可读运行与求解资源的浏览器验收 | 实际版本资源、界限／Gap／执行资源、未知量保持、窄屏，零POST |
+| `tests/test_connectivity.py` | CLI显式目录检查 | 默认零HTTP、两协议认证、未知支持与零生成，凭据不导出 |
+| `tests/helpers/connectivity_server.py` | 一次性Web／目录fixture | 本机合成凭据、目录计数、拒绝生成，临时workspace |
+| `tests/web_connectivity_check_flow.cjs` | 网页连通性开关 | 同一doctor、默认零请求／显式GET、可读目录结果与窄屏 |
+| `docs/development/s03-connectivity.md` | FR-06实际能力与验收 | 共享Provider传输、目录证据边界、实际网络结果与复查入口 |
 | `docs/development/s05-connection-diagnostics.md` | 连接观察、诊断支持与证据 | 原运行不改写、免费GET与生成验收区别、公共固定类别和未知预算 |
