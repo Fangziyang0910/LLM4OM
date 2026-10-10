@@ -187,8 +187,20 @@ const UI = (() => {
     container.append(group);
   }
   function modelNotes(container, metadata, ir, relations, requirements) {
-    const section = card("模型声明", "以下内容来自该版本保存的建模输出。");
     const assumptions = metadata?.assumptions || ir?.assumptions || [];
+    const section = node("details", "model-card model-notes");
+    section.open = Boolean(assumptions.length || metadata?.warnings?.length);
+    section.append(
+      node(
+        "summary",
+        "",
+        "模型声明 · " +
+          assumptions.length +
+          " 条假设 / " +
+          (metadata?.warnings?.length || 0) +
+          " 条警告",
+      ),
+    );
     section.append(node("h4", "", "模型假设"));
     if (assumptions.length)
       list(section, assumptions, [
@@ -220,14 +232,16 @@ const UI = (() => {
         node("p", "hint", "该版本未记录模型警告；这不表示模型已通过全部检查。"),
       );
     container.append(section);
-    const coverage = card(
-      "需求关联",
-      "这是方法声明的关联。关联存在不证明建模正确；未记录关联也不证明缺少约束。",
-    );
     const ids = new Set([
       ...requirements.map((item) => item.id),
       ...relations.flatMap((item) => item.ids),
     ]);
+    if (!ids.size && !metadata?.requirement_traces?.length) return;
+    const coverage = node("details", "model-card model-coverage");
+    coverage.append(node("summary", "", "需求关联 · " + ids.size + " 条规则"));
+    coverage.append(
+      node("p", "hint", "这是方法声明的关联，独立检查见求解结果。"),
+    );
     if (ids.size)
       list(
         coverage,
@@ -365,6 +379,7 @@ const UI = (() => {
       "决策变量",
       "点击变量或公式中的符号，查看它在模型中的关联。",
     );
+    vars.classList.add("variables-card");
     for (const item of variables) {
       const row = node("button", "variable-card");
       row.type = "button";
@@ -414,6 +429,7 @@ const UI = (() => {
     }
     if (variables.length || !source.state) container.append(vars);
     const constraints = card("约束条件", "保留模型实际提供的关系与边界。");
+    constraints.classList.add("constraints-card");
     const restrictions = ir?.constraints || representation.constraints || [];
     restrictions.forEach((item, index) => {
       const row = node("div", "constraint-row");

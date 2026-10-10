@@ -93,6 +93,8 @@ function showConfig() {
   $("base-url").value = config.llm.config.base_url || "";
   $("token-budget").value = config.budget.max_total_tokens;
   $("wall-budget").value = config.budget.wall_time_s;
+  $("attempt-budget").value = config.budget.max_llm_attempts;
+  $("solver-budget").value = config.budget.max_solver_calls;
   $("config-json").value = pretty(config);
   const explanations = {
     "llm4om.methods.direct":
@@ -109,6 +111,9 @@ function showConfig() {
   $("method-explainer").textContent =
     explanations[config.method.plugin_id] ||
     "按所选方法的实际流程建模，保存公开步骤和输出。";
+  showBudgetSummary();
+}
+function showBudgetSummary() {
   $("budget-summary").textContent =
     `本次上限：${config.budget.max_llm_attempts} 次模型请求 · ${UI.format(config.budget.max_total_tokens)} Token · ${UI.format(config.budget.wall_time_s)} 秒`;
 }
@@ -123,9 +128,25 @@ function readConfig() {
     config.llm.config.base_url = $("base-url").value;
   config.budget.max_total_tokens = Number($("token-budget").value);
   config.budget.wall_time_s = Number($("wall-budget").value);
+  config.budget.max_llm_attempts = Number($("attempt-budget").value);
+  config.budget.max_solver_calls = Number($("solver-budget").value);
   $("config-json").value = pretty(config);
+  showBudgetSummary();
   return config;
 }
+for (const id of [
+  "attempt-budget",
+  "token-budget",
+  "wall-budget",
+  "solver-budget",
+])
+  $(id).onchange = () => {
+    try {
+      readConfig();
+    } catch (error) {
+      notice(error.message, true);
+    }
+  };
 function chooseMethod() {
   const method = $("method").value;
   if (
@@ -536,14 +557,21 @@ $("backend").onchange = () => {
   config.model_backend.plugin_id = $("backend").value;
   showConfig();
 };
-$("load-example").onclick = () => {
-  $("description").value =
-    "一家工厂生产产品 A 和 B。每件 A 的利润为 3，每件 B 的利润为 2。每件 A 消耗 2 单位原料和 1 单位工时；每件 B 消耗 1 单位原料和 2 单位工时。原料和工时的可用容量均为 8。决定两种产品的生产数量，数量必须是非负整数，使总利润最大。";
-  $("problem-json").value = "";
-  uploads = [];
-  renderUploads();
-  $("description").focus();
+const problemExamples = {
+  production:
+    "一家工厂生产产品 A 和 B。每件 A 的利润为 3，每件 B 的利润为 2。每件 A 消耗 2 单位原料和 1 单位工时；每件 B 消耗 1 单位原料和 2 单位工时。原料和工时的可用容量均为 8。决定两种产品的生产数量，数量必须是非负整数，使总利润最大。",
+  projects:
+    "有甲、乙、丙三个项目，费用分别为 4、3、5 万元，收益分别为 7、5、9 万元。总预算为 8 万元。每个项目只能选择或不选择，最多执行一次。决定选择哪些项目，使总收益最大，并且不超过预算。",
+  diet: "两种食物 A、B 每份价格分别为 2、3 元，每份蛋白质分别为 3、4 克，每份膳食纤维分别为 2、1 克。每日至少需要 12 克蛋白质和 8 克膳食纤维。份数可以是非负小数。决定两种食物的份数，使总费用最小。",
 };
+for (const button of document.querySelectorAll("[data-example]"))
+  button.onclick = () => {
+    $("description").value = problemExamples[button.dataset.example];
+    $("problem-json").value = "";
+    uploads = [];
+    renderUploads();
+    $("description").focus();
+  };
 $("provider").onchange = () => {
   config.llm.provider_plugin_id = $("provider").value;
   $("config-json").value = pretty(config);

@@ -10,7 +10,9 @@
   </head>
   <body>
     <aside class="sidebar">
-      <a class="brand" href="/">LLM<span>4</span>OM</a>
+      <a class="brand" href="/"
+        ><span class="brand-symbol">∑</span> LLM<span>4</span>OM</a
+      >
       <p class="subtitle">Optimization Modeling</p>
       <button id="new-run" class="nav active">＋ 新建问题</button>
       <details class="developer-nav">
@@ -26,8 +28,8 @@
     <main>
       <header>
         <div>
-          <p class="eyebrow">OPTIMIZATION, MADE CLEAR</p>
-          <h1>把你的问题，变成可求解的模型</h1>
+          <p class="eyebrow">LLM4OM / OPTIMIZATION STUDIO</p>
+          <h1>建模空间</h1>
         </div>
         <span class="badge"
           ><span class="status-dot"></span> 建模服务已连接</span
@@ -36,17 +38,27 @@
       <div id="notice" role="status" hidden></div>
       <section id="editor" class="editor-grid">
         <div class="intro-copy">
-          <p>
-            描述目标和限制条件。选择一种建模方法，看模型如何形成，探索求解结果。
-          </p>
+          <p class="eyebrow">从自然语言，到优化决策</p>
+          <h2>描述你的目标，<br />让模型一步步形成。</h2>
+          <p>输入问题，选择建模方法。看清数学表述、求解实现与最终决策。</p>
           <div class="journey">
-            <span>01 描述问题</span><span>02 理解建模</span
-            ><span>03 探索结果</span>
+            <span
+              ><b>01</b><strong>提出问题</strong
+              ><small>目标、规则与数据</small></span
+            >
+            <span
+              ><b>02</b><strong>看清建模</strong
+              ><small>数学表述与求解实现</small></span
+            >
+            <span
+              ><b>03</b><strong>探索决策</strong
+              ><small>结果、解释与新版本</small></span
+            >
           </div>
         </div>
         <div class="panel problem-panel">
           <div class="panel-title">
-            <h2>你想解决什么问题？</h2>
+            <h2>描述问题</h2>
             <label class="file-button"
               >导入问题<input id="problem-file" type="file" accept=".json"
             /></label>
@@ -54,13 +66,25 @@
           <label for="description">用自然语言描述你的目标、决策和限制</label>
           <textarea
             id="description"
-            rows="8"
-            placeholder="描述决策变量、目标、业务规则，以及公开数据的含义。例如：决定产品 A、B 的生产数量，在资源容量限制下最大化总利润，数量为非负整数。"
+            rows="9"
+            placeholder="例如：我想制定工厂的生产计划。在原料和工时有限的情况下，决定每种产品的生产数量，让总利润最大。&#10;&#10;你可以说明目标、可做的决策，以及必须遵守的规则。"
           ></textarea>
           <div class="example-chips">
-            <button id="load-example" type="button" class="example-chip">
-              试试：产品生产计划 ↗</button
-            ><span>支持中文与英文</span>
+            <span>从示例开始</span>
+            <button
+              id="load-example"
+              data-example="production"
+              type="button"
+              class="example-chip"
+            >
+              生产计划 ↗
+            </button>
+            <button data-example="projects" type="button" class="example-chip">
+              项目选择 ↗
+            </button>
+            <button data-example="diet" type="button" class="example-chip">
+              配餐优化 ↗
+            </button>
           </div>
           <div class="upload-line">
             <label class="file-button"
@@ -100,15 +124,31 @@
             <label class="wide advanced-field"
               >Provider URL<input id="base-url" type="url"
             /></label>
-            <label class="advanced-field"
-              >总 Token 预算<input id="token-budget" type="number" min="1"
-            /></label>
-            <label class="advanced-field"
-              >总时间（秒）<input id="wall-budget" type="number" min="1"
-            /></label>
           </div>
           <div id="method-explainer" class="method-explainer"></div>
           <p id="budget-summary" class="hint"></p>
+          <details class="budget-controls">
+            <summary>调整本次运行上限</summary>
+            <div class="field-grid">
+              <label
+                >模型请求次数<input id="attempt-budget" type="number" min="1"
+              /></label>
+              <label
+                >总 Token<input id="token-budget" type="number" min="1"
+              /></label>
+              <label
+                >时间（秒）<input
+                  id="wall-budget"
+                  type="number"
+                  min="0.1"
+                  step="any"
+              /></label>
+              <label
+                >求解次数<input id="solver-budget" type="number" min="0"
+              /></label>
+            </div>
+            <p class="hint">请求次数包含重试。实际消耗会保存在运行记录中。</p>
+          </details>
           <details>
             <summary>高级：模型接口、方法参数与预算</summary>
             <textarea
@@ -189,7 +229,7 @@
       <section id="result" hidden>
         <div class="run-heading">
           <div>
-            <p class="eyebrow">YOUR MODEL, IN PROGRESS</p>
+            <p class="eyebrow">MODEL / SOLUTION</p>
             <h2 id="run-title">正在建模</h2>
             <p id="run-meta"></p>
             <label class="version-selector"
@@ -203,8 +243,8 @@
             <button id="cancel" class="secondary">取消</button
             ><button id="resume" class="secondary">继续恢复</button
             ><button id="rerun" class="secondary">派生重跑</button
-            ><button id="edit-run" class="secondary">编辑并创建派生版本</button
-            ><a id="export" class="secondary" href="#">下载公开结果</a>
+            ><button id="edit-run" class="secondary">编辑新版本</button
+            ><a id="export" class="secondary" href="#">下载结果</a>
           </div>
         </div>
         <section id="assisted-editor" class="panel" hidden>
