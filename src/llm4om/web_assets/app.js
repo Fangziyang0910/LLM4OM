@@ -324,7 +324,13 @@ function showArtifact(value) {
     activeTab === "formulation" && name.startsWith("method/state_")
       ? { representation: { state: value } }
       : value;
-  UI.records($("model-view"), view, activeTab, contents);
+  UI.records(
+    $("model-view"),
+    view,
+    activeTab,
+    contents,
+    snapshot?.data_previews,
+  );
 }
 function renderArtifact() {
   const entries = artifactEntries();

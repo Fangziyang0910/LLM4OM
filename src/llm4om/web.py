@@ -9,6 +9,7 @@ import ipaddress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from io import BytesIO, StringIO
+from itertools import islice
 import json
 from pathlib import Path
 import secrets
@@ -510,8 +511,31 @@ class WebWorkspace:
             record.pop('error', None)
             record.update(status=bundle['status'] if bundle else 'running',
                           description=problem.get('description', record['description']) if isinstance(problem, dict) else record['description'])
+        previews = {}
+        data_views = contents.get('data-views.json')
+        if isinstance(data_views, dict):
+            for data_id, view in data_views.get('views', {}).items():
+                raw = self.read_ref(run, view['content_ref'])
+                if view['format'] == 'csv':
+                    reader = csv.reader(StringIO(raw.decode('utf-8')), strict=True)
+                    header = next(reader)
+                    columns = header[:16]
+                    rows = [row[:16] for row in islice(reader, 20)]
+                    total_items = view['rows']
+                    truncated = len(header) > 16 or total_items > len(rows)
+                else:
+                    value = parse_json(raw)
+                    columns = ['字段', '值']
+                    rows = [[key, json.dumps(item, ensure_ascii=False, allow_nan=False)] for key, item in islice(value.items(), 20)]
+                    total_items = len(value)
+                    truncated = total_items > len(rows)
+                truncated = truncated or any(len(cell) > 256 for row in rows for cell in row)
+                previews[data_id] = {'metadata': view, 'columns': columns,
+                    'rows': [[cell[:256] + '…' if len(cell) > 256 else cell for cell in row] for row in rows],
+                    'total_items': total_items, 'display_truncated': truncated}
         return {'job': record, 'bundle': bundle, 'events': events, 'artifacts': refs, 'contents': contents,
-                'versions': self.versions(job_id), 'latest_run_id': latest.name if latest else None, 'historical': historical}
+                'versions': self.versions(job_id), 'latest_run_id': latest.name if latest else None, 'historical': historical,
+                'data_previews': previews}
 
     def export(self, job_id: str, run_id: str | None = None) -> bytes:
         run = self._selected_run(job_id, run_id)

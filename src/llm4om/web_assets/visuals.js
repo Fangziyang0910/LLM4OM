@@ -64,6 +64,9 @@ const UI = (() => {
       "formulation-snapshot.json": "表述来源",
       "model.py": "求解源码",
       "code-artifact.json": "代码来源",
+      "public-problem.json": "原始问题与规则",
+      "data-views.json": "模型数据视图",
+      "dataset-manifest.json": "原始数据来源",
       "state_1_params.json": "问题与参数",
       "state_2_objective.json": "优化目标初稿",
       "state_3_constraints.json": "约束识别",
@@ -420,7 +423,7 @@ const UI = (() => {
     });
     container.append(lines);
   }
-  function records(container, value, tab, contents) {
+  function records(container, value, tab, contents, dataPreviews = {}) {
     if (tab === "formulation") return formulation(container, value, contents);
     if (tab === "code") return code(container, value);
     container.replaceChildren();
@@ -430,14 +433,105 @@ const UI = (() => {
         const section = card("你的问题");
         section.append(node("p", "problem-text", problem.description));
         container.append(section);
+        for (const [title, rows] of [
+          ["输入规则", problem.requirements],
+          ["输入假设", problem.assumptions],
+        ]) {
+          if (rows?.length) {
+            const section = card(title);
+            list(section, rows, [
+              ["标识", (item) => item.id],
+              ["内容", (item) => item.text],
+              [
+                "状态",
+                (item) =>
+                  ({
+                    explicit: "原文声明",
+                    proposed: "待确认",
+                    confirmed: "已确认",
+                  })[item.status] || "问题规则",
+              ],
+            ]);
+            container.append(section);
+          }
+        }
         for (const ref of problem.data_refs || []) {
+          const preview = dataPreviews[ref.data_id],
+            view = preview?.metadata;
           const file = card(
             ref.data_id,
             ref.format.toUpperCase() + " · 原始数据绑定",
           );
-          file.append(node("p", "hint", "已保存，建模使用这一版本的数据。"));
+          const scope = node("div", "data-view-meta");
+          scope.append(
+            node(
+              "span",
+              "pill",
+              view?.complete
+                ? "完整模型数据视图"
+                : view?.kind === "summary"
+                  ? "仅结构摘要"
+                  : view
+                    ? "部分模型数据视图"
+                    : "尚无模型数据视图",
+            ),
+          );
+          if (view?.total_rows !== null && view?.total_rows !== undefined)
+            scope.append(
+              node(
+                "span",
+                "pill",
+                `原始 ${format(view.total_rows)} 行 · 视图 ${format(view.rows)} 行`,
+              ),
+            );
+          file.append(scope);
+          if (preview) {
+            list(
+              file,
+              preview.rows,
+              preview.columns.map((column, index) => [
+                column,
+                (row) => row[index],
+              ]),
+            );
+            file.append(
+              node(
+                "p",
+                "hint",
+                preview.display_truncated
+                  ? `页面显示 ${preview.rows.length} / ${preview.total_items} 行或字段，最多16列，长文本显示前256字符。完整已保存视图随公共导出提供。`
+                  : "显示已保存视图的全部内容。这里的页面预览不改变模型输入。",
+              ),
+            );
+          } else
+            file.append(
+              node("p", "hint", "原始数据已绑定；模型数据视图尚未保存。"),
+            );
+          const provenance = node("details", "data-provenance");
+          provenance.append(node("summary", "", "数据版本与来源"));
+          list(
+            provenance,
+            [
+              ["原始数据 SHA-256", ref.sha256 || "未提供"],
+              ["模型视图 SHA-256", view?.sha256 || "未提供"],
+              ["模型视图字节", view ? format(view.size_bytes) : "未提供"],
+            ],
+            [
+              ["项目", (row) => row[0]],
+              ["值", (row) => row[1]],
+            ],
+          );
+          file.append(provenance);
           container.append(file);
         }
+        if (!problem.data_refs?.length)
+          container.append(
+            node(
+              "p",
+              "hint",
+              "此问题没有附加数据文件，建模输入来自问题描述与明确规则。",
+            ),
+          );
         return;
       }
     }

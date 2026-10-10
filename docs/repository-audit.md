@@ -315,3 +315,6 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 
 | `tests/test_web_versions.py` | 历史版本与明确父运行的公共HTTP验收 | 实际HiGHS、读取／导出、派生lineage、父bundle和非法路径 |
 | `tests/web_history_flow.cjs` | 版本浏览的本机Chrome验收 | 零POST、13／5版本切换、选定父编辑、轮询保持和窄屏 |
+
+| `tests/test_web_data_previews.py` | 有界公开数据预览的HTTP验收 | CSV逗号／多行／前导零、JSON类型表达、显示截断、来源hash和真实HiGHS |
+| `tests/web_data_flow.cjs` | 输入数据页的本机Chrome验收 | 已保存产品／产能表、完整视图／来源、原始记录折叠、轮询与窄屏，零POST |

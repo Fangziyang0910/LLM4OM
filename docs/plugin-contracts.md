@@ -1280,6 +1280,10 @@ SDK／Worker0.32.0的单问题HTTP响应增加versions、latest_run_id和histori
 
 POST edit可传parent_run_id，明确从该版本派生；省略时沿用当前运行。取消、恢复和澄清继续作用于当前运行，历史选择不改变后台任务。查看历史不会迁移checkpoint或重跑方法；编辑仍执行共同用例的身份、数据、预算及方法能力检查。人工Code版本若没有可用LLM配置，问题修订需选择原始自动建模版本，不静默更换Provider。
 
+SDK／Worker0.33.0的详情响应增加data_previews，按data_id组织。metadata来自已校验的data-views.json；content_ref仍经过公开namespace、路径、大小和SHA-256校验，不从输入目录、任意路径或隐藏材料读预览。columns、rows和total_items描述页面表格，display_truncated标记显示截断。CSV保留字符串单元格，展示前20行／16列；JSON展示前20个顶层字段和值（JSON序列化文本）。单元格最多256字符并以省略号标记，不对原始数据或模型视图进行修改。
+
+模型视图的complete／kind／rows／total_rows与页面display_truncated分别呈现。完整模型视图仍可能在页面被截断；结构摘要不被标成完整数据。查看预览不触发Loader、模型或求解器，公共导出继续包含原已保存视图。
+
 ## 显式 Provider 代理
 
 SDK0.31.0的内置HTTPTextFactory配置可增加proxy_url，值为无认证信息的HTTP代理地址，仅允许根路径／无query／fragment。HTTPS目标使用标准CONNECT与TLS校验；SOCKS和代理URL认证未支持。缺省保持直连，环境HTTPS_PROXY不自动选择路由。声明代理时，隔离传输子进程清除NO_PROXY／no_proxy对路由的覆盖；调用进程环境不修改。重定向、共享账本、deadline、取消和未知attempt的恢复规则不变。

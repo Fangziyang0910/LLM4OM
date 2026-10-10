@@ -1318,3 +1318,20 @@ pre {
 .run-heading .version-selector {
   flex-wrap: wrap;
 }
+.data-view-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+.data-provenance {
+  margin-top: 14px;
+  font-size: 11px;
+}
+.data-provenance summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.data-provenance td {
+  font-family: "SFMono-Regular", Consolas, monospace;
+}

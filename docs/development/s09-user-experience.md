@@ -1,6 +1,6 @@
 # S09 用户建模界面
 
-用途：记录面向用户的单问题 Web 流程、实际支持和验收。状态：SDK／Worker0.32.0 开发实现。规范来源为 [插件契约](../plugin-contracts.md)、[阶段设计](../adr/0004-formulation-and-code.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。
+用途：记录面向用户的单问题 Web 流程、实际支持和验收。状态：SDK／Worker0.33.0 开发实现。规范来源为 [插件契约](../plugin-contracts.md)、[阶段设计](../adr/0004-formulation-and-code.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。
 
 ## 用户流程
 
@@ -88,3 +88,13 @@ OptiMUS六个保存状态按实际事件顺序出现：问题与参数、优化�
 本机公共HTTP验收：确定性Provider加实际HiGHS得到原始13，手工Code派生用容器HiGHS得到5，再明确选择原始父版本修订问题并重新建模得到13。只有两次合成Provider请求，父bundle bytes不变；读取和导出选定版本、父lineage及非法路径拒绝通过。tests/test_web_versions.py单项16.308s通过。
 
 Chrome通过原始13／派生5的版本切换、对应导出链接、原始父版本编辑、轮询选择保持及390px无溢出／无页面错误。入口tests/web_history_flow.cjs只读检查，零POST／零模型调用。证据在本机/tmp/llm4om-web-history-evidence，不提交运行数据。Worker0.32.0最终身份为sha256:2e02db6e72b1477c4403a5068aa23c71a0b59afcad2c6fb4ed3d959769d769cd；初次预检查镜像保留为0.32.0-precheck，没有用它验收。
+
+## 可读的输入数据
+
+输入数据页显示原问题、输入规则和输入假设。假设区分原文声明、待确认和已确认，不把方法推断当作用户确认。CSV模型数据视图显示为行列表格，JSON显示为字段与值；视图完整性、原始行数／视图行数和页面截断分别标记。数据版本区可展开查看原始／视图SHA-256和视图字节数。
+
+页面预览只读取已保存的公开content_ref。标准库CSV解析保留引号内逗号、多行文本和前导零；JSON中的false／null保持原类型的序列化表达。页面最多20行／16列，JSON最多20个字段，长单元格显示前256字符。完整已保存视图仍在公共导出中；预览不变更方法输入，也不声称已经查看全部原始数据。
+
+本机公共HTTP单项5.420s通过：确定性Provider和Worker0.33.0容器HiGHS目标13；25行CSV页面仅20行但模型视图仍完整，逗号／换行／003保留，JSON数值／数组／false／null正确显示，原始来源hash一致。入口tests/test_web_data_previews.py不使用真实云模型。Chrome以既有真实运行的隔离副本核对products／capacities表值、完整视图标记、来源hash、原始记录折叠、轮询和390px布局，无页面错误、零POST。入口tests/web_data_flow.cjs只读，沿用本机浏览器环境变量。
+
+证据位于/tmp/llm4om-web-data-evidence。Worker0.33.0身份为sha256:374489b868185d15b4a5d0c6047a666ba6b5edaf76d69a18789c20f548cc7b92；只构建此开发身份一次。未新增付费请求、批量benchmark、重复全量回归或GitHub Actions。
