@@ -119,6 +119,7 @@ function chooseMethod() {
       "llm4om.methods.direct",
       "llm4om.methods.feedback_repair",
       "llm4om.methods.optimus",
+      "llm4om.methods.optimus_inline",
       "llm4om.methods.coe",
     ].includes(method)
   )
