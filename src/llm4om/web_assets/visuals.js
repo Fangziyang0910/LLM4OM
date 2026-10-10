@@ -15,6 +15,10 @@ const UI = (() => {
     optimal: "候选最优",
     infeasible: "候选不可行",
     unbounded: "候选无界",
+    proposed: "已生成",
+    executed: "已执行",
+    invalid: "未通过检查",
+    selected: "最终选择",
   };
   const methodNames = {
     "llm4om.methods.direct": "Direct · 直接建模",
@@ -64,6 +68,13 @@ const UI = (() => {
       "formulation-snapshot.json": "表述来源",
       "model.py": "求解源码",
       "code-artifact.json": "代码来源",
+      "candidate.json": "候选状态",
+      "candidate-snapshot.json": "初始候选",
+      "assessment.json": "公开检查",
+      "candidate-selection.json": "最终选择",
+      "formulation-changes.json": "表述变化",
+      "repair-state.json": "修正过程",
+      "evaluation.json": "独立评估",
       "public-problem.json": "原始问题与规则",
       "data-views.json": "模型数据视图",
       "dataset-manifest.json": "原始数据来源",
@@ -74,6 +85,27 @@ const UI = (() => {
       "state_5_objective_modeled.json": "完整数学表述",
       "state_6_code.json": "数学表述与代码片段",
     })[name.split("/").at(-1)] || name;
+  function artifactKey(snapshot, reference) {
+    if (reference?.namespace !== "run_public") return;
+    const current = (
+      snapshot.bundle
+        ? Object.values(snapshot.bundle.public_projections || {})
+        : snapshot.artifacts || []
+    ).find((item) => item.relative_path === reference.relative_path);
+    if (
+      current?.namespace !== reference.namespace ||
+      current?.sha256 !== reference.sha256 ||
+      current?.size_bytes !== reference.size_bytes
+    )
+      return;
+    return Object.keys(snapshot.contents || {})
+      .sort((a, b) => b.length - a.length)
+      .find(
+        (name) =>
+          reference.relative_path === name ||
+          reference.relative_path.endsWith("/" + name),
+      );
+  }
   const mathText = (value) =>
     String(value || "")
       .replace(/\\leq\b/g, "≤")
@@ -683,25 +715,6 @@ const UI = (() => {
         return;
       }
     }
-    if (tab === "candidates") {
-      const candidates = Object.entries(contents)
-        .filter(
-          ([name, data]) =>
-            /candidate-snapshot.json$/.test(name) && data?.candidate_id,
-        )
-        .map(([, data]) => data);
-      const section = card(
-        "候选方案",
-        "展示实际保存的候选，保留修正和选择关系。",
-      );
-      list(section, candidates, [
-        ["方案", (r) => r.candidate_id],
-        ["状态", (r) => status(r.status)],
-        ["原因", (r) => r.change_reason || "初始方案"],
-      ]);
-      container.append(section);
-      return;
-    }
     if (Array.isArray(value)) {
       const section = card("运行记录");
       list(section, value.slice(-30), [
@@ -716,6 +729,198 @@ const UI = (() => {
       container,
       "详细记录已保存",
       "需要开发或研究时，可以展开下方原始记录。",
+    );
+  }
+  function candidates(container, snapshot) {
+    container.replaceChildren();
+    const contents = snapshot?.contents || {};
+    const get = (reference) => contents[artifactKey(snapshot, reference)];
+    const selection = contents["candidate-selection.json"];
+    const selectedId =
+      snapshot?.bundle?.final_candidate_id || selection?.candidate_id;
+    const records = new Map();
+    for (const [name, item] of Object.entries(contents)) {
+      if (
+        !/^candidates\/[^/]+\/candidate(?:-snapshot)?\.json$/.test(name) ||
+        !item?.candidate_id
+      )
+        continue;
+      if (name.endsWith("/candidate.json") || !records.has(item.candidate_id))
+        records.set(item.candidate_id, item);
+    }
+    if (!records.size) {
+      empty(
+        container,
+        "候选方案正在形成",
+        "方法保存候选后，可在这里查看模型、修正关系与实际求解结果。",
+      );
+      return;
+    }
+    if (selectedId) {
+      const summary = card("最终选择 · 候选 " + selectedId);
+      summary.classList.add("candidate-selection");
+      summary.append(
+        node("p", "", selection?.reason || "该方法未单独保存选择理由。"),
+      );
+      if (selection?.rule)
+        summary.append(node("span", "hint", "选择规则：" + selection.rule));
+      container.append(summary);
+    }
+    for (const candidate of [...records.values()].sort(
+      (a, b) => a.sequence_no - b.sequence_no,
+    )) {
+      const assessment =
+        contents[`candidates/${candidate.candidate_id}/assessment.json`];
+      const model = get(candidate.artifact_ref);
+      const codeArtifact = get(model?.code_ref);
+      const solve = get(
+        assessment?.solve_result_ref ||
+          (candidate.candidate_id === selectedId
+            ? snapshot.bundle?.solve_result_ref
+            : null),
+      );
+      const section = card("候选 " + candidate.candidate_id);
+      section.classList.add("candidate-card");
+      section.dataset.candidateId = candidate.candidate_id;
+      section.classList.toggle(
+        "final-candidate",
+        candidate.candidate_id === selectedId,
+      );
+      const tags = node("div", "result-tags");
+      tags.append(node("span", "pill", status(candidate.status)));
+      if (candidate.parent_ids?.length)
+        tags.append(
+          node(
+            "span",
+            "pill muted",
+            "修正自 " + candidate.parent_ids.join("、"),
+          ),
+        );
+      section.append(
+        tags,
+        node("p", "candidate-reason", candidate.change_reason || "初始候选"),
+      );
+      const stages = node("div", "candidate-stages");
+      for (const [phase, title] of [
+        ["formulation", "数学表述"],
+        ["code", "求解实现"],
+        ["solve", "求解"],
+      ]) {
+        const state =
+          assessment?.stages?.[phase] ||
+          (phase === "solve" && solve
+            ? { status: "available" }
+            : model?.stage_status?.[phase]);
+        const item = node("div");
+        item.append(
+          node("span", "", title),
+          node("strong", "", state ? status(state.status) : "未记录"),
+        );
+        stages.append(item);
+      }
+      section.append(stages);
+      if (solve) {
+        const result = node("div", "candidate-result");
+        result.append(
+          node("span", "", status(solve.termination)),
+          node("strong", "", "候选目标 " + format(solve.objective_value)),
+        );
+        section.append(result);
+      }
+      for (const diagnostic of assessment?.diagnostics || [])
+        section.append(
+          node(
+            "p",
+            "candidate-diagnostic",
+            diagnostic.message || diagnostic.code,
+          ),
+        );
+      const changes = get(assessment?.formulation_changes_ref);
+      if (changes) {
+        const detail = node("details", "candidate-changes");
+        detail.append(node("summary", "", "查看与上一候选的变化"));
+        const names = {
+          sets: "集合",
+          parameters: "参数",
+          variables: "变量",
+          objective: "目标",
+          constraints: "约束",
+          assumptions: "假设",
+          problem_type: "问题类型",
+        };
+        list(
+          detail,
+          [
+            [
+              "表述变化",
+              (changes.changed_sections || [])
+                .map((key) => names[key] || key)
+                .join("、") || "未记录变化",
+            ],
+            [
+              "IR变化",
+              (changes.ir_changed_sections || [])
+                .map((key) => names[key] || key)
+                .join("、") || "未记录变化",
+            ],
+            [
+              "增加约束",
+              (changes.constraint_ids_added || []).join("、") || "无",
+            ],
+            [
+              "删除约束",
+              (changes.constraint_ids_removed || []).join("、") || "无",
+            ],
+            [
+              "丢失需求关联",
+              (changes.requirements_lost || []).join("、") || "无",
+            ],
+          ],
+          [
+            ["项目", (row) => row[0]],
+            ["内容", (row) => row[1]],
+          ],
+        );
+        detail.append(
+          node(
+            "p",
+            "hint",
+            changes.source_formulation_available
+              ? "这是已声明输出的比较，不构成语义正确性证明。"
+              : "上一候选没有可比较的完整表述；这里保留实际比较记录。",
+          ),
+        );
+        section.append(detail);
+      }
+      const actions = node("div", "actions");
+      for (const [label, tab, reference] of [
+        ["查看数学模型", "formulation", model?.formulation_ref],
+        ["查看求解代码", "code", codeArtifact?.representation_ref],
+      ]) {
+        const key = artifactKey(snapshot, reference);
+        if (!key) continue;
+        const button = node("button", "secondary", label);
+        button.type = "button";
+        button.onclick = () => {
+          document.querySelector(`[data-tab="${tab}"]`).click();
+          const choice = document.getElementById("artifact-choice");
+          choice.value = key;
+          choice.dispatchEvent(new Event("change"));
+          document
+            .getElementById("model-view")
+            .scrollIntoView({ block: "start" });
+        };
+        actions.append(button);
+      }
+      section.append(actions);
+      container.append(section);
+    }
+    container.append(
+      node(
+        "p",
+        "hint",
+        "各目标值属于各自的候选模型。候选之间可能改变目标或约束，不自动按目标值排名。",
+      ),
     );
   }
   function timeline(snapshot) {
@@ -737,19 +942,8 @@ const UI = (() => {
         });
       }
       if (step?.artifact_ref?.namespace === "run_public") {
-        const name = Object.keys(snapshot.contents || {})
-          .filter((key) => step.artifact_ref.relative_path?.endsWith("/" + key))
-          .sort((a, b) => b.length - a.length)[0];
-        const current =
-          snapshot.bundle?.public_projections?.[name] ||
-          snapshot.artifacts?.find(
-            (ref) => name && ref.relative_path?.endsWith("/" + name),
-          );
-        if (
-          name &&
-          current?.sha256 === step.artifact_ref.sha256 &&
-          current.relative_path === step.artifact_ref.relative_path
-        ) {
+        const name = artifactKey(snapshot, step.artifact_ref);
+        if (name) {
           items.set("artifact-" + event.sequence_no, {
             sequence: event.sequence_no,
             label: artifactLabel(name),
@@ -1510,6 +1704,8 @@ const UI = (() => {
     status,
     shortMethod,
     artifactLabel,
+    artifactKey,
+    candidates,
     records,
     timeline,
     decision,

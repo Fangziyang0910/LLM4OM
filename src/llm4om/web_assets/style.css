@@ -772,6 +772,58 @@ details textarea {
   margin: 22px 0;
   background: #f8fcf9;
 }
+.candidate-card,
+.candidate-selection {
+  grid-column: 1 / -1;
+}
+.candidate-selection,
+.final-candidate {
+  border-color: #b9d9c8;
+  background: #f8fcf9;
+}
+.candidate-reason {
+  margin: 12px 0;
+  line-height: 1.8;
+}
+.candidate-stages {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+.candidate-stages > div {
+  padding: 12px;
+  background: #eef3ef;
+  border-radius: 9px;
+}
+.candidate-stages span,
+.candidate-stages strong {
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.candidate-stages span {
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+.candidate-result {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.candidate-diagnostic {
+  color: #b13b3b;
+  margin: 12px 0;
+}
+.candidate-changes {
+  margin: 15px 0;
+}
+.candidate-changes table {
+  margin-top: 15px;
+}
 .decision-explorer summary {
   font-size: 14px;
   font-weight: 650;

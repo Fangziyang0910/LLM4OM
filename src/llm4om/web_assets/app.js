@@ -303,7 +303,8 @@ function artifactEntries() {
   const patterns = {
     formulation: /formulation|model-ir|structured-ir|method\/state_/,
     code: /code|build|symbol-map|model\.py|factory\.py|native.*\.py/,
-    candidates: /candidate|selection|feedback|repair|evaluation/,
+    candidates:
+      /(?:^|\/)(?:candidate(?:-snapshot|-selection)?|assessment|formulation-changes|repair-state|evaluation)\.json$/,
     diagnostics: /diagnostic|execution|budget|report|trace/,
     data: /public-problem|data-views|dataset-manifest|data-bind/,
   };
@@ -315,6 +316,10 @@ function showArtifact(value) {
   const text = pretty(value) || "此阶段尚无可用记录。";
   if ($("artifact-content").textContent !== text)
     $("artifact-content").textContent = text;
+  if (activeTab === "candidates") {
+    UI.candidates($("model-view"), snapshot);
+    return;
+  }
   if (
     value === undefined &&
     ["running", "queued", "needs_input"].includes(snapshot?.job?.status)
@@ -356,19 +361,21 @@ function showArtifact(value) {
 function renderArtifact() {
   const entries = artifactEntries();
   const score = ([name, value]) =>
-    activeTab === "code"
-      ? name ===
-        `candidates/${snapshot?.bundle?.final_candidate_id || "001"}/model.py`
-        ? 2
-        : Number(name.endsWith(".py"))
-      : value?.representation
-        ? 100 +
-          Number(
-            name.startsWith(
-              `candidates/${snapshot?.bundle?.final_candidate_id || "001"}/`,
-            ),
-          )
-        : Number(name.match(/method\/state_(\d+)/)?.[1] || 0);
+    activeTab === "candidates"
+      ? Number(name === "candidate-selection.json")
+      : activeTab === "code"
+        ? name ===
+          `candidates/${snapshot?.bundle?.final_candidate_id || "001"}/model.py`
+          ? 2
+          : Number(name.endsWith(".py"))
+        : value?.representation
+          ? 100 +
+            Number(
+              name.startsWith(
+                `candidates/${snapshot?.bundle?.final_candidate_id || "001"}/`,
+              ),
+            )
+          : Number(name.match(/method\/state_(\d+)/)?.[1] || 0);
   entries.sort((a, b) => score(b) - score(a));
   $("output-heading").textContent = {
     formulation: "数学模型",
@@ -393,6 +400,10 @@ function renderArtifact() {
   if (artifactSelectedByUser && entries.some(([name]) => name === previous))
     $("artifact-choice").value = previous;
   $("artifact-choice").hidden = entries.length < 2;
+  $("artifact-choice").setAttribute(
+    "aria-label",
+    activeTab === "candidates" ? "选择原始候选记录" : "选择阶段记录",
+  );
   const selected = () =>
     entries.find(([name]) => name === $("artifact-choice").value)?.[1];
   showArtifact(selected());
@@ -478,10 +489,7 @@ async function refreshRun() {
     box.append(title, status);
     $("stages").append(box);
   }
-  const publicValue = (ref) =>
-    Object.entries(bundle?.public_projections || {}).find(
-      ([, item]) => item.relative_path === ref?.relative_path,
-    )?.[0];
+  const publicValue = (ref) => UI.artifactKey(snapshot, ref);
   const solve = contents[publicValue(bundle?.solve_result_ref)];
   const solution = contents[publicValue(solve?.solution_ref)];
   const model = contents[publicValue(bundle?.model_artifact_ref)];
