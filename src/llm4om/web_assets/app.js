@@ -656,6 +656,7 @@ $("problem-file").onchange = async (event) => {
 $("doctor").onclick = async () => {
   try {
     $("doctor").disabled = true;
+    $("doctor-result").hidden = true;
     notice("正在检查实际环境与兼容路径…");
     const result = await api("/api/doctor", {
       config: readConfig(),
