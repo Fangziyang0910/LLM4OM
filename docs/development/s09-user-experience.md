@@ -166,3 +166,11 @@ SDK／Worker0.34.0新增脱敏连接诊断，网页可以按已保存的attempt�
 本机Chrome以既有真实13／派生7记录核对累计调用／预算、Best bound／Gap、CPU／内存、父调用来源和版本切换；合成公开UI输入核对总Token未知、已知0、预留37和费用未提供，缺失求解记录不补造求解摘要。390px无溢出／页面无错误通过。入口tests/web_runtime_flow.cjs，截图位于/tmp/llm4om-web-runtime-evidence；零POST／模型／Solver调用，SDK／Worker0.34.0不变，未运行全量回归或Actions。
 
 SDK／Worker0.35.0的配置区支持显式[模型目录检查](s03-connectivity.md)，CLI与Web共享预检和目录读取；默认不发HTTP，目录结果不冒充生成能力。浏览器本机fixture验证了零默认请求／一次显式GET，未生成文本或提交任务。
+
+## 目标贡献与直接可见的约束余量
+
+SDK0.36.0的结果页直接展示严格IR目标函数中各变量的贡献卡片，保留系数×解值与非零常数项。变量优先显示实际IR名称，同时保留不同的变量ID。没有严格IR的原生结果继续显示真实解向量，不推测缺失目标项。
+
+约束活动值、关系、余量与适用的资源用量条在结果页默认可见。交互输入折叠在同一卡片下；展开后可代入新决策，恢复按钮回到保存解。保存目标和贡献卡片始终对应Solver结果，试算目标在单独区域更新。
+
+本机Chrome读取已有真实Direct／HiGHS记录：目标13的贡献为9与4；交互试算得到10／19并显示超限，恢复得到13。轮询保留输入，390px无横向溢出／页面错误，零POST、零新模型或Solver调用。沿用`tests/web_decision_flow.cjs`，未新增浏览器框架或执行全量回归。截图与本机输出位于`/tmp/llm4om-decision-visuals-evidence`。

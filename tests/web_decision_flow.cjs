@@ -21,8 +21,15 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       if (request.method() === "POST") posts.push(request.url());
     });
     await page.goto(url);
-    await page.locator(".job").first().click();
+    if (!new URL(url).searchParams.has("job"))
+      await page.locator(".job").first().click();
     const explorer = page.locator(".decision-explorer");
+    await explorer.locator(".explorer-constraint").first().waitFor();
+    assert.equal(await explorer.locator(".explorer-constraint").first().isVisible(), true);
+    assert.deepEqual(
+      await page.locator(".contribution-item strong").allTextContents(),
+      ["9", "4"],
+    );
     await explorer.locator("summary").click();
     assert.equal(
       await explorer.locator(".explorer-objective strong").innerText(),

@@ -1577,8 +1577,8 @@ const UI = (() => {
       )
     )
       return;
-    const section = node("details", "model-card decision-explorer");
-    section.append(node("summary", "", "探索决策 · 调整变量，查看目标与约束"));
+    const section = node("section", "model-card decision-explorer");
+    section.append(node("h3", "", "目标与约束余量"));
     section.append(
       node(
         "p",
@@ -1679,7 +1679,9 @@ const UI = (() => {
       for (const [id, input] of inputs) input.value = solution.variables[id];
       calculate();
     };
-    section.append(fields, reset, output);
+    const controls = node("details", "decision-controls");
+    controls.append(node("summary", "", "调整决策值 · 交互试算"), fields, reset);
+    section.append(output, controls);
     container.append(section);
     calculate();
   }
@@ -1733,13 +1735,20 @@ const UI = (() => {
     );
     container.append(meta);
     const values = Object.entries(solution?.variables || {});
+    const variableNames = new Map(
+      (solvedIR?.variables || []).map((item) => [item.id, item.name || item.id]),
+    );
     if (values.length) {
       const bars = node("div", "decision-bars"),
         maximum = Math.max(...values.map(([, value]) => Math.abs(value)), 1);
       values.forEach(([name, value]) => {
         const row = node("button", "decision-row");
         row.type = "button";
-        row.append(node("span", "decision-name", name));
+        row.setAttribute("aria-pressed", "false");
+        const label = node("span", "decision-name", variableNames.get(name) || name);
+        if (variableNames.get(name) && variableNames.get(name) !== name)
+          label.append(node("small", "decision-id", name));
+        row.append(label);
         const track = node("div", "bar-track"),
           bar = node("span", "bar-fill");
         bar.style.width = (Math.abs(value) / maximum) * 100 + "%";
@@ -1760,6 +1769,32 @@ const UI = (() => {
           "柱长表示决策值的绝对大小；点击可选中比较，准确值显示在右侧。",
         ),
       );
+    }
+    const expression = solvedIR?.objective?.expression;
+    if (
+      solve.has_primal_solution && expression &&
+      expression.terms.every((term) => Number.isFinite(solution?.variables?.[term.variable_id]))
+    ) {
+      const breakdown = node("section", "model-card objective-breakdown");
+      breakdown.append(node("h3", "", "目标值如何构成"));
+      const contributions = node("div", "contribution-grid");
+      for (const term of expression.terms) {
+        const quantity = solution.variables[term.variable_id];
+        const item = node("div", "contribution-item");
+        item.append(
+          node("span", "", variableNames.get(term.variable_id) || term.variable_id),
+          node("strong", "", format(term.coefficient * quantity)),
+          node("small", "hint", `${format(term.coefficient)} × ${format(quantity)}`),
+        );
+        contributions.append(item);
+      }
+      if (expression.constant !== 0) {
+        const constant = node("div", "contribution-item");
+        constant.append(node("span", "", "常数项"), node("strong", "", format(expression.constant)));
+        contributions.append(constant);
+      }
+      breakdown.append(contributions, node("p", "hint", "各项来自已求解的目标函数；负数表示负贡献。"));
+      container.append(breakdown);
     }
     if (solve.has_primal_solution)
       decisionExplorer(container, solvedIR, solution);
