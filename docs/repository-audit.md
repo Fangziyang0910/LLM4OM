@@ -318,3 +318,5 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 
 | `tests/test_web_data_previews.py` | 有界公开数据预览的HTTP验收 | CSV逗号／多行／前导零、JSON类型表达、显示截断、来源hash和真实HiGHS |
 | `tests/web_data_flow.cjs` | 输入数据页的本机Chrome验收 | 已保存产品／产能表、完整视图／来源、原始记录折叠、轮询与窄屏，零POST |
+
+| `tests/web_model_flow.cjs` | 模型声明与需求来源的本机Chrome验收 | 实际来源展开／关联／来源快照、合成声明的未知状态／候选隔离／安全文本，零POST |

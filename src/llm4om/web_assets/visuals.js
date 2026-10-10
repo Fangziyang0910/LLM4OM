@@ -167,15 +167,138 @@ const UI = (() => {
     });
     return row;
   }
+  function requirementLinks(container, ids, requirements) {
+    if (!ids?.length) return;
+    const group = node("div", "requirement-sources");
+    group.append(node("span", "source-caption", "来源需求"));
+    for (const id of ids) {
+      const link = node("details", "requirement-link");
+      link.append(node("summary", "source-tag", id));
+      link.append(
+        node(
+          "p",
+          "requirement-text",
+          requirements.find((item) => item.id === id)?.text ||
+            "原问题未声明此需求。",
+        ),
+      );
+      group.append(link);
+    }
+    container.append(group);
+  }
+  function modelNotes(container, metadata, ir, relations, requirements) {
+    const section = card("模型声明", "以下内容来自该版本保存的建模输出。");
+    const assumptions = metadata?.assumptions || ir?.assumptions || [];
+    section.append(node("h4", "", "模型假设"));
+    if (assumptions.length)
+      list(section, assumptions, [
+        ["假设", (item) => item?.text || parameterValue(item)],
+        [
+          "状态",
+          (item) =>
+            ({ explicit: "原文声明", proposed: "待确认", confirmed: "已确认" })[
+              item?.status
+            ] || "未记录确认状态",
+        ],
+        ["来源", (item) => item?.origin || "未记录来源"],
+      ]);
+    else section.append(node("p", "hint", "该版本未记录模型假设。"));
+    section.append(node("h4", "", "模型警告"));
+    if (metadata?.warnings?.length)
+      for (const warning of metadata.warnings)
+        section.append(
+          node(
+            "p",
+            "model-warning",
+            warning === "public_reflection_exhausted"
+              ? "公开检查的修正已达到次数上限。"
+              : parameterValue(warning),
+          ),
+        );
+    else
+      section.append(
+        node("p", "hint", "该版本未记录模型警告；这不表示模型已通过全部检查。"),
+      );
+    container.append(section);
+    const coverage = card(
+      "需求关联",
+      "这是方法声明的关联。关联存在不证明建模正确；未记录关联也不证明缺少约束。",
+    );
+    const ids = new Set([
+      ...requirements.map((item) => item.id),
+      ...relations.flatMap((item) => item.ids),
+    ]);
+    if (ids.size)
+      list(
+        coverage,
+        [...ids],
+        [
+          ["需求", (id) => id],
+          [
+            "原始规则",
+            (id) =>
+              requirements.find((item) => item.id === id)?.text ||
+              "原问题未声明此需求。",
+          ],
+          [
+            "模型条目",
+            (id) =>
+              relations
+                .filter((item) => item.ids.includes(id))
+                .map((item) => item.label)
+                .join(" · ") || "未记录关联",
+          ],
+        ],
+      );
+    else
+      coverage.append(
+        node("p", "hint", "原问题未提供结构化需求 ID，可依据原描述核对模型。"),
+      );
+    if (metadata?.requirement_traces?.length) {
+      const traces = node("details", "recorded-traces");
+      traces.append(node("summary", "", "方法保存的其他需求映射"));
+      for (const trace of metadata.requirement_traces)
+        traces.append(node("p", "requirement-text", parameterValue(trace)));
+      coverage.append(traces);
+    }
+    container.append(coverage);
+  }
   function formulation(container, value, contents) {
     container.replaceChildren();
-    const source = value?.representation || {};
+    const records = Object.entries(contents || {});
+    const document = value?.formulation_ref
+      ? records.find(
+          ([, item]) =>
+            item?.formulation_id === value.formulation_ref.artifact_id,
+        )?.[1]
+      : value;
+    const metadata = Object.hasOwn(value || {}, "formulation_ref")
+      ? value
+      : records
+          .filter(
+            ([, item]) =>
+              document?.formulation_id &&
+              item?.formulation_ref?.artifact_id === document.formulation_id,
+          )
+          .sort(
+            ([left], [right]) =>
+              Number(right.endsWith("/artifact.json")) -
+              Number(left.endsWith("/artifact.json")),
+          )[0]?.[1];
+    const requirements = contents?.["public-problem.json"]?.requirements || [];
+    const source = document?.representation || {};
     const representation = source.state || source;
-    const ir = Object.entries(contents || {}).find(
-      ([name, data]) =>
-        /model-ir|structured-ir|supplied-ir/.test(name) &&
-        data?.objective?.expression,
-    )?.[1];
+    const ir =
+      (!Object.hasOwn(value || {}, "formulation_ref") ||
+        Boolean(value.formulation_ref)) &&
+      !source.state &&
+      (document?.objective?.expression
+        ? document
+        : records.find(
+            ([name, data]) =>
+              /model-ir|structured-ir|supplied-ir/.test(name) &&
+              data?.objective?.expression,
+          )?.[1]);
     const names = Object.fromEntries(
       (ir?.variables || []).map((item) => [item.id, item.name || item.id]),
     );
@@ -205,6 +328,7 @@ const UI = (() => {
         "这一步没有独立的数学表述",
         "可以继续查看求解代码和方法过程。不同方法会提供不同形式的建模产物。",
       );
+      if (metadata) modelNotes(container, metadata, null, [], requirements);
       return;
     }
     const goal = card("优化目标", objective?.description || "模型要达到的目标");
@@ -232,6 +356,10 @@ const UI = (() => {
         ),
       );
     else goal.append(node("p", "hint", "数学目标表达式尚未形成。"));
+    const goalIds =
+      ir?.objective?.requirement_ids ?? objective?.requirement_ids ?? [];
+    requirementLinks(goal, goalIds, requirements);
+    const relations = [{ label: "目标函数", ids: goalIds }];
     container.append(goal);
     const vars = card(
       "决策变量",
@@ -278,6 +406,11 @@ const UI = (() => {
             ),
           );
       vars.append(row);
+      requirementLinks(vars, item.requirement_ids, requirements);
+      relations.push({
+        label: "变量 " + (item.name || item.id),
+        ids: item.requirement_ids || [],
+      });
     }
     if (variables.length || !source.state) container.append(vars);
     const constraints = card("约束条件", "保留模型实际提供的关系与边界。");
@@ -311,14 +444,11 @@ const UI = (() => {
             mathText(item.expression_text || item.formulation || ""),
           ),
         );
-      if (item.requirement_ids?.length)
-        detail.append(
-          node(
-            "span",
-            "source-tag",
-            "来源需求 " + item.requirement_ids.join(" · "),
-          ),
-        );
+      requirementLinks(detail, item.requirement_ids, requirements);
+      relations.push({
+        label: "约束 " + (item.id || index + 1),
+        ids: item.requirement_ids || [],
+      });
       row.append(detail);
       constraints.append(row);
     });
@@ -383,6 +513,8 @@ const UI = (() => {
       ]);
       container.append(section);
     }
+    if (!source.state)
+      modelNotes(container, metadata, ir, relations, requirements);
   }
   function code(container, value) {
     container.replaceChildren();

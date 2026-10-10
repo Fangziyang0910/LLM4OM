@@ -98,3 +98,15 @@ Chrome通过原始13／派生5的版本切换、对应导出链接、原始父�
 本机公共HTTP单项5.420s通过：确定性Provider和Worker0.33.0容器HiGHS目标13；25行CSV页面仅20行但模型视图仍完整，逗号／换行／003保留，JSON数值／数组／false／null正确显示，原始来源hash一致。入口tests/test_web_data_previews.py不使用真实云模型。Chrome以既有真实运行的隔离副本核对products／capacities表值、完整视图标记、来源hash、原始记录折叠、轮询和390px布局，无页面错误、零POST。入口tests/web_data_flow.cjs只读，沿用本机浏览器环境变量。
 
 证据位于/tmp/llm4om-web-data-evidence。Worker0.33.0身份为sha256:374489b868185d15b4a5d0c6047a666ba6b5edaf76d69a18789c20f548cc7b92；只构建此开发身份一次。未新增付费请求、批量benchmark、重复全量回归或GitHub Actions。
+
+## 模型声明与需求原文
+
+数学模型页中，目标、变量和约束记录的requirement_ids可以展开阅读原始需求。需求关联表列出原始需求与当前显示模型条目的声明关联；不存在关联时标为未记录，未知需求ID标明原问题未声明。页面不从目标值、关键词或求解成功推断关联，也不把关联表作为正确性分数。
+
+模型声明来自对应Formulation引用的ModelArtifact，展示保存的假设、确认状态、来源和警告。其他格式的requirement_traces保留原表达并折叠显示，不猜测字段含义。未记录假设／警告与独立检查通过分别呈现。没有独立Formulation的方法可以在产物来源中查看声明和警告，仍不补造数学表述。
+
+选中表述来源快照时，页面依据formulation_ref.artifact_id找到已公开的Formulation；不会把来源快照误标为缺失表述。方法中间state不套用最终模型的严格IR或声明；没有表述引用的输出也不使用其他候选IR补造数学模型。查看过程不触发模型、求解器或编辑请求。
+
+本机Chrome使用既有真实Direct／HiGHS记录的隔离副本，核对利润／变量域需求原文、关联表、展开状态在轮询后保持、来源快照解析和390px布局；无页面错误、零POST。公开UI.records接口的合成输入分别验证待确认假设、警告、未知／未关联需求、其他候选声明不混入、无表述方法不借用其他IR，以及HTML文本不生成图片元素。合成输入不写入真实运行记录。入口tests/web_model_flow.cjs沿用本机浏览器环境变量；证据位于/tmp/llm4om-web-model-evidence。
+
+本轮只修改前端呈现，SDK／Worker仍0.33.0，Python运行身份和镜像不变。没有新增付费模型请求、求解、batch、全量回归或Actions。
