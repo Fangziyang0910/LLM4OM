@@ -322,4 +322,5 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/web_model_flow.cjs` | 模型声明与需求来源的本机Chrome验收 | 实际来源展开／关联／来源快照、合成声明的未知状态／候选隔离／安全文本，零POST |
 
 | `tests/web_connection_flow.cjs` | 连接失败的本机Chrome验收 | 固定诊断解释、未知用量、旧记录和无关错误保持，零POST |
+| `tests/web_decision_flow.cjs` | 当前候选模型的决策试算交互 | 已保存真实解、目标／约束代入、恢复、轮询保持、窄屏，零POST |
 | `docs/development/s05-connection-diagnostics.md` | 连接观察、诊断支持与证据 | 原运行不改写、免费GET与生成验收区别、公共固定类别和未知预算 |

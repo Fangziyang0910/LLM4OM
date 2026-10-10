@@ -47,9 +47,9 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       /3/,
     );
     assert.equal(await page.locator("#model-view .variable-card").count(), 2);
-    const coverage = page
-      .locator(".model-card")
-      .filter({ has: page.locator("h3", { hasText: /^需求关联$/ }) });
+    const coverage = page.locator(".model-coverage");
+    await coverage.locator("summary").click();
+    await page.locator(".model-notes summary").click();
     assert.match(await coverage.innerText(), /R-FINISHING/);
     assert.match(await coverage.innerText(), /方法声明/);
     assert.match(

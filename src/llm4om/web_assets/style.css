@@ -768,6 +768,66 @@ details textarea {
   font-size: 15px;
   margin-bottom: 9px;
 }
+.decision-explorer {
+  margin: 22px 0;
+  background: #f8fcf9;
+}
+.decision-explorer summary {
+  font-size: 14px;
+  font-weight: 650;
+}
+.decision-explorer > .hint {
+  margin: 15px 0;
+}
+.explorer-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.explorer-output {
+  margin-top: 20px;
+}
+.explorer-objective {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border-radius: 10px;
+  background: #e3f1e8;
+  color: var(--accent);
+}
+.explorer-objective strong {
+  font-size: 26px;
+}
+.explorer-constraint {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 18px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.constraint-margin {
+  color: var(--muted);
+}
+.explorer-constraint meter {
+  width: 100%;
+  height: 12px;
+  accent-color: var(--accent);
+}
+.explorer-constraint.exceeded .constraint-margin {
+  color: #b13b3b;
+  font-weight: 650;
+}
+.explorer-constraint.exceeded meter::-webkit-meter-optimum-value {
+  background: #ce6969;
+}
+.explorer-constraint.exceeded meter::-moz-meter-bar {
+  background: #ce6969;
+}
 .model-card .hint {
   font-size: 11px;
   margin-bottom: 13px;

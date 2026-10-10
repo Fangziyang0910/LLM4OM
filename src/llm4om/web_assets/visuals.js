@@ -1165,7 +1165,122 @@ const UI = (() => {
     container.append(section);
     return true;
   }
-  function decision(container, solve, solution, ledger, snapshot) {
+  function decisionExplorer(container, ir, solution) {
+    if (
+      !ir?.objective?.expression ||
+      !ir.variables?.length ||
+      !ir.variables.every((item) =>
+        Number.isFinite(solution?.variables?.[item.id]),
+      )
+    )
+      return;
+    const section = node("details", "model-card decision-explorer");
+    section.append(node("summary", "", "探索决策 · 调整变量，查看目标与约束"));
+    section.append(
+      node(
+        "p",
+        "hint",
+        "仅代入当前候选模型计算，不重新求解或修改已保存结果。约束余量为负表示超出该限制；等式显示左侧减右侧的偏差。",
+      ),
+    );
+    const fields = node("div", "explorer-fields");
+    const inputs = new Map();
+    for (const item of ir.variables) {
+      const label = node("label", "", item.name || item.id);
+      const input = node("input");
+      input.type = "number";
+      input.step = item.domain === "continuous" ? "any" : "1";
+      if (item.lower_bound != null) input.min = item.lower_bound;
+      if (item.upper_bound != null) input.max = item.upper_bound;
+      if (item.domain === "binary") {
+        input.min = Math.max(item.lower_bound ?? 0, 0);
+        input.max = Math.min(item.upper_bound ?? 1, 1);
+      }
+      input.value = solution.variables[item.id];
+      input.dataset.decisionVariable = item.id;
+      label.append(input);
+      fields.append(label);
+      inputs.set(item.id, input);
+    }
+    const reset = node("button", "secondary", "恢复求解结果");
+    reset.type = "button";
+    const output = node("div", "explorer-output");
+    output.setAttribute("aria-live", "polite");
+    const calculate = () => {
+      output.replaceChildren();
+      if (
+        [...inputs.values()].some(
+          (input) =>
+            !input.validity.valid || !Number.isFinite(input.valueAsNumber),
+        )
+      ) {
+        output.append(node("p", "hint", "请填写符合变量边界和类型的数值。"));
+        return;
+      }
+      const value = (expression) =>
+        expression.constant +
+        expression.terms.reduce(
+          (sum, term) =>
+            sum + term.coefficient * inputs.get(term.variable_id).valueAsNumber,
+          0,
+        );
+      const objective = node("div", "explorer-objective");
+      objective.append(
+        node(
+          "span",
+          "",
+          ir.objective.sense === "max"
+            ? "试算目标 · 最大化"
+            : "试算目标 · 最小化",
+        ),
+        node("strong", "", format(value(ir.objective.expression))),
+      );
+      output.append(objective);
+      for (const item of ir.constraints || []) {
+        const activity = value(item.expression);
+        const margin =
+          item.sense === "le" ? item.rhs - activity : activity - item.rhs;
+        const row = node("div", "explorer-constraint");
+        row.classList.toggle("exceeded", item.sense !== "eq" && margin < 0);
+        row.append(node("strong", "", item.name || item.id));
+        row.append(
+          node(
+            "span",
+            "",
+            `${format(activity)} ${{ le: "≤", ge: "≥", eq: "=" }[item.sense]} ${format(item.rhs)}`,
+          ),
+        );
+        row.append(
+          node(
+            "span",
+            "constraint-margin",
+            `${item.sense === "eq" ? "偏差" : "余量"} ${format(margin)}`,
+          ),
+        );
+        if (item.sense === "le" && item.rhs > 0 && activity >= 0) {
+          const meter = node("meter");
+          meter.min = 0;
+          meter.max = item.rhs;
+          meter.value = activity;
+          meter.setAttribute(
+            "aria-label",
+            `${item.name || item.id} ${format(activity)} / ${format(item.rhs)}`,
+          );
+          row.append(meter);
+        }
+        output.append(row);
+      }
+    };
+    fields.oninput = calculate;
+    reset.onclick = () => {
+      for (const [id, input] of inputs) input.value = solution.variables[id];
+      calculate();
+    };
+    section.append(fields, reset, output);
+    container.append(section);
+    calculate();
+  }
+  function decision(container, solve, solution, ledger, snapshot, solvedIR) {
     container.replaceChildren();
     const failed = failure(container, snapshot);
     if (!solve) {
@@ -1243,6 +1358,8 @@ const UI = (() => {
         ),
       );
     }
+    if (solve.has_primal_solution)
+      decisionExplorer(container, solvedIR, solution);
     checks(container, snapshot?.contents?.["evaluation.json"]);
     container.append(
       node(

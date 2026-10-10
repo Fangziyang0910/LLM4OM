@@ -484,12 +484,19 @@ async function refreshRun() {
     )?.[0];
   const solve = contents[publicValue(bundle?.solve_result_ref)];
   const solution = contents[publicValue(solve?.solution_ref)];
+  const model = contents[publicValue(bundle?.model_artifact_ref)];
+  const code = contents[publicValue(model?.code_ref)];
+  const solvedIR =
+    code?.provenance?.origin === "deterministic_compilation"
+      ? contents[publicValue(code.provenance.source_ir_ref)]
+      : null;
   UI.decision(
     $("decision"),
     solve,
     solution,
     contents["budget-ledger.json"],
     snapshot,
+    solvedIR,
   );
   UI.timeline(snapshot);
   if (bundle?.error || job.error)
