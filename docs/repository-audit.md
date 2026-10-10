@@ -286,3 +286,5 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_optimus_inline.py` | 明确输入变体的公共Method契约 | 固定main fidelity、空参数声明、原数据hash与原接口 |
 | `examples/specs/optimus-inline.yaml` | 真实外部模型的inline-public配置 | 独立变体、公开输入、Gurobi与预算 |
 | `docs/development/s08-common-input.md` | 共同输入与三基准比较证据 | 原始来源、预选子集、未提供指标与变体 |
+
+| `docs/development/s09-process-isolation.md` | Web并发／取消功能与证据 | 共同应用入口、进程控制和待验收范围 |

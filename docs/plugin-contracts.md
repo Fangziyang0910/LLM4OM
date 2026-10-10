@@ -1255,3 +1255,7 @@ SDK0.26.0的`export_edit(run, operation)`与`edit_run(run, edits)`使用公开Ed
 SDK0.27.0提供`llm4om.methods.optimus_inline`，配置为`{rag_mode: null}`。固定main读取空params.json／labels.json，原始公开数据追加到描述；原参数声明接口仍由`llm4om.methods.optimus`提供，不默认替换。variant_id为optimus0.3-source_main-inline_public-ec_true-rag_none-external_chat，输入策略／有效描述hash／原数据hash保存在public-input-projection.json。主流程未增加LLM参数提取，也不注入参考材料。
 
 ExperimentSpec.tasks的`{id, manifest}`可增加case_ids，表示原冻结selected案例的明确子集。资格、oracle、原manifest均不修改；具体共同case在实验快照冻结。N_selected为该实验子集，N_manifest_selected保留原总数；不同方法不按结果删样本。
+
+## Web并发执行与取消
+
+SDK0.28.0的Web提交／恢复／编辑通过独立CLI应用进程调用共同Python用例；plugin discovery和doctor不与运行共享解释器。公开HTTP字段不变。取消先向拥有的应用进程组发送SIGINT，最多十秒后清理；若未保存完整终态，job公开错误保留，不伪称完成。资源子进程默认即时取消保持不变。详见[S09](development/s09-process-isolation.md)。

@@ -19,7 +19,7 @@ from llm4om.control import CancellationToken
 from llm4om.contracts import RunError, parse_json
 
 
-DEFAULT_IMAGE = "llm4om-worker:0.27.0"
+DEFAULT_IMAGE = "llm4om-worker:0.28.0"
 _CONTROL_TIMEOUT_S = 2.0
 _REAP_TIMEOUT_S = 0.5
 _CONTROL_OUTPUT_BYTES = 1048576
@@ -422,7 +422,7 @@ def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
 
 
 def run_owned_process(command: list[str], payload: bytes, *, deadline: float,
-                      cancellation: CancellationToken) -> tuple[bytes, bytes, int]:
+                      cancellation: CancellationToken, cancel_grace_s: float = 0) -> tuple[bytes, bytes, int]:
     """Supervise an owned trusted resource child under the same run deadline."""
     cancellation.check()
     _check_deadline(deadline)
@@ -430,10 +430,22 @@ def run_owned_process(command: list[str], payload: bytes, *, deadline: float,
                                stderr=subprocess.PIPE, start_new_session=True)
     diagnostics: list[str] = []
     partial_out, partial_err = b"", b""
+    stop_deadline: float | None = None
     try:
         data: bytes | None = payload
         while True:
-            cancellation.check()
+            if cancellation.cancelled and cancel_grace_s > 0:
+                if stop_deadline is None:
+                    # Application children need time to persist cancellation and unknown usage.
+                    try:
+                        os.killpg(process.pid, signal.SIGINT)
+                    except ProcessLookupError:
+                        pass
+                    stop_deadline = monotonic() + cancel_grace_s
+                if monotonic() >= stop_deadline:
+                    cancellation.check()
+            else:
+                cancellation.check()
             _check_deadline(deadline)
             try:
                 stdout, stderr = process.communicate(data, timeout=min(0.05, max(0, deadline - time())))

@@ -372,6 +372,38 @@ return await DirectMethod().run(problem, replace(context, llm=ReplyBoundary()), 
         self.assertEqual(caught.exception.code, 'run_cancelled')
         self.assertIn('partial-resource-output', caught.exception.details['stdout'])
 
+    def test_application_child_has_bounded_cooperative_cancellation(self):
+        from concurrent.futures import ThreadPoolExecutor
+        import sys
+        import time
+        from llm4om.contracts import RunError
+        from llm4om.executors import run_owned_process
+        for cooperative in (True, False):
+            with self.subTest(cooperative=cooperative), tempfile.TemporaryDirectory() as directory:
+                ready = Path(directory) / 'ready'
+                source = ("import signal,time,sys; from pathlib import Path; "
+                    + ("signal.signal(signal.SIGINT, lambda *_: (print('saved-terminal-ledger', flush=True), sys.exit(0))); "
+                       if cooperative else "signal.signal(signal.SIGINT, signal.SIG_IGN); ")
+                    + "Path(sys.argv[1]).touch(); time.sleep(20)")
+                token = CancellationToken()
+                with ThreadPoolExecutor(1) as pool:
+                    pending = pool.submit(run_owned_process, [sys.executable, '-u', '-c', source, str(ready)], b'',
+                        deadline=time.time() + 5, cancellation=token, cancel_grace_s=0.2)
+                    for _ in range(100):
+                        if ready.exists():
+                            break
+                        time.sleep(0.01)
+                    self.assertTrue(ready.exists())
+                    token.cancel()
+                    if cooperative:
+                        stdout, _, code = pending.result(timeout=2)
+                        self.assertEqual(code, 0)
+                        self.assertIn(b'saved-terminal-ledger', stdout)
+                    else:
+                        with self.assertRaises(RunError) as caught:
+                            pending.result(timeout=2)
+                        self.assertEqual(caught.exception.code, 'run_cancelled')
+
     def test_factory_and_native_completed_candidates_resume_without_reexecution(self):
         import os
         import yaml

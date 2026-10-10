@@ -81,3 +81,5 @@ CLI 与 Web 的同配置运行产生相同的配置 fingerprint 规则，run_id 
 对应 FR-06/20/24/26/34～36；AC-20/23。
 
 批量矩阵、公共报告、预算与继续执行的已实现范围见 [S08](../development/s08-benchmark.md)。
+
+Web同时运行的可信插件不共享解释器；CLI应用进程隔离与有界合作取消见[S09](../development/s09-process-isolation.md)。

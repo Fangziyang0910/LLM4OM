@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import secrets
 import sys
+import tempfile
 import threading
 import time
 from typing import Any
@@ -20,14 +21,11 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 import zipfile
 
-from llm4om.application import run_problem, resume_run
 from llm4om.contracts import RunError, parse_json, public_path, read_public_bytes, validate_config, validate_problem, validate_data, parse_reference_json
 from llm4om.control import CancellationToken
 from llm4om.executors import run_owned_process
 from llm4om.experiments import cancel_experiment
-from llm4om.assisted import export_edit, edit_run
-from llm4om.plugins import discover_plugins
-from llm4om.preflight import prepare_run
+from llm4om.assisted import export_edit
 from llm4om.providers import credential_environment
 from llm4om.storage import cancel_run
 
@@ -45,6 +43,19 @@ def _identifier(value: str) -> str:
     if len(value) != 32 or any(char not in '0123456789abcdef' for char in value):
         raise RunError('invalid_request', 'web', 'Expected a workspace job ID.')
     return value
+
+
+def _application(arguments: list[str], *, deadline: float,
+                 cancellation: CancellationToken) -> dict[str, Any]:
+    raw, _, _ = run_owned_process([sys.executable, '-m', 'llm4om', *arguments], b'',
+        deadline=deadline, cancellation=cancellation, cancel_grace_s=10)
+    try:
+        result = parse_json(raw)
+    except RunError as error:
+        raise RunError('web_run_error', 'web', 'Application did not return a saved result.') from error
+    if result.get('error'):
+        raise RunError(result['error']['code'], 'web', result['error']['message'])
+    return result
 
 
 class WebWorkspace:
@@ -72,8 +83,16 @@ class WebWorkspace:
                 'max_solver_calls': 4, 'wall_time_s': 180, 'max_concurrency': 1},
             'store': {'plugin_id': 'llm4om.stores.filesystem', 'config': {'root': 'runs'}},
             'reporters': [{'plugin_id': 'llm4om.reporters.jsonl'}, {'plugin_id': 'llm4om.reporters.markdown'}]}
-        return {'config': config, 'plugins': [{'manifest': plugin.manifest, 'origin': plugin.origin}
-            for plugin in discover_plugins().values()], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
+        inventory = _application(['plugins', 'list'], deadline=time.time() + 30, cancellation=CancellationToken())
+        return {'config': config, 'plugins': inventory['plugins'], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
+
+    def doctor(self, config: dict[str, Any]) -> dict[str, Any]:
+        validate_config(config)
+        with tempfile.NamedTemporaryFile(prefix='.llm4om-web-doctor-', suffix='.json', dir=Path.cwd()) as temporary:
+            path = Path(temporary.name)
+            path.write_text(json.dumps(config, ensure_ascii=False, allow_nan=False))
+            return _application(['doctor', '--config', str(path)], deadline=time.time() + 30,
+                                cancellation=CancellationToken())
 
     def _tasks(self) -> dict[str, Path]:
         selected = {}
@@ -338,19 +357,25 @@ class WebWorkspace:
                     record['prior_runs'] = [path.name for path in (job / 'runs').glob('*') if path.is_dir()]
                     record['parent_run_id'] = (options or {})['parent_run_id']
                 _json_file(job / 'job.json', record)
+                config = parse_json((job / 'input/config.json').read_bytes())
+                deadline = time.time() + config['budget']['wall_time_s'] + 15
                 if action == 'edit':
                     opts = options or {}
                     edits_path = job / ('edits-' + uuid4().hex + '.json')
                     _json_file(edits_path, opts['edits'])
-                    result = edit_run(job / 'runs' / _identifier(opts['parent_run_id']), edits_path, cancellation=token)
+                    arguments = ['edit', '--run-id', _identifier(opts['parent_run_id']), '--output', str(job / 'runs'),
+                                 '--edits', str(edits_path)]
+                    deadline = time.time() + opts['edits']['budget']['wall_time_s'] + 15
                     record['description'] = opts['edits']['problem']['description']
                 elif action == 'run':
-                    result = run_problem(job / 'input/problem.json', job / 'input/config.json', output_root=job / 'runs',
-                        cancellation=token, interactive=True)
+                    arguments = ['run', '--problem', str(job / 'input/problem.json'), '--config', str(job / 'input/config.json'),
+                                 '--output', str(job / 'runs'), '--interactive']
                 else:
                     run = self._run_path(job_id)
                     if run is None:
                         raise RunError('not_found', 'web', 'No saved run is available to resume.')
+                    saved_config = parse_json((run / 'requested-config.json').read_bytes())
+                    deadline = time.time() + saved_config['budget']['wall_time_s'] + 15
                     opts = options or {}
                     answers = None
                     revised = None
@@ -360,13 +385,18 @@ class WebWorkspace:
                     if opts.get('revised_problem') is not None:
                         revised = job / 'input/revised-problem.json'
                         _json_file(revised, opts['revised_problem'])
-                    result = resume_run(run, cancellation=token, strategy=opts.get('strategy', 'continue'),
-                        answers=answers, revised_problem=revised)
-                record.update(status=result.status, run_id=result.run_id)
+                    arguments = ['resume', '--run-id', run.name, '--output', str(job / 'runs'),
+                                 '--strategy', opts.get('strategy', 'continue')]
+                    if answers is not None:
+                        arguments.extend(['--answers', str(answers)])
+                    if revised is not None:
+                        arguments.extend(['--revised-problem', str(revised)])
+                result = _application(arguments, deadline=deadline, cancellation=token)
+                record.update(status=result['status'], run_id=result['run_id'])
                 record.pop('prior_runs', None)
                 record.pop('error', None)
             except (Exception, SystemExit) as error:
-                record.update(status='failed', error={'code': error.code if isinstance(error, RunError) else 'web_run_error',
+                record.update(status='cancelled' if token.cancelled else 'failed', error={'code': error.code if isinstance(error, RunError) else 'web_run_error',
                     'message': str(error) if isinstance(error, RunError) else 'Cannot finish the local application request.'})
             finally:
                 record.pop('prior_runs', None)
@@ -536,7 +566,7 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                 elif address.path == '/api/jobs' and not mutation:
                     result = {'jobs': workspace.list_jobs()}
                 elif address.path == '/api/doctor' and mutation:
-                    result = {'preflight_ok': True, 'execution_plan': prepare_run(payload['config'], config_dir=Path.cwd()).snapshot}
+                    result = workspace.doctor(payload['config'])
                 elif address.path == '/api/jobs' and mutation:
                     result = workspace.submit(payload)
                 elif len(parts) >= 3 and parts[:2] == ['api', 'jobs']:

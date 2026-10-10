@@ -22,4 +22,20 @@ ExperimentSpec.tasks每项可指定case_ids，必须是原冻结manifest中已se
 
 无凭据GET与无效凭据POST探针当前通过直连／本机代理均得到HTTP401，说明这些瞬时探针的TLS／HTTP可连接；无法据此判断8次有效模型请求失败的根因。没有把失败归因于方法，也没有重发完整付费实验。inline变体通过本机synthetic HTTP与实际Gurobi验收：9次固定main响应、目标12、data.json空参数，检查9.387s通过；原main9项检查1.405s通过，显式case选择2.597s、兼容预检2.735s通过。源码41模块、240文件仓库和JS语法通过。
 
-顺序派生重跑已完成OptiMUS/NL4Opt实际接入：父run4dbf51e7d69b47198705c33635cc5e81保留失败，新runeda1ad611e5c4ccd812393803132ccfc使用相同公开case/config，固定main fidelity为match，实际Gurobi候选目标880。共20 attempts包含父未知attempt，已知37,054 Tokens＋原9,805预留，total/cost仍为null；2次源脚本尝试、3个Solver调用。其整数候选与Direct连续候选888.8888888888889的差异不解释为准确率，原NL4Opt域和独立最优参考仍未提供。首次9格结果不替换；其余7格以原父预算上限和原实验截止时间进行顺序派生，执行结果继续保存。
+顺序派生重跑已完成OptiMUS/NL4Opt实际接入：父run4dbf51e7d69b47198705c33635cc5e81保留失败，新runeda1ad611e5c4ccd812393803132ccfc使用相同公开case/config，固定main fidelity为match，实际Gurobi候选目标880。共20 attempts包含父未知attempt，已知37,054 Tokens＋原9,805预留，total/cost仍为null；2次源脚本尝试、3个Solver调用。其整数候选与Direct连续候选888.8888888888889的差异不解释为准确率，原NL4Opt域和独立最优参考仍未提供。首次9格结果不替换；其余7格在原父预算上限和原实验截止时间内顺序派生，现已全部结束；下表记录结果，不替换首次9格。
+
+
+## 顺序派生结果
+
+| Benchmark | 方法 | 结果 | 证据 |
+|---|---|---|---|
+| NL4Opt | OptiMUS inline | completed，候选目标880 | 固定main fidelity match；数值参考不可用 |
+| NL4Opt | CoE | collector_failed | 生成prob_problem仅return模型，没有optimize；退出成功不当作求解证据 |
+| MAMO | Direct | completed，目标10000 | run529f5e941db94a42994572f16f9d9b14；supplied_numeric_reference_match通过，独立语义未验证 |
+| MAMO | OptiMUS inline | provider_connection_error | 已知35,825 Tokens，继承及新增未知预留分别保留 |
+| MAMO | CoE | provider_connection_error | 已知10,110 Tokens，未产生候选 |
+| NLP4LP | Direct | provider_connection_error | 失败保留在原参考资格分母 |
+| NLP4LP | OptiMUS inline | provider_connection_error | 失败保留在原参考资格分母 |
+| NLP4LP | CoE | provider_connection_error | 失败保留在原参考资格分母 |
+
+这是显式rerun条件，父run、派生run与资源账本分别保存。派生账本包含父消耗，不能将两个账本相加解释为新增消耗；total_tokens与cost未知仍为null。顺序执行并未消除所有连接失败，因此并发不是已经证实的根因。没有自动补写CoE的optimize，也没有用隐藏评分选择另一个样本。三方法三基准的全部成功接入仍未完成。
