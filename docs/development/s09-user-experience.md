@@ -1,6 +1,6 @@
 # S09 用户建模界面
 
-用途：记录面向用户的单问题 Web 流程、实际支持和验收。状态：SDK／Worker0.33.0 开发实现。规范来源为 [插件契约](../plugin-contracts.md)、[阶段设计](../adr/0004-formulation-and-code.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。
+用途：记录面向用户的单问题 Web 流程、实际支持和验收。状态：SDK／Worker0.34.0 开发实现。规范来源为 [插件契约](../plugin-contracts.md)、[阶段设计](../adr/0004-formulation-and-code.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。
 
 ## 用户流程
 
@@ -110,3 +110,5 @@ Chrome通过原始13／派生5的版本切换、对应导出链接、原始父�
 本机Chrome使用既有真实Direct／HiGHS记录的隔离副本，核对利润／变量域需求原文、关联表、展开状态在轮询后保持、来源快照解析和390px布局；无页面错误、零POST。公开UI.records接口的合成输入分别验证待确认假设、警告、未知／未关联需求、其他候选声明不混入、无表述方法不借用其他IR，以及HTML文本不生成图片元素。合成输入不写入真实运行记录。入口tests/web_model_flow.cjs沿用本机浏览器环境变量；证据位于/tmp/llm4om-web-model-evidence。
 
 本轮只修改前端呈现，SDK／Worker仍0.33.0，Python运行身份和镜像不变。没有新增付费模型请求、求解、batch、全量回归或Actions。
+
+SDK／Worker0.34.0新增脱敏连接诊断，网页可以按已保存的attempt解释TLS、DNS、拒绝连接、重置和超时；旧失败无类别时仍显示通用错误，不事后猜测原因。实现、间歇性实际网络观察与本机复查入口见 [连接诊断](s05-connection-diagnostics.md)。

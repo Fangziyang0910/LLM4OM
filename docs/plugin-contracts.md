@@ -1284,6 +1284,14 @@ SDK／Worker0.33.0的详情响应增加data_previews，按data_id组织。metada
 
 模型视图的complete／kind／rows／total_rows与页面display_truncated分别呈现。完整模型视图仍可能在页面被截断；结构摘要不被标成完整数据。查看预览不触发Loader、模型或求解器，公共导出继续包含原已保存视图。
 
+## Provider连接诊断
+
+SDK／Worker0.34.0的Gateway公开attempt可增加connection_diagnostic，值限定为tls_certificate、tls_interrupted、tls_error、dns_error、connection_refused、connection_reset、timeout、connection_error。它描述传输异常类别；已有diagnostic错误码、status、usage、reservation和重试语义不变。旧记录可以省略此字段。
+
+隔离HTTP传输只返回固定类别，不返回原始异常文本、HTTP认证信息、请求正文、主机路径或凭据。Gateway校验类别、写入原资源journal并投影到llm-trace.json；未知结果仍保留预留。诊断不证明请求是否被供应方处理或计费，也不释放未知预算。恢复继续验证资源链；此可选字段不绕过SDK／源码／checkpoint身份检查。网页仅将当前错误码匹配的已保存attempt诊断解释为可读原因，旧记录沿用通用提示。
+
+实际网络观察和确定性复查入口见 [连接诊断](development/s05-connection-diagnostics.md)。
+
 ## 显式 Provider 代理
 
 SDK0.31.0的内置HTTPTextFactory配置可增加proxy_url，值为无认证信息的HTTP代理地址，仅允许根路径／无query／fragment。HTTPS目标使用标准CONNECT与TLS校验；SOCKS和代理URL认证未支持。缺省保持直连，环境HTTPS_PROXY不自动选择路由。声明代理时，隔离传输子进程清除NO_PROXY／no_proxy对路由的覆盖；调用进程环境不修改。重定向、共享账本、deadline、取消和未知attempt的恢复规则不变。

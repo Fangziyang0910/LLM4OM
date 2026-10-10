@@ -4,6 +4,10 @@ import asyncio
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import threading
 import unittest
 from unittest.mock import patch
@@ -13,6 +17,51 @@ from llm4om.providers import OpenAICompatibleFactory, AnthropicFactory
 
 
 class ProviderProxyTests(unittest.TestCase):
+    def test_tls_interruption_is_publicly_diagnosable_without_releasing_unknown_usage(self):
+        class BrokenTunnel(BaseHTTPRequestHandler):
+            def do_CONNECT(self):
+                self.send_response(200)
+                self.end_headers()
+                self.close_connection = True
+            def log_message(self, *args): pass
+        server = ThreadingHTTPServer(('127.0.0.1', 0), BrokenTunnel)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            import yaml
+            project = Path(__file__).resolve().parents[1]
+            with tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                config = yaml.safe_load((project / 'examples/specs/run.yaml').read_text())
+                config['executor'] = {'plugin_id': 'llm4om.executors.trusted_local', 'config': {}}
+                config['budget']['max_total_tokens'] = 20000
+                config['llm'] = {'provider_plugin_id': 'llm4om.providers.openai_compatible', 'model': 'tls-diagnostic-fixture',
+                    'config': {'base_url': 'https://example.invalid/v1', 'credential_env': 'TLS_DIAGNOSTIC_KEY',
+                        'proxy_url': f'http://127.0.0.1:{server.server_port}', 'max_retries': 0, 'timeout_s': 5,
+                        'max_output_tokens': 512}}
+                path = root / 'run.yaml'
+                path.write_text(yaml.safe_dump(config))
+                result = subprocess.run([sys.executable, '-m', 'llm4om', 'run', '--problem', str(project / 'examples/specs/problem.json'),
+                    '--config', str(path), '--output', str(root / 'runs')], cwd=root, capture_output=True, text=True,
+                    env={**os.environ, 'TLS_DIAGNOSTIC_KEY': 'synthetic-tls-key', 'PYTHONPATH': str(project / 'src')}, timeout=15)
+                self.assertEqual(result.returncode, 1)
+                run = Path(json.loads(result.stdout)['bundle_path'])
+                bundle = json.loads((run / 'bundle.json').read_text())
+                self.assertEqual(bundle['error']['code'], 'provider_connection_error', bundle['error'])
+                trace = json.loads((run / 'llm-trace.json').read_text())['attempts']
+                self.assertEqual(len(trace), 1)
+                self.assertEqual(trace[0]['connection_diagnostic'], 'tls_interrupted')
+                self.assertEqual(trace[0]['status'], 'unknown')
+                self.assertGreater(trace[0]['reservation'], 0)
+                ledger = json.loads((run / 'budget-ledger.json').read_text())
+                self.assertEqual(ledger['external_llm_requests'], 1)
+                self.assertIsNone(ledger['total_tokens'])
+                self.assertEqual(ledger['solver_calls'], 0)
+                public = '\n'.join(file.read_text() for file in run.rglob('*.json'))
+                self.assertNotIn('synthetic-tls-key', public)
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def test_both_protocols_use_explicit_proxy_even_with_no_proxy(self):
         requests = []
         class Proxy(BaseHTTPRequestHandler):

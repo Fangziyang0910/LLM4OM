@@ -1104,10 +1104,37 @@ const UI = (() => {
         "历史结果仍可查看。新的执行需要使用当前版本的配置。",
       ],
     };
-    const [title, detail] = advice[error.code] || [
-      "这次建模未完成",
-      "查看已保存的步骤和诊断，修改输入或配置后再执行。",
-    ];
+    const connection = snapshot.contents?.["llm-trace.json"]?.attempts
+      ?.filter(
+        (item) => item.diagnostic === error.code && item.connection_diagnostic,
+      )
+      .at(-1);
+    const diagnosis = {
+      tls_interrupted: [
+        "模型服务的 TLS 连接被中断",
+        "检查服务或显式代理的连接路线。请求用量可能未知，原记录已保留。",
+      ],
+      tls_certificate: [
+        "模型服务证书校验失败",
+        "检查服务证书与本机可信证书配置，再创建新运行。",
+      ],
+      tls_error: ["模型服务的 TLS 连接失败", "检查服务和代理的 TLS 连接配置。"],
+      dns_error: ["模型服务域名解析失败", "检查服务地址和使用路线的 DNS。"],
+      connection_refused: [
+        "模型服务连接被拒绝",
+        "检查服务或代理是否正在监听配置的地址和端口。",
+      ],
+      connection_reset: [
+        "模型服务连接被重置",
+        "检查服务或显式代理的连接路线。请求用量可能未知。",
+      ],
+      timeout: advice.provider_timeout,
+    };
+    const [title, detail] = diagnosis[connection?.connection_diagnostic] ||
+      advice[error.code] || [
+        "这次建模未完成",
+        "查看已保存的步骤和诊断，修改输入或配置后再执行。",
+      ];
     const section = node("div", "failure-summary");
     section.append(
       node("span", "eyebrow", "RUN NEEDS ATTENTION"),

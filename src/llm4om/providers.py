@@ -5,6 +5,8 @@ import hashlib
 import json
 import os
 import re
+import socket
+import ssl
 import subprocess
 import signal
 import sys
@@ -84,6 +86,26 @@ class _NoRedirect(HTTPRedirectHandler):
 def _connection_code(error: Exception) -> str:
     reason = error.reason if isinstance(error, URLError) else error
     return "provider_timeout" if isinstance(reason, TimeoutError) else "provider_connection_error"
+
+
+_CONNECTION_DIAGNOSTICS = frozenset({'tls_certificate', 'tls_interrupted', 'tls_error', 'dns_error',
+    'connection_refused', 'connection_reset', 'timeout', 'connection_error'})
+
+
+def _connection_diagnostic(error: Exception) -> str:
+    reason = error.reason if isinstance(error, URLError) else error
+    for classes, diagnostic in [
+        ((ssl.SSLCertVerificationError,), 'tls_certificate'),
+        ((ssl.SSLEOFError, ssl.SSLZeroReturnError), 'tls_interrupted'),
+        ((ssl.SSLError,), 'tls_error'),
+        ((socket.gaierror,), 'dns_error'),
+        ((ConnectionRefusedError,), 'connection_refused'),
+        ((ConnectionResetError,), 'connection_reset'),
+        ((TimeoutError,), 'timeout'),
+    ]:
+        if isinstance(reason, classes):
+            return diagnostic
+    return 'connection_error'
 
 
 def _reply_usage(value: dict[str, Any]) -> dict[str, Any]:
@@ -411,6 +433,7 @@ def _public_trace(attempts: list[dict[str, Any]]) -> list[dict[str, Any]]:
               "diagnostic", "status", "response_id", "response_sha256", "model", "finish_reason",
               "provider_request_id", "cost", "usage")
     return [{**{field: item[field] for field in fields},
+             **({"connection_diagnostic": item["connection_diagnostic"]} if "connection_diagnostic" in item else {}),
              **({"stop_reason": item["stop_reason"]} if "stop_reason" in item else {})} for item in attempts]
 
 
@@ -470,7 +493,7 @@ def _resource_state(archive: Path, *, expected: str | None = None,
                         continue
                     changed += 1
                     mutable = {"end", "diagnostic", "status", "response_id", "response_sha256", "model",
-                               "finish_reason", "stop_reason", "provider_request_id", "usage", "reservation", "reply", "raw_reply"}
+                               "finish_reason", "stop_reason", "provider_request_id", "usage", "reservation", "reply", "raw_reply", "connection_diagnostic"}
                     if (before["status"] != "unknown" or before["end"] is not None
                             or any(after.get(key) != value for key, value in before.items() if key not in mutable)
                             or (after["status"] != "success" and after["reservation"] != before["reservation"])):
@@ -482,6 +505,9 @@ def _resource_state(archive: Path, *, expected: str | None = None,
             elif attempts:
                 raise ValueError("Resource genesis must be empty.")
             for item in attempts:
+                if 'connection_diagnostic' in item and (not isinstance(item['connection_diagnostic'], str)
+                        or item['connection_diagnostic'] not in _CONNECTION_DIAGNOSTICS):
+                    raise ValueError('Invalid public connection diagnostic.')
                 if (type(item["reservation"]) is not int or item["reservation"] < 0
                         or item["status"] not in {"unknown", "success"}
                         or any(value is not None and (type(value) is not int or value < 0) for value in item["usage"].values())):
@@ -722,6 +748,7 @@ class Gateway:
                 self._save(state)
             reply = None
             code = None
+            connection_diagnostic = None
             retryable = False
             try:
                 reply = await _supervise(provider.acomplete(
@@ -733,14 +760,20 @@ class Gateway:
                 error.close()
             except (TimeoutError, URLError, ConnectionError, OSError) as error:
                 code = _connection_code(error)
+                connection_diagnostic = _connection_diagnostic(error)
                 retryable = code != "provider_timeout"
             except RunError as error:
                 code = error.code
+                candidate_diagnostic = (error.details or {}).get('connection_diagnostic')
+                if isinstance(candidate_diagnostic, str) and candidate_diagnostic in _CONNECTION_DIAGNOSTICS:
+                    connection_diagnostic = candidate_diagnostic
                 retryable = code in {"rate_limit", "provider_error", "provider_connection_error"}
             with _resource_lock(self.archive):
                 state = self._load()
                 item = next(item for item in state["attempts"] if item["attempt_id"] == attempt_id)
                 item.update(end=time.time(), diagnostic=code, status="success" if reply is not None else "unknown")
+                if connection_diagnostic is not None:
+                    item['connection_diagnostic'] = connection_diagnostic
                 if reply is not None:
                     item.update({key: value for key, value in reply.items() if key != "text"})
                     item["reply"] = reply["text"]
@@ -758,7 +791,8 @@ class Gateway:
                 self.cancellation.check()
                 return self._response(item)
             if not retryable or retry == provider.max_retries:
-                raise RunError(code or "provider_error", "llm", "Provider request failed; outcome and charge may be unknown.")
+                raise RunError(code or "provider_error", "llm", "Provider request failed; outcome and charge may be unknown.",
+                    details={'connection_diagnostic': connection_diagnostic} if connection_diagnostic is not None else None)
             delay = min(0.1 * 2 ** retry, 1.0)
             if remaining <= delay:
                 raise RunError("deadline_exhausted", "llm", "No shared deadline remains for a retry.")
@@ -829,7 +863,9 @@ def _transport_result(raw: bytes) -> dict[str, Any]:
     if "http_status" in value:
         raise HTTPError("", value["http_status"], "Provider HTTP request failed.", Message(), None)
     if "error" in value:
-        raise RunError(value["error"], "llm", "Provider request failed; outcome and charge may be unknown.")
+        diagnostic = value.get('connection_diagnostic')
+        details = {'connection_diagnostic': diagnostic} if isinstance(diagnostic, str) and diagnostic in _CONNECTION_DIAGNOSTICS else None
+        raise RunError(value["error"], "llm", "Provider request failed; outcome and charge may be unknown.", details=details)
     result: dict[str, Any] = value["reply"]
     return result
 
@@ -853,7 +889,7 @@ def _transport_main() -> None:
         error.close()
         result = {"http_status": status}
     except (TimeoutError, URLError, ConnectionError, OSError) as error:
-        result = {"error": _connection_code(error)}
+        result = {"error": _connection_code(error), "connection_diagnostic": _connection_diagnostic(error)}
     except RunError as error:
         result = {"error": error.code}
     sys.stdout.buffer.write(json.dumps(result, allow_nan=False).encode())
