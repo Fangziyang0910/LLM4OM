@@ -21,6 +21,96 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       if (request.method() === "POST") mutations.push(request.url());
     });
     await page.goto(url);
+    await page.waitForFunction(
+      () => !document.querySelector("#data-files").disabled,
+    );
+    const jobsBefore = await page.evaluate(
+      async () => (await (await fetch("/api/jobs")).json()).jobs.length,
+    );
+    await page.locator("#data-files").setInputFiles([
+      {
+        name: "notes.csv",
+        mimeType: "text/csv",
+        buffer: Buffer.from(
+          'label,note,amount\n"A, special","first\nsecond",003\n' +
+            Array.from(
+              { length: 24 },
+              (_, index) =>
+                `item${index},<img src=x onerror=alert(1)>,${index}\n`,
+            ).join(""),
+        ),
+      },
+      {
+        name: "settings.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(
+          '{"capacity":8,"costs":[3,2],"enabled":false,"unknown":null}',
+        ),
+      },
+    ]);
+    await page.locator(".upload-preview").nth(1).waitFor();
+    const uploadCards = page.locator(".upload-card");
+    assert.deepEqual(
+      await uploadCards.first().locator("th").allTextContents(),
+      ["label", "note", "amount"],
+    );
+    assert.deepEqual(
+      await uploadCards
+        .first()
+        .locator("tbody tr")
+        .first()
+        .locator("td")
+        .allTextContents(),
+      ["A, special", "first\nsecond", "003"],
+    );
+    assert.equal(await uploadCards.first().locator("tbody tr").count(), 20);
+    assert.match(await uploadCards.first().innerText(), /20 \/ 25/);
+    assert.equal(await uploadCards.locator("img").count(), 0);
+    assert.deepEqual(
+      await uploadCards
+        .nth(1)
+        .locator("tbody tr")
+        .nth(2)
+        .locator("td")
+        .allTextContents(),
+      ["enabled", "false"],
+    );
+    assert.deepEqual(
+      await uploadCards
+        .nth(1)
+        .locator("tbody tr")
+        .nth(3)
+        .locator("td")
+        .allTextContents(),
+      ["unknown", "null"],
+    );
+    assert.equal(
+      await page.evaluate(
+        async () => (await (await fetch("/api/jobs")).json()).jobs.length,
+      ),
+      jobsBefore,
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+      false,
+    );
+    if (process.env.LLM4OM_WEB_SCREENSHOTS)
+      await page.screenshot({
+        path: path.join(
+          process.env.LLM4OM_WEB_SCREENSHOTS,
+          "upload-mobile.png",
+        ),
+        fullPage: true,
+      });
+    await uploadCards
+      .first()
+      .getByRole("button", { name: "移除", exact: true })
+      .click();
+    assert.equal(await uploadCards.count(), 1);
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.waitForSelector(".job");
     await page.locator(".job").first().click();
     await page.waitForSelector(".objective-result strong");
@@ -94,9 +184,12 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       false,
     );
     assert.deepEqual(errors, []);
-    assert.deepEqual(mutations, []);
+    assert.deepEqual(
+      mutations.map((address) => new URL(address).pathname),
+      ["/api/data-preview", "/api/data-preview"],
+    );
     console.log(
-      "Actual saved products/capacities tables, full-view scope, source hashes, raw record folded, polling and mobile: passed; zero POST/model calls.",
+      "Upload CSV/JSON previews and saved tables, bounded display, safe text/values, no new jobs, polling and mobile: passed; only two local preview POSTs, zero model/Solver calls.",
     );
   } finally {
     await browser.close();

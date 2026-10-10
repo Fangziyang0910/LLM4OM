@@ -441,6 +441,20 @@ details textarea {
   border-radius: 8px;
   margin-bottom: 12px;
 }
+.upload-preview {
+  max-height: 250px;
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+.upload-preview td {
+  white-space: pre-wrap;
+}
+.file-button:has(input:disabled) {
+  opacity: 0.55;
+  cursor: wait;
+}
 .upload-meta {
   display: flex;
   align-items: center;

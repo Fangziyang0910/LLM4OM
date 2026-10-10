@@ -46,6 +46,31 @@ def _identifier(value: str) -> str:
     return value
 
 
+def _data_preview(raw: bytes, format_name: str, *, total_items: int | None = None) -> dict[str, Any]:
+    if len(raw) > MAX_FILE or format_name not in {'csv', 'json'}:
+        raise RunError('invalid_data', 'web', 'Preview CSV or object JSON files up to8 MiB.')
+    try:
+        if format_name == 'csv':
+            reader = csv.reader(StringIO(raw.decode('utf-8')), strict=True)
+            header = next(reader)
+            columns = header[:16]
+            rows = [row[:16] for row in islice(reader, 20)]
+            if total_items is None:
+                total_items = len(rows) + sum(1 for _ in reader)
+            truncated = len(header) > 16 or total_items > len(rows)
+        else:
+            value = parse_json(raw)
+            columns = ['字段', '值']
+            rows = [[key, json.dumps(item, ensure_ascii=False, allow_nan=False)] for key, item in islice(value.items(), 20)]
+            total_items = len(value)
+            truncated = total_items > len(rows)
+    except (UnicodeDecodeError, csv.Error, StopIteration) as error:
+        raise RunError('invalid_data', 'web', 'Cannot preview this file as UTF-8 CSV or object JSON.') from error
+    truncated = truncated or any(len(cell) > 256 for row in rows for cell in row)
+    return {'columns': columns, 'rows': [[cell[:256] + '…' if len(cell) > 256 else cell for cell in row] for row in rows],
+            'total_items': total_items, 'display_truncated': truncated}
+
+
 def _application(arguments: list[str], *, deadline: float,
                  cancellation: CancellationToken) -> dict[str, Any]:
     raw, _, _ = run_owned_process([sys.executable, '-m', 'llm4om', *arguments], b'',
@@ -518,23 +543,7 @@ class WebWorkspace:
         if isinstance(data_views, dict):
             for data_id, view in data_views.get('views', {}).items():
                 raw = self.read_ref(run, view['content_ref'])
-                if view['format'] == 'csv':
-                    reader = csv.reader(StringIO(raw.decode('utf-8')), strict=True)
-                    header = next(reader)
-                    columns = header[:16]
-                    rows = [row[:16] for row in islice(reader, 20)]
-                    total_items = view['rows']
-                    truncated = len(header) > 16 or total_items > len(rows)
-                else:
-                    value = parse_json(raw)
-                    columns = ['字段', '值']
-                    rows = [[key, json.dumps(item, ensure_ascii=False, allow_nan=False)] for key, item in islice(value.items(), 20)]
-                    total_items = len(value)
-                    truncated = total_items > len(rows)
-                truncated = truncated or any(len(cell) > 256 for row in rows for cell in row)
-                previews[data_id] = {'metadata': view, 'columns': columns,
-                    'rows': [[cell[:256] + '…' if len(cell) > 256 else cell for cell in row] for row in rows],
-                    'total_items': total_items, 'display_truncated': truncated}
+                previews[data_id] = {'metadata': view, **_data_preview(raw, view['format'], total_items=view['rows'])}
         return {'job': record, 'bundle': bundle, 'events': events, 'artifacts': refs, 'contents': contents,
                 'versions': self.versions(job_id), 'latest_run_id': latest.name if latest else None, 'historical': historical,
                 'data_previews': previews}
@@ -652,6 +661,10 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                     result = {'jobs': workspace.list_jobs()}
                 elif address.path == '/api/doctor' and mutation:
                     result = workspace.doctor(payload['config'], check_connectivity=payload.get('check_connectivity', False))
+                elif address.path == '/api/data-preview' and mutation:
+                    raw = base64.b64decode(payload['base64'], validate=True)
+                    result = _data_preview(raw, payload['format'])
+                    result.update(source_sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
                 elif address.path == '/api/jobs' and mutation:
                     result = workspace.submit(payload)
                 elif len(parts) >= 3 and parts[:2] == ['api', 'jobs']:

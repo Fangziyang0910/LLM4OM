@@ -192,3 +192,15 @@ SDK0.36.0的结果页直接展示严格IR目标函数中各变量的贡献卡片
 增删保留已有表单数值、修改原因与累计预算，五元素表述和严格IR同步。后续提交仍走原Compiler／assisted流程，生成派生run，父产物保留。原生或自由文本表述继续使用其已有编辑入口；新增变量和现有表达式的变量项仍在高级完整文档中处理。
 
 本机浏览器在已有目标13的临时副本中修改既有数值，添加x_A≤0，再添加并移除另一条新约束。同步后的模型具有两个原约束和一个新约束，A=0、B=1、常数1与B贡献2，经真实容器HiGHS得到3。原版bundle bytes保持，结果标记assisted，模型请求不增加、Solver增加1；预算／原因保留与390px布局通过。入口沿用`tests/web_model_edit_flow.cjs`，证据在`/tmp/llm4om-constraint-editor-evidence`。SDK／Worker0.36.0保持，未新增后端接口、依赖或测试框架，未跑全量回归、batch或Actions。
+
+## 开始建模前的数据预览
+
+上传CSV／JSON后，输入区直接显示表头／字段和值。CSV保留前导零与单元格换行，JSON以明确文本显示数组、布尔和null。页面最多展示20行或字段、16列和每格前256字符，截断时显示实际总数；完整原始bytes仍用于提交。修改数据ID或移除文件沿用原操作。
+
+上传和已保存DataView共用现有解析规则。`POST /api/data-preview`接受格式与base64文件内容，沿用同源／token检查和8MiB单文件限制，只返回有界表格、大小和源hash；不持久化文件、不创建run、不调用模型或Solver。此预览表示上传文件，不冒充方法实际使用的DataView。schema验证仍由已有提交入口完成。
+
+上传控件在初始化取得服务token后启用，避免页面刚打开时发送未准备好的请求。测试过程中发现这一时序并在实际入口修正，未放宽服务端检查。
+
+本机43模块类型检查通过。沿用一次公共HTTP检查：新预览保持CSV特殊字符／003／总25行，预览后jobs为空；随后既有数据经工程回复和真实容器HiGHS得到13，保存视图与来源保持。浏览器在已有运行临时副本中通过两个上传预览、20／25截断、false／null、安全文本、移除、已有结果数据页与390px无溢出；仅两个本机预览POST，零新增run／模型／Solver调用。入口仍为`tests/test_web_data_previews.py`和`tests/web_data_flow.cjs`，证据在`/tmp/llm4om-upload-preview-evidence`。
+
+SDK／Worker仍0.36.0，这次改变宿主Web入口；Worker求解代码与镜像保持。未添加依赖、接口框架或新测试套件，未执行全量回归、batch或Actions。

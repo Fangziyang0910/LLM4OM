@@ -62,6 +62,11 @@ class WebDataPreviewTests(unittest.TestCase):
                         'Content-Type': 'application/json', 'X-LLM4OM-Token': bootstrap['token']}), timeout=10) as response:
                         return json.load(response)
                 config = bootstrap['config']
+                preview = api('/api/data-preview', {'format': 'csv', 'base64': base64.b64encode(uploads[2][2]).decode()})
+                self.assertEqual(preview['rows'][0], ['A, special', 'first\nsecond', '003'])
+                self.assertEqual(preview['total_items'], 25)
+                self.assertTrue(preview['display_truncated'])
+                self.assertEqual(api('/api/jobs')['jobs'], [])
                 config['llm'] = {'provider_plugin_id': 'llm4om.providers.openai_compatible', 'model': 'data-preview-fixture',
                     'config': {'base_url': f'http://127.0.0.1:{provider.server_port}/v1', 'credential_env': 'DATA_PREVIEW_TEST_KEY',
                         'max_retries': 0, 'max_output_tokens': 8192, 'timeout_s': 10}}

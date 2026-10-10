@@ -246,7 +246,9 @@ function renderUploads() {
     const details = document.createElement("details"),
       summary = document.createElement("summary");
     summary.textContent =
-      "数据 schema（CSV 默认为原始字符串，可明确声明数值／唯一键）";
+      upload.format === "csv"
+        ? "高级：列类型与唯一键（CSV 默认保留原始字符串）"
+        : "高级：数据 schema";
     const schema = document.createElement("textarea");
     schema.rows = 6;
     schema.value = upload.schema ? pretty(upload.schema) : "";
@@ -261,7 +263,30 @@ function renderUploads() {
       }
     };
     details.append(summary, schema);
-    card.append(meta, details);
+    card.append(meta);
+    if (upload.preview) {
+      const preview = upload.preview;
+      const table = UI.node("div", "table-scroll upload-preview");
+      UI.list(
+        table,
+        preview.rows,
+        preview.columns.map((column, index) => [column, (row) => row[index]]),
+      );
+      card.append(
+        table,
+        UI.node(
+          "p",
+          "hint",
+          preview.display_truncated
+            ? `显示 ${preview.rows.length} / ${preview.total_items} 行或字段，最多16列；长文本只显示前256字符。完整文件会用于提交。`
+            : `共 ${preview.total_items} 行或字段。预览保留原始值，不改变提交的数据。`,
+        ),
+      );
+    } else
+      card.append(
+        UI.node("p", "hint", upload.previewError || "正在读取文件预览…"),
+      );
+    card.append(details);
     $("uploads").append(card);
   });
 }
@@ -633,13 +658,23 @@ $("data-files").onchange = async (event) => {
     let binary = "";
     for (let start = 0; start < bytes.length; start += 16384)
       binary += String.fromCharCode(...bytes.subarray(start, start + 16384));
-    uploads.push({
+    const upload = {
       name: file.name,
       size: file.size,
       data_id: file.name.replace(/\.[^.]+$/, ""),
       format: file.name.toLowerCase().endsWith(".csv") ? "csv" : "json",
       base64: btoa(binary),
-    });
+    };
+    uploads.push(upload);
+    renderUploads();
+    try {
+      upload.preview = await api("/api/data-preview", {
+        format: upload.format,
+        base64: upload.base64,
+      });
+    } catch (error) {
+      upload.previewError = "文件预览未完成：" + error.message;
+    }
   }
   renderUploads();
 };
@@ -756,6 +791,7 @@ async function start() {
     const params = new URLSearchParams(location.search);
     const result = await api("/api/bootstrap");
     token = result.token;
+    $("data-files").disabled = false;
     config = result.config;
     plugins = result.plugins;
     showConfig();
