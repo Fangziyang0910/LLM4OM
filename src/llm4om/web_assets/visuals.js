@@ -1919,6 +1919,13 @@ const UI = (() => {
   function revision(container, template, ledger) {
     container.replaceChildren();
     const fields = [];
+    let readDraft = draft;
+    const changeConstraints = (change) => {
+      const value = draft(false);
+      change(value.structured_ir.constraints);
+      synchronizeFormulation(value);
+      readDraft = revision(container, value, ledger);
+    };
     function field(
       label,
       value,
@@ -2073,6 +2080,12 @@ const UI = (() => {
       });
       ir.constraints.forEach((item, index) => {
         const grid = group("约束 · " + item.id);
+        const remove = node("button", "secondary", "移除约束");
+        remove.type = "button";
+        remove.setAttribute("aria-label", "移除约束 " + item.id);
+        remove.onclick = () =>
+          changeConstraints((rows) => rows.splice(index, 1));
+        grid.parentElement.firstElementChild.append(remove);
         const path = ["structured_ir", "constraints", index];
         linearFields(grid, item.id, item.expression, [...path, "expression"]);
         addField(grid, item.id + " · 关系", item.sense, [...path, "sense"], {
@@ -2086,6 +2099,34 @@ const UI = (() => {
           number: true,
         });
       });
+      const add = node("button", "secondary", "＋ 添加约束");
+      add.type = "button";
+      add.onclick = () =>
+        changeConstraints((rows) => {
+          let index = 1;
+          while (rows.some((item) => item.id === "C_USER_" + index)) index++;
+          rows.push({
+            id: "C_USER_" + index,
+            expression: {
+              constant: 0,
+              terms: ir.variables.map((item) => ({
+                variable_id: item.id,
+                coefficient: 0,
+              })),
+            },
+            sense: "le",
+            rhs: 0,
+            requirement_ids: [],
+          });
+        });
+      container.append(
+        add,
+        node(
+          "p",
+          "hint",
+          "新约束请填写变量系数、关系和右侧值。修改将保存为人工辅助的新版本。",
+        ),
+      );
     } else
       container.append(
         node(
@@ -2145,42 +2186,7 @@ const UI = (() => {
         JSON.stringify(value.structured_ir) !==
           JSON.stringify(template.structured_ir)
       ) {
-        const ir = value.structured_ir;
-        ir.problem_type = ir.variables.every(
-          (item) => item.domain === "continuous",
-        )
-          ? "lp"
-          : "milp";
-        if (value.formulation?.representation_kind === "five_element") {
-          const text = (expression) =>
-            [
-              expression.constant,
-              ...expression.terms.map(
-                (term) => `${term.coefficient}*${term.variable_id}`,
-              ),
-            ].join(" + ");
-          const representation = value.formulation.representation;
-          representation.variables = ir.variables.map(
-            ({ id, domain, lower_bound, upper_bound, requirement_ids }) => ({
-              id,
-              index_sets: [],
-              domain,
-              lower_bound,
-              upper_bound,
-              requirement_ids,
-            }),
-          );
-          representation.objective = {
-            sense: ir.objective.sense,
-            expression_text: text(ir.objective.expression),
-            requirement_ids: ir.objective.requirement_ids,
-          };
-          representation.constraints = ir.constraints.map((item) => ({
-            id: item.id,
-            expression_text: `${text(item.expression)} ${{ le: "<=", ge: ">=", eq: "=" }[item.sense]} ${item.rhs}`,
-            requirement_ids: item.requirement_ids,
-          }));
-        }
+        synchronizeFormulation(value);
       }
       if (validate) {
         if (
@@ -2214,8 +2220,45 @@ const UI = (() => {
       );
       return value;
     }
+    function synchronizeFormulation(value) {
+      const ir = value.structured_ir;
+      ir.problem_type = ir.variables.every(
+        (item) => item.domain === "continuous",
+      )
+        ? "lp"
+        : "milp";
+      if (value.formulation?.representation_kind !== "five_element") return;
+      const text = (expression) =>
+        [
+          expression.constant,
+          ...expression.terms.map(
+            (term) => `${term.coefficient}*${term.variable_id}`,
+          ),
+        ].join(" + ");
+      const representation = value.formulation.representation;
+      representation.variables = ir.variables.map(
+        ({ id, domain, lower_bound, upper_bound, requirement_ids }) => ({
+          id,
+          index_sets: [],
+          domain,
+          lower_bound,
+          upper_bound,
+          requirement_ids,
+        }),
+      );
+      representation.objective = {
+        sense: ir.objective.sense,
+        expression_text: text(ir.objective.expression),
+        requirement_ids: ir.objective.requirement_ids,
+      };
+      representation.constraints = ir.constraints.map((item) => ({
+        id: item.id,
+        expression_text: `${text(item.expression)} ${{ le: "<=", ge: ">=", eq: "=" }[item.sense]} ${item.rhs}`,
+        requirement_ids: item.requirement_ids,
+      }));
+    }
     draft(false);
-    return () => draft(true);
+    return () => readDraft(true);
   }
   return {
     node,

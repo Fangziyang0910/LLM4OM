@@ -54,7 +54,21 @@ assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
       await page.getByLabel(label, { exact: true }).fill(value);
     await page
       .getByLabel("修改原因", { exact: true })
-      .fill("调整目标系数与常数、变量上界和资源限制，检查严格IR表单修订。");
+      .fill("调整已有数值，并新增 x_A ≤ 0 约束，检查普通表单的结构修订。");
+    await page
+      .getByRole("button", { name: "＋ 添加约束", exact: true })
+      .click();
+    await page.getByLabel("C_USER_1 · x_A 系数", { exact: true }).fill("1");
+    await page
+      .getByRole("button", { name: "＋ 添加约束", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "移除约束 C_USER_2", exact: true })
+      .click();
+    assert.match(
+      await page.getByLabel("修改原因", { exact: true }).inputValue(),
+      /新增/,
+    );
     const draft = JSON.parse(
       await page.locator("#assisted-document").inputValue(),
     );
@@ -67,6 +81,14 @@ assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
     assert.match(
       draft.formulation.representation.constraints[0].expression_text,
       /<= 3$/,
+    );
+    assert.deepEqual(
+      draft.structured_ir.constraints.map((item) => item.id),
+      ["C_CUTTING", "C_FINISHING", "C_USER_1"],
+    );
+    assert.match(
+      draft.formulation.representation.constraints.at(-1).expression_text,
+      /1\*x_A.*<= 0$/,
     );
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(
@@ -108,7 +130,7 @@ assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
     );
     await page.waitForFunction(
       () =>
-        document.querySelector(".objective-result strong")?.textContent === "7",
+        document.querySelector(".objective-result strong")?.textContent === "3",
       null,
       { timeout: 20000 },
     );
@@ -128,7 +150,7 @@ assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
     );
     assert.deepEqual(errors, []);
     console.log(
-      "Readable strictIR editing → real container HiGHS7, synchronized Formulation, immutable parent13, assisted result, zero new model requests, mobile passed.",
+      "Readable strictIR constraint add/remove → real container HiGHS3, synchronized Formulation, preserved edits/reason, immutable parent13, assisted result, zero new model requests, mobile passed.",
     );
   } finally {
     await browser.close();

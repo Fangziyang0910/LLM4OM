@@ -1538,6 +1538,13 @@ pre {
   border-radius: 12px;
   background: #fbfdfb;
 }
+.revision-model-group h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
 .revision-model-group .revision-field {
   margin: 8px 0;
 }
