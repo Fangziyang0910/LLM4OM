@@ -1,6 +1,6 @@
 # LLM4OM 开发规范
 
-适用于仓库文档、数据、维护工具和未来平台实现。工作流程见 [CONTRIBUTING](CONTRIBUTING.md)；领域语言以 [GLOSSARY](GLOSSARY.md)为准。
+适用于仓库文档、数据、维护工具和平台实现。工作流程见 [CONTRIBUTING](CONTRIBUTING.md)；领域语言以 [GLOSSARY](GLOSSARY.md)为准。
 
 ## 1. Module、Interface 与 Adapter
 

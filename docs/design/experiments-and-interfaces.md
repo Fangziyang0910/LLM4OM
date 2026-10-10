@@ -58,11 +58,11 @@ head／核心锚点仍在旧版本而 journal 已有新 settlement 是合法崩�
 | list_plugins / doctor | 环境与配置 | 能力列表、检查结果、兼容路径 |
 | run_problem | ProblemSpec + RunConfig | run_id + RunBundle |
 | run_experiment | ExperimentSpec | experiment_id + 进度与逐样本结果 |
-| inspect_run / inspect_candidate | ID | 已保存的模型、代码、数据绑定与记录 |
+| Web查询／读取公开产物 | 运行／候选标识 | 已保存的模型、代码、数据绑定与记录 |
 | cancel_run / resume_run | ID 与明确恢复策略 | 新状态或派生运行引用 |
-| render_report / export_bundle | ID 与格式 | 报告或公开产物包 |
+| report_run / report_experiment、Web公开导出 | 已保存运行／实验 | 报告或公开产物包 |
 
-表中名称是应用用例，最终 SDK 命名在 S01 实现时落实。CLI 命令规划保持 README 中的 run/benchmark/resume/report；inspect 可以先通过 run 结果路径提供，无需增加未验证命令。
+SDK已提供prepare_run、run_problem、run_experiment、cancel_run、resume_run及报告入口；具体参数以导出函数为准。CLI已有run／benchmark／resume／report，查询与公开导出通过已保存产物和Web入口提供。
 
 ### Web 页面与领域信息
 

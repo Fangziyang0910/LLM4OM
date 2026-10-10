@@ -1,6 +1,6 @@
 # LLM4OM 详细设计索引
 
-文档修订：0.4.0；日期：2026-10-08。详细设计按任务分支阅读；S01／S02-A／S03 及 S04-B 当前取消／恢复范围已实现；其余能力按开发计划推进。字段以 [接口契约](plugin-contracts.md)为准，系统职责见 [架构设计](architecture.md)，领域定义见 [GLOSSARY](../GLOSSARY.md)。
+设计基线修订：0.4.0。当前实现状态与验收证据见[开发计划](implementation-plan.md)和[README](../README.md)。字段以[接口契约](plugin-contracts.md)为准，系统职责见[架构设计](architecture.md)，领域定义见[GLOSSARY](../GLOSSARY.md)。本索引组织设计内容，不另维护一份实现状态。
 
 DD 编号用于需求与验收追踪。每个页面说明时序与不变量，避免重复定义契约字段；开发前同时读取相关 FR 和 AC。
 

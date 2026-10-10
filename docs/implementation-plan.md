@@ -150,17 +150,21 @@ flowchart LR
     S09B --> S10
 ```
 
-S01／S02-A／S03／[S04-A](development/s04-container.md)／[S05-A](development/s05-provider.md) 和 [S07-A](development/s07-nl4opt.md) 已完成当前范围。[S02-B](development/s02b-factory.md) 也已完成当前范围。[S06-A](development/s06-gurobi.md) 已完成当前范围。[S04-B](development/s04-resume.md)与 [S05-B](development/s05b-messages.md)已完成当前范围，本机241项集成回归及独立审查通过。[S06-B](development/s06b-optimus.md) 已实现固定源码默认流程，真实模型／Solver 和干净 wheel 安装已验收，263项完整本机回归已通过，独立审阅因本机 Codex CLI 用量上限尚未完成。S07-B/C 已接入并完成本机验收，独立审阅仍待完成。S07-D 原问题检查实现见 [记录](development/s07-checkers.md)。[S06-C](development/s06-coe.md) 已通过真实模型、独立原问题检查和306项本机回归，独立审阅仍待完成。S05-C/D 的当前实现见下方切片记录，独立审阅仍待完成；未完成范围仍包括完整插件注册、S08、S09 与 S10。NL4Opt 已经真实外部模型、容器求解和独立审阅后修复，本地证据见切片记录。工作项与实际证据分别关联 GitHub Issues；互不阻塞的任务可以并行。
+当前SDK／Worker为0.36.0开发版本。单问题CLI／SDK／Web、外部Provider、HiGHS／微型Gurobi、Direct／反馈修正／固定OptiMUS／CoE、三个首批任务来源、批量调度与报告已有实现。各版本的支持组合与验收证据保留在对应切片记录；[用户界面](development/s09-user-experience.md)包含当前输入、真实步骤、数据、模型、决策与派生编辑。
+
+仍需完成ArtifactStore独立替换、待补的独立审阅、完整混合故障／基准比较与S10发布验收。当前按用户指令优先推进核心流程和Web，批量评测与底层扩展暂缓；完整1.0目标和验收范围保持。当前外部接口可达性以实际请求记录为依据，不由历史成功或Mock推定。
+
+2026-10-10按用户要求暂停开发，将现有代码与文档统一到main，并关闭当前全部PR和Issue。关闭工作项是本次仓库整理，不代表未完成能力已实现或完整1.0验收通过。后续工作以本计划与[验收清单](acceptance.md)为依据。当前两次最新真实LLM请求均在连接阶段失败，未进入求解；恢复开发时需先恢复真实核心流程。
 
 ## 5. 工程默认值与完成边界
 
-S01 采用 Python 3.11／3.12、标准库 argparse／dataclass／unittest，以及已有 PyYAML／jsonschema；依赖由 pyproject.toml 与 uv.lock 管理。维护工具复用这些依赖，类型检查使用开发依赖 mypy。Pyomo 6.10.1／highspy 1.15.1 已通过可选 solve extra 接入 S02-A，Web 实现另行选择。文件和事件优先，确有查询需要时再引入 SQLite。方法可自行依赖 Agent 框架，核心不强制依赖它。
+S01 采用 Python 3.11／3.12、标准库 argparse／dataclass／unittest，以及已有 PyYAML／jsonschema；依赖由 pyproject.toml 与 uv.lock 管理。维护工具复用这些依赖，类型检查使用开发依赖 mypy。Pyomo 6.10.1／highspy 1.15.1 已通过可选 solve extra 接入 S02-A，Web使用已有标准库HTTP入口和HTML／CSS／JavaScript。文件和事件优先，确有查询需要时再引入 SQLite。方法可自行依赖 Agent 框架，核心不强制依赖它。
 
 LLMOPT 等训练类工作的流程／提示变体、MCTS autoformulation、ORPilot、IndustryOR／OptMATH 及 NLP／CP 留待首批契约被真实验证后扩展。每个新增方法、Solver 或 benchmark 都需要声明实际支持组合与来源。
 
-S07-C 当前已贯通固定 MAMO 导入、公开资格冻结与单样本数值比较；已完成规范来源的真实 HiGHS 微型验收，包／Worker／干净 wheel 安装及268项本机完整回归已通过，独立审阅仍待完成。见 [实现记录](development/s07-mamo.md)，Issue22 保持打开。
+S07-C 当前已贯通固定 MAMO 导入、公开资格冻结与单样本数值比较；已完成规范来源的真实 HiGHS 微型验收，包／Worker／干净 wheel 安装及268项本机完整回归已通过，独立审阅仍待完成。见 [实现记录](development/s07-mamo.md)。
 
-S07-B 当前已贯通 NLP4LP 固定发布导入、公开 JSON 参数／私有参考隔离与资格冻结；361个原始问题完整导入，322／37／2参考可用性分别记录。真实指定模型／容器 HiGHS 已验收（两次试运行含一次连接失败），273项完整本机回归已通过，独立审阅仍待完成。见 [实现记录](development/s07-nlp4lp.md)，Issue21 保持打开。
+S07-B 当前已贯通 NLP4LP 固定发布导入、公开 JSON 参数／私有参考隔离与资格冻结；361个原始问题完整导入，322／37／2参考可用性分别记录。真实指定模型／容器 HiGHS 已验收（两次试运行含一次连接失败），273项完整本机回归已通过，独立审阅仍待完成。见 [实现记录](development/s07-nlp4lp.md)。
 
 [S05-D1角色模型配置](development/s05-role-models.md)已通过实际指定模型／Messages角色覆盖、HiGHS和314项本机回归，独立审阅仍待完成。该组件不替代S05-D澄清；公共反馈与修正的实现由S05-C1/C2记录。
 
