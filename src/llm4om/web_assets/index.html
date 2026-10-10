@@ -232,7 +232,24 @@
             <div id="method-timeline"></div>
           </aside>
           <div class="output-column">
+            <div id="clarification" class="panel" hidden>
+              <h2>需要你补充一点信息</h2>
+              <p class="hint">
+                确认已有声明可继续当前运行。补充或修改规则会创建问题的新版本，原记录会保留。
+              </p>
+              <div id="clarification-questions"></div>
+              <details id="clarification-preview" hidden>
+                <summary>查看将要提交的问题修订</summary>
+                <pre id="clarification-description"></pre>
+              </details>
+              <button id="answer-submit" class="primary">提交回答并继续</button>
+              <details class="raw-record">
+                <summary>查看原始澄清请求</summary>
+                <pre id="clarification-request"></pre>
+              </details>
+            </div>
             <div id="decision" class="panel"></div>
+            <div id="step-output" class="panel" hidden></div>
             <div class="tabs" role="tablist">
               <button class="tab active" data-tab="formulation">数学模型</button
               ><button class="tab" data-tab="code">求解代码</button
@@ -248,15 +265,6 @@
                 <summary>查看原始记录</summary>
                 <pre id="artifact-content"></pre>
               </details>
-            </div>
-            <div id="clarification" class="panel" hidden>
-              <h2>需要澄清</h2>
-              <pre id="clarification-request"></pre>
-              <label for="answers">版本化回答 JSON</label
-              ><textarea id="answers" rows="8"></textarea
-              ><button id="answer-submit" class="primary">
-                提交回答并恢复
-              </button>
             </div>
           </div>
         </div>

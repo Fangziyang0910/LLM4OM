@@ -29,3 +29,34 @@ Formulation 和 Code 保持两个建模阶段。Solve 表示求解。跨阶段�
 外部模型可产生不完整或错误建模输出，页面保存实际失败和诊断；本切片没有改变方法算法、训练权重或独立评估协议。
 
 本机记录：公共HTTP进展1项通过（3.503s）；CoE方法6项与OptiMUS方法9项通过（合计约1.4s）；42模块类型检查、252文件仓库检查与JS语法检查通过。Chrome页面实际容器HiGHS求解13，变量关联、选中保持、原始记录折叠、代码与390px窄屏通过，无页面错误。Worker0.30.0身份为`sha256:41549f695a5a7fef3fc7f7a2decfecaf4abe24bc9c4dee41e5984ad3901fd268`。截图和逐项观察保存在本机`/tmp/llm4om-web-experience-evidence`，不提交运行数据。
+
+## 澄清、失败和角色输出
+
+前端增强继续使用SDK／Worker0.30.0，不修改方法算法或Python运行身份，也不重建镜像。
+
+反馈修正方法可以提出澄清。页面直接显示已保存的问题及原声明，用户选择确认，或填写完整的修订／补充文本。提交绑定原request_id。全部确认时继续同一run；新信息或修改声明时，页面显示将提交的问题描述，使用已有revised_problem接口创建新revision／派生run。原数据绑定和父历史保留。修订已存在的需求或假设时更新其原条目；新信息作为明确的用户需求保存。其他方法仍按各自声明，不因此声称支持澄清。
+
+结果区分别展示表述结构、代码接口／构建、原问题可行性、参考目标匹配和业务语义证据。卡片来自已保存evaluation，缺失项目显示未提供。失败区解释实际错误code；运行详情保留诊断。点击CoE角色可展开该角色已保存的专家意见，多轮输出分别保留；这些意见不替代最终数学表述。
+
+本机Chrome实际通过确认原声明→同run容器HiGHS13，以及补充A≤2→新revision／run容器HiGHS12。父bundle bytes保持不变；空回答被阻止；修订描述提交前可见；缺失独立检查仍显示未提供。真实历史超时与CoE专家输出的可读呈现也已观察。
+
+### 本机复查入口
+
+使用已安装的Playwright和Chrome，不触发GitHub Actions。先在一个终端启动确定性服务；workspace必须为空，不使用项目.env：
+
+```bash
+uv run --locked --extra solve python tests/helpers/web_guidance_server.py --workspace /tmp/llm4om-web-guidance-fixture
+```
+
+另一个终端执行，按本机安装填写Playwright模块和Chrome路径：
+
+```bash
+LLM4OM_BROWSER_MODULE=/path/to/playwright \
+LLM4OM_BROWSER_EXECUTABLE=/path/to/chrome \
+LLM4OM_WEB_TEST_URL=http://127.0.0.1:8774 \
+LLM4OM_WEB_TEST_PROVIDER_URL=http://127.0.0.1:8775/v1 \
+LLM4OM_WEB_TEST_WORKSPACE=/tmp/llm4om-web-guidance-fixture/jobs \
+node tests/web_clarification_flow.cjs
+```
+
+此入口只接受本机fixture地址，生成确定性回复并调用已有真实HiGHS。它验证交互和工程流程，不证明外部LLM建模质量。结束后在服务终端按Ctrl-C；运行记录位于临时workspace。

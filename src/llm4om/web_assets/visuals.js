@@ -579,6 +579,33 @@ const UI = (() => {
           content.append(
             node("small", "step-detail", item.actor || "应用流程"),
           );
+        const output = document.getElementById("step-output");
+        const comments = Object.entries(snapshot.contents || {}).flatMap(
+          ([name, value]) =>
+            Array.isArray(value?.comments)
+              ? value.comments
+                  .filter(
+                    (comment) =>
+                      Array.isArray(comment) &&
+                      comment[0] === item.actor &&
+                      typeof comment[1] === "string",
+                  )
+                  .map((comment) => ({ name, text: comment[1] }))
+              : [],
+        );
+        output.hidden = !comments.length;
+        output.replaceChildren();
+        if (comments.length) {
+          output.append(
+            node("h3", "", roleLabel(item.actor) + " · 已保存的角色输出"),
+          );
+          comments.forEach((comment) => {
+            const details = node("details"),
+              summary = node("summary", "", comment.name.split("/").at(-1));
+            details.append(summary, node("pre", "", comment.text));
+            output.append(details);
+          });
+        }
       };
       container.append(row);
     }
@@ -590,9 +617,206 @@ const UI = (() => {
         ? "正在执行方法步骤"
         : "已保存 " + items.size + " 个过程记录");
   }
-  function decision(container, solve, solution, ledger) {
+  function clarification(container, request, problem) {
     container.replaceChildren();
+    container.dataset.requestId = request.request_id;
+    const fields = request.questions.map((question, index) => {
+      const group = node("fieldset", "clarification-question");
+      group.append(node("legend", "", question.question));
+      const input = node("textarea");
+      input.rows = 3;
+      input.maxLength = 4096;
+      input.id = "clarification-answer-" + index;
+      let choice = null;
+      if (question.kind === "confirm_existing") {
+        group.append(
+          node("p", "existing-statement", "原声明：" + question.statement),
+        );
+        choice = node("select");
+        choice.setAttribute("aria-label", question.question);
+        for (const [value, label] of [
+          ["", "请选择"],
+          ["confirm", "确认原声明"],
+          ["replace", "修改这项声明"],
+        ]) {
+          const option = node("option", "", label);
+          option.value = value;
+          choice.append(option);
+        }
+        group.append(choice);
+        input.hidden = true;
+        choice.onchange = () => {
+          input.hidden = choice.value !== "replace";
+          label.hidden = input.hidden;
+          preview();
+        };
+      }
+      const label = node(
+        "label",
+        "",
+        question.kind === "confirm_existing"
+          ? "修改后的完整声明"
+          : "你的补充信息",
+      );
+      label.htmlFor = input.id;
+      label.hidden = input.hidden;
+      input.placeholder = "请直接描述规则、数值和单位。";
+      group.append(label, input);
+      container.append(group);
+      input.oninput = () => preview();
+      return { question, input, choice };
+    });
+    function submission() {
+      const answers = fields.map(({ question, input, choice }) => {
+        if (choice && !choice.value) throw new Error("请回答所有澄清问题。");
+        const value = choice?.value === "confirm" ? true : input.value.trim();
+        if (value !== true && (!value || value.length > 4096))
+          throw new Error("请填写完整的补充或修订信息，最多4096个字符。");
+        return { question_id: question.question_id, value };
+      });
+      const revise = answers.some((answer) => answer.value !== true);
+      const response = {
+        schema_version: "0.1.0",
+        request_id: request.request_id,
+        action: revise ? "revise" : "confirm",
+        answers,
+      };
+      if (!revise) return { answers: response };
+      const revised = structuredClone(problem);
+      revised.revision =
+        problem.revision + ".clarification-" + request.request_id.slice(0, 8);
+      const changes = [];
+      fields.forEach(({ question }, index) => {
+        const answer = answers[index];
+        if (answer.value === true) return;
+        if (question.kind === "confirm_existing") {
+          const source = revised[
+            question.statement_ref.kind === "requirement"
+              ? "requirements"
+              : "assumptions"
+          ].find((item) => item.id === question.statement_ref.id);
+          if (!source)
+            throw new Error("原声明不在当前公开问题中，无法提交修订。");
+          source.text = answer.value;
+          if (question.statement_ref.kind === "assumption") {
+            source.status = "confirmed";
+            source.origin = "user_clarification";
+          }
+          if ("source_span" in source) source.source_span = null;
+          changes.push(
+            "修订原声明（" + question.statement + "）：" + answer.value,
+          );
+        } else {
+          revised.requirements.push({
+            id: "CLARIFY-" + request.request_id.slice(0, 8) + "-" + (index + 1),
+            text: answer.value,
+            category: "other",
+            source_span: null,
+          });
+          changes.push(question.question + "\n" + answer.value);
+        }
+      });
+      revised.description +=
+        "\n\n本次问题修订（以下规则替代有冲突的原声明）：\n" +
+        changes.join("\n");
+      return { answers: response, revised_problem: revised };
+    }
+    function preview() {
+      try {
+        const payload = submission();
+        document.getElementById("clarification-preview").hidden =
+          !payload.revised_problem;
+        document.getElementById("clarification-description").textContent =
+          payload.revised_problem?.description || "";
+        document.getElementById("answer-submit").textContent =
+          payload.revised_problem ? "确认修订并继续" : "确认声明并继续";
+      } catch {
+        document.getElementById("clarification-preview").hidden = true;
+        document.getElementById("answer-submit").textContent = "提交回答并继续";
+      }
+    }
+    preview();
+    return submission;
+  }
+  function checks(container, evaluation) {
+    const section = node("section", "result-checks");
+    section.append(node("h3", "", "模型检查"));
+    for (const [key, label] of [
+      ["formulation_validation", "表述结构"],
+      ["code_validation", "代码接口 / 构建"],
+      ["independent_feasibility", "原问题可行性"],
+      ["objective_match", "参考目标匹配"],
+      ["semantic_validation", "业务语义证据"],
+    ]) {
+      const result = evaluation?.[key];
+      const row = node("div", "check-row");
+      row.append(
+        node("span", "", label),
+        node(
+          "span",
+          "pill " + (result?.status === "pass" ? "success" : "muted"),
+          {
+            pass: "通过",
+            fail: "未通过",
+            error: "检查异常",
+            not_available: "未提供",
+          }[result?.status] || "未提供",
+        ),
+      );
+      if (result?.reason) row.title = result.reason;
+      section.append(row);
+    }
+    container.append(section);
+  }
+  function failure(container, snapshot) {
+    const error = snapshot?.job?.error || snapshot?.bundle?.error;
+    if (!error) return false;
+    const advice = {
+      provider_timeout: [
+        "模型服务响应超时",
+        "检查模型服务状态与请求时限，再决定是否创建新运行。",
+      ],
+      provider_connection_error: [
+        "暂时无法连接模型服务",
+        "检查服务地址和连接。已保存的记录会保留。",
+      ],
+      auth_error: ["模型服务认证失败", "检查服务端配置的凭据。"],
+      llm_output_truncated: [
+        "模型输出未生成完整",
+        "调整输出上限或简化问题后重新建模。",
+      ],
+      budget_exhausted: [
+        "本次运行已达到预算上限",
+        "查看实际消耗，调整预算后创建新的运行。",
+      ],
+      checkpoint_incompatible: [
+        "保存记录与当前版本不兼容",
+        "历史结果仍可查看。新的执行需要使用当前版本的配置。",
+      ],
+    };
+    const [title, detail] = advice[error.code] || [
+      "这次建模未完成",
+      "查看已保存的步骤和诊断，修改输入或配置后再执行。",
+    ];
+    const section = node("div", "failure-summary");
+    section.append(
+      node("span", "eyebrow", "RUN NEEDS ATTENTION"),
+      node("h2", "", title),
+      node("p", "hint", detail),
+      node("code", "failure-code", error.code),
+    );
+    const button = node("button", "secondary", "查看运行详情");
+    button.onclick = () =>
+      document.querySelector('[data-tab="diagnostics"]').click();
+    section.append(button);
+    container.append(section);
+    return true;
+  }
+  function decision(container, solve, solution, ledger, snapshot) {
+    container.replaceChildren();
+    const failed = failure(container, snapshot);
     if (!solve) {
+      if (failed) return;
       empty(
         container,
         "求解结果将在这里出现",
@@ -664,6 +888,7 @@ const UI = (() => {
         ),
       );
     }
+    checks(container, snapshot?.contents?.["evaluation.json"]);
     container.append(
       node(
         "p",
@@ -680,6 +905,7 @@ const UI = (() => {
     records,
     timeline,
     decision,
+    clarification,
     empty,
   };
 })();

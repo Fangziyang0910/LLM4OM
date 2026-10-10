@@ -9,6 +9,7 @@ let token = "",
   snapshot = null,
   activeTab = "formulation",
   artifactSelectedByUser = false,
+  clarificationSubmission = null,
   renderFingerprint = "";
 artifactSelectedByUser = false;
 const pretty = (value) =>
@@ -74,7 +75,7 @@ function showConfig() {
     "llm4om.methods.coe":
       "由协调者选择专家，进行建模讨论、代码生成与审查。页面展示实际参与的角色。",
     "llm4om.methods.feedback_repair":
-      "生成候选模型，依据公开执行反馈修正，并保存候选与选择关系。",
+      "遇到缺失或含糊的规则时可以先向你提问。生成候选模型后，依据公开执行反馈修正，并保存候选与选择关系。",
   };
   $("method-explainer").textContent =
     explanations[config.method.plugin_id] ||
@@ -230,6 +231,7 @@ async function refreshJobs() {
   }
 }
 async function openJob(id) {
+  $("step-output").hidden = true;
   snapshot = null;
   renderFingerprint = "";
   $("artifact-choice").replaceChildren();
@@ -263,11 +265,15 @@ function showArtifact(value) {
     $("artifact-content").textContent = text;
   if (
     value === undefined &&
-    ["running", "queued"].includes(snapshot?.job?.status)
+    ["running", "queued", "needs_input"].includes(snapshot?.job?.status)
   ) {
     UI.empty(
       $("model-view"),
-      activeTab === "code" ? "求解实现正在形成" : "建模输出正在形成",
+      snapshot.job.status === "needs_input"
+        ? "补充信息后继续建模"
+        : activeTab === "code"
+          ? "求解实现正在形成"
+          : "建模输出正在形成",
       "完成的公开产物会自动出现在这里。可以在左侧查看当前的实际步骤。",
     );
     return;
@@ -394,7 +400,13 @@ async function refreshRun() {
     )?.[0];
   const solve = contents[publicValue(bundle?.solve_result_ref)];
   const solution = contents[publicValue(solve?.solution_ref)];
-  UI.decision($("decision"), solve, solution, contents["budget-ledger.json"]);
+  UI.decision(
+    $("decision"),
+    solve,
+    solution,
+    contents["budget-ledger.json"],
+    snapshot,
+  );
   UI.timeline(snapshot);
   if (bundle?.error || job.error)
     notice(
@@ -403,19 +415,25 @@ async function refreshRun() {
     );
   $("export").href = `/api/jobs/${currentJob}/export`;
   $("export").hidden = !bundle;
-  const request = Object.entries(contents).find(
-    ([name]) =>
-      name.startsWith("clarifications/") && name.endsWith("request.json"),
-  )?.[1];
+  const request = contents[publicValue(bundle?.clarification_request_ref)];
   $("clarification").hidden = job.status !== "needs_input";
-  if (request) $("clarification-request").textContent = pretty(request);
+  if (
+    request &&
+    $("clarification-questions").dataset.requestId !== request.request_id
+  ) {
+    $("clarification-request").textContent = pretty(request);
+    clarificationSubmission = UI.clarification(
+      $("clarification-questions"),
+      request,
+      contents["public-problem.json"],
+    );
+  }
   renderArtifact();
   $("cancel").hidden = !["running", "queued"].includes(job.status);
-  $("resume").hidden = !["failed", "cancelled", "needs_input"].includes(
-    job.status,
-  );
+  $("resume").hidden = !["failed", "cancelled"].includes(job.status);
 }
 $("new-run").onclick = () => {
+  $("step-output").hidden = true;
   currentExperiment = null;
   $("experiment-editor").hidden = true;
   $("experiment-result").hidden = true;
@@ -540,12 +558,16 @@ for (const [id, action] of [
   };
 $("answer-submit").onclick = async () => {
   try {
-    await api(`/api/jobs/${currentJob}/resume`, {
-      answers: JSON.parse($("answers").value),
-    });
+    if (!clarificationSubmission) throw new Error("澄清请求尚未加载。");
+    const payload = clarificationSubmission();
+    $("answer-submit").disabled = true;
+    await api(`/api/jobs/${currentJob}/resume`, payload);
     notice("回答已提交，正在恢复。");
+    await refreshRun();
   } catch (error) {
     notice(error.message, true);
+  } finally {
+    $("answer-submit").disabled = false;
   }
 };
 document.querySelectorAll(".tab").forEach(

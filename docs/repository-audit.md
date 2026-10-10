@@ -302,3 +302,6 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/web_assets/visuals.js` | 用户数学模型、代码、实际步骤和决策可视化 | 安全DOM、公开记录、实际最终引用、浏览器交互与窄屏 |
 | `tests/test_web_progress.py` | 运行中公开进展与完成求解的HTTP验收 | 确定性responder、真实HiGHS、凭据与私有状态不暴露 |
 | `docs/development/s09-user-experience.md` | 用户界面流程、支持与验收 | 公共步骤契约、真实／fixture证据、当前优先级 |
+
+| `tests/web_clarification_flow.cjs` | 用户澄清表单的本机浏览器验收 | 本机fixture地址、确认／显式修订、真实HiGHS、父记录与缺失证据 |
+| `tests/helpers/web_guidance_server.py` | 独立临时Web与确定性澄清responder | 空workspace、合成凭据、明确fixture身份、不修改项目.env |
