@@ -111,6 +111,21 @@ class ExperimentTests(unittest.TestCase):
         self.assertEqual(len(summary['excluded_cells']), 1)
         self.assertEqual(len(summary['groups']), 2)
 
+    def test_case_selection_is_frozen_and_unknown_case_fails_before_running(self):
+        case_id = json.loads(self.manifest.read_text())['cases'][0]['case_id']
+        self.spec['tasks'][0]['case_ids'] = ['unselected-case']
+        self.write(self.path, self.spec)
+        with self.assertRaises(RunError):
+            run_experiment(self.path, self.root / 'batch', offline=True)
+        self.assertFalse((self.root / 'batch/runs').exists())
+        self.spec['tasks'][0]['case_ids'] = [case_id]
+        self.write(self.path, self.spec)
+        summary = run_experiment(self.path, self.root / 'batch', offline=True)
+        self.assertEqual([group['N_selected'] for group in summary['groups']], [1, 1])
+        snapshot = json.loads((self.root / 'batch/experiment.json').read_text())
+        self.assertEqual(snapshot['cells'][0]['N_manifest_selected'], 1)
+        self.assertEqual([row['case_id'] for row in snapshot['cells'][0]['cases']], [case_id])
+
     def test_resume_rejects_changed_mock_input_without_more_work(self):
         output = self.root / 'batch'
         run_experiment(self.path, output, offline=True)

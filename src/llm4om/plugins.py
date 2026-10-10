@@ -18,7 +18,7 @@ import jsonschema
 
 from llm4om.control import _supervise
 from llm4om.methods import DirectFactory, MethodContext, MethodOutcome
-from llm4om.optimus import OptimusFactory
+from llm4om.optimus import OptimusFactory, OptimusInlineFactory
 from llm4om.contracts import RunError, parse_json, reject_additional_refs
 
 
@@ -113,7 +113,7 @@ def discover_plugins() -> dict[tuple[str, str], Plugin]:
     from llm4om.data_loaders import PublicDataFactory
     from llm4om.assisted import AssistedFactory
     plugins: dict[tuple[str, str], Plugin] = {}
-    for builtin in (DirectFactory(), OptimusFactory(), CoEFactory(), FeedbackRepairFactory(), AssistedFactory(),
+    for builtin in (DirectFactory(), OptimusFactory(), OptimusInlineFactory(), CoEFactory(), FeedbackRepairFactory(), AssistedFactory(),
                     MockFactory(), OpenAICompatibleFactory(), AnthropicFactory(), *builtin_factories(), LPIRPyomoFactory(),
                     PyomoBackendFactory(), GurobiBackendFactory(), HighsSolverFactory(), GurobiSolverFactory(), PublicDataFactory()):
         manifest = _manifest(builtin)

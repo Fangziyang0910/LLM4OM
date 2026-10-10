@@ -14,6 +14,7 @@ from llm4om.methods import DirectFactory, MethodContext, MethodOutcome, ModelPro
 
 COMMIT = "e182e9ef5841605c2a7e87467021fd83522b6484"
 VARIANT = "optimus0.3-source_main-ec_true-rag_none-external_chat"
+INLINE_VARIANT = "optimus0.3-source_main-inline_public-ec_true-rag_none-external_chat"
 
 
 class OptimusMethod:
@@ -27,16 +28,30 @@ class OptimusMethod:
             raise RunError("capability_mismatch", "admission", "OptiMUS requires mediated script/artifact resources.")
         if self.config["rag_mode"] is not None:
             raise RunError("rag_resources_unavailable", "admission", "Requested RAG has no admitted rights-cleared compatible corpus/index/embedding resources.")
-        identity = {"schema_version": "0.1.0", "source_commit": COMMIT, "variant": VARIANT,
+        inline = self.config.get("public_input_mode", "provided_json") == "inline_public"
+        variant = INLINE_VARIANT if inline else VARIANT
+        identity = {"schema_version": "0.1.0", "source_commit": COMMIT, "variant": variant,
                     "problem_sha256": context.problem_sha256, "config": self.config}
         if checkpoint is not None and checkpoint != identity:
             raise RunError("checkpoint_incompatible", "admission", "OptiMUS replay checkpoint identity changed.")
         context.cancellation.check()
-        try:
-            params_raw = context.data[self.config["params_data_id"]]
-            labels_raw = context.data[self.config["labels_data_id"]]
-        except KeyError as error:
-            raise RunError("invalid_method_input", "admission", "Explicit public parameter and label data are required.") from error
+        description = problem["description"]
+        if inline:
+            params_raw, labels_raw = b"{}", b"{}"
+            public_data = {key: raw.decode("utf-8") for key, raw in context.data.items()}
+            if public_data:
+                description += "\nPublic problem data (original bytes as text):\n" + json.dumps(public_data, ensure_ascii=False)
+            description += "\nNo external parameter declarations are supplied. Use the public description and data values directly; data.json has no parameter entries."
+        else:
+            try:
+                params_raw = context.data[self.config["params_data_id"]]
+                labels_raw = context.data[self.config["labels_data_id"]]
+            except KeyError as error:
+                raise RunError("invalid_method_input", "admission", "Explicit public parameter and label data are required.") from error
+        resources.record("public-input-projection.json", json.dumps({"schema_version": "0.1.0", "public_input_mode": "inline_public" if inline else "provided_json",
+            "variant_id": variant, "description_sha256": hashlib.sha256(description.encode()).hexdigest(),
+            "data_sha256": {key: hashlib.sha256(raw).hexdigest() for key, raw in context.data.items()},
+            "parameter_declarations": "empty_inline_literals" if inline else "provided_public_json"}, ensure_ascii=False).encode())
         params, labels = parse_json(params_raw), parse_json(labels_raw)
         if any(not isinstance(value, dict) or not {"value", "shape", "definition"} <= value.keys() for value in params.values()):
             raise RunError("invalid_method_input", "admission", "Supplied parameters require value, shape and definition.")
@@ -65,7 +80,7 @@ class OptimusMethod:
             await writer.drain()
         try:
             await send({"files": {"params.json": params_raw.decode(), "labels.json": labels_raw.decode(),
-                                  "desc.txt": problem["description"]}})
+                                  "desc.txt": description}})
             while True:
                 context.cancellation.check()
                 remaining = deadline - time.time()
@@ -138,7 +153,8 @@ class OptimusMethod:
             return MethodOutcome("failed", None, None)
         source = files[selected]
         state = parse_json(files["state_6_code.json"])
-        provenance = {"origin": "source_native", "upstream_commit": COMMIT, "variant_id": VARIANT,
+        provenance = {"origin": "source_native", "upstream_commit": COMMIT, "variant_id": variant,
+                      "public_input_mode": "inline_public" if inline else "provided_json",
                       "source_model": "gpt-4o", "actual_model": "configured_shared_gateway",
                       "paper_coverage": "fixed_source_main_not_entire_paper_algorithm", "rag_mode": None,
                       "error_correction": True, "max_source_executions": 3,
@@ -187,3 +203,18 @@ class OptimusFactory:
 
     def create(self, config: dict[str, Any]) -> OptimusMethod:
         return OptimusMethod(config)
+
+
+class OptimusInlineFactory(OptimusFactory):
+    def describe(self) -> dict[str, Any]:
+        manifest = super().describe()
+        manifest.update(plugin_id="llm4om.methods.optimus_inline", display_name="OptiMUS0.3 inline-public input variant",
+            description="Fixed main workflow with empty parameter declarations and all public values in description; no hidden labels.")
+        manifest["source"].update(variant_id=INLINE_VARIANT,
+            adaptation="fixed_source_main_empty_parameter_declarations_inline_public_values")
+        manifest["config_schema"] = {"type": "object", "additionalProperties": False, "required": ["rag_mode"],
+            "properties": {"rag_mode": {"const": None}}}
+        return manifest
+
+    def create(self, config: dict[str, Any]) -> OptimusMethod:
+        return OptimusMethod({**config, "public_input_mode": "inline_public"})

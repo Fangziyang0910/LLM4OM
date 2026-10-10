@@ -92,3 +92,5 @@ DataLoader的共同注册、原始数据与有限视图分别记录，见 [S03-C
 网页批量提交、进度、逐样本比较与公共导出见 [S09-B](development/s09-batch-web.md)。
 
 人工辅助修订、父历史和编辑预算见 [S09-C](development/s09-assisted-edits.md)。
+
+三方法共同公开输入与接入比较见[S08-B](development/s08-common-input.md)。

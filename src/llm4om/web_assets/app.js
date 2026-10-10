@@ -73,14 +73,19 @@ function readConfig() {
 }
 function chooseMethod() {
   const method = $("method").value;
-  if (method === "llm4om.methods.optimus") {
+  if (
+    ["llm4om.methods.optimus", "llm4om.methods.optimus_inline"].includes(method)
+  ) {
     config.method = {
       plugin_id: method,
-      config: {
-        rag_mode: null,
-        params_data_id: "params",
-        labels_data_id: "labels",
-      },
+      config:
+        method === "llm4om.methods.optimus_inline"
+          ? { rag_mode: null }
+          : {
+              rag_mode: null,
+              params_data_id: "params",
+              labels_data_id: "labels",
+            },
     };
     config.model_backend.plugin_id = "llm4om.model_backends.gurobipy";
     config.solver.plugin_id = "llm4om.solvers.gurobi";

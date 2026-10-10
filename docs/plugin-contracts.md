@@ -1249,3 +1249,9 @@ SDK0.26.0的`export_edit(run, operation)`与`edit_run(run, edits)`使用公开Ed
 人工修改建立新run和assisted_revision lineage，保存parent_run_id、父checkpoint/公开产物、parent_budget_ledger、parent_resource_records与编辑原因。问题编辑需新revision，Code-only不改来源数学表述。父候选和付费/未知预算继承，新增候选计数；新总上限显式变化记入lineage。RunBundle.assisted与budget-ledger.evidence_origin=assisted、方法human_assisted声明区分手工辅助和自动建模；分组报告N_assisted保留该区别。
 
 公开源代码通过共同表示契约与容器执行。CompiledCode的原ConcreteModel工厂在编辑模板中公开加入保存symbol-map的ModelHandle适配，原bytes仍在父记录；人工编辑不伪称原确定性编译。CodeArtifact.provenance.generation记录user_edited，严格IR新编译仍记录真实Compiler来源。
+
+## OptiMUS公开输入变体与实验case选择
+
+SDK0.27.0提供`llm4om.methods.optimus_inline`，配置为`{rag_mode: null}`。固定main读取空params.json／labels.json，原始公开数据追加到描述；原参数声明接口仍由`llm4om.methods.optimus`提供，不默认替换。variant_id为optimus0.3-source_main-inline_public-ec_true-rag_none-external_chat，输入策略／有效描述hash／原数据hash保存在public-input-projection.json。主流程未增加LLM参数提取，也不注入参考材料。
+
+ExperimentSpec.tasks的`{id, manifest}`可增加case_ids，表示原冻结selected案例的明确子集。资格、oracle、原manifest均不修改；具体共同case在实验快照冻结。N_selected为该实验子集，N_manifest_selected保留原总数；不同方法不按结果删样本。

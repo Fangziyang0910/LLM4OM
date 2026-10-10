@@ -282,3 +282,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_assisted_edits.py` | SDK/CLI人工编辑行为 | 实际HiGHS/Gurobi、容器、父不可变、预算与负例 |
 | `tests/test_web_assisted.py` | 公共HTTP编辑流程 | Problem revision、Code、实际Solver、请求计数与父记录 |
 | `docs/development/s09-assisted-edits.md` | 人工修订使用与支持记录 | 契约、真实入口证据与未验收范围 |
+
+| `tests/test_optimus_inline.py` | 明确输入变体的公共Method契约 | 固定main fidelity、空参数声明、原数据hash与原接口 |
+| `examples/specs/optimus-inline.yaml` | 真实外部模型的inline-public配置 | 独立变体、公开输入、Gurobi与预算 |
+| `docs/development/s08-common-input.md` | 共同输入与三基准比较证据 | 原始来源、预选子集、未提供指标与变体 |

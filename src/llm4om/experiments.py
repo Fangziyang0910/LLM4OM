@@ -96,7 +96,7 @@ def _prepare(config: Path, offline: bool) -> tuple[dict[str, Any], list[dict[str
         if not isinstance(entries, list) or not entries:
             raise RunError('invalid_experiment', 'admission', f'{name} must contain explicit selections.')
         for item in entries:
-            if not isinstance(item, dict) or set(item) != {'id', path_field}:
+            if not isinstance(item, dict) or not {'id', path_field} <= set(item) or set(item) - {'id', path_field, *({'case_ids'} if name == 'tasks' else set())}:
                 raise RunError('invalid_experiment', 'admission', 'Selections require exactly id and their input path.')
             identifier = _id(item['id'])
             if identifier in target:
@@ -111,10 +111,13 @@ def _prepare(config: Path, offline: bool) -> tuple[dict[str, Any], list[dict[str
                     sources[str(artifact_path)] = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
             else:
                 manifest = parse_reference_json(path.read_bytes())
+                requested = item.get('case_ids')
+                if requested is not None and (not isinstance(requested, list) or not requested or any(not isinstance(value, str) for value in requested) or len(set(requested)) != len(requested)):
+                    raise RunError('invalid_experiment', 'admission', 'case_ids must be an explicit nonempty unique selection.')
                 entries_for_task = []
                 seen = set()
                 for entry in manifest['cases']:
-                    if entry.get('selected') is not True:
+                    if entry.get('selected') is not True or requested is not None and entry['case_id'] not in requested:
                         continue
                     if entry['case_id'] in seen:
                         raise RunError('invalid_manifest', 'admission', 'Duplicate selected case.')
@@ -136,6 +139,8 @@ def _prepare(config: Path, offline: bool) -> tuple[dict[str, Any], list[dict[str
                         'metric_eligibility': {metric: bool(entry.get('verified_eligible' if metric == 'verified_solution' else 'eligible', False)
                             and metric in evaluator.manifest['capabilities']['evidence_levels']
                             and (metric != 'objective_match' or entry.get('reference_quality') != 'not_available')) for metric in METRICS}})
+                if requested is not None and set(requested) != seen:
+                    raise RunError('invalid_manifest', 'admission', 'Every requested case must be selected in the frozen task manifest.')
                 if not entries_for_task:
                     raise RunError('invalid_manifest', 'admission', 'A selected task must contain selected cases.')
                 tasks[identifier] = (path, manifest, entries_for_task)
@@ -149,7 +154,7 @@ def _prepare(config: Path, offline: bool) -> tuple[dict[str, Any], list[dict[str
                 'manifest_sha256': hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
                 'protocol_id': manifest['protocol_id'], 'source': manifest['source'],
                 'config_sha256': hashlib.sha256(run_config.read_bytes()).hexdigest(),
-                'configuration': run_settings, 'N_selected': len(cases),
+                'configuration': run_settings, 'N_selected': len(cases), 'N_manifest_selected': manifest['N_selected'],
                 'cases': [{k: v for k, v in case.items() if k != 'problem_path'} for case in cases]}
             if (task_id, configuration_id) in exclusions:
                 cell.update(status='excluded', reason=exclusions[(task_id, configuration_id)], execution_plan=None)

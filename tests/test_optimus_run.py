@@ -16,7 +16,7 @@ from test_optimus_method import REPLIES
 
 
 class OptimusRunTests(unittest.TestCase):
-    def run_case(self, replies=REPLIES, *, budget=None, crash=False, rag_mode=None, cancel_at_source=False):
+    def run_case(self, replies=REPLIES, *, budget=None, crash=False, rag_mode=None, cancel_at_source=False, inline=False):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -50,6 +50,8 @@ class OptimusRunTests(unittest.TestCase):
         config = yaml.safe_load((Path(__file__).parents[1] / "examples/specs/gurobi.yaml").read_text())
         config["method"] = {"plugin_id": "llm4om.methods.optimus", "config": {
             "rag_mode": rag_mode, "params_data_id": "params", "labels_data_id": "labels"}}
+        if inline:
+            config["method"] = {"plugin_id": "llm4om.methods.optimus_inline", "config": {"rag_mode": None}}
         config.pop("compiler")
         config["model_backend"]["plugin_id"] = "llm4om.model_backends.gurobipy"
         config["llm"] = {"provider_plugin_id": "llm4om.providers.openai_compatible", "model": "synthetic-tape",
@@ -92,6 +94,16 @@ raise SystemExit(main())
                                      cancellation=cancellation)
         bundle = json.loads((result.bundle_path / "bundle.json").read_text())
         return result, bundle, requests
+
+    def test_inline_public_variant_uses_actual_gurobi_and_empty_parameter_file(self):
+        result, bundle, requests = self.run_case(replies=[reply.replace('Capacity', '4') for reply in REPLIES], inline=True)
+        self.assertEqual(result.status, 'completed')
+        bundle = json.loads((result.bundle_path / 'bundle.json').read_text())
+        solve = json.loads((result.bundle_path / bundle['solve_result_ref']['relative_path']).read_text())
+        self.assertEqual(solve['objective_value'], 12)
+        self.assertEqual(len(requests), 9)
+        projection = json.loads((result.bundle_path / 'method/public-input-projection.json').read_text())
+        self.assertEqual(projection['public_input_mode'], 'inline_public')
 
     def test_complete_source_workflow_uses_final_execution_once(self):
         result, bundle, requests = self.run_case()
