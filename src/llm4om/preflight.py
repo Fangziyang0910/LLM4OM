@@ -18,6 +18,7 @@ from llm4om.control import CancellationToken
 from llm4om.plugins import MethodPlugin, Plugin, discover_plugins, _quiet, _exception_details
 from llm4om.compilers import ResolvedCompiler, resolve_compiler, compiler_identity
 from llm4om.execution_plugins import ExecutionResources, resolve_execution_resources
+from llm4om.data_loaders import ResolvedDataLoader, resolve_data_loader
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,7 @@ class AdmissionPlan:
     role_providers: dict[str, HTTPTextProvider] = field(default_factory=dict)
     compiler: ResolvedCompiler | None = None
     execution: ExecutionResources | None = None
+    data_loader: ResolvedDataLoader | None = None
 
 
 def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: Path | None = None,
@@ -42,6 +44,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     if time.time() >= deadline:
         raise RunError("deadline_exhausted", "admission", "The absolute run deadline expired.")
     inventory = discover_plugins()
+    data_loader = resolve_data_loader(settings, inventory=inventory, expected=expected.get("data_loader") if expected else None)
     provider_plugin = inventory.get(("llm_provider", settings["llm"]["provider_plugin_id"]))
     if provider_plugin is None:
         raise RunError("unknown_plugin", "admission", "Requested Provider is not installed.")
@@ -63,7 +66,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         _call_provider(lambda: role_factory.validate(selection["config"], selection["model"]), role_plugin)
         _validate_plugin_config(role_plugin, selection["config"], ["llm", "role_models", role, "config"])
         role_factories[role] = role_factory
-    packages = {}
+    packages = dict(data_loader.binding["packages"])
     for selected in selected_providers:
         for name in selected.manifest["dependencies"].get("python", []):
             try:
@@ -215,6 +218,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         "method_profile": profile, "method_cancellation": capabilities.get("cancellation", "unknown"), "code_origin": "method_generated" if profile in ("factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0") else "deterministic_compilation",
         "compiler_id": settings["compiler"]["plugin_id"] if profile in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0") else None, "model_backend_id": settings["model_backend"]["plugin_id"],
         "compiler": compiler.binding if compiler else None,
+        "data_loader": data_loader.binding, "data_view": data_loader.limits,
         "execution": {"model_backend": execution.backend_binding, "solver": execution.solver_binding},
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
         "packages": packages, "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": provider_plugin.manifest,
@@ -226,7 +230,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 for selection in role_models.values()) else "same_requested_model_roles",
             "role_resource_comparison": "different_role_resources" if any(
                 any(selection[key] != settings["llm"][key] for key in ("provider_plugin_id", "model", "config"))
-                for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers, compiler, execution)
+            for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers, compiler, execution, data_loader)
 
 
 def _validate_plugin_config(plugin: Plugin, config: dict[str, Any], path: list[str]) -> None:

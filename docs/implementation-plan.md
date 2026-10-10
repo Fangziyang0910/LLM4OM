@@ -170,6 +170,10 @@ S03-C1扩展当前Registry到独立文本Provider，见 [记录](development/s03
 
 S03-C2接入独立Task／Evaluator，见 [记录](development/s03-task-registry.md)。其余插件种类、S08／S09／S10及独立审阅继续推进。
 
-S03-C3a接入独立grounded LPIR→Pyomo Compiler，见 [记录](development/s03-compiler-registry.md)。Backend／Solver及其他插件种类、S08／S09／S10和独立审阅继续推进。
+S03-C3a接入独立grounded LPIR→Pyomo Compiler，见 [记录](development/s03-compiler-registry.md)。Backend／Solver已有本机验收，其他插件种类、S08／S09／S10和独立审阅继续推进。
 
-S03-C3b由 [#43](https://github.com/Fangziyang0910/LLM4OM/issues/43)跟踪，当前正在接入Backend／Solver共同接口与实际Worker路径，见 [开发状态](development/s03-solver-registry.md)。
+S03-C3b由 [#43](https://github.com/Fangziyang0910/LLM4OM/issues/43)跟踪，Backend／Solver共同接口与实际Worker路径已完成本机验收，见 [开发状态](development/s03-solver-registry.md)。
+
+S03-C4由 [#45](https://github.com/Fangziyang0910/LLM4OM/issues/45)跟踪。DataLoader通过共同Registry接入；原始数据、有限视图与模型绑定分别保留，见 [开发状态](development/s03-data-loader.md)。Executor／ArtifactStore／Reporter和S08／S09／S10继续推进。
+
+按2026-10-10用户对推进节奏的反馈，当前优先交付S09-A本地单问题工作台，再推进S08批量实验与报告。S09-A所需现有单问题、预检、隔离、取消／恢复已具备；其开发不依赖其余注册接口完成。完整插件注册与S09-B／S10仍在范围内，按实际使用路径补齐。开发采用聚焦测试与实际功能演示，完整回归集中到较大的交付节点。

@@ -7,7 +7,7 @@ name = "llm4om-fixture-execution"
 version = "0.1.0"
 description = "Independent Backend/Solver engineering fixture"
 requires-python = ">=3.11,<3.13"
-dependencies = ["llm4om>=0.21.0,<0.22.0"]
+dependencies = ["llm4om>=0.22.0,<0.23.0"]
 
 [project.entry-points."llm4om.plugins"]
 fixture_backend = "llm4om_fixture_execution:backend"

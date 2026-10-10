@@ -101,7 +101,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
             public_input = parse_json(read_public_bytes(problem))
             for data in public_input.get("data_refs", []):
                 path = public_path(problem.parent, data["path"])
-                sources[str(path)] = hashlib.sha256(read_public_bytes(path)).hexdigest()
+                sources[str(path)] = hashlib.sha256(read_public_bytes(path, max_bytes=8 * 1024 * 1024)).hexdigest()
             if "response_artifact" in settings["llm"]["config"]:
                 path = public_path(config.parent, settings["llm"]["config"]["response_artifact"])
                 sources[str(path)] = hashlib.sha256(read_public_bytes(path)).hexdigest()
@@ -226,11 +226,16 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     validate_problem(public)
     data_refs = []
     data_content = {}
+    data_views = {}
+    view_records = {}
+    if plan.data_loader is None:
+        raise RunError("unknown_plugin", "admission", "No admitted public DataLoader is available.")
     for index, data in enumerate(public["data_refs"]):
-        raw = read_public_bytes(public_path(problem.parent, data["path"]))
-        if data["sha256"] and hashlib.sha256(raw).hexdigest() != data["sha256"]:
-            raise RunError("data_hash_mismatch", "validation", "A data file does not match its declared SHA-256.")
-        validate_data(raw, data)
+        raw = read_public_bytes(public_path(problem.parent, data["path"]), max_bytes=8 * 1024 * 1024)
+        view = plan.data_loader.load(raw, data)
+        data_views[data["data_id"]] = view
+        view_ref = store.write(f"data-views/{index}.{view.format}", view.content, f"view-{data['data_id']}")
+        view_records[data["data_id"]] = {**view.metadata(), "content_ref": view_ref}
         ref = store.write(f"data/{index}.{data['format']}", raw, data["data_id"])
         data_refs.append(ref)
         data_content[data["data_id"]] = raw
@@ -238,6 +243,10 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
         data["sha256"] = ref["sha256"]
     problem_ref = store.json("public-problem.json", public, public["problem_id"])
     store.json("dataset-manifest.json", {"schema_version": "0.2.0", "data": data_refs}, "dataset")
+    data_views_ref = store.json("data-views.json", {"schema_version": "0.1.0", "loader": plan.data_loader.binding,
+        "limits": plan.data_loader.limits, "views": view_records}, "data-views")
+    if method.manifest["capabilities"].get("data_access", "full") == "full" and any(not view.complete for view in data_views.values()):
+        raise RunError("capability_mismatch", "admission", "Method requires full data; the admitted modeling view is incomplete.")
     public_config = deepcopy(settings)
     public_config["store"]["config"]["root"] = "."
     if "response_artifact" in public_config["llm"]["config"]:
@@ -267,7 +276,7 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     context = MethodContext(gateway, MappingProxyType(data_content), MappingProxyType(deepcopy(settings["budget"])),
                             hashlib.sha256(source_problem).hexdigest(), store.cancellation, save_method_checkpoint,
                             RunMethodResources(store, public, settings, plan, responses=gateway.calls), plan.deadline,
-                            tuple(deepcopy(store.state.get("clarification_responses", []))))
+                            tuple(deepcopy(store.state.get("clarification_responses", []))), MappingProxyType(data_views))
     store.state["method_started"] = True
     store.checkpoint()
     try:
@@ -276,7 +285,8 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     finally:
         if isinstance(gateway, Gateway):
             ledger.update(gateway.ledger)
-            store.json("llm-trace.json", {"schema_version": "0.2.0", "attempts": gateway.trace}, "llm-trace")
+            store.json("llm-trace.json", {"schema_version": "0.2.0", "attempts": gateway.trace,
+                "data_views_ref": data_views_ref}, "llm-trace")
         store.state["ledger"] = ledger
         store.checkpoint()
     if outcome.status == "needs_input":
@@ -897,7 +907,7 @@ def _derive_run(store: RunStore, resource_records: list[dict[str, Any]], *,
         revised = parse_json(raw)
         sources = {}
         for ref in revised["data_refs"]:
-            data = read_public_bytes(public_path(problem.parent, ref["path"]))
+            data = read_public_bytes(public_path(problem.parent, ref["path"]), max_bytes=8 * 1024 * 1024)
             validate_data(data, ref)
             digest = hashlib.sha256(data).hexdigest()
             if ref["sha256"] and ref["sha256"] != digest:

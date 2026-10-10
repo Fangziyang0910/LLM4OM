@@ -32,6 +32,9 @@ S06-B 已完成完整固定 OptiMUS 主流程的真实运行／本机回归；�
 uv sync --locked --extra dev --extra solve --extra gurobi
 uv run --locked --extra dev --extra solve --extra gurobi mypy
 uv run --locked python scripts/build_worker_image.py
+uv build examples/plugins/fixture_execution --wheel --out-dir dist/fixtures
+EXECUTION_TEST_IMAGE="$(uv run --locked python -c 'from llm4om.executors import DEFAULT_IMAGE; print(DEFAULT_IMAGE + "-with-execution")')"
+uv run --locked python scripts/build_worker_image.py --tag "$EXECUTION_TEST_IMAGE" --plugin-wheel dist/fixtures/llm4om_fixture_execution-0.1.0-py3-none-any.whl
 uv run --locked --extra dev --extra solve --extra gurobi python scripts/render_references.py --check
 uv run --locked --extra dev --extra solve --extra gurobi python scripts/check_repository.py
 uv run --locked --extra dev --extra solve --extra gurobi python -m unittest discover -s tests -v
@@ -46,7 +49,7 @@ uv build
 
 Review 分开回答两个问题：Standards 是否符合开发规范和相关契约；Spec 是否完成用户要求或 issue。显式调用 code-review 时按技能执行独立审阅；若当前环境无法运行独立审阅者，说明实际采用的自查范围。
 
-交付先完成对应检查，再报告变化、证据和剩余条件。PR 使用 [仓库模板](.github/PULL_REQUEST_TEMPLATE.md)说明 Summary、Evidence 与 Merge Danger。用户请求提交或 PR 时保存完整改动并关联工作项。日常验收以本机测试和真实 Provider／Solver 运行为依据：开发中运行聚焦测试，切片交付时运行一次所需完整回归、类型／仓库检查和包构建；只有新改动或未解决故障才重复。GitHub Actions 仅手动触发，供必要的环境交叉验证；push／PR 不自动重跑完整矩阵，也不将远程 CI 作为每次开发推进的门槛。发布标签与公开包发布依据真实验收和用户授权进行。
+交付先完成对应检查，再报告变化、证据和剩余条件。PR 使用 [仓库模板](.github/PULL_REQUEST_TEMPLATE.md)说明 Summary、Evidence 与 Merge Danger。用户请求提交或 PR 时保存完整改动并关联工作项。日常验收以本机测试和真实 Provider／Solver 运行为依据。开发中验证新增行为及受影响路径；相关小切片集中到可使用的交付节点，再执行一次必要完整回归、类型／仓库检查和包构建。同一实现快照不重复源码、wheel或镜像验收；源码或执行身份发生变化、出现实际失败时，只重验受影响范围。每个交付节点先展示可使用的功能和实际运行结果。GitHub Actions 仅手动触发，供必要的环境交叉验证；push／PR 不自动重跑完整矩阵，也不将远程 CI 作为每次开发推进的门槛。发布标签与公开包发布依据真实验收和用户授权进行。
 
 技能选择与触发条件见 [任务工作流](docs/agents/workflow.md)。常规实现选择无需额外审批；用户明确指令优先于工程默认值。
 
@@ -71,3 +74,5 @@ S03-C1独立Provider按已确认的CLI／HTTP／Solver接口验证；本机聚�
 S03-C2采用本机CLI／Task／Evaluation／Solver／文件系统验收；隐藏材料仅在导入与评估端，见 [记录](docs/development/s03-task-registry.md)。
 
 S03-C3a的独立Compiler在CLI／Compiler／Worker／真实Solver接口验收，可信插件wheel进入不可变镜像，见 [记录](docs/development/s03-compiler-registry.md)。
+
+S03-C4使用CLI／SDK、MethodContext、公开HTTP、Task和OS接口验收原始数据与有限视图；本机聚焦测试、干净wheel和真实容器求解见 [记录](docs/development/s03-data-loader.md)。GitHub Actions仅手动补充。

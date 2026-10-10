@@ -110,10 +110,11 @@ def discover_plugins() -> dict[tuple[str, str], Plugin]:
     from llm4om.compilers import LPIRPyomoFactory
     from llm4om.backends import PyomoBackendFactory, GurobiBackendFactory
     from llm4om.solvers import HighsSolverFactory, GurobiSolverFactory
+    from llm4om.data_loaders import PublicDataFactory
     plugins: dict[tuple[str, str], Plugin] = {}
     for builtin in (DirectFactory(), OptimusFactory(), CoEFactory(), FeedbackRepairFactory(),
                     MockFactory(), OpenAICompatibleFactory(), AnthropicFactory(), *builtin_factories(), LPIRPyomoFactory(),
-                    PyomoBackendFactory(), GurobiBackendFactory(), HighsSolverFactory(), GurobiSolverFactory()):
+                    PyomoBackendFactory(), GurobiBackendFactory(), HighsSolverFactory(), GurobiSolverFactory(), PublicDataFactory()):
         manifest = _manifest(builtin)
         plugin_type = MethodPlugin if manifest["kind"] == "method" else Plugin
         plugins[(manifest["kind"], manifest["plugin_id"])] = plugin_type(manifest, {"kind": "builtin"}, builtin)
@@ -172,6 +173,10 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
     capabilities.update(method_profile=text, supports_checkpoint={"type": "boolean"}, supports_clarification={"type": "boolean"}, cancellation={"const": "cooperative/0.1.0"})
     capabilities.update(provider_profile={"enum": ["http_text/0.1.0", "mock_text/0.1.0"]})
     capabilities.update(usage_semantics=text)
+    capabilities.update(data_loader_profile={"const": "public_bytes/0.1.0"},
+        data_formats={"type": "array", "items": {"enum": ["csv", "json"]}, "minItems": 1, "uniqueItems": True},
+        view_kinds={"type": "array", "items": {"enum": ["full", "rows", "summary"]}, "minItems": 1, "uniqueItems": True},
+        data_access={"enum": ["full", "views"]})
     capabilities.update(task_profile={"const": "frozen_task/0.1.0"}, evaluator_profile={"const": "frozen_evaluation/0.1.0"},
         protocol_ids=strings, default_evaluator_id=text, oracle_separation={"const": "separate_public_private/0.1.0"}, evidence_levels=strings)
     capabilities.update(compiler_profile={"const": "grounded_lpir_pyomo/0.1.0"}, deterministic={"const": True}, ir_schema_versions=strings)
@@ -180,7 +185,7 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
         solver_profile={"const": "model_handle/0.1.0"}, handle_profiles=handle_profiles,
         result_profile={"enum": ["highs_api/0.1.0", "gurobi_api/0.1.0"]})
     fields = {"schema_version": {"const": "0.2.0"}, "plugin_id": {**text,
-              "pattern": r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$"}, "kind": {"enum": ["method", "llm_provider", "task_adapter", "evaluator", "compiler", "model_backend", "solver_backend"]},
+              "pattern": r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$"}, "kind": {"enum": ["method", "llm_provider", "task_adapter", "evaluator", "compiler", "model_backend", "solver_backend", "data_loader"]},
               "plugin_version": {"type": "string", "pattern": f"^{stable_version}$", "maxLength": 128},
               "contract_range": {**text, "maxLength": 256}, "display_name": text, "description": text,
               "capabilities": {"type": "object", "properties": capabilities,
@@ -205,6 +210,12 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
             _local_schema(manifest["options_schema"])
         if not callable(factory.create):
             raise TypeError("Factory must create a plugin.")
+        if manifest["kind"] == "data_loader":
+            caps = manifest["capabilities"]
+            if (caps.get("data_loader_profile") != "public_bytes/0.1.0" or not caps.get("data_formats")
+                    or not caps.get("view_kinds") or caps["input_artifact_kinds"] != ["public_data"]
+                    or caps["output_artifact_kinds"] != ["data_view"]):
+                raise ValueError("Unsupported DataLoader profile.")
         if manifest["kind"] == "model_backend":
             caps = manifest["capabilities"]
             if (caps.get("backend_profile") != "model_handle/0.1.0" or not caps.get("handle_profile")

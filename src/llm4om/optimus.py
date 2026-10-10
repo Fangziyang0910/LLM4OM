@@ -174,7 +174,7 @@ class OptimusFactory:
             config_schema={"type": "object", "properties": {"rag_mode": {"enum": [None, "problem_description", "constraint_or_objective", "problem_labels"]},
                 "params_data_id": {"type": "string", "minLength": 1}, "labels_data_id": {"type": "string", "minLength": 1}},
                 "required": ["rag_mode", "params_data_id", "labels_data_id"], "additionalProperties": False})
-        manifest["capabilities"].update(method_profile="native_script/0.1.0", formulation_representations=["native_formulation"],
+        manifest["capabilities"].update(method_profile="native_script/0.1.0", data_access="full", formulation_representations=["native_formulation"],
             code_representations=["native_script"], model_backends=["llm4om.model_backends.gurobipy"],
             solvers=["llm4om.solvers.gurobi"], execution_modes=["container"])
         return manifest

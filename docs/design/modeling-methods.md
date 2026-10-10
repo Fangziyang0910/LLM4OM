@@ -12,6 +12,8 @@
 
 默认检查协议为 `llm4om.eval.public-v0.1`，因此无隐藏评分的单问题也有明确的 EvaluationResult 协议标识；不产生 benchmark 正确率。
 
+公开数据加载先保存原始bytes与hash，再形成声明范围内的数据视图。Direct／feedback_repair向LLM发送实际视图；参数化工厂在隔离Worker中读取原始绑定数据。需要完整数据的方法在视图不完整时拒绝生成。SDK0.22.0的实际范围见 [DataLoader记录](../development/s03-data-loader.md)，字段与限制由 [插件契约](../plugin-contracts.md#27-s03-c4-public-dataloader-and-dataview-sdk-0220)维护。
+
 ### 运行时序
 
 ```mermaid

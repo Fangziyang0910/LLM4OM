@@ -12,6 +12,7 @@ from pathlib import Path
 import unittest
 
 from llm4om.linear import compile_ir
+from llm4om.executors import DEFAULT_IMAGE
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -260,6 +261,7 @@ class InstalledExecutionTests(unittest.TestCase):
         script = """import json,sys
 from pathlib import Path
 from llm4om.linear import compile_ir
+from llm4om.executors import DEFAULT_IMAGE
 from llm4om.solvers import solve,solver_runtime
 config={'component':'selected_decisions'}
 runtime=solver_runtime('llm4om.examples.checking_highs',config=config)
@@ -302,7 +304,7 @@ print(json.dumps({'runtime':runtime,'result':result}))
         settings["method"]["config"]["output_mode"] = "python_factory"
         settings["model_backend"] = {"plugin_id": "llm4om.examples.renaming_pyomo", "config": {"component": "selected_decisions"}}
         settings["solver"] = {"plugin_id": "llm4om.examples.checking_highs", "config": {"component": "selected_decisions"}}
-        settings["executor"]["config"]["image"] = os.environ.get("LLM4OM_TEST_EXECUTION_IMAGE", "llm4om-worker:0.21.0-with-execution")
+        settings["executor"]["config"]["image"] = os.environ.get("LLM4OM_TEST_EXECUTION_IMAGE", DEFAULT_IMAGE + "-with-execution")
         settings["llm"] = self.serve_replies([json.dumps(reply)])
         config = self.inputs / "factory.yaml"
         config.write_text(yaml.safe_dump(settings))
@@ -325,7 +327,7 @@ print(json.dumps({'runtime':runtime,'result':result}))
         settings["method"]["config"]["output_mode"] = "native_gurobipy"
         settings["model_backend"] = {"plugin_id": "llm4om.examples.marking_gurobipy", "config": {"component": "selected_native"}}
         settings["solver"] = {"plugin_id": "llm4om.examples.checking_gurobi", "config": {"component": "selected_native"}}
-        settings["executor"]["config"]["image"] = os.environ.get("LLM4OM_TEST_EXECUTION_IMAGE", "llm4om-worker:0.21.0-with-execution")
+        settings["executor"]["config"]["image"] = os.environ.get("LLM4OM_TEST_EXECUTION_IMAGE", DEFAULT_IMAGE + "-with-execution")
         settings["llm"] = self.serve_replies([json.dumps(reply)])
         config = self.inputs / "native.yaml"
         config.write_text(yaml.safe_dump(settings))
@@ -362,7 +364,7 @@ def prob_case(capacity):
         settings["budget"].update(max_total_tokens=150000, max_llm_attempts=10, max_solver_calls=2, max_repairs=0, wall_time_s=90)
         settings["model_backend"] = {"plugin_id": "llm4om.examples.marking_gurobipy", "config": {"component": "selected_native"}}
         settings["solver"] = {"plugin_id": "llm4om.examples.checking_gurobi", "config": {"component": "selected_native"}}
-        settings["executor"]["config"]["image"] = os.environ.get("LLM4OM_TEST_EXECUTION_IMAGE", "llm4om-worker:0.21.0-with-execution")
+        settings["executor"]["config"]["image"] = os.environ.get("LLM4OM_TEST_EXECUTION_IMAGE", DEFAULT_IMAGE + "-with-execution")
         settings["llm"] = self.serve_replies(["Programming Expert", "Use integer x bounded by capacity.", source])
         config = self.inputs / "script.yaml"
         config.write_text(yaml.safe_dump(settings))

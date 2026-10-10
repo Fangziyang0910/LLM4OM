@@ -8,6 +8,7 @@ from typing import Any, Callable, Mapping, Protocol
 from dataclasses import field
 from uuid import uuid4
 from llm4om.control import CancellationToken
+from llm4om.data_loaders import DataView
 
 from llm4om.contracts import RunError, parse_json
 
@@ -97,6 +98,7 @@ class MethodContext:
     resources: MethodResources | None = None
     deadline: float | None = None
     clarifications: tuple[dict[str, Any], ...] = ()
+    data_views: Mapping[str, "DataView"] = field(default_factory=dict)
 
 
 class DirectMethod:
@@ -162,7 +164,14 @@ class DirectMethod:
                 instructions += " For repair_stage=code you may omit representation to reuse the source Formulation."
             else:
                 instructions += " Grounded LPIR corrections use repair_stage=formulation because LPIR is the executable mathematical representation."
-        payload: dict[str, Any] = {"problem": problem, "data": {key: value.decode("utf-8") for key, value in context.data.items()}}
+        payload: dict[str, Any] = {"problem": problem, "data": {
+            key: (context.data_views[key].content if key in context.data_views else value).decode("utf-8")
+            for key, value in context.data.items()}}
+        if context.data_views:
+            payload["data_views"] = {key: view.metadata() for key, view in context.data_views.items()}
+            instructions += (" data_views records the exact permitted exposure; incomplete views omit original data. "
+                "Schema summaries contain no parameter values. Do not invent omitted coefficients or cells. "
+                "Parameterized Code may read the original bound data; raw and view hashes are distinct.")
         if allow_clarification:
             instructions += (" If a business rule is missing, return only {clarification:{questions:[{question_id,kind,question,statement_ref}]}}. "
                 "kind is confirm_existing or new_information. Confirm existing requirement/assumption by statement_ref={kind:requirement|assumption,id}; "
@@ -261,7 +270,7 @@ class DirectFactory:
     def describe(self) -> dict[str, Any]:
         return {
             "schema_version": "0.2.0", "plugin_id": "llm4om.methods.direct", "kind": "method",
-            "plugin_version": "0.17.0", "contract_range": ">=0.2.0,<0.3.0",
+            "plugin_version": "0.18.0", "contract_range": ">=0.2.0,<0.3.0",
             "display_name": "Direct (declared text output)",
             "description": "One public text response produces a five-element Formulation with grounded LPIR or parameterized Python factory.",
             "capabilities": {"method_profile": "grounded_single_candidate/0.1.0", "problem_types": ["lp", "milp"],
@@ -269,7 +278,8 @@ class DirectFactory:
                 "formulation_representations": ["five_element"], "code_representations": ["python_factory"],
                 "model_backends": ["llm4om.model_backends.pyomo_factory"], "solvers": ["llm4om.solvers.highs", "llm4om.solvers.gurobi"],
                 "llm_features": ["text"], "execution_modes": ["trusted_local", "container"],
-                "supports_checkpoint": True, "cancellation": "cooperative/0.1.0", "supports_clarification": False, "oracle_requirements": []},
+                "supports_checkpoint": True, "cancellation": "cooperative/0.1.0", "supports_clarification": False,
+                "data_access": "views", "oracle_requirements": []},
             "config_schema": {"type": "object", "properties": {
                 "formulation_mode": {"const": "five_element"}, "output_mode": {"enum": ["lp_ir", "python_factory", "native_gurobipy"]}},
                 "required": ["formulation_mode", "output_mode"], "additionalProperties": False},

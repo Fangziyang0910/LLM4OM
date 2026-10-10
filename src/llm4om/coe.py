@@ -272,7 +272,7 @@ class CoEFactory:
                 "properties": {"public_contract_data_id": {"type": ["string", "null"], "minLength": 1},
                     "max_collaborate_nums": {"type": "integer", "minimum": 1, "maximum": 100}, "enable_reflection": {"type": "boolean"},
                     "max_trials": {"type": "integer", "minimum": 1, "maximum": 100}, "seed": {"type": "integer", "minimum": 0}}})
-        manifest["capabilities"].update(method_profile="native_script/0.2.0", formulation_representations=[], code_representations=["native_script"],
+        manifest["capabilities"].update(method_profile="native_script/0.2.0", data_access="full", formulation_representations=[], code_representations=["native_script"],
             model_backends=["llm4om.model_backends.gurobipy"], solvers=["llm4om.solvers.gurobi"], execution_modes=["container"], supports_checkpoint=False)
         return manifest
 

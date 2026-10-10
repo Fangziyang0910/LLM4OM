@@ -82,3 +82,5 @@ Task／Evaluator的共同注册、评分身份与导入密封见 [S03-C2](develo
 独立Compiler的共同注册、Worker包预检与源码／映射身份见 [S03-C3a](development/s03-compiler-registry.md)。
 
 Backend／Solver共同注册的开发状态与实际路径见 [S03-C3b](development/s03-solver-registry.md)。
+
+DataLoader的共同注册、原始数据与有限视图分别记录，见 [S03-C4](development/s03-data-loader.md)。

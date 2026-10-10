@@ -180,4 +180,6 @@ CoE专家路由与原生函数的开发实现、真实外部模型／原问题�
 
 0.20.0新增独立Compiler选择、Worker包预检与源码／映射核验，见 [S03-C3a](docs/development/s03-compiler-registry.md)。本机测试为主要验收；GitHub Actions仅手动用于必要的环境交叉验证。
 
-0.21.0的Backend／Solver共同注册正在开发，实际grounded路径与剩余验收见 [S03-C3b](docs/development/s03-solver-registry.md)。
+0.21.0的Backend／Solver共同注册已完成本机验收，实际grounded／factory／native路径与独立审阅条件见 [S03-C3b](docs/development/s03-solver-registry.md)。
+
+0.22.0的数据加载与有限视图正在本机验收，见 [S03-C4](docs/development/s03-data-loader.md)。原始数据绑定与LLM视图分别记录。

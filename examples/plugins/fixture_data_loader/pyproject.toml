@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm4om-fixture-data-loader"
+version = "0.1.0"
+description = "Independent public data-view engineering fixture"
+requires-python = ">=3.11,<3.13"
+dependencies = ["llm4om>=0.22.0,<0.23.0"]
+
+[project.entry-points."llm4om.plugins"]
+fixture_data_loader = "llm4om_fixture_data_loader:FixtureFactory"
+
+[tool.setuptools.packages.find]
+where = ["src"]
