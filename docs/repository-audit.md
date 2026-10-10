@@ -270,3 +270,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `docs/development/s09-web.md` | Web功能与真实运行支持记录 | 真实Provider／Solver与未验证范围分开 |
 
 | `tests/test_web_bind.py` | 显式远程IPv4监听的公共HTTP行为 | 页面／bootstrap、同源检查、既有请求token |
+| `src/llm4om/experiments.py` | 冻结批量调度与公共分组报告 | 独立进程、显式排除、硬预算、冻结分母与恢复 |
+| `tests/test_experiments.py` | 公共批量运行行为 | 实际并发 HiGHS、原问题评估、分母、预算与输入漂移 |
+| `examples/specs/benchmark-run.yaml` | 真实外部模型／HiGHS 批量配置 | 无凭据、显式资源与预算 |
+| `docs/development/s08-benchmark.md` | 批量功能、使用入口与证据范围 | 接口与评测协议一致；剩余验收不冒称完成 |

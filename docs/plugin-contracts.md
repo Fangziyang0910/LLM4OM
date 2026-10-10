@@ -252,7 +252,9 @@ Schema／plugin／IR／protocol 均记录完整版本。读入时校验声明版
 
 ## 8. ExperimentSpec 与单问题 RunConfig
 
-实验配置必需字段为 schema_version、experiment_id、task、methods、llm、model_backend、solver、executor、evaluation、budget、repeats、store、reporters。compiler 仅在相应 IR 转换路径必需；roles、sample_selection、cache_policy、allowed_problem_types 为可选配置。默认 allowed_problem_types 为 [lp,milp]。
+已实现的 ExperimentSpec 0.1.0 使用 `schema_version`、`experiment_id`、`tasks`、`configurations`、`repeats`、`budget`、`exclusions`。`tasks` 中每项为 `{id, manifest}`，指向已冻结任务清单；`configurations` 中每项为 `{id, run_config}`，指向完整 RunConfig。相对路径基于 ExperimentSpec 目录，RunConfig 内相对路径仍基于其自身目录。任务 × 配置 × 重复次数展开矩阵，首个模型请求前完成全部未排除组合的公共输入、能力与依赖预检。`exclusions` 每项为 `{task_id, configuration_id, reason}`，不支持组合必须明确排除。
+
+实验 `budget` 声明 `max_concurrency`、`wall_time_s`、`max_llm_attempts`、`max_total_tokens`、`max_solver_calls`。调度前预留完整单 run 的硬计数上限，已开始工作的预留在恢复时保留；当前不会回收未用上限。实验使用持久化绝对截止时间。每个并发样本通过已有 CLI 在独立进程运行，调用同一应用与评估接口；插件输出捕获不会跨样本共享。该配置不把 oracle 路径传给 RunConfig 或方法。
 
 单问题 RunConfig 必需字段为 schema_version、method、llm、model_backend、solver、executor、budget、store；compiler 随 IR 路径需要，reporters、roles、evaluation 和 allowed_problem_types 可以按已声明默认值提供。公开问题由 SDK 参数或 CLI `--problem` 传入。它不要求 task、experiment_id、methods 列表、repeats 或 oracle_path；无 evaluation/oracle 时仍记录公开合法性与执行检查，独立检查为 not_available。示例见 [run.yaml](../examples/specs/run.yaml)。
 
@@ -260,11 +262,9 @@ Schema／plugin／IR／protocol 均记录完整版本。读入时校验声明版
 
 普通插件选择对象为 `{plugin_id, config}`，config 可为空对象；LLM 选择为 `{provider_plugin_id, model, config}`，solver 为 `{plugin_id, options}`。缺省 config 与 options 仅能使用 Manifest 中明确默认值，不能由插件静默选择模型或求解器。
 
-methods 是方法选择列表；角色 LLM 配置可在 roles 中覆盖默认 llm。1.0 实验可以按显式变体配置展开方法／模型／后端组合，展开后的每个 RunConfig 固定一个实例、方法、资源配置及评测协议，不共享可变插件状态。
+每份 RunConfig 明确选择方法、默认 LLM、可选 `llm.role_models`、编译器、后端、求解器与执行方式。实验不隐式修改方法或模型来填补不支持组合。`experiment_id`、`case_id`、配置与 repeat 关联保存在实验记录，私有任务材料仅由 Task/Evaluator 读取。
 
-task.config 的 oracle_path／私有数据只在 TaskAdapter 与评估端存在。PublicRunConfig 投影去除这些字段、凭据和敏感路径后才传给方法／导出；不是把原始 YAML 直接塞进 Context。配置相对路径以该配置文件所在目录为基准，最终访问仍受对应工作根目录和公开／私有权限控制；示例中 store.root 可解析至仓库 runs，方法的数据引用不允许因此访问该整棵目录。
-
-ExperimentSpec 展开后每个 RunConfig 使用单数 method，并关联所属 experiment_id 与 case_id 等运行元数据。该关联不向方法暴露私有 oracle。单问题与实验共用 DD-01，用例差别在任务展开、参考材料与汇总。
+实验目录保存公开 `experiment.json`、每个样本的原应用运行目录与公共评估，私有 `.private/experiment-state.json` 保存调度检查点与输入路径/hash。公开报告只导出选中样本 ID、资格、结果和来源，不导出冻结清单中的私有引用。继续执行要求输入 bytes、配置、SDK/source、Python 和插件执行身份一致；完成样本复用已保存结果，不重新调用模型。CSV 未知数值为空，JSONL/summary 未知量为 null；Markdown/HTML 明示 unknown。每个数据来源／协议／配置／repeat 独立统计，不将重复实验当成独立问题。
 
 Budget 的硬计数阈值为非负整数，wall_time_s 为正数；repeats 为正整数；并发至少 1；max_repairs=0 合法。JSON/YAML 中禁止可执行标签与任意对象构造。全部插件参数经 config_schema／后端 options schema 校验；未知键 fail fast，扩展字段放入明示命名空间而不是随意透传。
 

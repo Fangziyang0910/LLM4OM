@@ -1,54 +1,17 @@
-# Design-only configuration. LLM4OM CLI is not implemented yet.
-schema_version: "0.2.0"
-experiment_id: "fixture-offline-production"
-task:
-  plugin_id: "llm4om.tasks.user_problem"
-  config:
-    problem_path: "problem.json"
-    oracle_path: "oracle.json" # TaskAdapter-private: never included in MethodContext.
-methods:
-  - plugin_id: "llm4om.methods.direct"
-    config:
-      formulation_mode: "five_element"
-      output_mode: "lp_ir"
-llm:
-  provider_plugin_id: "llm4om.providers.mock"
-  model: "fixture-linear-model"
-  config:
-    response_artifact: "model-artifact.json" # Engineering fixture only, never a real benchmark result.
-compiler:
-  plugin_id: "llm4om.compilers.lp_ir_to_pyomo"
-model_backend:
-  plugin_id: "llm4om.model_backends.pyomo_factory"
-solver:
-  plugin_id: "llm4om.solvers.highs"
-  options:
-    time_limit_s: 10
-executor:
-  plugin_id: "llm4om.executors.container"
-  config:
-    network: false
-    cpu_limit: 1
-    memory_limit_mb: 512
-    wall_time_s: 30
-evaluation:
-  protocol_id: "llm4om.eval.checker-v0.1"
-  evaluator_plugin_id: "llm4om.evaluators.independent_checker"
-  abs_tol: 0.000001
-  rel_tol: 0.00001
+# Actual external LLM batch; import-checker.json freezes the private evaluation input.
+schema_version: "0.1.0"
+experiment_id: "production-batch"
+tasks:
+  - id: "production"
+    manifest: "../../runs/production-task/manifest.json"
+configurations:
+  - id: "direct-highs"
+    run_config: "benchmark-run.yaml"
+repeats: 2
 budget:
-  max_llm_attempts: 1
-  max_total_tokens: 4096
-  max_candidates: 1
-  max_repairs: 0
-  max_solver_calls: 1
-  wall_time_s: 60
-  max_concurrency: 1
-repeats: 1
-store:
-  plugin_id: "llm4om.stores.filesystem"
-  config:
-    root: "../../runs"
-reporters:
-  - plugin_id: "llm4om.reporters.jsonl"
-  - plugin_id: "llm4om.reporters.markdown"
+  max_llm_attempts: 2
+  max_total_tokens: 60000
+  max_solver_calls: 2
+  wall_time_s: 600
+  max_concurrency: 2
+exclusions: []

@@ -18,8 +18,10 @@ from llm4om.checkers import SolutionChecker, ProductionChecker, UnitCapChecker
 from llm4om.checker_tasks import CheckerFixtureAdapter, IndependentCheckerEvaluator
 from llm4om.plugins import discover_plugins, discover_methods
 from llm4om.task_plugins import prepare_task
+from llm4om.experiments import run_experiment, report_experiment
 
 __all__ = [
+    "run_experiment", "report_experiment",
     "ModelHandle", "FactoryCodeProposal", "ScriptCodeProposal", "GenerationFailure", "MethodContext", "MethodResources", "MethodOutcome", "ModelProposal",
     "CancellationToken", "RunResult", "run_problem", "resume_run", "cancel_run", "EvaluationCase", "TaskAdapter", "Evaluator",
     "NL4OptAdapter", "MAMOAdapter", "NLP4LPAdapter", "CheckerFixtureAdapter", "import_dataset",

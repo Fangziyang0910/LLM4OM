@@ -86,3 +86,5 @@ Backend／Solver共同注册的开发状态与实际路径见 [S03-C3b](developm
 DataLoader的共同注册、原始数据与有限视图分别记录，见 [S03-C4](development/s03-data-loader.md)。
 
 本地单问题工作台的功能、启动命令与真实运行见 [S09-A](development/s09-web.md)。
+
+批量冻结任务、实验矩阵、继续执行与公共报告见 [S08](development/s08-benchmark.md)。

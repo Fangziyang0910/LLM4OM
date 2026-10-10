@@ -16,6 +16,7 @@ from llm4om.plugins import discover_plugins
 from llm4om.contracts import RunError, read_config
 from llm4om.preflight import prepare_run
 from llm4om.task_plugins import prepare_task
+from llm4om.experiments import run_experiment, report_experiment
 
 
 def main() -> int:
@@ -25,6 +26,13 @@ def main() -> int:
     web.add_argument("--workspace", type=Path, default=Path("runs/web"))
     web.add_argument("--port", type=int, default=8765)
     web.add_argument("--host", default="127.0.0.1", help="Bind address; use 0.0.0.0 for remote access")
+    benchmark = commands.add_parser("benchmark", help="Run an explicit frozen task/configuration matrix")
+    benchmark.add_argument("--config", type=Path, required=True)
+    benchmark.add_argument("--output", type=Path, required=True)
+    benchmark.add_argument("--offline", action="store_true")
+    benchmark.add_argument("--resume", action="store_true", help="Keep saved completed cases and continue unfinished work")
+    report_command = commands.add_parser("report", help="Export public per-case and grouped experiment reports")
+    report_command.add_argument("--experiment", type=Path, required=True)
     run = commands.add_parser("run", help="Generate Formulation and Code; solve supported LP/MILP")
     run.add_argument("--problem", type=Path, required=True)
     run.add_argument("--config", type=Path, required=True)
@@ -56,6 +64,22 @@ def main() -> int:
     doctor_config.add_argument("--task-config", type=Path, help="Preflight Task/Evaluator selections without importing source")
     doctor.add_argument("--offline", action="store_true")
     args = parser.parse_args()
+    if args.command in ("benchmark", "report"):
+        cancellation = CancellationToken()
+        previous = signal.signal(signal.SIGINT, lambda signum, frame: cancellation.cancel())
+        try:
+            experiment_result = (report_experiment(args.experiment) if args.command == "report" else
+                      run_experiment(args.config, args.output, offline=args.offline, resume=args.resume,
+                                     cancellation=cancellation))
+            print(json.dumps(experiment_result, ensure_ascii=False))
+            return 0
+        except (RunError, OSError, KeyError, TypeError, ValueError) as error:
+            print(json.dumps({"error": {"code": error.code if isinstance(error, RunError) else "experiment_error",
+                "message": str(error) if isinstance(error, RunError) else "Cannot read or persist this experiment.",
+                "details": error.details if isinstance(error, RunError) else None}}))
+            return 1
+        finally:
+            signal.signal(signal.SIGINT, previous)
     if args.command == "serve":
         from llm4om.web import serve_web
         serve_web(args.workspace, port=args.port, host=args.host)

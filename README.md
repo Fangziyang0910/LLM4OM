@@ -12,7 +12,7 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 ## 当前状态
 
-已交付 **S01 离线回放、S02-A 真实 HiGHS、S02-B 参数化 Pyomo 工厂、S03 方法发现与预检、S04-A 容器执行、S04-B 取消／恢复、S05-A 真实文本 LLM、S05-B Messages 协议、S07-A 原始 NL4Opt 导入／单样本评测、S06-A 微型真实 Gurobi／native gurobipy（Python 包 0.8.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。Web按开发计划接入；经典方法的实际支持见下方S06实现记录。
+已交付 **S01 离线回放、S02-A 真实 HiGHS、S02-B 参数化 Pyomo 工厂、S03 方法发现与预检、S04-A 容器执行、S04-B 取消／恢复、S05-A 真实文本 LLM、S05-B Messages 协议、S07-A 原始 NL4Opt 导入／单样本评测、S06-A 微型真实 Gurobi／native gurobipy（Python 包 0.8.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。本地 Web 首版和批量实验功能已实现，见下方开发记录；经典方法的实际支持见下方S06实现记录。
 
 仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
 
@@ -185,3 +185,5 @@ CoE专家路由与原生函数的开发实现、真实外部模型／原问题�
 0.22.0的数据加载与有限视图正在本机验收，见 [S03-C4](docs/development/s03-data-loader.md)。原始数据绑定与LLM视图分别记录。
 
 本地Web首版见 [S09-A](docs/development/s09-web.md)：`llm4om serve --workspace runs/web --port 8767`。网页接口已真实调用指定DeepSeek并经容器HiGHS求得13；页面视觉与其余交互继续完善。
+
+批量冻结任务运行、断点继续和 JSONL／CSV／Markdown／HTML 报告见 [S08](docs/development/s08-benchmark.md)。示例先导入任务，再执行 `llm4om benchmark --config examples/specs/experiment.yaml --output runs/production-batch`；配置明确选择真实外部模型，不属于离线 Mock。

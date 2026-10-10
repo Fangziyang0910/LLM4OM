@@ -126,12 +126,12 @@ def check_configs() -> list[str]:
     jsonschema.Draft202012Validator.check_schema(manifest["config_schema"])
     errors = []
     configs = []
-    for name in ["run.yaml", "experiment.yaml", "solve.yaml", "plugin-run.yaml"]:
+    for name in ["run.yaml", "solve.yaml", "plugin-run.yaml"]:
         config = yaml.safe_load((fixture / name).read_text())
         configs.append(config)
         if config["schema_version"] != manifest["schema_version"]:
             errors.append(f"{name}: fixture schema version mismatch")
-        methods = config["methods"] if name == "experiment.yaml" else [config["method"]]
+        methods = [config["method"]]
         selected_manifest = manifest if name != "plugin-run.yaml" else json.loads(
             (ROOT / "examples/plugins/fixture_method/src/llm4om_fixture_method/manifest.json").read_text())
         selected_validator = validator if name != "plugin-run.yaml" else jsonschema.Draft202012Validator(selected_manifest["config_schema"])
@@ -139,7 +139,7 @@ def check_configs() -> list[str]:
             if method["plugin_id"] == selected_manifest["plugin_id"]:
                 for error in selected_validator.iter_errors(method["config"]):
                     errors.append(f"{name}: invalid method config at {list(error.path)}")
-        if name != "experiment.yaml" and (
+        if (
             {"task", "methods", "experiment_id", "repeats"} & config.keys()
             or "oracle_path" in json.dumps(config)
         ):
@@ -153,17 +153,17 @@ def check_configs() -> list[str]:
                     valid = valid and value >= 1
             if not valid:
                 errors.append(f"{name}: invalid budget: {key}")
-        if name == "experiment.yaml" and (
-            type(config["repeats"]) is not int or config["repeats"] < 1
-        ):
-            errors.append("experiment.yaml: repeats must be a positive integer")
         response = config["llm"]["config"]["response_artifact"]
         if response != "model-artifact.json" or not (fixture / response).is_file():
             errors.append(f"{name}: missing mock response artifact")
-    if configs[0]["method"] != configs[1]["methods"][0]:
-        errors.append("fixture method config differs between single run and experiment")
-    if configs[2]["method"] != configs[0]["method"]:
+    if configs[1]["method"] != configs[0]["method"]:
         errors.append("fixture method config differs between offline and real solve")
+    experiment = yaml.safe_load((fixture / "experiment.yaml").read_text())
+    if (set(experiment) != {"schema_version", "experiment_id", "tasks", "configurations", "repeats", "budget", "exclusions"}
+            or experiment["schema_version"] != "0.1.0" or type(experiment["repeats"]) is not int or experiment["repeats"] < 1
+            or experiment["configurations"] != [{"id": "direct-highs", "run_config": "benchmark-run.yaml"}]
+            or experiment["exclusions"] != []):
+        errors.append("experiment.yaml: invalid runnable frozen-task matrix")
     return errors
 
 
