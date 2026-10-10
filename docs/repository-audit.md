@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-10；SDK／Worker 开发版本：0.21.0。当前包含 214 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-10；SDK／Worker 开发版本：0.22.0。当前包含 221 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -254,3 +254,11 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/plugins/fixture_execution/pyproject.toml` | 独立Backend／Solver包声明 | SDK版本约束、共同entry points与构建 |
 | `examples/plugins/fixture_execution/README.md` | 独立构建／求解插件操作说明 | 实际组件变换、配置及可信镜像 |
 | `examples/plugins/fixture_execution/src/llm4om_fixture_execution/__init__.py` | 独立组件重命名与真实HiGHS插件 | 保持决策映射、检查配置组件后实际求解 |
+
+| `docs/development/s03-data-loader.md` | DataLoader／有限视图的实际范围与证据 | CLI／SDK、真实原始绑定、来源与剩余验收 |
+| `src/llm4om/data_loaders.py` | 公共bytes加载、限制与独立视图契约校验 | 原始格式／值／来源不改写；全数据与摘要区别 |
+| `examples/specs/data-view.yaml` | 显式有限视图与真实HiGHS工程配置 | Mock输出与LLM准确率分开；原始数据绑定 |
+| `examples/plugins/fixture_data_loader/README.md` | 独立加载器示例职责与配置 | 列顺序变化与原始bytes分别验收 |
+| `examples/plugins/fixture_data_loader/pyproject.toml` | 独立wheel／entry point／SDK范围 | 真实安装与完整来源身份 |
+| `examples/plugins/fixture_data_loader/src/llm4om_fixture_data_loader/__init__.py` | 真正改变CSV暴露列顺序的工程Adapter | 配置生效、路径无关输入、核心独立校验 |
+| `tests/test_data_loader_plugins.py` | 公开数据加载与真实LLM视图验收 | HTTP、HiGHS／容器、原始检查、拒绝与恢复 |

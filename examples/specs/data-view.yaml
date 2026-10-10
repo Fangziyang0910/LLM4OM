@@ -1,0 +1,46 @@
+# Engineering Mock output and real HiGHS; limited views do not prove grounding correctness.
+schema_version: 0.2.0
+method:
+  plugin_id: llm4om.methods.direct
+  config:
+    formulation_mode: five_element
+    output_mode: lp_ir
+llm:
+  provider_plugin_id: llm4om.providers.mock
+  model: fixture-production-v1
+  config:
+    response_artifact: model-artifact.json
+compiler:
+  plugin_id: llm4om.compilers.lp_ir_to_pyomo
+model_backend:
+  plugin_id: llm4om.model_backends.pyomo_factory
+solver:
+  plugin_id: llm4om.solvers.highs
+  options:
+    time_limit_s: 10
+executor:
+  plugin_id: llm4om.executors.trusted_local
+  config: {}
+budget:
+  max_llm_attempts: 1
+  max_total_tokens: 4096
+  max_candidates: 1
+  max_repairs: 0
+  max_solver_calls: 1
+  wall_time_s: 60
+  max_concurrency: 1
+store:
+  plugin_id: llm4om.stores.filesystem
+  config:
+    root: ../../runs
+reporters:
+- plugin_id: llm4om.reporters.jsonl
+- plugin_id: llm4om.reporters.markdown
+data_loader:
+  plugin_id: llm4om.data_loaders.public
+  config: {}
+data_view:
+  mode: preview
+  max_rows: 1
+  max_columns: 32
+  max_bytes: 65536

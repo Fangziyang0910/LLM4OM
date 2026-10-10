@@ -26,7 +26,7 @@ Manifest 字段：
 
 source 对研究方法另记录研究路线（prompting-based／training-based／hybrid）、接入方式（原流程适配／流程变体）、原模型与实际外部 LLM 的差异，以及可获得的 `paper_url`、`citation_key`、`paper_version`、`upstream_commit`、`variant_id` 与适配差异引用。名称或题目不是唯一身份；论文、模型权重、推理流程与数据集分别关联。考察提交不自动作为已验证接入版本。
 
-内部 registry 键为 `(kind, plugin_id)`，一次环境不允许相同键的多个活动版本。与内置键冲突必须报错，不能以安装顺序覆盖。已实现的method／llm_provider／task_adapter／evaluator使用entry point分组`llm4om.plugins`；加载第三方Python包会执行可信插件代码，因此安装／加载与生成代码隔离是两个问题。
+内部 registry 键为 `(kind, plugin_id)`，一次环境不允许相同键的多个活动版本。与内置键冲突必须报错，不能以安装顺序覆盖。已实现的method／llm_provider／task_adapter／evaluator／compiler／model_backend／solver_backend／data_loader使用entry point分组`llm4om.plugins`；加载第三方Python包会执行可信插件代码，因此安装／加载与生成代码隔离是两个问题。
 
 ### 能力声明与匹配规则
 
@@ -1185,3 +1185,53 @@ Admission freezes full Backend/Solver Manifest, config, origin and applicable ho
 Solver runtime and results require finite JSON, explicit version strings, declared result profiles, exact requested options and complete public decision keys. Exception text, plugin stdout and private error details are suppressed at the selected Solver interface. Numerical SDK version/evidence interpretation follows result_profile rather than third-party ID. The platform binds actual Solver/Backend plugin IDs after the selected adapters execute. Solve success is evidence about the candidate model, not formulation correctness.
 
 The SDK exports ModelBackend, NativeModelBackend, SolverBackend, their built-in factories, ExecutionResources and resolve_execution_resources. The public solvers.solve entry accepts optional config and backend_selection; solver_runtime/solver_packages can query an installed Solver with config. Trusted plugin wheels enter an immutable image at build time. Engineering examples and actual local support are recorded in [S03-C3b](development/s03-solver-registry.md); no general nonlinear support is claimed.
+
+## 27. S03-C4 public DataLoader and DataView (SDK 0.22.0)
+
+DataLoader is an installed `llm4om.plugins` factory with kind=data_loader,
+data_loader_profile=public_bytes/0.1.0, explicit data_formats (csv/json) and
+view_kinds (full/rows/summary). Core discovery checks its self-contained config
+schema, contract and declared dependencies. RunConfig.data_loader selects
+plugin_id/config; omitted selection uses llm4om.data_loaders.public. Admission
+freezes full Manifest/config/package/executable identity and data_view limits.
+Changed identity or exposure limits reject resume without changing saved evidence.
+
+The core owns public_path, per-file 8 MiB bounded reading, original SHA-256, CSV
+columns/types/nullability/unique keys and strict public JSON validation. The
+DataLoader receives load(ref,schema,DataContext(raw,limits)) with admitted original
+bytes, a copied schema and only data_id/format/sha256/size_bytes metadata. It
+receives no filesystem path, gateway, budget, credentials or evaluation materials.
+Loading trusted plugins remains distinct from executing generated code.
+
+RunConfig.data_view sets mode=preview|full|summary, max_rows, max_columns,
+max_bytes and an optional columns allow-list. Defaults are preview,100 rows,32
+columns and65,536 bytes per input view. Bounds are enforced independently of the
+Loader; full mode rejects an incomplete or excessive view. CSV previews select
+original rows/columns without changing values or multiplicity. Object JSON
+supports unchanged full bytes or a bounded top-level schema summary; nested
+array row selection and numerical aggregation are not part of this profile.
+Summaries contain declared structure/counts, not parameter values.
+
+DataView has content bytes, format/kind, source_sha256, total_rows/rows, columns
+and complete. The core verifies actual content, counts, original membership and
+exposure bounds. Full views preserve exact original bytes and original format.
+View SHA-256/size are computed separately from original data identity.
+Unknown plugin errors expose safe types/frames, not private exception text or
+details; original CSV diagnostics identify row/line/column and failure reason.
+
+Original snapshots and Solver data binding remain unchanged. MethodContext.data
+retains original public bytes; data_views supplies declared DataView objects. A
+method without data_access=views conservatively requires a complete view before
+generation. Direct/feedback_repair explicitly accept views and send their exact
+content/metadata to the LLM; omitted values must not be invented. Third-party
+methods must honor their declared access capability. A view is data exposure,
+not proof of correct grounding or formulation.
+
+The bundle projects data-views.json and individual content snapshots. Online
+llm-trace.json references the immutable view record, alongside request hashes;
+Direct's request includes the exact data/data_views content. Trusted Worker
+construction receives original raw data, without the host Loader or hidden
+materials. SDK exports DataLoader, DataContext, DataView, PublicDataFactory and
+resolve_data_loader. The independent column-order wheel is an engineering
+fixture, not a new research method. Local evidence is recorded in
+[S03-C4](development/s03-data-loader.md).

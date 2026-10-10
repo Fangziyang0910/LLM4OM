@@ -6,6 +6,7 @@ from llm4om.backends import ModelHandle, ModelBackend, NativeModelBackend, Pyomo
 from llm4om.solvers import SolverBackend, HighsSolverFactory, GurobiSolverFactory
 from llm4om.execution_plugins import ExecutionResources, resolve_execution_resources
 from llm4om.compilers import Compiler, LPIRPyomoFactory, LPIRPyomoCompiler, resolve_compiler
+from llm4om.data_loaders import DataLoader, DataView, DataContext, PublicDataFactory, resolve_data_loader
 from llm4om.linear import CompiledCode
 from llm4om.methods import FactoryCodeProposal, ScriptCodeProposal, GenerationFailure, MethodContext, MethodResources, MethodOutcome, ModelProposal
 from llm4om.application import RunResult, run_problem, resume_run
@@ -29,4 +30,5 @@ __all__ = [
     "Compiler", "CompiledCode", "LPIRPyomoFactory", "LPIRPyomoCompiler", "resolve_compiler",
     "ModelBackend", "NativeModelBackend", "SolverBackend", "PyomoBackendFactory", "GurobiBackendFactory",
     "HighsSolverFactory", "GurobiSolverFactory", "ExecutionResources", "resolve_execution_resources",
+    "DataLoader", "DataView", "DataContext", "PublicDataFactory", "resolve_data_loader",
 ]

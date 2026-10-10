@@ -66,9 +66,13 @@ def parse_reference_json(raw: bytes) -> dict[str, Any]:
     return value
 
 
-def read_public_bytes(path: Path) -> bytes:
+def read_public_bytes(path: Path, *, max_bytes: int | None = None) -> bytes:
     try:
-        return path.read_bytes()
+        with path.open("rb") as stream:
+            raw = stream.read() if max_bytes is None else stream.read(max_bytes + 1)
+        if max_bytes is not None and len(raw) > max_bytes:
+            raise RunError("invalid_data", "validation", "Public data exceed the permitted per-file size.")
+        return raw
     except OSError as error:
         raise RunError("input_unavailable", "validation", "Cannot read an explicit public input file.") from error
 
@@ -222,6 +226,7 @@ def validate_data(raw: bytes, ref: dict[str, Any]) -> None:
 
 
 def validate_csv(raw: bytes, schema: dict[str, Any]) -> None:
+    diagnostic: dict[str, Any] = {"row": 1, "column": None, "reason": "columns_or_keys"}
     try:
         columns = schema["columns"]
         names = [column["name"] for column in columns]
@@ -230,11 +235,13 @@ def validate_csv(raw: bytes, schema: dict[str, Any]) -> None:
         if len(set(names)) != len(names) or rows.fieldnames != names or not set(keys) <= set(names):
             raise ValueError("Invalid columns or keys.")
         seen = set()
-        for row in rows:
+        for row_index, row in enumerate(rows, start=2):
+            diagnostic.update(row=row_index, line=rows.line_num, column=None, reason="cell_count")
             if None in row or any(value is None for value in row.values()):
                 raise ValueError("Incorrect number of cells.")
             typed: dict[str, str | Decimal | None] = {}
             for column in columns:
+                diagnostic.update(column=column["name"], reason="nullability")
                 value = row[column["name"]]
                 typed[column["name"]] = value
                 if value == "":
@@ -242,17 +249,20 @@ def validate_csv(raw: bytes, schema: dict[str, Any]) -> None:
                         raise ValueError("Missing non-nullable cell.")
                     typed[column["name"]] = None
                 elif column["type"] in {"number", "integer"}:
+                    diagnostic["reason"] = "finite_numeric_type"
                     number = Decimal(value)
                     if not number.is_finite() or (column["type"] == "integer" and number != number.to_integral_value()):
                         raise ValueError("Invalid numeric cell.")
                     typed[column["name"]] = number
             if keys:
+                diagnostic.update(column=None, columns=keys, reason="duplicate_key")
                 key = tuple(typed[name] for name in keys)
                 if key in seen:
                     raise ValueError("Duplicate data key.")
                 seen.add(key)
     except (ValueError, InvalidOperation, csv.Error) as error:
-        raise RunError("invalid_data", "validation", "CSV does not match its columns, finite types, nullability or unique keys.") from error
+        raise RunError("invalid_data", "validation", "CSV does not match its columns, finite types, nullability or unique keys.",
+                       details=diagnostic) from error
 
 
 def validate_model_artifact(artifact: dict[str, Any]) -> None:
@@ -410,6 +420,7 @@ def validate_worker_response(payload: dict[str, Any], expected_runtime: dict[str
 
 
 def validate_config(settings: dict[str, Any]) -> None:
+    from llm4om.data_loaders import VIEW_SCHEMA
     llm_selection = _object({"provider_plugin_id": TEXT, "model": TEXT, "config": {"type": "object"}})
     schema = _object({
         "schema_version": {"const": "0.2.0"},
@@ -417,6 +428,8 @@ def validate_config(settings: dict[str, Any]) -> None:
         "llm": _object({**llm_selection["properties"], "role_models": {"type": "object", "propertyNames": TEXT,
             "additionalProperties": llm_selection}}, ["provider_plugin_id", "model", "config"]),
         "compiler": _object({"plugin_id": TEXT, "config": {"type": "object"}}, ["plugin_id"]),
+        "data_loader": _object({"plugin_id": TEXT, "config": {"type": "object"}}, ["plugin_id"]),
+        "data_view": VIEW_SCHEMA,
         "model_backend": _object({"plugin_id": TEXT, "config": {"type": "object"}}, ["plugin_id"]),
         "solver": _object({"plugin_id": TEXT, "config": {"type": "object"}, "options": _object({
             "time_limit_s": {"type": "number", "minimum": 0}}, [])}, ["plugin_id"]),
