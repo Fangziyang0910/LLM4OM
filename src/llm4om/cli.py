@@ -24,6 +24,7 @@ def main() -> int:
     web = commands.add_parser("serve", help="Open the local single-user optimization workbench")
     web.add_argument("--workspace", type=Path, default=Path("runs/web"))
     web.add_argument("--port", type=int, default=8765)
+    web.add_argument("--host", default="127.0.0.1", help="Bind address; use 0.0.0.0 for remote access")
     run = commands.add_parser("run", help="Generate Formulation and Code; solve supported LP/MILP")
     run.add_argument("--problem", type=Path, required=True)
     run.add_argument("--config", type=Path, required=True)
@@ -57,7 +58,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.command == "serve":
         from llm4om.web import serve_web
-        serve_web(args.workspace, port=args.port)
+        serve_web(args.workspace, port=args.port, host=args.host)
         return 0
     if args.command == "import":
         try:

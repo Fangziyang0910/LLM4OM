@@ -12,11 +12,19 @@ uv run --locked python scripts/build_worker_image.py
 uv run --locked llm4om serve --workspace runs/web --port 8767
 ```
 
-打开输出的本地URL。输入自然语言，添加公开CSV／JSON，选择方法、Provider、模型、建模后端和求解器。可导入ProblemSpec或编辑完整RunConfig；CSV未声明schema时保持原始字符串和允许空值，不推断业务唯一键。导入规格的原始hash必须匹配上传bytes。OptiMUS需要明确的params／labels JSON；CoE参数和预算可在完整配置中编辑。
+打开输出的本地URL。远程启动：
+
+```bash
+uv run --locked llm4om serve --host 0.0.0.0 --workspace runs/web --port 8767
+```
+
+远程浏览器访问 `http://服务器IP:8767`。当前工作台为单用户工具，远程监听用于可信网络访问。
+
+输入自然语言，添加公开CSV／JSON，选择方法、Provider、模型、建模后端和求解器。可导入ProblemSpec或编辑完整RunConfig；CSV未声明schema时保持原始字符串和允许空值，不推断业务唯一键。导入规格的原始hash必须匹配上传bytes。OptiMUS需要明确的params／labels JSON；CoE参数和预算可在完整配置中编辑。
 
 凭据只由服务端环境或当前目录.env读取，页面不接收API key。检查环境与兼容性复用prepare_run，实际提交复用run_problem。当前页可看阶段、五元素／原生表述、代码、候选、原始绑定、决策、终止状态、Token和未知费用；事件轮询来自核心记录。取消、恢复、澄清回答和明确派生重跑复用已有应用接口。重启服务仍可查看已保存工作。编辑问题／代码的完整派生工作流与实验比较由后续S09-B继续补齐。
 
-服务只绑定127.0.0.1，校验Host／Origin和进程内请求token。公开下载仅包含run_public引用及其hash／size校验后的内容，不遍历Provider私有archive、环境文件或任意宿主路径。上传单文件8 MiB、JSON请求24 MiB、公开导出64 MiB；本地并发2、最多8个排队或活动工作。
+默认绑定127.0.0.1；远程访问使用 `--host 0.0.0.0`，通过服务器 IPv4 地址和端口打开页面。校验Host／同源Origin和进程内请求token。公开下载仅包含run_public引用及其hash／size校验后的内容，不遍历Provider私有archive、环境文件或任意宿主路径。上传单文件8 MiB、JSON请求24 MiB、公开导出64 MiB；本地并发2、最多8个排队或活动工作。
 
 ## 实际运行证据
 

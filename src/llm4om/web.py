@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 import csv
 import hashlib
+import ipaddress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from io import BytesIO, StringIO
@@ -269,7 +270,11 @@ class WebWorkspace:
         self.pool.shutdown(wait=True, cancel_futures=True)
 
 
-def serve_web(root: Path, *, port: int = 8765) -> None:
+def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
+    try:
+        binding = ipaddress.IPv4Address(host)
+    except ipaddress.AddressValueError as error:
+        raise RunError('invalid_config', 'web', 'Use an IPv4 bind address, such as 127.0.0.1 or 0.0.0.0.') from error
     workspace = WebWorkspace(root)
     token = secrets.token_urlsafe(32)
     class Handler(BaseHTTPRequestHandler):
@@ -287,10 +292,19 @@ def serve_web(root: Path, *, port: int = 8765) -> None:
             self.wfile.write(raw)
 
         def check_origin(self, *, mutation: bool = False) -> None:
-            host = self.headers.get('Host', '')
+            authority = self.headers.get('Host', '')
             allowed = {f'127.0.0.1:{server.server_port}', f'localhost:{server.server_port}'}
-            if host not in allowed or (self.headers.get('Origin') is not None and self.headers['Origin'] not in {'http://' + item for item in allowed}):
-                raise RunError('invalid_origin', 'web', 'Use this workbench from its local URL.')
+            if not binding.is_loopback:
+                address = urlsplit('http://' + authority)
+                try:
+                    remote = ipaddress.IPv4Address(address.hostname or '')
+                    if address.port == server.server_port and address.username is None and address.password is None and not address.path:
+                        if binding.is_unspecified or remote == binding:
+                            allowed.add(authority)
+                except (ipaddress.AddressValueError, ValueError):
+                    pass
+            if authority not in allowed or (self.headers.get('Origin') is not None and self.headers['Origin'] != 'http://' + authority):
+                raise RunError('invalid_origin', 'web', 'Use this workbench from its bound server URL.')
             if mutation and not secrets.compare_digest(self.headers.get('X-LLM4OM-Token', ''), token):
                 raise RunError('invalid_origin', 'web', 'Reload the local workbench before submitting changes.')
 
@@ -344,8 +358,8 @@ def serve_web(root: Path, *, port: int = 8765) -> None:
 
         def do_POST(self) -> None:
             self.dispatch(mutation=True)
-    server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
-    print(f'LLM4OM workbench: http://127.0.0.1:{server.server_port}', flush=True)
+    server = ThreadingHTTPServer((host, port), Handler)
+    print(f'LLM4OM workbench: http://{host}:{server.server_port}', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

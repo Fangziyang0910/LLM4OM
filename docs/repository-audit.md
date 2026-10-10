@@ -268,3 +268,5 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/web_assets/app.js` | 公共接口调用与已保存结果展示 | 安全文本渲染、事件轮询、上传和控制 |
 | `src/llm4om/web_assets/style.css` | 本地工作台布局与响应式样式 | 焦点、表格与阶段卡片；视觉验收继续补齐 |
 | `docs/development/s09-web.md` | Web功能与真实运行支持记录 | 真实Provider／Solver与未验证范围分开 |
+
+| `tests/test_web_bind.py` | 显式远程IPv4监听的公共HTTP行为 | 页面／bootstrap、同源检查、既有请求token |
