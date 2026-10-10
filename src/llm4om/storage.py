@@ -206,7 +206,7 @@ class RunStore:
         _mkdir(projection.parent)
         ref = {'artifact_id': artifact_id,
             'media_type': {'.json': 'application/json', '.csv': 'text/csv', '.md': 'text/markdown',
-                           '.jsonl': 'application/x-ndjson'}.get(destination.suffix, 'application/octet-stream'),
+                           '.jsonl': 'application/x-ndjson', '.html': 'text/html', '.txt': 'text/plain'}.get(destination.suffix, 'application/octet-stream'),
             'sha256': hashlib.sha256(content).hexdigest(), 'size_bytes': len(content),
             'namespace': 'run_public', 'relative_path': name, 'schema_version': schema_version}
         if self.versioned:

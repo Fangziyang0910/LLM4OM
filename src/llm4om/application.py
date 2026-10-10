@@ -31,6 +31,7 @@ from llm4om.linear import CompiledCode, compile_ir
 from llm4om.storage import RunStore
 from llm4om.executors import run_container, run_owned_process
 from llm4om.clarification import prepare_clarification, validate_clarification_response
+from llm4om.reporters import render_reports, resolve_reporters
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
     execution_ref = store.state.get("execution_ref")
     admission_ref = None
     requested_config_ref = None
+    plan = restored_plan
     code_level = "deterministic_compilation"
     stages: dict[str, Any] = {name: {"status": "not_available", "reason": "Stage has not run."}
               for name in ("formulation", "code", "solve")}
@@ -183,23 +185,24 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
         ledger["evidence_origin"] = "assisted"
     store.json("budget-ledger.json", ledger, "budget")
     store.emit("run_finished", status=status, error=error_record)
-    if settings_valid and any(reporter["plugin_id"] == "llm4om.reporters.markdown" for reporter in settings.get("reporters", [])):
-        report = (f"# LLM4OM run {store.run_id}\n\nMode: {mode}. Status: {status}.\n\n"
-                  "| Stage | Status |\n|---|---|\n" +
-                  "".join(f"| {name} | {stage['status']} |\n" for name, stage in stages.items()) +
-                  f"\nMethod: {settings['method']['plugin_id']}. Provider: {settings['llm']['provider_plugin_id']}. External LLM requests: {ledger['external_llm_requests']}.\n"
-                  "Structural checks do not establish semantic correctness.\n")
-        if solve_ref is not None:
-            solve_summary = parse_json(read_public_bytes(store.path / solve_ref["relative_path"]))
-            report += f"\n{solve_summary['solver_id']}: {solve_summary['termination']}. Objective: {solve_summary['objective_value']}.\n"
-        if error_record:
-            report += f"\nError: {error_record['code']} ({error_record['stage']}).\n"
-        store.write("reports/report.md", report.encode(), "report")
+    report_refs: list[dict[str, Any]] = []
+    report_errors: list[dict[str, Any]] = []
+    if plan is not None:
+        row = {"run_id": store.run_id, "status": status, "mode": mode, "stages": stages, "error": error_record,
+            "method_id": settings["method"]["plugin_id"], "provider_id": settings["llm"]["provider_plugin_id"],
+            "model": settings["llm"]["model"], **ledger,
+            "solve": _load_verified_record(store, solve_ref) if solve_ref else None}
+        view = {"id": store.run_id, "rows": [row],
+                "summary": {"policy": "Structural checks do not establish semantic correctness. Unknown resources stay null."}}
+        report_refs, report_errors = render_reports(list(plan.reporters), view, 'run',
+            lambda name, raw, ref: store.write(name, raw, ref["artifact_id"]))
+        if report_errors:
+            store.json("diagnostics/report-errors.json", {"schema_version": "0.1.0", "errors": report_errors}, "report-errors")
     resource_status = {"compiler": "available" if code_level == "deterministic_compilation" and stages["code"]["status"] == "available" else "not_available",
                        **{name: "available" if solve_ref is not None else "failed" if execution_ref is not None else "not_available"
                           for name in ("model_backend", "solver", "executor")}}
     store.json("bundle.json", {"schema_version": "0.2.0", "run_id": store.run_id,
-               "assisted": store.state.get("assisted", False),
+               "assisted": store.state.get("assisted", False), "report_refs": report_refs, "report_errors": report_errors,
                "mode": mode, "status": status, "stages": stages,
                "error": error_record, "model_artifact_ref": artifact_ref, "solve_result_ref": solve_ref,
                "execution_result_ref": execution_ref,
@@ -221,6 +224,39 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
     store.state["status"] = status
     store.checkpoint()
     return RunResult(store.run_id, store.path, status)
+
+
+
+def report_run(run: Path) -> dict[str, Any]:
+    """Render saved public results without a Provider, Solver or source replay."""
+    store = RunStore(run.parent, resume=run)
+    try:
+        if store.state.get("status") not in {"completed", "artifact_ready", "failed", "cancelled", "unresolved", "needs_input"}:
+            raise RunError("run_active", "reporting", "Report a saved inactive run.")
+        if store.state.get("sdk") != version("llm4om") or store.state.get("host", {}).get("sdk_sha256") != _sdk_sha256():
+            raise RunError("checkpoint_incompatible", "reporting", "Saved SDK identity differs from this renderer.")
+        bundle = _load_verified_record(store, store.projections["bundle.json"])
+        settings = _load_verified_record(store, bundle["requested_config_ref"])
+        ledger = _load_verified_record(store, store.projections["budget-ledger.json"])
+        reporters = resolve_reporters(settings.get("reporters", []), "run", expected=store.state["admission"]["reporters"])
+        row = {"run_id": store.run_id, "status": bundle["status"], "mode": bundle["mode"],
+            "stages": bundle["stages"], "error": bundle["error"], "method_id": settings["method"]["plugin_id"],
+            "provider_id": settings["llm"]["provider_plugin_id"], "model": settings["llm"]["model"], **ledger,
+            "solve": _load_verified_record(store, bundle["solve_result_ref"]) if bundle["solve_result_ref"] else None}
+        refs, errors = render_reports(reporters, {"id": store.run_id, "rows": [row],
+            "summary": {"policy": "Structural checks do not establish semantic correctness. Unknown resources stay null."}},
+            "run", lambda name, raw, ref: store.write(name, raw, ref["artifact_id"]))
+        bundle.update(report_refs=refs, report_errors=errors)
+        if errors:
+            store.json("diagnostics/report-errors.json", {"schema_version": "0.1.0", "errors": errors}, "report-errors")
+        store.emit("reports_rendered", report_errors=errors)
+        bundle.update(artifacts=list(store.refs),
+            public_projections={name: ref for name, ref in store.projections.items() if name != "bundle.json"})
+        store.json("bundle.json", bundle, "bundle")
+        store.checkpoint()
+        return {"run_id": store.run_id, "status": bundle["status"], "report_refs": refs, "report_errors": errors}
+    finally:
+        store.close()
 
 
 def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: dict[str, Any],

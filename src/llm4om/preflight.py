@@ -19,6 +19,7 @@ from llm4om.plugins import MethodPlugin, Plugin, discover_plugins, _quiet, _exce
 from llm4om.compilers import ResolvedCompiler, resolve_compiler, compiler_identity
 from llm4om.execution_plugins import ExecutionResources, resolve_execution_resources
 from llm4om.data_loaders import ResolvedDataLoader, resolve_data_loader
+from llm4om.reporters import ResolvedReporter, resolve_reporters
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class AdmissionPlan:
     compiler: ResolvedCompiler | None = None
     execution: ExecutionResources | None = None
     data_loader: ResolvedDataLoader | None = None
+    reporters: tuple[ResolvedReporter, ...] = ()
 
 
 def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: Path | None = None,
@@ -44,6 +46,8 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     if time.time() >= deadline:
         raise RunError("deadline_exhausted", "admission", "The absolute run deadline expired.")
     inventory = discover_plugins()
+    reporters = resolve_reporters(settings.get("reporters", []), "run", inventory=inventory,
+        expected=expected.get("reporters") if expected is not None else None)
     data_loader = resolve_data_loader(settings, inventory=inventory, expected=expected.get("data_loader") if expected else None)
     provider_plugin = inventory.get(("llm_provider", settings["llm"]["provider_plugin_id"]))
     if provider_plugin is None:
@@ -221,7 +225,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         "data_loader": data_loader.binding, "data_view": data_loader.limits,
         "execution": {"model_backend": execution.backend_binding, "solver": execution.solver_binding},
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
-        "packages": packages, "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": provider_plugin.manifest,
+        "packages": packages, "reporters": [reporter.binding for reporter in reporters], "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": provider_plugin.manifest,
         "provider_origin": provider_plugin.origin, "model": settings["llm"]["model"],
         **({"role_models": {role: {"provider": inventory[("llm_provider", selection["provider_plugin_id"])].manifest,
             "origin": inventory[("llm_provider", selection["provider_plugin_id"])].origin, "model": selection["model"],
@@ -230,7 +234,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 for selection in role_models.values()) else "same_requested_model_roles",
             "role_resource_comparison": "different_role_resources" if any(
                 any(selection[key] != settings["llm"][key] for key in ("provider_plugin_id", "model", "config"))
-            for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers, compiler, execution, data_loader)
+            for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers, compiler, execution, data_loader, tuple(reporters))
 
 
 def _validate_plugin_config(plugin: Plugin, config: dict[str, Any], path: list[str]) -> None:

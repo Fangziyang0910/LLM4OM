@@ -7,7 +7,7 @@ import signal
 from pathlib import Path
 from typing import Any
 
-from llm4om.application import run_problem, resume_run
+from llm4om.application import run_problem, resume_run, report_run
 from llm4om.storage import cancel_run
 from llm4om.control import CancellationToken
 from llm4om.tasks import import_dataset
@@ -33,7 +33,9 @@ def main() -> int:
     benchmark.add_argument("--offline", action="store_true")
     benchmark.add_argument("--resume", action="store_true", help="Keep saved completed cases and continue unfinished work")
     report_command = commands.add_parser("report", help="Export public per-case and grouped experiment reports")
-    report_command.add_argument("--experiment", type=Path, required=True)
+    report_source = report_command.add_mutually_exclusive_group(required=True)
+    report_source.add_argument("--experiment", type=Path)
+    report_source.add_argument("--run", type=Path, help="Render the saved run without LLM/Solver calls")
     edit = commands.add_parser("edit", help="Export or execute an explicit assisted revision")
     edit.add_argument("--run-id", required=True)
     edit.add_argument("--output", type=Path, default=Path("runs"))
@@ -93,8 +95,8 @@ def main() -> int:
         cancellation = CancellationToken()
         previous = signal.signal(signal.SIGINT, lambda signum, frame: cancellation.cancel())
         try:
-            experiment_result = (report_experiment(args.experiment) if args.command == "report" else
-                      run_experiment(args.config, args.output, offline=args.offline, resume=args.resume,
+            experiment_result = ((report_run(args.run) if args.run else report_experiment(args.experiment))
+                      if args.command == "report" else run_experiment(args.config, args.output, offline=args.offline, resume=args.resume,
                                      cancellation=cancellation))
             print(json.dumps(experiment_result, ensure_ascii=False))
             return 0

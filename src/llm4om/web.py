@@ -155,6 +155,8 @@ class WebWorkspace:
             'tasks': [{'id': identifier, 'manifest': str(tasks[identifier])} for identifier in payload['task_ids']],
             'configurations': selections, 'repeats': payload['repeats'], 'budget': payload['budget'],
             'exclusions': payload.get('exclusions', [])}
+        if 'reporters' in payload:
+            spec['reporters'] = payload['reporters']
         _json_file(job / 'spec.json', spec)
         record = {'experiment_id': experiment_id, 'created_at': time.time(), 'status': 'queued',
                   'task_count': len(spec['tasks']), 'configuration_count': len(selections), 'repeats': spec['repeats']}
@@ -225,14 +227,28 @@ class WebWorkspace:
 
     def export_experiment(self, experiment_id: str) -> bytes:
         job = self._experiment(experiment_id)
+        summary = parse_json(read_public_bytes(job / 'batch/reports/summary.json', max_bytes=MAX_REQUEST))
+        refs = summary.get('report_refs')
+        names = ['experiment.json', 'reports/summary.json']
+        if refs is None:
+            names.extend(['reports/results.jsonl', 'reports/results.csv', 'reports/report.md', 'reports/report.html'])
+        else:
+            for ref in refs:
+                if ref['namespace'] != 'experiment_public' or not ref['relative_path'].startswith('reports/'):
+                    raise RunError('private_reference', 'web', 'Only public report references can be exported.')
+                names.append(ref['relative_path'])
         output = BytesIO()
         size = 0
         with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
-            for name in ('experiment.json', 'reports/results.jsonl', 'reports/results.csv', 'reports/summary.json', 'reports/report.md', 'reports/report.html'):
-                path = job / 'batch' / name
+            for name in names:
+                path = public_path(job / 'batch', name)
                 if not path.is_file():
                     raise RunError('not_found', 'web', 'This experiment has not saved its public report yet.')
                 raw = read_public_bytes(path, max_bytes=MAX_REQUEST)
+                if refs is not None and name not in {'experiment.json', 'reports/summary.json'}:
+                    ref = next(item for item in refs if item['relative_path'] == name)
+                    if len(raw) != ref['size_bytes'] or hashlib.sha256(raw).hexdigest() != ref['sha256']:
+                        raise RunError('artifact_hash_mismatch', 'web', 'Public report differs from its saved reference.')
                 size += len(raw)
                 if size > 64 * 1024 * 1024:
                     raise RunError('export_limit', 'web', 'Public experiment export exceeds64 MiB.')

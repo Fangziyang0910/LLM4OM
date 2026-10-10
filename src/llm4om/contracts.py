@@ -447,8 +447,8 @@ def validate_config(settings: dict[str, Any]) -> None:
                                         "max_repairs", "max_solver_calls", "wall_time_s", "max_concurrency"]}),
         "store": _object({"plugin_id": {"const": "llm4om.stores.filesystem"},
                           "config": _object({"root": TEXT})}),
-        "reporters": {"type": "array", "items": _object({"plugin_id": {
-            "enum": ["llm4om.reporters.jsonl", "llm4om.reporters.markdown"]}})},
+        "reporters": {"type": "array", "maxItems": 32, "items": _object({"plugin_id": TEXT,
+            "config": {"type": "object"}}, ["plugin_id"])},
         "evaluation": _object({"protocol_id": {"const": "llm4om.eval.public-v0.1"},
                                "evaluator_plugin_id": {"const": "llm4om.evaluators.structural"}}),
         "allowed_problem_types": {"type": "array", "minItems": 1, "uniqueItems": True,

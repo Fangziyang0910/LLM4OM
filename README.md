@@ -193,3 +193,5 @@ CoE专家路由与原生函数的开发实现、真实外部模型／原问题�
 公开问题／建模输出的人工派生编辑见 [S09-C](docs/development/s09-assisted-edits.md)：CLI使用`llm4om edit`导出文档并执行新版本，网页使用“编辑并创建派生版本”。父产物和预算保留，结果明确标记人工辅助。
 
 Web并发应用进程与合作取消见[S09](docs/development/s09-process-isolation.md)。
+
+已保存的单问题可用llm4om report --run runs/RUN_ID重新呈现，不重调模型／Solver；Reporter接入见[记录](docs/development/s03-reporters.md)。

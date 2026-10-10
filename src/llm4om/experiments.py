@@ -1,10 +1,7 @@
 """Frozen batch execution and public, denominator-preserving reports."""
 
-import csv
 import fcntl
 import hashlib
-import html
-import io
 import json
 import platform
 import re
@@ -26,6 +23,7 @@ from llm4om.preflight import prepare_run
 from llm4om.task_plugins import load_registered_case
 from llm4om.evaluation import _verify_ref
 from llm4om.storage import cancel_run
+from llm4om.reporters import DEFAULT_REPORTERS, resolve_reporters, render_reports, publish_report
 
 
 LIMITS = ('max_llm_attempts', 'max_total_tokens', 'max_solver_calls')
@@ -69,8 +67,10 @@ def _positive(value: Any, name: str, maximum: int = 1000000, minimum: int = 1) -
 def _prepare(config: Path, offline: bool) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     settings = read_config(config)
     required = {'schema_version', 'experiment_id', 'tasks', 'configurations', 'repeats', 'budget', 'exclusions'}
-    if set(settings) != required or settings['schema_version'] != '0.1.0':
+    if not required <= set(settings) or set(settings) - required - {'reporters'} or settings['schema_version'] != '0.1.0':
         raise RunError('invalid_experiment', 'admission', 'Expected an explicit ExperimentSpec 0.1.0.')
+    selections = settings.get('reporters', DEFAULT_REPORTERS)
+    reporters = resolve_reporters(selections, 'experiment')
     experiment_id = _id(settings['experiment_id'])
     repeats = _positive(settings['repeats'], 'repeats', 1000)
     budget = settings['budget']
@@ -189,7 +189,7 @@ def _prepare(config: Path, offline: bool) -> tuple[dict[str, Any], list[dict[str
     if not jobs:
         raise RunError('invalid_experiment', 'admission', 'The matrix has no included jobs.')
     snapshot = {'schema_version': '0.1.0', 'experiment_id': experiment_id, 'offline': offline, 'repeats': repeats,
-        'budget': budget, 'sdk': version('llm4om'), 'sdk_sha256': _sdk_sha256(), 'python': platform.python_version(), 'cells': cells}
+        'budget': budget, 'sdk': version('llm4om'), 'sdk_sha256': _sdk_sha256(), 'python': platform.python_version(), 'cells': cells, 'reporters': selections, 'reporter_bindings': [reporter.binding for reporter in reporters]}
     return {**snapshot, '_input_sources': sources}, jobs
 
 
@@ -375,6 +375,9 @@ def report_experiment(output: Path) -> dict[str, Any]:
     """Export public JSONL/CSV and per-protocol/config/repeat Markdown/HTML summaries."""
     state = parse_reference_json((output / '.private/experiment-state.json').read_bytes())
     snapshot = state['snapshot']
+    if (snapshot.get('sdk') != version('llm4om') or snapshot.get('sdk_sha256') != _sdk_sha256()
+            or 'reporters' not in snapshot or 'reporter_bindings' not in snapshot):
+        raise RunError('checkpoint_incompatible', 'reporting', 'Saved experiment has no compatible SDK/Reporter identities.')
     rows = [state['results'].get(job['job_id'], _empty(job, job['status'])) for job in state['jobs']]
     groups = []
     for cell in snapshot['cells']:
@@ -407,33 +410,9 @@ def report_experiment(output: Path) -> dict[str, Any]:
                'excluded_cells': [cell for cell in snapshot['cells'] if cell['status'] == 'excluded'],
                'budget': snapshot['budget'], 'reserved_run_caps': state['reserved'], 'elapsed_s': state.get('elapsed_s'),
                'policy': 'Groups keep protocol/source/config/repeat separate. Mock is engineering evidence; assisted results require a separate human-assisted comparison. Unknown costs/tokens are null. Unfinished and failed jobs retain frozen denominators.'}
-    reports = output / 'reports'
-    reports.mkdir(exist_ok=True)
-    (reports / 'results.jsonl').write_text(''.join(json.dumps(row, ensure_ascii=False, allow_nan=False) + '\n' for row in rows), encoding='utf-8')
-    columns = ['task_id', 'configuration_id', 'case_id', 'repeat', 'status', 'run_id', 'evidence_origin', 'eligible', 'verified_eligible',
-               *[metric + '_' + suffix for metric in METRICS for suffix in ('numerator', 'denominator', 'rate')],
-               'llm_attempts', 'solver_calls', 'total_tokens', 'cost', 'elapsed_s']
-    stream = io.StringIO(newline='')
-    writer = csv.DictWriter(stream, fieldnames=columns, extrasaction='ignore')
-    writer.writeheader()
-    # CSV formula injection is blocked while preserving original identifiers in JSONL.
-    for row in rows:
-        writer.writerow({key: "'" + value if isinstance(value, str) and value.startswith(('=', '+', '-', '@', '\t', '\r')) else value for key, value in row.items()})
-    (reports / 'results.csv').write_text(stream.getvalue(), encoding='utf-8')
-    _write(reports / 'summary.json', summary)
-    headers = ['Task', 'Configuration', 'Repeat', 'Completed/selected', 'Independent feasible', 'Objective match', 'Verified solution', 'Tokens', 'Cost']
-    table = []
-    for group in groups:
-        table.append([group['task_id'], group['configuration_id'], str(group['repeat']), f"{group['N_completed']}/{group['N_selected']}",
-            *[f"{group[metric + '_numerator']}/{group[metric + '_denominator']}" if group[metric + '_denominator'] else 'not_available' for metric in METRICS],
-            str(group['total_tokens']) if group['total_tokens'] is not None else 'unknown', str(group['cost']) if group['cost'] is not None else 'unknown'])
-    markdown = f"# LLM4OM experiment {snapshot['experiment_id']}\n\n{summary['policy']}\n\n"
-    markdown += '| ' + ' | '.join(headers) + ' |\n|' + '|'.join(['---'] * len(headers)) + '|\n'
-    markdown += ''.join('| ' + ' | '.join(str(value).replace('|', '\\|').replace('\n', ' ') for value in row) + ' |\n' for row in table)
-    markdown += '\nFull stage counts, failures, resource availability and excluded cells: summary.json. Per-case evidence: results.jsonl.\n'
-    (reports / 'report.md').write_text(markdown, encoding='utf-8')
-    rendered = '<!doctype html><html lang="en"><meta charset="utf-8"><title>LLM4OM experiment</title><h1>' + html.escape(snapshot['experiment_id']) + '</h1><p>' + html.escape(summary['policy']) + '</p><table><caption>Each repeat is reported separately</caption><thead><tr>' + ''.join('<th scope="col">' + html.escape(header) + '</th>' for header in headers) + '</tr></thead><tbody>'
-    rendered += ''.join('<tr>' + ''.join('<td>' + html.escape(str(value)) + '</td>' for value in row) + '</tr>' for row in table)
-    rendered += '</tbody></table><p>Full stage counts, failures and exclusions: <a href="summary.json">summary.json</a>. <a href="results.jsonl">Per-case evidence</a>.</p></html>\n'
-    (reports / 'report.html').write_text(rendered, encoding='utf-8')
+    reporters = resolve_reporters(snapshot['reporters'], 'experiment', expected=snapshot['reporter_bindings'])
+    refs, errors = render_reports(reporters, {'id': snapshot['experiment_id'], 'rows': rows, 'summary': summary},
+        'experiment', lambda name, raw, ref: publish_report(output, name, raw, ref))
+    summary.update(report_refs=refs, report_errors=errors)
+    _write(output / 'reports/summary.json', summary)
     return summary

@@ -1,6 +1,7 @@
 """LLM4OM public application, task and evaluation interfaces."""
 
 from llm4om.storage import cancel_run
+from llm4om.reporters import Reporter, ReportContext, ReportDestination, resolve_reporters
 from llm4om.control import CancellationToken
 from llm4om.backends import ModelHandle, ModelBackend, NativeModelBackend, PyomoBackendFactory, GurobiBackendFactory
 from llm4om.solvers import SolverBackend, HighsSolverFactory, GurobiSolverFactory
@@ -9,7 +10,7 @@ from llm4om.compilers import Compiler, LPIRPyomoFactory, LPIRPyomoCompiler, reso
 from llm4om.data_loaders import DataLoader, DataView, DataContext, PublicDataFactory, resolve_data_loader
 from llm4om.linear import CompiledCode
 from llm4om.methods import FactoryCodeProposal, ScriptCodeProposal, GenerationFailure, MethodContext, MethodResources, MethodOutcome, ModelProposal
-from llm4om.application import RunResult, run_problem, resume_run
+from llm4om.application import RunResult, run_problem, resume_run, report_run
 from llm4om.tasks import EvaluationCase, TaskAdapter, Evaluator, FrozenTaskAdapter, NL4OptAdapter, import_dataset
 from llm4om.evaluation import NL4OptEvaluator, evaluate_case, evaluate_outcome
 from llm4om.mamo import MAMOAdapter, MAMOEvaluator
@@ -22,7 +23,8 @@ from llm4om.experiments import run_experiment, report_experiment, cancel_experim
 from llm4om.assisted import edit_run, export_edit
 
 __all__ = [
-    "run_experiment", "report_experiment", "cancel_experiment",
+    "Reporter", "ReportContext", "ReportDestination", "resolve_reporters",
+    "report_run", "run_experiment", "report_experiment", "cancel_experiment",
     "edit_run", "export_edit",
     "ModelHandle", "FactoryCodeProposal", "ScriptCodeProposal", "GenerationFailure", "MethodContext", "MethodResources", "MethodOutcome", "ModelProposal",
     "CancellationToken", "RunResult", "run_problem", "resume_run", "cancel_run", "EvaluationCase", "TaskAdapter", "Evaluator",

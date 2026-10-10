@@ -26,7 +26,7 @@ Manifest 字段：
 
 source 对研究方法另记录研究路线（prompting-based／training-based／hybrid）、接入方式（原流程适配／流程变体）、原模型与实际外部 LLM 的差异，以及可获得的 `paper_url`、`citation_key`、`paper_version`、`upstream_commit`、`variant_id` 与适配差异引用。名称或题目不是唯一身份；论文、模型权重、推理流程与数据集分别关联。考察提交不自动作为已验证接入版本。
 
-内部 registry 键为 `(kind, plugin_id)`，一次环境不允许相同键的多个活动版本。与内置键冲突必须报错，不能以安装顺序覆盖。已实现的method／llm_provider／task_adapter／evaluator／compiler／model_backend／solver_backend／data_loader使用entry point分组`llm4om.plugins`；加载第三方Python包会执行可信插件代码，因此安装／加载与生成代码隔离是两个问题。
+内部 registry 键为 `(kind, plugin_id)`，一次环境不允许相同键的多个活动版本。与内置键冲突必须报错，不能以安装顺序覆盖。已实现的method／llm_provider／task_adapter／evaluator／compiler／model_backend／solver_backend／data_loader／reporter使用entry point分组`llm4om.plugins`；加载第三方Python包会执行可信插件代码，因此安装／加载与生成代码隔离是两个问题。
 
 ### 能力声明与匹配规则
 
@@ -52,7 +52,7 @@ source 对研究方法另记录研究路线（prompting-based／training-based�
 | `evaluator` | `evaluate(case, outcome, context) -> EvaluationResult` | 隐藏评分进程；不能反向泄漏 oracle |
 | `executor` | `async execute(request, context) -> ExecutionResult` | 执行安全模式、资源限制、清理与证据 |
 | `artifact_store` | `put(value, metadata) -> ArtifactRef` / `get(ref, access) -> bytes` | 内容寻址与访问控制；引用不是任意宿主路径 |
-| `reporter` | `render(experiment_result, destination, context) -> ReportRef` | 只读取已形成结果，不重新决定正确性 |
+| `reporter` | `render(public_result, destination, context) -> list[ReportRef]` | 只读取已形成结果，不重新决定正确性 |
 
 Registry、Planner、预算账本与状态机是 1.0 稳定核心，不为了未来假设把每个内部函数变成公开插件。Executor／Store／Reporter 允许替换，但初期只保证表中小接口。
 
@@ -1259,3 +1259,11 @@ ExperimentSpec.tasks的`{id, manifest}`可增加case_ids，表示原冻结select
 ## Web并发执行与取消
 
 SDK0.28.0的Web提交／恢复／编辑通过独立CLI应用进程调用共同Python用例；plugin discovery和doctor不与运行共享解释器。公开HTTP字段不变。取消先向拥有的应用进程组发送SIGINT，最多十秒后清理；若未保存完整终态，job公开错误保留，不伪称完成。资源子进程默认即时取消保持不变。详见[S09](development/s09-process-isolation.md)。
+
+## Reporter公开结果契约
+
+SDK0.29.0的Reporter声明reporter_profile=public_results/0.1.0、report_scopes（run／experiment）与report_filenames。输入kind为public_results，输出为report。RunConfig／ExperimentSpec.reporters为最多32项的plugin_id／可选config列表。RunConfig省略时无附加报告；实验省略时选择内置JSONL／CSV／Markdown／HTML。summary.json保留给核心，不能被Reporter覆盖；最多128个声明文件名不得冲突。
+
+render接收公开result（id、rows、summary）深复制、ReportDestination与ReportContext(scope)，返回其全部实际产出的ReportRef列表。destination.put(name, bytes, media_type)只接收唯一声明文件；命名不包含目录、URL或点开头，输出总上限64MiB。核心对照引用／bytes并发布，single-run引用转成RunStore实际不可变引用；实验namespace为experiment_public。插件只生成呈现，不修改评估／选择／分组。
+
+RunBundle／实验summary保存report_refs与report_errors。渲染错误不重跑建模；report_run／report_experiment使用固定身份重试已保存公开结果。CLI为report --run PATH或report --experiment PATH。第三方Python插件仍是可信安装代码；公开接口的受限输入不等于进程沙箱。见[实现与证据](development/s03-reporters.md)。

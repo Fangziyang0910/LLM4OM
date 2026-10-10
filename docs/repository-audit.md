@@ -292,3 +292,9 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `scripts/acceptance_load.py` | 真实离线批量性能验收 | cgroup4vCPU／8GiB、直接基线、1000终态与P95 |
 | `scripts/acceptance_faults.py` | 100个CLI任务的故障集合 | 合成HTTP／实际HiGHS、取消／显式重跑与父预算 |
 | `docs/development/s08-load-acceptance.md` | 性能／故障证据与完成边界 | 原始记录、准确入口范围与剩余验收 |
+
+| `src/llm4om/reporters.py` | 公开结果呈现与共同Reporter注册 | 声明scope／文件、预算独立、bytes引用与隔离副本 |
+| `examples/plugins/fixture_reporter/pyproject.toml` | 独立Reporter分发和entry point | 单独wheel安装与范围依赖 |
+| `examples/plugins/fixture_reporter/src/llm4om_fixture_reporter/__init__.py` | Reporter工程fixture | 公开观察／副本修改／有界错误，不评分 |
+| `tests/test_reporter_plugins.py` | 公共CLI／SDK的Reporter验收 | 实际HiGHS、引用／错误、恢复与报告转义 |
+| `docs/development/s03-reporters.md` | Reporter实现支持与证据 | 来源契约／公开输入／未验收范围 |
