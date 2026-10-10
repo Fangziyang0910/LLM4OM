@@ -21,3 +21,5 @@ doctor临时配置位于原工作目录，保持相对配置资源的解析规�
 最终源码／Worker代码hash为72b2f0d37365b3f32a94fdcb4cb73eef8c8d174bea159f385afe9a3a460a6b03；最终镜像sha256:35403f20b47bb16326e0facb49c5e6a294debb521ecc9e06a856267ec6fe7d3a。网页批量／取消／继续的既有实际HiGHS路径18.472s通过，见本机batch-check.log。Standards／Spec由父代理自查，不能替代独立双路审阅；PR保持draft，不合并、不公开发布。
 
 本机Chrome通过真实10.150.68.218:8767页面验收，桌面1440×1100与手机390×844截图已查看。OptiMUS inline选择同步到Gurobi，doctor实际预检通过，四个历史job可读取，批量编辑器可打开；页面脚本错误为零。此次浏览器检查没有提交新模型任务。截图和运行脚本保存在/tmp/llm4om-s09-process-evidence；Cua控制接口没有提供浏览器，本次使用本机现有Playwright／Chrome，不将HTTP检查代称为浏览器验收。
+
+浏览器检查补齐OptiMUS inline完整config断言：代码自查发现通用方法分支将rag_mode清空，已在7bfefc2修复；实际浏览器确认rag_mode=null与Gurobi，并完成该变体的doctor预检。变更仅涉及Web静态资源，不改变Python执行身份或已冻结Worker／运行记录；无需重建或重跑其Solver。
