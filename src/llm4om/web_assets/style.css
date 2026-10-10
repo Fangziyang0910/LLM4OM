@@ -1298,3 +1298,23 @@ pre {
   padding-top: 16px;
   border-top: 1px solid var(--line);
 }
+.version-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 14px;
+}
+.version-selector select {
+  width: auto;
+  max-width: 100%;
+  font-size: 11px;
+  background: white;
+}
+.version-selector[hidden] {
+  display: none;
+}
+.run-heading .version-selector {
+  flex-wrap: wrap;
+}

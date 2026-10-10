@@ -1,6 +1,6 @@
 # S09 用户建模界面
 
-用途：记录面向用户的单问题 Web 流程、实际支持和验收。状态：SDK／Worker0.30.0 开发实现。规范来源为 [插件契约](../plugin-contracts.md)、[阶段设计](../adr/0004-formulation-and-code.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。
+用途：记录面向用户的单问题 Web 流程、实际支持和验收。状态：SDK／Worker0.32.0 开发实现。规范来源为 [插件契约](../plugin-contracts.md)、[阶段设计](../adr/0004-formulation-and-code.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。
 
 ## 用户流程
 
@@ -78,3 +78,13 @@ OptiMUS六个保存状态按实际事件顺序出现：问题与参数、优化�
 问题修订显示新revision及重新调用模型的提示；代码修订保留原问题和表述，使用现有assisted执行，不新增模型请求。总预算包含父消耗，界面不自动重置或提高。空修改原因和不足的候选总上限被阻止；提交前重新检查当前run_id，版本已改变时要求重新载入。新结果与方法名称显示人工辅助，避免误认自动建模。
 
 本机浏览器在隔离的完成运行副本中，经可读代码编辑器把两个变量上界改为1，实际容器HiGHS目标5。原bundle bytes不变，external_llm_requests不增加，Solver增加1，RunBundle.assisted=true；空原因拒绝、问题表单／revision／调用提示及390px无溢出／无页面错误通过。原服务的用户记录未用于修改测试。入口tests/web_edit_flow.cjs要求明确的临时workspace；不触发真实云调用，不重建镜像。
+
+## 运行版本与指定父版本
+
+存在多个已保存运行时，结果页提供版本选择，显示完成状态、人工修订标记和父运行。选择后，数学表述、代码、结果、导出和编辑共同绑定该版本；轮询保留选择。最新版本继续展示实际进展。历史版本不提供当前任务的取消／恢复／重跑按钮。
+
+用户可以从原始自动建模版本再次修订问题。代码手工版本仍保留其实际无模型执行配置；页面不会替它找回或替换Provider。预算、数据和方法支持检查沿用共同应用用例，原bundle不覆盖。不同SDK的历史阅读不等于checkpoint恢复兼容。
+
+本机公共HTTP验收：确定性Provider加实际HiGHS得到原始13，手工Code派生用容器HiGHS得到5，再明确选择原始父版本修订问题并重新建模得到13。只有两次合成Provider请求，父bundle bytes不变；读取和导出选定版本、父lineage及非法路径拒绝通过。tests/test_web_versions.py单项16.308s通过。
+
+Chrome通过原始13／派生5的版本切换、对应导出链接、原始父版本编辑、轮询选择保持及390px无溢出／无页面错误。入口tests/web_history_flow.cjs只读检查，零POST／零模型调用。证据在本机/tmp/llm4om-web-history-evidence，不提交运行数据。Worker0.32.0最终身份为sha256:2e02db6e72b1477c4403a5068aa23c71a0b59afcad2c6fb4ed3d959769d769cd；初次预检查镜像保留为0.32.0-precheck，没有用它验收。

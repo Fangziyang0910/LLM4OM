@@ -17,7 +17,7 @@ import tempfile
 import threading
 import time
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 import zipfile
 
@@ -291,15 +291,40 @@ class WebWorkspace:
                 return saved
         return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
 
-    def edit_template(self, job_id: str, operation: str) -> dict[str, Any]:
-        run = self._run_path(job_id)
+    def _selected_run(self, job_id: str, run_id: str | None = None) -> Path | None:
+        if run_id is None:
+            return self._run_path(job_id)
+        run = public_path(self._job(job_id) / 'runs', _identifier(run_id), require_file=False)
+        if not run.is_dir():
+            raise RunError('not_found', 'web', 'Selected run is not stored in this workspace job.')
+        return run
+
+    def versions(self, job_id: str) -> list[dict[str, Any]]:
+        versions = []
+        for path in (self._job(job_id) / 'runs').glob('*'):
+            if path.is_symlink() or not path.is_dir() or len(path.name) != 32 or any(char not in '0123456789abcdef' for char in path.name):
+                continue
+            if not (path / 'bundle.json').is_file():
+                continue
+            bundle_path = public_path(path, 'bundle.json')
+            bundle = parse_json(read_public_bytes(bundle_path, max_bytes=MAX_REQUEST))
+            if bundle.get('run_id') != path.name:
+                raise RunError('artifact_hash_mismatch', 'web', 'Saved version identity differs from its directory.')
+            lineage = parse_json(self.read_ref(path, bundle['lineage_ref'])) if bundle.get('lineage_ref') else {}
+            versions.append({'run_id': path.name, 'status': bundle['status'],
+                'parent_run_id': lineage.get('parent_run_id'), 'operation': lineage.get('operation'),
+                'assisted': bundle.get('assisted', False), 'saved_at': bundle_path.stat().st_mtime})
+        return sorted(versions, key=lambda item: item['saved_at'], reverse=True)
+
+    def edit_template(self, job_id: str, operation: str, run_id: str | None = None) -> dict[str, Any]:
+        run = self._selected_run(job_id, run_id)
         if run is None:
             raise RunError('not_found', 'web', 'No saved run is available to edit.')
         return export_edit(run, operation=operation)
 
     def submit_edit(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         job = self._job(job_id)
-        run = self._run_path(job_id)
+        run = self._selected_run(job_id, payload.get('parent_run_id'))
         if run is None:
             raise RunError('not_found', 'web', 'No saved run is available to edit.')
         if not isinstance(payload.get('edits'), dict):
@@ -447,10 +472,11 @@ class WebWorkspace:
             raise RunError('artifact_hash_mismatch', 'web', 'Public artifact differs from its immutable reference.')
         return raw
 
-    def inspect(self, job_id: str) -> dict[str, Any]:
+    def inspect(self, job_id: str, run_id: str | None = None) -> dict[str, Any]:
         job = self._job(job_id)
         record = parse_json((job / 'job.json').read_bytes())
-        run = self._run_path(job_id)
+        latest = self._run_path(job_id)
+        run = self._selected_run(job_id, run_id)
         if run is None:
             return {'job': record, 'bundle': None, 'events': [], 'artifacts': []}
         bundle = parse_json((run / 'bundle.json').read_bytes()) if (run / 'bundle.json').is_file() else None
@@ -478,10 +504,17 @@ class WebWorkspace:
                     raw = self.read_ref(run, ref)
                     contents[key] = parse_json(raw) if ref['media_type'] == 'application/json' else raw.decode('utf-8', errors='replace')
         record.update(run_id=run.name, status=bundle['status'] if bundle and job_id not in self.active and not record.get('error') else record['status'])
-        return {'job': record, 'bundle': bundle, 'events': events, 'artifacts': refs, 'contents': contents}
+        historical = latest is None or latest.name != run.name
+        if historical:
+            problem = contents.get('public-problem.json')
+            record.pop('error', None)
+            record.update(status=bundle['status'] if bundle else 'running',
+                          description=problem.get('description', record['description']) if isinstance(problem, dict) else record['description'])
+        return {'job': record, 'bundle': bundle, 'events': events, 'artifacts': refs, 'contents': contents,
+                'versions': self.versions(job_id), 'latest_run_id': latest.name if latest else None, 'historical': historical}
 
-    def export(self, job_id: str) -> bytes:
-        run = self._run_path(job_id)
+    def export(self, job_id: str, run_id: str | None = None) -> bytes:
+        run = self._selected_run(job_id, run_id)
         if run is None or not (run / 'bundle.json').is_file():
             raise RunError('not_found', 'web', 'No public bundle has been saved.')
         bundle = parse_json((run / 'bundle.json').read_bytes())
@@ -597,12 +630,13 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                     result = workspace.submit(payload)
                 elif len(parts) >= 3 and parts[:2] == ['api', 'jobs']:
                     job_id = _identifier(parts[2])
+                    query = parse_qs(address.query)
+                    selected_run = query.get('run_id', [None])[0]
                     if len(parts) == 3 and not mutation:
-                        result = workspace.inspect(job_id)
+                        result = workspace.inspect(job_id, selected_run)
                     elif len(parts) == 4 and parts[3] == 'edit-template' and not mutation:
-                        from urllib.parse import parse_qs
-                        operation = parse_qs(address.query).get('operation', ['code'])[0]
-                        result = workspace.edit_template(job_id, operation)
+                        operation = query.get('operation', ['code'])[0]
+                        result = workspace.edit_template(job_id, operation, selected_run)
                     elif len(parts) == 4 and parts[3] == 'edit' and mutation:
                         result = workspace.submit_edit(job_id, payload)
                     elif len(parts) == 4 and parts[3] == 'cancel' and mutation:
@@ -610,7 +644,7 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                     elif len(parts) == 4 and parts[3] == 'resume' and mutation:
                         result = workspace.resume(job_id, payload)
                     elif len(parts) == 4 and parts[3] == 'export' and not mutation:
-                        self.send(200, workspace.export(job_id), 'application/zip')
+                        self.send(200, workspace.export(job_id, selected_run), 'application/zip')
                         return
                     else:
                         raise RunError('not_found', 'web', 'Unknown workbench action.')

@@ -312,3 +312,6 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/web_process_flow.cjs` | 浏览器中的方法配置与公开中间版本验收 | 零POST、Manifest兼容选项、版本定位与选择保持、窄屏 |
 
 | `tests/web_edit_flow.cjs` | 可读派生编辑的本机浏览器验收 | 临时完成run副本、真实容器HiGHS、父结果／模型计数／assisted标记 |
+
+| `tests/test_web_versions.py` | 历史版本与明确父运行的公共HTTP验收 | 实际HiGHS、读取／导出、派生lineage、父bundle和非法路径 |
+| `tests/web_history_flow.cjs` | 版本浏览的本机Chrome验收 | 零POST、13／5版本切换、选定父编辑、轮询保持和窄屏 |

@@ -5,6 +5,7 @@ let token = "",
   plugins = [],
   uploads = [],
   currentJob = null,
+  selectedRun = null,
   currentExperiment = null,
   snapshot = null,
   activeTab = "formulation",
@@ -259,6 +260,7 @@ async function refreshJobs() {
   }
 }
 async function openJob(id) {
+  selectedRun = null;
   $("assisted-editor").hidden = true;
   $("step-output").hidden = true;
   snapshot = null;
@@ -379,15 +381,46 @@ function metric(label, value) {
 }
 async function refreshRun() {
   if (!currentJob) return;
-  snapshot = await api(`/api/jobs/${currentJob}`);
+  const jobId = currentJob,
+    runId = selectedRun;
+  const result = await api(
+    `/api/jobs/${jobId}${runId ? "?run_id=" + runId : ""}`,
+  );
+  if (currentJob !== jobId || selectedRun !== runId) return;
+  snapshot = result;
   const fingerprint = JSON.stringify([
     snapshot.job,
     snapshot.artifacts,
     snapshot.events,
+    snapshot.versions,
+    snapshot.latest_run_id,
   ]);
   if (fingerprint === renderFingerprint) return;
   renderFingerprint = fingerprint;
   const { job, bundle, contents = {} } = snapshot;
+  const versions = snapshot.versions || [];
+  $("run-version").replaceChildren();
+  const latestOption = UI.node("option", "", "最新版本 / 正在执行");
+  latestOption.value = "";
+  $("run-version").append(latestOption);
+  for (const version of versions) {
+    const option = UI.node(
+      "option",
+      "",
+      (version.assisted ? "人工修订" : "运行") +
+        " · " +
+        UI.status(version.status) +
+        " · " +
+        version.run_id.slice(0, 8) +
+        (version.parent_run_id
+          ? " ← " + version.parent_run_id.slice(0, 8)
+          : " · 原始版本"),
+    );
+    option.value = version.run_id;
+    $("run-version").append(option);
+  }
+  $("run-version").value = selectedRun || "";
+  $("run-version").parentElement.hidden = versions.length < 2;
   const methodId =
     contents["public-config.json"]?.method?.plugin_id || job.method;
   $("run-title").textContent = job.description;
@@ -437,7 +470,8 @@ async function refreshRun() {
       (bundle?.error || job.error).message || "运行未完成，请查看运行详情。",
       true,
     );
-  $("export").href = `/api/jobs/${currentJob}/export`;
+  $("export").href =
+    `/api/jobs/${currentJob}/export${selectedRun ? "?run_id=" + selectedRun : ""}`;
   $("export").hidden = !bundle;
   const request = contents[publicValue(bundle?.clarification_request_ref)];
   $("clarification").hidden = job.status !== "needs_input";
@@ -453,15 +487,34 @@ async function refreshRun() {
     );
   }
   renderArtifact();
-  $("cancel").hidden = !["running", "queued"].includes(job.status);
-  $("resume").hidden = !["failed", "cancelled"].includes(job.status);
+  $("cancel").hidden =
+    snapshot.historical || !["running", "queued"].includes(job.status);
+  $("resume").hidden =
+    snapshot.historical || !["failed", "cancelled"].includes(job.status);
+  $("rerun").hidden = Boolean(snapshot.historical);
+  $("edit-run").disabled = ["running", "queued"].includes(job.status);
 }
+$("run-version").onchange = async () => {
+  selectedRun = $("run-version").value || null;
+  renderFingerprint = "";
+  snapshot = null;
+  $("assisted-editor").hidden = true;
+  $("step-output").hidden = true;
+  $("artifact-choice").replaceChildren();
+  artifactSelectedByUser = false;
+  try {
+    await refreshRun();
+  } catch (error) {
+    notice(error.message, true);
+  }
+};
 $("new-run").onclick = () => {
   $("step-output").hidden = true;
   currentExperiment = null;
   $("experiment-editor").hidden = true;
   $("experiment-result").hidden = true;
   currentJob = null;
+  selectedRun = null;
   snapshot = null;
   document.querySelector('[data-tab="formulation"]').click();
   $("editor").hidden = false;
@@ -825,7 +878,7 @@ async function loadEditTemplate() {
   if (!currentJob) return;
   const parent = { job: currentJob, run: snapshot.job.run_id };
   const document = await api(
-    `/api/jobs/${parent.job}/edit-template?operation=${$("edit-operation").value}`,
+    `/api/jobs/${parent.job}/edit-template?operation=${$("edit-operation").value}&run_id=${parent.run}`,
   );
   if (currentJob !== parent.job || snapshot?.job?.run_id !== parent.run)
     throw new Error("运行版本已改变，请重新载入编辑内容。");
@@ -880,13 +933,18 @@ $("submit-edit").onclick = async () => {
     if (!editSubmission || currentJob !== editParent?.job)
       throw new Error("请先载入当前运行的编辑内容。");
     const edits = editSubmission();
-    const latest = await api(`/api/jobs/${currentJob}`);
+    const latest = await api(
+      `/api/jobs/${currentJob}?run_id=${editParent.run}`,
+    );
     if (latest.job.run_id !== editParent.run)
       throw new Error("运行版本已改变，请重新载入编辑内容。");
     $("assisted-document").value = pretty(edits);
     await api(`/api/jobs/${currentJob}/edit`, {
       edits,
+      parent_run_id: editParent.run,
     });
+    selectedRun = null;
+    renderFingerprint = "";
     $("assisted-editor").hidden = true;
     notice("人工修订已提交。原运行保留，新结果会记录父运行和预算。");
     await refreshRun();

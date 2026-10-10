@@ -1276,6 +1276,10 @@ Direct联合生成保持一次调用；OptiMUS与CoE在原有实际模型调用�
 
 GET /api/jobs/JOB_ID在无最终RunBundle时读取有界、hash校验且run_id匹配的checkpoint，返回其中public projections的已验证公开内容。HTTP不返回checkpoint本体、私有state、凭据或隐藏评测材料。最终结果遵循RunBundle.solve_result_ref与SolveResult.solution_ref；前端不得使用第一个中间求解代替最终选择。呈现范围与证据见 [用户界面](development/s09-user-experience.md)。
 
+SDK／Worker0.32.0的单问题HTTP响应增加versions、latest_run_id和historical。versions只列同一工作项中已保存bundle的运行，提供run_id、status、parent_run_id、operation、assisted和saved_at（bundle文件的本机mtime，不是创建时间）。GET详情、edit-template和export可传run_id；省略时读取当前运行。显式选择必须是此工作项runs目录内的公开运行，拒绝路径穿越和符号链接，不接受其他工作项的run_id。
+
+POST edit可传parent_run_id，明确从该版本派生；省略时沿用当前运行。取消、恢复和澄清继续作用于当前运行，历史选择不改变后台任务。查看历史不会迁移checkpoint或重跑方法；编辑仍执行共同用例的身份、数据、预算及方法能力检查。人工Code版本若没有可用LLM配置，问题修订需选择原始自动建模版本，不静默更换Provider。
+
 ## 显式 Provider 代理
 
 SDK0.31.0的内置HTTPTextFactory配置可增加proxy_url，值为无认证信息的HTTP代理地址，仅允许根路径／无query／fragment。HTTPS目标使用标准CONNECT与TLS校验；SOCKS和代理URL认证未支持。缺省保持直连，环境HTTPS_PROXY不自动选择路由。声明代理时，隔离传输子进程清除NO_PROXY／no_proxy对路由的覆盖；调用进程环境不修改。重定向、共享账本、deadline、取消和未知attempt的恢复规则不变。
