@@ -159,15 +159,22 @@ def solve_native(handle: ModelHandle, options: dict[str, Any], *, model_backend:
 
 def solve_gurobi(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
     _validate_options(options)
+    from llm4om.backends import PyomoFactoryBackend
+    return solve_gurobi_handle(PyomoFactoryBackend().load(code, {}), options)
+
+
+def solve_gurobi_handle(handle: ModelHandle, options: dict[str, Any]) -> dict[str, Any]:
+    _validate_options(options)
+    from llm4om.backends import PyomoFactoryBackend
+    PyomoFactoryBackend().export(handle)
     import gurobipy as gp
     import pyomo.environ as pyo
     from pyomo.repn import generate_standard_repn
-    namespace: dict[str, Any] = {}
-    exec(compile(code.source, "<compiled-lpir>", "exec"), namespace)
-    source = namespace["build_model"]({})
+    source = handle.model
+    objective = next(source.component_data_objects(pyo.Objective, active=True, descend_into=True))
     with environment() as env, gp.Model(env=env) as model:
         variables = {}
-        for index, var in source.variables.items():
+        for index, var in enumerate(source.component_data_objects(pyo.Var, active=True, descend_into=True)):
             for bound in (var.lb, var.ub):
                 if bound is not None:
                     _finite_bound(float(bound))
@@ -181,8 +188,8 @@ def solve_gurobi(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
                 if 0 < abs(float(coefficient)) < 1e-13 or abs(float(coefficient)) >= gp.GRB.INFINITY:
                     raise RunError("unsupported_numeric_range", "solve", "Gurobi would drop or reject a coefficient.")
             return gp.LinExpr(list(repn.linear_coefs), [variables[id(var)] for var in repn.linear_vars]) + float(repn.constant)
-        model.setObjective(expression(source.objective.expr), gp.GRB.MINIMIZE if source.objective.sense == pyo.minimize else gp.GRB.MAXIMIZE)
-        for row in source.constraints.values():
+        model.setObjective(expression(objective.expr), gp.GRB.MINIMIZE if objective.sense == pyo.minimize else gp.GRB.MAXIMIZE)
+        for row in source.component_data_objects(pyo.Constraint, active=True, descend_into=True):
             expr = expression(row.body)
             if row.lower is not None:
                 _finite_bound(float(pyo.value(row.lower)) - expr.getConstant())
@@ -190,10 +197,8 @@ def solve_gurobi(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
             if row.upper is not None:
                 _finite_bound(float(pyo.value(row.upper)) - expr.getConstant())
                 model.addConstr(expr <= pyo.value(row.upper))
-        decisions = {key: variables[id(source.variables[index])] for key, index in code.symbol_map["variables"].items()}
-        # The compiler's constant-only placeholder is not a public decision.
-        if not decisions:
-            model.remove(list(variables.values()))
+        decisions = {key: variables[id(var)] for key, var in handle.decision_map.items()}
+        model.remove([variables[id(var)] for var in handle.internal_variables])
         return solve_native(ModelHandle(model, decisions), options, model_backend="llm4om.model_backends.pyomo_factory")
 
 

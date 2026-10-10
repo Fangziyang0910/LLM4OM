@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-10；SDK／Worker 开发版本：0.20.0。当前包含 208 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-10；SDK／Worker 开发版本：0.21.0。当前包含 214 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -247,3 +247,10 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/plugins/fixture_compiler/pyproject.toml` | 独立Compiler包声明 | SDK版本约束、构建和共同entry point |
 | `examples/plugins/fixture_compiler/README.md` | 独立Compiler使用说明 | 安装／选择／可信镜像和配置 |
 | `examples/plugins/fixture_compiler/src/llm4om_fixture_compiler/__init__.py` | 独立源码格式Compiler | AST格式变换、明确配置、原数学转换复用 |
+
+| `src/llm4om/execution_plugins.py` | Backend／Solver选择、兼容性与执行身份 | Manifest／配置、依赖环境、实际结果profile与安全错误 |
+| `tests/test_backend_solver_plugins.py` | 构建／求解插件的公共行为验收 | 实际Handle／SDK、独立wheel／CLI／Worker |
+| `docs/development/s03-solver-registry.md` | 构建／求解注册的开发状态 | 已接入路径、本机证据和未完成范围 |
+| `examples/plugins/fixture_execution/pyproject.toml` | 独立Backend／Solver包声明 | SDK版本约束、共同entry points与构建 |
+| `examples/plugins/fixture_execution/README.md` | 独立构建／求解插件操作说明 | 实际组件变换、配置及可信镜像 |
+| `examples/plugins/fixture_execution/src/llm4om_fixture_execution/__init__.py` | 独立组件重命名与真实HiGHS插件 | 保持决策映射、检查配置组件后实际求解 |

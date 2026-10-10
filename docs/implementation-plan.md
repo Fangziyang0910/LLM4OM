@@ -171,3 +171,5 @@ S03-C1扩展当前Registry到独立文本Provider，见 [记录](development/s03
 S03-C2接入独立Task／Evaluator，见 [记录](development/s03-task-registry.md)。其余插件种类、S08／S09／S10及独立审阅继续推进。
 
 S03-C3a接入独立grounded LPIR→Pyomo Compiler，见 [记录](development/s03-compiler-registry.md)。Backend／Solver及其他插件种类、S08／S09／S10和独立审阅继续推进。
+
+S03-C3b由 [#43](https://github.com/Fangziyang0910/LLM4OM/issues/43)跟踪，当前正在接入Backend／Solver共同接口与实际Worker路径，见 [开发状态](development/s03-solver-registry.md)。

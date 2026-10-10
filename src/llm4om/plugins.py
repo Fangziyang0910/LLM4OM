@@ -11,6 +11,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
 from importlib.metadata import entry_points
+from importlib.metadata import version, PackageNotFoundError
 from typing import Any, Iterator
 from pathlib import Path
 import jsonschema
@@ -72,15 +73,47 @@ def discover_methods() -> dict[tuple[str, str], MethodPlugin]:
     return {key: plugin for key, plugin in discover_plugins().items() if isinstance(plugin, MethodPlugin)}
 
 
+def resolve_configured_plugin(kind: str, selection: dict[str, Any], *,
+        inventory: dict[tuple[str, str], Plugin] | None = None,
+        expected: dict[str, Any] | None = None, check_dependencies: bool = True) -> tuple[Any, dict[str, Any]]:
+    inventory = discover_plugins() if inventory is None else inventory
+    plugin = inventory.get((kind, selection["plugin_id"]))
+    if plugin is None:
+        raise RunError("checkpoint_incompatible" if expected else "unknown_plugin", "admission", "Requested execution plugin is not installed.")
+    config = selection.get("config", {})
+    try:
+        jsonschema.Draft202012Validator(plugin.manifest["config_schema"]).validate(config)
+    except (jsonschema.ValidationError, jsonschema.exceptions.RefResolutionError, RecursionError) as error:
+        raise RunError("invalid_config", "admission", "Execution plugin config does not match its Manifest.") from error
+    packages = {}
+    for name in plugin.manifest["dependencies"].get("python", []) if check_dependencies else []:
+        try:
+            packages[name] = version(name)
+        except PackageNotFoundError as error:
+            raise RunError("dependency_missing", "admission", "A declared execution dependency is not installed.") from error
+    binding = {"manifest": plugin.manifest, "origin": plugin.origin, "config": deepcopy(config), "packages": packages}
+    if expected is not None and binding != expected:
+        raise RunError("checkpoint_incompatible", "admission", "Execution plugin Manifest/package/config differs from the saved identity.")
+    try:
+        with _quiet():
+            instance = plugin.factory.create(deepcopy(config))
+    except (Exception, SystemExit) as error:
+        raise RunError("invalid_plugin_manifest", "admission", "Cannot construct the declared execution plugin.", details=_exception_details(error)) from error
+    return instance, binding
+
+
 def discover_plugins() -> dict[tuple[str, str], Plugin]:
     from llm4om.coe import CoEFactory
     from llm4om.feedback_repair import FeedbackRepairFactory
     from llm4om.providers import MockFactory, OpenAICompatibleFactory, AnthropicFactory
     from llm4om.task_plugins import builtin_factories
     from llm4om.compilers import LPIRPyomoFactory
+    from llm4om.backends import PyomoBackendFactory, GurobiBackendFactory
+    from llm4om.solvers import HighsSolverFactory, GurobiSolverFactory
     plugins: dict[tuple[str, str], Plugin] = {}
     for builtin in (DirectFactory(), OptimusFactory(), CoEFactory(), FeedbackRepairFactory(),
-                    MockFactory(), OpenAICompatibleFactory(), AnthropicFactory(), *builtin_factories(), LPIRPyomoFactory()):
+                    MockFactory(), OpenAICompatibleFactory(), AnthropicFactory(), *builtin_factories(), LPIRPyomoFactory(),
+                    PyomoBackendFactory(), GurobiBackendFactory(), HighsSolverFactory(), GurobiSolverFactory()):
         manifest = _manifest(builtin)
         plugin_type = MethodPlugin if manifest["kind"] == "method" else Plugin
         plugins[(manifest["kind"], manifest["plugin_id"])] = plugin_type(manifest, {"kind": "builtin"}, builtin)
@@ -142,14 +175,18 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
     capabilities.update(task_profile={"const": "frozen_task/0.1.0"}, evaluator_profile={"const": "frozen_evaluation/0.1.0"},
         protocol_ids=strings, default_evaluator_id=text, oracle_separation={"const": "separate_public_private/0.1.0"}, evidence_levels=strings)
     capabilities.update(compiler_profile={"const": "grounded_lpir_pyomo/0.1.0"}, deterministic={"const": True}, ir_schema_versions=strings)
+    handle_profiles: dict[str, Any] = {"type": "array", "items": {"enum": ["pyomo_linear/0.1.0", "gurobipy_linear/0.1.0"]}, "minItems": 1, "uniqueItems": True}
+    capabilities.update(backend_profile={"const": "model_handle/0.1.0"}, handle_profile=handle_profiles["items"],
+        solver_profile={"const": "model_handle/0.1.0"}, handle_profiles=handle_profiles,
+        result_profile={"enum": ["highs_api/0.1.0", "gurobi_api/0.1.0"]})
     fields = {"schema_version": {"const": "0.2.0"}, "plugin_id": {**text,
-              "pattern": r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$"}, "kind": {"enum": ["method", "llm_provider", "task_adapter", "evaluator", "compiler"]},
+              "pattern": r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$"}, "kind": {"enum": ["method", "llm_provider", "task_adapter", "evaluator", "compiler", "model_backend", "solver_backend"]},
               "plugin_version": {"type": "string", "pattern": f"^{stable_version}$", "maxLength": 128},
               "contract_range": {**text, "maxLength": 256}, "display_name": text, "description": text,
               "capabilities": {"type": "object", "properties": capabilities,
                                "required": ["problem_types", "input_artifact_kinds", "output_artifact_kinds"],
                                "additionalProperties": False},
-              "config_schema": {"type": "object"},
+              "config_schema": {"type": "object"}, "options_schema": {"type": "object"},
               "dependencies": {"type": "object", "properties": {"python": strings}, "additionalProperties": False},
               "source": {"type": ["object", "null"]}}
     try:
@@ -159,12 +196,27 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
                 value["capabilities"] = factory.resolve_capabilities(config)
             manifest = parse_json(json.dumps(value, allow_nan=False).encode())
         jsonschema.Draft202012Validator({"type": "object", "properties": fields,
-            "required": list(fields), "additionalProperties": False}).validate(manifest)
+            "required": [name for name in fields if name != "options_schema"], "additionalProperties": False}).validate(manifest)
         jsonschema.Draft202012Validator.check_schema(manifest["config_schema"])
         _local_schema(manifest["config_schema"])
         reject_additional_refs(manifest["source"])
+        if "options_schema" in manifest:
+            jsonschema.Draft202012Validator.check_schema(manifest["options_schema"])
+            _local_schema(manifest["options_schema"])
         if not callable(factory.create):
             raise TypeError("Factory must create a plugin.")
+        if manifest["kind"] == "model_backend":
+            caps = manifest["capabilities"]
+            if (caps.get("backend_profile") != "model_handle/0.1.0" or not caps.get("handle_profile")
+                    or caps.get("output_artifact_kinds") != ["model_handle"]
+                    or not caps.get("input_artifact_kinds")):
+                raise ValueError("Unsupported Backend profile.")
+        if manifest["kind"] == "solver_backend":
+            caps = manifest["capabilities"]
+            if (caps.get("solver_profile") != "model_handle/0.1.0" or not caps.get("handle_profiles")
+                    or not caps.get("result_profile") or "options_schema" not in manifest
+                    or caps.get("input_artifact_kinds") != ["model_handle"] or caps.get("output_artifact_kinds") != ["solve_result"]):
+                raise ValueError("Unsupported Solver profile.")
         if manifest["kind"] == "compiler":
             caps = manifest["capabilities"]
             if (caps.get("compiler_profile") != "grounded_lpir_pyomo/0.1.0" or caps.get("deterministic") is not True

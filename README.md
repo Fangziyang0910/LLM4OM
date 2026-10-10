@@ -179,3 +179,5 @@ CoE专家路由与原生函数的开发实现、真实外部模型／原问题�
 0.19.0的独立Task／Evaluator、冻结协议与无源读取预检见 [S03-C2](docs/development/s03-task-registry.md)。
 
 0.20.0新增独立Compiler选择、Worker包预检与源码／映射核验，见 [S03-C3a](docs/development/s03-compiler-registry.md)。本机测试为主要验收；GitHub Actions仅手动用于必要的环境交叉验证。
+
+0.21.0的Backend／Solver共同注册正在开发，实际grounded路径与剩余验收见 [S03-C3b](docs/development/s03-solver-registry.md)。

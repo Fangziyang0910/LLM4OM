@@ -2,7 +2,9 @@
 
 from llm4om.storage import cancel_run
 from llm4om.control import CancellationToken
-from llm4om.backends import ModelHandle
+from llm4om.backends import ModelHandle, ModelBackend, NativeModelBackend, PyomoBackendFactory, GurobiBackendFactory
+from llm4om.solvers import SolverBackend, HighsSolverFactory, GurobiSolverFactory
+from llm4om.execution_plugins import ExecutionResources, resolve_execution_resources
 from llm4om.compilers import Compiler, LPIRPyomoFactory, LPIRPyomoCompiler, resolve_compiler
 from llm4om.linear import CompiledCode
 from llm4om.methods import FactoryCodeProposal, ScriptCodeProposal, GenerationFailure, MethodContext, MethodResources, MethodOutcome, ModelProposal
@@ -25,4 +27,6 @@ __all__ = [
     "discover_plugins", "discover_methods",
     "FrozenTaskAdapter", "evaluate_outcome", "prepare_task",
     "Compiler", "CompiledCode", "LPIRPyomoFactory", "LPIRPyomoCompiler", "resolve_compiler",
+    "ModelBackend", "NativeModelBackend", "SolverBackend", "PyomoBackendFactory", "GurobiBackendFactory",
+    "HighsSolverFactory", "GurobiSolverFactory", "ExecutionResources", "resolve_execution_resources",
 ]

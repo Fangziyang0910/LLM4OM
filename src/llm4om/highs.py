@@ -7,6 +7,7 @@ from typing import Any
 
 from llm4om.linear import CompiledCode
 from llm4om.contracts import RunError
+from llm4om.backends import ModelHandle, PyomoFactoryBackend
 
 
 def runtime_versions() -> dict[str, str]:
@@ -18,7 +19,7 @@ def runtime_versions() -> dict[str, str]:
         raise RunError("solver_unavailable", "admission", "Install the solve extra to use Pyomo and HiGHS.") from error
 
 
-def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
+def _time_limit(options: dict[str, Any]) -> float:
     limit = options.get("time_limit_s", 0)
     try:
         seconds = float(limit) if not isinstance(limit, bool) and isinstance(limit, (int, float)) else math.nan
@@ -27,13 +28,27 @@ def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
     if (set(options) - {"time_limit_s"} or isinstance(limit, bool)
             or not math.isfinite(seconds) or seconds < 0):
         raise RunError("invalid_solver_options", "admission", "Only a finite nonnegative time_limit_s is supported.")
+    return seconds
+
+
+def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
+    _time_limit(options)
+    return solve_highs_handle(PyomoFactoryBackend().load(code, {}), options)
+
+
+def solve_highs_handle(handle: ModelHandle, options: dict[str, Any]) -> dict[str, Any]:
+    seconds = _time_limit(options)
+    PyomoFactoryBackend().export(handle)
     import highspy
     import pyomo.environ as pyo
     from pyomo.repn import generate_standard_repn
 
-    namespace: dict[str, Any] = {}
-    exec(compile(code.source, "<compiled-lpir>", "exec"), namespace)
-    model = namespace["build_model"]({})
+    model = handle.model
+    variables = list(model.component_data_objects(pyo.Var, active=True, descend_into=True))
+    objectives = list(model.component_data_objects(pyo.Objective, active=True, descend_into=True))
+    if len(objectives) != 1:
+        raise RunError("invalid_factory_objective", "solve", "HiGHS requires exactly one active objective.")
+    objective_model = objectives[0]
     solver = highspy.Highs()  # type: ignore[no-untyped-call]
     def checked(status: Any) -> None:
         if status == highspy.HighsStatus.kError:
@@ -50,21 +65,21 @@ def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
             raise RunError("unsupported_numeric_range", "solve", "A finite bound exceeds HiGHS numerical limits.")
         return result
     columns = {}
-    for index, variable in model.variables.items():
+    for index, variable in enumerate(variables):
         columns[id(variable)] = index
         checked(solver.addVar(finite_bound(variable.lb) if variable.lb is not None else -highspy.kHighsInf,
                              finite_bound(variable.ub) if variable.ub is not None else highspy.kHighsInf))
         if variable.is_integer():
             checked(solver.changeColIntegrality(index, highspy.HighsVarType.kInteger))
-    objective = generate_standard_repn(model.objective.expr)
+    objective = generate_standard_repn(objective_model.expr)
     checked(solver.changeObjectiveOffset(float(objective.constant)))
     for variable, coefficient in zip(objective.linear_vars, objective.linear_coefs):
         if (not math.isfinite(float(coefficient)) or abs(coefficient) >= limits["infinite_cost"]
                 or 0 < abs(coefficient) <= limits["dual_feasibility_tolerance"]):
             raise RunError("unsupported_numeric_range", "solve", "A cost is outside the supported HiGHS numerical range.")
         checked(solver.changeColCost(columns[id(variable)], float(coefficient)))
-    checked(solver.changeObjectiveSense(highspy.ObjSense.kMinimize if model.objective.sense == pyo.minimize else highspy.ObjSense.kMaximize))
-    for row in model.constraints.values():
+    checked(solver.changeObjectiveSense(highspy.ObjSense.kMinimize if objective_model.sense == pyo.minimize else highspy.ObjSense.kMaximize))
+    for row in model.component_data_objects(pyo.Constraint, active=True, descend_into=True):
         expression = generate_standard_repn(row.body)
         indexes = [columns[id(variable)] for variable in expression.linear_vars]
         lower = finite_bound(pyo.value(row.lower) - expression.constant) if row.lower is not None else -highspy.kHighsInf
@@ -83,9 +98,9 @@ def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
     info = solver.getInfo()
     primal = solver.getSolution()
     has_primal = info.valid and primal.value_valid and info.primal_solution_status == highspy.SolutionStatus.kSolutionStatusFeasible
-    values = {name: float(primal.col_value[index]) for name, index in code.symbol_map["variables"].items()} if has_primal else None
+    values = {name: float(primal.col_value[columns[id(variable)]]) for name, variable in handle.decision_map.items()} if has_primal else None
     objective_value = float(info.objective_function_value) if has_primal else None
-    mip = any(variable.is_integer() for variable in model.variables.values())
+    mip = any(variable.is_integer() for variable in variables)
     mip_stats = info.valid and mip and info.mip_node_count >= 0 and termination in ("optimal", "time_limit", "interrupted", "feasible")
     bound = float(info.mip_dual_bound) if mip_stats else objective_value if termination == "optimal" else None
     gap = float(info.mip_gap) if mip_stats and has_primal else None
@@ -94,7 +109,7 @@ def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
     return {"solver_id": "llm4om.solvers.highs", "solver_version": solver.version(),
             "model_backend": "llm4om.model_backends.pyomo_factory", "raw_status": raw_status,
             "termination": termination, "has_primal_solution": bool(has_primal), "variables": values,
-            "objective_value": objective_value, "objective_sense": namespace["IR"]["objective"]["sense"],
+            "objective_value": objective_value, "objective_sense": "min" if objective_model.sense == pyo.minimize else "max",
             "best_bound": bound if bound is not None and math.isfinite(bound) else None,
             "reported_gap": gap if gap is not None and math.isfinite(gap) else None,
             "solve_time_s": solver.getRunTime(), "options": options, "effective_options": effective,

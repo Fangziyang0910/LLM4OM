@@ -17,7 +17,9 @@ class Compiler(Protocol):
 
 class LPIRPyomoCompiler:
     def compile(self, ir: dict[str, Any], target_backend: str) -> CompiledCode:
-        if target_backend != "llm4om.model_backends.pyomo_factory":
+        from llm4om.plugins import discover_plugins
+        backend = discover_plugins().get(("model_backend", target_backend))
+        if backend is None or backend.manifest["capabilities"]["handle_profile"] != "pyomo_linear/0.1.0":
             raise RunError("capability_mismatch", "code", "This compiler requires the Pyomo Backend.")
         return compile_ir(ir)
 
@@ -86,7 +88,10 @@ def resolve_compiler(selection: dict[str, Any], target_backend: str, *,
         jsonschema.Draft202012Validator(plugin.manifest["config_schema"]).validate(config)
     except (jsonschema.ValidationError, jsonschema.exceptions.RefResolutionError, RecursionError) as error:
         raise RunError("invalid_config", "admission", "Compiler config does not match its self-contained Manifest.") from error
-    if target_backend not in plugin.manifest["capabilities"]["model_backends"]:
+    target = inventory.get(("model_backend", target_backend))
+    declared_profiles = {inventory[("model_backend", key)].manifest["capabilities"]["handle_profile"]
+        for key in plugin.manifest["capabilities"]["model_backends"] if ("model_backend", key) in inventory}
+    if target is None or target.manifest["capabilities"]["handle_profile"] not in declared_profiles:
         raise RunError("capability_mismatch", "admission", "Compiler cannot target the selected Backend.")
     packages = {}
     for name in plugin.manifest["dependencies"].get("python", []):

@@ -13,6 +13,7 @@ from importlib.metadata import version
 
 import yaml
 from llm4om.compilers import resolve_compiler, compiler_identity
+from llm4om.execution_plugins import resolve_execution_resources
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -68,6 +69,8 @@ elif operation == "inspect":
             "packages": {"Pyomo": "6.10.1", "highspy": "1.15.1"}}}
         runtime["compiler_identity"] = compiler_identity(resolve_compiler(
             {"plugin_id": "llm4om.compilers.lp_ir_to_pyomo"}, "llm4om.model_backends.pyomo_factory").binding)
+        runtime["execution_identity"] = resolve_execution_resources(
+            {"plugin_id": "llm4om.model_backends.pyomo_factory"}, {"plugin_id": "llm4om.solvers.highs"}, ["lp", "milp"]).identity()
         for schema_version in ("999.0.0", "0.2.0"):
             with self.subTest(schema_version=schema_version):
                 payload = {"schema_version": schema_version, "runtime": runtime["runtime"],
