@@ -1,6 +1,6 @@
 # S08 批量实验与报告
 
-状态：已编写可运行功能代码，正在补齐本机聚焦验收。范围对应 FR-31～FR-34、DD-06／07 和 [Issue51](https://github.com/Fangziyang0910/LLM4OM/issues/51)。接口以 [插件契约](../plugin-contracts.md#8-experimentspec-与单问题-runconfig)为准，指标以 [评测协议](../evaluation.md)为准。首版不代表完整 S08／1.0 验收完成。
+状态：SDK／Worker0.24.0 已编写可运行功能代码，并通过本机聚焦验收；独立审阅和全量 benchmark 比较继续推进。范围对应 FR-31～FR-34、DD-06／07 和 [Issue51](https://github.com/Fangziyang0910/LLM4OM/issues/51)。接口以 [插件契约](../plugin-contracts.md#8-experimentspec-与单问题-runconfig)为准，指标以 [评测协议](../evaluation.md)为准。首版不代表完整 S08／1.0 验收完成。
 
 ## 使用
 
@@ -28,6 +28,10 @@ SDK 使用 `run_experiment(config, output, offline=False, resume=False, cancella
 
 ## 验证与剩余范围
 
-本机聚焦验收覆盖实际并发 HiGHS、原问题检查、已完成工作恢复、总预算、显式排除、输入漂移拒绝与取消分母。执行结果在交付时补充。没有触发 GitHub Actions，也没有重复完整回归。
+本机聚焦验收覆盖实际并发 HiGHS、原问题检查、已完成工作恢复、总预算、显式排除、输入漂移拒绝与取消分母。5项聚焦检查在本机14.613s通过；两个并发HiGHS样本均完成并通过独立原问题检查，目标值13。类型检查及230文件仓库检查通过。没有触发 GitHub Actions，也没有重复完整回归。
 
 仍需完成三种方法的真实公共样本比较、1000／100任务性能与故障验收、Web 批量展示和独立 Standards／Spec 审阅。Linux 为当前执行环境；平台锁与过程监督不声称已验证 Windows／macOS。
+
+真实外部模型批次已在当前SDK／Worker0.24.0执行：两个并发Direct／deepseek-v4-pro-0813／容器HiGHS运行均为optimal，候选目标13。运行ID为 `10b85757f7fc451388259d078f79198e` 与 `5f83338f0a5d4589a4c0a9939a94148f`，各1次LLM与1次Solver，共14,820 Tokens，费用未知。完成后恢复保留相同run_id、调用和tokens，各组N_reused=1。该实际批次的候选变量名与事前声明的原决策映射不一致，因此独立检查为unknown，独立成功计数为0／1；不会把候选optimal改写为业务检查通过。两个工程Mock批次的独立原问题检查已通过，二者证据分别记录。
+
+公开实验／评估／报告8文件与wheel检查未发现本地凭据或oracle引用；实际记录见 `/tmp/llm4om-s08-evidence/actual-batch/acceptance.json`。该本地路径为开发证据，不纳入发行包。源与Worker身份为 `3a0f4224397d7b63f9f57e55b45391f215ecac04f96f4ee19516a5bc57738e46`，Worker image为 `sha256:dcf2c30237770b7ff4a56e0e707a3f4800a0107b74996de5f0443766c92f5a20`。

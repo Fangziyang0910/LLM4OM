@@ -1,6 +1,6 @@
 # 实验、恢复与入口详细设计
 
-文档修订：0.4.0。开发设计，S01 已实现单问题应用入口与文件记录，其余能力待接入；返回 [详细设计索引](../detailed-design.md)。字段与错误语义由 [接口契约](../plugin-contracts.md)维护，指标由 [评测协议](../evaluation.md)维护。
+文档修订：0.4.0。开发设计与实现契约；单问题、冻结任务、恢复、Web和批量首版已实现，完整比较与发布验收继续推进；返回 [详细设计索引](../detailed-design.md)。字段与错误语义由 [接口契约](../plugin-contracts.md)维护，指标由 [评测协议](../evaluation.md)维护。
 
 ## DD-06 Benchmark 与实验展开
 
@@ -79,3 +79,5 @@ head／核心锚点仍在旧版本而 journal 已有新 settlement 是合法崩�
 CLI 与 Web 的同配置运行产生相同的配置 fingerprint 规则，run_id 仍不同。Web 会话仅保存选择与 run_id，后台任务状态由应用层管理。多用户权限、公共托管与协作编辑不在 1.0 范围。
 
 对应 FR-06/20/24/26/34～36；AC-20/23。
+
+批量矩阵、公共报告、预算与继续执行的已实现范围见 [S08](../development/s08-benchmark.md)。
