@@ -110,6 +110,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
         },
         "candidates/001/artifact.json": metadata,
       });
+      host.querySelector(".model-coverage").open = true;
       const result = {
         text: host.innerText,
         images: host.querySelectorAll("img").length,
