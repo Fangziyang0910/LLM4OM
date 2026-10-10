@@ -308,3 +308,5 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 
 | `tests/test_provider_proxy.py` | 显式模型连接路线的公共接口检查 | Chat／Messages、NO_PROXY、非法地址与公开凭据拒绝 |
 | `docs/development/s05-explicit-proxy.md` | HTTP代理实际支持和验收 | 来源／默认直连／隐私边界／不可变Worker身份 |
+
+| `tests/web_process_flow.cjs` | 浏览器中的方法配置与公开中间版本验收 | 零POST、Manifest兼容选项、版本定位与选择保持、窄屏 |

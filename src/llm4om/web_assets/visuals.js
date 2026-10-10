@@ -56,6 +56,20 @@ const UI = (() => {
             .map(([key, item]) => key + " = " + parameterValue(item))
             .join("; ")
         : format(value);
+  const artifactLabel = (name) =>
+    ({
+      "formulation.json": "数学表述",
+      "structured-ir.json": "实例化模型",
+      "formulation-snapshot.json": "表述来源",
+      "model.py": "求解源码",
+      "code-artifact.json": "代码来源",
+      "state_1_params.json": "问题与参数",
+      "state_2_objective.json": "优化目标初稿",
+      "state_3_constraints.json": "约束识别",
+      "state_4_constraints_modeled.json": "约束数学表述",
+      "state_5_objective_modeled.json": "完整数学表述",
+      "state_6_code.json": "数学表述与代码片段",
+    })[name.split("/").at(-1)] || name;
   const mathText = (value) =>
     String(value || "")
       .replace(/\\leq\b/g, "≤")
@@ -168,6 +182,20 @@ const UI = (() => {
     const variables = ir?.variables || entries(representation.variables);
     const objective = representation.objective;
     if (!objective && !variables.length && !representation.constraints) {
+      if (source.state) {
+        const section = card("问题与参数", "此时尚未形成完整的数学表述。");
+        section.append(
+          node("p", "problem-text", representation.description || ""),
+        );
+        const parameters = entries(representation.parameters);
+        if (parameters.length)
+          list(section, parameters, [
+            ["参数", (r) => r.id],
+            ["定义", (r) => r.definition || r.description || "—"],
+          ]);
+        container.append(section);
+        return;
+      }
       empty(
         container,
         "这一步没有独立的数学表述",
@@ -191,18 +219,15 @@ const UI = (() => {
     );
     if (ir?.objective?.expression)
       goal.append(expression(ir.objective.expression, names));
-    else
+    else if (objective?.expression_text || objective?.formulation)
       goal.append(
         node(
           "div",
           "math-expression",
-          mathText(
-            objective?.expression_text ||
-              objective?.formulation ||
-              objective?.description,
-          ),
+          mathText(objective?.expression_text || objective?.formulation),
         ),
       );
+    else goal.append(node("p", "hint", "数学目标表达式尚未形成。"));
     container.append(goal);
     const vars = card(
       "决策变量",
@@ -250,7 +275,7 @@ const UI = (() => {
           );
       vars.append(row);
     }
-    container.append(vars);
+    if (variables.length || !source.state) container.append(vars);
     const constraints = card("约束条件", "保留模型实际提供的关系与边界。");
     const restrictions = ir?.constraints || representation.constraints || [];
     restrictions.forEach((item, index) => {
@@ -295,7 +320,29 @@ const UI = (() => {
     });
     if (!restrictions.length)
       constraints.append(node("p", "hint", "当前表述没有列出约束。"));
-    container.append(constraints);
+    if (representation.constraints || ir?.constraints || !source.state)
+      container.append(constraints);
+    if (source.state) {
+      const fragments = [
+        { description: "优化目标", code: objective?.code },
+        ...(representation.constraints || []),
+      ].filter((item) => typeof item.code === "string" && item.code);
+      if (fragments.length) {
+        const section = card(
+          "已生成的代码片段",
+          "这些是当前状态的代码片段。完整程序可在求解代码中查看。",
+        );
+        for (const fragment of fragments) {
+          const block = node("div");
+          block.append(node("h4", "", fragment.description || "代码片段"));
+          const body = node("div");
+          code(body, fragment.code);
+          block.append(body);
+          section.append(block);
+        }
+        container.append(section);
+      }
+    }
     const sets = representation.sets || [];
     if (sets.length) {
       const section = card("集合与索引");
@@ -446,11 +493,35 @@ const UI = (() => {
           end: step.status === "completed" ? step.timestamp : undefined,
         });
       }
+      if (step?.artifact_ref?.namespace === "run_public") {
+        const name = Object.keys(snapshot.contents || {})
+          .filter((key) => step.artifact_ref.relative_path?.endsWith("/" + key))
+          .sort((a, b) => b.length - a.length)[0];
+        const current =
+          snapshot.bundle?.public_projections?.[name] ||
+          snapshot.artifacts?.find(
+            (ref) => name && ref.relative_path?.endsWith("/" + name),
+          );
+        if (
+          name &&
+          current?.sha256 === step.artifact_ref.sha256 &&
+          current.relative_path === step.artifact_ref.relative_path
+        ) {
+          items.set("artifact-" + event.sequence_no, {
+            sequence: event.sequence_no,
+            label: artifactLabel(name),
+            phase: step.stage || "formulation",
+            status: "completed",
+            actor: "已保存的公开产物",
+            artifact: name,
+          });
+        }
+      }
     }
-    if (!items.size) {
+    if (!events.some((event) => event.method_event?.type === "modeling_step")) {
       const calls =
         snapshot.contents?.["method/calls.json"]?.calls ||
-        snapshot.contents?.["method/roles.json"]?.roles ||
+        snapshot.contents?.["method/source-calls.json"]?.calls ||
         [];
       calls.forEach((call, index) =>
         items.set("call-" + index, {
@@ -530,6 +601,7 @@ const UI = (() => {
     )) {
       const row = node("button", "timeline-step " + item.status);
       row.type = "button";
+      if (item.artifact) row.dataset.artifact = item.artifact;
       if (
         item.status === "running" &&
         ["failed", "cancelled"].includes(job.status)
@@ -572,6 +644,17 @@ const UI = (() => {
               ? "formulation"
               : "diagnostics";
         document.querySelector('[data-tab="' + tab + '"]')?.click();
+        if (item.artifact) {
+          const choice = document.getElementById("artifact-choice");
+          if (
+            Array.from(choice.options).some(
+              (option) => option.value === item.artifact,
+            )
+          ) {
+            choice.value = item.artifact;
+            choice.dispatchEvent(new Event("change"));
+          }
+        }
         row.classList.toggle("expanded");
         let detail = row.querySelector(".step-detail");
         if (detail) detail.remove();
@@ -902,6 +985,7 @@ const UI = (() => {
     format,
     status,
     shortMethod,
+    artifactLabel,
     records,
     timeline,
     decision,

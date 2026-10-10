@@ -60,3 +60,13 @@ node tests/web_clarification_flow.cjs
 ```
 
 此入口只接受本机fixture地址，生成确定性回复并调用已有真实HiGHS。它验证交互和工程流程，不证明外部LLM建模质量。结束后在服务终端按Ctrl-C；运行记录位于临时workspace。
+
+## 方法配置与中间版本浏览
+
+前端依据Method的solvers声明和Solver接受的ModelHandle profile过滤选项。OptiMUS／CoE默认只显示Gurobi；Direct的Pyomo路径保留HiGHS和Gurobi。高级配置的不可用原选择保留并明确标记，提交被阻止，用户须选择有效选项。没有把配置静默改成另一个求解器；应用层prepare_run仍负责完整兼容预检。
+
+方法已发布的artifact_ref可以直接连接过程条目与当前公开内容。页面匹配namespace、相对路径和SHA-256，只展示已由服务端加载的公开版本，不沿事件引用下载任意路径。如果事件引用的旧版本不在当前公开投影中，不将新版本冒充它。
+
+OptiMUS六个保存状态按实际事件顺序出现：问题与参数、优化目标初稿、约束识别、约束数学表述、完整数学表述、数学表述与代码片段。点击选择对应状态；轮询保留用户选择。未形成数学模型时展示原问题与参数定义，代码片段保留真实bytes文本。最终源码仍在求解代码中。历史角色清单使用实际source-calls.json，不能从文件名猜测调用数量。
+
+本机Chrome以既有真实OptiMUS记录验收六个状态的逐次定位、代码片段、历史选择保持、390px无溢出、无页面错误；方法选择与不可用配置标记通过。整个浏览器检查零POST／零LLM调用，不重建Worker或重跑求解。入口为tests/web_process_flow.cjs，环境变量LLM4OM_BROWSER_MODULE／LLM4OM_BROWSER_EXECUTABLE／LLM4OM_WEB_TEST_URL沿用上节。

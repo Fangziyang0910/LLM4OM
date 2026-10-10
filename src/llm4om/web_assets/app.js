@@ -11,7 +11,6 @@ let token = "",
   artifactSelectedByUser = false,
   clarificationSubmission = null,
   renderFingerprint = "";
-artifactSelectedByUser = false;
 const pretty = (value) =>
   typeof value === "string" ? value : JSON.stringify(value, null, 2);
 function notice(text, error = false) {
@@ -38,10 +37,13 @@ async function api(path, value) {
     throw new Error(result.error?.message || "请求失败");
   return result;
 }
-function fillSelect(id, kind, selected) {
+function fillSelect(id, kind, selected, allowed) {
   $(id).replaceChildren();
   for (const item of plugins.filter(
-    (p) => p.manifest.kind === kind && !p.manifest.capabilities.human_assisted,
+    (p) =>
+      p.manifest.kind === kind &&
+      !p.manifest.capabilities.human_assisted &&
+      (!allowed || allowed.includes(p.manifest.plugin_id)),
   )) {
     const option = document.createElement("option");
     option.value = item.manifest.plugin_id;
@@ -53,13 +55,37 @@ function fillSelect(id, kind, selected) {
           : item.manifest.display_name;
     $(id).append(option);
   }
+  if (!Array.from($(id).options).some((option) => option.value === selected)) {
+    const unavailable = UI.node("option", "", "当前配置不可用 · " + selected);
+    unavailable.value = selected;
+    unavailable.disabled = true;
+    $(id).append(unavailable);
+  }
   $(id).value = selected;
 }
 function showConfig() {
   fillSelect("method", "method", config.method.plugin_id);
   fillSelect("provider", "llm_provider", config.llm.provider_plugin_id);
   fillSelect("backend", "model_backend", config.model_backend.plugin_id);
-  fillSelect("solver", "solver_backend", config.solver.plugin_id);
+  const method = plugins.find(
+    (p) => p.manifest.plugin_id === config.method.plugin_id,
+  )?.manifest;
+  const backend = plugins.find(
+    (p) => p.manifest.plugin_id === config.model_backend.plugin_id,
+  )?.manifest;
+  const solverIds = method?.capabilities.solvers;
+  const compatible = solverIds?.filter((id) => {
+    const solver = plugins.find((p) => p.manifest.plugin_id === id)?.manifest;
+    return (
+      !backend?.capabilities.handle_profile ||
+      !solver?.capabilities.handle_profiles ||
+      solver.capabilities.handle_profiles.includes(
+        backend.capabilities.handle_profile,
+      )
+    );
+  });
+  fillSelect("solver", "solver_backend", config.solver.plugin_id, compatible);
+  $("submit").disabled = Boolean($("solver").selectedOptions[0]?.disabled);
   $("model").value = config.llm.model;
   $("base-url").value = config.llm.config.base_url || "";
   $("token-budget").value = config.budget.max_total_tokens;
@@ -326,17 +352,10 @@ function renderArtifact() {
   for (const [name] of entries) {
     const option = document.createElement("option");
     option.value = name;
-    const labels = {
-      "formulation.json": "数学表述",
-      "structured-ir.json": "实例化模型",
-      "formulation-snapshot.json": "表述来源",
-      "model.py": "求解源码",
-      "code-artifact.json": "代码来源",
-    };
     option.textContent =
       (name.startsWith("candidates/")
         ? "候选 " + name.split("/")[1] + " · "
-        : "") + (labels[name.split("/").at(-1)] || name);
+        : "") + UI.artifactLabel(name);
     $("artifact-choice").append(option);
   }
   if (artifactSelectedByUser && entries.some(([name]) => name === previous))
@@ -445,6 +464,14 @@ $("new-run").onclick = () => {
   notice("");
 };
 $("method").onchange = chooseMethod;
+$("solver").onchange = () => {
+  config.solver.plugin_id = $("solver").value;
+  showConfig();
+};
+$("backend").onchange = () => {
+  config.model_backend.plugin_id = $("backend").value;
+  showConfig();
+};
 $("load-example").onclick = () => {
   $("description").value =
     "一家工厂生产产品 A 和 B。每件 A 的利润为 3，每件 B 的利润为 2。每件 A 消耗 2 单位原料和 1 单位工时；每件 B 消耗 1 单位原料和 2 单位工时。原料和工时的可用容量均为 8。决定两种产品的生产数量，数量必须是非负整数，使总利润最大。";
