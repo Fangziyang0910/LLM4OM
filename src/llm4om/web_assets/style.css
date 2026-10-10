@@ -1395,10 +1395,21 @@ pre {
   margin: 16px 0;
 }
 .revision-field > input,
-.revision-field > textarea {
+.revision-field > textarea,
+.revision-field > select {
   display: block;
   margin-top: 7px;
   color: var(--ink);
+}
+.revision-model-group {
+  margin: 20px 0;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfdfb;
+}
+.revision-model-group .revision-field {
+  margin: 8px 0;
 }
 .source-editor {
   font-family: ui-monospace, SFMono-Regular, monospace;

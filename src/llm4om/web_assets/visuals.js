@@ -1570,20 +1570,34 @@ const UI = (() => {
       label,
       value,
       path,
-      { multiline = false, number = false, rows = 4 } = {},
+      {
+        multiline = false,
+        number = false,
+        nullable = false,
+        choices,
+        rows = 4,
+      } = {},
     ) {
       const wrapper = node("label", "revision-field", label);
-      const input = node(multiline ? "textarea" : "input");
+      const input = node(choices ? "select" : multiline ? "textarea" : "input");
+      if (choices)
+        for (const [key, label] of choices) {
+          const option = node("option", "", label);
+          option.value = key;
+          input.append(option);
+        }
       if (multiline) input.rows = rows;
       else if (number) {
         input.type = "number";
-        input.min = 0;
-        input.step = path.at(-1) === "wall_time_s" ? "any" : "1";
+        if (path[0] === "budget") input.min = 0;
+        input.step =
+          path[0] === "budget" && path.at(-1) !== "wall_time_s" ? "1" : "any";
       }
+      if (nullable) input.placeholder = "无界";
       input.value = value ?? "";
       wrapper.append(input);
       container.append(wrapper);
-      fields.push({ input, path, number });
+      fields.push({ input, path, number, nullable });
       input.oninput = () => draft(false);
       return input;
     }
@@ -1625,6 +1639,100 @@ const UI = (() => {
       );
       input.classList.add("source-editor");
       input.spellcheck = false;
+    } else if (template.structured_ir) {
+      container.append(
+        node(
+          "p",
+          "hint",
+          "编辑实际用于求解的线性模型。新版本的变量、目标与约束文本会按编辑后的IR更新。数值边界留空表示无界。",
+        ),
+      );
+      const ir = template.structured_ir;
+      const names = Object.fromEntries(
+        ir.variables.map((item) => [item.id, item.name || item.id]),
+      );
+      const group = (title) => {
+        const section = node("div", "revision-model-group");
+        section.append(node("h4", "", title));
+        const grid = node("div", "field-grid");
+        section.append(grid);
+        container.append(section);
+        return grid;
+      };
+      const addField = (grid, label, value, path, options) => {
+        field(label, value, path, options);
+        grid.append(container.lastElementChild);
+      };
+      const linearFields = (grid, label, expression, path) => {
+        addField(
+          grid,
+          label + " · 常数",
+          expression.constant,
+          [...path, "constant"],
+          { number: true },
+        );
+        expression.terms.forEach((term, index) =>
+          addField(
+            grid,
+            label + " · " + names[term.variable_id] + " 系数",
+            term.coefficient,
+            [...path, "terms", index, "coefficient"],
+            { number: true },
+          ),
+        );
+      };
+      const objective = group("优化目标");
+      addField(
+        objective,
+        "优化方向",
+        ir.objective.sense,
+        ["structured_ir", "objective", "sense"],
+        {
+          choices: [
+            ["max", "最大化"],
+            ["min", "最小化"],
+          ],
+        },
+      );
+      linearFields(objective, "目标", ir.objective.expression, [
+        "structured_ir",
+        "objective",
+        "expression",
+      ]);
+      ir.variables.forEach((item, index) => {
+        const grid = group("变量 · " + names[item.id]);
+        const path = ["structured_ir", "variables", index];
+        addField(grid, item.id + " · 类型", item.domain, [...path, "domain"], {
+          choices: [
+            ["continuous", "连续"],
+            ["integer", "整数"],
+            ["binary", "0 / 1"],
+          ],
+        });
+        for (const [key, label] of [
+          ["lower_bound", "下界"],
+          ["upper_bound", "上界"],
+        ])
+          addField(grid, item.id + " · " + label, item[key], [...path, key], {
+            number: true,
+            nullable: true,
+          });
+      });
+      ir.constraints.forEach((item, index) => {
+        const grid = group("约束 · " + item.id);
+        const path = ["structured_ir", "constraints", index];
+        linearFields(grid, item.id, item.expression, [...path, "expression"]);
+        addField(grid, item.id + " · 关系", item.sense, [...path, "sense"], {
+          choices: [
+            ["le", "≤"],
+            ["ge", "≥"],
+            ["eq", "="],
+          ],
+        });
+        addField(grid, item.id + " · 右侧值", item.rhs, [...path, "rhs"], {
+          number: true,
+        });
+      });
     } else
       container.append(
         node(
@@ -1669,12 +1777,70 @@ const UI = (() => {
     }
     function draft(validate) {
       const value = structuredClone(template);
-      fields.forEach(({ input, path, number }) => {
+      fields.forEach(({ input, path, number, nullable }) => {
         let target = value;
         for (const key of path.slice(0, -1)) target = target[key];
-        target[path.at(-1)] = number ? Number(input.value) : input.value;
+        target[path.at(-1)] = number
+          ? nullable && input.value === ""
+            ? null
+            : input.valueAsNumber
+          : input.value;
       });
+      if (
+        value.operation === "formulation" &&
+        value.structured_ir &&
+        JSON.stringify(value.structured_ir) !==
+          JSON.stringify(template.structured_ir)
+      ) {
+        const ir = value.structured_ir;
+        ir.problem_type = ir.variables.every(
+          (item) => item.domain === "continuous",
+        )
+          ? "lp"
+          : "milp";
+        if (value.formulation?.representation_kind === "five_element") {
+          const text = (expression) =>
+            [
+              expression.constant,
+              ...expression.terms.map(
+                (term) => `${term.coefficient}*${term.variable_id}`,
+              ),
+            ].join(" + ");
+          const representation = value.formulation.representation;
+          representation.variables = ir.variables.map(
+            ({ id, domain, lower_bound, upper_bound, requirement_ids }) => ({
+              id,
+              index_sets: [],
+              domain,
+              lower_bound,
+              upper_bound,
+              requirement_ids,
+            }),
+          );
+          representation.objective = {
+            sense: ir.objective.sense,
+            expression_text: text(ir.objective.expression),
+            requirement_ids: ir.objective.requirement_ids,
+          };
+          representation.constraints = ir.constraints.map((item) => ({
+            id: item.id,
+            expression_text: `${text(item.expression)} ${{ le: "<=", ge: ">=", eq: "=" }[item.sense]} ${item.rhs}`,
+            requirement_ids: item.requirement_ids,
+          }));
+        }
+      }
       if (validate) {
+        if (
+          fields.some(
+            ({ input, number, nullable }) =>
+              number &&
+              (!input.validity.valid ||
+                (input.value === ""
+                  ? !nullable
+                  : !Number.isFinite(input.valueAsNumber))),
+          )
+        )
+          throw new Error("请填写有效的数值。只有变量边界可以留空。");
         if (!value.reason.trim()) throw new Error("请填写修改原因。");
         if (
           value.operation === "problem" &&

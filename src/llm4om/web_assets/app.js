@@ -926,19 +926,38 @@ refreshExperiments().catch((error) => notice(error.message, true));
 async function loadEditTemplate() {
   if (!currentJob) return;
   const parent = { job: currentJob, run: snapshot.job.run_id };
-  const document = await api(
-    `/api/jobs/${parent.job}/edit-template?operation=${$("edit-operation").value}&run_id=${parent.run}`,
-  );
-  if (currentJob !== parent.job || snapshot?.job?.run_id !== parent.run)
-    throw new Error("运行版本已改变，请重新载入编辑内容。");
-  $("assisted-document").value = pretty(document);
-  editParent = parent;
-  editSubmission = UI.revision(
-    $("revision-fields"),
-    document,
-    snapshot.contents?.["budget-ledger.json"],
-  );
-  $("revision-advanced").open = document.operation === "formulation";
+  const controls = [
+    "edit-operation",
+    "load-edit-template",
+    "edit-run",
+    "submit-edit",
+  ];
+  controls.forEach((id) => {
+    $(id).disabled = true;
+  });
+  try {
+    const document = await api(
+      `/api/jobs/${parent.job}/edit-template?operation=${$("edit-operation").value}&run_id=${parent.run}`,
+    );
+    if (currentJob !== parent.job || snapshot?.job?.run_id !== parent.run)
+      throw new Error("运行版本已改变，请重新载入编辑内容。");
+    $("assisted-document").value = pretty(document);
+    editParent = parent;
+    editSubmission = UI.revision(
+      $("revision-fields"),
+      document,
+      snapshot.contents?.["budget-ledger.json"],
+    );
+    $("revision-advanced").open =
+      document.operation === "formulation" && !document.structured_ir;
+  } finally {
+    controls.forEach((id) => {
+      $(id).disabled = false;
+    });
+    $("edit-run").disabled = ["running", "queued"].includes(
+      snapshot?.job?.status,
+    );
+  }
 }
 $("edit-run").onclick = async () => {
   try {

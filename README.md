@@ -198,4 +198,6 @@ Web并发应用进程与合作取消见[S09](docs/development/s09-process-isolat
 
 当前优先交付面向用户的单问题界面：自然语言输入、实际方法进展、交互式数学模型、代码和决策结果，见 [S09 用户体验](docs/development/s09-user-experience.md)。批量实验保留为开发者入口，当前不推进集体 benchmark 运行。
 
+结果页支持决策试算、候选修正浏览和运行版本选择。“编辑新版本”可以修改问题、代码或已有严格线性模型；数值表单编辑后复用Compiler／Solver创建人工辅助版本，保留父记录与累计预算。
+
 模型接口需要本机HTTP代理时，可在服务端`.env`填写`LLM4OM_LLM_PROXY_URL=http://127.0.0.1:7890`。CLI／SDK使用LLM配置的`proxy_url`；默认仍为直连。地址不包含代理凭据，实际支持见 [显式代理](docs/development/s05-explicit-proxy.md)。
