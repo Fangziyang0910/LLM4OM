@@ -514,12 +514,16 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
                     "problem": public, "formulation": formulation, "data_bindings": code["data_bindings"],
                     "data_refs": public["data_refs"], "allowed_problem_types": plan.snapshot["allowed_problem_types"],
                     "solver_options": solver_options, "wall_time_s": limits["wall_time_s"],
-                    "output_limit_bytes": min(limits.get("output_limit_bytes", 1024 * 1024), 8 * 1024 * 1024)}
+                    "output_limit_bytes": min(limits.get("output_limit_bytes", 1024 * 1024), 8 * 1024 * 1024),
+                    "execution": {"model_backend": settings["model_backend"], "solver": settings["solver"], "allowed_problem_types": plan.snapshot["allowed_problem_types"]},
+                    "execution_identity": plan.execution.identity() if plan.execution else None}
             else:
                 ir = parse_json(read_public_bytes(store.path / formulation["structured_ir_ref"]["relative_path"]))
                 source = compiled.source.encode()
                 request = {"ir": ir, "source_sha256": hashlib.sha256(source).hexdigest(), "symbol_map": compiled.symbol_map, "solver_options": solver_options,
-                    "compiler": settings["compiler"], "compiler_identity": compiler_identity(plan.snapshot["compiler"]), "target_backend": settings["model_backend"]["plugin_id"]}
+                    "compiler": settings["compiler"], "compiler_identity": compiler_identity(plan.snapshot["compiler"]), "target_backend": settings["model_backend"]["plugin_id"],
+                    "execution": {"model_backend": settings["model_backend"], "solver": settings["solver"], "allowed_problem_types": plan.snapshot["allowed_problem_types"]},
+                    "execution_identity": plan.execution.identity() if plan.execution else None}
             inputs = {"request.json": json.dumps(request, ensure_ascii=False, allow_nan=False).encode(), "model.py": source}
             for data in parse_json(read_public_bytes(store.path / "public-problem.json"))["data_refs"]:
                 inputs[data["path"]] = read_public_bytes(store.path / data["path"])
@@ -534,7 +538,8 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
             payload = parse_json(container.stdout)
             validate_worker_response(payload, {name: value for name, value in plan.snapshot["worker"].items()
                 if name in ("python", "llm4om", "packages", "solver_environment")},
-                solver_id=settings["solver"]["plugin_id"], model_backend=settings["model_backend"]["plugin_id"])
+                solver_id=settings["solver"]["plugin_id"], model_backend=settings["model_backend"]["plugin_id"],
+                result_profile=plan.execution.result_profile if plan.execution else None)
             if "error" in payload:
                 raise RunError(payload["error"]["code"], payload["error"]["stage"], payload["error"]["message"])
             if container.status != "completed" or container.exit_code != 0:
@@ -576,7 +581,9 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
                 [sys.executable, "-m", "llm4om.worker", "--solve-stdin", "--solver", settings["solver"]["plugin_id"]],
                 json.dumps({"ir": ir, "source_sha256": hashlib.sha256(compiled.source.encode()).hexdigest(),
                             "symbol_map": compiled.symbol_map, "solver_options": solver_options, "compiler": settings["compiler"],
-                            "compiler_identity": compiler_identity(plan.snapshot["compiler"]), "target_backend": settings["model_backend"]["plugin_id"]}, allow_nan=False).encode(),
+                            "compiler_identity": compiler_identity(plan.snapshot["compiler"]), "target_backend": settings["model_backend"]["plugin_id"],
+                            "execution": {"model_backend": settings["model_backend"], "solver": settings["solver"], "allowed_problem_types": plan.snapshot["allowed_problem_types"]},
+                            "execution_identity": plan.execution.identity() if plan.execution else None}, allow_nan=False).encode(),
                 deadline=plan.deadline, cancellation=store.cancellation)
             out.write(stdout.decode(errors="replace"))
             err.write(stderr.decode(errors="replace"))
@@ -586,7 +593,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
             if exit_code != 0:
                 raise RunError("solver_error", "solve", "The owned Solver child failed.")
             validate_worker_response(payload, payload["runtime"], solver_id=settings["solver"]["plugin_id"],
-                                     model_backend=settings["model_backend"]["plugin_id"])
+                                     model_backend=settings["model_backend"]["plugin_id"], result_profile=plan.execution.result_profile if plan.execution else None)
             solve = payload["result"]
             resources = payload["resources"]
             executor_details.update(exit_code=exit_code)
@@ -746,8 +753,10 @@ def _reconcile_execution(store: RunStore, settings: dict[str, Any]) -> None:
             raise ValueError("Completed execution identity differs from the admitted candidate.")
         solve_ref = execution["solve_result_ref"]
         solve = load(solve_ref)
+        result_profile = store.state["admission"]["execution"]["solver"]["manifest"]["capabilities"]["result_profile"]
+        sdk_origin = "trusted_gurobi_api" if result_profile == "gurobi_api/0.1.0" else "trusted_highs_api"
         expected_origin = ("trusted_container_worker" if mode == "container" else
-                           "trusted_gurobi_api" if settings["solver"]["plugin_id"] == "llm4om.solvers.gurobi" else "trusted_highs_api")
+                           sdk_origin)
         if solve["termination"] == "error" or solve["evidence_origin"] != expected_origin:
             raise ValueError("Execution has no completed trusted Solver result.")
         runtime = {"packages": store.state["admission"]["packages"]}
@@ -755,10 +764,10 @@ def _reconcile_execution(store: RunStore, settings: dict[str, Any]) -> None:
             raise ValueError("Completed execution used another Worker.")
         result = {key: value for key, value in solve.items() if key not in ("schema_version", "solution_ref")}
         result["variables"] = load(solve["solution_ref"])["variables"] if solve["solution_ref"] is not None else None
-        result["evidence_origin"] = "trusted_gurobi_api" if settings["solver"]["plugin_id"] == "llm4om.solvers.gurobi" else "trusted_highs_api"
+        result["evidence_origin"] = sdk_origin
         validate_worker_response({"schema_version": "0.2.0", "runtime": runtime, "result": result,
                                   "resources": execution["resources"]}, runtime,
-                                 solver_id=settings["solver"]["plugin_id"], model_backend=settings["model_backend"]["plugin_id"])
+                                 solver_id=settings["solver"]["plugin_id"], model_backend=settings["model_backend"]["plugin_id"], result_profile=result_profile)
         store.accept_publications()
         candidate = load(store.projections[f"candidates/{candidate_id}/candidate-snapshot.json"])
         candidate.update(artifact_ref=artifact_ref, status="selected")

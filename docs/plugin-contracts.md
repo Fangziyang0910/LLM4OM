@@ -47,8 +47,8 @@ source 对研究方法另记录研究路线（prompting-based／training-based�
 | `task_adapter` | `iter_cases(config) -> Iterator[EvaluationCase]` | 导入／调度端；公开输入与 oracle 分开 |
 | `data_loader` | `load(ref, schema, context) -> DataView` | 受控数据读取，有限视图和大小限制 |
 | `compiler` | `compile(ir, target_backend) -> CompiledCode` | 支持 IR schema 与目标 Backend；Code／Build由编排层记录，不调用 LLM |
-| `model_backend` | `load(build, data, context) -> ModelHandle` | Worker 内构建模型；Handle 不跨进程序列化 |
-| `solver_backend` | `solve(handle, options, context) -> SolveResult` | Worker 内，仅接收支持的 ModelHandle |
+| `model_backend` | `load(build, data) -> ModelHandle` / `export(handle) -> dict` | Worker 内构建模型；native另提供受控read_transport；Handle不跨进程序列化 |
+| `solver_backend` | `runtime() -> dict` / `solve(handle, options) -> dict` | Worker 内，仅接收声明的Handle；应用层归一化并绑定SolveResult |
 | `evaluator` | `evaluate(case, outcome, context) -> EvaluationResult` | 隐藏评分进程；不能反向泄漏 oracle |
 | `executor` | `async execute(request, context) -> ExecutionResult` | 执行安全模式、资源限制、清理与证据 |
 | `artifact_store` | `put(value, metadata) -> ArtifactRef` / `get(ref, access) -> bytes` | 内容寻址与访问控制；引用不是任意宿主路径 |
@@ -1171,3 +1171,17 @@ The platform's grounded Worker request includes ir, source_sha256, symbol_map, s
 scripts/build_worker_image.py accepts repeatable --plugin-wheel for explicitly trusted prebuilt wheels. It prevents SDK replacement and filename collisions, installs those wheels without resolving dependencies, and uses only wheels/locked requirements as Docker context. Additional dependencies must already be in the locked runtime. It never mounts host source or installs plugins during a run. Actual supported paths and evidence: [S03-C3a](development/s03-compiler-registry.md).
 
 The runtime probe uses a bounded output allowance of at least 64 KiB for admission metadata. Candidate execution retains the configured output limit. Malformed runtime envelopes remain executor_unavailable; absent/different compiler identities are compiler_unavailable.
+
+## 26. S03-C3b registered ModelBackend and SolverBackend (SDK 0.21.0)
+
+Both kinds use common describe()/create(config) factories and llm4om.plugins entry points. RunConfig.model_backend and solver accept plugin_id plus optional config; Solver options are checked against its self-contained options_schema. Current backend_profile and solver_profile are model_handle/0.1.0. Backends declare one handle_profile (pyomo_linear/0.1.0 or gurobipy_linear/0.1.0), and Solvers declare explicit handle_profiles and result_profile (highs_api/0.1.0 or gurobi_api/0.1.0). Problem types, configured artifacts, profile and actual dependency availability are checked before generation.
+
+ModelBackend.load accepts parameterized source or CompiledCode with public data bytes and returns ModelHandle(model,decision_map,internal_variables=()). export validates the supported linear domain and explicit complete mapping. Compiled constant-only models may declare zero-bound internal variables; those variables do not become public decisions. NativeModelBackend also exposes read_transport(exported) as a context manager, using an independently read SDK model from bounded MPS transport. Handles stay inside Worker processes.
+
+Generated factories execute only in the isolated construction child. That child selects the bound Backend and exports a model. The trusted collector validates the export and independently constructs a concrete instance or reads native MPS, then calls the selected Solver. Source scripts retain their original Code and execution; capture and independent collection are separate recorded operations. Unknown or incompatible profiles reject without replacing a method or rewriting Code. Existing method/compiler declarations can refer to registered adapters' compatible profiles; actual selected IDs/config/packages remain recorded.
+
+Admission freezes full Backend/Solver Manifest, config, origin and applicable host package versions. Container hosts do not need unused numerical SDKs; the Worker checks declared dependencies, SDK availability and versions. Portable execution_identity excludes host numerical dependency packages while retaining executable package content, Manifest and config. Actual Worker package versions are bound by runtime/admission and immutable image ID. Grounded, factory and collector requests carry execution selections and execution_identity. Changed host bindings or Worker image identity cannot silently resume.
+
+Solver runtime and results require finite JSON, explicit version strings, declared result profiles, exact requested options and complete public decision keys. Exception text, plugin stdout and private error details are suppressed at the selected Solver interface. Numerical SDK version/evidence interpretation follows result_profile rather than third-party ID. The platform binds actual Solver/Backend plugin IDs after the selected adapters execute. Solve success is evidence about the candidate model, not formulation correctness.
+
+The SDK exports ModelBackend, NativeModelBackend, SolverBackend, their built-in factories, ExecutionResources and resolve_execution_resources. The public solvers.solve entry accepts optional config and backend_selection; solver_runtime/solver_packages can query an installed Solver with config. Trusted plugin wheels enter an immutable image at build time. Engineering examples and actual local support are recorded in [S03-C3b](development/s03-solver-registry.md); no general nonlinear support is claimed.

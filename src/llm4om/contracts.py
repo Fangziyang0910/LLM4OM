@@ -368,8 +368,12 @@ def validate_formulation(formulation: dict[str, Any], public: dict[str, Any]) ->
 
 def validate_worker_response(payload: dict[str, Any], expected_runtime: dict[str, Any], *,
                              solver_id: str = "llm4om.solvers.highs",
-                             model_backend: str = "llm4om.model_backends.pyomo_factory") -> None:
-    gurobi = solver_id == "llm4om.solvers.gurobi"
+                             model_backend: str = "llm4om.model_backends.pyomo_factory",
+                             result_profile: str | None = None) -> None:
+    result_profile = result_profile or ("gurobi_api/0.1.0" if solver_id == "llm4om.solvers.gurobi" else "highs_api/0.1.0")
+    if result_profile not in ("highs_api/0.1.0", "gurobi_api/0.1.0"):
+        raise RunError("worker_protocol_error", "execution", "Unsupported declared Solver result profile.")
+    gurobi = result_profile == "gurobi_api/0.1.0"
     number = {"type": ["number", "null"]}
     result = _object({
         "solver_id": {"const": solver_id},
@@ -413,8 +417,8 @@ def validate_config(settings: dict[str, Any]) -> None:
         "llm": _object({**llm_selection["properties"], "role_models": {"type": "object", "propertyNames": TEXT,
             "additionalProperties": llm_selection}}, ["provider_plugin_id", "model", "config"]),
         "compiler": _object({"plugin_id": TEXT, "config": {"type": "object"}}, ["plugin_id"]),
-        "model_backend": _object({"plugin_id": {"enum": ["llm4om.model_backends.pyomo_factory", "llm4om.model_backends.gurobipy"]}}),
-        "solver": _object({"plugin_id": {"enum": ["llm4om.solvers.highs", "llm4om.solvers.gurobi"]}, "options": _object({
+        "model_backend": _object({"plugin_id": TEXT, "config": {"type": "object"}}, ["plugin_id"]),
+        "solver": _object({"plugin_id": TEXT, "config": {"type": "object"}, "options": _object({
             "time_limit_s": {"type": "number", "minimum": 0}}, [])}, ["plugin_id"]),
         "executor": {"anyOf": [
             _object({"plugin_id": {"const": "llm4om.executors.container"}, "config": _object({

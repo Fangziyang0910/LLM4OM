@@ -19,7 +19,7 @@ from llm4om.control import CancellationToken
 from llm4om.contracts import RunError, parse_json
 
 
-DEFAULT_IMAGE = "llm4om-worker:0.20.0"
+DEFAULT_IMAGE = "llm4om-worker:0.21.0"
 _CONTROL_TIMEOUT_S = 2.0
 _REAP_TIMEOUT_S = 0.5
 _CONTROL_OUTPUT_BYTES = 1048576
@@ -367,9 +367,14 @@ def _validate_request(command: list[str], inputs: Mapping[str, bytes], limits: d
 def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
                    solver_id: str = "llm4om.solvers.highs",
                    cancellation: CancellationToken | None = None,
-                   compiler_selection: dict[str, Any] | None = None, expected_compiler: dict[str, Any] | None = None) -> dict[str, Any]:
+                   compiler_selection: dict[str, Any] | None = None, expected_compiler: dict[str, Any] | None = None,
+                   execution_selection: dict[str, Any] | None = None, expected_execution: dict[str, Any] | None = None,
+                   result_profile: str | None = None) -> dict[str, Any]:
     command = ["python", "-I", "-m", "llm4om.worker", "--runtime", "--solver", solver_id]
     inputs = {}
+    if execution_selection is not None:
+        command.extend(["--execution-runtime", "/input/execution.json"])
+        inputs["execution.json"] = json.dumps(execution_selection, allow_nan=False).encode()
     if compiler_selection is not None:
         command.extend(["--compiler-runtime", "/input/compiler.json"])
         inputs["compiler.json"] = json.dumps(compiler_selection, allow_nan=False).encode()
@@ -380,18 +385,26 @@ def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
     try:
         data = parse_json(execution.stdout)
         runtime_error = data.get("error")
+        if expected_execution is not None and isinstance(runtime_error, dict) and runtime_error.get("code") in {
+                "execution_plugin_unavailable", "unknown_plugin", "invalid_plugin_manifest", "plugin_load_error", "invalid_config", "dependency_missing", "capability_mismatch"}:
+            raise RunError("execution_plugin_unavailable", "admission", "Worker lacks the exact admitted Backend/Solver implementation/config.")
         if expected_compiler is not None and isinstance(runtime_error, dict) and runtime_error.get("code") in {
-                "unknown_plugin", "invalid_plugin_manifest", "plugin_load_error", "invalid_config", "dependency_missing", "capability_mismatch"}:
+                "compiler_unavailable", "unknown_plugin", "invalid_plugin_manifest", "plugin_load_error", "invalid_config", "dependency_missing", "capability_mismatch"}:
             raise RunError("compiler_unavailable", "admission", "Worker lacks the exact admitted compiler implementation/config.")
         runtime = data["runtime"]
+        gurobi = result_profile == "gurobi_api/0.1.0" if result_profile else solver_id == "llm4om.solvers.gurobi"
+        required_packages = {"Pyomo", "gurobipy"} if gurobi else {"Pyomo", "highspy"}
+        if expected_execution is not None:
+            required_packages.update(name for binding in expected_execution.values()
+                for name in binding["manifest"]["dependencies"].get("python", []))
         if (execution.status != "completed" or execution.exit_code != 0 or data["schema_version"] != "0.2.0"
-                or not isinstance(runtime, dict) or set(runtime) != ({"python", "llm4om", "packages", "solver_environment"} if solver_id == "llm4om.solvers.gurobi" else {"python", "llm4om", "packages"})
+                or not isinstance(runtime, dict) or set(runtime) != ({"python", "llm4om", "packages", "solver_environment"} if gurobi else {"python", "llm4om", "packages"})
                 or runtime["llm4om"] != version("llm4om") or not isinstance(runtime["python"], str)
                 or not runtime["python"].startswith(("3.11.", "3.12."))
-                or not isinstance(runtime["packages"], dict) or set(runtime["packages"]) != ({"Pyomo", "gurobipy"} if solver_id == "llm4om.solvers.gurobi" else {"Pyomo", "highspy"})
+                or not isinstance(runtime["packages"], dict) or set(runtime["packages"]) != required_packages
                 or not all(isinstance(value, str) and value for value in runtime["packages"].values())):
             raise ValueError("Worker did not pass dependency preflight.")
-        if solver_id == "llm4om.solvers.gurobi":
+        if gurobi:
             capability = runtime["solver_environment"]
             if runtime["packages"]["gurobipy"] != "13.0.3" or capability not in (
                     {"availability": "size_limited", "micro_model_verified": True, "size_boundary_error": 10010},
@@ -399,9 +412,11 @@ def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
                 raise ValueError("Worker did not report a supported Gurobi environment.")
         if expected_compiler is not None and data.get("compiler_identity") != expected_compiler:
             raise RunError("compiler_unavailable", "admission", "Worker lacks the exact admitted compiler implementation/config.")
+        if expected_execution is not None and data.get("execution_identity") != expected_execution:
+            raise RunError("execution_plugin_unavailable", "admission", "Worker Backend/Solver differs from the admitted identities.")
         return {**runtime, "image_id": execution.image_id, "restrictions": execution.restrictions}
     except (ValueError, KeyError, TypeError) as error:
-        if isinstance(error, RunError) and error.code == "compiler_unavailable":
+        if isinstance(error, RunError) and error.code in ("compiler_unavailable", "execution_plugin_unavailable"):
             raise
         raise RunError("executor_unavailable", "admission", "Worker image cannot load the required Solver runtime.") from error
 

@@ -14,10 +14,10 @@ import jsonschema
 
 from llm4om.contracts import RunError, parse_json, validate_config
 from llm4om.executors import worker_runtime, container_runtime, run_owned_process, DEFAULT_IMAGE
-from llm4om.solvers import solver_packages
 from llm4om.control import CancellationToken
 from llm4om.plugins import MethodPlugin, Plugin, discover_plugins, _quiet, _exception_details
 from llm4om.compilers import ResolvedCompiler, resolve_compiler, compiler_identity
+from llm4om.execution_plugins import ExecutionResources, resolve_execution_resources
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,7 @@ class AdmissionPlan:
     deadline: float
     role_providers: dict[str, HTTPTextProvider] = field(default_factory=dict)
     compiler: ResolvedCompiler | None = None
+    execution: ExecutionResources | None = None
 
 
 def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: Path | None = None,
@@ -111,8 +112,13 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     if profile in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0") and "compiler" not in settings:
         raise RunError("invalid_config", "admission", "Grounded LPIR requires its explicit compiler.")
     native = profile in ("native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0")
-    if settings["model_backend"]["plugin_id"] != ("llm4om.model_backends.gurobipy" if native else "llm4om.model_backends.pyomo_factory") or native and settings["solver"]["plugin_id"] != "llm4om.solvers.gurobi":
+    allowed_types = settings.get("allowed_problem_types", ["lp", "milp"])
+    execution = resolve_execution_resources(settings["model_backend"], settings["solver"], allowed_types, inventory=inventory,
+        expected=expected.get("execution") if expected else None, check_dependencies=not offline and execution_mode != "container")
+    if execution.backend_binding["manifest"]["capabilities"]["handle_profile"] != ("gurobipy_linear/0.1.0" if native else "pyomo_linear/0.1.0"):
         raise RunError("capability_mismatch", "admission", "The output profile is incompatible with the selected Backend/Solver.")
+    if ("native_code" if native else "python_factory") not in execution.backend_binding["manifest"]["capabilities"]["input_artifact_kinds"]:
+        raise RunError("capability_mismatch", "admission", "Backend does not accept this Code representation.")
     compiler = resolve_compiler(settings["compiler"], settings["model_backend"]["plugin_id"], inventory=inventory,
         expected=expected.get("compiler") if expected else None) if profile in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0") else None
     if compiler is not None:
@@ -130,7 +136,15 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         raise RunError("capability_mismatch", "admission", "Role Provider does not support the requested method features.")
     for field, value in required.items():
         declared = capabilities.get(field)
-        compatible = (isinstance(declared, list) and set(value) <= set(declared)) if field in {
+        if field in {"model_backends", "solvers"}:
+            kind = "model_backend" if field == "model_backends" else "solver_backend"
+            capability = "handle_profile" if kind == "model_backend" else "result_profile"
+            selected_binding = execution.backend_binding if kind == "model_backend" else execution.solver_binding
+            compatible = isinstance(declared, list) and any((kind, key) in inventory and
+                inventory[(kind, key)].manifest["capabilities"][capability] == selected_binding["manifest"]["capabilities"][capability]
+                for key in declared)
+        else:
+            compatible = (isinstance(declared, list) and set(value) <= set(declared)) if field in {
             "input_artifact_kinds", "output_artifact_kinds", "model_backends", "solvers", "execution_modes"} else declared == value
         if not compatible:
             raise RunError("capability_mismatch", "admission", "A method capability is unknown or incompatible with this profile.",
@@ -176,26 +190,32 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 worker = worker_runtime(settings["executor"]["config"], deadline=deadline, cancellation=cancellation,
                                         solver_id=settings["solver"]["plugin_id"],
                                         compiler_selection={"compiler": settings["compiler"], "target_backend": settings["model_backend"]["plugin_id"]} if compiler else None,
-                                        expected_compiler=compiler_identity(compiler.binding) if compiler else None)
+                                        expected_compiler=compiler_identity(compiler.binding) if compiler else None,
+                                        execution_selection={"model_backend": settings["model_backend"], "solver": settings["solver"], "allowed_problem_types": allowed_types},
+                                        expected_execution=execution.identity(), result_profile=execution.result_profile)
             packages.update(worker["packages"])
         else:
             if expected is not None:
                 local_runtime = {"packages": expected["packages"], "solver_environment": expected.get("solver_environment")}
             else:
-                solver_packages(settings["solver"]["plugin_id"])
-                out, _, code = run_owned_process([sys.executable, "-m", "llm4om.worker", "--runtime", "--solver", settings["solver"]["plugin_id"]],
-                                                b"", deadline=deadline, cancellation=cancellation or CancellationToken())
+                import json
+                out, _, code = run_owned_process([sys.executable, "-m", "llm4om.worker", "--runtime", "--runtime-stdin"],
+                    json.dumps({"model_backend": settings["model_backend"], "solver": settings["solver"], "allowed_problem_types": allowed_types}, allow_nan=False).encode(),
+                    deadline=deadline, cancellation=cancellation or CancellationToken())
                 payload = parse_json(out)
                 if code != 0 or "runtime" not in payload:
                     runtime_error = payload.get("error", {})
                     raise RunError(runtime_error.get("code", "dependency_missing"), "admission", "The owned Solver runtime check failed.")
                 local_runtime = payload["runtime"]
+                if payload.get("execution_identity") != execution.identity():
+                    raise RunError("execution_plugin_unavailable", "admission", "Owned Worker execution adapters differ from the selected identities.")
             packages.update(local_runtime["packages"])
     return AdmissionPlan(method, {"schema_version": "0.2.0", "mode": "offline_mock" if offline else execution_mode,
         "method": {"manifest": method.manifest, "origin": method.origin},
         "method_profile": profile, "method_cancellation": capabilities.get("cancellation", "unknown"), "code_origin": "method_generated" if profile in ("factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0") else "deterministic_compilation",
         "compiler_id": settings["compiler"]["plugin_id"] if profile in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0") else None, "model_backend_id": settings["model_backend"]["plugin_id"],
         "compiler": compiler.binding if compiler else None,
+        "execution": {"model_backend": execution.backend_binding, "solver": execution.solver_binding},
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
         "packages": packages, "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": provider_plugin.manifest,
         "provider_origin": provider_plugin.origin, "model": settings["llm"]["model"],
@@ -206,7 +226,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 for selection in role_models.values()) else "same_requested_model_roles",
             "role_resource_comparison": "different_role_resources" if any(
                 any(selection[key] != settings["llm"][key] for key in ("provider_plugin_id", "model", "config"))
-                for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers, compiler)
+                for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers, compiler, execution)
 
 
 def _validate_plugin_config(plugin: Plugin, config: dict[str, Any], path: list[str]) -> None:

@@ -379,7 +379,9 @@ class RunMethodResources:
             options["time_limit_s"] = min(options.get("time_limit_s", remaining), remaining)
             collection = {"schema_version": "0.1.0", "transport": capture["transport"],
                 "source_sha256": code.source_sha256, "solver_options": options,
-                "allowed_problem_types": plan.snapshot["allowed_problem_types"]}
+                "allowed_problem_types": plan.snapshot["allowed_problem_types"],
+                "execution": {"model_backend": self.settings["model_backend"], "solver": self.settings["solver"], "allowed_problem_types": plan.snapshot["allowed_problem_types"]},
+                "execution_identity": plan.execution.identity() if plan.execution else None}
             try:
                 collected = run_container(["python", "-I", "-m", "llm4om.worker", "--collect-native", "/input/capture.json",
                         "--solver", self.settings["solver"]["plugin_id"]],
@@ -389,9 +391,9 @@ class RunMethodResources:
                     raise RunError("run_cancelled" if collected.status == "cancelled" else "collector_failed", "execution", "Independent collector did not complete.")
                 trusted = parse_json(collected.stdout)
                 expected = {name: value for name, value in plan.snapshot["worker"].items()
-                            if name in ("python", "llm4om", "packages")}
+                            if name in ("python", "llm4om", "packages", "solver_environment")}
                 validate_worker_response(trusted, expected, solver_id=self.settings["solver"]["plugin_id"],
-                                         model_backend=self.settings["model_backend"]["plugin_id"])
+                                         model_backend=self.settings["model_backend"]["plugin_id"], result_profile=plan.execution.result_profile if plan.execution else None)
                 collector_ref = store.json(path + "collector.json", trusted, execution_id + "-collector")
                 if "error" in trusted:
                     raise RunError(trusted["error"]["code"], "execution", "Independent collector rejected the model.")

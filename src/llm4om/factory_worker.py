@@ -9,21 +9,28 @@ import selectors
 import subprocess
 import sys
 import time
-from typing import Any
+from typing import Any, cast
 
 from llm4om.contracts import RunError, parse_json, read_public_bytes, validate_bindings, validate_data, validate_formulation, validate_problem
 from llm4om.linear import compile_ir
 from llm4om.solvers import solve
+from llm4om.execution_plugins import resolve_execution_resources
+from llm4om.backends import NativeModelBackend
 
 
 def solve_factory(path: Path, *, solver_id: str = "llm4om.solvers.highs") -> tuple[dict[str, Any], dict[str, Any]]:
     request = parse_json(read_public_bytes(path))
     fields = {"kind", "source_sha256", "solver_options", "problem", "formulation", "data_bindings",
               "data_refs", "allowed_problem_types", "wall_time_s", "output_limit_bytes"}
-    if set(request) != fields or request["kind"] not in ("python_factory/0.1.0", "native_gurobipy/0.1.0"):
+    if set(request) not in (fields, fields | {"execution", "execution_identity"}) or request["kind"] not in ("python_factory/0.1.0", "native_gurobipy/0.1.0"):
         raise RunError("invalid_worker_request", "execution", "Factory request does not match version 0.1.0.")
     native = request["kind"] == "native_gurobipy/0.1.0"
-    if native and solver_id != "llm4om.solvers.gurobi":
+    execution = resolve_execution_resources(request["execution"]["model_backend"], request["execution"]["solver"], request["allowed_problem_types"]) if "execution" in request else None
+    if execution is not None and execution.identity() != request["execution_identity"]:
+        raise RunError("checkpoint_incompatible", "execution", "Factory collector execution adapters differ from admission.")
+    if execution is not None and execution.backend_binding["manifest"]["capabilities"]["handle_profile"] != ("gurobipy_linear/0.1.0" if native else "pyomo_linear/0.1.0"):
+        raise RunError("capability_mismatch", "execution", "Factory representation does not match the selected Backend.")
+    if native and execution is None and solver_id != "llm4om.solvers.gurobi":
         raise RunError("capability_mismatch", "admission", "Native gurobipy requires Gurobi.")
     public = request["problem"]
     validate_problem(public)
@@ -103,7 +110,7 @@ def solve_factory(path: Path, *, solver_id: str = "llm4om.solvers.highs") -> tup
         transport = exported["instance"]
         if native:
             from llm4om.gurobi import read_native, native_instance, solve_native
-            handle = stack.enter_context(read_native(transport))
+            handle = stack.enter_context(cast(NativeModelBackend, execution.backend).read_transport(transport) if execution else read_native(transport))
             instance = native_instance(handle)
         else:
             instance = transport
@@ -127,6 +134,11 @@ def solve_factory(path: Path, *, solver_id: str = "llm4om.solvers.highs") -> tup
             raise RunError("execution_timeout", "execution", "No Worker deadline remains for independent solving.")
         options = dict(request["solver_options"])
         options["time_limit_s"] = min(options.get("time_limit_s", remaining), remaining)
-        result = solve_native(handle, options) if native else solve(compiled, options, solver_id)
+        if execution:
+            if not native:
+                handle = execution.backend.load(compiled, {})
+            result = execution.solve(handle, options)
+        else:
+            result = solve_native(handle, options) if native else solve(compiled, options, solver_id)
         return result, {"instance": instance, "decision_map": decisions, "source_sha256": request["source_sha256"],
                         **({"model_mps": transport["model_mps"]} if native else {})}
