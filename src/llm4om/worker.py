@@ -12,11 +12,13 @@ from pathlib import Path
 from llm4om.contracts import RunError, parse_json, read_public_bytes
 from llm4om.solvers import solver_runtime, solver_packages, solve
 from llm4om.linear import compile_ir
+from llm4om.compilers import resolve_compiler, compiler_identity
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime", action="store_true")
+    parser.add_argument("--compiler-runtime", type=Path)
     parser.add_argument("--solver", default="llm4om.solvers.highs")
     parser.add_argument("--solve", type=Path)
     parser.add_argument("--collect-native", type=Path)
@@ -26,7 +28,12 @@ def main() -> int:
         runtime = {"python": platform.python_version(), "llm4om": version("llm4om"),
                    **({"packages": solver_packages(args.solver)} if args.collect_native is not None else solver_runtime(args.solver))}
         if args.runtime:
-            print(json.dumps({"schema_version": "0.2.0", "runtime": runtime}, allow_nan=False))
+            compiler_runtime = {}
+            if args.compiler_runtime is not None:
+                selection = parse_json(read_public_bytes(args.compiler_runtime))
+                compiler = resolve_compiler(selection["compiler"], selection["target_backend"])
+                compiler_runtime["compiler_identity"] = compiler_identity(compiler.binding)
+            print(json.dumps({"schema_version": "0.2.0", "runtime": runtime, **compiler_runtime}, allow_nan=False))
             return 0
         if args.solve is None and not args.solve_stdin and args.collect_native is None:
             parser.error("--solve or --runtime is required")
@@ -47,9 +54,17 @@ def main() -> int:
             from llm4om.factory_worker import solve_factory
             result, factory = solve_factory(args.solve, solver_id=args.solver)
         else:
-            if set(request) != {"ir", "source_sha256", "solver_options"}:
+            if set(request) not in ({"ir", "source_sha256", "solver_options"}, {"ir", "source_sha256", "symbol_map", "solver_options", "compiler", "compiler_identity", "target_backend"}):
                 raise RunError("invalid_worker_request", "execution", "Worker accepts strict IR, source hash and Solver options only.")
-            compiled = compile_ir(request["ir"])
+            if "compiler" in request:
+                compiler = resolve_compiler(request["compiler"], request["target_backend"])
+                if compiler_identity(compiler.binding) != request["compiler_identity"]:
+                    raise RunError("checkpoint_incompatible", "execution", "Worker compiler differs from the admitted implementation/config.")
+                compiled = compiler.compile(request["ir"])
+                if compiled.symbol_map != request["symbol_map"]:
+                    raise RunError("code_hash_mismatch", "execution", "Worker symbols differ from the admitted CodeArtifact.")
+            else:
+                compiled = compile_ir(request["ir"])
             actual_source = compiled.source.encode() if args.solve_stdin else read_public_bytes(args.solve.parent / "model.py")
             if (hashlib.sha256(compiled.source.encode()).hexdigest() != request["source_sha256"]
                     or hashlib.sha256(actual_source).hexdigest() != request["source_sha256"]):

@@ -132,6 +132,8 @@ LPIR 0.1 表达具体实例的已展开线性模型。它的常数与系数已�
 
 编译结果包含变量／约束 ID 到生成代码、后端模型名称的映射；求解解向量必须能够映射回 IR。编译器正确性采用手算 fixture、变量域／常数项／目标方向检查及跨后端对比验收。
 
+独立Compiler的选择与宿主／Worker身份校验已进入SDK0.20.0，实际profile及本机证据见 [S03-C3a](development/s03-compiler-registry.md)。Backend／Solver的独立注册仍按完整计划推进。
+
 ### 4.2 工厂与原生代码路径
 
 方法的 Code 步骤可以直接生成 Python 工厂 `build_model(data)` 返回声明后端的模型对象，平台在隔离 Worker 内掌握求解调用与结果收集。模型对象只在 Worker 内存在，不作为跨进程传输契约。

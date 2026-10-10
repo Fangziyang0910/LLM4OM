@@ -4,7 +4,7 @@ WORKDIR /opt/llm4om
 COPY runtime-requirements.txt /opt/llm4om/runtime-requirements.txt
 RUN python -m pip install --no-cache-dir --require-hashes -r runtime-requirements.txt
 COPY wheels/ /opt/llm4om/wheels/
-RUN python -m pip install --no-deps --no-cache-dir /opt/llm4om/wheels/llm4om-*.whl
+RUN python -m pip install --no-deps --no-cache-dir /opt/llm4om/wheels/*.whl
 ENV PYTHONDONTWRITEBYTECODE=1
 USER 65532:65532
 ENTRYPOINT ["python", "-I", "-m", "llm4om.worker"]

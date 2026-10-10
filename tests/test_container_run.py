@@ -12,6 +12,7 @@ from pathlib import Path
 from importlib.metadata import version
 
 import yaml
+from llm4om.compilers import resolve_compiler, compiler_identity
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -53,15 +54,20 @@ elif operation == "inspect":
         return result, root
 
     def test_doctor_rejects_incomplete_worker_runtime_before_the_method_runs(self) -> None:
-        result, _ = self.docker_fixture("doctor", runtime={"schema_version": "0.2.0", "runtime": {"packages": []}})
-        self.assertEqual(result.returncode, 1, result.stderr + result.stdout)
-        report = json.loads(result.stdout)
-        self.assertFalse(report["preflight_ok"])
-        self.assertEqual(report["error"]["code"], "executor_unavailable")
+        for runtime in ({"schema_version": "0.2.0", "runtime": {"packages": []}},
+                        {"schema_version": "0.2.0", "error": []}):
+            with self.subTest(runtime=runtime):
+                result, _ = self.docker_fixture("doctor", runtime=runtime)
+                self.assertEqual(result.returncode, 1, result.stderr + result.stdout)
+                report = json.loads(result.stdout)
+                self.assertFalse(report["preflight_ok"])
+                self.assertEqual(report["error"]["code"], "executor_unavailable")
 
     def test_incompatible_worker_response_does_not_become_a_solve_result(self) -> None:
         runtime = {"schema_version": "0.2.0", "runtime": {"python": "3.12.15", "llm4om": version("llm4om"),
             "packages": {"Pyomo": "6.10.1", "highspy": "1.15.1"}}}
+        runtime["compiler_identity"] = compiler_identity(resolve_compiler(
+            {"plugin_id": "llm4om.compilers.lp_ir_to_pyomo"}, "llm4om.model_backends.pyomo_factory").binding)
         for schema_version in ("999.0.0", "0.2.0"):
             with self.subTest(schema_version=schema_version):
                 payload = {"schema_version": schema_version, "runtime": runtime["runtime"],

@@ -15,6 +15,7 @@ from io import StringIO
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
+from llm4om.compilers import resolve_compiler, compiler_identity
 
 from llm4om.contracts import (
     RunError, parse_json, public_path, read_config, read_public_bytes, validate_config, validate_data, validate_problem,
@@ -430,7 +431,8 @@ def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: 
     formulation = parse_json(read_public_bytes(store.path / artifact["formulation_ref"]["relative_path"]))
     ir_ref = formulation["structured_ir_ref"]
     ir = parse_json(read_public_bytes(store.path / ir_ref["relative_path"]))
-    compiled = compile_ir(ir)
+    compiler = resolve_compiler(settings["compiler"], settings["model_backend"]["plugin_id"], expected=store.state["admission"]["compiler"])
+    compiled = compiler.compile(ir)
     source_ref = store.write(f"candidates/{candidate_id}/model.py", compiled.source.encode(), "compiled-source")
     symbols_ref = store.json(f"candidates/{candidate_id}/symbol-map.json", compiled.symbol_map, "symbol-map")
     code_ref = store.json(f"candidates/{candidate_id}/code-artifact.json", {
@@ -438,16 +440,17 @@ def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: 
         "representation_ref": source_ref, "model_backend": settings["model_backend"]["plugin_id"],
         "source_formulation_ref": artifact["formulation_ref"], "data_bindings": artifact["data_bindings"],
         "provenance": {"origin": "deterministic_compilation", "compiler_id": settings["compiler"]["plugin_id"],
-                       "compiler_version": "0.1.0", "source_ir_ref": ir_ref, "symbol_map_ref": symbols_ref}}, "compiled-code")
+                       "compiler_version": compiler.binding["manifest"]["plugin_version"], "source_ir_ref": ir_ref, "symbol_map_ref": symbols_ref,
+                       "compiler_identity": compiler_identity(compiler.binding)}}, "compiled-code")
     artifact["artifact_id"] += "-compiled"
     artifact["code_ref"] = code_ref
     artifact["stage_status"]["code"] = {"status": "available", "reason": None}
     artifact_ref = store.json(f"candidates/{candidate_id}/artifact.json", artifact, artifact["artifact_id"])
     store.json(f"candidates/{candidate_id}/build.json", {"schema_version": "0.2.0", "code_artifact_ref": code_ref,
-        "compiler_id": settings["compiler"]["plugin_id"], "compiler_version": "0.1.0",
+        "compiler_id": settings["compiler"]["plugin_id"], "compiler_version": compiler.binding["manifest"]["plugin_version"],
         "source_ir_ref": ir_ref, "target_backend": settings["model_backend"]["plugin_id"],
         "symbol_map_ref": symbols_ref, "data_bindings": artifact["data_bindings"],
-        "diagnostics": [], "compiler_config_sha256": hashlib.sha256(b"{}").hexdigest()}, "build")
+        "diagnostics": [], "compiler_config_sha256": hashlib.sha256(json.dumps(compiler.binding["config"], sort_keys=True).encode()).hexdigest()}, "build")
     return artifact_ref, compiled
 
 
@@ -515,7 +518,8 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
             else:
                 ir = parse_json(read_public_bytes(store.path / formulation["structured_ir_ref"]["relative_path"]))
                 source = compiled.source.encode()
-                request = {"ir": ir, "source_sha256": hashlib.sha256(source).hexdigest(), "solver_options": solver_options}
+                request = {"ir": ir, "source_sha256": hashlib.sha256(source).hexdigest(), "symbol_map": compiled.symbol_map, "solver_options": solver_options,
+                    "compiler": settings["compiler"], "compiler_identity": compiler_identity(plan.snapshot["compiler"]), "target_backend": settings["model_backend"]["plugin_id"]}
             inputs = {"request.json": json.dumps(request, ensure_ascii=False, allow_nan=False).encode(), "model.py": source}
             for data in parse_json(read_public_bytes(store.path / "public-problem.json"))["data_refs"]:
                 inputs[data["path"]] = read_public_bytes(store.path / data["path"])
@@ -571,7 +575,8 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
             stdout, stderr, exit_code = run_owned_process(
                 [sys.executable, "-m", "llm4om.worker", "--solve-stdin", "--solver", settings["solver"]["plugin_id"]],
                 json.dumps({"ir": ir, "source_sha256": hashlib.sha256(compiled.source.encode()).hexdigest(),
-                            "solver_options": solver_options}, allow_nan=False).encode(),
+                            "symbol_map": compiled.symbol_map, "solver_options": solver_options, "compiler": settings["compiler"],
+                            "compiler_identity": compiler_identity(plan.snapshot["compiler"]), "target_backend": settings["model_backend"]["plugin_id"]}, allow_nan=False).encode(),
                 deadline=plan.deadline, cancellation=store.cancellation)
             out.write(stdout.decode(errors="replace"))
             err.write(stderr.decode(errors="replace"))
@@ -640,7 +645,9 @@ def _restored_compilation(store: RunStore, artifact_ref: dict[str, Any]) -> Comp
     if code["provenance"]["origin"] != "deterministic_compilation":
         return None
     ir = parse_json(read_public_bytes(store.path / code["provenance"]["source_ir_ref"]["relative_path"]))
-    return compile_ir(ir)
+    binding = store.state["admission"]["compiler"]
+    return resolve_compiler({"plugin_id": binding["manifest"]["plugin_id"], "config": binding["config"]},
+        store.state["admission"]["model_backend_id"], expected=binding).compile(ir)
 
 
 def _load_verified_record(store: RunStore, ref: dict[str, Any]) -> dict[str, Any]:

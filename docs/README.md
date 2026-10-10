@@ -78,3 +78,5 @@ CoE流程与真实模型、独立原问题检查的开发证据见 [S06-C](devel
 独立文本Provider的注册、预检、实际协议与身份恢复见 [S03-C1](development/s03-provider-registry.md)。
 
 Task／Evaluator的共同注册、评分身份与导入密封见 [S03-C2](development/s03-task-registry.md)。
+
+独立Compiler的共同注册、Worker包预检与源码／映射身份见 [S03-C3a](development/s03-compiler-registry.md)。

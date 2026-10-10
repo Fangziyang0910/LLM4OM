@@ -69,3 +69,5 @@ S05-D2澄清与问题修订见 [实现记录](docs/development/s05-clarification
 S03-C1独立Provider按已确认的CLI／HTTP／Solver接口验证；本机聚焦red→green、一次必要完整回归和干净wheel为主要验收，见 [记录](docs/development/s03-provider-registry.md)。
 
 S03-C2采用本机CLI／Task／Evaluation／Solver／文件系统验收；隐藏材料仅在导入与评估端，见 [记录](docs/development/s03-task-registry.md)。
+
+S03-C3a的独立Compiler在CLI／Compiler／Worker／真实Solver接口验收，可信插件wheel进入不可变镜像，见 [记录](docs/development/s03-compiler-registry.md)。

@@ -19,7 +19,7 @@ from llm4om.control import CancellationToken
 from llm4om.contracts import RunError, parse_json
 
 
-DEFAULT_IMAGE = "llm4om-worker:0.19.0"
+DEFAULT_IMAGE = "llm4om-worker:0.20.0"
 _CONTROL_TIMEOUT_S = 2.0
 _REAP_TIMEOUT_S = 0.5
 _CONTROL_OUTPUT_BYTES = 1048576
@@ -366,13 +366,23 @@ def _validate_request(command: list[str], inputs: Mapping[str, bytes], limits: d
 
 def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
                    solver_id: str = "llm4om.solvers.highs",
-                   cancellation: CancellationToken | None = None) -> dict[str, Any]:
-    execution = run_container(["python", "-I", "-m", "llm4om.worker", "--runtime", "--solver", solver_id], {}, limits,
+                   cancellation: CancellationToken | None = None,
+                   compiler_selection: dict[str, Any] | None = None, expected_compiler: dict[str, Any] | None = None) -> dict[str, Any]:
+    command = ["python", "-I", "-m", "llm4om.worker", "--runtime", "--solver", solver_id]
+    inputs = {}
+    if compiler_selection is not None:
+        command.extend(["--compiler-runtime", "/input/compiler.json"])
+        inputs["compiler.json"] = json.dumps(compiler_selection, allow_nan=False).encode()
+    execution = run_container(command, inputs, {**limits, "output_limit_bytes": max(limits.get("output_limit_bytes", 1024 * 1024), 65536)},
                               image=limits.get("image", DEFAULT_IMAGE), deadline=deadline, cancellation=cancellation)
     if execution.status == "cancelled":
         raise RunError("run_cancelled", "admission", "Worker admission was cancelled.")
     try:
         data = parse_json(execution.stdout)
+        runtime_error = data.get("error")
+        if expected_compiler is not None and isinstance(runtime_error, dict) and runtime_error.get("code") in {
+                "unknown_plugin", "invalid_plugin_manifest", "plugin_load_error", "invalid_config", "dependency_missing", "capability_mismatch"}:
+            raise RunError("compiler_unavailable", "admission", "Worker lacks the exact admitted compiler implementation/config.")
         runtime = data["runtime"]
         if (execution.status != "completed" or execution.exit_code != 0 or data["schema_version"] != "0.2.0"
                 or not isinstance(runtime, dict) or set(runtime) != ({"python", "llm4om", "packages", "solver_environment"} if solver_id == "llm4om.solvers.gurobi" else {"python", "llm4om", "packages"})
@@ -387,8 +397,12 @@ def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
                     {"availability": "size_limited", "micro_model_verified": True, "size_boundary_error": 10010},
                     {"availability": "micro_model_available_size_limit_not_observed", "micro_model_verified": True, "size_boundary_error": None}):
                 raise ValueError("Worker did not report a supported Gurobi environment.")
+        if expected_compiler is not None and data.get("compiler_identity") != expected_compiler:
+            raise RunError("compiler_unavailable", "admission", "Worker lacks the exact admitted compiler implementation/config.")
         return {**runtime, "image_id": execution.image_id, "restrictions": execution.restrictions}
     except (ValueError, KeyError, TypeError) as error:
+        if isinstance(error, RunError) and error.code == "compiler_unavailable":
+            raise
         raise RunError("executor_unavailable", "admission", "Worker image cannot load the required Solver runtime.") from error
 
 

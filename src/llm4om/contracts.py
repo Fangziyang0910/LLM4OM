@@ -412,7 +412,7 @@ def validate_config(settings: dict[str, Any]) -> None:
         "method": _object({"plugin_id": TEXT, "config": {"type": "object"}}),
         "llm": _object({**llm_selection["properties"], "role_models": {"type": "object", "propertyNames": TEXT,
             "additionalProperties": llm_selection}}, ["provider_plugin_id", "model", "config"]),
-        "compiler": _object({"plugin_id": {"const": "llm4om.compilers.lp_ir_to_pyomo"}}),
+        "compiler": _object({"plugin_id": TEXT, "config": {"type": "object"}}, ["plugin_id"]),
         "model_backend": _object({"plugin_id": {"enum": ["llm4om.model_backends.pyomo_factory", "llm4om.model_backends.gurobipy"]}}),
         "solver": _object({"plugin_id": {"enum": ["llm4om.solvers.highs", "llm4om.solvers.gurobi"]}, "options": _object({
             "time_limit_s": {"type": "number", "minimum": 0}}, [])}, ["plugin_id"]),

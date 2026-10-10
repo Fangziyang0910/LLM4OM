@@ -17,6 +17,7 @@ from llm4om.executors import worker_runtime, container_runtime, run_owned_proces
 from llm4om.solvers import solver_packages
 from llm4om.control import CancellationToken
 from llm4om.plugins import MethodPlugin, Plugin, discover_plugins, _quiet, _exception_details
+from llm4om.compilers import ResolvedCompiler, resolve_compiler, compiler_identity
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class AdmissionPlan:
     provider: MockProvider | HTTPTextProvider | None
     deadline: float
     role_providers: dict[str, HTTPTextProvider] = field(default_factory=dict)
+    compiler: ResolvedCompiler | None = None
 
 
 def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: Path | None = None,
@@ -111,6 +113,10 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     native = profile in ("native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0")
     if settings["model_backend"]["plugin_id"] != ("llm4om.model_backends.gurobipy" if native else "llm4om.model_backends.pyomo_factory") or native and settings["solver"]["plugin_id"] != "llm4om.solvers.gurobi":
         raise RunError("capability_mismatch", "admission", "The output profile is incompatible with the selected Backend/Solver.")
+    compiler = resolve_compiler(settings["compiler"], settings["model_backend"]["plugin_id"], inventory=inventory,
+        expected=expected.get("compiler") if expected else None) if profile in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0") else None
+    if compiler is not None:
+        packages.update(compiler.binding["packages"])
     required = {"method_profile": profile,
                 "input_artifact_kinds": ["public_problem"], "output_artifact_kinds": ["model_artifact"],
                 "formulation_representations": [] if profile == "native_script/0.2.0" else ["native_formulation" if profile == "native_script/0.1.0" else "five_element"], "code_representations": ["native_script" if profile.startswith("native_script/") else "native_code" if native else "python_factory"],
@@ -133,6 +139,9 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     if not set(allowed_types) <= set(capabilities["problem_types"]):
         raise RunError("capability_mismatch", "admission", "Method cannot produce every configured problem type.",
                        details={"path": ["method", "capabilities", "problem_types"]})
+    if compiler is not None and not set(allowed_types) <= set(compiler.binding["manifest"]["capabilities"]["problem_types"]):
+        raise RunError("capability_mismatch", "admission", "Compiler cannot compile every configured problem type.",
+                       details={"path": ["compiler", "capabilities", "problem_types"]})
     for name in method.manifest["dependencies"].get("python", []):
         try:
             packages[name] = version(name)
@@ -165,7 +174,9 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 worker = expected["worker"]
             else:
                 worker = worker_runtime(settings["executor"]["config"], deadline=deadline, cancellation=cancellation,
-                                        solver_id=settings["solver"]["plugin_id"])
+                                        solver_id=settings["solver"]["plugin_id"],
+                                        compiler_selection={"compiler": settings["compiler"], "target_backend": settings["model_backend"]["plugin_id"]} if compiler else None,
+                                        expected_compiler=compiler_identity(compiler.binding) if compiler else None)
             packages.update(worker["packages"])
         else:
             if expected is not None:
@@ -184,6 +195,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         "method": {"manifest": method.manifest, "origin": method.origin},
         "method_profile": profile, "method_cancellation": capabilities.get("cancellation", "unknown"), "code_origin": "method_generated" if profile in ("factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0") else "deterministic_compilation",
         "compiler_id": settings["compiler"]["plugin_id"] if profile in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0") else None, "model_backend_id": settings["model_backend"]["plugin_id"],
+        "compiler": compiler.binding if compiler else None,
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
         "packages": packages, "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": provider_plugin.manifest,
         "provider_origin": provider_plugin.origin, "model": settings["llm"]["model"],
@@ -194,7 +206,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 for selection in role_models.values()) else "same_requested_model_roles",
             "role_resource_comparison": "different_role_resources" if any(
                 any(selection[key] != settings["llm"][key] for key in ("provider_plugin_id", "model", "config"))
-                for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers)
+                for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers, compiler)
 
 
 def _validate_plugin_config(plugin: Plugin, config: dict[str, Any], path: list[str]) -> None:

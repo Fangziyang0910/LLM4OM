@@ -46,7 +46,7 @@ source 对研究方法另记录研究路线（prompting-based／training-based�
 | `llm_provider` | `async complete(request, context) -> LLMResponse` | Gateway 控制凭据、预算、重试和 trace |
 | `task_adapter` | `iter_cases(config) -> Iterator[EvaluationCase]` | 导入／调度端；公开输入与 oracle 分开 |
 | `data_loader` | `load(ref, schema, context) -> DataView` | 受控数据读取，有限视图和大小限制 |
-| `compiler` | `compile(ir, target, context) -> BuildArtifact` | 支持 IR schema 与目标 Backend；不调用 LLM |
+| `compiler` | `compile(ir, target_backend) -> CompiledCode` | 支持 IR schema 与目标 Backend；Code／Build由编排层记录，不调用 LLM |
 | `model_backend` | `load(build, data, context) -> ModelHandle` | Worker 内构建模型；Handle 不跨进程序列化 |
 | `solver_backend` | `solve(handle, options, context) -> SolveResult` | Worker 内，仅接收支持的 ModelHandle |
 | `evaluator` | `evaluate(case, outcome, context) -> EvaluationResult` | 隐藏评分进程；不能反向泄漏 oracle |
@@ -1155,3 +1155,19 @@ Imported privileged manifest adds plugin_bindings0.1.0: runtime SDK version/code
 EvaluationResult keeps the existing0.1/0.2 public fields, including NLP4LP reference diagnostics/counts, data-binding policy and variable-mapping availability. Result case_id/protocol_id/manifest_sha256/source/eligibility/counts must match the frozen case. Imported selected/eligible counts must match actual unique case enumeration. Result run_id/run_status match the actual RunBundle; success counts require matching pass statuses. Counters preserve eligibility; zero-denominator rates are null. Values are finite JSON; private oracle fields/refs reject. Actual public run diagnostics may retain verified run_public references. Pass/fail evidence cannot exceed declared evidence_levels. Unknown Evaluator exceptions produce safe checker_error while preserving denominators. Public plugin_identity omits actual privileged config; exact config remains available in the privileged frozen manifest.
 
 Actual support, example and local acceptance: [S03-C2](development/s03-task-registry.md).
+
+## 25. S03-C3a installed Compilers (SDK 0.20.0)
+
+The common Registry accepts kind=compiler through built-in factories and installed llm4om.plugins entry points. Factories expose describe() and create(config); a Compiler exposes compile(ir,target_backend)→CompiledCode with source and symbol_map. The SDK exports Compiler, CompiledCode, LPIRPyomoFactory, LPIRPyomoCompiler and resolve_compiler.
+
+The current profile is grounded_lpir_pyomo/0.1.0, with deterministic=true, ir_schema_versions=[0.1.0], input_artifact_kinds=[grounded_lpir], output_artifact_kinds=[python_factory] and model_backends=[llm4om.model_backends.pyomo_factory]. problem_types must cover configured and actual LP/MILP types. RunConfig.compiler accepts plugin_id and optional config, defaulting to an empty object. Manifest/config/contract/dependency/capability failures reject before generation.
+
+Compilation validates strict LPIR, bounded nonempty Python source (at most 8 MiB), syntax, variable/constraint IDs and integer index permutations, and the internal constant anchor. A Compiler receives a copy of public IR. Errors retain safe diagnostic types and frames, never exception text or compiler stdout. Code provenance contains actual compiler_id/version, source_ir_ref, symbol_map_ref and compiler_identity; Build records the selected Backend and compiler_config_sha256.
+
+Admission freezes the full Manifest, config, dependency versions and installed origin. package_sha256 covers registered distribution files except bytecode. content_sha256 excludes bytecode and .dist-info installation metadata, so host and Worker can compare the same executable code/resources across installers. Portable compiler_identity includes Manifest/config/packages and origin kind/value/distribution/distribution_version/content_sha256. Resume compares the complete host binding and unchanged SDK/source/image identities.
+
+The platform's grounded Worker request includes ir, source_sha256, symbol_map, solver_options, compiler, compiler_identity and target_backend. Worker resolves the same compiler, compares identity, recompiles and verifies source hash plus symbols before solve. The existing three-field built-in Worker request remains available for explicit low-level calls; platform requests always include the admitted selection. Container preflight checks installed compiler identity before generation. Trusted-local uses the owned process's same installation and validates identity at execution.
+
+scripts/build_worker_image.py accepts repeatable --plugin-wheel for explicitly trusted prebuilt wheels. It prevents SDK replacement and filename collisions, installs those wheels without resolving dependencies, and uses only wheels/locked requirements as Docker context. Additional dependencies must already be in the locked runtime. It never mounts host source or installs plugins during a run. Actual supported paths and evidence: [S03-C3a](development/s03-compiler-registry.md).
+
+The runtime probe uses a bounded output allowance of at least 64 KiB for admission metadata. Candidate execution retains the configured output limit. Malformed runtime envelopes remain executor_unavailable; absent/different compiler identities are compiler_unavailable.

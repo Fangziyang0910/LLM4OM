@@ -60,6 +60,8 @@ ModelArtifact 是共同封装，formulation_ref 与 code_ref 分别指向数学�
 
 只有经过明确校验的严格 IR 才进入确定性 Code 编译；五元素自由文本不直接执行。校验 LPIR 的 ID、有限系数、域、边界与引用 → 按固定版本编译 → 创建 symbol_map → 在 Worker 构建后端模型 → 求解 → 将解向量映射回 IR 与原决策。
 
+SDK0.20.0通过共同Registry选择独立Compiler，宿主与Worker使用相同配置和包内容。Worker重编译后核对源码与symbol_map，防止保存的Code和实际解映射分离。字段与支持范围见 [Compiler契约](../plugin-contracts.md#25-s03-c3a-installed-compilers-sdk-0200)。
+
 目标常数、目标方向与约束常数必须保持。合法重复项可归一化，原始表示保留；非法引用、非有限值或未支持结构在执行前拒绝。语义修正形成新候选，确定性编译不自行修改业务约束。
 
 ### 工厂与原生代码路径

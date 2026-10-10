@@ -3,6 +3,8 @@
 from llm4om.storage import cancel_run
 from llm4om.control import CancellationToken
 from llm4om.backends import ModelHandle
+from llm4om.compilers import Compiler, LPIRPyomoFactory, LPIRPyomoCompiler, resolve_compiler
+from llm4om.linear import CompiledCode
 from llm4om.methods import FactoryCodeProposal, ScriptCodeProposal, GenerationFailure, MethodContext, MethodResources, MethodOutcome, ModelProposal
 from llm4om.application import RunResult, run_problem, resume_run
 from llm4om.tasks import EvaluationCase, TaskAdapter, Evaluator, FrozenTaskAdapter, NL4OptAdapter, import_dataset
@@ -22,4 +24,5 @@ __all__ = [
     "SolutionChecker", "ProductionChecker", "UnitCapChecker",
     "discover_plugins", "discover_methods",
     "FrozenTaskAdapter", "evaluate_outcome", "prepare_task",
+    "Compiler", "CompiledCode", "LPIRPyomoFactory", "LPIRPyomoCompiler", "resolve_compiler",
 ]

@@ -169,3 +169,5 @@ S05-C1候选资源见 [记录](development/s05-public-candidates.md)；S05-C2有
 S03-C1扩展当前Registry到独立文本Provider，见 [记录](development/s03-provider-registry.md)。其余插件种类仍待接入；该切片不替代S08／S09／S10。
 
 S03-C2接入独立Task／Evaluator，见 [记录](development/s03-task-registry.md)。其余插件种类、S08／S09／S10及独立审阅继续推进。
+
+S03-C3a接入独立grounded LPIR→Pyomo Compiler，见 [记录](development/s03-compiler-registry.md)。Backend／Solver及其他插件种类、S08／S09／S10和独立审阅继续推进。
