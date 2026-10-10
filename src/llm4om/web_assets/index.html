@@ -202,24 +202,35 @@
           </div>
         </div>
         <section id="assisted-editor" class="panel" hidden>
-          <h3>人工辅助修订</h3>
+          <h3>编辑并创建新版本</h3>
           <label for="edit-operation">编辑范围</label
           ><select id="edit-operation">
-            <option value="code">Code</option>
-            <option value="formulation">Formulation / 严格 IR</option>
-            <option value="problem">公开问题</option>
+            <option value="code">修改求解代码</option>
+            <option value="problem">修改问题描述与规则</option>
+            <option value="formulation">高级：数学表述 / 严格 IR</option>
           </select>
           <button id="load-edit-template" class="secondary">
-            载入编辑文档
+            重新载入原内容
           </button>
           <p class="hint">
-            填写 reason。问题修改须改变 revision；代码修改保留来源 Formulation
-            和原始数据。下方 budget
-            是包含父消耗的总上限，可明确提高。原版本保留，新结果标为人工辅助。
+            原版本会保留。代码修订复用原数学表述；问题修订会重新建模。新结果标记为人工辅助。
           </p>
-          <label for="assisted-document">版本化编辑文档 JSON</label
-          ><textarea id="assisted-document" rows="22"></textarea>
-          <button id="submit-edit" class="primary">提交修订并求解</button>
+          <div id="revision-fields"></div>
+          <details id="revision-advanced" class="raw-record">
+            <summary>高级：完整编辑文档</summary>
+            <textarea
+              id="assisted-document"
+              rows="16"
+              aria-label="完整编辑文档 JSON"
+            ></textarea
+            ><button id="apply-edit-document" class="secondary">
+              应用完整编辑文档
+            </button>
+          </details>
+          <div class="actions">
+            <button id="submit-edit" class="primary">确认修订并运行</button
+            ><button id="close-edit" class="secondary">取消编辑</button>
+          </div>
         </section>
         <div id="stages" class="stage-grid"></div>
         <div class="experience-grid">

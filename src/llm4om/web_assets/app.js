@@ -10,6 +10,8 @@ let token = "",
   activeTab = "formulation",
   artifactSelectedByUser = false,
   clarificationSubmission = null,
+  editSubmission = null,
+  editParent = null,
   renderFingerprint = "";
 const pretty = (value) =>
   typeof value === "string" ? value : JSON.stringify(value, null, 2);
@@ -257,6 +259,7 @@ async function refreshJobs() {
   }
 }
 async function openJob(id) {
+  $("assisted-editor").hidden = true;
   $("step-output").hidden = true;
   snapshot = null;
   renderFingerprint = "";
@@ -385,9 +388,11 @@ async function refreshRun() {
   if (fingerprint === renderFingerprint) return;
   renderFingerprint = fingerprint;
   const { job, bundle, contents = {} } = snapshot;
+  const methodId =
+    contents["public-config.json"]?.method?.plugin_id || job.method;
   $("run-title").textContent = job.description;
   $("run-meta").textContent =
-    `${UI.status(job.status)} · ${UI.shortMethod(job.method)} · ${job.run_id || "正在准备"}`;
+    `${UI.status(job.status)} · ${bundle?.assisted && methodId !== "llm4om.methods.assisted" ? "人工辅助 · " : ""}${UI.shortMethod(methodId)} · ${job.run_id || "正在准备"}`;
   $("stages").replaceChildren();
   for (const stage of ["formulation", "code", "solve"]) {
     const box = document.createElement("div");
@@ -818,15 +823,26 @@ refreshExperiments().catch((error) => notice(error.message, true));
 
 async function loadEditTemplate() {
   if (!currentJob) return;
+  const parent = { job: currentJob, run: snapshot.job.run_id };
   const document = await api(
-    `/api/jobs/${currentJob}/edit-template?operation=${$("edit-operation").value}`,
+    `/api/jobs/${parent.job}/edit-template?operation=${$("edit-operation").value}`,
   );
+  if (currentJob !== parent.job || snapshot?.job?.run_id !== parent.run)
+    throw new Error("运行版本已改变，请重新载入编辑内容。");
   $("assisted-document").value = pretty(document);
+  editParent = parent;
+  editSubmission = UI.revision(
+    $("revision-fields"),
+    document,
+    snapshot.contents?.["budget-ledger.json"],
+  );
+  $("revision-advanced").open = document.operation === "formulation";
 }
 $("edit-run").onclick = async () => {
   try {
     $("assisted-editor").hidden = false;
     await loadEditTemplate();
+    $("assisted-editor").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     notice(error.message, true);
   }
@@ -838,11 +854,38 @@ $("load-edit-template").onclick = async () => {
     notice(error.message, true);
   }
 };
+$("edit-operation").onchange = () =>
+  loadEditTemplate().catch((error) => notice(error.message, true));
+$("close-edit").onclick = () => {
+  $("assisted-editor").hidden = true;
+};
+$("apply-edit-document").onclick = () => {
+  try {
+    const document = JSON.parse($("assisted-document").value);
+    if (document.operation !== $("edit-operation").value)
+      throw new Error("完整文档的编辑范围应与当前选择一致。");
+    editSubmission = UI.revision(
+      $("revision-fields"),
+      document,
+      snapshot.contents?.["budget-ledger.json"],
+    );
+    notice("完整编辑文档已应用到表单。");
+  } catch (error) {
+    notice(error.message, true);
+  }
+};
 $("submit-edit").onclick = async () => {
   try {
     $("submit-edit").disabled = true;
+    if (!editSubmission || currentJob !== editParent?.job)
+      throw new Error("请先载入当前运行的编辑内容。");
+    const edits = editSubmission();
+    const latest = await api(`/api/jobs/${currentJob}`);
+    if (latest.job.run_id !== editParent.run)
+      throw new Error("运行版本已改变，请重新载入编辑内容。");
+    $("assisted-document").value = pretty(edits);
     await api(`/api/jobs/${currentJob}/edit`, {
-      edits: JSON.parse($("assisted-document").value),
+      edits,
     });
     $("assisted-editor").hidden = true;
     notice("人工修订已提交。原运行保留，新结果会记录父运行和预算。");

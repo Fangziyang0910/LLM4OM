@@ -70,3 +70,11 @@ node tests/web_clarification_flow.cjs
 OptiMUS六个保存状态按实际事件顺序出现：问题与参数、优化目标初稿、约束识别、约束数学表述、完整数学表述、数学表述与代码片段。点击选择对应状态；轮询保留用户选择。未形成数学模型时展示原问题与参数定义，代码片段保留真实bytes文本。最终源码仍在求解代码中。历史角色清单使用实际source-calls.json，不能从文件名猜测调用数量。
 
 本机Chrome以既有真实OptiMUS记录验收六个状态的逐次定位、代码片段、历史选择保持、390px无溢出、无页面错误；方法选择与不可用配置标记通过。整个浏览器检查零POST／零LLM调用，不重建Worker或重跑求解。入口为tests/web_process_flow.cjs，环境变量LLM4OM_BROWSER_MODULE／LLM4OM_BROWSER_EXECUTABLE／LLM4OM_WEB_TEST_URL沿用上节。
+
+## 可读的派生编辑
+
+结果页的编辑入口展示问题描述、已有规则／假设、求解代码、修改原因和可调整总预算。原数据绑定保留，不在此入口修改数据。完整编辑文档仍可在高级区查看／应用；自由文本Formulation和严格IR的详细编辑继续使用这个高级入口，不将文本当作可执行模型。
+
+问题修订显示新revision及重新调用模型的提示；代码修订保留原问题和表述，使用现有assisted执行，不新增模型请求。总预算包含父消耗，界面不自动重置或提高。空修改原因和不足的候选总上限被阻止；提交前重新检查当前run_id，版本已改变时要求重新载入。新结果与方法名称显示人工辅助，避免误认自动建模。
+
+本机浏览器在隔离的完成运行副本中，经可读代码编辑器把两个变量上界改为1，实际容器HiGHS目标5。原bundle bytes不变，external_llm_requests不增加，Solver增加1，RunBundle.assisted=true；空原因拒绝、问题表单／revision／调用提示及390px无溢出／无页面错误通过。原服务的用户记录未用于修改测试。入口tests/web_edit_flow.cjs要求明确的临时workspace；不触发真实云调用，不重建镜像。

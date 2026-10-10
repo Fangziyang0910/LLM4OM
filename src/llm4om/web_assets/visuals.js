@@ -22,6 +22,7 @@ const UI = (() => {
     "llm4om.methods.optimus": "OptiMUS · 参数化输入",
     "llm4om.methods.coe": "CoE · 专家协作",
     "llm4om.methods.feedback_repair": "反馈修正",
+    "llm4om.methods.assisted": "人工辅助修订",
   };
   const roles = {
     conductor: "选择参与专家",
@@ -927,6 +928,8 @@ const UI = (() => {
     hero.append(title, objective);
     container.append(hero);
     const meta = node("div", "result-tags");
+    if (snapshot?.bundle?.assisted)
+      meta.append(node("span", "pill muted", "人工辅助结果"));
     meta.append(
       node("span", "pill success", status(solve.termination)),
       node("span", "pill muted", (solve.solver_id || "").split(".").at(-1)),
@@ -980,6 +983,141 @@ const UI = (() => {
       ),
     );
   }
+  function revision(container, template, ledger) {
+    container.replaceChildren();
+    const fields = [];
+    function field(
+      label,
+      value,
+      path,
+      { multiline = false, number = false, rows = 4 } = {},
+    ) {
+      const wrapper = node("label", "revision-field", label);
+      const input = node(multiline ? "textarea" : "input");
+      if (multiline) input.rows = rows;
+      else if (number) {
+        input.type = "number";
+        input.min = 0;
+        input.step = path.at(-1) === "wall_time_s" ? "any" : "1";
+      }
+      input.value = value ?? "";
+      wrapper.append(input);
+      container.append(wrapper);
+      fields.push({ input, path, number });
+      input.oninput = () => draft(false);
+      return input;
+    }
+    const hint =
+      template.operation === "problem"
+        ? "确认后将重新调用所选模型建模。原数据绑定不变，新版本继承已有消耗。"
+        : "确认后使用编辑后的建模输出重新求解，不新增模型请求。原问题与数据保留。";
+    container.append(node("p", "revision-summary", hint));
+    if (template.operation === "problem") {
+      field("新版本标识", template.problem.revision + ".edited-" + Date.now(), [
+        "problem",
+        "revision",
+      ]);
+      field(
+        "完整问题描述",
+        template.problem.description,
+        ["problem", "description"],
+        { multiline: true, rows: 7 },
+      );
+      for (const [group, label] of [
+        ["requirements", "已有规则"],
+        ["assumptions", "已有假设"],
+      ]) {
+        if (template.problem[group].length)
+          container.append(node("h4", "", label));
+        template.problem[group].forEach((item, index) =>
+          field(item.id, item.text, ["problem", group, index, "text"], {
+            multiline: true,
+            rows: 2,
+          }),
+        );
+      }
+    } else if (template.operation === "code") {
+      const input = field(
+        "求解代码",
+        template.code.source,
+        ["code", "source"],
+        { multiline: true, rows: 18 },
+      );
+      input.classList.add("source-editor");
+      input.spellcheck = false;
+    } else
+      container.append(
+        node(
+          "p",
+          "hint",
+          "数学表述与严格IR通过下方完整文档编辑，应用后再提交。",
+        ),
+      );
+    const reason = field("修改原因", template.reason, ["reason"], {
+      multiline: true,
+      rows: 2,
+    });
+    reason.maxLength = 4096;
+    reason.placeholder = "说明你希望改变的行为或要修正的问题。";
+    const consumed = ledger || {};
+    container.append(
+      node(
+        "p",
+        "hint",
+        "已累计：模型请求 " +
+          format(consumed.llm_attempts) +
+          " 次 · 求解 " +
+          format(consumed.solver_calls) +
+          " 次 · 候选 " +
+          format(consumed.candidates) +
+          " 个 · 已知 Token " +
+          format(consumed.known_total_tokens ?? consumed.total_tokens) +
+          "。下方是包含这些消耗的总上限。",
+      ),
+    );
+    const budgets = node("div", "field-grid revision-budget");
+    container.append(budgets);
+    for (const [key, label] of [
+      ["max_llm_attempts", "模型请求总上限"],
+      ["max_total_tokens", "Token 总上限"],
+      ["max_solver_calls", "求解次数总上限"],
+      ["max_candidates", "候选总上限"],
+      ["wall_time_s", "新运行时间上限（秒）"],
+    ]) {
+      field(label, template.budget[key], ["budget", key], { number: true });
+      budgets.append(container.lastElementChild);
+    }
+    function draft(validate) {
+      const value = structuredClone(template);
+      fields.forEach(({ input, path, number }) => {
+        let target = value;
+        for (const key of path.slice(0, -1)) target = target[key];
+        target[path.at(-1)] = number ? Number(input.value) : input.value;
+      });
+      if (validate) {
+        if (!value.reason.trim()) throw new Error("请填写修改原因。");
+        if (
+          value.operation === "problem" &&
+          (!value.problem.description.trim() ||
+            !value.problem.revision.trim() ||
+            value.problem.revision === template.problem.revision)
+        )
+          throw new Error("问题修订需要完整描述和新的版本标识。");
+        if (value.operation === "code" && !value.code.source.trim())
+          throw new Error("求解代码不能留空。");
+        if (value.budget.max_candidates <= (consumed.candidates || 0))
+          throw new Error("候选总上限需要覆盖已有候选和本次新增候选。");
+      }
+      document.getElementById("assisted-document").value = JSON.stringify(
+        value,
+        null,
+        2,
+      );
+      return value;
+    }
+    draft(false);
+    return () => draft(true);
+  }
   return {
     node,
     format,
@@ -990,6 +1128,7 @@ const UI = (() => {
     timeline,
     decision,
     clarification,
+    revision,
     empty,
   };
 })();

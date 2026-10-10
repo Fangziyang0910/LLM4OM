@@ -1258,3 +1258,43 @@ pre {
 #clarification .primary {
   margin-top: 10px;
 }
+.revision-field {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 16px 0;
+}
+.revision-field > input,
+.revision-field > textarea {
+  display: block;
+  margin-top: 7px;
+  color: var(--ink);
+}
+.source-editor {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  line-height: 1.75;
+  tab-size: 4;
+  white-space: pre;
+  overflow: auto;
+}
+.revision-summary {
+  font-size: 12px;
+  color: #416d5a;
+  background: var(--soft);
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 18px;
+}
+.revision-budget {
+  margin-bottom: 20px;
+}
+#revision-fields h4 {
+  font-size: 12px;
+  margin-top: 20px;
+}
+#assisted-editor .actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}

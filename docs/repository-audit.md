@@ -310,3 +310,5 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `docs/development/s05-explicit-proxy.md` | HTTP代理实际支持和验收 | 来源／默认直连／隐私边界／不可变Worker身份 |
 
 | `tests/web_process_flow.cjs` | 浏览器中的方法配置与公开中间版本验收 | 零POST、Manifest兼容选项、版本定位与选择保持、窄屏 |
+
+| `tests/web_edit_flow.cjs` | 可读派生编辑的本机浏览器验收 | 临时完成run副本、真实容器HiGHS、父结果／模型计数／assisted标记 |
