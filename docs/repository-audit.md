@@ -274,3 +274,6 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_experiments.py` | 公共批量运行行为 | 实际并发 HiGHS、原问题评估、分母、预算与输入漂移 |
 | `examples/specs/benchmark-run.yaml` | 真实外部模型／HiGHS 批量配置 | 无凭据、显式资源与预算 |
 | `docs/development/s08-benchmark.md` | 批量功能、使用入口与证据范围 | 接口与评测协议一致；剩余验收不冒称完成 |
+
+| `tests/test_web_experiments.py` | 公共HTTP批量入口验收 | SyntheticProvider、真实HiGHS、原问题检查、报告与完成继续 |
+| `docs/development/s09-batch-web.md` | 网页实验功能和实际支持 | 共同应用接口、私有边界、剩余验收 |

@@ -80,3 +80,5 @@ S03-C4使用CLI／SDK、MethodContext、公开HTTP、Task和OS接口验收原始
 按用户2026-10-10的明确指令，当前先编写并交付可使用的功能代码，再逐渐补齐细节与聚焦测试。必要信任边界校验与错误处理保持完整；不会因每个小改动重复运行整套回归。
 
 批量任务展开、分组报告和复用记录通过已有CLI／Task／Evaluation／Solver接口验证，见 [S08](docs/development/s08-benchmark.md)。按用户要求先实现功能，以本机聚焦检查与实际运行收敛，不逐次重复全量回归。
+
+网页批量入口使用公共HTTP加实际HiGHS验收，并复用实验控制，见 [S09-B](docs/development/s09-batch-web.md)。一次聚焦检查覆盖提交、分组、导出和完成复用；浏览器视觉验收与独立审阅分别记录。

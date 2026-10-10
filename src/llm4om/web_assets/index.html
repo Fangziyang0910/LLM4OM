@@ -12,8 +12,11 @@
       <a class="brand" href="/">LLM<span>4</span>OM</a>
       <p class="subtitle">Optimization Modeling</p>
       <button id="new-run" class="nav active">＋ 新建问题</button>
+      <button id="new-experiment" class="nav">批量实验与比较</button>
       <h2 class="small-heading">运行记录</h2>
       <div id="jobs" aria-label="运行记录"></div>
+      <h2 class="small-heading">实验记录</h2>
+      <div id="experiments" aria-label="实验记录"></div>
       <p class="sidebar-footer">
         本地科研工作台<br />Formulation → Code → Solve
       </p>
@@ -99,6 +102,68 @@
             ><button id="submit" class="primary">开始建模与求解 →</button>
           </div>
         </div>
+      </section>
+      <section id="experiment-editor" class="panel" hidden>
+        <h2>批量 benchmark 实验</h2>
+        <p class="hint">
+          先使用 CLI 将任务冻结导入项目 runs/ 或工作区
+          tasks/。每个配置明确选择方法、模型、后端与预算。
+        </p>
+        <label for="task-choice">冻结任务</label
+        ><select id="task-choice" multiple size="5"></select>
+        <button id="refresh-tasks" class="secondary">刷新任务</button>
+        <label for="experiment-configurations"
+          >配置变体 JSON（id 与完整 config）</label
+        ><textarea id="experiment-configurations" rows="16"></textarea>
+        <label for="experiment-repeats">重复次数</label
+        ><input
+          id="experiment-repeats"
+          type="number"
+          min="1"
+          max="1000"
+          value="1"
+        />
+        <label for="experiment-budget">实验总预算 JSON</label
+        ><textarea id="experiment-budget" rows="7"></textarea>
+        <label for="experiment-exclusions"
+          >显式排除 JSON（task_id、configuration_id、reason）</label
+        ><textarea id="experiment-exclusions" rows="3">[]</textarea>
+        <button id="submit-experiment" class="primary">运行批量实验</button>
+      </section>
+      <section id="experiment-result" hidden>
+        <div class="run-heading">
+          <div>
+            <h2>实验结果与证据</h2>
+            <p id="experiment-meta"></p>
+          </div>
+          <div class="actions">
+            <button id="cancel-experiment" class="secondary">取消实验</button
+            ><button id="resume-experiment" class="secondary">继续实验</button
+            ><a id="export-experiment" class="secondary" href="#"
+              >下载公共报告</a
+            >
+          </div>
+        </div>
+        <div id="experiment-progress" class="decision-metrics"></div>
+        <div class="panel">
+          <h3>分组比较</h3>
+          <p class="hint">
+            各来源、配置和 repeat
+            分开统计。候选求解成功不等于原问题正确；未知费用保留 unknown。
+          </p>
+          <div id="experiment-groups" class="table-scroll"></div>
+        </div>
+        <div class="panel">
+          <h3>逐样本记录</h3>
+          <p class="hint">
+            页面展示前200条已保存记录。下载包含全部样本；JSONL保存完整公共评估与诊断。
+          </p>
+          <div id="experiment-rows" class="table-scroll"></div>
+        </div>
+        <details class="panel">
+          <summary>完整分组协议、资源与排除记录</summary>
+          <pre id="experiment-summary"></pre>
+        </details>
       </section>
       <section id="result" hidden>
         <div class="run-heading">

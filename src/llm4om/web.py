@@ -12,6 +12,7 @@ from io import BytesIO, StringIO
 import json
 from pathlib import Path
 import secrets
+import sys
 import threading
 import time
 from typing import Any
@@ -20,8 +21,10 @@ from uuid import uuid4
 import zipfile
 
 from llm4om.application import run_problem, resume_run
-from llm4om.contracts import RunError, parse_json, public_path, read_public_bytes, validate_config, validate_problem, validate_data
+from llm4om.contracts import RunError, parse_json, public_path, read_public_bytes, validate_config, validate_problem, validate_data, parse_reference_json
 from llm4om.control import CancellationToken
+from llm4om.executors import run_owned_process
+from llm4om.experiments import cancel_experiment
 from llm4om.plugins import discover_plugins
 from llm4om.preflight import prepare_run
 from llm4om.providers import credential_environment
@@ -69,7 +72,152 @@ class WebWorkspace:
             'store': {'plugin_id': 'llm4om.stores.filesystem', 'config': {'root': 'runs'}},
             'reporters': [{'plugin_id': 'llm4om.reporters.jsonl'}, {'plugin_id': 'llm4om.reporters.markdown'}]}
         return {'config': config, 'plugins': [{'manifest': plugin.manifest, 'origin': plugin.origin}
-            for plugin in discover_plugins().values()], 'jobs': self.list_jobs()}
+            for plugin in discover_plugins().values()], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
+
+    def _tasks(self) -> dict[str, Path]:
+        selected = {}
+        for root in (Path.cwd() / 'runs', self.root / 'tasks'):
+            if not root.is_dir():
+                continue
+            for path in root.rglob('manifest.json'):
+                if path.is_symlink() or not path.resolve().is_relative_to(root.resolve()) or 'private' in path.parts or '.private' in path.parts:
+                    continue
+                try:
+                    manifest = parse_reference_json(read_public_bytes(path, max_bytes=MAX_REQUEST))
+                    if 'cases' in manifest and 'protocol_id' in manifest and 'adapter_id' in manifest:
+                        selected[hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:32]] = path.resolve()
+                except (RunError, OSError):
+                    continue
+        return selected
+
+    def list_tasks(self) -> list[dict[str, Any]]:
+        result = []
+        for task_id, path in self._tasks().items():
+            manifest = parse_reference_json(path.read_bytes())
+            result.append({'task_id': task_id, 'source': manifest['source'], 'protocol_id': manifest['protocol_id'],
+                'N_selected': manifest['N_selected'], 'adapter_id': manifest['adapter_id']})
+        return result
+
+    def _experiment(self, experiment_id: str) -> Path:
+        path = public_path(self.root / 'experiments', _identifier(experiment_id), require_file=False)
+        if not path.is_dir():
+            raise RunError('not_found', 'web', 'Experiment is not available in this workspace.')
+        return path
+
+    def list_experiments(self) -> list[dict[str, Any]]:
+        result = []
+        for path in (self.root / 'experiments').glob('*/job.json'):
+            result.append(parse_json(path.read_bytes()))
+        return sorted(result, key=lambda item: item['created_at'], reverse=True)
+
+    def submit_experiment(self, payload: dict[str, Any]) -> dict[str, Any]:
+        tasks = self._tasks()
+        if not isinstance(payload.get('task_ids'), list) or not payload['task_ids'] or not set(payload['task_ids']) <= tasks.keys():
+            raise RunError('invalid_request', 'web', 'Select a frozen task imported under runs/ or workspace/tasks/.')
+        configurations = payload.get('configurations')
+        if not isinstance(configurations, list) or not 1 <= len(configurations) <= 32:
+            raise RunError('invalid_request', 'web', 'Declare one to32 explicit configuration variants.')
+        validated = []
+        for item in configurations:
+            if not isinstance(item, dict) or set(item) != {'id', 'config'}:
+                raise RunError('invalid_request', 'web', 'Each configuration needs id and a full RunConfig.')
+            validate_config(item['config'])
+            validated.append(item)
+        experiment_id = uuid4().hex
+        job = self.root / 'experiments' / experiment_id
+        job.mkdir(parents=True)
+        selections = []
+        for index, item in enumerate(validated):
+            name = f'configuration-{index}.json'
+            _json_file(job / name, item['config'])
+            selections.append({'id': item['id'], 'run_config': name})
+        spec = {'schema_version': '0.1.0', 'experiment_id': experiment_id,
+            'tasks': [{'id': identifier, 'manifest': str(tasks[identifier])} for identifier in payload['task_ids']],
+            'configurations': selections, 'repeats': payload['repeats'], 'budget': payload['budget'],
+            'exclusions': payload.get('exclusions', [])}
+        _json_file(job / 'spec.json', spec)
+        record = {'experiment_id': experiment_id, 'created_at': time.time(), 'status': 'queued',
+                  'task_count': len(spec['tasks']), 'configuration_count': len(selections), 'repeats': spec['repeats']}
+        _json_file(job / 'job.json', record)
+        self._start_experiment(experiment_id)
+        return record
+
+    def _start_experiment(self, experiment_id: str, *, resume: bool = False) -> None:
+        job = self._experiment(experiment_id)
+        key = 'experiment:' + experiment_id
+        with self.lock:
+            if key in self.active or len(self.active) >= 8:
+                raise RunError('experiment_active', 'web', 'Experiment is active or the queue is full.')
+            token = CancellationToken()
+            self.active[key] = token
+        def work() -> None:
+            record = parse_json((job / 'job.json').read_bytes())
+            try:
+                record['status'] = 'running'
+                _json_file(job / 'job.json', record)
+                spec = parse_json((job / 'spec.json').read_bytes())
+                command = [sys.executable, '-m', 'llm4om', 'benchmark', '--config', str(job / 'spec.json'), '--output', str(job / 'batch')]
+                if resume:
+                    command.append('--resume')
+                _, _, code = run_owned_process(command, b'', deadline=time.time() + spec['budget']['wall_time_s'] + 15, cancellation=token)
+                if code != 0:
+                    raise RunError('experiment_failed', 'web', 'Batch preflight or execution failed; inspect the saved experiment.')
+                record['status'] = 'finished'
+                record.pop('error', None)
+            except (Exception, SystemExit) as error:
+                record.update(status='cancelled' if token.cancelled else 'failed',
+                    error={'code': error.code if isinstance(error, RunError) else 'experiment_error',
+                           'message': 'Cannot finish this batch. Saved samples and reservations are retained.'})
+            finally:
+                _json_file(job / 'job.json', record)
+                with self.lock:
+                    self.active.pop(key, None)
+        self.pool.submit(work)
+
+    def inspect_experiment(self, experiment_id: str) -> dict[str, Any]:
+        job = self._experiment(experiment_id)
+        result: dict[str, Any] = {'job': parse_json((job / 'job.json').read_bytes()), 'summary': None, 'rows': [], 'progress': None}
+        state_path = job / 'batch/.private/experiment-state.json'
+        if state_path.is_file():
+            state = parse_reference_json(state_path.read_bytes())
+            result['progress'] = {'N_selected_runs': len(state['jobs']), 'N_saved': len(state['results']),
+                'statuses': {status: sum(item['status'] == status for item in state['jobs']) for status in {item['status'] for item in state['jobs']}}}
+            result['rows'] = list(state['results'].values())[:200]
+        summary = job / 'batch/reports/summary.json'
+        if summary.is_file():
+            result['summary'] = parse_json(read_public_bytes(summary, max_bytes=MAX_REQUEST))
+        return result
+
+    def control_experiment(self, experiment_id: str, *, resume: bool = False) -> dict[str, Any]:
+        if resume:
+            self._start_experiment(experiment_id, resume=True)
+        else:
+            job = self._experiment(experiment_id)
+            control = job / 'batch/experiment-control.json'
+            if control.is_file():
+                cancel_experiment(job / 'batch')
+            else:
+                with self.lock:
+                    token = self.active.get('experiment:' + experiment_id)
+                    if token is not None:
+                        token.cancel()
+        return {'experiment_id': experiment_id, 'status': 'queued' if resume else 'cancel_requested'}
+
+    def export_experiment(self, experiment_id: str) -> bytes:
+        job = self._experiment(experiment_id)
+        output = BytesIO()
+        size = 0
+        with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
+            for name in ('experiment.json', 'reports/results.jsonl', 'reports/results.csv', 'reports/summary.json', 'reports/report.md', 'reports/report.html'):
+                path = job / 'batch' / name
+                if not path.is_file():
+                    raise RunError('not_found', 'web', 'This experiment has not saved its public report yet.')
+                raw = read_public_bytes(path, max_bytes=MAX_REQUEST)
+                size += len(raw)
+                if size > 64 * 1024 * 1024:
+                    raise RunError('export_limit', 'web', 'Public experiment export exceeds64 MiB.')
+                archive.writestr(name, raw)
+        return output.getvalue()
 
     def list_jobs(self) -> list[dict[str, Any]]:
         jobs = []
@@ -265,7 +413,14 @@ class WebWorkspace:
 
     def close(self) -> None:
         with self.lock:
-            for token in self.active.values():
+            active = list(self.active.items())
+        for identifier, token in active:
+            if identifier.startswith('experiment:'):
+                try:
+                    self.control_experiment(identifier.split(':', 1)[1])
+                except (RunError, OSError):
+                    token.cancel()
+            else:
                 token.cancel()
         self.pool.shutdown(wait=True, cancel_futures=True)
 
@@ -326,6 +481,23 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                     return
                 if address.path == '/api/bootstrap' and not mutation:
                     result = {**workspace.bootstrap(), 'token': token}
+                elif address.path == '/api/tasks' and not mutation:
+                    result = {'tasks': workspace.list_tasks()}
+                elif address.path == '/api/experiments' and not mutation:
+                    result = {'experiments': workspace.list_experiments()}
+                elif address.path == '/api/experiments' and mutation:
+                    result = workspace.submit_experiment(payload)
+                elif len(parts) >= 3 and parts[:2] == ['api', 'experiments']:
+                    experiment_id = _identifier(parts[2])
+                    if len(parts) == 3 and not mutation:
+                        result = workspace.inspect_experiment(experiment_id)
+                    elif len(parts) == 4 and parts[3] in {'cancel', 'resume'} and mutation:
+                        result = workspace.control_experiment(experiment_id, resume=parts[3] == 'resume')
+                    elif len(parts) == 4 and parts[3] == 'export' and not mutation:
+                        self.send(200, workspace.export_experiment(experiment_id), 'application/zip')
+                        return
+                    else:
+                        raise RunError('not_found', 'web', 'Unknown experiment action.')
                 elif address.path == '/api/jobs' and not mutation:
                     result = {'jobs': workspace.list_jobs()}
                 elif address.path == '/api/doctor' and mutation:

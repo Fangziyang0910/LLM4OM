@@ -508,3 +508,17 @@ pre {
   max-height: 240px;
   font-size: 11px;
 }
+
+.table-scroll {
+  overflow-x: auto;
+}
+#experiments {
+  max-height: 30vh;
+  overflow: auto;
+}
+#task-choice {
+  width: 100%;
+}
+.nav + .nav {
+  margin-top: 12px;
+}

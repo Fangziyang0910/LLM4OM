@@ -5,6 +5,7 @@ let token = "",
   plugins = [],
   uploads = [],
   currentJob = null,
+  currentExperiment = null,
   snapshot = null,
   activeTab = "formulation";
 const pretty = (value) =>
@@ -175,6 +176,9 @@ async function refreshJobs() {
   }
 }
 async function openJob(id) {
+  currentExperiment = null;
+  $("experiment-editor").hidden = true;
+  $("experiment-result").hidden = true;
   currentJob = id;
   $("editor").hidden = true;
   $("result").hidden = false;
@@ -318,6 +322,9 @@ async function refreshRun() {
   renderArtifact();
 }
 $("new-run").onclick = () => {
+  currentExperiment = null;
+  $("experiment-editor").hidden = true;
+  $("experiment-result").hidden = true;
   currentJob = null;
   $("editor").hidden = false;
   $("result").hidden = true;
@@ -470,3 +477,188 @@ setInterval(async () => {
     notice(error.message, true);
   }
 }, 1500);
+
+function renderTable(container, columns, rows) {
+  container.replaceChildren();
+  const table = document.createElement("table"),
+    head = document.createElement("thead"),
+    body = document.createElement("tbody"),
+    heading = document.createElement("tr");
+  for (const [label] of columns) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = label;
+    heading.append(th);
+  }
+  head.append(heading);
+  for (const row of rows) {
+    const line = document.createElement("tr");
+    for (const [, key] of columns) {
+      const td = document.createElement("td");
+      const value = typeof key === "function" ? key(row) : row[key];
+      td.textContent =
+        value === null || value === undefined
+          ? "unknown"
+          : typeof value === "object"
+            ? pretty(value)
+            : String(value);
+      line.append(td);
+    }
+    body.append(line);
+  }
+  table.append(head, body);
+  container.append(table);
+}
+async function refreshExperiments() {
+  const { experiments } = await api("/api/experiments");
+  $("experiments").replaceChildren();
+  for (const experiment of experiments) {
+    const button = document.createElement("button");
+    button.className = "job";
+    button.textContent = `${experiment.status} · ${experiment.task_count}任务 × ${experiment.configuration_count}配置 × ${experiment.repeats}`;
+    button.onclick = () => openExperiment(experiment.experiment_id);
+    $("experiments").append(button);
+  }
+}
+async function refreshTasks() {
+  const { tasks } = await api("/api/tasks");
+  $("task-choice").replaceChildren();
+  for (const task of tasks) {
+    const option = document.createElement("option");
+    option.value = task.task_id;
+    option.textContent = `${task.source.dataset_id} · ${task.source.source_version} · ${task.N_selected}样本 · ${task.protocol_id}`;
+    $("task-choice").append(option);
+  }
+}
+async function openExperiment(id) {
+  currentJob = null;
+  currentExperiment = id;
+  $("editor").hidden = true;
+  $("result").hidden = true;
+  $("experiment-editor").hidden = true;
+  $("experiment-result").hidden = false;
+  await refreshExperiment();
+}
+async function refreshExperiment() {
+  if (!currentExperiment) return;
+  const result = await api(`/api/experiments/${currentExperiment}`);
+  $("experiment-meta").textContent =
+    `${result.job.status} · ${currentExperiment}`;
+  const progress = result.progress || {};
+  $("experiment-progress").replaceChildren(
+    metric(
+      "已保存 / 计划运行",
+      `${progress.N_saved || 0} / ${progress.N_selected_runs || "—"}`,
+    ),
+    metric("状态", pretty(progress.statuses || {})),
+  );
+  const match = (name) => (row) =>
+    row[name + "_denominator"]
+      ? `${row[name + "_numerator"]}/${row[name + "_denominator"]}`
+      : "not_available";
+  renderTable(
+    $("experiment-groups"),
+    [
+      ["任务", "task_id"],
+      ["配置", "configuration_id"],
+      ["Repeat", "repeat"],
+      ["完成/选中", (row) => `${row.N_completed}/${row.N_selected}`],
+      ["独立可行", match("independent_feasibility")],
+      ["目标匹配", match("objective_match")],
+      ["Verified solution", match("verified_solution")],
+      ["Tokens", "total_tokens"],
+      ["费用", "cost"],
+    ],
+    result.summary?.groups || [],
+  );
+  renderTable(
+    $("experiment-rows"),
+    [
+      ["样本", "case_id"],
+      ["配置", "configuration_id"],
+      ["Repeat", "repeat"],
+      ["状态", "status"],
+      ["Run", "run_id"],
+      ["来源", "evidence_origin"],
+      ["独立可行", match("independent_feasibility")],
+      ["目标匹配", match("objective_match")],
+      ["Verified solution", match("verified_solution")],
+    ],
+    result.rows || [],
+  );
+  $("experiment-summary").textContent = pretty(
+    result.summary || result.job.error || "等待保存报告。",
+  );
+  $("export-experiment").href = `/api/experiments/${currentExperiment}/export`;
+}
+$("new-experiment").onclick = async () => {
+  currentJob = null;
+  currentExperiment = null;
+  $("editor").hidden = true;
+  $("result").hidden = true;
+  $("experiment-result").hidden = true;
+  $("experiment-editor").hidden = false;
+  $("experiment-configurations").value = pretty([
+    { id: "configured-method", config: readConfig() },
+  ]);
+  $("experiment-budget").value = pretty({
+    max_llm_attempts: 100,
+    max_total_tokens: 1000000,
+    max_solver_calls: 100,
+    wall_time_s: 3600,
+    max_concurrency: 2,
+  });
+  try {
+    await refreshTasks();
+  } catch (error) {
+    notice(error.message, true);
+  }
+};
+$("refresh-tasks").onclick = async () => {
+  try {
+    await refreshTasks();
+  } catch (error) {
+    notice(error.message, true);
+  }
+};
+$("submit-experiment").onclick = async () => {
+  try {
+    $("submit-experiment").disabled = true;
+    const result = await api("/api/experiments", {
+      task_ids: Array.from(
+        $("task-choice").selectedOptions,
+        (option) => option.value,
+      ),
+      configurations: JSON.parse($("experiment-configurations").value),
+      repeats: Number($("experiment-repeats").value),
+      budget: JSON.parse($("experiment-budget").value),
+      exclusions: JSON.parse($("experiment-exclusions").value),
+    });
+    await openExperiment(result.experiment_id);
+    await refreshExperiments();
+    notice("实验已提交。");
+  } catch (error) {
+    notice(error.message, true);
+  } finally {
+    $("submit-experiment").disabled = false;
+  }
+};
+for (const action of ["cancel", "resume"])
+  $(action + "-experiment").onclick = async () => {
+    try {
+      await api(`/api/experiments/${currentExperiment}/${action}`, {});
+      notice("实验操作已提交。");
+      await refreshExperiment();
+    } catch (error) {
+      notice(error.message, true);
+    }
+  };
+setInterval(async () => {
+  try {
+    await refreshExperiments();
+    if (currentExperiment) await refreshExperiment();
+  } catch (error) {
+    notice(error.message, true);
+  }
+}, 3000);
+refreshExperiments().catch((error) => notice(error.message, true));

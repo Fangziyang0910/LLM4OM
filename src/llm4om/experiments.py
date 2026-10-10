@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from contextlib import contextmanager
 from importlib.metadata import version
 from pathlib import Path
+from uuid import uuid4
 from typing import Any, Iterator
 
 from llm4om.application import _sdk_sha256
@@ -24,6 +25,7 @@ from llm4om.executors import run_owned_process
 from llm4om.preflight import prepare_run
 from llm4om.task_plugins import load_registered_case
 from llm4om.evaluation import _verify_ref
+from llm4om.storage import cancel_run
 
 
 LIMITS = ('max_llm_attempts', 'max_total_tokens', 'max_solver_calls')
@@ -206,7 +208,7 @@ def _execute(job: dict[str, Any], output: Path, offline: bool, cancellation: Can
         bundles = list(run_root.glob('*/bundle.json'))
         if len(previous) > 1 or len(bundles) > 1:
             raise RunError('checkpoint_incompatible', 'control', 'A batch job must own only one persisted run.')
-        if bundles:
+        if bundles and parse_json(bundles[0].read_bytes())['status'] != 'cancelled':
             run_path = bundles[0].parent
             bundle = parse_json(bundles[0].read_bytes())
         else:
@@ -217,13 +219,14 @@ def _execute(job: dict[str, Any], output: Path, offline: bool, cancellation: Can
                 if offline:
                     command.append('--offline')
             # Plugin output capture is process-global; each concurrent run owns a process.
-            raw, _, _ = run_owned_process([sys.executable, '-m', 'llm4om', *command], b'', deadline=deadline, cancellation=cancellation)
+            raw, _, _ = run_owned_process([sys.executable, '-m', 'llm4om', *command], b'', deadline=deadline + 3, cancellation=cancellation)
             run_record = parse_json(raw)
             if 'bundle_path' not in run_record:
                 raise RunError('experiment_job_error', 'execution', 'Application did not persist a batch outcome.')
             run_path = Path(run_record['bundle_path'])
             bundle = parse_json((run_path / 'bundle.json').read_bytes())
-        evaluation_path = output / 'evaluations' / (job['job_id'] + '.json')
+        bundle_digest = hashlib.sha256((run_path / 'bundle.json').read_bytes()).hexdigest()[:16]
+        evaluation_path = output / 'evaluations' / (job['job_id'] + '-' + bundle_digest + '.json')
         if evaluation_path.exists():
             evaluation = parse_reference_json(evaluation_path.read_bytes())
         else:
@@ -236,6 +239,8 @@ def _execute(job: dict[str, Any], output: Path, offline: bool, cancellation: Can
         ledger = parse_json((run_path / 'budget-ledger.json').read_bytes())
         result.update(status=bundle['status'], run_id=bundle['run_id'], evidence_origin=ledger['evidence_origin'],
                       evaluation=evaluation, checker_error=evaluation['checker_error'], run_error=bundle['error'])
+        if bundle['status'] == 'cancelled':
+            result['interrupted'] = True
         for key in ('total_tokens', 'cost', 'llm_attempts', 'solver_calls', 'known_total_tokens', 'reserved_tokens', 'external_llm_requests'):
             result[key] = ledger.get(key)
         for metric in METRICS:
@@ -291,6 +296,10 @@ def run_experiment(config: Path, output: Path, *, offline: bool = False, resume:
         _write(state_path, state)
         state_path.chmod(0o600)
         deadline = state.setdefault('deadline', time.time() + snapshot['budget']['wall_time_s'])
+        identity = {'schema_version': '0.1.0', 'experiment_id': snapshot['experiment_id'], 'invocation_id': uuid4().hex}
+        (output / 'cancel-request.json').unlink(missing_ok=True)
+        _write(output / 'experiment-control.json', identity)
+        cancellation.bind(output / 'cancel-request.json', identity)
         session_start = time.monotonic()
         active: dict[Any, tuple[dict[str, Any], CancellationToken]] = {}
         with ThreadPoolExecutor(max_workers=snapshot['budget']['max_concurrency']) as pool:
@@ -312,6 +321,10 @@ def run_experiment(config: Path, output: Path, *, offline: bool = False, resume:
                         state['reserved'][key] += job['budget'][key]
                     job['started'] = True
                 job['status'] = 'running'
+                job.pop('cancel_requested_at', None)
+                if job['job_id'] in state['results']:
+                    state.setdefault('continuation_history', {}).setdefault(job['job_id'], []).append(state['results'][job['job_id']])
+                    job.pop('evidence', None)
                 _write(state_path, state)
                 token = CancellationToken()
                 active[pool.submit(_execute, job, output, offline, token, deadline)] = (job, token)
@@ -325,8 +338,16 @@ def run_experiment(config: Path, output: Path, *, offline: bool = False, resume:
 def _collect(active: dict[Any, tuple[dict[str, Any], CancellationToken]], state: dict[str, Any], path: Path,
              cancellation: CancellationToken, deadline: float) -> None:
     if cancellation.cancelled or time.time() >= deadline:
-        for _, token in active.values():
-            token.cancel()
+        for job, token in active.values():
+            roots = list((path.parent.parent / 'runs' / job['job_id']).glob('*/checkpoint.json'))
+            if roots and 'cancel_requested_at' not in job:
+                try:
+                    cancel_run(roots[0].parent)
+                except (RunError, OSError):
+                    pass
+                job['cancel_requested_at'] = time.time()
+            if not roots or time.time() - job.get('cancel_requested_at', 0) >= 2:
+                token.cancel()
     done, _ = wait(active, timeout=0.1, return_when=FIRST_COMPLETED)
     for future in done:
         job, _ = active.pop(future)
@@ -334,6 +355,15 @@ def _collect(active: dict[Any, tuple[dict[str, Any], CancellationToken]], state:
         state['results'][job['job_id']] = result
         job['status'] = result['status']
         _write(path, state)
+
+
+def cancel_experiment(output: Path) -> dict[str, Any]:
+    """Request cancellation of the current experiment invocation, including its owned runs."""
+    identity = parse_json((output / 'experiment-control.json').read_bytes())
+    if set(identity) != {'schema_version', 'experiment_id', 'invocation_id'} or identity['schema_version'] != '0.1.0':
+        raise RunError('control_incompatible', 'control', 'Saved experiment control identity is invalid.')
+    _write(output / 'cancel-request.json', identity)
+    return {'experiment_id': identity['experiment_id'], 'status': 'cancel_requested'}
 
 
 def report_experiment(output: Path) -> dict[str, Any]:

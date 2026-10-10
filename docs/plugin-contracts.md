@@ -1235,3 +1235,9 @@ materials. SDK exports DataLoader, DataContext, DataView, PublicDataFactory and
 resolve_data_loader. The independent column-order wheel is an engineering
 fixture, not a new research method. Local evidence is recorded in
 [S03-C4](development/s03-data-loader.md).
+
+## 网页实验控制
+
+SDK／Worker0.25.0提供`cancel_experiment(output)`，绑定当前invocation的公开control identity。`run_experiment`在持有排他锁后接受新invocation，清除上一invocation的取消请求；完成样本复用和未完成继续分别记录。调度器优先合作取消拥有的RunStore，短暂等待后才终止仍未退出的资源进程。中断恢复保留先前结果历史和硬预算；已过期原deadline或缺少可用方法checkpoint时明确拒绝继续。
+
+Web`/api/tasks`列已冻结任务的公开元数据；`/api/experiments`列出／提交变体矩阵，`/api/experiments/{id}`读取状态和公共结果，`/cancel`、`/resume`调用共同调度控制，`/export`只导出公开实验配置和报告。任务仅从项目runs或工作区tasks发现；没有公开任意服务器路径读取入口。
