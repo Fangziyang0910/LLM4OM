@@ -84,6 +84,8 @@ class WebWorkspace:
             'store': {'plugin_id': 'llm4om.stores.filesystem', 'config': {'root': 'runs'}},
             'reporters': [{'plugin_id': 'llm4om.reporters.jsonl'}, {'plugin_id': 'llm4om.reporters.markdown'}]}
         inventory = _application(['plugins', 'list'], deadline=time.time() + 30, cancellation=CancellationToken())
+        if environment.get('LLM4OM_LLM_PROXY_URL'):
+            config['llm']['config']['proxy_url'] = environment['LLM4OM_LLM_PROXY_URL']
         return {'config': config, 'plugins': inventory['plugins'], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
 
     def doctor(self, config: dict[str, Any]) -> dict[str, Any]:

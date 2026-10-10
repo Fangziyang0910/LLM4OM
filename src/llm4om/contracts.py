@@ -111,9 +111,10 @@ def _reject_private_fields(value: Any) -> None:
             normalized = "".join(character for character in str(key).lower() if character.isalnum())
             if normalized in private or (normalized == "containsoracle" and item is not False):
                 raise RunError("private_input", "validation", "Public inputs cannot contain oracle fields or credentials.")
-            if normalized == "baseurl" and isinstance(item, str):
+            if normalized in {"baseurl", "proxyurl"} and isinstance(item, str):
                 address = urlsplit(item)
-                if address.username or address.password or address.query or address.fragment:
+                if (address.username is not None or address.password is not None or address.query or address.fragment
+                        or normalized == "proxyurl" and address.path not in {"", "/"}):
                     raise RunError("private_input", "validation", "Provider URLs cannot contain credentials or query fields.")
             _reject_private_fields(item)
     elif isinstance(value, list):

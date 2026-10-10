@@ -305,3 +305,6 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 
 | `tests/web_clarification_flow.cjs` | 用户澄清表单的本机浏览器验收 | 本机fixture地址、确认／显式修订、真实HiGHS、父记录与缺失证据 |
 | `tests/helpers/web_guidance_server.py` | 独立临时Web与确定性澄清responder | 空workspace、合成凭据、明确fixture身份、不修改项目.env |
+
+| `tests/test_provider_proxy.py` | 显式模型连接路线的公共接口检查 | Chat／Messages、NO_PROXY、非法地址与公开凭据拒绝 |
+| `docs/development/s05-explicit-proxy.md` | HTTP代理实际支持和验收 | 来源／默认直连／隐私边界／不可变Worker身份 |

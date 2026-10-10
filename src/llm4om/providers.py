@@ -210,8 +210,10 @@ class HTTPTextProvider:
         raise NotImplementedError
 
     def _http_complete(self, messages: list[dict[str, Any]], timeout: float) -> dict[str, Any]:
-        # Redirects could expose credentials to another origin; no environment proxies.
-        with build_opener(_NoRedirect(), ProxyHandler({})).open(self._request(messages), timeout=timeout) as response:
+        # Only the declared route is used; redirects could expose origin credentials.
+        proxy = self.config.get("proxy_url")
+        proxies = {"http": proxy, "https": proxy} if proxy else {}
+        with build_opener(_NoRedirect(), ProxyHandler(proxies)).open(self._request(messages), timeout=timeout) as response:
             provider_request_id = response.headers.get(self.request_id_header)
             raw = response.read(8 * 1024 * 1024 + 1)
         if len(raw) > 8 * 1024 * 1024:
@@ -331,6 +333,7 @@ class HTTPTextFactory:
                 "config_schema": {"type": "object", "properties": {
                     "base_url": {"type": "string", "minLength": 1},
                     "credential_env": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z_0-9]*$"},
+                    "proxy_url": {"type": "string", "minLength": 1},
                     "max_output_tokens": {"type": "integer", "minimum": 1},
                     "max_retries": {"type": "integer", "minimum": 0, "maximum": 5},
                     "timeout_s": {"type": "number", "exclusiveMinimum": 0}},
@@ -348,6 +351,13 @@ class HTTPTextFactory:
                 raise ValueError("Unsupported endpoint.")
             if not model or not isinstance(model, str):
                 raise ValueError("Model required.")
+            if "proxy_url" in config:
+                proxy = urlsplit(config["proxy_url"])
+                if (proxy.scheme != "http" or not proxy.hostname or proxy.port == 0
+                        or proxy.username is not None or proxy.password is not None
+                        or proxy.path not in {"", "/"} or proxy.query or proxy.fragment
+                        or any(ord(char) < 33 or char.isspace() for char in config["proxy_url"])):
+                    raise ValueError("Unsupported HTTP proxy.")
         except (jsonschema.ValidationError, ValueError) as error:
             raise RunError("invalid_config", "admission", "Invalid text Provider configuration.") from error
 
@@ -826,6 +836,10 @@ def _transport_result(raw: bytes) -> dict[str, Any]:
 
 def _transport_main() -> None:
     value = json.loads(sys.stdin.buffer.read())
+    # The isolated child must not let NO_PROXY override an explicitly selected route.
+    if value["config"].get("proxy_url"):
+        os.environ.pop("NO_PROXY", None)
+        os.environ.pop("no_proxy", None)
     factory = provider_factory(value["provider"])
     if not isinstance(factory, HTTPTextFactory):
         raise ValueError("Provider has no HTTP transport.")

@@ -1275,3 +1275,9 @@ SDK0.30.0沿用 MethodResources.emit，并标准化 type=modeling_step 的公开
 Direct联合生成保持一次调用；OptiMUS与CoE在原有实际模型调用前后发布事件，不增加提示或改变路由。调用异常仍由原错误路径保存，Web将终态下未完成步骤显示为中断。成功调用完成只表示该步骤完成，不代表候选已通过求解或业务验证。
 
 GET /api/jobs/JOB_ID在无最终RunBundle时读取有界、hash校验且run_id匹配的checkpoint，返回其中public projections的已验证公开内容。HTTP不返回checkpoint本体、私有state、凭据或隐藏评测材料。最终结果遵循RunBundle.solve_result_ref与SolveResult.solution_ref；前端不得使用第一个中间求解代替最终选择。呈现范围与证据见 [用户界面](development/s09-user-experience.md)。
+
+## 显式 Provider 代理
+
+SDK0.31.0的内置HTTPTextFactory配置可增加proxy_url，值为无认证信息的HTTP代理地址，仅允许根路径／无query／fragment。HTTPS目标使用标准CONNECT与TLS校验；SOCKS和代理URL认证未支持。缺省保持直连，环境HTTPS_PROXY不自动选择路由。声明代理时，隔离传输子进程清除NO_PROXY／no_proxy对路由的覆盖；调用进程环境不修改。重定向、共享账本、deadline、取消和未知attempt的恢复规则不变。
+
+公开输入对proxy_url的认证／查询／非根路径执行与Provider URL相同的隐私拒绝。Web可将服务端LLM4OM_LLM_PROXY_URL映射到此公开无凭据配置，API key不进入配置或前端。详见 [实现与验收](development/s05-explicit-proxy.md)。
