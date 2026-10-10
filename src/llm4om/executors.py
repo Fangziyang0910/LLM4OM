@@ -12,14 +12,14 @@ from datetime import datetime, timezone
 from importlib.metadata import version
 from pathlib import Path, PurePosixPath
 from time import monotonic, sleep, time
-from typing import Any, Mapping
+from typing import Any, Mapping, Callable
 from uuid import uuid4
 
 from llm4om.control import CancellationToken
 from llm4om.contracts import RunError, parse_json
 
 
-DEFAULT_IMAGE = "llm4om-worker:0.35.0"
+DEFAULT_IMAGE = "llm4om-worker:0.36.0"
 _CONTROL_TIMEOUT_S = 2.0
 _REAP_TIMEOUT_S = 0.5
 _CONTROL_OUTPUT_BYTES = 1048576
@@ -369,7 +369,8 @@ def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
                    cancellation: CancellationToken | None = None,
                    compiler_selection: dict[str, Any] | None = None, expected_compiler: dict[str, Any] | None = None,
                    execution_selection: dict[str, Any] | None = None, expected_execution: dict[str, Any] | None = None,
-                   result_profile: str | None = None) -> dict[str, Any]:
+                   result_profile: str | None = None,
+                   runner: Callable[..., ContainerExecution] = run_container) -> dict[str, Any]:
     command = ["python", "-I", "-m", "llm4om.worker", "--runtime", "--solver", solver_id]
     inputs = {}
     if execution_selection is not None:
@@ -378,7 +379,7 @@ def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
     if compiler_selection is not None:
         command.extend(["--compiler-runtime", "/input/compiler.json"])
         inputs["compiler.json"] = json.dumps(compiler_selection, allow_nan=False).encode()
-    execution = run_container(command, inputs, {**limits, "output_limit_bytes": max(limits.get("output_limit_bytes", 1024 * 1024), 65536)},
+    execution = runner(command, inputs, {**limits, "output_limit_bytes": max(limits.get("output_limit_bytes", 1024 * 1024), 65536)},
                               image=limits.get("image", DEFAULT_IMAGE), deadline=deadline, cancellation=cancellation)
     if execution.status == "cancelled":
         raise RunError("run_cancelled", "admission", "Worker admission was cancelled.")

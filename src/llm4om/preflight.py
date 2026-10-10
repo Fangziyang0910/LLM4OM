@@ -21,6 +21,7 @@ from llm4om.compilers import ResolvedCompiler, resolve_compiler, compiler_identi
 from llm4om.execution_plugins import ExecutionResources, resolve_execution_resources
 from llm4om.data_loaders import ResolvedDataLoader, resolve_data_loader
 from llm4om.reporters import ResolvedReporter, resolve_reporters
+from llm4om.executor_registry import ResolvedExecutor, resolve_executor
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class AdmissionPlan:
     execution: ExecutionResources | None = None
     data_loader: ResolvedDataLoader | None = None
     reporters: tuple[ResolvedReporter, ...] = ()
+    executor: ResolvedExecutor | None = None
 
 
 def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: Path | None = None,
@@ -47,6 +49,8 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     if time.time() >= deadline:
         raise RunError("deadline_exhausted", "admission", "The absolute run deadline expired.")
     inventory = discover_plugins()
+    executor = resolve_executor(settings["executor"], inventory=inventory,
+        expected=expected.get("executor") if expected else None)
     reporters = resolve_reporters(settings.get("reporters", []), "run", inventory=inventory,
         expected=expected.get("reporters") if expected is not None else None)
     data_loader = resolve_data_loader(settings, inventory=inventory, expected=expected.get("data_loader") if expected else None)
@@ -72,6 +76,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         _validate_plugin_config(role_plugin, selection["config"], ["llm", "role_models", role, "config"])
         role_factories[role] = role_factory
     packages = dict(data_loader.binding["packages"])
+    packages.update(executor.binding["packages"])
     for selected in selected_providers:
         for name in selected.manifest["dependencies"].get("python", []):
             try:
@@ -108,7 +113,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         raise RunError("unknown_plugin", "admission", "The requested modeling method is not installed.")
     _validate_plugin_config(method, settings["method"]["config"], ["method", "config"])
     method = method.resolve(settings["method"]["config"])
-    execution_mode = settings["executor"]["plugin_id"].removeprefix("llm4om.executors.")
+    execution_mode = executor.mode
     capabilities = method.manifest["capabilities"]
     profile = capabilities.get("method_profile")
     if profile not in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0", "factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0"):
@@ -137,7 +142,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 "model_backends": [settings["model_backend"]["plugin_id"]], "solvers": [settings["solver"]["plugin_id"]],
                 "llm_features": ["text"], "oracle_requirements": []}
     if not offline:
-        required["execution_modes"] = [settings["executor"]["plugin_id"].removeprefix("llm4om.executors.")]
+        required["execution_modes"] = [execution_mode]
     if not set(capabilities.get("llm_features", [])) <= set(provider_plugin.manifest["capabilities"].get("llm_features", [])):
         raise RunError("capability_mismatch", "admission", "Provider does not support the requested method features.")
     if any(not set(capabilities.get("llm_features", [])) <= set(selected.manifest["capabilities"].get("llm_features", [])) for selected in selected_providers[1:]):
@@ -176,7 +181,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 or any(expected["packages"].get(name) != value for name, value in packages.items())):
             raise RunError("checkpoint_incompatible", "admission", "Method profile, manifest or package identity changed.")
         for name, saved_version in expected["packages"].items():
-            if execution_mode != "container" or name in method.manifest["dependencies"].get("python", []):
+            if execution_mode != "container" or name in method.manifest["dependencies"].get("python", []) or name in executor.binding["packages"]:
                 try:
                     if version(name) != saved_version:
                         raise RunError("checkpoint_incompatible", "admission", "A saved resource package changed.")
@@ -195,7 +200,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                     raise RunError("checkpoint_incompatible", "admission", "Worker image identity changed.")
                 worker = expected["worker"]
             else:
-                worker = worker_runtime(settings["executor"]["config"], deadline=deadline, cancellation=cancellation,
+                worker = worker_runtime(settings["executor"]["config"], deadline=deadline, cancellation=cancellation, runner=executor.run,
                                         solver_id=settings["solver"]["plugin_id"],
                                         compiler_selection={"compiler": settings["compiler"], "target_backend": settings["model_backend"]["plugin_id"]} if compiler else None,
                                         expected_compiler=compiler_identity(compiler.binding) if compiler else None,
@@ -207,7 +212,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 local_runtime = {"packages": expected["packages"], "solver_environment": expected.get("solver_environment")}
             else:
                 import json
-                out, _, code = run_owned_process([sys.executable, "-m", "llm4om.worker", "--runtime", "--runtime-stdin"],
+                out, _, code = executor.run([sys.executable, "-m", "llm4om.worker", "--runtime", "--runtime-stdin"],
                     json.dumps({"model_backend": settings["model_backend"], "solver": settings["solver"], "allowed_problem_types": allowed_types}, allow_nan=False).encode(),
                     deadline=deadline, cancellation=cancellation or CancellationToken())
                 payload = parse_json(out)
@@ -225,7 +230,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         "compiler": compiler.binding if compiler else None,
         "data_loader": data_loader.binding, "data_view": data_loader.limits,
         "execution": {"model_backend": execution.backend_binding, "solver": execution.solver_binding},
-        "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"],
+        "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"], "executor": executor.binding,
         "packages": packages, "reporters": [reporter.binding for reporter in reporters], "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": provider_plugin.manifest,
         "provider_origin": provider_plugin.origin, "model": settings["llm"]["model"],
         **({"role_models": {role: {"provider": inventory[("llm_provider", selection["provider_plugin_id"])].manifest,
@@ -235,7 +240,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 for selection in role_models.values()) else "same_requested_model_roles",
             "role_resource_comparison": "different_role_resources" if any(
                 any(selection[key] != settings["llm"][key] for key in ("provider_plugin_id", "model", "config"))
-            for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers, compiler, execution, data_loader, tuple(reporters))
+            for selection in role_models.values()) else "same_role_resources"} if role_models else {})}, provider, deadline, role_providers, compiler, execution, data_loader, tuple(reporters), executor)
 
 
 def check_model_connectivity(plan: AdmissionPlan) -> dict[str, Any]:

@@ -332,3 +332,10 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/web_connectivity_check_flow.cjs` | 网页连通性开关 | 同一doctor、默认零请求／显式GET、可读目录结果与窄屏 |
 | `docs/development/s03-connectivity.md` | FR-06实际能力与验收 | 共享Provider传输、目录证据边界、实际网络结果与复查入口 |
 | `docs/development/s05-connection-diagnostics.md` | 连接观察、诊断支持与证据 | 原运行不改写、免费GET与生成验收区别、公共固定类别和未知预算 |
+
+| `src/llm4om/executor_registry.py` | 可安装执行器与已有进程接口绑定 | Manifest／配置、真实CLI两模式与类型检查 |
+| `examples/plugins/fixture_executor/README.md` | 独立执行器使用说明 | 安装命令、实际模式与可信宿主边界 |
+| `examples/plugins/fixture_executor/pyproject.toml` | 独立安装包及entry point | 实际安装、发现与CLI运行 |
+| `examples/plugins/fixture_executor/src/llm4om_fixture_executor/__init__.py` | 调用收据与已有执行监督复用 | 实际Worker预检／HiGHS求解 |
+| `tests/test_executor_registry.py` | 独立执行器公共CLI验收 | 容器／本机、目标13、安装身份和无stdout污染 |
+| `docs/development/s03-executor-registry.md` | Executor实际支持契约与证据 | 进程profile、调用范围、镜像身份与剩余条件 |

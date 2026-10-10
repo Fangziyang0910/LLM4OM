@@ -6,6 +6,7 @@ from llm4om.control import CancellationToken
 from llm4om.backends import ModelHandle, ModelBackend, NativeModelBackend, PyomoBackendFactory, GurobiBackendFactory
 from llm4om.solvers import SolverBackend, HighsSolverFactory, GurobiSolverFactory
 from llm4om.execution_plugins import ExecutionResources, resolve_execution_resources
+from llm4om.executor_registry import ResolvedExecutor, ContainerExecutorFactory, TrustedLocalExecutorFactory, resolve_executor
 from llm4om.compilers import Compiler, LPIRPyomoFactory, LPIRPyomoCompiler, resolve_compiler
 from llm4om.data_loaders import DataLoader, DataView, DataContext, PublicDataFactory, resolve_data_loader
 from llm4om.linear import CompiledCode
@@ -23,6 +24,7 @@ from llm4om.experiments import run_experiment, report_experiment, cancel_experim
 from llm4om.assisted import edit_run, export_edit
 
 __all__ = [
+    "ResolvedExecutor", "ContainerExecutorFactory", "TrustedLocalExecutorFactory", "resolve_executor",
     "Reporter", "ReportContext", "ReportDestination", "resolve_reporters",
     "report_run", "run_experiment", "report_experiment", "cancel_experiment",
     "edit_run", "export_edit",

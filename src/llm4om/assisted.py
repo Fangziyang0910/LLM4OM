@@ -200,7 +200,7 @@ def edit_run(run: Path, edits: Path, *, cancellation: CancellationToken | None =
                     raise RunError('invalid_edit', 'admission', 'Edited Code needs explicit source and its original representation.')
                 if kind == 'native_script' and material['data_json'] != expected['code']['data_json']:
                     raise RunError('invalid_edit', 'admission', 'Code-only script editing retains exact public data.json.')
-                if settings['executor']['plugin_id'] != 'llm4om.executors.container':
+                if store.state.get('admission', {}).get('mode') != 'container':
                     settings['executor'] = {'plugin_id': 'llm4om.executors.container', 'config':
                         {'network': False, 'cpu_limit': 1, 'memory_limit_mb': 1024, 'wall_time_s': 60}}
             settings['method'] = {'plugin_id': 'llm4om.methods.assisted', 'config': {'code_kind': kind,

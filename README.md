@@ -12,20 +12,15 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 ## 当前状态
 
-已交付 **S01 离线回放、S02-A 真实 HiGHS、S02-B 参数化 Pyomo 工厂、S03 方法发现与预检、S04-A 容器执行、S04-B 取消／恢复、S05-A 真实文本 LLM、S05-B Messages 协议、S07-A 原始 NL4Opt 导入／单样本评测、S06-A 微型真实 Gurobi／native gurobipy（Python 包 0.8.0，未发布）**，保留 1.0 需求与设计基线（文档修订 0.4.0）。CLI 读取问题与 CSV，回放人工 Mock 五元素表述，将伴随的严格 LPIR 编译为 Pyomo 实现并求解，保存阶段来源、数据 hash、解向量、事件和报告。独立安装的方法可经 entry point 发现并运行，doctor 与 run 共用兼容性和依赖预检。本地 Web 首版和批量实验功能已实现，见下方开发记录；经典方法的实际支持见下方S06实现记录。
+当前SDK／Worker为0.36.0开发版本，尚未发布完整1.0。CLI与Web已提供输入问题、选择方法、展示真实建模步骤、五元素表述、求解代码、决策结果和保存版本。结果页支持数据预览、模型数值编辑、派生求解、候选比较、决策试算与运行资源展示。
 
-仓库另有可运行的文档维护工具，检查链接、配置、fixture 和参考资料。它们的用法见 [CONTRIBUTING](CONTRIBUTING.md)，与未来平台命令分别管理。
+Direct、反馈修正、固定OptiMUS流程和CoE已接入；主要通过通用外部LLM生成表述或代码。HiGHS支持Pyomo路径，Gurobi支持当前声明的Pyomo与gurobipy路径；实际Gurobi验收限微型size-limited环境。具体组合与证据见[能力矩阵](docs/implementation-plan.md#1-首批能力矩阵)及[Web实现记录](docs/development/s09-user-experience.md)。
 
-S05-A 提供 文本 OpenAI-compatible Provider／Gateway 和 Direct 输出适配（最初交付包 0.4.0，已验收 SDK 基线为 0.8.0，未发布）。已用指定外部模型与容器 HiGHS 跑通两个独立 LP/MILP 问题；完整回归与独立审阅记录见 [S05-A 实现记录](docs/development/s05-provider.md)。完整 1.0 任务范围保持不变。
+NL4Opt、NLP4LP与MAMO已有导入和评测接口；CLI已有批量调度和报告。当前优先推进单问题核心流程与用户界面，不进行全量benchmark评测。已有真实模型／Solver成功记录不代表所有组合或完整发布已验收。
 
-S05-B 新增独立 Messages Adapter（SDK／Worker 0.8.0）。本地工程实现与支持范围见
-[实现记录](docs/development/s05b-messages.md)和[配置示例](examples/specs/messages.yaml)；
-真实指定模型端到端验收、最新修复的241项本机集成回归和独立审查均已通过。
-既有小探针不替代平台验收，SDK／Worker 0.8.0 仍未发布。
+[可安装Executor](docs/development/s03-executor-registry.md)沿用已有容器／本机进程接口。ArtifactStore独立替换和完整发布验收仍待完成。[显式连通性检查](docs/development/s03-connectivity.md)已实现；最近指定Provider的模型目录请求出现TLS中断，生成服务的当前状态须以实际请求结果为准。
 
-S06-B 的 OptiMUS 固定源码流程已完成真实外部模型／Gurobi 验收，见 [实现记录](docs/development/s06b-optimus.md)。[MAMO](docs/development/s07-mamo.md) 和 [NLP4LP](docs/development/s07-nlp4lp.md) 已接入冻结任务与数值评测；NLP4LP 已用指定外部模型／HiGHS 验收一个公开实例。近期切片的独立审阅仍待完成。
-
-GitHub 仓库当前为私有，项目按未来开源协作设计，采用 Apache-2.0。私有可见性与开源许可证分别管理。
+GitHub仓库当前为私有，采用Apache-2.0。详细历史证据见[开发计划](docs/implementation-plan.md)和各切片记录。
 
 ## 1.0 目标
 
@@ -93,13 +88,13 @@ SDK 使用 CancellationToken／cancel_run／resume_run，CLI SIGINT 走同一取
 恢复保留原 run、预算与 deadline，复用已完成模型调用和匹配求解记录；未知 HTTP 结果不重发。
 不支持内部 checkpoint 且无已完成阶段时，默认 continue 明确拒绝。显式 rerun 创建新运行并保留父历史、累计费用与未知预留；可产生新付费请求，累计预算上限仍有效。支持范围与证据见 [S04-B](docs/development/s04-resume.md)。
 
-## 后续使用方式
+## 批量实验与报告
 
-以下命令仍是开发目标：
+以下CLI已实现，配置和支持范围见[批量实验记录](docs/development/s08-benchmark.md)：
 
 ```bash
-llm4om benchmark --config experiments/benchmark.yaml
-llm4om report --experiment-id EXPERIMENT_ID --format markdown
+llm4om benchmark --config examples/specs/experiment.yaml --output runs/experiment
+llm4om report --experiment runs/experiment
 ```
 
 本地 Web 使用界面复用已有单问题应用入口。首批论文方法优先 `optimus` 和 `coe`，`direct` 提供工程对照，`feedback_repair` 为可选对照。模型主要使用通用外部 LLM，暂不集成任务专用训练权重；训练类工作的提示或建模流程可另作明确变体，未来专用模型仍走共同 LLM 接口。
@@ -110,7 +105,7 @@ llm4om report --experiment-id EXPERIMENT_ID --format markdown
 
 每个插件必须声明能力和兼容矩阵，不允许自动降级后仍把结果标成原方法；每个评估结论必须说明证据级别。**求解器报告最优，只表示候选模型被求解，不证明模型符合业务需求。**
 
-已完成 S01／S02-A／S02-B／S03／S04-A／S04-B／S05-A／S05-B／S07-A／S06-A 当前范围；当前前沿与后续依赖见 [开发计划](docs/implementation-plan.md)。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+已完成 S01／S02-A／S02-B／S03／S04-A／S04-B／S05-A／S05-B／S07-A／S06-A 当前范围；后续工作与依赖见 [开发计划](docs/implementation-plan.md)。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 本地 NL4Opt 导入与单样本评测（S07-A）
 
@@ -164,7 +159,7 @@ MAMO Task／Evaluation 已进入 SDK/Worker0.10.0 开发版本：保留全部优
 
 NLP4LP Task／Evaluation 已进入 SDK/Worker0.11.0 开发版本：完整保留361个公开描述与参数，参考缺失／损坏分别记录，资格按公开问题与数据评阅冻结。实际支持与待验收条件见 [S07-B](docs/development/s07-nlp4lp.md)。
 
-SDK／Worker0.12.0 的原问题独立可行性、原目标重算与有限探测见 [S07-D](docs/development/s07-checkers.md)。Web／批量实验仍按完整1.0计划实施。
+SDK／Worker0.12.0 的原问题独立可行性、原目标重算与有限探测见 [S07-D](docs/development/s07-checkers.md)。Web与批量CLI已实现，完整1.0验收仍在推进。
 
 CoE专家路由与原生函数的开发实现、真实外部模型／原问题检查和剩余验收见 [S06-C](docs/development/s06-coe.md)。
 

@@ -50,7 +50,7 @@ source 对研究方法另记录研究路线（prompting-based／training-based�
 | `model_backend` | `load(build, data) -> ModelHandle` / `export(handle) -> dict` | Worker 内构建模型；native另提供受控read_transport；Handle不跨进程序列化 |
 | `solver_backend` | `runtime() -> dict` / `solve(handle, options) -> dict` | Worker 内，仅接收声明的Handle；应用层归一化并绑定SolveResult |
 | `evaluator` | `evaluate(case, outcome, context) -> EvaluationResult` | 隐藏评分进程；不能反向泄漏 oracle |
-| `executor` | `async execute(request, context) -> ExecutionResult` | 执行安全模式、资源限制、清理与证据 |
+| `executor` | `factory.create(config) -> process callable` | 声明并遵守版本化进程profile；应用层形成ExecutionResult，见[实际契约](development/s03-executor-registry.md) |
 | `artifact_store` | `put(value, metadata) -> ArtifactRef` / `get(ref, access) -> bytes` | 内容寻址与访问控制；引用不是任意宿主路径 |
 | `reporter` | `render(public_result, destination, context) -> list[ReportRef]` | 只读取已形成结果，不重新决定正确性 |
 

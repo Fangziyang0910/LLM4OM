@@ -53,7 +53,7 @@
 | S03-A | 单独安装第三方方法，通过 plugins list 和 run 使用 | S01 | CLI：不改内核、ID 冲突、版本与配置错误。AC-01/02/21 |
 | S03-B | doctor 给出实际兼容路径、环境缺失与预算 admission 结果 | S03-A、S02-A | CLI：不兼容组合在付费调用前拒绝，未知能力不当作支持。AC-02/07/12 |
 
-状态：S03-A／B 已实现当前方法子集，见 [运行 profile 与实际证据](development/s03-plugins.md)。独立方法经安装／发现／run 使用，doctor 与 run 共用预检；其他插件种类、原生路径与真实连通性仍待接入。覆盖 FR-01～06/17、NFR-01/08/10 的当前部分；DD-03。
+状态：独立方法与多种资源插件已经接入，doctor与run共用预检；当前[可安装Executor](development/s03-executor-registry.md)与[显式连通性检查](development/s03-connectivity.md)已实现。ArtifactStore独立替换仍待完成，实际支持以各切片证据为准。覆盖 FR-01～06/17、NFR-01/08/10 的当前部分；DD-03。
 
 ### S04 隔离执行与恢复
 

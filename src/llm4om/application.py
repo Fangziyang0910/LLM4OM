@@ -29,7 +29,6 @@ from llm4om.method_resources import RunMethodResources
 from llm4om.preflight import AdmissionPlan, prepare_run
 from llm4om.linear import CompiledCode, compile_ir
 from llm4om.storage import RunStore
-from llm4om.executors import run_container, run_owned_process
 from llm4om.clarification import prepare_clarification, validate_clarification_response
 from llm4om.reporters import render_reports, resolve_reporters
 
@@ -507,6 +506,9 @@ def _compile_candidate(store: RunStore, artifact_ref: dict[str, Any], settings: 
 
 def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_ref: dict[str, Any],
                        settings: dict[str, Any], ledger: dict[str, Any], plan: AdmissionPlan) -> tuple[dict[str, Any] | None, dict[str, Any], RunError | None]:
+    executor = plan.executor
+    if executor is None:
+        raise RunError("executor_unavailable", "execution", "An admitted Executor is required.")
     candidate_id = store.state.get("candidate_id", "001")
     if plan.snapshot["method_profile"] in ("native_script/0.1.0", "native_script/0.2.0"):
         artifact = _load_verified_record(store, artifact_ref)
@@ -552,7 +554,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
     resources = {"cpu_time_s": None, "peak_memory_bytes": None}
     executor_details: dict[str, Any] = {}
     try:
-        if settings["executor"]["plugin_id"] == "llm4om.executors.container":
+        if executor.mode == "container":
             artifact = parse_json(read_public_bytes(store.path / artifact_ref["relative_path"]))
             formulation = parse_json(read_public_bytes(store.path / artifact["formulation_ref"]["relative_path"]))
             limits = {**settings["executor"]["config"]}
@@ -578,7 +580,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
             inputs = {"request.json": json.dumps(request, ensure_ascii=False, allow_nan=False).encode(), "model.py": source}
             for data in parse_json(read_public_bytes(store.path / "public-problem.json"))["data_refs"]:
                 inputs[data["path"]] = read_public_bytes(store.path / data["path"])
-            container = run_container(["python", "-I", "-m", "llm4om.worker", "--solve", "/input/request.json", "--solver", settings["solver"]["plugin_id"]],
+            container = executor.run(["python", "-I", "-m", "llm4om.worker", "--solve", "/input/request.json", "--solver", settings["solver"]["plugin_id"]],
                 inputs, limits, image=plan.snapshot["worker"]["image_id"], deadline=plan.deadline, cancellation=store.cancellation)
             out.write(container.stdout.decode(errors="replace"))
             err.write(container.stderr.decode(errors="replace"))
@@ -628,7 +630,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
             artifact = parse_json(read_public_bytes(store.path / artifact_ref["relative_path"]))
             formulation = parse_json(read_public_bytes(store.path / artifact["formulation_ref"]["relative_path"]))
             ir = parse_json(read_public_bytes(store.path / formulation["structured_ir_ref"]["relative_path"]))
-            stdout, stderr, exit_code = run_owned_process(
+            stdout, stderr, exit_code = executor.run(
                 [sys.executable, "-m", "llm4om.worker", "--solve-stdin", "--solver", settings["solver"]["plugin_id"]],
                 json.dumps({"ir": ir, "source_sha256": hashlib.sha256(compiled.source.encode()).hexdigest(),
                             "symbol_map": compiled.symbol_map, "solver_options": solver_options, "compiler": settings["compiler"],
@@ -670,7 +672,7 @@ def _execute_candidate(store: RunStore, compiled: CompiledCode | None, artifact_
     execution_ref = store.json(f"candidates/{candidate_id}/execution.json", {"schema_version": "0.2.0",
         "run_id": store.run_id, "input_artifact_ref": input_artifact_ref, "artifact_ref": artifact_ref,
         "solver_call": ledger["solver_calls"],
-        "execution_id": f"execution-{candidate_id}", "mode": settings["executor"]["plugin_id"].removeprefix("llm4om.executors."), "status": "cancelled" if error and error.code == "run_cancelled" else "failed" if error else "completed",
+        "execution_id": f"execution-{candidate_id}", "mode": executor.mode, "status": "cancelled" if error and error.code == "run_cancelled" else "failed" if error else "completed",
         "start": started, "end": datetime.now(timezone.utc).isoformat(),
         "worker_status": container.status if container else executor_details.get("status"),
         "exit_code": container.exit_code if container else executor_details.get("exit_code"),
@@ -793,7 +795,7 @@ def _reconcile_execution(store: RunStore, settings: dict[str, Any]) -> None:
         artifact_ref = execution["artifact_ref"]
         artifact = load(artifact_ref)
         original = load(store.state["artifact_ref"])
-        mode = settings["executor"]["plugin_id"].removeprefix("llm4om.executors.")
+        mode = store.state["admission"]["executor"]["manifest"]["capabilities"]["execution_modes"][0]
         if (execution["run_id"] != store.run_id or execution["execution_id"] != store.state["execution_id"]
                 or execution["solver_call"] != store.state["ledger"]["solver_calls"]
                 or execution["input_artifact_ref"] != store.state["artifact_ref"]

@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 from llm4om.contracts import RunError, parse_json, public_path, read_public_bytes, validate_bindings, validate_worker_response
-from llm4om.executors import run_container
 from llm4om.methods import GenerationFailure, LLMResponse, MethodOutcome, ModelProposal, ScriptCodeProposal
 from llm4om.preflight import AdmissionPlan
 from llm4om.storage import RunStore
@@ -352,7 +351,9 @@ class RunMethodResources:
         store.checkpoint()
         request = {"schema_version": "0.1.0", "source_sha256": code.source_sha256, "data_json": code.data_json.decode(),
                    "wall_time_s": limits["wall_time_s"], "output_limit_bytes": byte_limit}
-        execution = run_container(["python", "-I", "-m", "llm4om.script_worker", "/input/request.json"],
+        if plan.executor is None:
+            raise RunError("executor_unavailable", "execution", "Script execution needs its admitted Executor.")
+        execution = plan.executor.run(["python", "-I", "-m", "llm4om.script_worker", "/input/request.json"],
             {"request.json": json.dumps(request, allow_nan=False).encode(), "model.py": code.source.encode()}, limits,
             image=plan.snapshot["worker"]["image_id"], deadline=plan.deadline, cancellation=store.cancellation)
         execution_details = asdict(execution)
@@ -390,7 +391,7 @@ class RunMethodResources:
                 "execution": {"model_backend": self.settings["model_backend"], "solver": self.settings["solver"], "allowed_problem_types": plan.snapshot["allowed_problem_types"]},
                 "execution_identity": plan.execution.identity() if plan.execution else None}
             try:
-                collected = run_container(["python", "-I", "-m", "llm4om.worker", "--collect-native", "/input/capture.json",
+                collected = plan.executor.run(["python", "-I", "-m", "llm4om.worker", "--collect-native", "/input/capture.json",
                         "--solver", self.settings["solver"]["plugin_id"]],
                     {"capture.json": json.dumps(collection, allow_nan=False).encode()}, limits,
                     image=plan.snapshot["worker"]["image_id"], deadline=plan.deadline, cancellation=store.cancellation)
