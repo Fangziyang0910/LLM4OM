@@ -288,3 +288,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `docs/development/s08-common-input.md` | 共同输入与三基准比较证据 | 原始来源、预选子集、未提供指标与变体 |
 
 | `docs/development/s09-process-isolation.md` | Web并发／取消功能与证据 | 共同应用入口、进程控制和待验收范围 |
+
+| `scripts/acceptance_load.py` | 真实离线批量性能验收 | cgroup4vCPU／8GiB、直接基线、1000终态与P95 |
+| `scripts/acceptance_faults.py` | 100个CLI任务的故障集合 | 合成HTTP／实际HiGHS、取消／显式重跑与父预算 |
+| `docs/development/s08-load-acceptance.md` | 性能／故障证据与完成边界 | 原始记录、准确入口范围与剩余验收 |

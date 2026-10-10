@@ -96,3 +96,5 @@ DataLoader的共同注册、原始数据与有限视图分别记录，见 [S03-C
 三方法共同公开输入与接入比较见[S08-B](development/s08-common-input.md)。
 
 Web同时运行、应用进程隔离与合作取消见[S09](development/s09-process-isolation.md)。
+
+本机1000任务性能与100任务故障证据见[S08-C](development/s08-load-acceptance.md)。
