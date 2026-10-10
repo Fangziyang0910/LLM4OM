@@ -7,7 +7,10 @@ let token = "",
   currentJob = null,
   currentExperiment = null,
   snapshot = null,
-  activeTab = "formulation";
+  activeTab = "formulation",
+  artifactSelectedByUser = false,
+  renderFingerprint = "";
+artifactSelectedByUser = false;
 const pretty = (value) =>
   typeof value === "string" ? value : JSON.stringify(value, null, 2);
 function notice(text, error = false) {
@@ -41,7 +44,12 @@ function fillSelect(id, kind, selected) {
   )) {
     const option = document.createElement("option");
     option.value = item.manifest.plugin_id;
-    option.textContent = item.manifest.display_name;
+    option.textContent =
+      kind === "method"
+        ? UI.shortMethod(item.manifest.plugin_id)
+        : kind === "solver_backend"
+          ? item.manifest.plugin_id.split(".").at(-1).toUpperCase()
+          : item.manifest.display_name;
     $(id).append(option);
   }
   $(id).value = selected;
@@ -56,6 +64,23 @@ function showConfig() {
   $("token-budget").value = config.budget.max_total_tokens;
   $("wall-budget").value = config.budget.wall_time_s;
   $("config-json").value = pretty(config);
+  const explanations = {
+    "llm4om.methods.direct":
+      "一次模型调用联合生成数学表述与求解实现，再构建并求解候选模型。",
+    "llm4om.methods.optimus_inline":
+      "依次理解目标与约束、形成数学表述、编写代码，并根据执行反馈调试。适合直接输入问题。",
+    "llm4om.methods.optimus":
+      "使用公开参数和标签文件，分步形成数学表述与求解代码。需要 params 与 labels 数据。",
+    "llm4om.methods.coe":
+      "由协调者选择专家，进行建模讨论、代码生成与审查。页面展示实际参与的角色。",
+    "llm4om.methods.feedback_repair":
+      "生成候选模型，依据公开执行反馈修正，并保存候选与选择关系。",
+  };
+  $("method-explainer").textContent =
+    explanations[config.method.plugin_id] ||
+    "按所选方法的实际流程建模，保存公开步骤和输出。";
+  $("budget-summary").textContent =
+    `本次上限：${config.budget.max_llm_attempts} 次模型请求 · ${UI.format(config.budget.max_total_tokens)} Token · ${UI.format(config.budget.wall_time_s)} 秒`;
 }
 function readConfig() {
   config = JSON.parse($("config-json").value);
@@ -124,6 +149,27 @@ function chooseMethod() {
     ].includes(method)
   )
     config.method = { plugin_id: method, config: {} };
+  const classical = /optimus|coe/.test(method);
+  Object.assign(
+    config.budget,
+    classical
+      ? {
+          max_llm_attempts: 30,
+          max_total_tokens: 300000,
+          max_solver_calls: 12,
+          max_repairs: 3,
+          max_candidates: 4,
+          wall_time_s: 1800,
+        }
+      : {
+          max_llm_attempts: 4,
+          max_total_tokens: 100000,
+          max_solver_calls: 4,
+          max_repairs: 2,
+          max_candidates: 4,
+          wall_time_s: 180,
+        },
+  );
   showConfig();
 }
 function renderUploads() {
@@ -177,13 +223,16 @@ async function refreshJobs() {
     const title = document.createElement("strong");
     title.textContent = job.description;
     const meta = document.createElement("span");
-    meta.textContent = `${job.status} · ${job.model}`;
+    meta.textContent = `${UI.status(job.status)} · ${UI.shortMethod(job.method)}`;
     button.append(title, meta);
     button.onclick = () => openJob(job.job_id);
     $("jobs").append(button);
   }
 }
 async function openJob(id) {
+  snapshot = null;
+  renderFingerprint = "";
+  $("artifact-choice").replaceChildren();
   currentExperiment = null;
   $("experiment-editor").hidden = true;
   $("experiment-result").hidden = true;
@@ -191,12 +240,14 @@ async function openJob(id) {
   $("editor").hidden = true;
   $("result").hidden = false;
   await refreshRun();
+  if (snapshot?.bundle?.stages?.formulation?.status === "not_available")
+    document.querySelector('[data-tab="code"]').click();
   await refreshJobs();
 }
 function artifactEntries() {
   const contents = snapshot?.contents || {};
   const patterns = {
-    formulation: /formulation|model-ir/,
+    formulation: /formulation|model-ir|structured-ir|method\/state_/,
     code: /code|build|symbol-map|model\.py|factory\.py|native.*\.py/,
     candidates: /candidate|selection|feedback|repair|evaluation/,
     diagnostics: /diagnostic|execution|budget|report|trace/,
@@ -210,33 +261,58 @@ function showArtifact(value) {
   const text = pretty(value) || "此阶段尚无可用记录。";
   if ($("artifact-content").textContent !== text)
     $("artifact-content").textContent = text;
-  $("model-view").replaceChildren();
-  const representation = value?.representation;
   if (
-    activeTab !== "formulation" ||
-    !representation?.sets ||
-    !representation?.variables
-  )
+    value === undefined &&
+    ["running", "queued"].includes(snapshot?.job?.status)
+  ) {
+    UI.empty(
+      $("model-view"),
+      activeTab === "code" ? "求解实现正在形成" : "建模输出正在形成",
+      "完成的公开产物会自动出现在这里。可以在左侧查看当前的实际步骤。",
+    );
     return;
-  for (const [key, label] of [
-    ["sets", "集合"],
-    ["parameters", "参数"],
-    ["variables", "变量与域"],
-    ["objective", "目标"],
-    ["constraints", "约束"],
-  ]) {
-    const card = document.createElement("section");
-    card.className = "model-card";
-    const title = document.createElement("h3");
-    title.textContent = label;
-    const content = document.createElement("pre");
-    content.textContent = pretty(representation[key]);
-    card.append(title, content);
-    $("model-view").append(card);
   }
+  const name = $("artifact-choice").value;
+  const candidate = name.startsWith("candidates/") ? name.split("/")[1] : null;
+  const contents = candidate
+    ? Object.fromEntries(
+        Object.entries(snapshot?.contents || {}).filter(
+          ([key]) =>
+            !key.startsWith("candidates/") ||
+            key.startsWith(`candidates/${candidate}/`),
+        ),
+      )
+    : snapshot?.contents || {};
+  const view =
+    activeTab === "formulation" && name.startsWith("method/state_")
+      ? { representation: { state: value } }
+      : value;
+  UI.records($("model-view"), view, activeTab, contents);
 }
 function renderArtifact() {
   const entries = artifactEntries();
+  const score = ([name, value]) =>
+    activeTab === "code"
+      ? name ===
+        `candidates/${snapshot?.bundle?.final_candidate_id || "001"}/model.py`
+        ? 2
+        : Number(name.endsWith(".py"))
+      : value?.representation
+        ? 100 +
+          Number(
+            name.startsWith(
+              `candidates/${snapshot?.bundle?.final_candidate_id || "001"}/`,
+            ),
+          )
+        : Number(name.match(/method\/state_(\d+)/)?.[1] || 0);
+  entries.sort((a, b) => score(b) - score(a));
+  $("output-heading").textContent = {
+    formulation: "数学模型",
+    code: "求解实现",
+    candidates: "候选与修正",
+    diagnostics: "实际运行记录",
+    data: "问题与数据",
+  }[activeTab];
   const previous = $("artifact-choice").value;
   $("artifact-choice").replaceChildren();
   if (activeTab === "diagnostics")
@@ -244,81 +320,87 @@ function renderArtifact() {
   for (const [name] of entries) {
     const option = document.createElement("option");
     option.value = name;
-    option.textContent = name;
+    const labels = {
+      "formulation.json": "数学表述",
+      "structured-ir.json": "实例化模型",
+      "formulation-snapshot.json": "表述来源",
+      "model.py": "求解源码",
+      "code-artifact.json": "代码来源",
+    };
+    option.textContent =
+      (name.startsWith("candidates/")
+        ? "候选 " + name.split("/")[1] + " · "
+        : "") + (labels[name.split("/").at(-1)] || name);
     $("artifact-choice").append(option);
   }
-  if (entries.some(([name]) => name === previous))
+  if (artifactSelectedByUser && entries.some(([name]) => name === previous))
     $("artifact-choice").value = previous;
+  $("artifact-choice").hidden = entries.length < 2;
   const selected = () =>
     entries.find(([name]) => name === $("artifact-choice").value)?.[1];
   showArtifact(selected());
-  $("artifact-choice").onchange = () => showArtifact(selected());
+  $("artifact-choice").onchange = () => {
+    artifactSelectedByUser = true;
+    showArtifact(selected());
+  };
 }
 function metric(label, value) {
-  const box = document.createElement("div");
-  box.className = "metric";
-  const name = document.createElement("span");
-  name.textContent = label;
-  const number = document.createElement("strong");
-  number.textContent = value ?? "—";
-  box.append(name, number);
+  const box = UI.node("div", "metric");
+  box.append(UI.node("span", "", label), UI.node("strong", "", value ?? "—"));
   return box;
 }
 async function refreshRun() {
   if (!currentJob) return;
   snapshot = await api(`/api/jobs/${currentJob}`);
+  const fingerprint = JSON.stringify([
+    snapshot.job,
+    snapshot.artifacts,
+    snapshot.events,
+  ]);
+  if (fingerprint === renderFingerprint) return;
+  renderFingerprint = fingerprint;
   const { job, bundle, contents = {} } = snapshot;
   $("run-title").textContent = job.description;
   $("run-meta").textContent =
-    `${job.status} · ${job.run_id || "等待应用分配 run_id"}`;
+    `${UI.status(job.status)} · ${UI.shortMethod(job.method)} · ${job.run_id || "正在准备"}`;
   $("stages").replaceChildren();
   for (const stage of ["formulation", "code", "solve"]) {
     const box = document.createElement("div");
     box.className = "stage";
     const title = document.createElement("strong");
-    title.textContent = stage;
+    title.textContent = {
+      formulation: "01 数学表述",
+      code: "02 求解实现",
+      solve: "03 求解结果",
+    }[stage];
     const status = document.createElement("span");
-    status.textContent = bundle?.stages?.[stage]?.status || "等待";
+    const runningStep = snapshot.events?.findLast(
+      (event) => event.method_event?.type === "modeling_step",
+    )?.method_event;
+    const state =
+      bundle?.stages?.[stage]?.status ||
+      (job.status === "running" &&
+      (runningStep?.phase || "formulation") === stage
+        ? "running"
+        : "pending");
+    status.textContent = UI.status(state);
+    box.classList.add(state);
     box.append(title, status);
     $("stages").append(box);
   }
-  const solve = Object.entries(contents).find(([name]) =>
-    name.endsWith("solve-result.json"),
-  )?.[1];
-  const solution = Object.entries(contents).find(([name]) =>
-    name.endsWith("solution.json"),
-  )?.[1];
-  $("decision").replaceChildren();
-  const metrics = document.createElement("div");
-  metrics.className = "metrics";
-  metrics.append(
-    metric("终止状态", solve?.termination),
-    metric("目标值", solve?.objective_value),
-    metric("求解器", solve?.solver_id),
-    metric("实际 Token", contents["budget-ledger.json"]?.total_tokens),
-    metric("费用", contents["budget-ledger.json"]?.cost ?? "未知"),
-  );
-  $("decision").append(metrics);
-  if (solution?.variables) {
-    const table = document.createElement("table");
-    for (const [name, value] of Object.entries(solution.variables)) {
-      const row = document.createElement("tr");
-      for (const text of [name, value]) {
-        const cell = document.createElement("td");
-        cell.textContent = text;
-        row.append(cell);
-      }
-      table.append(row);
-    }
-    $("decision").append(table);
-  }
-  const note = document.createElement("p");
-  note.className = "hint";
-  note.textContent =
-    "求解结果针对候选模型。独立业务检查与表述正确性按各自证据显示。";
-  $("decision").append(note);
+  const publicValue = (ref) =>
+    Object.entries(bundle?.public_projections || {}).find(
+      ([, item]) => item.relative_path === ref?.relative_path,
+    )?.[0];
+  const solve = contents[publicValue(bundle?.solve_result_ref)];
+  const solution = contents[publicValue(solve?.solution_ref)];
+  UI.decision($("decision"), solve, solution, contents["budget-ledger.json"]);
+  UI.timeline(snapshot);
   if (bundle?.error || job.error)
-    notice(pretty(bundle?.error || job.error), true);
+    notice(
+      (bundle?.error || job.error).message || "运行未完成，请查看运行详情。",
+      true,
+    );
   $("export").href = `/api/jobs/${currentJob}/export`;
   $("export").hidden = !bundle;
   const request = Object.entries(contents).find(
@@ -328,17 +410,31 @@ async function refreshRun() {
   $("clarification").hidden = job.status !== "needs_input";
   if (request) $("clarification-request").textContent = pretty(request);
   renderArtifact();
+  $("cancel").hidden = !["running", "queued"].includes(job.status);
+  $("resume").hidden = !["failed", "cancelled", "needs_input"].includes(
+    job.status,
+  );
 }
 $("new-run").onclick = () => {
   currentExperiment = null;
   $("experiment-editor").hidden = true;
   $("experiment-result").hidden = true;
   currentJob = null;
+  snapshot = null;
+  document.querySelector('[data-tab="formulation"]').click();
   $("editor").hidden = false;
   $("result").hidden = true;
   notice("");
 };
 $("method").onchange = chooseMethod;
+$("load-example").onclick = () => {
+  $("description").value =
+    "一家工厂生产产品 A 和 B。每件 A 的利润为 3，每件 B 的利润为 2。每件 A 消耗 2 单位原料和 1 单位工时；每件 B 消耗 1 单位原料和 2 单位工时。原料和工时的可用容量均为 8。决定两种产品的生产数量，数量必须是非负整数，使总利润最大。";
+  $("problem-json").value = "";
+  uploads = [];
+  renderUploads();
+  $("description").focus();
+};
 $("provider").onchange = () => {
   config.llm.provider_plugin_id = $("provider").value;
   $("config-json").value = pretty(config);
@@ -387,7 +483,6 @@ $("doctor").onclick = async () => {
     notice("正在检查实际环境与兼容路径…");
     const result = await api("/api/doctor", { config: readConfig() });
     $("environment-content").textContent = pretty(result);
-    $("environment").open = true;
     notice("环境与兼容检查通过。");
   } catch (error) {
     notice(error.message, true);
@@ -457,6 +552,7 @@ document.querySelectorAll(".tab").forEach(
   (button) =>
     (button.onclick = () => {
       activeTab = button.dataset.tab;
+      artifactSelectedByUser = false;
       document
         .querySelectorAll(".tab")
         .forEach((item) => item.classList.toggle("active", item === button));

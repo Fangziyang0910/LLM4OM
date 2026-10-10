@@ -181,3 +181,5 @@ S03-C4由 [#45](https://github.com/Fangziyang0910/LLM4OM/issues/45)跟踪。Data
 S09-A [#49](https://github.com/Fangziyang0910/LLM4OM/issues/49)已编写本地页面与运行接口，并完成真实网页HTTP→DeepSeek→容器HiGHS13。当前优先推进功能，之后集中完善细节与测试。浏览器视觉和完整交互仍待验收，见 [记录](development/s09-web.md)。S08批量／报告、S09-B、其余接口和S10仍在原范围内。
 
 S03 Reporter注册／单问题与实验呈现见[记录](development/s03-reporters.md)；Executor／ArtifactStore注册、100任务批量故障恢复及完整S10继续推进。
+
+2026-10-10 用户进一步明确优先级：先做好面向用户的单问题 Web 使用界面和真实核心流程，展示方法内部步骤、数学模型、求解实现与决策结果。批量 benchmark、其余边缘适配与大规模回归暂缓；完整1.0范围保持，但不以这些任务阻塞页面交付。当前实现见 [S09 用户体验](development/s09-user-experience.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。

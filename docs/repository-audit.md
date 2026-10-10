@@ -298,3 +298,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/plugins/fixture_reporter/src/llm4om_fixture_reporter/__init__.py` | Reporter工程fixture | 公开观察／副本修改／有界错误，不评分 |
 | `tests/test_reporter_plugins.py` | 公共CLI／SDK的Reporter验收 | 实际HiGHS、引用／错误、恢复与报告转义 |
 | `docs/development/s03-reporters.md` | Reporter实现支持与证据 | 来源契约／公开输入／未验收范围 |
+
+| `src/llm4om/web_assets/visuals.js` | 用户数学模型、代码、实际步骤和决策可视化 | 安全DOM、公开记录、实际最终引用、浏览器交互与窄屏 |
+| `tests/test_web_progress.py` | 运行中公开进展与完成求解的HTTP验收 | 确定性responder、真实HiGHS、凭据与私有状态不暴露 |
+| `docs/development/s09-user-experience.md` | 用户界面流程、支持与验收 | 公共步骤契约、真实／fixture证据、当前优先级 |

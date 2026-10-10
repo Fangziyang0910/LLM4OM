@@ -77,7 +77,7 @@ uv run --locked llm4om run --offline --problem examples/specs/problem.json --con
 
 CLI 输出 run_id、bundle_path 和 status。运行目录默认在 `runs/`；查看其中的 `bundle.json`、阶段产物、解向量和 `reports/report.md`。`--output PATH` 可覆盖存储根目录。真实 run 默认使用已构建的 Docker 镜像；solve.yaml 显式选择 trusted_local。两条路径真实得到 A=3、B=2、目标 13，状态 completed；offline run 的 artifact_ready 只表示离线产物已保存。这些配置的 Formulation 来自人工 Mock；外部 LLM 配置见 S05-A。候选求解成功不代表业务语义已验证。
 
-CLI 和未来 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK、支持范围与错误语义见 [S01](docs/development/s01-offline-run.md)、[S02-A](docs/development/s02-highs.md)、[S03](docs/development/s03-plugins.md)及 [S04-A](docs/development/s04-container.md)。本地 LLM 凭据保存在 Git 忽略的 `.env`，变量名见 [.env.example](.env.example)。S05-A 文本 Provider 优先加载配置目录的 `.env`，不存在时加载当前工作目录的 `.env`；进程环境优先。Mock 不读取凭据文件。
+CLI 和 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK、支持范围与错误语义见 [S01](docs/development/s01-offline-run.md)、[S02-A](docs/development/s02-highs.md)、[S03](docs/development/s03-plugins.md)及 [S04-A](docs/development/s04-container.md)。本地 LLM 凭据保存在 Git 忽略的 `.env`，变量名见 [.env.example](.env.example)。S05-A 文本 Provider 优先加载配置目录的 `.env`，不存在时加载当前工作目录的 `.env`；进程环境优先。Mock 不读取凭据文件。
 
 ## 取消与恢复
 
@@ -102,7 +102,7 @@ llm4om benchmark --config experiments/benchmark.yaml
 llm4om report --experiment-id EXPERIMENT_ID --format markdown
 ```
 
-本地 Web 工作台将复用已有单问题应用入口。首批论文方法优先 `optimus` 和 `coe`，`direct` 提供工程对照，`feedback_repair` 为可选对照。模型主要使用通用外部 LLM，暂不集成任务专用训练权重；训练类工作的提示或建模流程可另作明确变体，未来专用模型仍走共同 LLM 接口。
+本地 Web 使用界面复用已有单问题应用入口。首批论文方法优先 `optimus` 和 `coe`，`direct` 提供工程对照，`feedback_repair` 为可选对照。模型主要使用通用外部 LLM，暂不集成任务专用训练权重；训练类工作的提示或建模流程可另作明确变体，未来专用模型仍走共同 LLM 接口。
 
 首批基准为 NL4Opt、NLP4LP 和 MAMO 的 EasyLP／ComplexLP 中符合 LP/MILP 范围的实例。求解器仍为 HiGHS 与 Gurobi，建模后端为 Pyomo／gurobipy。具体方法与求解器组合见 [能力矩阵](docs/implementation-plan.md#1-首批能力矩阵)。
 
@@ -188,10 +188,12 @@ CoE专家路由与原生函数的开发实现、真实外部模型／原问题�
 
 批量冻结任务运行、断点继续和 JSONL／CSV／Markdown／HTML 报告见 [S08](docs/development/s08-benchmark.md)。示例先导入任务，再执行 `llm4om benchmark --config examples/specs/experiment.yaml --output runs/production-batch`；配置明确选择真实外部模型，不属于离线 Mock。
 
-网页也已接入批量提交、进度、逐样本结果和公共报告下载，见 [S09-B](docs/development/s09-batch-web.md)。从页面“批量实验与比较”进入；先将任务冻结导入项目runs或工作区tasks。
+网页也已接入批量提交、进度、逐样本结果和公共报告下载，见 [S09-B](docs/development/s09-batch-web.md)。从页面“开发者工具 → 实验管理”进入；先将任务冻结导入项目runs或工作区tasks。
 
 公开问题／建模输出的人工派生编辑见 [S09-C](docs/development/s09-assisted-edits.md)：CLI使用`llm4om edit`导出文档并执行新版本，网页使用“编辑并创建派生版本”。父产物和预算保留，结果明确标记人工辅助。
 
 Web并发应用进程与合作取消见[S09](docs/development/s09-process-isolation.md)。
 
 已保存的单问题可用llm4om report --run runs/RUN_ID重新呈现，不重调模型／Solver；Reporter接入见[记录](docs/development/s03-reporters.md)。
+
+当前优先交付面向用户的单问题界面：自然语言输入、实际方法进展、交互式数学模型、代码和决策结果，见 [S09 用户体验](docs/development/s09-user-experience.md)。批量实验保留为开发者入口，当前不推进集体 benchmark 运行。

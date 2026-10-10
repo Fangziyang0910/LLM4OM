@@ -73,7 +73,7 @@ class WebWorkspace:
             'llm': {'provider_plugin_id': 'llm4om.providers.openai_compatible',
                 'model': environment.get('LLM4OM_LLM_MODEL', 'your-model'),
                 'config': {'base_url': environment.get('LLM4OM_LLM_BASE_URL', 'https://api.openai.com/v1'),
-                    'credential_env': 'LLM4OM_LLM_API_KEY', 'max_retries': 1, 'max_output_tokens': 8192}},
+                    'credential_env': 'LLM4OM_LLM_API_KEY', 'max_retries': 0, 'timeout_s': 90, 'max_output_tokens': 8192}},
             'compiler': {'plugin_id': 'llm4om.compilers.lp_ir_to_pyomo'},
             'model_backend': {'plugin_id': 'llm4om.model_backends.pyomo_factory'},
             'solver': {'plugin_id': 'llm4om.solvers.highs', 'options': {'time_limit_s': 30}},
@@ -460,11 +460,19 @@ class WebWorkspace:
                     events.append(parse_json(line))
                 except RunError:
                     continue
-        refs = bundle.get('artifacts', []) if bundle else []
+        projections = bundle.get('public_projections', {}) if bundle else {}
+        if not bundle and (run / 'checkpoint.json').is_file():
+            envelope = parse_json(read_public_bytes(run / 'checkpoint.json', max_bytes=MAX_REQUEST))
+            payload = envelope['payload']
+            raw = (json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + '\n').encode()
+            if envelope.get('sha256') != hashlib.sha256(raw).hexdigest() or payload.get('run_id') != run.name:
+                raise RunError('checkpoint_incompatible', 'web', 'Public progress checkpoint identity changed.')
+            projections = payload.get('projections', {})
+        refs = bundle.get('artifacts', []) if bundle else list(projections.values())
         contents = {}
-        if bundle:
-            for key, ref in bundle.get('public_projections', {}).items():
-                if ref['media_type'] == 'application/json' or key.endswith('.py') or key.endswith('.md'):
+        if projections:
+            for key, ref in projections.items():
+                if ref['media_type'] == 'application/json' or key.endswith(('.py', '.md', '.txt')):
                     raw = self.read_ref(run, ref)
                     contents[key] = parse_json(raw) if ref['media_type'] == 'application/json' else raw.decode('utf-8', errors='replace')
         record.update(run_id=run.name, status=bundle['status'] if bundle and job_id not in self.active and not record.get('error') else record['status'])
@@ -555,9 +563,9 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                     if not 0 < size <= MAX_REQUEST or self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
                         raise RunError('invalid_request', 'web', 'Send a bounded JSON request.')
                     payload = parse_json(self.rfile.read(size))
-                if not mutation and address.path in {'/', '/app.js', '/style.css'}:
-                    name = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css'}[address.path]
-                    media = {'/': 'text/html; charset=utf-8', '/app.js': 'text/javascript; charset=utf-8', '/style.css': 'text/css; charset=utf-8'}[address.path]
+                if not mutation and address.path in {'/', '/app.js', '/visuals.js', '/style.css'}:
+                    name = {'/': 'index.html', '/app.js': 'app.js', '/visuals.js': 'visuals.js', '/style.css': 'style.css'}[address.path]
+                    media = {'/': 'text/html; charset=utf-8', '/app.js': 'text/javascript; charset=utf-8', '/visuals.js': 'text/javascript; charset=utf-8', '/style.css': 'text/css; charset=utf-8'}[address.path]
                     self.send(200, files('llm4om').joinpath('web_assets', name).read_bytes(), media)
                     return
                 if address.path == '/api/bootstrap' and not mutation:

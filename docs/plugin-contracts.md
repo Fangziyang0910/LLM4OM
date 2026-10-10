@@ -1267,3 +1267,11 @@ SDK0.29.0的Reporter声明reporter_profile=public_results/0.1.0、report_scopes�
 render接收公开result（id、rows、summary）深复制、ReportDestination与ReportContext(scope)，返回其全部实际产出的ReportRef列表。destination.put(name, bytes, media_type)只接收唯一声明文件；命名不包含目录、URL或点开头，输出总上限64MiB。核心对照引用／bytes并发布，single-run引用转成RunStore实际不可变引用；实验namespace为experiment_public。插件只生成呈现，不修改评估／选择／分组。
 
 RunBundle／实验summary保存report_refs与report_errors。渲染错误不重跑建模；report_run／report_experiment使用固定身份重试已保存公开结果。CLI为report --run PATH或report --experiment PATH。第三方Python插件仍是可信安装代码；公开接口的受限输入不等于进程沙箱。见[实现与证据](development/s03-reporters.md)。
+
+## 建模步骤与 Web 公开进展
+
+SDK0.30.0沿用 MethodResources.emit，并标准化 type=modeling_step 的公开事件。字段为 schema_version=0.1.0、step_id（run内稳定身份）、phase、label、actor 和 status。phase 为 formulation／code／solve／coordination；coordination 表示跨阶段的方法协调，不增加建模阶段。status 为 running／completed／failed。step_id／label／actor 为非空字符串，最多512字符。运行资源校验后加入主机 timestamp（UTC epoch 秒），发布到 method_event；同一 step_id 的生命周期合并展示。其他已有 method_event 不改语义。
+
+Direct联合生成保持一次调用；OptiMUS与CoE在原有实际模型调用前后发布事件，不增加提示或改变路由。调用异常仍由原错误路径保存，Web将终态下未完成步骤显示为中断。成功调用完成只表示该步骤完成，不代表候选已通过求解或业务验证。
+
+GET /api/jobs/JOB_ID在无最终RunBundle时读取有界、hash校验且run_id匹配的checkpoint，返回其中public projections的已验证公开内容。HTTP不返回checkpoint本体、私有state、凭据或隐藏评测材料。最终结果遵循RunBundle.solve_result_ref与SolveResult.solution_ref；前端不得使用第一个中间求解代替最终选择。呈现范围与证据见 [用户界面](development/s09-user-experience.md)。

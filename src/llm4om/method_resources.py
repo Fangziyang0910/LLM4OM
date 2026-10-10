@@ -245,6 +245,13 @@ class RunMethodResources:
 
     def emit(self, event: dict[str, Any]) -> None:
         value = parse_json(json.dumps(event, allow_nan=False).encode())
+        if value.get("type") == "modeling_step":
+            if (value.get("schema_version") != "0.1.0" or value.get("phase") not in {"formulation", "code", "solve", "coordination"}
+                    or value.get("status") not in {"running", "completed", "failed"}
+                    or any(not isinstance(value.get(key), str) or not value[key] or len(value[key]) > 512
+                           for key in ("step_id", "label", "actor"))):
+                raise RunError("invalid_method_event", "validation", "Modeling progress needs a declared phase, step identity and lifecycle.")
+            value["timestamp"] = time.time()
         self.store.emit("method_event", method_event=value)
 
     async def execute(self, execution_id: str, code: ScriptCodeProposal) -> dict[str, Any]:

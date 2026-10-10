@@ -179,9 +179,15 @@ class DirectMethod:
             payload["clarifications"] = list(context.clarifications)
         if feedback is not None:
             payload["feedback"] = feedback
+        if context.resources is not None:
+            context.resources.emit({"type": "modeling_step", "schema_version": "0.1.0", "step_id": checkpoint["request_id"],
+                "phase": "formulation", "label": "联合生成数学表述与求解实现", "actor": "direct", "status": "running"})
         response = await context.llm.complete({"request_id": checkpoint["request_id"], **({"role": role} if role else {}), "messages": [
             {"role": "system", "content": instructions},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]})
+        if context.resources is not None:
+            context.resources.emit({"type": "modeling_step", "schema_version": "0.1.0", "step_id": checkpoint["request_id"],
+                "phase": "formulation", "label": "联合生成数学表述与求解实现", "actor": "direct", "status": "completed"})
         try:
             if response.finish_reason == "length":
                 raise RunError("llm_output_truncated", "formulation", "The LLM reached its output limit before completing the formulation.")

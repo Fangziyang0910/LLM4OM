@@ -131,8 +131,14 @@ class CoEMethod:
         async def complete(role: str, instruction: str, inputs: dict[str, Any]) -> str:
             context.cancellation.check()
             content = instruction + "\nPublic inputs:\n" + json.dumps(inputs, ensure_ascii=False, allow_nan=False)
+            step_id = "coe-" + str(len(calls) + 1)
+            phase = "coordination" if role in {"conductor", "reducer"} else "formulation" if role in EXPERTS[:3] else "code"
+            progress = {"type": "modeling_step", "schema_version": "0.1.0", "step_id": step_id,
+                "phase": phase, "label": role, "actor": role}
+            resources.emit({**progress, "status": "running"})
             reply = await context.llm.complete({"request_id": "coe-" + str(len(calls) + 1), "role": "coe." + role,
                 "messages": [{"role": "user", "content": content}]})
+            resources.emit({**progress, "status": "completed"})
             calls.append({"role": role, "call_id": reply.call_id, "prompt_sha256": hashlib.sha256(content.encode()).hexdigest(),
                 "response_sha256": reply.source_sha256, "evidence_origin": reply.evidence_origin})
             record("calls.json", {"schema_version": "0.1.0", "calls": calls})

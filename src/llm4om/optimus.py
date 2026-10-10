@@ -99,8 +99,13 @@ class OptimusMethod:
                     if message["role"] == "execute_code.execute_and_debug" and len(executions) > context.budget["max_repairs"]:
                         raise RunError("budget_exhausted", "code", "The shared repair limit stops source debugging.")
                     calls += 1
+                    progress = {"type": "modeling_step", "schema_version": "0.1.0",
+                        "step_id": f"source-{calls:06d}", "label": message["role"], "actor": message["role"],
+                        "phase": "code" if any(word in message["role"] for word in ("code", "debug")) else "formulation"}
+                    resources.emit({**progress, "status": "running"})
                     response = await context.llm.complete({"request_id": f"source-{calls:06d}",
                         "messages": message["messages"], "role": message["role"]})
+                    resources.emit({**progress, "status": "completed"})
                     roles.append({"role": message["role"], "source_model": message["model"], "call_id": response.call_id,
                         "prompt_sha256": hashlib.sha256(message["messages"][0]["content"].encode()).hexdigest(),
                         "response_sha256": response.source_sha256, "evidence_origin": response.evidence_origin})
