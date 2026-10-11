@@ -1,6 +1,6 @@
 # S08-B 共同公开输入与基准比较
 
-用途：记录SDK／Worker0.27.0的OptiMUS文本／普通JSON输入变体、事前共同样本选择与真实方法接入比较。状态：共同输入与case选择已实现，真实9组合运行已完成并保留全部结果；成功接入比较尚未全部完成。范围为S08-B、FR-10／31／32／34；指标依据[评测协议](../evaluation.md)，固定原方法依据[S06-B](s06b-optimus.md)。
+用途：记录SDK／Worker0.27.0的OptiMUS文本／普通JSON输入变体、事前共同样本选择与真实方法接入比较。状态：2026-10-11官方API全九格重跑完成——9/9经真实外部Provider接入、连接失败清零、4/4数值参考匹配；3格方法性失败如实记录。范围为S08-B、FR-10／31／32／34；指标依据[评测协议](../evaluation.md)，固定原方法依据[S06-B](s06b-optimus.md)。
 
 ## 明确的输入变体
 
@@ -38,4 +38,24 @@ ExperimentSpec.tasks每项可指定case_ids，必须是原冻结manifest中已se
 | NLP4LP | OptiMUS inline | provider_connection_error | 失败保留在原参考资格分母 |
 | NLP4LP | CoE | provider_connection_error | 失败保留在原参考资格分母 |
 
-这是显式rerun条件，父run、派生run与资源账本分别保存。派生账本包含父消耗，不能将两个账本相加解释为新增消耗；total_tokens与cost未知仍为null。顺序执行并未消除所有连接失败，因此并发不是已经证实的根因。没有自动补写CoE的optimize，也没有用隐藏评分选择另一个样本。三方法三基准的全部成功接入仍未完成。
+这是显式rerun条件，父run、派生run与资源账本分别保存。派生账本包含父消耗，不能将两个账本相加解释为新增消耗；total_tokens与cost未知仍为null。顺序执行并未消除所有连接失败，因此并发不是已经证实的根因。没有自动补写CoE的optimize，也没有用隐藏评分选择另一个样本。
+
+## 官方API全九格重跑（2026-10-11）
+
+原父运行与冻结任务源在本机清理后，按相同固定提交重新获取源字节（NL4Opt dev.jsonl、MAMO三JSONL＋LICENSE、NLP4LP受限数据集2127文件经认证下载）并逐项sha256核验，重新导入三份冻结manifest（MAMO easy_lp:1与NLP4LP train:1按题面原文重新冻结公开数学review，各manifest仅选中对应首例）。SDK／Worker0.37.0、三配置共用deepseek-v4-pro官方直连、Gurobi、相同单run预算（30 attempts／300k tokens／1800s）与顺序并发1。实验预算按调度器累计预留语义取9倍单run预算；前两次尝试分别因预算预留不足与导入运行时身份变化被拒，未产生模型调用。
+
+九格全部经真实外部Provider完成接入，无一次连接失败：
+
+| Benchmark | 方法 | 结果 | 资源 |
+|---|---|---|---|
+| NL4Opt | Direct | completed | 1 attempt／9,590 Tokens／1 Solver |
+| NL4Opt | OptiMUS inline | completed | 17 attempts／27,841 Tokens／2 Solver |
+| NL4Opt | CoE | collector_failed | 7 attempts／15,143 Tokens，prob_problem仍仅return模型 |
+| MAMO | Direct | completed，objective_match 1/1 | 1 attempt／6,135 Tokens |
+| MAMO | OptiMUS inline | completed，objective_match 1/1 | 21 attempts／34,996 Tokens |
+| MAMO | CoE | completed，objective_match 1/1 | 7 attempts／11,317 Tokens |
+| NLP4LP | Direct | invalid_formulation | 1 attempt／7,458 Tokens／0 Solver，单次native_gurobipy联合输出未给出完整五元素，按0/1保留分母 |
+| NLP4LP | OptiMUS inline | completed，objective_match 1/1 | 18 attempts／25,925 Tokens |
+| NLP4LP | CoE | collector_failed | 7 attempts／15,620 Tokens |
+
+四格数值参考（MAMO×3、NLP4LP×OptiMUS）全部匹配（4/4）；NL4Opt无独立参考保持null。CoE两格collector_failed与Direct一格invalid_formulation是记录在案的方法性结果，不是平台接入失败；MAMO×OptiMUS／CoE与NLP4LP×OptiMUS首次取得成功接入。总耗时1,178秒、约155k Tokens、费用未知。9组合仍是一份接入验收，不据此给出统计排名。实验与全部运行证据位于`/tmp/llm4om-s08b`（不提交运行数据）；重导入的manifest身份含0.37.0运行时。
