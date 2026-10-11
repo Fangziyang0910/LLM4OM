@@ -26,7 +26,7 @@ import zipfile
 from llm4om.contracts import RunError, parse_json, public_path, read_public_bytes, validate_config, validate_problem, validate_data, parse_reference_json
 from llm4om.control import CancellationToken
 from llm4om.executors import run_owned_process
-from llm4om.experiments import cancel_experiment
+from llm4om.experiments import LIMITS, cancel_experiment
 from llm4om.assisted import export_edit
 from llm4om.providers import credential_environment
 from llm4om.storage import cancel_run
@@ -112,7 +112,15 @@ class WebWorkspace:
             'reporters': [{'plugin_id': 'llm4om.reporters.jsonl'}, {'plugin_id': 'llm4om.reporters.markdown'}]}
         inventory = _application(['plugins', 'list'], deadline=time.time() + 30, cancellation=CancellationToken())
         if environment.get('LLM4OM_LLM_PROXY_URL'):
-            config['llm']['config']['proxy_url'] = environment['LLM4OM_LLM_PROXY_URL']
+            proxy = environment['LLM4OM_LLM_PROXY_URL']
+            candidate = urlsplit(proxy)
+            # Mirror the Provider admission rule so proxy credentials never reach the client config.
+            if (candidate.scheme != 'http' or not candidate.hostname or candidate.port == 0
+                    or candidate.username is not None or candidate.password is not None
+                    or candidate.path not in {'', '/'} or candidate.query or candidate.fragment
+                    or any(ord(char) < 33 or char.isspace() for char in proxy)):
+                raise RunError('invalid_config', 'web', 'LLM4OM_LLM_PROXY_URL must be a plain http:// proxy URL without credentials.')
+            config['llm']['config']['proxy_url'] = proxy
         return {'config': config, 'plugins': inventory['plugins'], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
 
     def doctor(self, config: dict[str, Any], *, check_connectivity: bool = False) -> dict[str, Any]:
@@ -170,10 +178,24 @@ class WebWorkspace:
             raise RunError('invalid_request', 'web', 'Declare one to32 explicit configuration variants.')
         validated = []
         for item in configurations:
-            if not isinstance(item, dict) or set(item) != {'id', 'config'}:
+            if not isinstance(item, dict) or set(item) != {'id', 'config'} or not isinstance(item['id'], str) or not item['id'].strip():
                 raise RunError('invalid_request', 'web', 'Each configuration needs id and a full RunConfig.')
             validate_config(item['config'])
             validated.append(item)
+        repeats = payload.get('repeats')
+        if type(repeats) is not int or not 1 <= repeats <= 1000:
+            raise RunError('invalid_request', 'web', 'repeats must be an integer between 1 and 1000.')
+        budget = payload.get('budget')
+        if not isinstance(budget, dict) or set(budget) != {*LIMITS, 'max_concurrency', 'wall_time_s'}:
+            raise RunError('invalid_request', 'web', 'Declare concurrency, wall time and experiment-wide attempt/token/Solver caps.')
+        for key in budget:
+            if type(budget[key]) is not int or not 0 <= budget[key] <= (32 if key == 'max_concurrency' else 1000000000) \
+                    or (key not in LIMITS and budget[key] < 1):
+                raise RunError('invalid_request', 'web', f'{key} must be a positive integer within its cap.')
+        exclusions = payload.get('exclusions', [])
+        if not isinstance(exclusions, list) or any(not isinstance(item, dict) or set(item) != {'task_id', 'configuration_id', 'reason'}
+                or not isinstance(item['reason'], str) or not item['reason'].strip() for item in exclusions):
+            raise RunError('invalid_request', 'web', 'Each excluded task/configuration cell needs a reason.')
         experiment_id = uuid4().hex
         job = self.root / 'experiments' / experiment_id
         job.mkdir(parents=True)
@@ -182,10 +204,10 @@ class WebWorkspace:
             name = f'configuration-{index}.json'
             _json_file(job / name, item['config'])
             selections.append({'id': item['id'], 'run_config': name})
-        spec = {'schema_version': '0.1.0', 'experiment_id': experiment_id,
+        spec: dict[str, Any] = {'schema_version': '0.1.0', 'experiment_id': experiment_id,
             'tasks': [{'id': identifier, 'manifest': str(tasks[identifier])} for identifier in payload['task_ids']],
-            'configurations': selections, 'repeats': payload['repeats'], 'budget': payload['budget'],
-            'exclusions': payload.get('exclusions', [])}
+            'configurations': selections, 'repeats': repeats, 'budget': budget,
+            'exclusions': exclusions}
         if 'reporters' in payload:
             spec['reporters'] = payload['reporters']
         _json_file(job / 'spec.json', spec)
@@ -212,7 +234,8 @@ class WebWorkspace:
                 command = [sys.executable, '-m', 'llm4om', 'benchmark', '--config', str(job / 'spec.json'), '--output', str(job / 'batch')]
                 if resume:
                     command.append('--resume')
-                _, _, code = run_owned_process(command, b'', deadline=time.time() + spec['budget']['wall_time_s'] + 15, cancellation=token)
+                _, _, code = run_owned_process(command, b'', deadline=time.time() + spec['budget']['wall_time_s'] + 15,
+                                               cancellation=token, cancel_grace_s=10)
                 if code != 0:
                     raise RunError('experiment_failed', 'web', 'Batch preflight or execution failed; inspect the saved experiment.')
                 record['status'] = 'finished'

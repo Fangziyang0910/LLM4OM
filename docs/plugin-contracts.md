@@ -719,7 +719,13 @@ resume needs no new credential, model request or Solver call.
 OptiMUS uses the fixed default main (EC=true, RAG=None). All source calls use
 Gateway and deterministic replay IDs. The original three-execution repair loop
 and last-successful-executed selection remain; an unexecuted final repair cannot
-be selected as solved. Requested RAG modes fail before paid calls until actual
+be selected as solved. When all three executions fail, the method still returns
+the last failed script as its selected candidate (candidate_selected) and the
+application layer records the explicit execution failure in the public bundle;
+"last-successful-executed" qualifies selection only when a successful execution
+exists, so exhaustion never masquerades as a verified solve. The inline_public
+variant aggregates public data behind a fixed 16MiB admission bound
+(data_view_limit) before any paid call. Requested RAG modes fail before paid calls until actual
 compatible rights-cleared corpus/index/embedding resources are admitted.
 
 ## 15. S07-C MAMO Task interface (SDK 0.10.0)

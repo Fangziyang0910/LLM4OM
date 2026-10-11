@@ -27,3 +27,4 @@ Reporter只接收已形成的公开rows与summary的深复制。它不能改变�
 SDK／Worker代码hash为c82179c5524cde4327600f19916d151fe6b01a366d6e6648c87bd7a0f3fd013d，镜像为sha256:37ddc82284e7f00b4b1ec203cb296ab51d81dcccfd10810d742e6612a987979b。本机证据在/tmp/llm4om-s03-reporters-evidence。Standards／Spec由父代理自查；当前没有可用的独立双路审阅者，draft PR不合并。完整1.0仍继续开发。
 
 单问题Markdown保留明确模式、状态、方法、资源可用性和候选目标，避免将原始JSON作为可读报告主体；对应两项最终检查5.490s通过。仅选Markdown的网页ZIP实际导出三个公开文件，报告bytes变化时拒绝导出。
+2026-10-11 P3 处置：ReportRef 核对改为对已存引用的多重集匹配，不再要求插入顺序完全一致；上限、转义与 summary.json 语义不变。

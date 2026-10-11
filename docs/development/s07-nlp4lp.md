@@ -123,3 +123,4 @@ All2,127 original source file hashes/sizes/URLs remain unchanged.
 Parent Standards/Spec self-review found no remaining actionable P1/P2 in its
 reading. Reports `parent-review-standards.md` / `parent-review-spec.md` in the
 task evidence directory explicitly do not fulfil independent review.
+2026-10-11 P3 处置："files 字典死存储"经复核不成立——该字典随后循环使用，相关改动已回退（测试回归通过）。备注：评测时聚合 size_bytes 取自当前 stat() 恒等于冻结写入值，该校验项为恒真；SHA-256 仍对冻结值校验，按备注保留。

@@ -193,8 +193,11 @@ class DirectMethod:
                 raise RunError("llm_output_truncated", "formulation", "The LLM reached its output limit before completing the formulation.")
             value = parse_json(response.text.encode())
             if allow_clarification and set(value) == {"clarification"} and isinstance(value["clarification"], dict):
-                return MethodOutcome("needs_input", None, None, {**value["clarification"], "provenance": {
-                    "origin": response.evidence_origin, "call_id": response.call_id, "response_sha256": response.source_sha256}})
+                supplied = value["clarification"]
+                clarification = {key: item for key, item in supplied.items() if key != "provenance"}
+                clarification["provenance"] = {"origin": response.evidence_origin, "call_id": response.call_id,
+                    "response_sha256": response.source_sha256, **(supplied.get("provenance") or {})}
+                return MethodOutcome("needs_input", None, None, clarification)
             repair = None
             if feedback is not None:
                 repair = {"stage": value.pop("repair_stage", None), "reason": value.pop("change_reason", None)}

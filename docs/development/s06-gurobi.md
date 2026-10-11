@@ -145,3 +145,4 @@ Standard/Spec reports and parent corrections are kept distinct. No remote CI or 
 used for this slice; package remains unpublished and full 1.0 remains in the approved plan.
 
 Parent credential-value scan passed for tracked files, rebuilt wheel/sdist and selected public Gurobi bundles. The project .env remains ignored with mode0600; its value was not printed.
+2026-10-11 P3 处置：零目标 Pyomo 模型改为求解前显式 `unsupported_factory_expression` 拒绝，消除裸 `next()` StopIteration 误用隐患；gurobipy 13.0.3 锁版另已补记入 s03-solver-registry。

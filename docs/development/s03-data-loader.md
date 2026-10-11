@@ -21,3 +21,4 @@ CSV支持完整原始bytes、有限原始行列和结构摘要。JSON对象支�
 持久运行f35da2fb10bb490fb73b247afc3b0673保存了独立Loader的实际有限视图、原始工厂和真实HiGHS13，原问题独立检查通过。完成后恢复不增加预算或HTTP请求。来源是固定本地HTTP响应，不是实际模型准确率实验。公开91文件已知密钥检查未发现密钥，私有Provider archive不公开导出。
 
 交付审查明确OptiMUS／CoE需要完整原始数据，避免继承Direct的有限视图声明。两个公开SDK实际运行均在生成前拒绝部分视图，LLM／Solver预算均为零。交付源码／wheel／Worker代码hash为d127059576252b3a9659dae55356555fd0d780d1740cc7fc2709ec223c02405e；早期8ccf快照的wheel与pilot镜像另行保留，旧运行不静默迁移。
+2026-10-11 P3 处置：allow-list 缺失列经复核为合法路径——投影列允许来自关联文件而非本文件，故不在边界拒绝（曾尝试收紧并回退）。`PublicDataFactory.create` 忽略 config 与其空 schema 一致。

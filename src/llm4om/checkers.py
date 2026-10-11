@@ -75,7 +75,7 @@ class ProductionChecker:
         return {"schema_version": "0.1.0", "checker_id": "llm4om.checkers.production", "version": "0.1.0",
             "required_decisions": ["A", "B"], "public_data_ids": ["products", "capacities"],
             "scope": "two_product_integer_production_from_original_public_csv", "objective_sense": "max",
-            "coverage": ["nonnegative_domains", "integer_domains", "all_declared_resource_capacities", "original_profit"]}
+            "coverage": ["nonnegative_domain", "integer_domain", "original_profit", "capacity:<resource_id>"]}
 
     def check(self, problem: dict[str, Any], data: Mapping[str, bytes],
               decisions: Mapping[str, int | float]) -> dict[str, Any]:

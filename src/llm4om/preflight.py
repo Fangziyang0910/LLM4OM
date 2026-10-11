@@ -52,6 +52,11 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     inventory = discover_plugins()
     executor = resolve_executor(settings["executor"], inventory=inventory,
         expected=expected.get("executor") if expected else None)
+    if executor.mode == "container":
+        missing = {"network", "cpu_limit", "memory_limit_mb", "wall_time_s"} - set(settings["executor"]["config"])
+        if missing:
+            raise RunError("invalid_config", "admission", "Container Executors must declare their runtime limits.",
+                details={"missing": sorted(missing)})
     store = resolve_store(settings["store"], inventory=inventory,
         expected=expected.get("store") if expected else None)
     reporters = resolve_reporters(settings.get("reporters", []), "run", inventory=inventory,
@@ -68,6 +73,8 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     role_factories: dict[str, HTTPTextFactory] = {}
     selected_providers = [provider_plugin]
     for role, selection in role_models.items():
+        if not isinstance(role, str) or not 1 <= len(role.strip()) <= 128:
+            raise RunError("invalid_config", "admission", "Role names must be nonempty bounded strings.")
         role_plugin = inventory.get(("llm_provider", selection["provider_plugin_id"]))
         if role_plugin is None:
             raise RunError("unknown_plugin", "admission", "Requested role Provider is not installed.")

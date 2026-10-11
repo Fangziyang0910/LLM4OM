@@ -115,3 +115,4 @@ project `.env` remains unchanged0600/ignored. No duplicate full suite followed
 these metadata-only changes. Final scans and source/image checks are recorded
 in `final-verification.log`; root evidence is `root-smoke/verification.json`
 under `/tmp/llm4om-s07c/`.
+2026-10-11 P3 处置：iter_cases 读取公开 ProblemSpec 改用公开边界 parse_json（原 parse_reference_json 会跳过私有字段拒绝），与 nlp4lp 的公共接缝一致。

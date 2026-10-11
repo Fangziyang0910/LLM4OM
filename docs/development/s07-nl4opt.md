@@ -154,3 +154,4 @@ passed free doctor and re-evaluated the preserved real sample without another mo
 Worker image `sha256:428036c9d57880f3ee79afb35889ecc319c8b19469dfef7963230a2cbb7c269e`.
 The actual upstream LICENSE bytes match the copied notice. S07-A's current raw-data scope
 is accepted; numerical accuracy, derived reference models and remaining 1.0 work stay separate.
+2026-10-11 P3 处置：公开问题投影匹配在多于一个候选时显式 `outcome_case_mismatch` 拒绝（原 `problems[0]` 歧义）。备注：公开 ProblemSpec source 排除 source_path 而冻结 manifest 保留上游路径，两处身份字段不一致（无泄漏），按备注保留。

@@ -106,3 +106,4 @@ Formulation／Code 后续修复的独立方法、工厂／native 与阶段复用
 S05-B 的 SDK0.8.0 将相同资源 journal 用于 OpenAI-compatible 与 Messages，解码由 Adapter 声明。
 成功回复回放延迟凭据解析，API key 缺失不阻止复用；完整运行仍拒绝 SDK／源码身份不一致，
 不会自动迁移本页0.7.0记录。新增证据见 [S05-B](s05b-messages.md)。
+2026-10-11 P3 处置：澄清派生重试的快速路径窥读子 checkpoint 失败时回退到全量验证 resume（原先未验证窥读可抛裸 KeyError）。备注：deadline 检查在两层冗余出现，诊断来源可能不稳定，按备注保留。

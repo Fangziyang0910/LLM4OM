@@ -15,3 +15,4 @@ ArtifactStore通过`llm4om.plugins` entry point导出factory实例，Manifest声
 [tests/test_store_registry.py](../../tests/test_store_registry.py)从公共CLI验收三项行为：内置filesystem在plugins list中显示artifact_store／run_store/0.1.0且默认运行完成；独立安装的[fixture_store](../../examples/plugins/fixture_store/README.md)记录每次打开、完成容器HiGHS目标13、admission绑定origin=installed且公开配置保留其plugin_id；未知store插件保存unknown_plugin失败bundle且llm_attempts为0。相关CLI、resume、崩溃恢复、辅助编辑、实验与Web绑定聚焦套件共109项通过；mypy44模块通过。
 
 Worker0.37.0镜像身份为`sha256:f09ee34f89be81ca62ede2fd210820911f801ddc16c2206257c9748f1c1b98fa`。本机证据位于`/tmp/llm4om-official-test`与测试临时目录，运行数据不纳入版本控制。未运行全量回归、批量benchmark或GitHub Actions；独立Standards／Spec审阅仍待完成。
+2026-10-11 P3 处置：`saved_store_selection` 读取失败回退默认选择的理由已在代码注释记录——回退后下游 store 校验会以具体错误再次失败，不掩盖终态；解析失败按内置 filesystem 打开、admission 保存具体错误的行为不变。

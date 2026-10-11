@@ -29,3 +29,4 @@
 实际模型输入未包含私有参考目标、决策映射或性质点；检查器只在最终选定输出后运行。原生 Code 的有限 IR性质检查为 not_available。固定源码直接运行／精确提示对照仍为not_available；独立编写的流程与公开 transition tapes不标为原源码运行。完整材料在 `/tmp/llm4om-s06c-implementation/real-acceptance/verification.json`。
 
 已验收代码 hash为 `036b919517a6fbe383245ad9d021f67bdc92708a06df6fa98d4cf6a8a4ce36df`，源码／wheel／Worker一致。镜像 `sha256:fcfa48c9913d9e0ca9e419ed1b385a27609072a28e7aac5066db220ead4d8afe`；旧0.12.0镜像保留。真实运行的无密钥CLI resume保持调用与预算账本不变。179个源文件、154个公开运行文件与wheel通过实际密钥扫描；私有oracle不进入方法提示或Worker。完整本机日志在 `/tmp/llm4om-s06c-implementation/verification.json` 及其相邻文件，不提交运行数据。
+2026-10-11 P3 备注（保留）：public_function_unavailable 以隔离子进程 stderr 固定字符串判定，fail-closed 方向安全，stderr 截断时可能漏判；最终 coe-final-original 执行结果不进 trials.json，方法内视角与运行视角信息不对称（最终执行结果在平台 receipts/bundle 可见）；Gateway role 名含空格，作为 role_models 精确匹配键使用时须整名匹配。

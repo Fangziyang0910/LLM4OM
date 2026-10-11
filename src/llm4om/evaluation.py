@@ -71,6 +71,8 @@ def evaluate_outcome(case: EvaluationCase, outcome: Path, result: dict[str, Any]
             _verify_ref(outcome, {**ref, "relative_path": name})
         problems = ([bundle["public_problem_ref"]] if bundle.get("public_problem_ref") else
                     [ref for ref in bundle["artifacts"] if ref["relative_path"] == "public-problem.json"])
+        if len(problems) > 1:
+            raise RunError("outcome_case_mismatch", "evaluation", "Run saved ambiguous public problem projections.")
         if problems:
             observed = _read_ref(outcome, problems[0])
             expected = deepcopy(public)

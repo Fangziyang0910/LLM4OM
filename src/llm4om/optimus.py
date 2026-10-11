@@ -40,7 +40,11 @@ class OptimusMethod:
             params_raw, labels_raw = b"{}", b"{}"
             public_data = {key: raw.decode("utf-8") for key, raw in context.data.items()}
             if public_data:
-                description += "\nPublic problem data (original bytes as text):\n" + json.dumps(public_data, ensure_ascii=False)
+                assembled = "\nPublic problem data (original bytes as text):\n" + json.dumps(public_data, ensure_ascii=False)
+                if len(description.encode()) + len(assembled.encode()) > 16 * 1024 * 1024:
+                    raise RunError("data_view_limit", "admission",
+                                   "Aggregated public data exceeds the fixed source driver input limit.")
+                description += assembled
             description += "\nNo external parameter declarations are supplied. Use the public description and data values directly; data.json has no parameter entries."
         else:
             try:

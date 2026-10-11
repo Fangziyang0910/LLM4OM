@@ -3,6 +3,7 @@
 from copy import deepcopy
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 if TYPE_CHECKING:
@@ -15,6 +16,13 @@ from llm4om.store_registry import open_run_store, saved_store_selection
 from llm4om.control import CancellationToken
 
 KINDS = ('lp_ir', 'python_factory', 'native_code', 'native_script')
+
+
+def _atomic_write(path: Path, content: bytes) -> None:
+    # Derived-run inputs are read back by hash; an interrupted write must not leave truncated bytes.
+    temporary = path.with_name(path.name + '.tmp')
+    temporary.write_bytes(content)
+    os.replace(temporary, path)
 
 
 class AssistedMethod:
@@ -172,7 +180,13 @@ def edit_run(run: Path, edits: Path, *, cancellation: CancellationToken | None =
         validate_problem(public)
         if public['problem_id'] != expected['problem']['problem_id']:
             raise RunError('invalid_edit', 'admission', 'A revision must retain its public problem identity.')
-        if public['data_refs'] != expected['problem']['data_refs']:
+        # Ref order is presentation only; normalize by data_id so reorderings compare as the same data.
+        expected_refs = expected['problem']['data_refs']
+        ref_order = {ref['data_id']: index for index, ref in enumerate(expected_refs)}
+        if len(ref_order) != len(public['data_refs']) or {ref['data_id'] for ref in public['data_refs']} != set(ref_order):
+            raise RunError('invalid_edit', 'admission', 'This edit retains exact original data; import changed data as a new problem.')
+        public['data_refs'].sort(key=lambda ref: ref_order[ref['data_id']])
+        if public['data_refs'] != expected_refs:
             raise RunError('invalid_edit', 'admission', 'This edit retains exact original data; import changed data as a new problem.')
         operation = value['operation']
         if operation == 'problem':
@@ -201,9 +215,12 @@ def edit_run(run: Path, edits: Path, *, cancellation: CancellationToken | None =
                     raise RunError('invalid_edit', 'admission', 'Edited Code needs explicit source and its original representation.')
                 if kind == 'native_script' and material['data_json'] != expected['code']['data_json']:
                     raise RunError('invalid_edit', 'admission', 'Code-only script editing retains exact public data.json.')
-                if store.state.get('admission', {}).get('mode') != 'container':
-                    settings['executor'] = {'plugin_id': 'llm4om.executors.container', 'config':
-                        {'network': False, 'cpu_limit': 1, 'memory_limit_mb': 1024, 'wall_time_s': 60}}
+            if store.state.get('admission', {}).get('mode') != 'container':
+                declared = value['budget'].get('wall_time_s') if isinstance(value['budget'], dict) else None
+                if type(declared) is not int or declared < 1:
+                    declared = 60
+                settings['executor'] = {'plugin_id': 'llm4om.executors.container', 'config':
+                    {'network': False, 'cpu_limit': 1, 'memory_limit_mb': 1024, 'wall_time_s': declared}}
             settings['method'] = {'plugin_id': 'llm4om.methods.assisted', 'config': {'code_kind': kind,
                 'formulation_kind': value['formulation']['representation_kind'] if value['formulation'] else 'not_available', 'edits': value}}
             settings['llm'] = {'provider_plugin_id': 'llm4om.providers.mock', 'model': 'no-llm-human-edit', 'config': {'response_artifact': 'edits.json'}}
@@ -218,10 +235,10 @@ def edit_run(run: Path, edits: Path, *, cancellation: CancellationToken | None =
             name = f'data/{index}.{ref["format"]}'
             target = inputs / name
             target.parent.mkdir(exist_ok=True)
-            target.write_bytes(read_public_bytes(store.path / ref['path'], max_bytes=8 * 1024 * 1024))
+            _atomic_write(target, read_public_bytes(store.path / ref['path'], max_bytes=8 * 1024 * 1024))
             ref['path'] = name
         for name, content in (('problem.json', revised), ('config.json', settings), ('edits.json', value)):
-            (inputs / name).write_text(json.dumps(content, ensure_ascii=False, indent=2, allow_nan=False) + '\n')
+            _atomic_write(inputs / name, (json.dumps(content, ensure_ascii=False, indent=2, allow_nan=False) + '\n').encode())
         if operation == 'problem' and 'response_artifact' in settings['llm']['config']:
             raise RunError('invalid_edit', 'admission', 'Problem changes need a real Provider or a newly input-bound Mock packet.')
         return _initialize_derived_run(child, store, resource_records, problem=inputs / 'problem.json',

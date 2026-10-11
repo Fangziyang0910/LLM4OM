@@ -489,7 +489,7 @@ class RecoveredResources:
 def _resource_state(archive: Path, *, expected: str | None = None,
                     allow_unpublished_genesis: bool = False) -> dict[str, Any]:
     """Verify the entire immutable chain, including the mutable head and core anchor."""
-    # ponytail: full snapshots suit bounded runs; use incremental records for large search budgets.
+    # Full snapshots suit bounded runs; incremental records would scale to larger search budgets.
     try:
         decoders: dict[str, type[HTTPTextProvider]] = {}
         head = archive / "state.json"

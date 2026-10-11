@@ -289,7 +289,8 @@ class IndependentCheckerEvaluator:
             _material(material)
             reference = material["reference_objective"]
             primal = observed["candidate_primal"]
-            if reference is not None and primal["status"] == "available":
+            if (reference is not None and primal["status"] == "available"
+                    and observed["case_binding"]["status"] == "pass"):
                 match = supplied_numeric_match(primal["reported_objective"], reference["value"], {"kind": "none"}, reference)
                 observed["reported_objective_match"] = {"status": "pass" if match else "fail", "level": "candidate_reported_reference_match"}
             if material["checker"] is None:

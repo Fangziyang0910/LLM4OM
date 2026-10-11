@@ -108,6 +108,7 @@ def _runtime() -> dict[str, str]:
 
 
 def _prepare_task(settings: dict[str, Any]) -> tuple[Plugin, TaskAdapter, dict[str, Any]]:
+    """Consume the adapter/evaluation selections from settings; callers pass a fresh config mapping."""
     inventory = discover_plugins()
     task_plugin, task_binding, adapter = _select(inventory, "task_adapter", settings.get("adapter_id", "llm4om.tasks.nl4opt"), settings.pop("adapter_config", {}))
     evaluation = settings.pop("evaluation", {"evaluator_plugin_id": task_plugin.manifest["capabilities"]["default_evaluator_id"], "config": {}})
@@ -301,7 +302,7 @@ def evaluation_error(case: EvaluationCase, outcome: Path, plugin: Plugin, error:
         "manifest_sha256": hashlib.sha256(case.manifest).hexdigest(), "source": manifest["source"],
         "projection_revision": manifest["projection_revision"], "eligible": entry["eligible"],
         "N_selected": manifest["N_selected"], "N_eligible": manifest.get("N_eligible", manifest.get("N_independent_eligible", 0)),
-        "N_evaluated": 1, "objective_match": {"status": "error"}, "independent_feasibility": dict(unavailable),
+        "N_evaluated": 1, "objective_match": dict(unavailable), "independent_feasibility": dict(unavailable),
         "semantic_validation": dict(unavailable), "formulation_validation": dict(unavailable), "code_validation": dict(unavailable),
         "execution": dict(unavailable), "candidate_primal": dict(unavailable), "case_binding": dict(unavailable),
         "run_id": None, "run_status": "unknown", "run_error": None, "checker_error": None}

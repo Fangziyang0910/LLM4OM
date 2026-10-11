@@ -45,3 +45,4 @@ snapshot 和 score 不覆盖已有文件。私有目录为0700、policy 为0600�
 实际 CLI HiGHS run `2766a72c24914649a2eb62d44c2f8c77` 与容器 Gurobi run `e3982c820de143228bd56b0e194e0024` 均通过原问题可行性、目标13和有限点检查。第一次将 byte-bound Mock 用于路径规范化后任务的 run `8e8345df305744589f0ccc578dd01af7` 被正确拒绝；失败评测保留分母1／率0，独立重复成功不改写它。
 
 最终源码／wheel／Worker 代码 hash 为 `ed102dd514d443867bd4d1f53e4dfaccca2b9c5dd63b65e933d70372239cbd63`。Worker0.12.0 镜像为 `sha256:00bae627774a1e8850c9c67368a2cf98d622af3c32ec21eb34150702eda073ea`；0.11.0 标签仍保留。169个源文件、197个公开运行／评分文件与52个 wheel 条目通过实际密钥扫描；运行与包均不含 oracle 文件。完整本机材料保存在 `/tmp/llm4om-s07d/verification.json` 及其相邻日志，不纳入版本控制。
+2026-10-11 P3 处置：reported_objective_match 增加 case_binding==pass 门槛（与 MAMO/NLP4LP 对齐）；describe() 声明的 coverage 命名与实际输出对齐（nonnegative_domain/integer_domain/original_profit/capacity:<resource_id>）。

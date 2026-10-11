@@ -125,3 +125,4 @@ of this evidence. Final independent integration acceptance remains pending
 that review. Parent Standards/Spec self-review found no remaining actionable
 P1/P2 in its reading; reports are separately retained as
 `/tmp/llm4om-s06b/parent-review-standards.md` and `parent-review-spec.md`.
+2026-10-11 P3 处置：inline_public 变体在付费调用前加入 16MiB 聚合公开数据上界（`data_view_limit`）。设计说明：三次执行全部失败的耗尽路径返回最后失败脚本作为 candidate_selected，执行失败由应用层显式记录（不伪称求解成功）；"last-successful-executed selection" 仅在存在成功执行时生效，语义已补记入 plugin-contracts §14。LLM 角色推导依赖 vendored 调用链帧结构的说明已在源码注释记录（调用链 hash 锁定，确定但脆弱）。

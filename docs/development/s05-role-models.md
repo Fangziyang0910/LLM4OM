@@ -39,3 +39,4 @@ Direct默认逻辑role为formulation。OptiMUS和CoE使用其实际role字符串
 代码hash `f1896d2df3fc1eae7c7876939bc2025c7a99d6620fe971d60006c6b442f9ef6d`，Worker镜像 `sha256:f8df356afb6dcadea31c4b5a507b9e2404598f79f81220aebe7bdf23983f18ad`。182个源文件、82个公开运行文件与53个wheel条目通过实际密钥扫描。证据在 `/tmp/llm4om-s05d-roles/real-acceptance/verification.json` 和相邻本机材料，不提交运行数据。
 
 交付代码630775d：mypy32个模块、仓库182文件、参考资料／diff／wheel／sdist和源码／wheel／Worker身份检查通过。完整证据位于 `/tmp/llm4om-s05d-roles/verification.json` 与相邻日志；不触发GitHub CI，不公开发布包。父Standards／Spec自查不能替代待完成的独立审阅，完整1.0继续推进。
+2026-10-11 P3 处置：角色名在 admission 校验为 1–128 个非空白字符，超长角色名不再进入快照与公开 trace。

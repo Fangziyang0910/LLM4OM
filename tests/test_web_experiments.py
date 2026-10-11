@@ -20,9 +20,38 @@ from urllib.request import Request, build_opener, ProxyHandler
 import yaml
 
 from llm4om import import_dataset
+from llm4om.contracts import RunError
+from llm4om.web import WebWorkspace
 
 
 class WebExperimentTests(unittest.TestCase):
+    def test_submit_experiment_rejects_malformed_repeats_budget_exclusions(self):
+        fixture = Path(__file__).resolve().parents[1] / 'examples/specs'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            import_dataset(fixture / 'import-checker.json', root / 'tasks/production')
+            workspace = WebWorkspace(root)
+            try:
+                config = yaml.safe_load((fixture / 'solve.yaml').read_text())
+                task_id = next(iter(workspace._tasks()))
+                budget = {'max_llm_attempts': 2, 'max_total_tokens': 60000, 'max_solver_calls': 2,
+                          'wall_time_s': 180, 'max_concurrency': 2}
+                base = {'task_ids': [task_id], 'configurations': [{'id': 'direct', 'config': config}]}
+                cases = (
+                    ({**base, 'repeats': 0, 'budget': budget, 'exclusions': []}, 'repeats must be an integer'),
+                    ({**base, 'repeats': '2', 'budget': budget, 'exclusions': []}, 'repeats must be an integer'),
+                    ({**base, 'repeats': 1, 'budget': {'max_llm_attempts': 2}, 'exclusions': []}, 'attempt/token/Solver caps'),
+                    ({**base, 'repeats': 1, 'budget': {**budget, 'max_concurrency': 0}, 'exclusions': []}, 'within its cap'),
+                    ({**base, 'repeats': 1, 'budget': budget, 'exclusions': [{'task_id': 't'}]}, 'needs a reason'),
+                    ({**base, 'repeats': 1, 'budget': budget, 'exclusions': ['cell']}, 'needs a reason'))
+                for payload, fragment in cases:
+                    with self.assertRaises(RunError) as raised:
+                        workspace.submit_experiment(payload)
+                    self.assertIn(fragment, str(raised.exception))
+                self.assertEqual(list((root / 'experiments').glob('*/job.json')), [])
+            finally:
+                workspace.close()
+
     def test_http_batch_real_solver_reports_and_completed_continue(self):
         fixture = Path(__file__).resolve().parents[1] / 'examples/specs'
         ir = json.loads((fixture / 'model-ir.json').read_text())

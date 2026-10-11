@@ -96,8 +96,10 @@ def render_reports(reporters: list[ResolvedReporter], result: dict[str, Any], sc
         try:
             with _quiet():
                 produced = reporter.instance.render(deepcopy(result), destination, ReportContext(scope))
-            if (not isinstance(produced, list) or set(destination._files) != destination._filenames
-                    or produced != [ref for _, ref in destination._files.values()]):
+            stored = [ref for _, ref in destination._files.values()]
+            produced_set = produced if isinstance(produced, list) else []
+            if (set(destination._files) != destination._filenames or len(produced_set) != len(stored)
+                    or not all(any(candidate == ref for ref in stored) for candidate in produced_set)):
                 raise RunError('invalid_report', 'reporting', 'Returned report references differ from the produced bytes.')
             outputs = [(ref['relative_path'], raw, deepcopy(ref)) for raw, ref in destination._files.values()]
             if total_bytes + sum(len(raw) for _, raw, _ in outputs) > MAX_REPORT_BYTES:

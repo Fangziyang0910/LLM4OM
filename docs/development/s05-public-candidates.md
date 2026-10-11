@@ -25,3 +25,4 @@ Python3.12.11主要本机回归321项／762.221秒通过。两处最终修复使
 这些后续行为现已进入0.16.0的 [S05-C2](s05-feedback-repair.md)：feedback_repair、解析失败修正、声明变化诊断及工厂 Code-only 来源复用。两版本证据分别记录。澄清／新问题 revision 属于 S05-D；工程测试不能据此报告 benchmark 语义正确率。
 
 Standards／Spec 自查和独立审阅分别记录。2026-10-11独立Standards／Spec审阅通过：五个模块全部PASS-WITH-NOTES，无P1/P2，仅P3打磨项（报告/tmp/llm4om-reviews/s05-group.md）。
+2026-10-11 P3 处置：澄清返回的 provenance 合并改为平台键在前、方法自带键最后展开——方法侧同名键优先且不再被静默覆盖，平台键不丢弃。

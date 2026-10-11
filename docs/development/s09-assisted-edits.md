@@ -36,3 +36,4 @@ native gurobipy与native_script的编辑路径通过同一表示契约实现，�
 实际支持：严格IR→确定性Pyomo编译、Python工厂→容器HiGHS、native gurobipy工厂→容器Gurobi、带／不带原生Formulation的native_script→共同执行资源／独立Gurobi采集。工厂需ModelHandle；脚本仍保留原data.json。脚本在方法步骤中执行并保存checkpoint，最终复用相同执行记录。契约与原生表述版本按源产物保留；不能把native0.3表述误作five_element0.2。
 
 当前Web已新增可读的问题／代码编辑、原因与总预算表单，完整文档保留为高级入口。SDK／Worker仍0.31.0，不改原执行契约。浏览器代码修订→真实容器HiGHS5、父bundle不变、零新增模型请求与assisted标记已观察，见 [用户界面](s09-user-experience.md)。问题重新建模仅在原Provider配置可用时执行；来自无LLM手工版本的后续问题修改仍遵循已有应用接口的拒绝规则，不自动切换方法或Provider。
+2026-10-11 P3 处置：非 lp_ir 编辑强制 container executor 的 wall_time_s 改取编辑文档声明预算（缺失/非法回退 60）；子 run 输入改原子写（临时文件＋replace）；data_refs 顺序重排按 data_id 归一后比较，不再误报 artifact_problem_mismatch。备注：edit 派生无幂等重试，重复提交会创建新子 run（父用量经 ledger 继承如实记账）。

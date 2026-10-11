@@ -26,3 +26,4 @@ Web调用既有benchmark CLI／应用与Task/Evaluator，不实现第二份建�
 本机HTTP提交使用synthetic文本Provider与真实HiGHS，检验批量执行、原问题检查、分组、ZIP与完成继续。实际HTTP提交两个样本，真实HiGHS与原问题检查均通过；公共ZIP6文件，完成后继续保持run_id及2次Provider请求不变。本机完整公共入口检查18.580s通过，包含活动取消和继续；40模块类型检查及233文件仓库检查通过。浏览器布局未实际观察；S09的完整问题／代码派生编辑、三方法真实比较、规模性能与独立审阅仍需完成。
 
 活动中的Python工厂已通过网页取消：调度器保存取消结果，停止拥有的执行，保留单样本分母；继续后完成同一run，未新增Provider请求。该检查用synthetic Provider和实际容器／HiGHS，工程结果不作为真实LLM准确率。检查结束后没有遗留llm4om.execution容器。浏览器控制工具当前返回零个可用surface，未取得浏览器渲染证据。
+2026-10-11 P3 处置：submit_experiment 在写 spec 前本地校验 repeats/budget/exclusions（非法值即时 `invalid_request`，不再延迟到子进程失败）。备注（保留）：`--host 0.0.0.0` 下 check_origin 是 CSRF 缓解而非认证——单用户令牌模型不变，勿暴露于不受信网络；最新 run 按时间选择与进行中 resume/edit 存在瞬时竞态，影响限于显示/取消目标。

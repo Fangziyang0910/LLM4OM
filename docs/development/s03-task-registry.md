@@ -31,3 +31,4 @@ privileged manifest记录Task／Evaluator的Manifest、包来源／版本／文�
 最终代码已补齐实际run绑定、状态／计数一致性和案例清点，源码／wheel／Worker hash24fa3ba72dd8ddf8af3c010dcfcabb2fd0c717e0dd801d22579a3b622bd6dacf一致，镜像34dbfc10259ef0c4338f80a29d0bd888ca9cabbfdf5522fa80076c57869ab9ad。Worker不含独立Task包；源码202文件与wheel56项的已知密钥检查未发现密钥。旧pilot不使用最终环境静默恢复。
 
 旧0.18.0 wheel实际创建的NL4Opt工程快照可按原字节只读评估，结果标为legacy_unbound；缺失run仍记录错误与零eligible，不伪造成功。
+2026-10-11 P3 处置：`evaluation_error` 的指标块改为按 `evidence_levels` 门控（原先无条件写 `objective_match: error`）；`_prepare_task` 对传入 settings 的消费语义已在 docstring 说明。load 路径 adapter 身份仍依赖冻结清单 seal＋导入期断言保证，属防御纵深备注（不可利用，不改行为）。

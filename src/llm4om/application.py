@@ -976,8 +976,12 @@ def _derive_run(store: RunStore, resource_records: list[dict[str, Any]], *,
             if existing["identity"] != identity:
                 raise RunError("problem_revision_conflict", "admission", "A recorded problem revision cannot be rebound to different input or answers.")
             child_path = store.path.parent / existing["run_id"]
-            with_state = parse_json(read_public_bytes(child_path / "checkpoint.json"))["payload"]["state"]
-            if "sources" not in with_state:
+            try:
+                # Fast path only; unreadable checkpoints fall through to the verified resume below.
+                with_state = parse_json(read_public_bytes(child_path / "checkpoint.json"))["payload"]["state"]
+            except (ValueError, OSError, KeyError, TypeError):
+                with_state = None
+            if with_state is None or "sources" not in with_state:
                 child = open_run_store(saved_store_selection(store.path), store.path.parent, resume=child_path,
                                        cancellation=cancellation)
                 try:

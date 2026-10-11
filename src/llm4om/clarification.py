@@ -25,10 +25,10 @@ def prepare_clarification(value: dict[str, Any], public: dict[str, Any], run_id:
             "provenance": {"type": "object"}}, "required": ["questions"]}
     try:
         jsonschema.Draft202012Validator(schema).validate(value)
-        if len(json.dumps(value, allow_nan=False).encode()) > 65536:
-            raise RunError("invalid_clarification", "formulation", "Clarification metadata exceeds its byte limit.")
     except jsonschema.ValidationError as error:
         raise RunError("invalid_clarification", "formulation", "Invalid bounded clarification request.") from error
+    if len(json.dumps(value, allow_nan=False).encode()) > 65536:
+        raise RunError("invalid_clarification", "formulation", "Clarification metadata exceeds its byte limit.")
     questions = deepcopy(value["questions"])
     if len({q["question_id"] for q in questions}) != len(questions):
         raise RunError("invalid_clarification", "formulation", "Clarification question IDs must be unique.")

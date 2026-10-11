@@ -23,3 +23,4 @@ Provider是可信宿主插件，配置和构造不得自行发送付费请求。
 真实pilot使用源码hash7a4991226c59390fd6227bee7bbf63432a200392c3caba0b195795c00f43a6ac、镜像sha256:967aade20d44579762f6f40b489b01a27be5d1ce155d4030e0957230bcf8b302；原wheel与镜像别名0.18.0-provider-pilot保留。此后修复自定义参数转交及Messages错误分类，最终快照单独记录；旧run不使用最终环境静默恢复。没有重复付费调用或触发Actions。
 
 最终源码／wheel／Worker代码hash均为9eba1b3f8164c736f9f33fbb37b6c646299bbe33891f4c078443704074651c65；最终镜像sha256:5381542849425389aeb2e84721139b7dae564d82b0e20a872e57cb32c57eace7。Worker中没有独立Provider包。196个源文件、83个公开run文件和wheel55项的已知密钥检查未发现密钥。
+2026-10-11 P3 处置：`# ponytail` 注释改写为领域说明。审阅指出的"8MiB 专门 RunError 成为死分支"经复核不成立——该 raise 位于解析 try 块之前，始终携带专属消息传播；此条按已核实驳回。

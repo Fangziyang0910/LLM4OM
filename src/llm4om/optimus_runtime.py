@@ -67,6 +67,8 @@ class SourceRuntime:
             if self.abort is not None:
                 raise self.abort
             frame = inspect.currentframe()
+            # The vendored get_response->create call chain is hash-locked upstream; this frame walk
+            # resolves the requesting LLM role and is only valid against that fixed chain.
             caller = frame.f_back.f_back if frame is not None and frame.f_back is not None else None
             role = f"{Path(caller.f_code.co_filename).stem}.{caller.f_code.co_name}" if caller else "source"
             try:

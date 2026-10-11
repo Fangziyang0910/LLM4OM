@@ -10,7 +10,7 @@ from typing import Any
 
 import jsonschema
 
-from llm4om.contracts import RunError, parse_reference_json, public_path, validate_problem
+from llm4om.contracts import RunError, parse_json, parse_reference_json, public_path, validate_problem
 from llm4om.storage import RunStore
 from llm4om.tasks import _json, FrozenTaskAdapter, EvaluationCase
 from llm4om.evaluation import evaluate_outcome, _verify_ref
@@ -191,7 +191,7 @@ class MAMOAdapter(FrozenTaskAdapter):
             entry = parse_reference_json(case.entry)
             if entry["review"] is not None:
                 try:
-                    _review_policy(entry["review"], parse_reference_json(case.public_problem.read_bytes())["description"])
+                    _review_policy(entry["review"], parse_json(case.public_problem.read_bytes())["description"])
                 except (jsonschema.ValidationError, ValueError) as error:
                     raise RunError("invalid_public_review", "evaluation", "Selected review must match its exact public question.") from error
             yield case

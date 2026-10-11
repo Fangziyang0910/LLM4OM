@@ -73,6 +73,8 @@ def open_run_store(selection: dict[str, Any], root: Path, *, resume: Path | None
 
 def saved_store_selection(run: Path) -> dict[str, Any]:
     """Reconstruct the store selection recorded by the run that owns this directory."""
+    # Read errors fall back to the builtin selection; opening that store then fails its own
+    # checkpoint verification, so the underlying cause still surfaces at the run boundary.
     try:
         state = parse_json(read_public_bytes(run / 'checkpoint.json'))['payload']['state']
         binding = state.get('admission', {}).get('store')

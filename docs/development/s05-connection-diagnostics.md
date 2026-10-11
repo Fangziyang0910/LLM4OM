@@ -25,3 +25,4 @@ tests/test_provider_proxy.py新增CLI场景：本机合成代理接受CONNECT后
 Worker0.34.0单次构建身份为sha256:dcab276d11cc394ea0d95103dd54a20a61f9ff5970b0365c459244ca3111f95d。证据位于/tmp/llm4om-connection-evidence，不提交用户运行数据。依赖下载曾遇到同类TLS中断，后续使用锁文件和本机缓存离线完成；没有更改依赖版本。
 
 未运行真实模型生成、批量benchmark、全量重复回归或GitHub Actions。外部连接仍存在间歇性故障；本切片使后续故障可诊断，不声称控制了代理或供应方的稳定性。
+2026-10-11 P3 备注：Gateway 接受任意 RunError.details 携带的 connection_diagnostic，未限定来源必须为隔离传输；类别词表固定、不参与 retryable 判定或预算释放，受信第三方 Provider 理论上可附误导类别，按信任模型备注保留。

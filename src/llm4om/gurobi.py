@@ -171,7 +171,9 @@ def solve_gurobi_handle(handle: ModelHandle, options: dict[str, Any]) -> dict[st
     import pyomo.environ as pyo
     from pyomo.repn import generate_standard_repn
     source = handle.model
-    objective = next(source.component_data_objects(pyo.Objective, active=True, descend_into=True))
+    objective = next(source.component_data_objects(pyo.Objective, active=True, descend_into=True), None)
+    if objective is None:
+        raise RunError("unsupported_factory_expression", "solve", "The model declares no active objective to solve.")
     with environment() as env, gp.Model(env=env) as model:
         variables = {}
         for index, var in enumerate(source.component_data_objects(pyo.Var, active=True, descend_into=True)):

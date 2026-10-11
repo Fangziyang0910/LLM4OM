@@ -104,8 +104,11 @@ def _prepare(config: Path, offline: bool) -> tuple[dict[str, Any], list[dict[str
             path = (config.parent / item[path_field]).resolve()
             sources[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
             if name == 'configurations':
-                configurations[identifier] = (path, read_config(path))
-                response = configurations[identifier][1]['llm']['config'].get('response_artifact')
+                run_settings = read_config(path)
+                configurations[identifier] = (path, run_settings)
+                llm_settings = run_settings.get('llm')
+                llm_config = llm_settings.get('config') if isinstance(llm_settings, dict) else None
+                response = llm_config.get('response_artifact') if isinstance(llm_config, dict) else None
                 if response is not None:
                     artifact_path = public_path(path.parent, response)
                     sources[str(artifact_path)] = hashlib.sha256(artifact_path.read_bytes()).hexdigest()

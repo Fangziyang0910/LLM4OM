@@ -44,3 +44,4 @@ Python3.12.11完整本机回归342项／814.375秒通过。8项澄清聚焦／32
 最终源码／wheel／Worker hash为 `fa1ba6d20d6d2cd28c7d66026d6efbdf74acec82701b731f930d27d0cdb6435c`，image `sha256:ce6406fb7242e6bc01451be62d2b8b0ebc418b3fe7cb28a286f20bffb88c03a1`；两快照分别记录，不静默迁移旧运行。全部证据、私有Provider记录、原业务检查与恢复日志在 `/tmp/llm4om-s05d2-evidence/`。
 
 反馈方法当前实现澄清；Direct／OptiMUS／CoE保持各自声明，不自动宣称具有交互流程。新增信息不会替换隐藏评测参考，也不把修订后的问题当作原题正确解。完整注册、批量实验、Web工作台与剩余发布验收仍在全目标内。
+2026-10-11 P3 处置：65536 字节上限检查移出 jsonschema try 块——RunError 继承 ValueError，原先可被同一 except 吞掉；边界行为不变。

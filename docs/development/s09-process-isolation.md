@@ -23,3 +23,4 @@ doctor临时配置位于原工作目录，保持相对配置资源的解析规�
 本机Chrome通过真实10.150.68.218:8767页面验收，桌面1440×1100与手机390×844截图已查看。OptiMUS inline选择同步到Gurobi，doctor实际预检通过，四个历史job可读取，批量编辑器可打开；页面脚本错误为零。此次浏览器检查没有提交新模型任务。截图和运行脚本保存在/tmp/llm4om-s09-process-evidence；Cua控制接口没有提供浏览器，本次使用本机现有Playwright／Chrome，不将HTTP检查代称为浏览器验收。
 
 浏览器检查补齐OptiMUS inline完整config断言：代码自查发现通用方法分支将rag_mode清空，已在7bfefc2修复；实际浏览器确认rag_mode=null与Gurobi，并完成该变体的doctor预检。变更仅涉及Web静态资源，不改变Python执行身份或已冻结Worker／运行记录；无需重建或重跑其Solver。
+2026-10-11 P3 处置：benchmark 父进程取消补齐 10 秒协作窗口（与单 run 对称）；close() 取消未启动 future 并把 queued 任务标记 cancelled 后退出；LLM4OM_LLM_PROXY_URL 在回显进客户端配置前按 Provider 准入规则校验（拒绝携带凭据的代理 URL）。备注：control 异常回退时个别 job 子进程可能存活至自身 deadline，由其 session 隔离与 checkpoint 恢复兜底。

@@ -38,6 +38,7 @@ def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
 
 def solve_highs_handle(handle: ModelHandle, options: dict[str, Any]) -> dict[str, Any]:
     seconds = _time_limit(options)
+    # The re-export validates the linear structure and decision coverage before the solver consumes the handle.
     PyomoFactoryBackend().export(handle)
     import highspy
     import pyomo.environ as pyo
