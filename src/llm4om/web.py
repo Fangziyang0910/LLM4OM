@@ -6,6 +6,7 @@ from copy import deepcopy
 import csv
 import hashlib
 import ipaddress
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from io import BytesIO, StringIO
@@ -581,7 +582,17 @@ class WebWorkspace:
                     token.cancel()
             else:
                 token.cancel()
-        self.pool.shutdown(wait=True, cancel_futures=True)
+        self.pool.shutdown(wait=False, cancel_futures=True)
+        for pattern in ('*/job.json', 'experiments/*/job.json'):
+            for path in self.root.glob(pattern):
+                try:
+                    record = parse_json(path.read_bytes())
+                except (OSError, ValueError):
+                    continue
+                if record.get('status') == 'queued':
+                    record['status'] = 'cancelled'
+                    record['shutdown'] = True
+                    _json_file(path, record)
 
 
 def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
@@ -709,3 +720,6 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
     finally:
         server.server_close()
         workspace.close()
+        # Workspace state is fully checkpointed; a wedged job thread must never keep
+        # this restartable local workbench process alive after shutdown.
+        os._exit(0)

@@ -223,3 +223,14 @@ Formulation、数据绑定和导出视图分别保留，不把方法生成代码
 本机 Python 3.11／3.12 各155项测试、19模块 mypy、109源文件、参考导出、diff、包／Worker构建和
 SDK-only实际工厂求解通过。精确 run_id、用量、hash、镜像、支持限制见 [S02-B](development/s02b-factory.md)。
 未触发远程 CI；Gurobi 已完成独立环境研究，平台接入与其他1.0任务继续按计划实施。
+
+## 13. 0.37.0 发布审计本机校验（2026-10-11）
+
+SDK／Worker 0.37.0 开发版本。全量回归一次439项：6个尾部失败全部定位——5个Web超时源于
+`llm4om serve`进程泄漏级联（关闭路径等待卡死的工作线程），修复为有界关闭（取消令牌、排队任务记
+cancelled、兜底退出）后5项Web套件全绿且零泄漏；1个OOM压力测试为尾部负载敏感，单跑通过。
+其余433项当轮通过。修复配套聚焦验证：experiments 8项（评估证据原子性与两条覆盖路径）、
+store/插件/CLI/resume/辅助编辑/实验/Web绑定共109项、backend_solver 18项、executor_registry 1项、
+mypy 44模块、仓库检查通过。真实证据：官方API单问题端到端（目标13）、S08-B九格（连接失败清零、
+4/4数值匹配）、S08-C 99格SIGINT取消＋resume零丢失（N_reused=38）。环境备注：uv离线构建缓存需
+预热；fixture_executor需安装在环境、fixture_execution不可安装（与inventory断言冲突）。

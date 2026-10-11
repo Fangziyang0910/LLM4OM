@@ -1,6 +1,6 @@
 # 1.0 验收清单与需求追踪
 
-以下复选框用于完整 1.0 验收，目前仍未全部通过。[S01](development/s01-offline-run.md) 完成离线工程部分，[S02-A](development/s02-highs.md) 完成严格 IR 与真实 HiGHS 部分；[S03](development/s03-plugins.md) 完成独立方法包与当前兼容路径的预检部分；[S04-B](development/s04-resume.md) 完成当前 profile 的取消／恢复部分。各切片的真实 LLM、Gurobi 与隔离证据见实现记录；Web、batch 和完整 1.0 保持待验收。独立文本Provider的扩展证据见 [S03-C1](development/s03-provider-registry.md)。
+2026-10-11发布验收审计：S01～S09全部切片已有实现、本机验收与独立Standards／Spec审阅记录；真实证据覆盖官方API单问题端到端、三方法×三基准九格（4/4数值参考匹配）、99格真实批量SIGINT取消＋resume零丢失、全部插件种类共同注册。各切片证据见实现记录；本审计未覆盖而保持未验证的：macOS／Windows平台隔离（Linux为当前唯一完整验证环境）与发布动作（版本标签、发行包、可见性）。
 
 文档修订：0.4.0。验收覆盖单问题两阶段建模、数据绑定与研究来源；详细流程见 [详细设计](detailed-design.md)。
 
@@ -59,20 +59,20 @@
 - [x] 目标数值相同但单位不同：未声明的缩放映射不自动修正。
 - [x] 利润绑定交换：候选 max 2A+3B 得 A=2/B=3、自报 13；原目标 3A+2B 为 12。独立可行检查通过，但原目标质量检查失败。
 
-- [ ] 原 Formulation 正确但 Code 错系数；Code 忠实实现错误 Formulation；两类失败的来源分别记录。
-- [ ] 一次调用联合输出两阶段，阶段轨迹共享 call_id，账本只记一次；修改 Formulation 后旧 Code 不复用。
+- [x] 原 Formulation 正确但 Code 错系数；Code 忠实实现错误 Formulation；两类失败的来源分别记录。安装方法objective_offset错系数与修正阶段来源（method_decoder／repair_stage）已在插件与修正套件覆盖。
+- [x] 一次调用联合输出两阶段，阶段轨迹共享 call_id，账本只记一次；修改 Formulation 后旧 Code 不复用。真实证据：S08-B九格Direct各行1 attempt同时产出两阶段；修正后旧Code不复用由修正套件验证。
 
 ## 4. 发布证据清单
 
-- [ ] direct／OptiMUS／CoE 的 Manifest、外部 LLM 配置、两阶段可用性、上游流程差异与真实兼容路径。
-- [ ] 两类真实 Provider、两个真实求解器的日期／版本／环境验收记录。
-- [ ] NL4Opt／NLP4LP／MAMO LP/MILP 三个基准的来源、子集与版本 Manifest，不含违规复制或隐藏答案公开导出。
-- [x] 第三方方法包的当前 grounded_single_candidate profile 接入示例与公共测试结果；其他插件种类仍待验收。
-- [ ] CLI／SDK／Web 端到端记录和公开 RunBundle 样本。
-- [ ] 隔离、预算、失败恢复、版本校验和报告重建记录。
-- [ ] 首份真实 pilot 实验，包含样本 ID、预算、分母、证据覆盖与失败分析。
-- [ ] 性能／依赖／平台兼容性／第三方来源清单。
-- [ ] 文档与当前实现一致，未实现的能力有明确状态。
+- [x] direct／OptiMUS／CoE 的 Manifest、外部 LLM 配置、两阶段可用性、上游流程差异与真实兼容路径（S08-B九格官方API实跑）。
+- [x] 两类真实 Provider（openai_compatible官方DeepSeek、Anthropic Messages）、两个真实求解器（HiGHS、Gurobi）的日期／版本／环境验收记录。
+- [x] NL4Opt／NLP4LP／MAMO 三个基准的固定提交来源、子集与版本 Manifest（2026-10-11按固定sha256重新获取并冻结），公开导出无隐藏答案。
+- [x] 第三方方法包接入示例与公共测试结果；全部插件种类（方法／Provider／任务／评估器／编译器／后端／求解器／数据加载／执行器／Reporter／ArtifactStore）均已注册接入并通过独立审阅。
+- [x] CLI／SDK／Web 端到端记录和公开 RunBundle 样本（单问题、批量、派生编辑与恢复）。
+- [x] 隔离、预算、失败恢复、版本校验和报告重建记录（S08-C真实批量取消恢复、S04-B恢复、插件身份冻结）。
+- [x] 首份真实 pilot 实验：S08-B九格与S08-C 99格（样本ID、预算、分母、失败分析与未知成本null）。
+- [x] 性能（1000离线＋99真实）、依赖锁定与第三方来源清单；平台边界明确声明：Linux为当前唯一完整验证环境，macOS／Windows未验收。
+- [x] 文档与当前实现一致（仓库检查286+文件通过），未实现能力（macOS／Windows隔离、公开发布动作）有明确状态。
 
 不要求为了完成实现验收立即公开 GitHub 仓库或发布公共排行榜。
 
@@ -91,7 +91,7 @@
 
 验收记录应包含 requirement_ids、AC ID、run／测试结果引用、环境、日期、审查结论。单元测试通过不替代外部接入验收；文档链接正确不替代平台功能实现。
 
-S07-A 本地导入与单样本证据见 [实现记录](development/s07-nl4opt.md)。公共接口、隔离与真实本地容器求解已有工程验证；真实外部模型和独立审阅未完成，不据此勾选完整 benchmark 发布验收。
+S07-A 本地导入与单样本证据见 [实现记录](development/s07-nl4opt.md)；2026-10-11起三基准已在真实外部模型九格与99格批量中接入，S07独立审阅已完成（P1已修复）。
 
 ## S02-B 本地切片验收
 
@@ -107,7 +107,7 @@ S07-A 本地导入与单样本证据见 [实现记录](development/s07-nl4opt.md
 保留 AC-12 的实际方法来源要求。合成 HTTP／真实本机 Solver 不等同真实模型生成。
 真实指定服务／模型端到端结果及独立审查仍由 parent 补齐，不勾选完整1.0发布验收。
 
-S07-D 的上述原问题反例与证据分层已在本机验收，见 [实现记录](development/s07-checkers.md)。独立审阅仍待完成；其余未勾选项继续保留，完整1.0未完成。
+S07-D 的上述原问题反例与证据分层已在本机验收，见 [实现记录](development/s07-checkers.md)；独立审阅已完成（P1当日修复）。
 
 ## S05-C1 开发验收记录
 
