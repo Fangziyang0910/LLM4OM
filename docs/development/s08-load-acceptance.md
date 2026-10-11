@@ -1,6 +1,12 @@
 # S08-C 本机负载与故障验收
 
-用途：记录NFR-03／05／06、AC-18／22的本机压力证据。状态：1000离线批量性能验收通过；100CLI故障集合已通过，真实批量调度故障恢复的完整规模验收仍需补齐。工作项为[Issue61](https://github.com/Fangziyang0910/LLM4OM/issues/61)。规范由[需求](../requirements/v1.0.md)、[评测协议](../evaluation.md)与[S08](s08-benchmark.md)维护，完整1.0未完成。
+用途：记录NFR-03／05／06、AC-18／22的本机压力证据。状态：1000离线批量性能验收通过；100CLI故障集合已通过；2026-10-11真实批量调度故障恢复验收通过（99格真实外部Provider，SIGINT协作取消＋resume零丢失）。工作项为[Issue61](https://github.com/Fangziyang0910/LLM4OM/issues/61)。规范由[需求](../requirements/v1.0.md)、[评测协议](../evaluation.md)与[S08](s08-benchmark.md)维护，完整1.0未完成。
+
+## 真实批量调度故障恢复（2026-10-11，SDK／Worker0.37.0）
+
+NL4Opt dev全99例（冻结manifest，仅dev split原样selected）×Direct five_element＋native_gurobipy×deepseek-v4-pro官方API×容器Gurobi，单run预算4 attempts／60k tokens／6 Solver，实验并发4。首次配置的单run token预算(30k)低于Provider单请求输出预留(32768)，42格在admission以budget_exhausted拒绝且零消耗——该次配置错误批次如实弃置，未产生模型调用。
+
+修正后批次在42格启动、38格入账（25完成／13方法失败）时对benchmark进程注入SIGINT协作取消：4个在飞格记cancelled＋interrupted，预留账本(168 attempts／2.52M tokens)与全部已存结果完好。`--resume`后38格全部复用零重跑（N_reused=38）、4个取消格重跑、57个新格继续，最终99/99入账：76 completed＋23方法性失败（formulation pass 87／not_available 12），99次真实LLM attempt、87次Solver调用、tokens部分未知保持null，JSONL／CSV／Markdown／HTML四报告零错误，恢复会话耗时1,914秒。无任务丢失、无串结果、无重复计费；失败分母保留。证据位于`/tmp/llm4om-s08c`（运行数据不提交）。
 
 ## 冻结环境与负载
 
