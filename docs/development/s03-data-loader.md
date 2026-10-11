@@ -1,6 +1,6 @@
 # S03-C4：公开数据加载与有限视图
 
-用途：记录SDK／Worker0.22.0的数据加载扩展及本机验收。工作项为 [#45](https://github.com/Fangziyang0910/LLM4OM/issues/45)。规范来源为 [插件契约](../plugin-contracts.md#27-s03-c4-public-dataloader-and-dataview-sdk-0220)，领域词由 [GLOSSARY](../../GLOSSARY.md)维护。本切片已完成实现与本机验收；独立审阅仍待完成，包未发布。
+用途：记录SDK／Worker0.22.0的数据加载扩展及本机验收。工作项为 [#45](https://github.com/Fangziyang0910/LLM4OM/issues/45)。规范来源为 [插件契约](../plugin-contracts.md#27-s03-c4-public-dataloader-and-dataview-sdk-0220)，领域词由 [GLOSSARY](../../GLOSSARY.md)维护。本切片已完成实现与本机验收；2026-10-11独立Standards／Spec审阅通过：8个注册模块全部PASS／PASS-WITH-NOTES，无P1/P2，仅P3打磨项（报告/tmp/llm4om-reviews/s03-registry-group.md）。包未发布。
 
 ## 实际行为
 

@@ -22,6 +22,6 @@ Worker重新选择相同编译器及配置，再编译并核对源码hash和完�
 
 预检修复保留executor_unavailable与compiler_unavailable的区别，损坏error字段不终止CLI。预检元数据采用至少64KiB有界输出，候选仍按配置限额执行。源码的损坏响应／错误求解响应／512字节限额分别1项通过；对应干净Python3.11 wheel分别1项／0.489s、1项／7.001s和1项／5.574s通过。修复后compiler源码9项／20.905s通过，最终wheel9项／20.796s通过。修复后的源码／wheel／Worker代码hash为c9fde82e2830cda2428c0649148824c7d324004e56dd5ba8bac1dabccb374969；新标签镜像9eed9a7dab1269d572e2e1ef4dcd905f247e4f8beb4b37b2bc33eb418ed2c20c与含插件镜像9ce55bb6904412c06e1c3edf4e44428b6ba8b2ad81449c7b3f4f914a58544fc2已构建。原回归结束后，默认标签更新为修复后的镜像；旧pilot按原wheel／镜像保存，不静默迁移。
 
-独立Standards／Spec审阅待CLI用量条件恢复；自查不计为独立审阅，PR保留draft。其他插件种类、批量实验、Web与完整1.0继续推进。
+2026-10-11独立Standards／Spec审阅通过：8个注册模块全部PASS／PASS-WITH-NOTES，无P1/P2，仅P3打磨项（报告/tmp/llm4om-reviews/s03-registry-group.md）。其他插件种类、批量实验、Web与完整1.0继续推进。
 
 最终含插件镜像的MILP／LP两项／11.509s通过。下一步Backend／Solver的共同接口与实际Worker路径由 [#43](https://github.com/Fangziyang0910/LLM4OM/issues/43)跟踪。

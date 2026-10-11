@@ -16,7 +16,7 @@ Provider是可信宿主插件，配置和构造不得自行发送付费请求。
 
 开发已按公共入口red→green验证清单、独立安装、无付费预检、HTTP→HiGHS、角色路由、恢复、身份变化、版本／配置／依赖错误以及安全诊断。手算生产问题的预期为A3／B2／目标13。最终Provider聚焦10项／32.813s；Gateway26项／19.822s；Messages18项／63.533s；角色路由2项／5.945s；原HTTP应用8项／15.163s均通过。干净Python3.11.13 wheel的Provider10项与Messages错误分类、不同协议→容器HiGHS的补充检查均通过。一次完整本机回归运行353项／904.548s，初次有5个子用例失败，均来自Messages选项与Mock角色的预检错误分类；最终对应Messages18项与角色2项已通过，全部失败用例均已重验。没有第二次运行完整套件；不把初次回归写成全绿。最终干净wheel的Provider10项／32.204s、Messages分类1项／0.502s及自定义协议→容器1项／5.322s通过。
 
-独立Standards／Spec审阅仍待当前CLI用量条件恢复；自查不计为独立审阅。其他插件种类、批量报告、Web与完整1.0发布验收继续推进。
+2026-10-11独立Standards／Spec审阅通过：8个注册模块全部PASS／PASS-WITH-NOTES，无P1/P2，仅P3打磨项（报告/tmp/llm4om-reviews/s03-registry-group.md）。其他插件种类、批量报告、Web与完整1.0发布验收继续推进。
 
 真实指定DeepSeek经独立安装的Provider wheel完成run57304364895f4c5fb71da650db55f18b：1次实际请求、7556 reported tokens、cost=null；容器HiGHS得到x_A3／x_B2／目标13。原公开CSV在最终选择后用显式A→x_A／B→x_B映射重算，可行性通过、原目标13。这是工程验收，不是冻结benchmark准确率。完成态在无.env／无凭据环境恢复，ledger不变。
 

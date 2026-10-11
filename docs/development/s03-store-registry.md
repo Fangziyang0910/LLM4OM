@@ -1,6 +1,6 @@
 # S03 可安装 ArtifactStore
 
-用途：说明独立安装运行存储的实际接口与调用范围。状态：SDK／Worker0.37.0开发实现和本机验收；独立审阅待完成；完整1.0尚未发布。规范来源为 [插件契约](../plugin-contracts.md)、[开发规范](../../CODING_STANDARDS.md)与 [S03](../implementation-plan.md#s03-插件发现配置与预检)。
+用途：说明独立安装运行存储的实际接口与调用范围。状态：SDK／Worker0.37.0开发实现和本机验收；2026-10-11独立Standards／Spec审阅通过：8个注册模块全部PASS／PASS-WITH-NOTES，无P1/P2，仅P3打磨项（报告/tmp/llm4om-reviews/s03-registry-group.md）。完整1.0尚未发布。规范来源为 [插件契约](../plugin-contracts.md)、[开发规范](../../CODING_STANDARDS.md)与 [S03](../implementation-plan.md#s03-插件发现配置与预检)。
 
 ## 实际接口
 

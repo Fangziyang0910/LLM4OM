@@ -24,7 +24,7 @@ privileged manifest记录Task／Evaluator的Manifest、包来源／版本／文�
 
 开发按CLI／Task／Evaluation／OS／真实Solver接口逐步red→green。已验证独立wheel安装、导入→HiGHS目标13→评分、无oracle导出、包／配置变化拒绝、协议／依赖预检、错误分母和旧格式读取。最终隔离源码11项／59.558s、干净Python3.11 wheel11项／53.916s及容器流程1项／6.277s通过。独立检查器15项／70.020s、NL4Opt5项／9.018s与NLP4LP5项／9.012s通过；MAMO组合检查中的受影响数值用例因源码变更失效，最终单独重验1项／27.549s通过。一次完整本机回归在原稳定快照运行362项／976.592s并全部通过。最终审查补充的run绑定、计数一致性和清点规则以源码／wheel／容器聚焦测试单独验证；没有第二次运行整套回归。不增加本次变更不需要的付费模型调用，不触发Actions。
 
-独立Standards／Spec审阅仍待当前CLI用量条件恢复；自查不计为独立审阅。其余插件种类、批量报告、Web与完整1.0继续推进。
+2026-10-11独立Standards／Spec审阅通过：8个注册模块全部PASS／PASS-WITH-NOTES，无P1/P2，仅P3打磨项（报告/tmp/llm4om-reviews/s03-registry-group.md）。其余插件种类、批量报告、Web与完整1.0继续推进。
 
 本机保存的独立Task／Evaluator运行1d7cee11f27b49a6987d5cde94d6a646经Mock生成、容器HiGHS真实求得A3／B2／13，候选自报目标匹配1/1，原始CSV另作独立业务检查通过；没有真实模型准确率声明或额外付费调用。该pilot的源码0847b1fb4e055fe6b72ec94cf14ea2478af53dc2a74fd6beba7a9310cc68d33a与镜像3248c1411ba92813fefe75fefbbe98ee9d4efa6a4815f56979420cd6f840c87c分别保留为原wheel及0.19.0-task-pilot。
 

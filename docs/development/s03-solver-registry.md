@@ -24,4 +24,4 @@ Manifest分别声明handle_profile、handle_profiles、result_profile和Solver o
 
 预检审查的负例证明Backend输入表示未参与匹配；该遗漏在独立工作树修复，red→green1项／0.533s通过。修复后源码18项／50.103s、干净Python3.11 wheel18项／48.552s与新标签容器1项／7.286s通过。修复后源码／wheel／Worker代码hash为670f09920b88a9512c5d80a53a6c4defa7de5a6597e025daf22da31353f4a478；两种新标签镜像分别为11ba391d144f089d82d4d60b58ab40288531426a5d33d6222b1966f38ddeb99c与e71bf15bd4a2d23e98e01bf739d32e2d7df30b549d0216bb0582d2285898083f。原回归的源码与标签未更改，旧pilot不静默迁移。
 
-原稳定快照的一次完整本机回归390项／991.807s全部通过。之后的Backend输入表示修复单独按上述18项源码／wheel及真实容器验收，没有重复整套回归。本轮未触发Actions或新增付费模型调用。独立Standards／Spec审阅仍待CLI用量条件恢复；自查不替代独立审阅。全1.0中的数据加载等其他插件、批量报告、Web与发布验收继续推进。
+原稳定快照的一次完整本机回归390项／991.807s全部通过。之后的Backend输入表示修复单独按上述18项源码／wheel及真实容器验收，没有重复整套回归。本轮未触发Actions或新增付费模型调用。2026-10-11独立Standards／Spec审阅通过：8个注册模块全部PASS／PASS-WITH-NOTES，无P1/P2，仅P3打磨项（报告/tmp/llm4om-reviews/s03-registry-group.md）。全1.0中的数据加载等其他插件、批量报告、Web与发布验收继续推进。
