@@ -61,6 +61,25 @@ class ExperimentTests(unittest.TestCase):
         raw = path.read_bytes()
         return {**original, 'sha256': hashlib.sha256(raw).hexdigest(), 'size_bytes': len(raw)}
 
+    def test_truncated_evaluation_bytes_are_reevaluated_on_resume(self):
+        output = self.root / 'batch'
+        summary = run_experiment(self.path, output)
+        self.assertEqual(summary['groups'][0]['verified_solution_denominator'], 1)
+        evaluation = next(output.glob('evaluations/*.json'))
+        state_path = output / '.private' / 'experiment-state.json'
+        state = json.loads(state_path.read_text())
+        for job in state['jobs']:
+            job['evidence'].pop(str(evaluation), None)  # Crash after the write began but before the pin was recorded.
+            state['results'].pop(job['job_id'], None)
+        state_path.write_text(json.dumps(state))
+        evaluation.write_bytes(b'{"schema_version": "0.2.0", "trunc')
+        continued = run_experiment(self.path, output, resume=True)
+        group = continued['groups'][0]
+        self.assertEqual(group['statuses'], {'completed': 1})
+        self.assertEqual((group['verified_solution_numerator'], group['verified_solution_denominator']), (1, 1))
+        self.assertEqual((group['objective_match_numerator'], group['objective_match_denominator']), (1, 1))
+        self.assertIn('plugin_identity', json.loads(evaluation.read_text()))
+
     def test_two_real_highs_runs_and_resume_do_not_repeat_completed_work(self):
         output = self.root / 'batch'
         summary = run_experiment(self.path, output)

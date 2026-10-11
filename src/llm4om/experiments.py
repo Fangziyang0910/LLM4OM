@@ -232,9 +232,13 @@ def _execute(job: dict[str, Any], output: Path, offline: bool, cancellation: Can
             bundle = parse_json((run_path / 'bundle.json').read_bytes())
         bundle_digest = hashlib.sha256((run_path / 'bundle.json').read_bytes()).hexdigest()[:16]
         evaluation_path = output / 'evaluations' / (job['job_id'] + '-' + bundle_digest + '.json')
+        evaluation = None
         if evaluation_path.exists():
-            evaluation = parse_reference_json(evaluation_path.read_bytes())
-        else:
+            try:
+                evaluation = parse_reference_json(evaluation_path.read_bytes())
+            except (ValueError, OSError):
+                evaluation = None  # Truncated evaluation bytes are re-evaluated offline, never recorded as a checker error.
+        if evaluation is None:
             raw, _, code = run_owned_process([sys.executable, '-m', 'llm4om', 'evaluate', '--manifest', job['manifest_path'],
                 '--case-id', job['case_id'], '--run', str(run_path), '--output', str(evaluation_path)], b'',
                 deadline=deadline, cancellation=cancellation)

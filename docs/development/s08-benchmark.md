@@ -1,6 +1,6 @@
 # S08 批量实验与报告
 
-状态：SDK／Worker0.24.0 已编写可运行功能代码，并通过本机聚焦验收；独立审阅和全量 benchmark 比较继续推进。范围对应 FR-31～FR-34、DD-06／07 和 [Issue51](https://github.com/Fangziyang0910/LLM4OM/issues/51)。接口以 [插件契约](../plugin-contracts.md#8-experimentspec-与单问题-runconfig)为准，指标以 [评测协议](../evaluation.md)为准。首版不代表完整 S08／1.0 验收完成。
+状态：SDK／Worker0.24.0 已编写可运行功能代码，并通过本机聚焦验收；2026-10-11独立Standards／Spec审阅通过：五个模块全部PASS-WITH-NOTES，唯一P2（批量评估非原子写入的崩溃窗口丢失已完成评估）已当场修复并补回归测试，其余为P3打磨项（报告/tmp/llm4om-reviews/s08-s09-group.md）。全量 benchmark 比较继续推进。范围对应 FR-31～FR-34、DD-06／07 和 [Issue51](https://github.com/Fangziyang0910/LLM4OM/issues/51)。接口以 [插件契约](../plugin-contracts.md#8-experimentspec-与单问题-runconfig)为准，指标以 [评测协议](../evaluation.md)为准。首版不代表完整 S08／1.0 验收完成。
 
 ## 使用
 

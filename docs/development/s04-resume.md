@@ -80,7 +80,7 @@ Docker 清理继续使用既有有界 kill／inspect／remove；daemon 故障时
 资源 head 回退拒绝、取消清理、未知请求预留和显式派生重跑。原始独立方法、参数化 Pyomo／native Gurobi、
 Task 导入与评测回归保留，真实 Docker／Solver 未跳过。
 
-独立 Standards／Spec 审阅对照原始 S04-B／S05-B 范围，未发现新的 P1／P2。
+独立 Standards／Spec 审阅对照原始 S04-B／S05-B 范围，未发现新的 P1／P2；2026-10-11对resume／派生路径的复审同样通过（见/tmp/llm4om-reviews/s08-s09-group.md）。
 strict mypy 检查22个源码文件，仓库128文件与参考检查、wheel／sdist 构建通过。
 干净 Python 3.11.13 wheel 的7项重点场景通过（44.426秒），另经合成 Messages 与真实 Worker
 求得 A=3、B=2、目标13；completed 恢复不需凭据，容器已删除。没有重复第二套完整版本矩阵。

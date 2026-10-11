@@ -2,9 +2,11 @@
 
 import hashlib
 import json
+import os
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable
+from uuid import uuid4
 
 from llm4om.contracts import RunError, parse_json, parse_reference_json, public_path
 from llm4om.tasks import EvaluationCase, Evaluator, TaskAdapter, PROTOCOL
@@ -134,6 +136,20 @@ def evaluate_case(manifest: Path, case_id: str, outcome: Path, output: Path) -> 
     validate_evaluation_result(result, case, plugin, outcome)
     result["plugin_identity"] = identity
     output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("x", encoding="utf-8") as stream:
-        stream.write(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
+    payload = (json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    if output.exists():
+        try:
+            parse_reference_json(output.read_bytes())
+            raise RunError("snapshot_exists", "evaluation", "Frozen evaluation evidence cannot be overwritten.")
+        except (ValueError, OSError):
+            pass  # Truncated bytes from an interrupted writer are replaced below, never reused.
+    temporary = output.with_name(output.name + ".tmp-" + uuid4().hex)
+    try:
+        with temporary.open("xb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, output)
+    finally:
+        temporary.unlink(missing_ok=True)
     return result

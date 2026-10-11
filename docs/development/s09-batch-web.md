@@ -1,6 +1,6 @@
 # S09-B 网页批量实验
 
-用途：记录SDK／Worker0.25.0的批量网页入口、当前实际支持与验收。功能代码已实现，本机HTTP批量流程通过验收；独立审阅仍待完成。对应 [Issue53](https://github.com/Fangziyang0910/LLM4OM/issues/53)、FR-34／35、DD-08；批量语义由 [契约](../plugin-contracts.md#8-experimentspec-与单问题-runconfig)和 [S08](s08-benchmark.md)维护。
+用途：记录SDK／Worker0.25.0的批量网页入口、当前实际支持与验收。功能代码已实现，本机HTTP批量流程通过验收；2026-10-11独立Standards／Spec审阅通过：五个模块全部PASS-WITH-NOTES，唯一P2（批量评估非原子写入的崩溃窗口丢失已完成评估）已当场修复并补回归测试，其余为P3打磨项（报告/tmp/llm4om-reviews/s08-s09-group.md）。对应 [Issue53](https://github.com/Fangziyang0910/LLM4OM/issues/53)、FR-34／35、DD-08；批量语义由 [契约](../plugin-contracts.md#8-experimentspec-与单问题-runconfig)和 [S08](s08-benchmark.md)维护。
 
 ## 使用
 

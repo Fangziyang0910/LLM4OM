@@ -1,6 +1,6 @@
 # S09 Web并发应用进程
 
-用途：记录SDK／Worker0.28.0的并发运行和合作取消。状态：功能与本机聚焦验收已完成，独立审阅待完成。工作项为[Issue59](https://github.com/Fangziyang0910/LLM4OM/issues/59)。规范来源为[插件契约](../plugin-contracts.md)、FR-33／35和NFR-03／06。
+用途：记录SDK／Worker0.28.0的并发运行和合作取消。状态：功能与本机聚焦验收已完成。2026-10-11独立Standards／Spec审阅通过：五个模块全部PASS-WITH-NOTES，唯一P2（批量评估非原子写入的崩溃窗口丢失已完成评估）已当场修复并补回归测试，其余为P3打磨项（报告/tmp/llm4om-reviews/s08-s09-group.md）。工作项为[Issue59](https://github.com/Fangziyang0910/LLM4OM/issues/59)。规范来源为[插件契约](../plugin-contracts.md)、FR-33／35和NFR-03／06。
 
 ## 行为
 
@@ -14,7 +14,7 @@ doctor临时配置位于原工作目录，保持相对配置资源的解析规�
 
 公共HTTP验收同时提交两个问题，Provider用两方barrier确认调用真实重叠；两次运行分别通过实际HiGHS。之后验证已完成继续没有新模型请求，问题revision与Code编辑保留父bytes与累计预算，再取消正在等待HTTP响应的第三任务并检查终态bundle。它使用合成Provider响应，不作为真实模型准确率。已有真实DeepSeek证据继续由前序切片维护。
 
-浏览器桌面／手机布局、方法选择、doctor、历史结果与批量配置入口已验收；完整压力／故障报告和独立Standards／Spec审阅仍待完成；完整1.0未完成。本轮不运行GitHub Actions或重复全量回归。
+浏览器桌面／手机布局、方法选择、doctor、历史结果与批量配置入口已验收；完整压力／故障报告仍待完成；完整1.0未完成。本轮不运行GitHub Actions或重复全量回归。
 
 公共HTTP并发／恢复／编辑／取消验收22.485s通过；同源／远程IPv4/token检查0.278s通过。资源取消原行为检查与应用进程合作／拒绝合作检查通过，后者0.310s。mypy41模块、仓库241文件和diff检查通过。
 

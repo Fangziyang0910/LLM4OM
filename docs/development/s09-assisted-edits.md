@@ -31,7 +31,7 @@ uv run --locked llm4om edit --run-id RUN_ID --output runs --edits edits.json
 
 本机SDK修改IR和Code，在实际HiGHS得到可手算目标5，父目标13产物保持bytes不变；Code在实际容器执行，无额外LLM。HTTP公开问题revision1→2重新请求synthetic Provider，再人工修改Code，保持两次Provider请求，总Solver与候选各3，父bundle bytes不变。本机HTTP检查19.783s通过，40+1模块类型检查和JS语法通过。
 
-native gurobipy与native_script的编辑路径通过同一表示契约实现，工厂及带／不带原生表述脚本三个分支已通过真实Gurobi，手工改界后目标为5，LLM请求为0；该公共入口检查31.893s通过。尚未取得浏览器视觉与独立Standards／Spec证据；全项目比较、性能与插件注册范围保持不变。
+native gurobipy与native_script的编辑路径通过同一表示契约实现，工厂及带／不带原生表述脚本三个分支已通过真实Gurobi，手工改界后目标为5，LLM请求为0；该公共入口检查31.893s通过。浏览器视觉证据仍待取得；2026-10-11独立Standards／Spec审阅通过（PASS-WITH-NOTES，仅P3打磨项，报告/tmp/llm4om-reviews/s08-s09-group.md）；全项目比较、性能与插件注册范围保持不变。
 
 实际支持：严格IR→确定性Pyomo编译、Python工厂→容器HiGHS、native gurobipy工厂→容器Gurobi、带／不带原生Formulation的native_script→共同执行资源／独立Gurobi采集。工厂需ModelHandle；脚本仍保留原data.json。脚本在方法步骤中执行并保存checkpoint，最终复用相同执行记录。契约与原生表述版本按源产物保留；不能把native0.3表述误作five_element0.2。
 
