@@ -1,6 +1,6 @@
 # S05-D1 角色模型配置
 
-SDK／Worker0.14.0 本机实现验收通过，独立审阅待完成；[#30](https://github.com/Fangziyang0910/LLM4OM/issues/30)。规范由 [插件契约](../plugin-contracts.md)维护；原S05-D的澄清／交互恢复与S05-C公共反馈修正仍待实现，此切片不将它们标为完成。
+SDK／Worker0.14.0 本机实现验收通过；2026-10-11独立Standards／Spec审阅通过：五个模块全部PASS-WITH-NOTES，无P1/P2，仅P3打磨项（报告/tmp/llm4om-reviews/s05-group.md）。[#30](https://github.com/Fangziyang0910/LLM4OM/issues/30)。规范由 [插件契约](../plugin-contracts.md)维护；原S05-D的澄清／交互恢复与S05-C公共反馈修正仍待实现，此切片不将它们标为完成。
 
 `llm`声明默认Provider/model/config，`llm.role_models`按实际逻辑角色名称提供独立覆盖。未配置的角色使用默认选择；角色请求仍走同一个Gateway，不获得另一份预算或并发限制。配置前检查每个Provider的能力和配置；目前只允许在线HTTP文本Provider，Mock角色覆盖明确拒绝。
 

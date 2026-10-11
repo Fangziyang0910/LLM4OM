@@ -1,6 +1,6 @@
 # S05-D2 澄清、确认与问题修订
 
-SDK／Worker0.17.0 开发切片，工作项为 [#36](https://github.com/Fangziyang0910/LLM4OM/issues/36)。字段与状态语义见 [插件契约第22节](../plugin-contracts.md#22-s05-d2-clarification-sdk-0170)，原需求为FR-19/33、AC-09/23；完整平台与独立审阅仍待验收。
+SDK／Worker0.17.0 开发切片，工作项为 [#36](https://github.com/Fangziyang0910/LLM4OM/issues/36)。字段与状态语义见 [插件契约第22节](../plugin-contracts.md#22-s05-d2-clarification-sdk-0170)，原需求为FR-19/33、AC-09/23；完整平台与独立审阅仍待验收。2026-10-11独立Standards／Spec审阅通过：五个模块全部PASS-WITH-NOTES，无P1/P2，仅P3打磨项（报告/tmp/llm4om-reviews/s05-group.md）。
 
 ## 实际行为
 

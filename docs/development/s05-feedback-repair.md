@@ -1,6 +1,6 @@
 # S05-C2 公共反馈修正策略
 
-SDK／Worker0.16.0 开发切片，工作项为 [#34](https://github.com/Fangziyang0910/LLM4OM/issues/34)。接口事实来源为 [插件契约第21节](../plugin-contracts.md#21-s05-c2-bounded-feedback-repair-sdk-0160)，方法时序见 [DD-02](../design/modeling-methods.md#dd-02-方法内部生成修正与选择)。真实外部修正已验收；独立审阅仍待完成，完整1.0未完成。
+SDK／Worker0.16.0 开发切片，工作项为 [#34](https://github.com/Fangziyang0910/LLM4OM/issues/34)。接口事实来源为 [插件契约第21节](../plugin-contracts.md#21-s05-c2-bounded-feedback-repair-sdk-0160)，方法时序见 [DD-02](../design/modeling-methods.md#dd-02-方法内部生成修正与选择)。真实外部修正已验收；独立审阅仍待完成，完整1.0未完成。2026-10-11独立Standards／Spec审阅通过：五个模块全部PASS-WITH-NOTES，无P1/P2，仅P3打磨项（报告/tmp/llm4om-reviews/s05-group.md）。
 
 ## 方法与支持范围
 

@@ -1,6 +1,6 @@
 # S05 连接诊断
 
-用途：记录Provider传输异常的可读诊断与实际连接观察。状态：SDK／Worker0.34.0开发实现。规范来源为[插件契约](../plugin-contracts.md#provider连接诊断)、FR-16／32和NFR-06／09；用户界面工作项为[#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。
+用途：记录Provider传输异常的可读诊断与实际连接观察。状态：SDK／Worker0.34.0开发实现。规范来源为[插件契约](../plugin-contracts.md#provider连接诊断)、FR-16／32和NFR-06／09；用户界面工作项为[#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。2026-10-11独立Standards／Spec审阅通过：五个模块全部PASS-WITH-NOTES，无P1/P2，仅P3打磨项（报告/tmp/llm4om-reviews/s05-group.md）。
 
 ## 实际观察
 
