@@ -22,6 +22,49 @@ NL4Opt、NLP4LP与MAMO已有导入和评测接口；CLI已有批量调度和报�
 
 GitHub仓库当前为私有，采用Apache-2.0。详细历史证据见[开发计划](docs/implementation-plan.md)和各切片记录。
 
+## 快速开始
+
+在仓库根目录执行，使用 Python 3.11／3.12：
+
+```bash
+uv sync --locked --extra dev --extra solve          # 安装（含 Gurobi 再加 --extra gurobi）
+uv run --locked python scripts/build_worker_image.py  # 构建 Docker Worker 镜像（求解在容器内执行）
+```
+
+### Web 工作台（推荐入口）
+
+```bash
+# 在仓库根目录的 .env 配置 LLM4OM_LLM_BASE_URL / LLM4OM_LLM_MODEL / LLM4OM_LLM_API_KEY（见 .env.example）
+uv run --locked llm4om serve --workspace runs/web --port 8767 --host 127.0.0.1
+```
+
+浏览器打开 `http://127.0.0.1:8767` 即可：输入自然语言问题与数据 → 选择方法 → 观察真实建模步骤 →
+查看五元素表述、求解代码、决策结果与运行记录，支持数据预览、模型数值编辑、派生求解、候选比较、
+决策试算、人工修订与批量实验管理。访问令牌由服务启动时生成，页面自动获取；LLM 凭据只保留在服务端。
+`--host 0.0.0.0` 可供局域网访问，但此时 Origin 校验是 CSRF 缓解而非认证，请勿暴露于不受信网络。
+
+### CLI 单次运行
+
+```bash
+uv run --locked --extra solve llm4om plugins list
+uv run --locked llm4om doctor --config examples/specs/run.yaml
+uv run --locked llm4om run --problem examples/specs/problem.json --config examples/specs/run.yaml
+uv run --locked llm4om run --offline --problem examples/specs/problem.json --config examples/specs/run.yaml
+```
+
+CLI 输出 run_id、bundle_path 和 status。运行目录默认在 `runs/`；查看其中的 `bundle.json`、阶段产物、解向量和 `reports/report.md`。`--output PATH` 可覆盖存储根目录。真实 run 默认使用已构建的 Docker 镜像；solve.yaml 显式选择 trusted_local。两条路径真实得到 A=3、B=2、目标 13，状态 completed；offline run 的 artifact_ready 只表示离线产物已保存。这些配置的 Formulation 来自人工 Mock；外部 LLM 配置见 S05-A。候选求解成功不代表业务语义已验证。
+
+CLI 和 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK、支持范围与错误语义见 [S01](docs/development/s01-offline-run.md)、[S02-A](docs/development/s02-highs.md)、[S03](docs/development/s03-plugins.md)及[S04-A](docs/development/s04-container.md)。本地 LLM 凭据保存在 Git 忽略的 `.env`，变量名见 [.env.example](.env.example)。S05-A 文本 Provider 优先加载配置目录的 `.env`，不存在时加载当前工作目录的 `.env`；进程环境优先。Mock 不读取凭据文件。
+
+### 批量实验与报告
+
+```bash
+llm4om benchmark --config examples/specs/experiment.yaml --output runs/experiment
+llm4om report --experiment runs/experiment
+```
+
+配置和支持范围见[批量实验记录](docs/development/s08-benchmark.md)；网页提交入口见[S09-B](docs/development/s09-batch-web.md)。
+
 ## 1.0 目标
 
 - 可插拔接入自动建模方法与不同 LLM，二者独立配置。
@@ -57,23 +100,6 @@ GitHub仓库当前为私有，采用Apache-2.0。详细历史证据见[开发计
 | [开发规范](CODING_STANDARDS.md)与 [贡献流程](CONTRIBUTING.md) | 模块设计、纵向任务、公共入口测试与审阅 |
 | [逐文件整理记录](docs/repository-audit.md) | 当前文件职责、事实来源与核验方式 |
 
-## 当前可运行的示例
-
-在仓库根目录执行，使用 Python 3.11／3.12：
-
-```bash
-uv sync --locked --extra dev --extra solve
-uv run --locked python scripts/build_worker_image.py
-uv run --locked --extra solve llm4om plugins list
-uv run --locked llm4om doctor --config examples/specs/run.yaml
-uv run --locked llm4om run --problem examples/specs/problem.json --config examples/specs/run.yaml
-uv run --locked llm4om run --offline --problem examples/specs/problem.json --config examples/specs/run.yaml
-```
-
-CLI 输出 run_id、bundle_path 和 status。运行目录默认在 `runs/`；查看其中的 `bundle.json`、阶段产物、解向量和 `reports/report.md`。`--output PATH` 可覆盖存储根目录。真实 run 默认使用已构建的 Docker 镜像；solve.yaml 显式选择 trusted_local。两条路径真实得到 A=3、B=2、目标 13，状态 completed；offline run 的 artifact_ready 只表示离线产物已保存。这些配置的 Formulation 来自人工 Mock；外部 LLM 配置见 S05-A。候选求解成功不代表业务语义已验证。
-
-CLI 和 Web 共用 `llm4om.run_problem` 应用入口。安装、SDK、支持范围与错误语义见 [S01](docs/development/s01-offline-run.md)、[S02-A](docs/development/s02-highs.md)、[S03](docs/development/s03-plugins.md)及 [S04-A](docs/development/s04-container.md)。本地 LLM 凭据保存在 Git 忽略的 `.env`，变量名见 [.env.example](.env.example)。S05-A 文本 Provider 优先加载配置目录的 `.env`，不存在时加载当前工作目录的 `.env`；进程环境优先。Mock 不读取凭据文件。
-
 ## 取消与恢复
 
 S04-B 已通过最新完整回归与独立审查，见 [实现记录](docs/development/s04-resume.md)。
@@ -87,19 +113,6 @@ llm4om resume --run-id RUN_ID --output runs --strategy rerun
 SDK 使用 CancellationToken／cancel_run／resume_run，CLI SIGINT 走同一取消路径。
 恢复保留原 run、预算与 deadline，复用已完成模型调用和匹配求解记录；未知 HTTP 结果不重发。
 不支持内部 checkpoint 且无已完成阶段时，默认 continue 明确拒绝。显式 rerun 创建新运行并保留父历史、累计费用与未知预留；可产生新付费请求，累计预算上限仍有效。支持范围与证据见 [S04-B](docs/development/s04-resume.md)。
-
-## 批量实验与报告
-
-以下CLI已实现，配置和支持范围见[批量实验记录](docs/development/s08-benchmark.md)：
-
-```bash
-llm4om benchmark --config examples/specs/experiment.yaml --output runs/experiment
-llm4om report --experiment runs/experiment
-```
-
-本地 Web 使用界面复用已有单问题应用入口。首批论文方法优先 `optimus` 和 `coe`，`direct` 提供工程对照，`feedback_repair` 为可选对照。模型主要使用通用外部 LLM，暂不集成任务专用训练权重；训练类工作的提示或建模流程可另作明确变体，未来专用模型仍走共同 LLM 接口。
-
-首批基准为 NL4Opt、NLP4LP 和 MAMO 的 EasyLP／ComplexLP 中符合 LP/MILP 范围的实例。求解器仍为 HiGHS 与 Gurobi，建模后端为 Pyomo／gurobipy。具体方法与求解器组合见 [能力矩阵](docs/implementation-plan.md#1-首批能力矩阵)。
 
 ## 开发约定
 
@@ -125,22 +138,23 @@ SDK 导出 `import_dataset`、`NL4OptAdapter`、`EvaluationCase`、`TaskAdapter`
 原始标注不是参考最优值。数值目标评测不可用，eligible 分母为零，候选求解证据独立保存。
 实际外部模型样本与独立审阅后修复已验收；数值参考条件与其余范围见 [实现证据](docs/development/s07-nl4opt.md)。
 
-## 参数化工厂（S02-B）
+## 切片实现索引
 
-S02-B 在 SDK／Worker 0.5.0 新增 Direct `output_mode: python_factory` 与版本化独立方法 Code proposal。
-公开 CSV bytes 按 data ID 传入 `build_model(data)`；只在容器子进程构建 Pyomo ModelHandle，
-可信 Worker 校验导出实例后独立调用 HiGHS。换数据／revision 可复用相同工厂源模板，形成新的
-绑定与实际解。原 Formulation 与 method-generated Code 保留，提取实例不冒充语义证明。
-旧 LPIR、trusted_local 与独立安装 fixture 行为保持。配置、工厂返回值与独立安装示例见
-[契约](docs/plugin-contracts.md#10-s02-b-parameterized-factory-interface-sdk-050)及
-[本地验收记录](docs/development/s02b-factory.md)；真实外部模型、重绑定与独立审阅后修复已验收，见该实现记录。
+各能力的实现记录与验收证据；版本号为对应 SDK／Worker 开发版本。
 
+### 建模方法
 
-## Gurobi 与原生 Code（S06-A）
+- Direct（默认五元素 Formulation，LPIR／python_factory／native 输出）：见快速开始配置与 [S01](docs/development/s01-offline-run.md)。
+- 参数化工厂（S02-B）：`output_mode: python_factory` 与版本化独立方法 Code proposal。公开 CSV bytes 按 data ID 传入 `build_model(data)`；只在容器子进程构建 Pyomo ModelHandle，可信 Worker 校验导出实例后独立调用 HiGHS。换数据／revision 可复用相同工厂源模板。旧 LPIR、trusted_local 与独立安装 fixture 行为保持，见 [契约](docs/plugin-contracts.md#10-s02-b-parameterized-factory-interface-sdk-050)与[本地验收记录](docs/development/s02b-factory.md)。
+- [公共候选评估](docs/development/s05-public-candidates.md)（0.15.0）：来源链与最终选择。
+- [反馈修正方法](docs/development/s05-feedback-repair.md)（0.16.0）：解析失败入账、阶段变化、Code-only 来源复用和共享预算。
+- [澄清流程](docs/development/s05-clarification.md)（0.17.0）：显式交互、原声明确认和新问题修订；非交互任务保留 unresolved，不从隐藏答案补齐。
+- [角色模型覆盖](docs/development/s05-role-models.md)（0.14.0）与共享预算。
+- 固定 OptiMUS 流程见 [S06-B](docs/development/s06b-optimus.md)与[源码考察](docs/development/s06b-optimus-source.md)；CoE 专家路由与原生函数见 [S06-C](docs/development/s06-coe.md)与[源码考察](docs/development/s06c-coe-source.md)。
 
-SDK／默认 Worker 0.8.0（未发布）支持 LPIR→Pyomo→Gurobi、参数化 Pyomo→Gurobi 和
-native gurobipy→Gurobi。真实 SDK 13.0.3 与无许可证挂载的 Linux Docker 已验证微型 LP/MILP；
-当前实际 availability 为 size_limited，不代表完整学术／商业许可证或 1.0 完成。
+### 求解与执行
+
+- Gurobi 与原生 Code（S06-A）：LPIR→Pyomo→Gurobi、参数化 Pyomo→Gurobi 和 native gurobipy→Gurobi。真实 SDK 13.0.3 与无许可证挂载的 Linux Docker 已验证微型 LP/MILP；当前实际 availability 为 size_limited，不代表完整学术／商业许可证或 1.0 完成。基础 SDK 可不安装 Gurobi，通过容器运行；选中宿主求解则需可选 gurobi extra。`output_mode: native_gurobipy` 对应 gurobipy Backend／Gurobi Solver／container。原生源码和 Formulation 保留，可信 Worker 重新读取 SDK MPS 并独立求解；提取视图不证明语义。见 [S06-A 实现记录](docs/development/s06-gurobi.md)与[契约](docs/plugin-contracts.md#11-s06-a-gurobi-and-native-code-sdk-060)。
 
 ```bash
 uv sync --locked --extra dev --extra solve --extra gurobi
@@ -149,52 +163,26 @@ uv run --locked llm4om doctor --config examples/specs/gurobi.yaml
 uv run --locked llm4om run --problem examples/specs/problem.json --config examples/specs/gurobi.yaml
 ```
 
-基础 SDK 可不安装 Gurobi，通过容器运行；选中宿主求解则需可选 gurobi extra。
-Direct 的 `output_mode: native_gurobipy` 对应 gurobipy Backend／Gurobi Solver／container。
-原生源码和 Formulation 保留，可信 Worker 重新读取 SDK MPS 并独立求解；提取视图不证明语义。
-能力矩阵、公开 proposal／返回值、许可证分类和真实验收边界见
-[S06-A 实现记录](docs/development/s06-gurobi.md)与[契约](docs/plugin-contracts.md#11-s06-a-gurobi-and-native-code-sdk-060)。
+- 取消与恢复（S04-B）：命令与语义见上文[取消与恢复](#取消与恢复)章节及[实现记录](docs/development/s04-resume.md)。
+- Web 并发应用进程与合作取消见 [S09 进程隔离](docs/development/s09-process-isolation.md)。
+- 插件注册：[独立文本 Provider](docs/development/s03-provider-registry.md)（0.18.0）、[独立 Task／Evaluator](docs/development/s03-task-registry.md)（0.19.0）、[独立 Compiler](docs/development/s03-compiler-registry.md)（0.20.0）、[Backend／Solver 共同注册](docs/development/s03-solver-registry.md)（0.21.0）、[数据加载与有限视图](docs/development/s03-data-loader.md)（0.22.0）、[Reporter](docs/development/s03-reporters.md)、[可安装 Executor](docs/development/s03-executor-registry.md)与[可安装 ArtifactStore](docs/development/s03-store-registry.md)（完成全部插件种类的共同注册）。
+- [显式连通性检查](docs/development/s03-connectivity.md)（0.35.0）：`llm4om doctor --config RUN_CONFIG --check-connectivity`，默认关闭、只读模型目录、不发起文本生成；网页配置区有对应开关。
 
-MAMO Task／Evaluation 已进入 SDK/Worker0.10.0 开发版本：保留全部优化问题、公开题面资格评阅和私有数值答案，单样本失败仍计入分母。实际支持与剩余验收见 [S07-C](docs/development/s07-mamo.md)；全量基准成绩未生成。
+### 任务基准与评测
 
-NLP4LP Task／Evaluation 已进入 SDK/Worker0.11.0 开发版本：完整保留361个公开描述与参数，参考缺失／损坏分别记录，资格按公开问题与数据评阅冻结。实际支持与待验收条件见 [S07-B](docs/development/s07-nlp4lp.md)。
+- NL4Opt（S07-A）：导入固定官方 snapshot，不自动下载；只导出 `public/` 和公开 run bundle，manifest 与 `private/` 留在导入／评测端。原始标注不是参考最优值，数值目标评测不可用时 eligible 分母为零。导入与单样本评测命令见[实现证据](docs/development/s07-nl4opt.md)。
+- [NLP4LP Task／Evaluation](docs/development/s07-nlp4lp.md)（0.11.0）：完整保留 361 个公开描述与参数，参考缺失／损坏分别记录，资格按公开问题与数据评阅冻结。
+- [MAMO Task／Evaluation](docs/development/s07-mamo.md)（0.10.0）：保留全部优化问题、公开题面资格评阅和私有数值答案，单样本失败仍计入分母。
+- [原问题独立检查器](docs/development/s07-checkers.md)（0.12.0）：独立可行性、原目标重算与有限探测。
 
-SDK／Worker0.12.0 的原问题独立可行性、原目标重算与有限探测见 [S07-D](docs/development/s07-checkers.md)。Web与批量CLI已实现，完整1.0验收仍在推进。
+### Web 工作台
 
-CoE专家路由与原生函数的开发实现、真实外部模型／原问题检查和剩余验收见 [S06-C](docs/development/s06-coe.md)。
+- 本地 Web 首版见 [S09-A](docs/development/s09-web.md)；网页接口已真实调用指定 DeepSeek 并经容器 HiGHS 求得 13。
+- 批量提交、进度、逐样本结果和公共报告下载见 [S09-B](docs/development/s09-batch-web.md)，从页面“开发者工具 → 实验管理”进入。
+- 人工派生编辑见 [S09-C](docs/development/s09-assisted-edits.md)：CLI 使用 `llm4om edit` 导出文档并执行新版本，网页使用“编辑并创建派生版本”；父产物和预算保留，结果明确标记人工辅助。
+- [S09 用户体验](docs/development/s09-user-experience.md)：决策试算、候选修正浏览、运行版本选择；数值表单编辑后复用 Compiler／Solver 创建人工辅助版本，保留父记录与累计预算。
+- 已保存的单问题可用 `llm4om report --run runs/RUN_ID` 重新呈现，不重调模型／Solver。
 
-角色模型覆盖与共享预算的0.14.0开发行为见 [记录](docs/development/s05-role-models.md)。
+### 网络
 
-公共候选评估、来源链与最终选择的0.15.0证据见 [S05-C1](docs/development/s05-public-candidates.md)；0.16.0新增 [反馈修正方法](docs/development/s05-feedback-repair.md)，覆盖解析失败入账、阶段变化、Code-only来源复用和共享预算。本机与实际资源验收分别记录。
-
-0.17.0 的 [澄清流程](docs/development/s05-clarification.md)支持显式交互、原声明确认和新问题修订。非交互任务保留unresolved，不从隐藏答案补齐。
-
-0.18.0的独立文本Provider注册、真实HTTP执行与恢复见 [S03-C1](docs/development/s03-provider-registry.md)；其他插件种类继续按计划接入。
-
-0.19.0的独立Task／Evaluator、冻结协议与无源读取预检见 [S03-C2](docs/development/s03-task-registry.md)。
-
-0.20.0新增独立Compiler选择、Worker包预检与源码／映射核验，见 [S03-C3a](docs/development/s03-compiler-registry.md)。本机测试为主要验收；GitHub Actions仅手动用于必要的环境交叉验证。
-
-0.21.0的Backend／Solver共同注册已完成本机验收，实际grounded／factory／native路径与独立审阅条件见 [S03-C3b](docs/development/s03-solver-registry.md)。
-
-0.22.0的数据加载与有限视图正在本机验收，见 [S03-C4](docs/development/s03-data-loader.md)。原始数据绑定与LLM视图分别记录。
-
-本地Web首版见 [S09-A](docs/development/s09-web.md)：`llm4om serve --workspace runs/web --port 8767 --host 0.0.0.0`。网页接口已真实调用指定DeepSeek并经容器HiGHS求得13；页面视觉与其余交互继续完善。
-
-批量冻结任务运行、断点继续和 JSONL／CSV／Markdown／HTML 报告见 [S08](docs/development/s08-benchmark.md)。示例先导入任务，再执行 `llm4om benchmark --config examples/specs/experiment.yaml --output runs/production-batch`；配置明确选择真实外部模型，不属于离线 Mock。
-
-网页也已接入批量提交、进度、逐样本结果和公共报告下载，见 [S09-B](docs/development/s09-batch-web.md)。从页面“开发者工具 → 实验管理”进入；先将任务冻结导入项目runs或工作区tasks。
-
-公开问题／建模输出的人工派生编辑见 [S09-C](docs/development/s09-assisted-edits.md)：CLI使用`llm4om edit`导出文档并执行新版本，网页使用“编辑并创建派生版本”。父产物和预算保留，结果明确标记人工辅助。
-
-Web并发应用进程与合作取消见[S09](docs/development/s09-process-isolation.md)。
-
-已保存的单问题可用llm4om report --run runs/RUN_ID重新呈现，不重调模型／Solver；Reporter接入见[记录](docs/development/s03-reporters.md)。
-
-当前优先交付面向用户的单问题界面：自然语言输入、实际方法进展、交互式数学模型、代码和决策结果，见 [S09 用户体验](docs/development/s09-user-experience.md)。批量实验保留为开发者入口，当前不推进集体 benchmark 运行。
-
-结果页支持决策试算、候选修正浏览和运行版本选择。“编辑新版本”可以修改问题、代码或已有严格线性模型；数值表单编辑后复用Compiler／Solver创建人工辅助版本，保留父记录与累计预算。
-
-SDK／Worker0.35.0支持`llm4om doctor --config RUN_CONFIG --check-connectivity`；网页对应配置区的显式目录检查开关。检查默认关闭，只读取模型目录，不发起文本生成。范围与真实网络观察见 [连通性检查](docs/development/s03-connectivity.md)。
-
-模型接口需要本机HTTP代理时，可在服务端`.env`填写`LLM4OM_LLM_PROXY_URL=http://127.0.0.1:7890`。CLI／SDK使用LLM配置的`proxy_url`；默认仍为直连。地址不包含代理凭据，实际支持见 [显式代理](docs/development/s05-explicit-proxy.md)。
+- 模型接口需要本机 HTTP 代理时，可在服务端 `.env` 填写 `LLM4OM_LLM_PROXY_URL=http://127.0.0.1:7890`。CLI／SDK 使用 LLM 配置的 `proxy_url`；默认仍为直连。地址不包含代理凭据，实际支持见 [显式代理](docs/development/s05-explicit-proxy.md)。
