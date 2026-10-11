@@ -105,7 +105,7 @@ Repository checks: **102 files, passed**; reference rendering check and `git dif
 Final `uv build` produced `dist/llm4om-0.4.0.tar.gz` and `dist/llm4om-0.4.0-py3-none-any.whl`.
 The rebuilt wheel was installed in an isolated local environment; SDK exports, CLI help,
 actual official dev import and evaluation of the stored official-sample local smoke all passed.
-No acceptance of a real external benchmark call or independent review is claimed.
+Independent review 2026-10-11: passed after same-day P1 fix in shared evaluate_case (guard swallowed by RunError(ValueError) inheritance); see /tmp/llm4om-reviews/s07-group.md.
 
 ## Parent real-model acceptance
 

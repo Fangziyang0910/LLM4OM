@@ -61,6 +61,18 @@ class ExperimentTests(unittest.TestCase):
         raw = path.read_bytes()
         return {**original, 'sha256': hashlib.sha256(raw).hexdigest(), 'size_bytes': len(raw)}
 
+    def test_frozen_evaluation_output_refuses_overwrite_of_valid_evidence(self):
+        from llm4om.evaluation import evaluate_case
+        output = self.root / 'batch'
+        run_experiment(self.path, output)
+        evaluation = next(output.glob('evaluations/*.json'))
+        entry = json.loads(self.manifest.read_text())['cases'][0]
+        run = next(output.glob('runs/*/*/bundle.json')).parent
+        with self.assertRaises(RunError) as caught:
+            evaluate_case(self.manifest, entry['case_id'], run, evaluation)
+        self.assertEqual(caught.exception.code, 'snapshot_exists')
+        self.assertIn('plugin_identity', evaluate_case(self.manifest, entry['case_id'], run, self.root / 'second.json'))
+
     def test_truncated_evaluation_bytes_are_reevaluated_on_resume(self):
         output = self.root / 'batch'
         summary = run_experiment(self.path, output)

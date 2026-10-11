@@ -1,7 +1,7 @@
 # S07-B NLP4LP public input and supplied-reference comparison
 
 Status: SDK/Worker0.11.0 local implementation and actual model/Solver acceptance;
-independent review is pending. Delivery: [draft PR25](https://github.com/Fangziyang0910/LLM4OM/pull/25).
+independent review passed 2026-10-11 (PASS-WITH-NOTES after the shared evaluate_case P1 was fixed the same day; report /tmp/llm4om-reviews/s07-group.md). Delivery: [draft PR25](https://github.com/Fangziyang0910/LLM4OM/pull/25).
 Scope: [Issue21](https://github.com/Fangziyang0910/LLM4OM/issues/21), FR-08–12/28–30,
 DD-06, AC-04/05/25. Source facts: [fixed-source research](s07-benchmark-research.md).
 Interface source: [contracts](../plugin-contracts.md#16-s07-b-nlp4lp-task-interface-sdk-0110).

@@ -137,12 +137,15 @@ def evaluate_case(manifest: Path, case_id: str, outcome: Path, output: Path) -> 
     result["plugin_identity"] = identity
     output.parent.mkdir(parents=True, exist_ok=True)
     payload = (json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    existing_valid = False
     if output.exists():
         try:
             parse_reference_json(output.read_bytes())
-            raise RunError("snapshot_exists", "evaluation", "Frozen evaluation evidence cannot be overwritten.")
+            existing_valid = True
         except (ValueError, OSError):
             pass  # Truncated bytes from an interrupted writer are replaced below, never reused.
+    if existing_valid:
+        raise RunError("snapshot_exists", "evaluation", "Frozen evaluation evidence cannot be overwritten.")
     temporary = output.with_name(output.name + ".tmp-" + uuid4().hex)
     try:
         with temporary.open("xb") as stream:
