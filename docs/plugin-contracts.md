@@ -51,7 +51,7 @@ source 对研究方法另记录研究路线（prompting-based／training-based�
 | `solver_backend` | `runtime() -> dict` / `solve(handle, options) -> dict` | Worker 内，仅接收声明的Handle；应用层归一化并绑定SolveResult |
 | `evaluator` | `evaluate(case, outcome, context) -> EvaluationResult` | 隐藏评分进程；不能反向泄漏 oracle |
 | `executor` | `factory.create(config) -> process callable` | 声明并遵守版本化进程profile；应用层形成ExecutionResult，见[实际契约](development/s03-executor-registry.md) |
-| `artifact_store` | `put(value, metadata) -> ArtifactRef` / `get(ref, access) -> bytes` | 内容寻址与访问控制；引用不是任意宿主路径 |
+| `artifact_store` | `create(config) -> opener(root, *, resume, cancellation, versioned) -> RunStore`（`run_store/0.1.0`） | 内容寻址与访问控制；引用不是任意宿主路径；实际契约见 [S03](development/s03-store-registry.md) |
 | `reporter` | `render(public_result, destination, context) -> list[ReportRef]` | 只读取已形成结果，不重新决定正确性 |
 
 Registry、Planner、预算账本与状态机是 1.0 稳定核心，不为了未来假设把每个内部函数变成公开插件。Executor／Store／Reporter 允许替换，但初期只保证表中小接口。

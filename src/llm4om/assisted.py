@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 from llm4om.contracts import RunError, parse_json, read_public_bytes, validate_problem, validate_config
 from llm4om.methods import DirectFactory, MethodContext, MethodOutcome, ModelProposal, FactoryCodeProposal, ScriptCodeProposal
 from llm4om.storage import RunStore
+from llm4om.store_registry import open_run_store, saved_store_selection
 from llm4om.control import CancellationToken
 
 KINDS = ('lp_ir', 'python_factory', 'native_code', 'native_script')
@@ -143,7 +144,7 @@ def _template(store: RunStore, operation: str) -> dict[str, Any]:
 
 def export_edit(run: Path, *, operation: str = 'code') -> dict[str, Any]:
     """Produce a public editing document, without changing the parent artifacts."""
-    store = RunStore(run.parent, resume=run)
+    store = open_run_store(saved_store_selection(run), run.parent, resume=run)
     try:
         if store.state.get('status') not in {'completed', 'artifact_ready', 'failed', 'cancelled', 'unresolved', 'needs_input'}:
             raise RunError('run_active', 'admission', 'Edit a saved inactive run.')
@@ -157,7 +158,7 @@ def edit_run(run: Path, edits: Path, *, cancellation: CancellationToken | None =
     from llm4om.application import _load_verified_record, _initialize_derived_run
     from llm4om.providers import Gateway
     value = parse_json(read_public_bytes(edits, max_bytes=24 * 1024 * 1024))
-    store = RunStore(run.parent, resume=run)
+    store = open_run_store(saved_store_selection(run), run.parent, resume=run)
     child = None
     try:
         if not isinstance(value.get('operation'), str):
@@ -209,7 +210,7 @@ def edit_run(run: Path, edits: Path, *, cancellation: CancellationToken | None =
         validate_config(settings)
         if settings['budget']['max_candidates'] <= store.state['ledger']['candidates']:
             raise RunError('budget_exhausted', 'admission', 'The revised budget must cover the inherited candidates and this new candidate.')
-        child = RunStore(store.path.parent, cancellation=cancellation)
+        child = open_run_store(saved_store_selection(store.path), store.path.parent, cancellation=cancellation)
         inputs = child.path / 'input'
         inputs.mkdir()
         revised = deepcopy(public)

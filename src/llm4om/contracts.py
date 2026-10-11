@@ -439,8 +439,7 @@ def validate_config(settings: dict[str, Any]) -> None:
                                  else POSITIVE if name == "max_concurrency" else NONNEGATIVE)
                            for name in ["max_llm_attempts", "max_total_tokens", "max_candidates",
                                         "max_repairs", "max_solver_calls", "wall_time_s", "max_concurrency"]}),
-        "store": _object({"plugin_id": {"const": "llm4om.stores.filesystem"},
-                          "config": _object({"root": TEXT})}),
+        "store": _object({"plugin_id": TEXT, "config": {"type": "object"}}),
         "reporters": {"type": "array", "maxItems": 32, "items": _object({"plugin_id": TEXT,
             "config": {"type": "object"}}, ["plugin_id"])},
         "evaluation": _object({"protocol_id": {"const": "llm4om.eval.public-v0.1"},

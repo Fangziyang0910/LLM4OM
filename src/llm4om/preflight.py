@@ -22,6 +22,7 @@ from llm4om.execution_plugins import ExecutionResources, resolve_execution_resou
 from llm4om.data_loaders import ResolvedDataLoader, resolve_data_loader
 from llm4om.reporters import ResolvedReporter, resolve_reporters
 from llm4om.executor_registry import ResolvedExecutor, resolve_executor
+from llm4om.store_registry import resolve_store
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,8 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     inventory = discover_plugins()
     executor = resolve_executor(settings["executor"], inventory=inventory,
         expected=expected.get("executor") if expected else None)
+    store = resolve_store(settings["store"], inventory=inventory,
+        expected=expected.get("store") if expected else None)
     reporters = resolve_reporters(settings.get("reporters", []), "run", inventory=inventory,
         expected=expected.get("reporters") if expected is not None else None)
     data_loader = resolve_data_loader(settings, inventory=inventory, expected=expected.get("data_loader") if expected else None)
@@ -231,6 +234,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         "data_loader": data_loader.binding, "data_view": data_loader.limits,
         "execution": {"model_backend": execution.backend_binding, "solver": execution.solver_binding},
         "solver_id": settings["solver"]["plugin_id"], "executor_id": settings["executor"]["plugin_id"], "executor": executor.binding,
+        "store": store.binding,
         "packages": packages, "reporters": [reporter.binding for reporter in reporters], "solver_environment": (worker or local_runtime).get("solver_environment"), "worker": worker, "budget": settings["budget"], "allowed_problem_types": allowed_types, "provider": provider_plugin.manifest,
         "provider_origin": provider_plugin.origin, "model": settings["llm"]["model"],
         **({"role_models": {role: {"provider": inventory[("llm_provider", selection["provider_plugin_id"])].manifest,

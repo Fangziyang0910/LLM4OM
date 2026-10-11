@@ -53,7 +53,7 @@
 | S03-A | 单独安装第三方方法，通过 plugins list 和 run 使用 | S01 | CLI：不改内核、ID 冲突、版本与配置错误。AC-01/02/21 |
 | S03-B | doctor 给出实际兼容路径、环境缺失与预算 admission 结果 | S03-A、S02-A | CLI：不兼容组合在付费调用前拒绝，未知能力不当作支持。AC-02/07/12 |
 
-状态：独立方法与多种资源插件已经接入，doctor与run共用预检；当前[可安装Executor](development/s03-executor-registry.md)与[显式连通性检查](development/s03-connectivity.md)已实现。ArtifactStore独立替换仍待完成，实际支持以各切片证据为准。覆盖 FR-01～06/17、NFR-01/08/10 的当前部分；DD-03。
+状态：独立方法与多种资源插件已经接入，doctor与run共用预检；当前[可安装Executor](development/s03-executor-registry.md)、[显式连通性检查](development/s03-connectivity.md)与[可安装ArtifactStore](development/s03-store-registry.md)已实现，各插件种类均有共同注册入口。实际支持以各切片证据为准。覆盖 FR-01～06/17、NFR-01/08/10 的当前部分；DD-03。
 
 ### S04 隔离执行与恢复
 
@@ -152,9 +152,9 @@ flowchart LR
 
 当前SDK／Worker为0.36.0开发版本。单问题CLI／SDK／Web、外部Provider、HiGHS／微型Gurobi、Direct／反馈修正／固定OptiMUS／CoE、三个首批任务来源、批量调度与报告已有实现。各版本的支持组合与验收证据保留在对应切片记录；[用户界面](development/s09-user-experience.md)包含当前输入、真实步骤、数据、模型、决策与派生编辑。
 
-仍需完成ArtifactStore独立替换、待补的独立审阅、完整混合故障／基准比较与S10发布验收。当前按用户指令优先推进核心流程和Web，批量评测与底层扩展暂缓；完整1.0目标和验收范围保持。当前外部接口可达性以实际请求记录为依据，不由历史成功或Mock推定。
+仍需完成待补的独立审阅（含S03各注册切片）、完整混合故障／基准比较与S10发布验收；全部插件种类已具备共同注册入口。当前按用户指令优先推进核心流程和Web，批量评测与底层扩展暂缓；完整1.0目标和验收范围保持。当前外部接口可达性以实际请求记录为依据，不由历史成功或Mock推定。2026-10-11起真实核心流程已按用户指令切换到DeepSeek官方API并完成端到端恢复（一次真实LLM调用、容器HiGHS目标13），此前中转链路的连接失败不再影响新运行。
 
-2026-10-10按用户要求暂停开发，将现有代码与文档统一到main，并关闭当前全部PR和Issue。关闭工作项是本次仓库整理，不代表未完成能力已实现或完整1.0验收通过。后续工作以本计划与[验收清单](acceptance.md)为依据。当前两次最新真实LLM请求均在连接阶段失败，未进入求解；恢复开发时需先恢复真实核心流程。
+2026-10-10按用户要求暂停开发，将现有代码与文档统一到main，并关闭当前全部PR和Issue。关闭工作项是本次仓库整理，不代表未完成能力已实现或完整1.0验收通过。后续工作以本计划与[验收清单](acceptance.md)为依据。暂停前两次最新真实LLM请求在连接阶段失败；2026-10-11恢复开发时已改用官方API完成真实端到端验证，该前提解除。
 
 ## 5. 工程默认值与完成边界
 
@@ -184,6 +184,6 @@ S03-C4由 [#45](https://github.com/Fangziyang0910/LLM4OM/issues/45)跟踪。Data
 
 S09-A [#49](https://github.com/Fangziyang0910/LLM4OM/issues/49)已编写本地页面与运行接口，并完成真实网页HTTP→DeepSeek→容器HiGHS13。当前优先推进功能，之后集中完善细节与测试。浏览器视觉和完整交互仍待验收，见 [记录](development/s09-web.md)。S08批量／报告、S09-B、其余接口和S10仍在原范围内。
 
-S03 Reporter注册／单问题与实验呈现见[记录](development/s03-reporters.md)；Executor／ArtifactStore注册、100任务批量故障恢复及完整S10继续推进。
+S03 Reporter注册／单问题与实验呈现见[记录](development/s03-reporters.md)；ArtifactStore注册与run_store/0.1.0打开契约见[记录](development/s03-store-registry.md)；100任务批量故障恢复及完整S10继续推进。
 
 2026-10-10 用户进一步明确优先级：先做好面向用户的单问题 Web 使用界面和真实核心流程，展示方法内部步骤、数学模型、求解实现与决策结果。批量 benchmark、其余边缘适配与大规模回归暂缓；完整1.0范围保持，但不以这些任务阻塞页面交付。当前实现见 [S09 用户体验](development/s09-user-experience.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。

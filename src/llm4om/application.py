@@ -29,6 +29,7 @@ from llm4om.method_resources import RunMethodResources
 from llm4om.preflight import AdmissionPlan, prepare_run
 from llm4om.linear import CompiledCode, compile_ir
 from llm4om.storage import RunStore
+from llm4om.store_registry import DEFAULT_SELECTION, open_run_store, resolve_store, saved_store_selection
 from llm4om.clarification import prepare_clarification, validate_clarification_response
 from llm4om.reporters import render_reports, resolve_reporters
 
@@ -46,12 +47,21 @@ def run_problem(problem: Path, config: Path, *, offline: bool = False,
     if type(interactive) is not bool:
         raise RunError("invalid_config", "admission", "Interactive mode must be an explicit boolean.")
     cancellation = cancellation or CancellationToken()
+    selection = dict(DEFAULT_SELECTION)
     try:
         settings = read_config(config)
-        root = output_root or config.parent / settings["store"]["config"]["root"]
+        selection = settings["store"]
+        root = output_root or config.parent / settings["store"]["config"].get("root", "runs")
     except (OSError, ValueError, KeyError, TypeError):
         root = output_root or Path.cwd() / "runs"
-    store = RunStore(root, cancellation=cancellation)
+    try:
+        resolved = resolve_store(selection)
+    except RunError:
+        # A store selection that cannot be resolved (including a broken installed plugin) still
+        # gets a filesystem run directory so admission can save its failure bundle.
+        store = RunStore(root, cancellation=cancellation)
+    else:
+        store = resolved.open(root, cancellation=cancellation)
     store.state["interactive"] = interactive
     try:
         return _run_problem(problem, config, store, offline=offline)
@@ -228,7 +238,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
 
 def report_run(run: Path) -> dict[str, Any]:
     """Render saved public results without a Provider, Solver or source replay."""
-    store = RunStore(run.parent, resume=run)
+    store = open_run_store(saved_store_selection(run), run.parent, resume=run)
     try:
         if store.state.get("status") not in {"completed", "artifact_ready", "failed", "cancelled", "unresolved", "needs_input"}:
             raise RunError("run_active", "reporting", "Report a saved inactive run.")
@@ -288,7 +298,8 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     if method.manifest["capabilities"].get("data_access", "full") == "full" and any(not view.complete for view in data_views.values()):
         raise RunError("capability_mismatch", "admission", "Method requires full data; the admitted modeling view is incomplete.")
     public_config = deepcopy(settings)
-    public_config["store"]["config"]["root"] = "."
+    if "root" in public_config["store"]["config"]:
+        public_config["store"]["config"]["root"] = "."
     if "response_artifact" in public_config["llm"]["config"]:
         public_config["llm"]["config"]["response_artifact"] = "candidates/001/artifact.json"
     public_config.setdefault("evaluation", {"protocol_id": "llm4om.eval.public-v0.1",
@@ -849,8 +860,8 @@ def resume_run(run: Path, *, cancellation: CancellationToken | None = None,
         raise RunError("invalid_resume_strategy", "admission", "Resume strategy must be continue or rerun.")
     if revised_problem is not None and answers is None:
         raise RunError("invalid_clarification_response", "admission", "A problem revision needs a bound clarification response.")
-    store = RunStore(run.parent, resume=run,
-                     cancellation=cancellation if strategy == "continue" and revised_problem is None else None)
+    store = open_run_store(saved_store_selection(run), run.parent, resume=run,
+                           cancellation=cancellation if strategy == "continue" and revised_problem is None else None)
     try:
         if store.state.get("sdk") != version("llm4om"):
             raise RunError("checkpoint_incompatible", "admission", "SDK version differs from the saved run.")
@@ -967,7 +978,8 @@ def _derive_run(store: RunStore, resource_records: list[dict[str, Any]], *,
             child_path = store.path.parent / existing["run_id"]
             with_state = parse_json(read_public_bytes(child_path / "checkpoint.json"))["payload"]["state"]
             if "sources" not in with_state:
-                child = RunStore(store.path.parent, resume=child_path, cancellation=cancellation)
+                child = open_run_store(saved_store_selection(store.path), store.path.parent, resume=child_path,
+                                       cancellation=cancellation)
                 try:
                     if child.state.get("derivation_identity") != identity:
                         raise RunError("checkpoint_incompatible", "admission", "Derived initialization identity changed.")
@@ -976,7 +988,7 @@ def _derive_run(store: RunStore, resource_records: list[dict[str, Any]], *,
                 finally:
                     child.close()
             return resume_run(child_path, cancellation=cancellation)
-    child = RunStore(store.path.parent, cancellation=cancellation)
+    child = open_run_store(saved_store_selection(store.path), store.path.parent, cancellation=cancellation)
     try:
         if operation_key is not None:
             child.state["derivation_identity"] = identity

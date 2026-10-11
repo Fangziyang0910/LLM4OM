@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm4om-fixture-store"
+version = "0.1.0"
+description = "Independent ArtifactStore integration fixture"
+requires-python = ">=3.11,<3.13"
+license = "Apache-2.0"
+dependencies = ["llm4om>=0.37.0,<0.38.0"]
+
+[project.entry-points."llm4om.plugins"]
+fixture_store = "llm4om_fixture_store:plugin"
+
+[tool.setuptools.packages.find]
+where = ["src"]

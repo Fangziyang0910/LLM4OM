@@ -100,3 +100,5 @@ Web同时运行、应用进程隔离与合作取消见[S09](development/s09-proc
 本机1000任务性能与100任务故障证据见[S08-C](development/s08-load-acceptance.md)。
 
 Reporter的注册、四格式呈现与公开结果重试见[S03](development/s03-reporters.md)。
+
+ArtifactStore的注册、run_store打开契约与恢复身份见[S03](development/s03-store-registry.md)。

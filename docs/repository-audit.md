@@ -339,3 +339,9 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/plugins/fixture_executor/src/llm4om_fixture_executor/__init__.py` | 调用收据与已有执行监督复用 | 实际Worker预检／HiGHS求解 |
 | `tests/test_executor_registry.py` | 独立执行器公共CLI验收 | 容器／本机、目标13、安装身份和无stdout污染 |
 | `docs/development/s03-executor-registry.md` | Executor实际支持契约与证据 | 进程profile、调用范围、镜像身份与剩余条件 |
+| `docs/development/s03-store-registry.md` | ArtifactStore实际支持契约与证据 | run_store/0.1.0、绑定身份、失败bundle回退与剩余条件 |
+| `src/llm4om/store_registry.py` | 可安装运行存储与RunStore打开契约绑定 | Manifest／配置、profile成员校验、恢复身份与类型检查 |
+| `tests/test_store_registry.py` | 独立运行存储公共CLI验收 | 内置默认完成、安装fixture目标13、unknown_plugin失败bundle |
+| `examples/plugins/fixture_store/pyproject.toml` | 独立ArtifactStore分发和entry point | 单独wheel安装与范围依赖 |
+| `examples/plugins/fixture_store/src/llm4om_fixture_store/__init__.py` | ArtifactStore工程fixture | 打开记录与标准文件系统契约委托 |
+| `examples/plugins/fixture_store/README.md` | fixture_store使用说明 | wheel构建、安装与插件列表入口 |
