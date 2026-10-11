@@ -1,7 +1,7 @@
 # S06-B OptiMUS fixed source workflow
 
 Status: implementation and actual local acceptance in SDK/Worker 0.9.0,
-unpublished; independent review is pending. Delivery: [draft PR23](https://github.com/Fangziyang0910/LLM4OM/pull/23). Scope: [Issue17](https://github.com/Fangziyang0910/LLM4OM/issues/17),
+unpublished. 2026-10-11独立Standards／Spec审阅通过：PASS-WITH-NOTES，无P1/P2，8条P3打磨项（报告/tmp/llm4om-reviews/s06-group.md）。 Delivery: [draft PR23](https://github.com/Fangziyang0910/LLM4OM/pull/23). Scope: [Issue17](https://github.com/Fangziyang0910/LLM4OM/issues/17),
 FR-14/22–26, DD-03/05, AC-12/13/25. The [source investigation](s06b-optimus-source.md)
 records the upstream behavior; [contracts](../plugin-contracts.md#14-s06-b-native-script-resources-sdk-090)
 define the implemented interface. This record distinguishes local workflow
