@@ -73,7 +73,7 @@
 | S05-C | 公共阶段反馈支持 Formulation／Code 定位、有界修正和选择；feedback_repair 可选对照 | S05-A、S04-B | 应用入口：max_repairs=0、预算停止、约束变化记录、选择理由。AC-06/07/09/12 |
 | S05-D | 交互运行提出澄清、恢复或形成派生 run，并支持角色模型配置 | S05-C | 应用入口：批量 unresolved；新业务规则不改写原输入。AC-06/08/23 |
 
-状态：S05-A 当前文本范围已实现，见 [实际支持与真实证据](development/s05-provider.md)和 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)；S05-B 实现与验收见 [Messages](development/s05b-messages.md)。[S05-C1候选资源](development/s05-public-candidates.md)、[S05-C2修正方法](development/s05-feedback-repair.md)及 [S05-D2澄清](development/s05-clarification.md)已有真实行为，独立审阅仍待完成。
+状态：S05-A 当前文本范围已实现，见 [实际支持与真实证据](development/s05-provider.md)和 [Issue #8](https://github.com/Fangziyang0910/LLM4OM/issues/8)；S05-B 实现与验收见 [Messages](development/s05b-messages.md)。[S05-C1候选资源](development/s05-public-candidates.md)、[S05-C2修正方法](development/s05-feedback-repair.md)及 [S05-D2澄清](development/s05-clarification.md)已有真实行为；2026-10-11五组独立Standards／Spec审阅全部完成（唯一P1/P2已当场修复）。
 
 覆盖 FR-14～19；DD-02/07。S05-B 使用 S05-A 已验证的共享 Gateway；这不是模型质量的依赖。
 
@@ -164,13 +164,13 @@ S01 采用 Python 3.11／3.12、标准库 argparse／dataclass／unittest，以�
 
 LLMOPT 等训练类工作的流程／提示变体、MCTS autoformulation、ORPilot、IndustryOR／OptMATH 及 NLP／CP 留待首批契约被真实验证后扩展。每个新增方法、Solver 或 benchmark 都需要声明实际支持组合与来源。
 
-S07-C 当前已贯通固定 MAMO 导入、公开资格冻结与单样本数值比较；已完成规范来源的真实 HiGHS 微型验收，包／Worker／干净 wheel 安装及268项本机完整回归已通过，独立审阅仍待完成。见 [实现记录](development/s07-mamo.md)。
+S07-C 当前已贯通固定 MAMO 导入、公开资格冻结与单样本数值比较；已完成规范来源的真实 HiGHS 微型验收，包／Worker／干净 wheel 安装及268项本机完整回归已通过；2026-10-11五组独立Standards／Spec审阅全部完成（唯一P1/P2已当场修复）。见 [实现记录](development/s07-mamo.md)。
 
-S07-B 当前已贯通 NLP4LP 固定发布导入、公开 JSON 参数／私有参考隔离与资格冻结；361个原始问题完整导入，322／37／2参考可用性分别记录。真实指定模型／容器 HiGHS 已验收（两次试运行含一次连接失败），273项完整本机回归已通过，独立审阅仍待完成。见 [实现记录](development/s07-nlp4lp.md)。
+S07-B 当前已贯通 NLP4LP 固定发布导入、公开 JSON 参数／私有参考隔离与资格冻结；361个原始问题完整导入，322／37／2参考可用性分别记录。真实指定模型／容器 HiGHS 已验收（两次试运行含一次连接失败），273项完整本机回归已通过；2026-10-11五组独立Standards／Spec审阅全部完成（唯一P1/P2已当场修复）。见 [实现记录](development/s07-nlp4lp.md)。
 
-[S05-D1角色模型配置](development/s05-role-models.md)已通过实际指定模型／Messages角色覆盖、HiGHS和314项本机回归，独立审阅仍待完成。该组件不替代S05-D澄清；公共反馈与修正的实现由S05-C1/C2记录。
+[S05-D1角色模型配置](development/s05-role-models.md)已通过实际指定模型／Messages角色覆盖、HiGHS和314项本机回归；2026-10-11五组独立Standards／Spec审阅全部完成（唯一P1/P2已当场修复）。该组件不替代S05-D澄清；公共反馈与修正的实现由S05-C1/C2记录。
 
-S05-C1候选资源见 [记录](development/s05-public-candidates.md)；S05-C2有界修正、解析失败入账、声明变化与Code-only来源复用见 [记录](development/s05-feedback-repair.md)；S05-D2原声明确认、新修订与派生运行见 [记录](development/s05-clarification.md)。独立审阅仍待完成；完整注册、批量／报告、Web及发布验收继续推进。
+S05-C1候选资源见 [记录](development/s05-public-candidates.md)；S05-C2有界修正、解析失败入账、声明变化与Code-only来源复用见 [记录](development/s05-feedback-repair.md)；S05-D2原声明确认、新修订与派生运行见 [记录](development/s05-clarification.md)。2026-10-11五组独立Standards／Spec审阅全部完成（唯一P1/P2已当场修复）。完整注册、批量／报告、Web及发布验收已按各自切片记录完成。
 
 S03-C1扩展当前Registry到独立文本Provider，见 [记录](development/s03-provider-registry.md)。其余插件种类仍待接入；该切片不替代S08／S09／S10。
 
@@ -184,7 +184,7 @@ S03-C4由 [#45](https://github.com/Fangziyang0910/LLM4OM/issues/45)跟踪。Data
 
 按2026-10-10用户对推进节奏的反馈，当前优先交付S09-A本地单问题工作台，再推进S08批量实验与报告。S09-A所需现有单问题、预检、隔离、取消／恢复已具备；其开发不依赖其余注册接口完成。完整插件注册与S09-B／S10仍在范围内，按实际使用路径补齐。开发采用聚焦测试与实际功能演示，完整回归集中到较大的交付节点。
 
-S09-A [#49](https://github.com/Fangziyang0910/LLM4OM/issues/49)已编写本地页面与运行接口，并完成真实网页HTTP→DeepSeek→容器HiGHS13。当前优先推进功能，之后集中完善细节与测试。浏览器视觉和完整交互仍待验收，见 [记录](development/s09-web.md)。S08批量／报告、S09-B、其余接口和S10仍在原范围内。
+S09-A [#49](https://github.com/Fangziyang0910/LLM4OM/issues/49)已编写本地页面与运行接口，并完成真实网页HTTP→DeepSeek→容器HiGHS13。当前优先推进功能，之后集中完善细节与测试。浏览器视觉与完整交互已按 [S09用户体验](development/s09-user-experience.md)记录验收；S08批量／报告、S09-B、其余接口和S10见对应切片记录。
 
 S03 Reporter注册／单问题与实验呈现见[记录](development/s03-reporters.md)；ArtifactStore注册与run_store/0.1.0打开契约见[记录](development/s03-store-registry.md)；100任务批量故障恢复及完整S10继续推进。
 

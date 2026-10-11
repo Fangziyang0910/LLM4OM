@@ -12,13 +12,13 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 ## 当前状态
 
-当前SDK／Worker为0.36.0开发版本，尚未发布完整1.0。CLI与Web已提供输入问题、选择方法、展示真实建模步骤、五元素表述、求解代码、决策结果和保存版本。结果页支持数据预览、模型数值编辑、派生求解、候选比较、决策试算与运行资源展示。
+当前SDK／Worker为0.37.0开发版本，尚未发布完整1.0。CLI与Web已提供输入问题、选择方法、展示真实建模步骤、五元素表述、求解代码、决策结果和保存版本。结果页支持数据预览、模型数值编辑、派生求解、候选比较、决策试算与运行资源展示。
 
 Direct、反馈修正、固定OptiMUS流程和CoE已接入；主要通过通用外部LLM生成表述或代码。HiGHS支持Pyomo路径，Gurobi支持当前声明的Pyomo与gurobipy路径；实际Gurobi验收限微型size-limited环境。具体组合与证据见[能力矩阵](docs/implementation-plan.md#1-首批能力矩阵)及[Web实现记录](docs/development/s09-user-experience.md)。
 
-NL4Opt、NLP4LP与MAMO已有导入和评测接口；CLI已有批量调度和报告。当前优先推进单问题核心流程与用户界面，不进行全量benchmark评测。已有真实模型／Solver成功记录不代表所有组合或完整发布已验收。
+NL4Opt、NLP4LP与MAMO已有导入和评测接口；CLI已有批量调度和报告。2026-10-11已按官方DeepSeek API完成三方法×三基准九格真实接入（连接失败清零、4/4数值参考匹配）与99格真实批量取消恢复验收；3格方法性失败如实记录。已有真实记录不代表完整发布已验收。
 
-[可安装Executor](docs/development/s03-executor-registry.md)沿用已有容器／本机进程接口。ArtifactStore独立替换和完整发布验收仍待完成。[显式连通性检查](docs/development/s03-connectivity.md)已实现；最近指定Provider的模型目录请求出现TLS中断，生成服务的当前状态须以实际请求结果为准。
+[可安装Executor](docs/development/s03-executor-registry.md)沿用已有容器／本机进程接口；[可安装ArtifactStore](docs/development/s03-store-registry.md)完成全部插件种类的共同注册。[显式连通性检查](docs/development/s03-connectivity.md)已实现。2026-10-11起真实Provider切换为官方DeepSeek API直连，中转链路TLS中断不再影响新运行；外部可达性仍以实际请求结果为准。
 
 GitHub仓库当前为私有，采用Apache-2.0。详细历史证据见[开发计划](docs/implementation-plan.md)和各切片记录。
 
