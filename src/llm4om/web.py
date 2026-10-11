@@ -99,7 +99,7 @@ class WebWorkspace:
             'llm': {'provider_plugin_id': 'llm4om.providers.openai_compatible',
                 'model': environment.get('LLM4OM_LLM_MODEL', 'your-model'),
                 'config': {'base_url': environment.get('LLM4OM_LLM_BASE_URL', 'https://api.openai.com/v1'),
-                    'credential_env': 'LLM4OM_LLM_API_KEY', 'max_retries': 0, 'timeout_s': 90, 'max_output_tokens': 8192}},
+                    'credential_env': 'LLM4OM_LLM_API_KEY', 'max_retries': 0, 'timeout_s': 90, 'max_output_tokens': 32768}},
             'compiler': {'plugin_id': 'llm4om.compilers.lp_ir_to_pyomo'},
             'model_backend': {'plugin_id': 'llm4om.model_backends.pyomo_factory'},
             'solver': {'plugin_id': 'llm4om.solvers.highs', 'options': {'time_limit_s': 30}},
