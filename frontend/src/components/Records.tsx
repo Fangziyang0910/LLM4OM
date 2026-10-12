@@ -1,7 +1,7 @@
 // 数学表述、求解代码与数据视图的结构化渲染,移植自原 visuals.js 的同名逻辑。
 import { useState } from "react";
 import type { DataPreview } from "../types";
-import { format, mathText, parameterValue, status } from "../ui";
+import { assumptionStatusNames, format, mathText, parameterValue, senseOperators, status } from "../ui";
 
 interface Term {
   coefficient: number;
@@ -157,13 +157,7 @@ function ModelNotes({
             rows={assumptions}
             fields={[
               ["假设", (item) => item?.text || parameterValue(item)],
-              [
-                "状态",
-                (item) =>
-                  ({ explicit: "原文声明", proposed: "待确认", confirmed: "已确认" } as Record<string, string>)[
-                    item?.status
-                  ] || "未记录确认状态",
-              ],
+              ["状态", (item) => assumptionStatusNames[item?.status] || "未记录确认状态"],
               ["来源", (item) => item?.origin || "未记录来源"],
             ]}
           />
@@ -444,8 +438,7 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
                       <Expression value={item.expression} names={names} active={active} onSetActive={setActive} />
                       <span className="math-bound">
                         {" "}
-                        {({ le: "≤", ge: "≥", eq: "=" } as Record<string, string>)[item.sense] || item.sense || ""}{" "}
-                        {format(item.rhs)}
+                        {senseOperators[item.sense] || item.sense || ""} {format(item.rhs)}
                       </span>
                     </div>
                   ) : (
@@ -545,13 +538,7 @@ function DataView({ contents, dataPreviews }: { contents: Record<string, any>; d
               fields={[
                 ["标识", (item) => item.id],
                 ["内容", (item) => item.text],
-                [
-                  "状态",
-                  (item) =>
-                    ({ explicit: "原文声明", proposed: "待确认", confirmed: "已确认" } as Record<string, string>)[
-                      item.status
-                    ] || "问题规则",
-                ],
+                ["状态", (item) => assumptionStatusNames[item.status] || "问题规则"],
               ]}
             />
           </Card>

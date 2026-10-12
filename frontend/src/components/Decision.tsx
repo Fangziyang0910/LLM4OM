@@ -1,7 +1,7 @@
 // 决策面板:失败诊断、进行中提示、求解结果、决策探索与独立检查。
 import { useState } from "react";
 import type { Snapshot } from "../types";
-import { activeStep, format, roleLabel, shortMethod, status } from "../ui";
+import { activeStep, format, roleLabel, senseOperators, shortMethod, status } from "../ui";
 
 function Failure({ snapshot, onOpenDiagnostics }: { snapshot: Snapshot; onOpenDiagnostics: () => void }) {
   const error = snapshot?.job?.error || snapshot?.bundle?.error;
@@ -176,7 +176,7 @@ function DecisionExplorer({ ir, solution }: { ir: any; solution: any }) {
                 <div key={item.id} className={"explorer-constraint" + (item.sense !== "eq" && margin < 0 ? " exceeded" : "")}>
                   <strong>{item.name || item.id}</strong>
                   <span>
-                    {format(activity)} {({ le: "≤", ge: "≥", eq: "=" } as Record<string, string>)[item.sense]} {format(item.rhs)}
+                    {format(activity)} {senseOperators[item.sense]} {format(item.rhs)}
                   </span>
                   <span className="constraint-margin">
                     {item.sense === "eq" ? "偏差" : "余量"} {format(margin)}

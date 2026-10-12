@@ -11,7 +11,8 @@ import type {
   UploadItem,
 } from "./types";
 import { artifactKey, artifactLabel, activeStep, format, pretty, shortMethod, status } from "./ui";
-import { Candidates, Connectivity } from "./components/Candidates";
+import { Candidates } from "./components/Candidates";
+import { Connectivity } from "./components/Connectivity";
 import { Clarification } from "./components/Clarification";
 import { Decision } from "./components/Decision";
 import { Records } from "./components/Records";
@@ -128,14 +129,8 @@ export default function App() {
     setExperiments(result.experiments);
   };
 
-  const refreshRun = async () => {
-    if (!currentJob) return;
-    const jobId = currentJob,
-      runId = selectedRun;
-    const result = await api<Snapshot>(
-      `/api/jobs/${jobId}${runId ? "?run_id=" + runId : ""}`,
-    );
-    if (currentJob !== jobId || selectedRun !== runId) return;
+  const refreshRunFor = async (id: string, runId: string | null) => {
+    const result = await api<Snapshot>(`/api/jobs/${id}${runId ? "?run_id=" + runId : ""}`);
     (window as any).snapshot = result;
     const fingerprint = JSON.stringify([
       result.job,
@@ -144,11 +139,22 @@ export default function App() {
       result.versions,
       result.latest_run_id,
     ]);
-    if (fingerprint === fingerprintRef.current) return;
-    fingerprintRef.current = fingerprint;
-    setSnapshot(result);
+    if (fingerprint !== fingerprintRef.current) {
+      fingerprintRef.current = fingerprint;
+      setSnapshot(result);
+    }
     const error = result.bundle?.error || result.job.error;
     if (error) notice(error.message || "运行未完成，请查看运行详情。", true);
+    return result;
+  };
+
+  const refreshRun = async () => {
+    if (!currentJob) return;
+    const jobId = currentJob,
+      runId = selectedRun;
+    const result = await refreshRunFor(jobId, runId);
+    if (currentJob !== jobId || selectedRun !== runId) return result;
+    return result;
   };
 
   const refreshExperiment = async () => {
@@ -279,6 +285,14 @@ export default function App() {
     return next;
   };
 
+  const commitBudget = () => {
+    try {
+      readConfig();
+    } catch (error) {
+      notice((error as Error).message, true);
+    }
+  };
+
   const chooseMethod = (method: string) => {
     const next = { ...config, method: { ...(config.method || {}) } } as RunConfig;
     if (["llm4om.methods.optimus", "llm4om.methods.optimus_inline"].includes(method)) {
@@ -350,22 +364,6 @@ export default function App() {
     const result = await refreshRunFor(id, runId);
     if (result?.bundle?.stages?.formulation?.status === "not_available") setActiveTab("code");
     await refreshJobs();
-  };
-
-  const refreshRunFor = async (id: string, runId: string | null) => {
-    const result = await api<Snapshot>(`/api/jobs/${id}${runId ? "?run_id=" + runId : ""}`);
-    (window as any).snapshot = result;
-    fingerprintRef.current = JSON.stringify([
-      result.job,
-      result.artifacts,
-      result.events,
-      result.versions,
-      result.latest_run_id,
-    ]);
-    setSnapshot(result);
-    const error = result.bundle?.error || result.job.error;
-    if (error) notice(error.message || "运行未完成，请查看运行详情。", true);
-    return result;
   };
 
   const submitRun = async () => {
@@ -1042,13 +1040,7 @@ export default function App() {
                       min="1"
                       value={budgetText.attempt}
                       onChange={(event) => setBudgetText((prior) => ({ ...prior, attempt: event.target.value }))}
-                      onBlur={() => {
-                        try {
-                          readConfig();
-                        } catch (error) {
-                          notice((error as Error).message, true);
-                        }
-                      }}
+                      onBlur={commitBudget}
                     />
                   </label>
                   <label>
@@ -1059,13 +1051,7 @@ export default function App() {
                       min="1"
                       value={budgetText.token}
                       onChange={(event) => setBudgetText((prior) => ({ ...prior, token: event.target.value }))}
-                      onBlur={() => {
-                        try {
-                          readConfig();
-                        } catch (error) {
-                          notice((error as Error).message, true);
-                        }
-                      }}
+                      onBlur={commitBudget}
                     />
                   </label>
                   <label>
@@ -1077,13 +1063,7 @@ export default function App() {
                       step="any"
                       value={budgetText.wall}
                       onChange={(event) => setBudgetText((prior) => ({ ...prior, wall: event.target.value }))}
-                      onBlur={() => {
-                        try {
-                          readConfig();
-                        } catch (error) {
-                          notice((error as Error).message, true);
-                        }
-                      }}
+                      onBlur={commitBudget}
                     />
                   </label>
                   <label>
@@ -1094,13 +1074,7 @@ export default function App() {
                       min="0"
                       value={budgetText.solver}
                       onChange={(event) => setBudgetText((prior) => ({ ...prior, solver: event.target.value }))}
-                      onBlur={() => {
-                        try {
-                          readConfig();
-                        } catch (error) {
-                          notice((error as Error).message, true);
-                        }
-                      }}
+                      onBlur={commitBudget}
                     />
                   </label>
                 </div>

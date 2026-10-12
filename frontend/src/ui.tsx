@@ -142,6 +142,13 @@ export function roleLabel(role: string | undefined): string {
   return role;
 }
 
+export const senseOperators: Record<string, string> = { le: "≤", ge: "≥", eq: "=" };
+export const assumptionStatusNames: Record<string, string> = {
+  explicit: "原文声明",
+  proposed: "待确认",
+  confirmed: "已确认",
+};
+
 export const pretty = (value: unknown): string =>
   typeof value === "string" ? value : JSON.stringify(value, null, 2);
 

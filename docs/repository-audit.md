@@ -277,7 +277,8 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/src/facade.tsx` | 浏览器级UI命令门面 | flushSync同步渲染、artifactKey等价 |
 | `frontend/src/main.tsx` | 应用入口 | 安装门面并挂载 |
 | `frontend/src/components/Records.tsx` | 数学表述、代码与数据视图渲染 | 五元素卡片、需求回链、代码行 |
-| `frontend/src/components/Candidates.tsx` | 候选与修正视图及体检呈现 | 选择理由、阶段、变化表 |
+| `frontend/src/components/Candidates.tsx` | 候选与修正视图 | 选择理由、阶段、变化表 |
+| `frontend/src/components/Connectivity.tsx` | 配置体检结果呈现 | 分层目录检查、模型列出情况 |
 | `frontend/src/components/RuntimeDetails.tsx` | 资源账本、求解执行与调用记录 | 未知Token与费用不记零 |
 | `frontend/src/components/Decision.tsx` | 决策面板、失败诊断与决策探索 | 候选模型结果、余量试算 |
 | `frontend/src/components/Timeline.tsx` | 方法过程时间线 | 步骤卡片、角色输出、产物直达 |
