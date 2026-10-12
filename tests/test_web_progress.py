@@ -64,8 +64,8 @@ class WebProgressTests(unittest.TestCase):
                         time.sleep(0.05)
                 else:
                     self.fail('Web did not start.')
-                with opener.open(url + '/visuals.js') as asset:
-                    self.assertIn(b'const UI', asset.read())
+                with opener.open(url + '/app.js') as asset:
+                    self.assertIn(b'window.UI', asset.read())
                 config = bootstrap['config']
                 config['llm'] = {'provider_plugin_id': 'llm4om.providers.openai_compatible', 'model': 'synthetic-progress',
                     'config': {'base_url': f'http://127.0.0.1:{provider.server_port}/v1',

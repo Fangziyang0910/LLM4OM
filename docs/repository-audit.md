@@ -264,9 +264,29 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_data_loader_plugins.py` | 公开数据加载与真实LLM视图验收 | HTTP、HiGHS／容器、原始检查、拒绝与恢复 |
 
 | `src/llm4om/web.py` | 本地Web工作区与公共HTTP接口 | 复用核心运行／恢复、限制公开引用、凭据留服务端 |
-| `src/llm4om/web_assets/index.html` | 结构化本地研究工作台 | 原生控件、问题／配置／阶段／候选与结果 |
-| `src/llm4om/web_assets/app.js` | 公共接口调用与已保存结果展示 | 安全文本渲染、事件轮询、上传和控制 |
-| `src/llm4om/web_assets/style.css` | 本地工作台布局与响应式样式 | 焦点、表格与阶段卡片；视觉验收继续补齐 |
+| `frontend/package.json` | React前端构建源与依赖声明 | 固定文件名产物、无外部CDN、playwright仅测试 |
+| `frontend/package-lock.json` | 前端依赖锁定 | 与package.json一致、可复现构建 |
+| `frontend/tsconfig.json` | 前端TypeScript编译选项 | 严格模式、noEmit类型检查 |
+| `frontend/vite.config.ts` | 前端构建输出契约 | 产物写入web_assets、服务路由与CSP不变 |
+| `to-questionnaire-frontend-redesign.md` | 前端重构问卷与已选方向 | 过程产物，收尾工单归档 |
+| `frontend/index.html` | 应用挂载模板 | 构建后等价于工作台首页 |
+| `frontend/src/App.tsx` | 工作台应用状态、表单、轮询与视图编排 | 行为等价迁移自原生app.js |
+| `frontend/src/types.ts` | 公开运行数据外形声明 | 未知阶段如实缺失、不补造 |
+| `frontend/src/api.ts` | 唯一HTTP通道与变更令牌 | 沿用既有REST形状 |
+| `frontend/src/ui.tsx` | 展示词汇与纯函数 | 状态／方法／角色词、artifact引用匹配 |
+| `frontend/src/facade.tsx` | 浏览器级UI命令门面 | flushSync同步渲染、artifactKey等价 |
+| `frontend/src/main.tsx` | 应用入口 | 安装门面并挂载 |
+| `frontend/src/components/Records.tsx` | 数学表述、代码与数据视图渲染 | 五元素卡片、需求回链、代码行 |
+| `frontend/src/components/Candidates.tsx` | 候选与修正视图及体检呈现 | 选择理由、阶段、变化表 |
+| `frontend/src/components/RuntimeDetails.tsx` | 资源账本、求解执行与调用记录 | 未知Token与费用不记零 |
+| `frontend/src/components/Decision.tsx` | 决策面板、失败诊断与决策探索 | 候选模型结果、余量试算 |
+| `frontend/src/components/Timeline.tsx` | 方法过程时间线 | 步骤卡片、角色输出、产物直达 |
+| `frontend/src/components/Clarification.tsx` | 澄清问答表单与修订构建 | 确认／修订语义、预览 |
+| `frontend/src/components/Revision.tsx` | 人工修订字段规格与校验 | 问题／代码／严格IR、数值语义 |
+| `frontend/src/style.css` | 工作台布局与响应式样式源 | 焦点、表格与阶段卡片；视觉验收继续补齐 |
+| `src/llm4om/web_assets/index.html` | 构建产物：工作台首页 | 由frontend构建生成，不手改 |
+| `src/llm4om/web_assets/app.js` | 构建产物：应用与渲染逻辑 | 由frontend构建生成，不手改 |
+| `src/llm4om/web_assets/style.css` | 构建产物：样式 | 由frontend构建生成，不手改 |
 | `docs/development/s09-web.md` | Web功能与真实运行支持记录 | 真实Provider／Solver与未验证范围分开 |
 
 | `tests/test_web_bind.py` | 显式远程IPv4监听的公共HTTP行为 | 页面／bootstrap、同源检查、既有请求token |
@@ -299,7 +319,6 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_reporter_plugins.py` | 公共CLI／SDK的Reporter验收 | 实际HiGHS、引用／错误、恢复与报告转义 |
 | `docs/development/s03-reporters.md` | Reporter实现支持与证据 | 来源契约／公开输入／未验收范围 |
 
-| `src/llm4om/web_assets/visuals.js` | 用户数学模型、代码、实际步骤和决策可视化 | 安全DOM、公开记录、实际最终引用、浏览器交互与窄屏 |
 | `tests/test_web_progress.py` | 运行中公开进展与完成求解的HTTP验收 | 确定性responder、真实HiGHS、凭据与私有状态不暴露 |
 | `docs/development/s09-user-experience.md` | 用户界面流程、支持与验收 | 公共步骤契约、真实／fixture证据、当前优先级 |
 

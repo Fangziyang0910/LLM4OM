@@ -1,0 +1,178 @@
+// 与原 visuals.js 对齐的展示词汇与纯函数;结构化渲染组件在各组件文件中。
+import type { ArtifactRef, Snapshot } from "./types";
+
+export const statusNames: Record<string, string> = {
+  running: "进行中",
+  queued: "排队中",
+  completed: "已完成",
+  failed: "未完成",
+  cancelled: "已取消",
+  artifact_ready: "模型已生成",
+  needs_input: "需要补充信息",
+  unresolved: "等待确认",
+  available: "已生成",
+  pending: "等待中",
+  not_available: "未提供",
+  optimal: "候选最优",
+  infeasible: "候选不可行",
+  unbounded: "候选无界",
+  proposed: "已生成",
+  executed: "已执行",
+  invalid: "未通过检查",
+  selected: "最终选择",
+};
+
+export const methodNames: Record<string, string> = {
+  "llm4om.methods.direct": "Direct · 直接建模",
+  "llm4om.methods.optimus_inline": "OptiMUS · 分步建模",
+  "llm4om.methods.optimus": "OptiMUS · 参数化输入",
+  "llm4om.methods.coe": "CoE · 专家协作",
+  "llm4om.methods.feedback_repair": "反馈修正",
+  "llm4om.methods.assisted": "人工辅助修订",
+};
+
+const roles: Record<string, string> = {
+  conductor: "选择参与专家",
+  reducer: "汇总专家方案",
+  public_evaluator: "生成公开检查输入",
+  "Terminology Interpreter": "解释问题术语",
+  "Parameter Extractor": "提取参数与决策",
+  "Modeling Expert": "数学建模讨论",
+  "Programming Example Provider": "构建代码示例",
+  "Programming Expert": "生成求解代码",
+  "Modeling Knowledge Supplement Expert": "补充建模方案",
+  "Code Reviewer": "审查与修正代码",
+};
+
+export const format = (value: unknown): string =>
+  typeof value === "number"
+    ? value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })
+    : String(value ?? "—");
+
+export const status = (value: string | undefined | null): string =>
+  statusNames[value || ""] || value || "等待中";
+
+export const shortMethod = (value: string | undefined): string =>
+  methodNames[value || ""] || value?.split(".").at(-1) || "建模方法";
+
+const parameterValue = (value: unknown): string =>
+  Array.isArray(value)
+    ? value.map(parameterValue).join(" · ")
+    : value && typeof value === "object"
+      ? Object.entries(value as Record<string, unknown>)
+          .map(([key, item]) => key + " = " + parameterValue(item))
+          .join("; ")
+      : format(value);
+export { parameterValue };
+
+export const artifactLabel = (name: string): string =>
+  (
+    {
+      "formulation.json": "数学表述",
+      "structured-ir.json": "实例化模型",
+      "formulation-snapshot.json": "表述来源",
+      "model.py": "求解源码",
+      "code-artifact.json": "代码来源",
+      "candidate.json": "候选状态",
+      "candidate-snapshot.json": "初始候选",
+      "assessment.json": "公开检查",
+      "candidate-selection.json": "最终选择",
+      "formulation-changes.json": "表述变化",
+      "repair-state.json": "修正过程",
+      "evaluation.json": "独立评估",
+      "public-problem.json": "原始问题与规则",
+      "data-views.json": "模型数据视图",
+      "dataset-manifest.json": "原始数据来源",
+      "state_1_params.json": "问题与参数",
+      "state_2_objective.json": "优化目标初稿",
+      "state_3_constraints.json": "约束识别",
+      "state_4_constraints_modeled.json": "约束数学表述",
+      "state_5_objective_modeled.json": "完整数学表述",
+      "state_6_code.json": "数学表述与代码片段",
+    } as Record<string, string>
+  )[name.split("/").at(-1) || ""] || name;
+
+export function artifactKey(
+  snapshot: Pick<Snapshot, "bundle" | "artifacts" | "contents"> | null | undefined,
+  reference: ArtifactRef | null | undefined,
+): string | undefined {
+  if (reference?.namespace !== "run_public") return;
+  const current = (
+    snapshot?.bundle
+      ? Object.values(snapshot.bundle.public_projections || {})
+      : snapshot?.artifacts || []
+  ).find((item) => item.relative_path === reference.relative_path);
+  if (
+    current?.namespace !== reference.namespace ||
+    current?.sha256 !== reference.sha256 ||
+    current?.size_bytes !== reference.size_bytes
+  )
+    return;
+  return Object.keys(snapshot?.contents || {})
+    .sort((a, b) => b.length - a.length)
+    .find(
+      (name) =>
+        reference.relative_path === name ||
+        reference.relative_path.endsWith("/" + name),
+    );
+}
+
+export const mathText = (value: unknown): string =>
+  String(value || "")
+    .replace(/\\leq\b/g, "≤")
+    .replace(/\\geq\b/g, "≥")
+    .replace(/\\cdot\b/g, "·")
+    .replace(/\\times\b/g, "×")
+    .replace(/\\sum\b/g, "∑")
+    .replace(/\\forall\b/g, "∀")
+    .replace(/\\in\b/g, "∈")
+    .replace(/\\mathbb\{R\}/g, "ℝ")
+    .replace(/\\mathbb\{Z\}/g, "ℤ")
+    .replace(/^\$+|\$+$/g, "");
+
+export function roleLabel(role: string | undefined): string {
+  if (!role) return "";
+  if (roles[role]) return roles[role];
+  if (/debug/.test(role)) return "检查与调试代码";
+  if (/code/.test(role)) return "生成求解实现";
+  if (/objective.*formulation/.test(role)) return "形成目标函数";
+  if (/constraint.*formulation/.test(role)) return "形成约束表述";
+  if (/objective/.test(role)) return "解析优化目标";
+  if (/constraint/.test(role)) return "识别业务约束";
+  return role;
+}
+
+export const pretty = (value: unknown): string =>
+  typeof value === "string" ? value : JSON.stringify(value, null, 2);
+
+export const phaseLabel = (phase: string | undefined): string =>
+  (
+    {
+      formulation: "Formulation · 数学表述",
+      code: "Code · 求解实现",
+      solve: "Solve · 求解",
+      coordination: "方法协调",
+    } as Record<string, string>
+  )[phase || ""] || phase || "";
+
+export function activeStep(snapshot: Snapshot | null | undefined) {
+  const current = new Map<string, any>();
+  let solver: any = null;
+  for (const event of snapshot?.events || []) {
+    const step = event.method_event;
+    if (step?.type === "modeling_step")
+      current.set(step.step_id, { ...step, sequence: event.sequence_no });
+    if (event.kind === "solver_started")
+      solver = {
+        phase: "solve",
+        label: "正在求解候选模型",
+        actor: "求解器",
+        sequence: event.sequence_no,
+        status: "running",
+      };
+    if (event.kind === "solver_finished") solver = null;
+  }
+  return [...current.values(), ...(solver ? [solver] : [])]
+    .filter((step) => step.status === "running")
+    .sort((a, b) => b.sequence - a.sequence)[0];
+}

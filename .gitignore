@@ -27,3 +27,6 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# Frontend build source; built assets ship inside src/llm4om/web_assets
+/frontend/node_modules/
