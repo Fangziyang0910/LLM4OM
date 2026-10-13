@@ -1,7 +1,7 @@
 // 数学表述、求解代码与数据视图的结构化渲染,移植自原 visuals.js 的同名逻辑。
 import { useState } from "react";
 import type { DataPreview } from "../types";
-import { assumptionStatusNames, format, parameterValue, senseOperators, status } from "../ui";
+import { assumptionStatusNames, format, parameterValue, senseOperator, status, VarSymbol } from "../ui";
 import { isBareFormula, MathTex } from "../math";
 import { tokenizeLines, type Token } from "../highlight";
 
@@ -86,22 +86,22 @@ function Expression({
       {value?.constant || !terms.length ? <span>{format(value?.constant || 0)}</span> : null}
       {terms.map((term, index) => (
         <span key={term.variable_id + index}>
-          <span className="math-operator">
-            {term.coefficient < 0 ? " − " : index || value?.constant ? " + " : ""}
+            <span className="math-operator">
+              {term.coefficient < 0 ? " − " : index || value?.constant ? " + " : ""}
+            </span>
+            {Math.abs(term.coefficient) !== 1 ? (
+              <span className="coefficient">{format(Math.abs(term.coefficient))} </span>
+            ) : null}
+            <button
+              type="button"
+              className={"math-variable" + (term.variable_id === active ? " highlight" : "")}
+              data-variable={term.variable_id}
+              onClick={() => onSetActive(term.variable_id)}
+            >
+              <VarSymbol name={names[term.variable_id] || term.variable_id} />
+            </button>
           </span>
-          {Math.abs(term.coefficient) !== 1 ? (
-            <span className="coefficient">{format(Math.abs(term.coefficient))} </span>
-          ) : null}
-          <button
-            type="button"
-            className={"math-variable" + (term.variable_id === active ? " highlight" : "")}
-            data-variable={term.variable_id}
-            onClick={() => onSetActive(term.variable_id)}
-          >
-            {names[term.variable_id] || term.variable_id}
-          </button>
-        </span>
-      ))}
+        ))}
     </div>
   );
 }
@@ -369,6 +369,9 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
   }
   const relations: { label: string; ids: string[] }[] = [];
   const sense = objective?.sense || ir?.objective?.sense;
+  const senseWord = String(sense ?? "")
+    .replace(/^[\\$]+/, "")
+    .toLowerCase();
   const goalIds = ir?.objective?.requirement_ids ?? objective?.requirement_ids ?? [];
   relations.push({ label: "目标函数", ids: goalIds });
   const restrictions = ir?.constraints || representation.constraints || [];
@@ -382,7 +385,7 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
             : objective?.description || "模型要达到的目标"}
         </p>
         <span className="pill">
-          {sense === "min" ? "最小化 MIN" : sense === "max" ? "最大化 MAX" : "目标函数"}
+          {senseWord === "min" ? "最小化 MIN" : senseWord === "max" ? "最大化 MAX" : "目标函数"}
         </span>
         {ir?.objective?.expression ? (
           <Expression value={ir.objective.expression} names={names} active={active} onSetActive={setActive} />
@@ -425,7 +428,9 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
                   data-variable={item.id || item.name}
                   onClick={() => setActive(item.id || item.name)}
                 >
-                  <strong className="variable-symbol">{item.name || item.id}</strong>
+                  <strong className="variable-symbol">
+                    <VarSymbol name={item.name || item.id} />
+                  </strong>
                   <span>{item.description || item.definition || ""}</span>
                   <span className="pill muted">
                     {domain}
@@ -462,7 +467,7 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
                       <Expression value={item.expression} names={names} active={active} onSetActive={setActive} />
                       <span className="math-bound">
                         {" "}
-                        {senseOperators[item.sense] || item.sense || ""} {format(item.rhs)}
+                        {senseOperator(item.sense)} {format(item.rhs)}
                       </span>
                     </div>
                   ) : (

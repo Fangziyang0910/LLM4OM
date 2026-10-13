@@ -130,7 +130,40 @@ export function roleLabel(role: string | undefined): string {
   return role;
 }
 
-export const senseOperators: Record<string, string> = { le: "≤", ge: "≥", eq: "=" };
+// 方法保存的 sense 可能是 le/ge,也可能是 \leq、geq、>= 这类写法;
+// 统一归一为标准键再映射符号,未识别的写法不原样显示。
+const senseKeys: Record<string, string> = {
+  le: "le", leq: "le", "<=": "le", "<": "le", lt: "le",
+  ge: "ge", geq: "ge", ">=": "ge", ">": "ge", gt: "ge",
+  eq: "eq", "=": "eq", "==": "eq",
+  neq: "ne", "!=": "ne", ne: "ne",
+};
+
+export function senseKey(sense: unknown): string {
+  const key = String(sense ?? "")
+    .trim()
+    .replace(/^[\\$]+/, "")
+    .toLowerCase();
+  return senseKeys[key] || "other";
+}
+
+export function senseOperator(sense: unknown): string {
+  return ({ le: "≤", ge: "≥", eq: "=", ne: "≠" } as Record<string, string>)[senseKey(sense)] || "";
+}
+
+// 变量名排版:xA / x_A / x1 显示为字母 + 下标;普通单词与中文名原样显示。
+export function VarSymbol({ name }: { name: unknown }) {
+  const text = String(name ?? "").trim();
+  const match = /^([A-Za-z])_?([A-Za-z0-9]{1,3})$/.exec(text);
+  if (match && (text.includes("_") || /^[\dA-Z]/.test(match[2])))
+    return (
+      <>
+        <i>{match[1]}</i>
+        <sub>{match[2]}</sub>
+      </>
+    );
+  return <>{text}</>;
+}
 export const assumptionStatusNames: Record<string, string> = {
   explicit: "原文声明",
   proposed: "待确认",

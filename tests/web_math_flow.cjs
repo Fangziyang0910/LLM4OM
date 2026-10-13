@@ -38,11 +38,37 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       const host = document.createElement("div");
       document.querySelector("main").appendChild(host);
       UI.records(host, formulation, "formulation", contents);
-      return {
+      const textPath = {
         katex: host.querySelectorAll(".katex").length,
         fallback: host.querySelectorAll(".math-fallback").length,
         text: [...host.querySelectorAll(".math-tex")].map((el) => el.textContent).join(" "),
         all: host.textContent,
+      };
+      // 结构化路径:方法也会把约束存为 terms+sense+rhs,sense 用 \geq 这类 LaTeX 写法,
+      // 变量名是 xA/xB(无下划线)。
+      state.constraints = [
+        {
+          id: "C1",
+          description: "resource limit",
+          expression: {
+            terms: [
+              { variable_id: "xA", coefficient: 2 },
+              { variable_id: "xB", coefficient: 1 },
+            ],
+            constant: 0,
+          },
+          sense: "\\geq",
+          rhs: 8,
+        },
+      ];
+      const irHost = document.createElement("div");
+      document.querySelector("main").appendChild(irHost);
+      UI.records(irHost, formulation, "formulation", contents);
+      return {
+        ...textPath,
+        subscripts: irHost.querySelectorAll(".math-variable sub").length,
+        bound: [...irHost.querySelectorAll(".math-bound")].map((el) => el.textContent).join(" "),
+        raw: irHost.textContent,
       };
     });
     assert.ok(rendered, "fixture 应包含 expression_text 表述");
@@ -53,6 +79,10 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     assert.match(rendered.text, /≤/);
     // 裸公式 description 不再原样重复显示为文本
     assert.doesNotMatch(rendered.all, /2 \* x_A/);
+    // 结构化路径:变量名 xA 排版为下标,LaTeX 写法的 sense(\geq)映射为 ≥,不再原样显示
+    assert.ok(rendered.subscripts >= 2, "xA/xB 变量名应排版下标");
+    assert.match(rendered.bound, /≥/);
+    assert.doesNotMatch(rendered.raw, /geq/, "LaTeX sense 不应原样显示");
     await page.click('[data-tab="formulation"]');
     assert.ok(
       (await page.locator(".math-variable").count()) > 0,
