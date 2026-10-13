@@ -189,3 +189,5 @@ S09-A [#49](https://github.com/Fangziyang0910/LLM4OM/issues/49)已编写本地�
 S03 Reporter注册／单问题与实验呈现见[记录](development/s03-reporters.md)；ArtifactStore注册与run_store/0.1.0打开契约见[记录](development/s03-store-registry.md)；100任务批量故障恢复及完整S10继续推进。
 
 2026-10-10 用户进一步明确优先级：先做好面向用户的单问题 Web 使用界面和真实核心流程，展示方法内部步骤、数学模型、求解实现与决策结果。批量 benchmark、其余边缘适配与大规模回归暂缓；完整1.0范围保持，但不以这些任务阻塞页面交付。当前实现见 [S09 用户体验](development/s09-user-experience.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。
+
+2026-10-13 S09-D 前端重构完成：workbench 前端迁移到 `frontend/`（React + Vite + TypeScript，固定文件名产出到 `web_assets/`，路由表与 CSP 不变），以垂直故事流、五元素结果区、起点页引导、人话失败诊断与统一设计令牌重做用户界面；键盘可达性纳入浏览器验收。等价性以旧/新实现同一测试电池对照证明，后端契约零改动。问卷归档于 [design](design/frontend-redesign-questionnaire.md)，实现记录见 [S09-D](development/s09-frontend-redesign.md)，spec 与工单证据见 [#86](https://github.com/Fangziyang0910/LLM4OM/issues/86)–[#93](https://github.com/Fangziyang0910/LLM4OM/issues/93)。

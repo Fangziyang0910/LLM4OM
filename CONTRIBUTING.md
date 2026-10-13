@@ -43,6 +43,35 @@ uv build
 
 仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。容器测试要求可访问的 Docker daemon 和已构建的 Worker 镜像；真实测试不自动跳过。Linux 为当前完整隔离验证环境，macOS／Windows 尚未验收。平台测试从 CLI／SDK 与编译／Solver 公共接口验证离线、真实求解、独立方法安装及预检；维护检查不替代真实隔离测试、完整预算执行、恢复或 benchmark 验收。基础安装可省略 solve extra，完整测试须安装 solve 与 gurobi extras；Gurobi 实测仅证明当前 size-limited 微型环境。
 
+### 前端构建与浏览器流程测试
+
+Workbench 前端源在 `frontend/`（React + Vite + TypeScript），构建产物以固定文件名输出到 `src/llm4om/web_assets/` 随包分发。修改前端后必须重新构建，流程测试跑在构建产物上：
+
+```bash
+npm --prefix frontend install
+npm --prefix frontend run build   # tsc --noEmit + vite build → web_assets/{index.html,app.js,style.css}
+```
+
+浏览器流程测试（Playwright `.cjs`）使用本机确定性 guidance 服务器（真实 `serve_web` + 工程 Provider）。工作区必须为**空的一次性目录**，重启需换新目录；每个测试族从全新工作区开始：
+
+```bash
+# 终端1：启动 fixture（默认 8774=web、8775=Provider）
+uv run --locked --extra solve python tests/helpers/web_guidance_server.py --workspace /tmp/llm4om-web-fixture
+
+# 终端2：运行流程测试（以 story 为例）
+LLM4OM_WEB_TEST_URL=http://127.0.0.1:8774 \
+LLM4OM_WEB_TEST_PROVIDER_URL=http://127.0.0.1:8775 \
+LLM4OM_WEB_TEST_WORKSPACE=/tmp/llm4om-web-fixture/jobs \
+LLM4OM_BROWSER_MODULE=frontend/node_modules/playwright \
+LLM4OM_BROWSER_EXECUTABLE="$HOME/.cache/ms-playwright/chromium-*/chrome-linux*/chrome" \
+node tests/web_story_flow.cjs
+```
+
+- 直接读运行目录的用例（`web_edit_flow`／`web_model_edit_flow`／`web_clarification_flow`）要求 `LLM4OM_WEB_TEST_WORKSPACE` 指向 `<workspace>/jobs`（其下即 `<job_id>/`）；其余用例只需该变量存在。
+- fixture 顺序：`web_clarification_flow` 先跑（其末尾修订生成 revision-2 运行），`web_edit_flow` 依赖该已完成运行；story／start／failure／keyboard 等自成体系，可独立工作区运行。
+- `web_decision/data/process/links/runtime/candidates/connectivity_check/history` 依赖一次性真实历史运行数据，当前需另行准备真实记录工作区（对照证据见 [#87](https://github.com/Fangziyang0910/LLM4OM/issues/87)）。
+- Chrome 路径按本机 Playwright 安装调整；`LLM4OM_BROWSER_MODULE` 指向 `frontend/node_modules/playwright`（devDependency）。
+
 ## 4. Review 与交付
 
 Review 分开回答两个问题：Standards 是否符合开发规范和相关契约；Spec 是否完成用户要求或 issue。显式调用 code-review 时按技能执行独立审阅；若当前环境无法运行独立审阅者，说明实际采用的自查范围。

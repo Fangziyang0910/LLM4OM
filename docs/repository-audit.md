@@ -268,7 +268,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/package-lock.json` | 前端依赖锁定 | 与package.json一致、可复现构建 |
 | `frontend/tsconfig.json` | 前端TypeScript编译选项 | 严格模式、noEmit类型检查 |
 | `frontend/vite.config.ts` | 前端构建输出契约 | 产物写入web_assets、服务路由与CSP不变 |
-| `to-questionnaire-frontend-redesign.md` | 前端重构问卷与已选方向 | 过程产物，收尾工单归档 |
+| `docs/design/frontend-redesign-questionnaire.md` | 前端重构问卷与已选方向 | 过程产物，#93 归档；实现见 S09-D |
 | `frontend/index.html` | 应用挂载模板 | 构建后等价于工作台首页 |
 | `frontend/src/App.tsx` | 工作台应用状态、表单、轮询与视图编排 | 行为等价迁移自原生app.js |
 | `frontend/src/types.ts` | 公开运行数据外形声明 | 未知阶段如实缺失、不补造 |
@@ -328,6 +328,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 
 | `tests/test_web_progress.py` | 运行中公开进展与完成求解的HTTP验收 | 确定性responder、真实HiGHS、凭据与私有状态不暴露 |
 | `docs/development/s09-user-experience.md` | 用户界面流程、支持与验收 | 公共步骤契约、真实／fixture证据、当前优先级 |
+| `docs/development/s09-frontend-redesign.md` | S09-D 前端重构(React 迁移与界面重做)记录 | 结构、交付切片、验收口径与 fixture 限制 |
 
 | `tests/web_clarification_flow.cjs` | 用户澄清表单的本机浏览器验收 | 本机fixture地址、确认／显式修订、真实HiGHS、父记录与缺失证据 |
 | `tests/helpers/web_guidance_server.py` | 独立临时Web与确定性澄清responder | 空workspace、合成凭据、明确fixture身份、不修改项目.env |

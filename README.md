@@ -42,6 +42,7 @@ uv run --locked llm4om serve --workspace runs/web --port 8767 --host 127.0.0.1
 查看五元素表述、求解代码、决策结果与运行记录，支持数据预览、模型数值编辑、派生求解、候选比较、
 决策试算、人工修订与批量实验管理。访问令牌由服务启动时生成，页面自动获取；LLM 凭据只保留在服务端。
 `--host 0.0.0.0` 可供局域网访问，但此时 Origin 校验是 CSRF 缓解而非认证，请勿暴露于不受信网络。
+页面源码在 `frontend/`（React + TypeScript），仓库自带已构建的静态资源；改前端后 `npm --prefix frontend run build` 重新生成,流程与浏览器测试见 [CONTRIBUTING](CONTRIBUTING.md)与[S09-D](docs/development/s09-frontend-redesign.md)。
 
 ### CLI 单次运行
 
@@ -181,6 +182,7 @@ uv run --locked llm4om run --problem examples/specs/problem.json --config exampl
 - 批量提交、进度、逐样本结果和公共报告下载见 [S09-B](docs/development/s09-batch-web.md)，从页面“开发者工具 → 实验管理”进入。
 - 人工派生编辑见 [S09-C](docs/development/s09-assisted-edits.md)：CLI 使用 `llm4om edit` 导出文档并执行新版本，网页使用“编辑并创建派生版本”；父产物和预算保留，结果明确标记人工辅助。
 - [S09 用户体验](docs/development/s09-user-experience.md)：决策试算、候选修正浏览、运行版本选择；数值表单编辑后复用 Compiler／Solver 创建人工辅助版本，保留父记录与累计预算。
+- [S09-D 前端重构](docs/development/s09-frontend-redesign.md)：React + Vite + TypeScript 构建链、垂直故事流、结构化结果区与起点页、人话失败诊断、统一设计令牌与键盘可达；后端契约零改动。
 - 已保存的单问题可用 `llm4om report --run runs/RUN_ID` 重新呈现，不重调模型／Solver。
 
 ### 网络
