@@ -217,7 +217,8 @@ function splitLatexParts(latex: string): string[] {
     const before = latex.slice(0, position).trimEnd().at(-1);
     return !!before && /[\w}\])]/.test(before);
   };
-  const relations = /^(\\le|\\leq|\\leqslant|\\ge|\\geq|\\geqslant|\\ne|\\neq|\\equiv|\\approx)$/;
+  const relations =
+    /^(\\le|\\leq|\\leqslant|\\ge|\\geq|\\geqslant|\\ne|\\neq|\\equiv|\\approx|\\cdot|\\times)$/;
   while (index < latex.length) {
     const char = latex[index];
     if (char === "{") depth += 1;

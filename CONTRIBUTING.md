@@ -68,7 +68,7 @@ node tests/web_story_flow.cjs
 ```
 
 - 直接读运行目录的用例（`web_edit_flow`／`web_model_edit_flow`／`web_clarification_flow`）要求 `LLM4OM_WEB_TEST_WORKSPACE` 指向 `<workspace>/jobs`（其下即 `<job_id>/`）；其余用例只需该变量存在。
-- fixture 顺序：`web_clarification_flow` 先跑（其末尾修订生成 revision-2 运行），`web_edit_flow` 依赖该已完成运行；story／start／failure／keyboard 等自成体系，可独立工作区运行。
+- fixture 顺序：`web_clarification_flow` 先跑（其末尾修订生成 revision-2 运行），`web_edit_flow` 依赖该已完成运行；`web_model_flow` 读取 jobs[0] 的最新版本，须在 `web_edit_flow` 之前（或独立工作区）运行，否则修订版本的假设记录会改变其断言对象；story／start／failure／keyboard 等自成体系，可独立工作区运行。
 - `web_decision/data/process/links/runtime/candidates/connectivity_check/history` 依赖一次性真实历史运行数据，当前需另行准备真实记录工作区（对照证据见 [#87](https://github.com/Fangziyang0910/LLM4OM/issues/87)）。
 - Chrome 路径按本机 Playwright 安装调整；`LLM4OM_BROWSER_MODULE` 指向 `frontend/node_modules/playwright`（devDependency）。
 

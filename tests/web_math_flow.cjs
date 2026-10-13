@@ -98,11 +98,12 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     assert.ok(rendered.subscripts >= 2, "xA/xB 变量名应排版下标");
     assert.match(rendered.bound, /≥/);
     assert.doesNotMatch(rendered.raw, /geq/, "LaTeX sense 不应原样显示");
-    // 窄屏下长公式应换行,不产生横向溢出(滚动条裁切)
+    // 窄屏下长公式应换行,不产生横向溢出(允许 2px:KaTeX 下标 vlist
+    // 自带 -2px 负边距,scrollWidth 会报告该测量伪影,不可见)
     await page.setViewportSize({ width: 390, height: 844 });
     const overflowing = await page.evaluate(() =>
       [...document.querySelectorAll("#math-host-1 .math-expression")].filter(
-        (el) => el.scrollWidth > el.clientWidth + 1,
+        (el) => el.scrollWidth > el.clientWidth + 2,
       ).length,
     );
     assert.equal(overflowing, 0, "长公式应在容器内换行,不得横向裁切");
