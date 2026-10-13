@@ -1913,3 +1913,46 @@ pre {
   color: #1d4ed8;
   font-weight: 600;
 }
+
+/* ---- 起点页:方法解释卡、预算可视化与兼容性提示 ---- */
+.method-explainer-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.method-explainer-card .panel-title h3 {
+  font-size: 14px;
+}
+.method-explainer-card .compat-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.method-explainer-card .compat-note.warning {
+  background: #fff4ec;
+  color: #9a3412;
+}
+.budget-visual {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.budget-visual .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* ---- 体检结果分层 ---- */
+.doctor-result .doctor-summary {
+  margin: 6px 0;
+  font-size: 13px;
+  color: var(--ink);
+}

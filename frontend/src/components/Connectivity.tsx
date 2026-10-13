@@ -8,9 +8,18 @@ export function Connectivity({ report }: { report: any }) {
     not_applicable: "无需网络检查",
   };
   const result = report.connectivity_checks;
+  const checks = (result.checks || []).filter((item: any) => item.status !== "not_checked");
+  const passed = checks.filter((item: any) => item.status === "reachable").length;
+  const failed = checks.filter((item: any) => item.status === "failed").length;
   return (
     <>
       <strong>配置与兼容性检查通过</strong>
+      {result.status !== "not_requested" && checks.length ? (
+        <p className="doctor-summary">
+          接口检查:通过 {passed} 项 · 未通过 {failed} 项
+          {failed ? ";建议检查服务地址与凭据后重试。" : ";可以提交运行。"}
+        </p>
+      ) : null}
       {result.status === "not_requested" ? (
         <p className="hint">未请求网络检查。勾选上方选项后可读取模型目录。</p>
       ) : (

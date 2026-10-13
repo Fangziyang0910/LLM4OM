@@ -28,6 +28,12 @@ const problemExamples: Record<string, string> = {
   diet: "两种食物 A、B 每份价格分别为 2、3 元，每份蛋白质分别为 3、4 克，每份膳食纤维分别为 2、1 克。每日至少需要 12 克蛋白质和 8 克膳食纤维。份数可以是非负小数。决定两种食物的份数，使总费用最小。",
 };
 
+const methodRequirements: Record<string, string> = {
+  "llm4om.methods.optimus":
+    "需要上传 params 与 labels 两个数据文件(或自定义数据 ID);求解走 Gurobi。",
+  "llm4om.methods.coe": "多轮专家讨论,Token 消耗较高;求解走 Gurobi。",
+};
+
 const methodExplainers: Record<string, string> = {
   "llm4om.methods.direct":
     "一次模型调用联合生成数学表述与求解实现，再构建并求解候选模型。",
@@ -72,6 +78,7 @@ export default function App() {
   });
   const [modelText, setModelText] = useState("");
   const [baseUrlText, setBaseUrlText] = useState("");
+  const [compatNote, setCompatNote] = useState("");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [dataFilesReady, setDataFilesReady] = useState(false);
   const [description, setDescription] = useState("");
@@ -254,10 +261,6 @@ export default function App() {
     selectOptions.solver.find((option) => option.value === config.solver?.plugin_id)?.disabled,
   );
 
-  const budgetSummary = config.budget
-    ? `本次上限：${config.budget.max_llm_attempts} 次模型请求 · ${format(config.budget.max_total_tokens)} Token · ${format(config.budget.wall_time_s)} 秒`
-    : "";
-
   const showConfig = (next: RunConfig) => {
     setConfigJson(pretty(next));
     setModelText(next.llm?.model || "");
@@ -294,6 +297,7 @@ export default function App() {
 
   const chooseMethod = (method: string) => {
     const next = { ...config, method: { ...(config.method || {}) } } as RunConfig;
+    const switched: string[] = [];
     if (["llm4om.methods.optimus", "llm4om.methods.optimus_inline"].includes(method)) {
       next.method = {
         plugin_id: method,
@@ -305,6 +309,7 @@ export default function App() {
       next.model_backend = { ...next.model_backend, plugin_id: "llm4om.model_backends.gurobipy" };
       next.solver = { ...next.solver, plugin_id: "llm4om.solvers.gurobi" };
       delete next.compiler;
+      switched.push("建模后端 gurobipy", "求解器 Gurobi");
     } else if (method === "llm4om.methods.coe") {
       next.method = {
         plugin_id: method,
@@ -313,6 +318,7 @@ export default function App() {
       next.model_backend = { ...next.model_backend, plugin_id: "llm4om.model_backends.gurobipy" };
       next.solver = { ...next.solver, plugin_id: "llm4om.solvers.gurobi" };
       delete next.compiler;
+      switched.push("建模后端 gurobipy", "求解器 Gurobi");
     } else if (["llm4om.methods.direct", "llm4om.methods.feedback_repair"].includes(method)) {
       next.method = {
         plugin_id: method,
@@ -321,6 +327,7 @@ export default function App() {
       next.model_backend = { ...next.model_backend, plugin_id: "llm4om.model_backends.pyomo_factory" };
       next.solver = { ...next.solver, plugin_id: "llm4om.solvers.highs" };
       next.compiler = { plugin_id: "llm4om.compilers.lp_ir_to_pyomo" };
+      switched.push("建模后端 pyomo_factory", "求解器 HiGHS", "编译器 lp_ir_to_pyomo");
     } else next.method = { plugin_id: method, config: {} };
     const classical = /optimus|coe/.test(method);
     next.budget = {
@@ -345,6 +352,11 @@ export default function App() {
     };
     setConfig(next);
     showConfig(next);
+    setCompatNote(
+      switched.length
+        ? "已按该方法声明的能力切换:" + switched.join(" · ") + "。可在下方手动调整。"
+        : "",
+    );
   };
 
   // ---- 任务提交与打开 ----
@@ -1019,13 +1031,34 @@ export default function App() {
                   />
                 </label>
               </div>
-              <div id="method-explainer" className="method-explainer">
-                {methodExplainers[config.method?.plugin_id] ||
-                  "按所选方法的实际流程建模，保存公开步骤和输出。"}
+              <div id="method-explainer" className="method-explainer method-explainer-card">
+                <div className="panel-title">
+                  <h3>{shortMethod(config.method?.plugin_id)}</h3>
+                </div>
+                <p>{methodExplainers[config.method?.plugin_id] ||
+                  "按所选方法的实际流程建模，保存公开步骤和输出。"}</p>
+                <p className="hint">
+                  {methodRequirements[config.method?.plugin_id] ||
+                    "直接输入问题描述即可开始;可附加 CSV / JSON 数据。"}
+                </p>
+                {compatNote ? <p className="compat-note">{compatNote}</p> : null}
+                {solverSelectionDisabled ? (
+                  <p className="compat-note warning">
+                    当前求解器与所选方法或建模后端不兼容;请选择可用求解器后再提交。
+                  </p>
+                ) : null}
               </div>
-              <p id="budget-summary" className="hint">
-                {budgetSummary}
-              </p>
+              <div id="budget-summary" className="budget-visual" aria-live="polite">
+                <span className="pill">模型请求 {config.budget?.max_llm_attempts ?? "—"}</span>
+                <span className="pill">Token {format(config.budget?.max_total_tokens)}</span>
+                <span className="pill">时间 {format(config.budget?.wall_time_s)} 秒</span>
+                <span className="pill">求解 {config.budget?.max_solver_calls ?? "—"}</span>
+                <p className="hint">
+                  {/optimus|coe/.test(config.method?.plugin_id || "")
+                    ? "经典多角色方法会显著增加真实模型请求与费用;上限可在下方调整。"
+                    : "上限包含重试;实际消耗会保存在运行记录中。"}
+                </p>
+              </div>
               <details className="budget-controls">
                 <summary>调整本次运行上限</summary>
                 <div className="field-grid">
