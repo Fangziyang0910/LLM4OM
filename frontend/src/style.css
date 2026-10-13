@@ -182,14 +182,6 @@ p {
   background: var(--sage-30);
   color: var(--paper);
 }
-.developer-nav {
-  margin-top: 20px;
-  font-size: 12px;
-  color: var(--sage-70);
-}
-.developer-nav .nav {
-  margin-top: 8px;
-}
 .small-heading {
   font-size: 10px;
   letter-spacing: 1.5px;
@@ -1187,12 +1179,12 @@ th {
   white-space: pre-wrap;
   font-size: 13px;
 }
-.raw-record {
+#revision-advanced {
   margin-top: 24px;
   border-top: 1px solid var(--line);
   padding-top: 12px;
 }
-.raw-record summary {
+#revision-advanced summary {
   font-size: 10px;
 }
 .code-toolbar {
@@ -1241,28 +1233,6 @@ th {
   max-width: 420px;
   margin: 0 auto;
 }
-pre {
-  background: var(--sage-94);
-  border-radius: var(--radius-sm);
-  padding: 15px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font:
-    11px/1.7 ui-monospace,
-    monospace;
-  color: var(--sage-33);
-  max-height: 650px;
-  overflow: auto;
-}
-#environment {
-  margin-top: 24px;
-  padding: 12px 20px;
-  background: transparent;
-  box-shadow: none;
-}
-#environment summary {
-  font-size: 10px;
-}
 .metrics,
 .decision-metrics {
   display: flex;
@@ -1287,13 +1257,9 @@ pre {
 #assisted-editor {
   margin-bottom: 20px;
 }
-#assisted-editor label,
-#experiment-editor label {
+#assisted-editor label {
   display: block;
   margin: 15px 0 5px;
-}
-#experiment-result > .panel {
-  margin-bottom: 20px;
 }
 @keyframes spin {
   to {
@@ -1374,9 +1340,6 @@ pre {
     width: auto;
     padding: 7px 12px;
     font-size: 11px;
-  }
-  .developer-nav {
-    margin-top: 10px;
   }
   #jobs {
     display: flex;
@@ -1787,47 +1750,8 @@ pre {
   gap: 8px;
   cursor: default;
 }
-.timeline-step.story-card.running .story-body {
+.timeline-step.story-card.running .step-marker {
   animation: story-pulse 1.6s ease-in-out infinite;
-}
-.timeline-step.story-card .story-summary {
-  background: var(--soft);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.timeline-step.story-card .story-code {
-  margin: 0;
-  background: var(--teal-12);
-  color: var(--sage-88);
-  border-radius: var(--radius-md);
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 1.6;
-  overflow-x: auto;
-  white-space: pre;
-}
-.timeline-step.story-card .story-comments details {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: 6px 10px;
-}
-.timeline-step.story-card .story-comments summary {
-  font-size: 12px;
-  color: var(--muted);
-}
-.timeline-step.story-card .story-comments pre {
-  margin: 6px 0 0;
-  white-space: pre-wrap;
-  font-size: 12px;
-}
-.timeline-step.story-card .story-attempts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
 }
 .timeline-step.story-card.ending {
   border-left-color: transparent;
@@ -1865,9 +1789,7 @@ pre {
 
 /* ---- 代码高亮 ---- */
 .tabs,
-pre,
-.code-lines,
-.story-code {
+.code-lines {
   scrollbar-width: thin;
   scrollbar-color: var(--sage-79) transparent;
 }
@@ -1950,20 +1872,29 @@ pre,
   border-radius: var(--radius-md);
   padding: 6px 10px;
 }
-.failure-summary .failure-detail pre {
-  margin: 6px 0 0;
-  font-size: 12px;
-  white-space: pre-wrap;
-}
 .timeline-step.story-card .failure-detail {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 6px 10px;
 }
-.timeline-step.story-card .failure-detail pre {
+.failure-facts {
   margin: 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   font-size: 12px;
-  white-space: pre-wrap;
+}
+.failure-facts div {
+  display: flex;
+  gap: 10px;
+}
+.failure-facts dt {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.failure-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 /* ---- 数学排版(KaTeX) ---- */
@@ -1976,7 +1907,4 @@ pre,
 }
 .math-expression .katex {
   font-size: 1.08em;
-}
-.story-summary .math-tex .katex {
-  font-size: 1em;
 }

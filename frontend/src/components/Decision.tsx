@@ -1,7 +1,7 @@
 // 决策面板:失败诊断、进行中提示、求解结果、决策探索与独立检查。
 import { useState } from "react";
 import type { Snapshot } from "../types";
-import { activeStep, failureDiagnosis, format, pretty, roleLabel, senseOperators, shortMethod, status } from "../ui";
+import { activeStep, failureDiagnosis, format, roleLabel, senseOperators, shortMethod, status } from "../ui";
 
 function Failure({ snapshot, onOpenDiagnostics }: { snapshot: Snapshot; onOpenDiagnostics: () => void }) {
   const error = snapshot?.job?.error || snapshot?.bundle?.error;
@@ -17,8 +17,25 @@ function Failure({ snapshot, onOpenDiagnostics }: { snapshot: Snapshot; onOpenDi
       <p className="hint">{detail}</p>
       <code className="failure-code">{error.code}</code>
       <details className="failure-detail">
-        <summary>技术详情:错误码与原始记录</summary>
-        <pre>{pretty({ code: error.code, message: error.message, connection_diagnostic: connection?.connection_diagnostic ?? null })}</pre>
+        <summary>技术详情</summary>
+        <dl className="failure-facts">
+          <div>
+            <dt>错误码</dt>
+            <dd>{error.code}</dd>
+          </div>
+          {error.message ? (
+            <div>
+              <dt>错误信息</dt>
+              <dd>{error.message}</dd>
+            </div>
+          ) : null}
+          {connection?.connection_diagnostic ? (
+            <div>
+              <dt>连接诊断</dt>
+              <dd>{connection.connection_diagnostic}</dd>
+            </div>
+          ) : null}
+        </dl>
       </details>
       <button className="secondary" onClick={onOpenDiagnostics}>
         查看运行详情

@@ -62,21 +62,19 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       const tab = document.querySelector(".tab.active")?.getAttribute("data-tab");
       return tab === "formulation" && document.querySelector("#artifact-choice")?.value;
     });
-    // 核心路径 4:Enter 展开方法步骤卡摘要
-    const generation = page
+    // 核心路径 4:Enter 在求解完成卡上打开运行详情
+    const solved = page
       .locator(".timeline-step.story-card")
-      .filter({ hasText: "联合生成数学表述与求解实现" })
+      .filter({ hasText: "求解完成" })
       .first();
-    await generation.focus();
-    const collapsed = await page.evaluate(() =>
-      document.activeElement.querySelector(".story-body") === null,
-    );
+    await solved.focus();
     await page.keyboard.press("Enter");
-    await page.locator(".story-attempts").first().waitFor({ timeout: 5000 });
-    assert.equal(collapsed, true, "展开前摘要应收起");
+    await page.waitForFunction(
+      () => document.querySelector(".tab.active")?.getAttribute("data-tab") === "diagnostics",
+    );
     assert.deepEqual(errors, []);
     console.log(
-      "Keyboard: visible focus ring, no trap, Enter-only path (run → code tab → artifact card → summary expand): passed.",
+      "Keyboard: visible focus ring, no trap, Enter-only path (run → code tab → artifact card → diagnostics card): passed.",
     );
   } finally {
     await browser.close();

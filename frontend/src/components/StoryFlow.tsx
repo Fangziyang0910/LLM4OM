@@ -1,14 +1,11 @@
-// 垂直故事流:建模过程每个事件一张顺读卡片。展开可见该步公开输出摘要
-// (角色发言、中间状态预览、时间窗内的模型调用消耗);头部为实时消耗条,
-// 结束卡衔接结果区。`.timeline-step[data-artifact]` 契约保持:只有方法事件
-// 引用挂 data-artifact,数量与旧时间线一致。
+// 垂直故事流:只有可展示的里程碑(保存的公开产物、公开检查反馈、澄清)与
+// 正在进行的步骤成为卡片;头部为实时消耗条,结束卡衔接结果区。
+// `.timeline-step[data-artifact]` 契约保持:run_public 产物事件挂 data-artifact。
 import { useMemo, useState } from "react";
-import { MathTex } from "../math";
 import type { Snapshot } from "../types";
-import { artifactKey, artifactLabel, failureDiagnosis, format, phaseLabel, pretty, roleLabel, shortMethod, status } from "../ui";
+import { artifactKey, artifactLabel, failureDiagnosis, format, phaseLabel, roleLabel, shortMethod, status } from "../ui";
 
 const eventLabels: Record<string, string> = {
-  run_started: "读取问题与数据",
   formulation_saved: "数学表述已保存",
   code_saved: "求解实现已保存",
   solver_started: "调用求解器",
@@ -78,7 +75,7 @@ function collectItems(snapshot: Snapshot): StoryItem[] {
         });
       continue;
     }
-    if (event.kind === "run_finished") continue;
+    if (event.kind === "run_finished" || event.kind === "run_started") continue;
     const label = eventLabels[event.kind];
     if (!label) continue;
     const runningCore =
@@ -119,9 +116,15 @@ function collectItems(snapshot: Snapshot): StoryItem[] {
       artifactTab: event.kind === "solver_finished" ? "diagnostics" : "formulation",
     });
   }
-  return [...items.values()].sort(
-    (a, b) => (orderOf(a, snapshot) - orderOf(b, snapshot)) || a.id.localeCompare(b.id),
-  );
+  return [...items.values()]
+    .filter((item) =>
+      // 方法步骤只在进行中成卡;完成的方法步骤没有可展示成果,
+      // 其结果由后续"已保存"里程碑卡承载,避免同义步骤反复刷屏。
+      item.id.startsWith("step-")
+        ? item.status === "running"
+        : item.milestone || item.status === "running" || Boolean(item.artifact || item.linkedArtifact),
+    )
+    .sort((a, b) => (orderOf(a, snapshot) - orderOf(b, snapshot)) || a.id.localeCompare(b.id));
 }
 
 const orderOf = (item: StoryItem, snapshot: Snapshot) => {
@@ -133,20 +136,6 @@ const orderOf = (item: StoryItem, snapshot: Snapshot) => {
   return sequence ?? 0;
 };
 
-function commentsFor(snapshot: Snapshot, actor: string | undefined) {
-  if (!actor) return [];
-  return Object.entries(snapshot.contents || {}).flatMap(([name, value]: [string, any]) =>
-    Array.isArray(value?.comments)
-      ? value.comments
-          .filter(
-            (comment: unknown[]) =>
-              Array.isArray(comment) && comment[0] === actor && typeof comment[1] === "string",
-          )
-          .map((comment: unknown[]) => ({ name, text: comment[1] as string }))
-      : [],
-  );
-}
-
 function assessmentFeedback(snapshot: Snapshot, item: StoryItem) {
   if (!item.linkedArtifact?.includes("/assessment.json")) return null;
   const assessment = snapshot.contents?.[item.linkedArtifact];
@@ -156,24 +145,6 @@ function assessmentFeedback(snapshot: Snapshot, item: StoryItem) {
     .filter(([, value]) => (value as any)?.status === "available")
     .map(([key]) => ({ formulation: "数学表述", code: "求解实现", solve: "求解" })[key] || key);
   return { stages, diagnostics };
-}
-
-function statePreview(snapshot: Snapshot, artifact: string | undefined) {
-  if (!artifact?.startsWith("method/state_")) return null;
-  const state = snapshot.contents?.[artifact]?.representation?.state;
-  if (!state) return null;
-  const fragments = [
-    { description: "优化目标", code: state.objective?.code },
-    ...(state.constraints || []),
-  ].filter((item: any) => typeof item.code === "string" && item.code);
-  return {
-    description: state.description as string | undefined,
-    objective: state.objective?.description || state.objective?.expression_text,
-    constraints: (state.constraints || []).length,
-    codeLines: fragments
-      .flatMap((fragment: any) => fragment.code.split("\n"))
-      .slice(0, 8),
-  };
 }
 
 export function StoryFlow({
@@ -240,30 +211,12 @@ export function StoryFlow({
         {items.map((item) => {
           const failedStep = item.status === "running" && failed;
           const className = "timeline-step story-card " + (failedStep ? "failed" : item.status);
-          const comments = commentsFor(snapshot, item.actor);
-          // 步骤时间戳与调用计时来自同一进程时钟;±秒级余量吸收事件与
-          // trace 的写入顺序差,不用于精确归因,只用于展示摘要。
-          const matched = attempts.filter(
-            (attempt) =>
-              item.start != null &&
-              item.end != null &&
-              attempt.start != null &&
-              attempt.end != null &&
-              attempt.start >= item.start - 1 &&
-              attempt.end <= item.end + 5,
-          );
           const jumpKey = item.artifact || item.linkedArtifact;
-          const preview = statePreview(snapshot, item.artifact);
           const feedback = assessmentFeedback(snapshot, item);
-          // 里程碑化:只有带真实建模输出(保存的产物、中间状态、检查反馈、
-          // 角色发言、时间窗内的模型调用)或正在发生(进行中/待补充)的
-          // 步骤才成为卡片;纯事件标记不单独成卡,避免展开为空。
-          const expandable =
-            !!preview || !!feedback || comments.length > 0 || matched.length > 0;
-          const hasOutput = expandable || !!jumpKey || item.milestone;
-          const inFlight = item.status === "running" || item.status === "needs_input";
-          if (!hasOutput && !inFlight) return null;
-          const isOpen = expandable && (expanded[item.id] || item.status === "running");
+          // 只有公开检查反馈是可展开的步骤输出;其余卡片要么带产物跳转,
+          // 要么是正在进行的实时卡。
+          const expandable = !!feedback;
+          const isOpen = expandable && expanded[item.id];
           return (
             <article
               key={item.id}
@@ -290,8 +243,7 @@ export function StoryFlow({
                   <strong>{roleLabel(item.label)}</strong>
                   <span>
                     {phaseLabel(item.phase)}
-                    {item.end && item.start ? " · " + format(item.end - item.start) + " s" : ""}
-                    {item.actor && item.actor !== "direct" ? " · " + roleLabel(item.actor) : ""}
+                    {item.status === "running" && !failedStep ? " · 进行中" : ""}
                   </span>
                 </div>
                 {jumpKey ? (
@@ -307,76 +259,22 @@ export function StoryFlow({
                   </button>
                 ) : null}
               </header>
-              {isOpen ? (
+              {isOpen && feedback ? (
                 <div className="story-body" onClick={(event) => event.stopPropagation()}>
-                  {preview ? (
-                    <div className="story-summary">
-                      {preview.description ? <p className="problem-text">{preview.description}</p> : null}
-                      {preview.objective ? (
-                        <p className="hint">目标:<MathTex text={preview.objective} /></p>
-                      ) : null}
-                      {preview.constraints ? (
-                        <p className="hint">已识别约束 {preview.constraints} 条</p>
-                      ) : null}
-                      {preview.codeLines.length ? (
-                        <pre className="story-code">
-                          {preview.codeLines.join("\n")}
-                          {preview.codeLines.length >= 8 ? "\n…" : ""}
-                        </pre>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {comments.length ? (
-                    <div className="story-comments">
-                      {comments.map((comment) => (
-                        <details key={comment.name}>
-                          <summary>{comment.name.split("/").at(-1)}</summary>
-                          <pre>{comment.text}</pre>
-                        </details>
-                      ))}
-                    </div>
-                  ) : null}
-                  {feedback ? (
-                    <div className="story-summary">
-                      {feedback.stages.length ? (
-                        <p className="hint">已通过检查的阶段:{feedback.stages.join("、")}</p>
-                      ) : (
-                        <p className="hint">该候选尚无通过记录的阶段。</p>
-                      )}
-                      {feedback.diagnostics.length ? (
-                        feedback.diagnostics.map((diagnostic: any, index: number) => (
-                          <p className="model-warning" key={index}>
-                            {diagnostic.message || diagnostic.code}
-                          </p>
-                        ))
-                      ) : (
-                        <p className="hint">公开检查未记录诊断信息。</p>
-                      )}
-                    </div>
-                  ) : null}
-                  {matched.length ? (
-                    <div className="story-attempts">
-                      {matched.map((attempt, index) => (
-                        <span className="pill muted" key={index}>
-                          {roleLabel(attempt.role || "模型调用")} ·{" "}
-                          {attempt.start != null && attempt.end != null
-                            ? format(attempt.end - attempt.start) + " s"
-                            : ""}{" "}
-                          ·{" "}
-                          {attempt.usage?.total_tokens == null
-                            ? "Token 未知"
-                            : "Token " + format(attempt.usage.total_tokens)}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {item.status === "running" && !expandable ? (
-                    <p className="hint">
-                      {failedStep
-                        ? "运行未完成:该步骤进行中被中断;原因见结束卡与诊断。"
-                        : "该步正在进行;输出与消耗会在完成后记录在这里。"}
-                    </p>
-                  ) : null}
+                  {feedback.stages.length ? (
+                    <p className="hint">已通过检查的阶段:{feedback.stages.join("、")}</p>
+                  ) : (
+                    <p className="hint">该候选尚无通过记录的阶段。</p>
+                  )}
+                  {feedback.diagnostics.length ? (
+                    feedback.diagnostics.map((diagnostic: any, index: number) => (
+                      <p className="model-warning" key={index}>
+                        {diagnostic.message || diagnostic.code}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="hint">公开检查未记录诊断信息。</p>
+                  )}
                 </div>
               ) : null}
             </article>
@@ -402,8 +300,25 @@ export function StoryFlow({
             <div className="story-body">
               {finished ? null : (
                 <details className="failure-detail">
-                  <summary>技术详情:错误码与原始记录</summary>
-                  <pre>{pretty({ code: runError?.code, message: runError?.message, connection_diagnostic: connection?.connection_diagnostic ?? null })}</pre>
+                  <summary>技术详情</summary>
+                  <dl className="failure-facts">
+                    <div>
+                      <dt>错误码</dt>
+                      <dd>{runError?.code || "未记录"}</dd>
+                    </div>
+                    {runError?.message ? (
+                      <div>
+                        <dt>错误信息</dt>
+                        <dd>{runError.message}</dd>
+                      </div>
+                    ) : null}
+                    {connection?.connection_diagnostic ? (
+                      <div>
+                        <dt>连接诊断</dt>
+                        <dd>{connection.connection_diagnostic}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
                 </details>
               )}
               <button type="button" className="secondary" onClick={scrollToDecision}>

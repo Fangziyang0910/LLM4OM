@@ -267,10 +267,7 @@ function CodeView({ value }: { value: any }) {
   const source = typeof value === "string" ? value : value?.source;
   if (!source)
     return (
-      <EmptyView
-        title="代码还在生成"
-        text="这里将显示可读的求解实现。构建信息可以在原始记录中查看。"
-      />
+      <EmptyView title="求解实现正在生成" text="生成完成后会在这里展示可读代码。" />
     );
   const linesRef = { current: null as HTMLDivElement | null };
   const copy = async () => {
@@ -375,11 +372,6 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
   const goalIds = ir?.objective?.requirement_ids ?? objective?.requirement_ids ?? [];
   relations.push({ label: "目标函数", ids: goalIds });
   const restrictions = ir?.constraints || representation.constraints || [];
-  const fragments = source.state
-    ? [{ description: "优化目标", code: objective?.code }, ...(representation.constraints || [])].filter(
-        (item: any) => typeof item.code === "string" && item.code,
-      )
-    : [];
   return (
     <>
       <section className="model-card objective-card">
@@ -470,16 +462,6 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
           {!restrictions.length ? <p className="hint">当前表述没有列出约束。</p> : null}
         </section>
       ) : null}
-      {fragments.length ? (
-        <Card title="已生成的代码片段" subtitle="这些是当前状态的代码片段。完整程序可在求解代码中查看。">
-          {fragments.map((fragment: any, index: number) => (
-            <div key={index}>
-              <h4>{fragment.description || "代码片段"}</h4>
-              <CodeLines code={fragment.code} />
-            </div>
-          ))}
-        </Card>
-      ) : null}
       {(representation.sets || []).length ? (
         <Card title="集合与索引">
           {(representation.sets || []).map((item: any) => (
@@ -520,13 +502,9 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
   );
 }
 
-function CodeLines({ code }: { code: string }) {
-  return <HighlightedCode code={code} />;
-}
-
 function DataView({ contents, dataPreviews }: { contents: Record<string, any>; dataPreviews: Record<string, DataPreview> }) {
   const problem = contents["public-problem.json"];
-  if (!problem) return <EmptyView title="详细记录已保存" text="需要开发或研究时，可以展开下方原始记录。" />;
+  if (!problem) return <EmptyView title="问题与数据正在准备" text="问题读取完成后会在这里展示。" />;
   return (
     <>
       <Card title="你的问题">
@@ -641,7 +619,7 @@ export function Records({
         />
       </Card>
     );
-  return <EmptyView title="详细记录已保存" text="需要开发或研究时，可以展开下方原始记录。" />;
+  return <EmptyView title="此阶段暂无内容" text="完成的公开产物会出现在这里。" />;
 }
 
 function statusOf(r: any) {

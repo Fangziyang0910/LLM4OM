@@ -1,5 +1,5 @@
 "use strict";
-// 结果区代码视图验收:语法高亮、复制入口、原始记录默认折叠与深链稳定。
+// 结果区代码视图验收:语法高亮、复制入口、无原始 JSON 展示与深链稳定。
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -76,16 +76,13 @@ for (const address of [url, provider])
       /Python · 求解实现/,
     );
     assert.ok(await page.getByRole("button", { name: "复制代码" }).isVisible());
+    // 原始 JSON 不再在界面展示
     assert.equal(
-      await page.locator("#artifact-content").locator("..").getAttribute("open"),
-      null,
-      "raw record must be collapsed by default",
+      await page.locator(".raw-record").count(),
+      0,
+      "raw record fold must be gone",
     );
-    await page.locator(".raw-record summary").click();
-    assert.match(
-      await page.locator("#artifact-content").innerText(),
-      /source|representation|{"?/,
-    );
+    assert.equal(await page.locator("#artifact-content").count(), 0);
     await page.waitForTimeout(1700);
     assert.equal(
       await page.locator("#artifact-choice").inputValue(),
@@ -104,7 +101,7 @@ for (const address of [url, provider])
     );
     assert.deepEqual(errors, []);
     console.log(
-      "Code view: syntax tokens, copy entry, collapsed raw record, polling and mobile passed.",
+      "Code view: syntax tokens, copy entry, no raw JSON, polling and mobile passed.",
     );
   } finally {
     await browser.close();

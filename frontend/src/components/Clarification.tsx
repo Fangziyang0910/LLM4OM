@@ -1,6 +1,5 @@
 // 澄清问答:确认原声明或提交修订;提交前可预览将要提交的问题修订。
 import { useState } from "react";
-import { pretty } from "../ui";
 
 interface Question {
   question_id: string;
@@ -71,13 +70,11 @@ export function buildClarificationSubmission(
 export function Clarification({
   request,
   problem,
-  rawRequest,
   onSubmit,
   onError,
 }: {
   request: { request_id: string; questions: Question[] };
   problem: any;
-  rawRequest: string;
   onSubmit: (payload: ClarificationPayload) => void;
   onError: (message: string) => void;
 }) {
@@ -136,7 +133,9 @@ export function Clarification({
       </div>
       <details id="clarification-preview" hidden={!revised}>
         <summary>查看将要提交的问题修订</summary>
-        <pre id="clarification-description">{pretty(revised?.description) || ""}</pre>
+        <p id="clarification-description" className="problem-text">
+          {revised?.description || ""}
+        </p>
       </details>
       <button
         id="answer-submit"
@@ -151,10 +150,6 @@ export function Clarification({
       >
         {revised ? "确认修订并继续" : "提交回答并继续"}
       </button>
-      <details className="raw-record">
-        <summary>查看原始澄清请求</summary>
-        <pre id="clarification-request">{rawRequest}</pre>
-      </details>
     </div>
   );
 }

@@ -40,7 +40,7 @@ uv run --locked llm4om serve --workspace runs/web --port 8767 --host 127.0.0.1
 
 浏览器打开 `http://127.0.0.1:8767` 即可：输入自然语言问题与数据 → 选择方法 → 观察真实建模步骤 →
 查看五元素表述、求解代码、决策结果与运行记录，支持数据预览、模型数值编辑、派生求解、候选比较、
-决策试算、人工修订与批量实验管理。访问令牌由服务启动时生成，页面自动获取；LLM 凭据只保留在服务端。
+决策试算与人工修订。访问令牌由服务启动时生成，页面自动获取；LLM 凭据只保留在服务端。
 `--host 0.0.0.0` 可供局域网访问，但此时 Origin 校验是 CSRF 缓解而非认证，请勿暴露于不受信网络。
 页面源码在 `frontend/`（React + TypeScript），仓库自带已构建的静态资源；改前端后 `npm --prefix frontend run build` 重新生成,流程与浏览器测试见 [CONTRIBUTING](CONTRIBUTING.md)与[S09-D](docs/development/s09-frontend-redesign.md)。
 
@@ -64,7 +64,7 @@ llm4om benchmark --config examples/specs/experiment.yaml --output runs/experimen
 llm4om report --experiment runs/experiment
 ```
 
-配置和支持范围见[批量实验记录](docs/development/s08-benchmark.md)；网页提交入口见[S09-B](docs/development/s09-batch-web.md)。
+配置和支持范围见[批量实验记录](docs/development/s08-benchmark.md)；批量实验使用 CLI，Web 工作台面向单问题交互（HTTP 实验接口仍在，见[S09-B](docs/development/s09-batch-web.md)）。
 
 ## 1.0 目标
 
@@ -179,7 +179,7 @@ uv run --locked llm4om run --problem examples/specs/problem.json --config exampl
 ### Web 工作台
 
 - 本地 Web 首版见 [S09-A](docs/development/s09-web.md)；网页接口已真实调用指定 DeepSeek 并经容器 HiGHS 求得 13。
-- 批量提交、进度、逐样本结果和公共报告下载见 [S09-B](docs/development/s09-batch-web.md)，从页面“开发者工具 → 实验管理”进入。
+- 批量提交、进度、逐样本结果和公共报告下载见 [S09-B](docs/development/s09-batch-web.md)：HTTP 接口保留并由 API 测试覆盖；页面入口已从工作台移除（2026-10-13），日常批量实验走 `llm4om benchmark`／`report` CLI。
 - 人工派生编辑见 [S09-C](docs/development/s09-assisted-edits.md)：CLI 使用 `llm4om edit` 导出文档并执行新版本，网页使用“编辑并创建派生版本”；父产物和预算保留，结果明确标记人工辅助。
 - [S09 用户体验](docs/development/s09-user-experience.md)：决策试算、候选修正浏览、运行版本选择；数值表单编辑后复用 Compiler／Solver 创建人工辅助版本，保留父记录与累计预算。
 - [S09-D 前端重构](docs/development/s09-frontend-redesign.md)：React + Vite + TypeScript 构建链、垂直故事流、结构化结果区与起点页、人话失败诊断、统一设计令牌与键盘可达；后端契约零改动。

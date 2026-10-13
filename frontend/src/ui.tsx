@@ -80,6 +80,7 @@ export const artifactLabel = (name: string): string =>
       "formulation-changes.json": "表述变化",
       "repair-state.json": "修正过程",
       "evaluation.json": "独立评估",
+      "solve-result.json": "求解结果",
       "public-problem.json": "原始问题与规则",
       "data-views.json": "模型数据视图",
       "dataset-manifest.json": "原始数据来源",
@@ -88,7 +89,7 @@ export const artifactLabel = (name: string): string =>
       "state_3_constraints.json": "约束识别",
       "state_4_constraints_modeled.json": "约束数学表述",
       "state_5_objective_modeled.json": "完整数学表述",
-      "state_6_code.json": "数学表述与代码片段",
+      "state_6_code.json": "数学表述与代码",
     } as Record<string, string>
   )[name.split("/").at(-1) || ""] || name;
 

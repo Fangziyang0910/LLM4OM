@@ -1,15 +1,8 @@
-// workbench 应用主组件:配置表单、任务提交与轮询、运行视图、人工编辑与批量实验。
+// workbench 应用主组件:配置表单、任务提交与轮询、运行视图与人工编辑。
 // DOM 契约(ids/classes)与轮询节奏沿用原实现,行为等价迁移自 app.js。
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, setApiToken } from "./api";
-import type {
-  ExperimentRecord,
-  JobRecord,
-  PluginManifest,
-  RunConfig,
-  Snapshot,
-  UploadItem,
-} from "./types";
+import type { JobRecord, PluginManifest, RunConfig, Snapshot, UploadItem } from "./types";
 import { artifactKey, artifactLabel, activeStep, format, pretty, shortMethod, status } from "./ui";
 import { Candidates } from "./components/Candidates";
 import { Connectivity } from "./components/Connectivity";
@@ -64,7 +57,7 @@ const tabHeadings: Record<string, string> = {
   data: "问题与数据",
 };
 
-type View = "editor" | "run" | "experiment-editor" | "experiment-result";
+type View = "editor" | "run";
 
 export default function App() {
   const [config, setConfig] = useState<RunConfig>({});
@@ -91,16 +84,9 @@ export default function App() {
   const [artifactChoice, setArtifactChoice] = useState("");
   const [artifactSelectedByUser, setArtifactSelectedByUser] = useState(false);
   const [view, setView] = useState<View>("editor");
-  const [experiments, setExperiments] = useState<ExperimentRecord[]>([]);
-  const [currentExperiment, setCurrentExperiment] = useState<string | null>(null);
-  const [experimentSnapshot, setExperimentSnapshot] = useState<any>(null);
-  const [experimentConfigurations, setExperimentConfigurations] = useState("");
-  const [experimentBudget, setExperimentBudget] = useState("");
-  const [taskOptions, setTaskOptions] = useState<any[]>([]);
   const [noticeState, setNoticeState] = useState<{ text: string; error: boolean }>({ text: "", error: false });
   const [doctorResult, setDoctorResult] = useState<any>(null);
   const [checkConnectivity, setCheckConnectivity] = useState(false);
-  const [environmentText, setEnvironmentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [doctorBusy, setDoctorBusy] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -129,10 +115,6 @@ export default function App() {
   const refreshJobs = async () => {
     const result = await api<{ jobs: JobRecord[] }>("/api/jobs");
     setJobs(result.jobs);
-  };
-  const refreshExperiments = async () => {
-    const result = await api<{ experiments: ExperimentRecord[] }>("/api/experiments");
-    setExperiments(result.experiments);
   };
 
   const refreshRunFor = async (id: string, runId: string | null) => {
@@ -163,26 +145,12 @@ export default function App() {
     return result;
   };
 
-  const refreshExperiment = async () => {
-    if (!currentExperiment) return;
-    const result = await api<any>(`/api/experiments/${currentExperiment}`);
-    setExperimentSnapshot(result);
-  };
-
-  const refreshTasks = async () => {
-    const { tasks } = await api<{ tasks: any[] }>("/api/tasks");
-    setTaskOptions(tasks);
-  };
-
-  // 轮询:与原实现一致的两个节奏,通过 ref 读取最新状态。
+  // 轮询:与原实现一致的节奏,通过 ref 读取最新状态。
   const stateRef = useRef<any>({});
   stateRef.current = {
     currentJob,
-    currentExperiment,
     refreshJobs,
     refreshRun,
-    refreshExperiments,
-    refreshExperiment,
     notice,
   };
   useEffect(() => {
@@ -195,18 +163,8 @@ export default function App() {
         notice((error as Error).message, true);
       }
     }, 1500);
-    const experimentTimer = setInterval(async () => {
-      const { currentExperiment, refreshExperiments, refreshExperiment, notice } = stateRef.current;
-      try {
-        await refreshExperiments();
-        if (currentExperiment) await refreshExperiment();
-      } catch (error) {
-        notice((error as Error).message, true);
-      }
-    }, 3000);
     return () => {
       clearInterval(jobsTimer);
-      clearInterval(experimentTimer);
     };
   }, []);
 
@@ -368,7 +326,6 @@ export default function App() {
     setSnapshot(null);
     fingerprintRef.current = "";
     setArtifactChoice("");
-    setCurrentExperiment(null);
     setCurrentJob(id);
     setView("run");
     const result = await refreshRunFor(id, runId);
@@ -413,7 +370,6 @@ export default function App() {
         config: readConfig(),
         check_connectivity: checkConnectivity,
       });
-      setEnvironmentText(pretty(result));
       setDoctorResult(result);
       notice(
         result.connectivity_checks.status === "failed"
@@ -606,13 +562,11 @@ export default function App() {
         const result = await api<any>("/api/bootstrap");
         setApiToken(result.token);
         setDataFilesReady(true);
-        setConfig(result.config);
-        showConfig(result.config);
-        setPlugins(result.plugins);
-        setEnvironmentText(pretty(result.plugins));
-        await refreshJobs();
-        refreshExperiments().catch(() => {});
-        const job = params.get("job"),
+      setConfig(result.config);
+      showConfig(result.config);
+      setPlugins(result.plugins);
+      await refreshJobs();
+      const job = params.get("job"),
           run = params.get("run");
         if (job) {
           if (!/^[a-f0-9]{32}$/.test(job) || (run && !/^[a-f0-9]{32}$/.test(run)))
@@ -649,7 +603,6 @@ export default function App() {
           id="new-run"
           className={"nav" + (view === "editor" ? " active" : "")}
           onClick={() => {
-            setCurrentExperiment(null);
             setCurrentJob(null);
             setSelectedRun(null);
             setSnapshot(null);
@@ -660,51 +613,6 @@ export default function App() {
         >
           ＋ 新建问题
         </button>
-        <details className="developer-nav">
-          <summary>开发者工具</summary>
-          <button
-            id="new-experiment"
-            className="nav"
-            onClick={async () => {
-              setCurrentJob(null);
-              setCurrentExperiment(null);
-              setView("experiment-editor");
-              setExperimentConfigurations(pretty([{ id: "configured-method", config: config }]));
-              setExperimentBudget(
-                pretty({
-                  max_llm_attempts: 100,
-                  max_total_tokens: 1000000,
-                  max_solver_calls: 100,
-                  wall_time_s: 3600,
-                  max_concurrency: 2,
-                }),
-              );
-              try {
-                await refreshTasks();
-              } catch (error) {
-                notice((error as Error).message, true);
-              }
-            }}
-          >
-            实验管理
-          </button>
-          <div id="experiments">
-            {experiments.map((experiment) => (
-              <button
-                key={experiment.experiment_id}
-                className="job"
-                onClick={() => {
-                  setCurrentJob(null);
-                  setCurrentExperiment(experiment.experiment_id);
-                  setView("experiment-result");
-                  refreshExperiment();
-                }}
-              >
-                {`${experiment.status} · ${experiment.task_count}任务 × ${experiment.configuration_count}配置 × ${experiment.repeats}`}
-              </button>
-            ))}
-          </div>
-        </details>
         <h2 className="small-heading">运行记录</h2>
         <div id="jobs" aria-label="运行记录">
           {jobs.map((job) => (
@@ -727,7 +635,7 @@ export default function App() {
       <main>
         <header>
           <h1>
-            {{ editor: "开始建模", run: "运行结果", "experiment-editor": "批量实验", "experiment-result": "实验结果" }[view] || "开始建模"}
+            {view === "run" ? "运行结果" : "开始建模"}
           </h1>
         </header>
         <div id="notice" role="status" hidden={!noticeState.text}>
@@ -1122,88 +1030,6 @@ export default function App() {
           </section>
         ) : null}
 
-        {view === "experiment-editor" ? (
-          <section id="experiment-editor" className="panel">
-            <h2>批量 benchmark 实验</h2>
-            <p className="hint">
-              先使用 CLI 将任务冻结导入项目 runs/ 或工作区 tasks/。每个配置明确选择方法、模型、后端与预算。
-            </p>
-            <label htmlFor="task-choice">冻结任务</label>
-            <select id="task-choice" multiple size={5}>
-              {taskOptions.map((task) => (
-                <option key={task.task_id} value={task.task_id}>
-                  {`${task.source.dataset_id} · ${task.source.source_version} · ${task.N_selected}样本 · ${task.protocol_id}`}
-                </option>
-              ))}
-            </select>
-            <button id="refresh-tasks" className="secondary" onClick={() => refreshTasks().catch((error) => notice(error.message, true))}>
-              刷新任务
-            </button>
-            <label htmlFor="experiment-configurations">配置变体 JSON（id 与完整 config）</label>
-            <textarea
-              id="experiment-configurations"
-              rows={16}
-              value={experimentConfigurations}
-              onChange={(event) => setExperimentConfigurations(event.target.value)}
-            />
-            <label htmlFor="experiment-repeats">重复次数</label>
-            <input id="experiment-repeats" type="number" min="1" max="1000" defaultValue="1" />
-            <label htmlFor="experiment-budget">实验总预算 JSON</label>
-            <textarea
-              id="experiment-budget"
-              rows={7}
-              value={experimentBudget}
-              onChange={(event) => setExperimentBudget(event.target.value)}
-            />
-            <label htmlFor="experiment-exclusions">显式排除 JSON（task_id、configuration_id、reason）</label>
-            <textarea id="experiment-exclusions" rows={3} defaultValue="[]" />
-            <button
-              id="submit-experiment"
-              className="primary"
-              onClick={async () => {
-                try {
-                  const result = await api<{ experiment_id: string }>("/api/experiments", {
-                    task_ids: Array.from(
-                      document.querySelectorAll<HTMLOptionElement>("#task-choice option"),
-                    )
-                      .filter((option) => option.selected)
-                      .map((option) => option.value),
-                    configurations: JSON.parse(experimentConfigurations),
-                    repeats: Number((document.getElementById("experiment-repeats") as HTMLInputElement).value),
-                    budget: JSON.parse(experimentBudget),
-                    exclusions: JSON.parse(
-                      (document.getElementById("experiment-exclusions") as HTMLTextAreaElement).value,
-                    ),
-                  });
-                  setCurrentExperiment(result.experiment_id);
-                  setView("experiment-result");
-                  await refreshExperiments();
-                  notice("实验已提交。");
-                } catch (error) {
-                  notice((error as Error).message, true);
-                }
-              }}
-            >
-              运行批量实验
-            </button>
-          </section>
-        ) : null}
-
-        {view === "experiment-result" && experimentSnapshot ? (
-          <ExperimentResult
-            snapshot={experimentSnapshot}
-            onCancelResume={async (action) => {
-              try {
-                await api(`/api/experiments/${currentExperiment}/${action}`, {});
-                notice("实验操作已提交。");
-                await refreshExperiment();
-              } catch (error) {
-                notice((error as Error).message, true);
-              }
-            }}
-          />
-        ) : null}
-
         {view === "run" && snapshot ? (
           <section id="result">
             <div className="run-heading">
@@ -1489,7 +1315,6 @@ export default function App() {
                     key={clarificationRequest.request_id}
                     request={clarificationRequest}
                     problem={contents["public-problem.json"]}
-                    rawRequest={pretty(clarificationRequest)}
                     onSubmit={async (payload) => {
                       await api(`/api/jobs/${currentJob}/resume`, payload as any);
                       notice("回答已提交，正在恢复。");
@@ -1581,22 +1406,11 @@ export default function App() {
                       />
                     )}
                   </div>
-                  <details className="raw-record">
-                    <summary>查看原始记录</summary>
-                    <pre id="artifact-content">
-                      {pretty(selectedArtifact) || "此阶段尚无可用记录。"}
-                    </pre>
-                  </details>
                 </div>
               </div>
             </div>
           </section>
         ) : null}
-
-        <details id="environment" className="panel">
-          <summary>高级：环境与接口信息</summary>
-          <pre id="environment-content">{environmentText}</pre>
-        </details>
       </main>
     </>
   );
@@ -1624,127 +1438,5 @@ function UploadPreview({ preview }: { preview: NonNullable<UploadItem["preview"]
         </tbody>
       </table>
     </div>
-  );
-}
-
-function ExperimentResult({
-  snapshot,
-  onCancelResume,
-}: {
-  snapshot: any;
-  onCancelResume: (action: "cancel" | "resume") => Promise<void>;
-}) {
-  const progress = snapshot.progress || {};
-  const match = (name: string) => (row: any) =>
-    row[name + "_denominator"]
-      ? `${row[name + "_numerator"]}/${row[name + "_denominator"]}`
-      : "not_available";
-  const renderTable = (columns: [string, any][], rows: any[]) => (
-    <table className="visual-table">
-      <thead>
-        <tr>
-          {columns.map(([label]) => (
-            <th key={label}>{label}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, index) => (
-          <tr key={index}>
-            {columns.map(([, key], cIndex) => {
-              const value = typeof key === "function" ? key(row) : row[key];
-              return (
-                <td key={cIndex}>
-                  {value === null || value === undefined
-                    ? "unknown"
-                    : typeof value === "object"
-                      ? pretty(value)
-                      : String(value)}
-                </td>
-              );
-            })}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-  return (
-    <section id="experiment-result">
-      <div className="run-heading">
-        <div>
-          <h2>实验结果与证据</h2>
-          <p id="experiment-meta">{`${snapshot.job.status} · ${snapshot.job.experiment_id}`}</p>
-        </div>
-        <div className="actions">
-          <button id="cancel-experiment" className="secondary" onClick={() => onCancelResume("cancel")}>
-            取消实验
-          </button>
-          <button id="resume-experiment" className="secondary" onClick={() => onCancelResume("resume")}>
-            继续实验
-          </button>
-          <a id="export-experiment" className="secondary" href={`/api/experiments/${snapshot.job.experiment_id}/export`}>
-            下载公共报告
-          </a>
-        </div>
-      </div>
-      <div id="experiment-progress" className="decision-metrics">
-        <div className="metric">
-          <span>已保存 / 计划运行</span>
-          <strong>{`${progress.N_saved || 0} / ${progress.N_selected_runs || "—"}`}</strong>
-        </div>
-        <div className="metric">
-          <span>状态</span>
-          <strong>{pretty(progress.statuses || {})}</strong>
-        </div>
-      </div>
-      <div className="panel">
-        <h3>分组比较</h3>
-        <p className="hint">
-          各来源、配置和重复分开统计。候选求解成功不等于原问题正确；未知费用保留 unknown。
-        </p>
-        <div id="experiment-groups" className="table-scroll">
-          {renderTable(
-            [
-              ["任务", "task_id"],
-              ["配置", "configuration_id"],
-              ["重复", "repeat"],
-              ["完成/选中", (row: any) => `${row.N_completed}/${row.N_selected}`],
-              ["独立可行", match("independent_feasibility")],
-              ["目标匹配", match("objective_match")],
-              ["已验证解", match("verified_solution")],
-              ["Token 用量", "total_tokens"],
-              ["费用", "cost"],
-            ],
-            snapshot.summary?.groups || [],
-          )}
-        </div>
-      </div>
-      <div className="panel">
-        <h3>逐样本记录</h3>
-        <p className="hint">
-          页面展示前200条已保存记录。下载包含全部样本；JSONL保存完整公共评估与诊断。
-        </p>
-        <div id="experiment-rows" className="table-scroll">
-          {renderTable(
-            [
-              ["样本", "case_id"],
-              ["配置", "configuration_id"],
-              ["重复", "repeat"],
-              ["状态", "status"],
-              ["Run", "run_id"],
-              ["来源", "evidence_origin"],
-              ["独立可行", match("independent_feasibility")],
-              ["目标匹配", match("objective_match")],
-              ["已验证解", match("verified_solution")],
-            ],
-            snapshot.rows || [],
-          )}
-        </div>
-      </div>
-      <details className="panel">
-        <summary>完整分组协议、资源与排除记录</summary>
-        <pre id="experiment-summary">{pretty(snapshot.summary || snapshot.job.error || "等待保存报告。")}</pre>
-      </details>
-    </section>
   );
 }

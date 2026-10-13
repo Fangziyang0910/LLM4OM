@@ -160,11 +160,9 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       ["cutting", "8"],
     );
     assert.equal(
-      await page
-        .locator("#artifact-content")
-        .locator("..")
-        .getAttribute("open"),
-      null,
+      await page.locator(".raw-record").count(),
+      0,
+      "raw JSON must not be displayed",
     );
     if (process.env.LLM4OM_WEB_SCREENSHOTS)
       await page.screenshot({

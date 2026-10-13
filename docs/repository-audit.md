@@ -278,7 +278,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/src/main.tsx` | 应用入口 | 安装门面并挂载 |
 | `frontend/src/highlight.ts` | 无依赖 Python 语法着色扫描器 | 关键字/字符串/数字/注释/内建,跨三引号行拆分 |
 | `frontend/src/components/Records.tsx` | 数学表述、代码与数据视图渲染 | 五元素卡片、需求回链、高亮代码行 |
-| `tests/web_code_view_flow.cjs` | 代码视图浏览器验收 | 语法 token、复制入口、原始记录默认折叠、轮询与窄屏 |
+| `tests/web_code_view_flow.cjs` | 代码视图浏览器验收 | 语法 token、复制入口、无原始 JSON 展示、轮询与窄屏 |
 | `frontend/src/components/Candidates.tsx` | 候选与修正视图 | 选择理由、阶段、变化表 |
 | `frontend/src/components/Connectivity.tsx` | 配置体检结果呈现 | 通过/未通过分层摘要、目录检查、建议动作 |
 | `tests/web_start_flow.cjs` | 起点页浏览器验收 | 方法解释卡、切换提示、不兼容警示、预算 chips、体检分层 |
@@ -286,8 +286,8 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/src/components/RuntimeDetails.tsx` | 资源账本、求解执行与调用记录 | 未知Token与费用不记零 |
 | `frontend/src/components/Decision.tsx` | 决策面板、失败诊断与决策探索 | 候选模型结果、余量试算 |
 | `frontend/src/components/StoryFlow.tsx` | 垂直故事流:过程事件卡片与输出摘要 | 角色发言、状态预览、时间窗消耗、实时消耗条、产物直达 |
-| `tests/web_story_flow.cjs` | 故事流浏览器验收 | 步骤顺序、展开摘要、消耗、跳转、轮询与窄屏 |
-| `tests/web_keyboard_flow.cjs` | 键盘可达性浏览器验收 | 焦点环可见、无焦点陷阱、Enter 核心路径(运行→标签→产物→摘要) |
+| `tests/web_story_flow.cjs` | 故事流浏览器验收 | 里程碑卡片集、实时消耗、跳转、无原始 JSON、轮询与窄屏 |
+| `tests/web_keyboard_flow.cjs` | 键盘可达性浏览器验收 | 焦点环可见、无焦点陷阱、Enter 核心路径(运行→标签→产物→运行详情) |
 | `tests/web_math_flow.cjs` | 数学排版浏览器验收 | expression_text→KaTeX(∑/≤/下标),结构化 IR 交互路径保持 |
 | `frontend/src/math.tsx` | ASCII 数学→LaTeX 有界转换与 MathTex 组件 | 语法外输入回退纯文本 |
 | `frontend/src/vendor/katex.css` | KaTeX 样式与字族裁剪(仅 Main/Math/Size) | 字体经 node_modules 相对路径引用,构建时 woff2 内联进 style.css,仓库不存二进制 |
@@ -347,7 +347,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/web_history_flow.cjs` | 版本浏览的本机Chrome验收 | 零POST、13／5版本切换、选定父编辑、轮询保持和窄屏 |
 
 | `tests/test_web_data_previews.py` | 有界公开数据预览的HTTP验收 | CSV逗号／多行／前导零、JSON类型表达、显示截断、来源hash和真实HiGHS |
-| `tests/web_data_flow.cjs` | 输入数据页的本机Chrome验收 | 已保存产品／产能表、完整视图／来源、原始记录折叠、轮询与窄屏，零POST |
+| `tests/web_data_flow.cjs` | 输入数据页的本机Chrome验收 | 已保存产品／产能表、完整视图／来源、无原始 JSON 展示、轮询与窄屏，零POST |
 
 | `tests/web_model_flow.cjs` | 模型声明与需求来源的本机Chrome验收 | 实际来源展开／关联／来源快照、合成声明的未知状态／候选隔离／安全文本，零POST |
 
