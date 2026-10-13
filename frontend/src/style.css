@@ -1965,3 +1965,18 @@ pre,
   font-size: 12px;
   white-space: pre-wrap;
 }
+
+/* ---- 数学排版(KaTeX) ---- */
+.math-expression .math-tex {
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 2px 0;
+  vertical-align: middle;
+}
+.math-expression .katex {
+  font-size: 1.08em;
+}
+.story-summary .math-tex .katex {
+  font-size: 1em;
+}

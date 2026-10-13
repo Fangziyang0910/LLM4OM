@@ -1,7 +1,8 @@
 // 数学表述、求解代码与数据视图的结构化渲染,移植自原 visuals.js 的同名逻辑。
 import { useState } from "react";
 import type { DataPreview } from "../types";
-import { assumptionStatusNames, format, mathText, parameterValue, senseOperators, status } from "../ui";
+import { assumptionStatusNames, format, parameterValue, senseOperators, status } from "../ui";
+import { MathTex } from "../math";
 import { tokenizeLines, type Token } from "../highlight";
 
 interface Term {
@@ -391,7 +392,7 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
           <Expression value={ir.objective.expression} names={names} active={active} onSetActive={setActive} />
         ) : objective?.expression_text || objective?.formulation ? (
           <div className="math-expression">
-            {mathText(objective?.expression_text || objective?.formulation)}
+            <MathTex text={objective?.expression_text || objective?.formulation || ""} display />
           </div>
         ) : (
           <p className="hint">数学目标表达式尚未形成。</p>
@@ -458,7 +459,7 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
                     </div>
                   ) : (
                     <div className="math-expression">
-                      {mathText(item.expression_text || item.formulation || "")}
+                      <MathTex text={item.expression_text || item.formulation || ""} />
                     </div>
                   )}
                   <RequirementLinks ids={item.requirement_ids} requirements={requirements} />

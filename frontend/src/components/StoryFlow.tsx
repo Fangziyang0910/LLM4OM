@@ -3,6 +3,7 @@
 // 结束卡衔接结果区。`.timeline-step[data-artifact]` 契约保持:只有方法事件
 // 引用挂 data-artifact,数量与旧时间线一致。
 import { useMemo, useState } from "react";
+import { MathTex } from "../math";
 import type { Snapshot } from "../types";
 import { artifactKey, artifactLabel, failureDiagnosis, format, phaseLabel, pretty, roleLabel, shortMethod, status } from "../ui";
 
@@ -312,7 +313,7 @@ export function StoryFlow({
                     <div className="story-summary">
                       {preview.description ? <p className="problem-text">{preview.description}</p> : null}
                       {preview.objective ? (
-                        <p className="hint">目标:{preview.objective}</p>
+                        <p className="hint">目标:<MathTex text={preview.objective} /></p>
                       ) : null}
                       {preview.constraints ? (
                         <p className="hint">已识别约束 {preview.constraints} 条</p>

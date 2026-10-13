@@ -66,6 +66,12 @@ class WebProgressTests(unittest.TestCase):
                     self.fail('Web did not start.')
                 with opener.open(url + '/app.js') as asset:
                     self.assertIn(b'window.UI', asset.read())
+                with opener.open(url + '/style.css') as asset:
+                    styles = asset.read()
+                    self.assertIn(b'katex', styles)
+                    self.assertIn(b'data:font/woff2', styles)
+                with opener.open(url + '/style.css') as asset:
+                    self.assertIn("font-src 'self' data:", asset.headers.get('Content-Security-Policy', ''))
                 config = bootstrap['config']
                 config['llm'] = {'provider_plugin_id': 'llm4om.providers.openai_compatible', 'model': 'synthetic-progress',
                     'config': {'base_url': f'http://127.0.0.1:{provider.server_port}/v1',

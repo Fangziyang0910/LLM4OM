@@ -11,6 +11,9 @@ export default defineConfig({
     emptyOutDir: true,
     target: "es2022",
     cssCodeSplit: false,
+    // KaTeX 字体(裁剪后均 < 100KB)以 data URI 内联进 style.css,
+    // 保持产物固定三文件契约,服务端路由表不需要新增条目。
+    assetsInlineLimit: 100 * 1024,
     rollupOptions: {
       output: {
         entryFileNames: "app.js",
