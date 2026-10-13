@@ -4,7 +4,7 @@
 // 引用挂 data-artifact,数量与旧时间线一致。
 import { useMemo, useState } from "react";
 import type { Snapshot } from "../types";
-import { artifactKey, artifactLabel, format, phaseLabel, roleLabel, shortMethod, status } from "../ui";
+import { artifactKey, artifactLabel, failureDiagnosis, format, phaseLabel, pretty, roleLabel, shortMethod, status } from "../ui";
 
 const eventLabels: Record<string, string> = {
   run_started: "读取问题与数据",
@@ -200,6 +200,14 @@ export function StoryFlow({
   };
   const finished = ["completed", "artifact_ready"].includes(job.status);
   const failed = ["failed", "cancelled"].includes(job.status);
+  const runError = job.error || snapshot.bundle?.error;
+  const connection = snapshot.contents?.["llm-trace.json"]?.attempts
+    ?.filter((item: any) => item.diagnostic === runError?.code && item.connection_diagnostic)
+    .at(-1);
+  const [failureTitle, failureDetail] = failureDiagnosis(
+    runError?.code,
+    connection?.connection_diagnostic,
+  );
   const scrollToDecision = () =>
     document.getElementById("decision")?.scrollIntoView({ behavior: "smooth", block: "start" });
   return (
@@ -353,9 +361,11 @@ export function StoryFlow({
                   ) : null}
                   {!preview && !feedback && !comments.length && !matched.length ? (
                     <p className="hint">
-                      {item.status === "running"
-                        ? "该步正在进行;输出与消耗会在完成后记录在这里。"
-                        : item.artifact || item.linkedArtifact
+                      {item.status === "running" && failedStep
+                        ? "运行未完成:该步骤进行中被中断;原因见结束卡与诊断。"
+                        : item.status === "running"
+                          ? "该步正在进行;输出与消耗会在完成后记录在这里。"
+                          : item.artifact || item.linkedArtifact
                           ? "该步的完整公开产物可从右上按钮查看。"
                           : "该步没有单独保存的输出摘要;完整记录见运行详情。"}
                     </p>
@@ -370,19 +380,27 @@ export function StoryFlow({
             <header className="story-head">
               <span className="step-marker">{finished ? "✓" : "!"}</span>
               <div className="step-content">
-                <strong>{finished ? "建模完成" : status(job.status)}</strong>
+                <strong>{finished ? "建模完成" : failureTitle}</strong>
                 <span>
-                  {finalObjective
-                    ? finalObjective.value == null
-                      ? status(finalObjective.termination)
-                      : "目标值 " + format(finalObjective.value)
-                    : "过程记录已保存"}
+                  {finished
+                    ? finalObjective
+                      ? finalObjective.value == null
+                        ? status(finalObjective.termination)
+                        : "目标值 " + format(finalObjective.value)
+                      : "过程记录已保存"
+                    : failureDetail}
                 </span>
               </div>
             </header>
             <div className="story-body">
+              {finished ? null : (
+                <details className="failure-detail">
+                  <summary>技术详情:错误码与原始记录</summary>
+                  <pre>{pretty({ code: runError?.code, message: runError?.message, connection_diagnostic: connection?.connection_diagnostic ?? null })}</pre>
+                </details>
+              )}
               <button type="button" className="secondary" onClick={scrollToDecision}>
-                查看最终结果 ↓
+                {finished ? "查看最终结果 ↓" : "查看诊断与恢复选项 ↓"}
               </button>
             </div>
           </article>

@@ -1956,3 +1956,33 @@ pre {
   font-size: 13px;
   color: var(--ink);
 }
+
+/* ---- 失败项可辨识与技术详情 ---- */
+#jobs .job.failed strong::after {
+  content: " ✕";
+  color: #b3261e;
+  font-size: 12px;
+}
+#jobs .job.failed span {
+  color: #b3261e;
+}
+.failure-summary .failure-detail {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.failure-summary .failure-detail pre {
+  margin: 6px 0 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.timeline-step.story-card .failure-detail {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.timeline-step.story-card .failure-detail pre {
+  margin: 6px 0 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+}

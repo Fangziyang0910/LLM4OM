@@ -1,55 +1,25 @@
 // 决策面板:失败诊断、进行中提示、求解结果、决策探索与独立检查。
 import { useState } from "react";
 import type { Snapshot } from "../types";
-import { activeStep, format, roleLabel, senseOperators, shortMethod, status } from "../ui";
+import { activeStep, failureDiagnosis, format, pretty, roleLabel, senseOperators, shortMethod, status } from "../ui";
 
 function Failure({ snapshot, onOpenDiagnostics }: { snapshot: Snapshot; onOpenDiagnostics: () => void }) {
   const error = snapshot?.job?.error || snapshot?.bundle?.error;
   if (!error) return null;
-  const advice: Record<string, [string, string]> = {
-    provider_timeout: ["模型服务响应超时", "检查模型服务状态与请求时限，再决定是否创建新运行。"],
-    provider_connection_error: ["暂时无法连接模型服务", "检查服务地址和连接。已保存的记录会保留。"],
-    auth_error: ["模型服务认证失败", "检查服务端配置的凭据。"],
-    llm_output_truncated: ["模型输出未生成完整", "调整输出上限或简化问题后重新建模。"],
-    budget_exhausted: ["本次运行已达到预算上限", "查看实际消耗，调整预算后创建新的运行。"],
-    checkpoint_incompatible: [
-      "保存记录与当前版本不兼容",
-      "历史结果仍可查看。新的执行需要使用当前版本的配置。",
-    ],
-  };
   const connection = snapshot.contents?.["llm-trace.json"]?.attempts
     ?.filter((item: any) => item.diagnostic === error.code && item.connection_diagnostic)
     .at(-1);
-  const diagnosis: Record<string, [string, string]> = {
-    tls_interrupted: [
-      "模型服务的 TLS 连接被中断",
-      "检查服务或显式代理的连接路线。请求用量可能未知，原记录已保留。",
-    ],
-    tls_certificate: [
-      "模型服务证书校验失败",
-      "检查服务证书与本机可信证书配置，再创建新运行。",
-    ],
-    tls_error: ["模型服务的 TLS 连接失败", "检查服务和代理的 TLS 连接配置。"],
-    dns_error: ["模型服务域名解析失败", "检查服务地址和使用路线的 DNS。"],
-    connection_refused: [
-      "模型服务连接被拒绝",
-      "检查服务或代理是否正在监听配置的地址和端口。",
-    ],
-    connection_reset: [
-      "模型服务连接被重置",
-      "检查服务或显式代理的连接路线。请求用量可能未知。",
-    ],
-    timeout: advice.provider_timeout,
-  };
-  const [title, detail] =
-    diagnosis[connection?.connection_diagnostic] ||
-    advice[error.code] || ["这次建模未完成", "查看已保存的步骤和诊断，修改输入或配置后再执行。"];
+  const [title, detail] = failureDiagnosis(error.code, connection?.connection_diagnostic);
   return (
     <div className="failure-summary">
       <span className="eyebrow">RUN NEEDS ATTENTION</span>
       <h2>{title}</h2>
       <p className="hint">{detail}</p>
       <code className="failure-code">{error.code}</code>
+      <details className="failure-detail">
+        <summary>技术详情:错误码与原始记录</summary>
+        <pre>{pretty({ code: error.code, message: error.message, connection_diagnostic: connection?.connection_diagnostic ?? null })}</pre>
+      </details>
       <button className="secondary" onClick={onOpenDiagnostics}>
         查看运行详情
       </button>

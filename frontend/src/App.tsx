@@ -710,7 +710,11 @@ export default function App() {
           {jobs.map((job) => (
             <button
               key={job.job_id}
-              className={"job" + (job.job_id === currentJob ? " selected" : "")}
+              className={
+                "job" +
+                (job.job_id === currentJob ? " selected" : "") +
+                (["failed", "cancelled"].includes(job.status) ? " failed" : "")
+              }
               onClick={() => openJob(job.job_id)}
             >
               <strong>{job.description}</strong>
