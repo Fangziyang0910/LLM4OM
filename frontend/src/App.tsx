@@ -644,7 +644,7 @@ export default function App() {
         <a className="brand" href="/">
           <span className="brand-symbol">∑</span> LLM<span>4</span>OM
         </a>
-        <p className="subtitle">Optimization Modeling</p>
+        <p className="subtitle">优化建模工作台</p>
         <button
           id="new-run"
           className={"nav" + (view === "editor" ? " active" : "")}
@@ -727,7 +727,7 @@ export default function App() {
       <main>
         <header>
           <div>
-            <p className="eyebrow">LLM4OM / OPTIMIZATION STUDIO</p>
+            <p className="eyebrow">LLM4OM 工作台</p>
             <h1>建模空间</h1>
           </div>
           <span className="badge">
@@ -1250,7 +1250,7 @@ export default function App() {
           <section id="result">
             <div className="run-heading">
               <div>
-                <p className="eyebrow">MODEL / SOLUTION</p>
+                <p className="eyebrow">建模与求解</p>
                 <h2 id="run-title">{snapshot.job.description}</h2>
                 <p id="run-meta">
                   {`${status(snapshot.job.status)} · ${
@@ -1749,12 +1749,12 @@ function ExperimentResult({
             [
               ["任务", "task_id"],
               ["配置", "configuration_id"],
-              ["Repeat", "repeat"],
+              ["重复", "repeat"],
               ["完成/选中", (row: any) => `${row.N_completed}/${row.N_selected}`],
               ["独立可行", match("independent_feasibility")],
               ["目标匹配", match("objective_match")],
-              ["Verified solution", match("verified_solution")],
-              ["Tokens", "total_tokens"],
+              ["已验证解", match("verified_solution")],
+              ["Token 用量", "total_tokens"],
               ["费用", "cost"],
             ],
             snapshot.summary?.groups || [],
@@ -1771,13 +1771,13 @@ function ExperimentResult({
             [
               ["样本", "case_id"],
               ["配置", "configuration_id"],
-              ["Repeat", "repeat"],
+              ["重复", "repeat"],
               ["状态", "status"],
               ["Run", "run_id"],
               ["来源", "evidence_origin"],
               ["独立可行", match("independent_feasibility")],
               ["目标匹配", match("objective_match")],
-              ["Verified solution", match("verified_solution")],
+              ["已验证解", match("verified_solution")],
             ],
             snapshot.rows || [],
           )}

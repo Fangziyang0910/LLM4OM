@@ -401,8 +401,7 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
       {variables.length || !source.state ? (
         <section className="model-card variables-card">
           <h3>决策变量</h3>
-          <p className="hint">点击变量或公式中的符号，查看它在模型中的关联。</p>
-          {variables.map((item: any) => {
+            {variables.map((item: any) => {
             const domain =
               ({
                 integer: "整数 ℤ",

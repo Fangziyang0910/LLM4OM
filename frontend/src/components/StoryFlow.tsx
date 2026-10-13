@@ -40,6 +40,7 @@ interface StoryItem {
   artifact?: string;
   linkedArtifact?: string;
   artifactTab: string;
+  milestone?: boolean;
 }
 
 function collectItems(snapshot: Snapshot): StoryItem[] {
@@ -112,6 +113,8 @@ function collectItems(snapshot: Snapshot): StoryItem[] {
             : "completed",
       // 方法事件之外的核心事件不占用 data-artifact 契约,产物经按钮跳转。
       linkedArtifact: linked,
+      // 澄清问答本身是建模输出(答复构成后续输入),无论何时都展示。
+      milestone: event.kind === "clarification_requested",
       artifactTab: event.kind === "solver_finished" ? "diagnostics" : "formulation",
     });
   }
@@ -220,8 +223,7 @@ export function StoryFlow({
       </div>
       <p id="process-summary" className="hint">
         {shortMethod(snapshot.contents?.["public-config.json"]?.method?.plugin_id || job.method) +
-          " · " +
-          (job.status === "running" ? "正在执行方法步骤" : "已保存 " + items.length + " 个过程记录")}
+          (job.status === "running" ? " · 正在执行方法步骤" : "")}
       </p>
       <div className="story-consumption" aria-live="polite">
         <span className="pill">模型请求 {format(consumption.requests)}</span>
@@ -252,6 +254,18 @@ export function StoryFlow({
           const jumpKey = item.artifact || item.linkedArtifact;
           const preview = statePreview(snapshot, item.artifact);
           const feedback = assessmentFeedback(snapshot, item);
+          // 里程碑化:只有带真实建模输出(保存的产物、中间状态、检查反馈、
+          // 角色发言、时间窗内的模型调用)或正在发生(进行中/待补充)的
+          // 步骤才成为卡片;纯事件标记不单独成卡,避免展开为空。
+          const hasOutput =
+            !!jumpKey ||
+            !!preview ||
+            !!feedback ||
+            comments.length > 0 ||
+            matched.length > 0 ||
+            item.milestone;
+          const inFlight = item.status === "running" || item.status === "needs_input";
+          if (!hasOutput && !inFlight) return null;
           const isOpen = expanded[item.id] || item.status === "running";
           return (
             <article

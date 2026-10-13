@@ -73,15 +73,20 @@ for (const address of [url, provider])
     );
     const cards = page.locator(".timeline-step.story-card");
     const count = await cards.count();
-    assert.ok(count >= 6, `expected >= 6 story cards, got ${count}`);
-    assert.match(await cards.first().innerText(), /读取问题与数据/);
     const labels = [];
     for (let index = 0; index < count; index++)
       labels.push(await cards.nth(index).locator(".step-content strong").innerText());
-    for (const expected of ["联合生成数学表述与求解实现", "数学表述已保存", "调用求解器", "求解完成"])
+    assert.ok(count >= 4, `expected >= 4 milestone cards, got ${count}: ${JSON.stringify(labels)}`);
+    for (const expected of ["联合生成数学表述与求解实现", "数学表述已保存", "求解完成"])
       assert.ok(
         labels.includes(expected),
         `story order missing ${expected}: ${JSON.stringify(labels)}`,
+      );
+    // 里程碑化:无建模输出的纯事件标记(读取问题、求解器启动)不再单独成卡。
+    for (const dropped of ["读取问题与数据", "调用求解器"])
+      assert.ok(
+        !labels.includes(dropped),
+        `contentless event should not be a card: ${JSON.stringify(labels)}`,
       );
     const ending = cards.last();
     assert.match(await ending.innerText(), /建模完成/);

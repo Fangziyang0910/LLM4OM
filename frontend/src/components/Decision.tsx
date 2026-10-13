@@ -12,7 +12,7 @@ function Failure({ snapshot, onOpenDiagnostics }: { snapshot: Snapshot; onOpenDi
   const [title, detail] = failureDiagnosis(error.code, connection?.connection_diagnostic);
   return (
     <div className="failure-summary">
-      <span className="eyebrow">RUN NEEDS ATTENTION</span>
+      <span className="eyebrow">运行需要处理</span>
       <h2>{title}</h2>
       <p className="hint">{detail}</p>
       <code className="failure-code">{error.code}</code>
@@ -228,7 +228,7 @@ export function Decision({
       {failed}
       <div className="decision-hero">
         <div>
-          <span className="eyebrow">MODEL SOLUTION</span>
+          <span className="eyebrow">求解结果</span>
           <h2>{solve.has_primal_solution ? "候选模型求解完成" : status(solve.termination)}</h2>
         </div>
         <div className="objective-result">
@@ -272,7 +272,6 @@ export function Decision({
               </button>
             ))}
           </div>
-          <p className="hint">柱长表示决策值的绝对大小；点击可选中比较，准确值显示在右侧。</p>
         </>
       ) : null}
       {solve.has_primal_solution &&
