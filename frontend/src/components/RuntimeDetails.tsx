@@ -75,8 +75,8 @@ export function RuntimeDetails({ snapshot }: { snapshot: Snapshot | null | undef
               ["原始状态", solve?.raw_status || "未提供"],
               ["候选模型可行解", solve ? (solve.has_primal_solution ? "有" : "无") : "未提供"],
               ["目标值", shown(solve?.objective_value)],
-              ["Best bound", shown(solve?.best_bound)],
-              ["报告Gap", shown(solve?.reported_gap)],
+              ["最优界", shown(solve?.best_bound)],
+              ["报告 Gap", shown(solve?.reported_gap)],
               ["求解耗时（秒）", shown(solve?.solve_time_s)],
               ["执行耗时（秒）", shown(execution?.wall_time_s)],
               ["CPU时间（秒）", shown(execution?.resources?.cpu_time_s)],
@@ -97,7 +97,7 @@ export function RuntimeDetails({ snapshot }: { snapshot: Snapshot | null | undef
       {attempts.size ? (
         <Card
           title="已保存的模型调用"
-          subtitle="每次尝试分别记录，可包含父版本。未知Token和费用不记为零。"
+          subtitle="未知 Token 与费用不记为零。"
           className="model-card runtime-card"
         >
           <Table

@@ -175,7 +175,7 @@ function ModelNotes({
             </p>
           ))
         ) : (
-          <p className="hint">该版本未记录模型警告；这不表示模型已通过全部检查。</p>
+          <p className="hint">该版本未记录模型警告。</p>
         )}
       </details>
       <Coverage metadata={metadata} relations={relations} requirements={requirements} />
@@ -438,8 +438,7 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
       {representation.constraints || ir?.constraints || !source.state ? (
         <section className="model-card constraints-card">
           <h3>约束条件</h3>
-          <p className="hint">保留模型实际提供的关系与边界。</p>
-          {restrictions.map((item: any, index: number) => {
+            {restrictions.map((item: any, index: number) => {
             relations.push({
               label: "约束 " + (item.id || index + 1),
               ids: item.requirement_ids || [],
@@ -584,7 +583,7 @@ function DataView({ contents, dataPreviews }: { contents: Record<string, any>; d
                 <p className="hint">
                   {preview.display_truncated
                     ? `页面显示 ${preview.rows.length} / ${preview.total_items} 行或字段，最多16列，长文本显示前256字符。完整已保存视图随公共导出提供。`
-                    : "显示已保存视图的全部内容。这里的页面预览不改变模型输入。"}
+                    : "显示已保存视图的全部内容。"}
                 </p>
               </>
             ) : (

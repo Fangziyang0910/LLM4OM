@@ -257,16 +257,12 @@ export function StoryFlow({
           // 里程碑化:只有带真实建模输出(保存的产物、中间状态、检查反馈、
           // 角色发言、时间窗内的模型调用)或正在发生(进行中/待补充)的
           // 步骤才成为卡片;纯事件标记不单独成卡,避免展开为空。
-          const hasOutput =
-            !!jumpKey ||
-            !!preview ||
-            !!feedback ||
-            comments.length > 0 ||
-            matched.length > 0 ||
-            item.milestone;
+          const expandable =
+            !!preview || !!feedback || comments.length > 0 || matched.length > 0;
+          const hasOutput = expandable || !!jumpKey || item.milestone;
           const inFlight = item.status === "running" || item.status === "needs_input";
           if (!hasOutput && !inFlight) return null;
-          const isOpen = expanded[item.id] || item.status === "running";
+          const isOpen = expandable && (expanded[item.id] || item.status === "running");
           return (
             <article
               key={item.id}
@@ -276,13 +272,13 @@ export function StoryFlow({
               data-artifact={item.artifact || undefined}
               onClick={() => {
                 if (jumpKey) onOpenArtifact(item.artifactTab, jumpKey);
-                setExpanded((prior) => ({ ...prior, [item.id]: !isOpen }));
+                if (expandable) setExpanded((prior) => ({ ...prior, [item.id]: !isOpen }));
               }}
               onKeyDown={(event) => {
                 if (event.key !== "Enter" && event.key !== " ") return;
                 event.preventDefault();
                 if (jumpKey) onOpenArtifact(item.artifactTab, jumpKey);
-                setExpanded((prior) => ({ ...prior, [item.id]: !isOpen }));
+                if (expandable) setExpanded((prior) => ({ ...prior, [item.id]: !isOpen }));
               }}
             >
               <header className="story-head">
@@ -373,15 +369,11 @@ export function StoryFlow({
                       ))}
                     </div>
                   ) : null}
-                  {!preview && !feedback && !comments.length && !matched.length ? (
+                  {item.status === "running" && !expandable ? (
                     <p className="hint">
-                      {item.status === "running" && failedStep
+                      {failedStep
                         ? "运行未完成:该步骤进行中被中断;原因见结束卡与诊断。"
-                        : item.status === "running"
-                          ? "该步正在进行;输出与消耗会在完成后记录在这里。"
-                          : item.artifact || item.linkedArtifact
-                          ? "该步的完整公开产物可从右上按钮查看。"
-                          : "该步没有单独保存的输出摘要;完整记录见运行详情。"}
+                        : "该步正在进行;输出与消耗会在完成后记录在这里。"}
                     </p>
                   ) : null}
                 </div>

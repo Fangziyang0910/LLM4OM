@@ -307,9 +307,7 @@ export function RevisionFields({
         specs.filter((spec) => spec.path[0] === "code").map(render)
       ) : ir ? (
         <>
-          <p className="hint">
-            编辑实际用于求解的线性模型。新版本的变量、目标与约束文本会按编辑后的IR更新。数值边界留空表示无界。
-          </p>
+          <p className="hint">编辑实际用于求解的线性模型；数值边界留空表示无界。</p>
           <div className="revision-model-group">
             <h4>优化目标</h4>
             <div className="field-grid">
@@ -361,11 +359,9 @@ export function RevisionFields({
           <button className="secondary" type="button" onClick={onAddConstraint}>
             ＋ 添加约束
           </button>
-          <p className="hint">新约束请填写变量系数、关系和右侧值。修改将保存为人工辅助的新版本。</p>
+          <p className="hint">修改保存为人工辅助新版本。</p>
         </>
-      ) : (
-        <p className="hint">数学表述与严格IR通过下方完整文档编辑，应用后再提交。</p>
-      )}
+      ) : null}
       {render(reason)}
       <p className="hint">
         {"已累计：模型请求 " +

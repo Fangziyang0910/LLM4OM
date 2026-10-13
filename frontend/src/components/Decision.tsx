@@ -48,21 +48,14 @@ function LiveModeling({ snapshot }: { snapshot: Snapshot }) {
                 ? roleLabel(step.label)
                 : "正在准备建模"}
         </h2>
-        <p className="hint">
-          {state === "needs_input"
-            ? "请完成下方问题，模型将依据你的回答继续。"
-            : state === "queued"
-              ? "开始执行后，这里会显示实际建模步骤。"
-              : "正在执行所选方法。步骤与模型输出会自动更新。"}
-        </p>
         {step && state === "running" ? (
           <div className="modeling-detail">
             <span className="pill">
               {
                 {
-                  formulation: "Formulation · 数学表述",
-                  code: "Code · 求解实现",
-                  solve: "Solve · 数值求解",
+                  formulation: "数学表述",
+                  code: "求解实现",
+                  solve: "数值求解",
                   coordination: "方法协作",
                 }[step.phase as string]
               }
@@ -127,9 +120,7 @@ function DecisionExplorer({ ir, solution }: { ir: any; solution: any }) {
   return (
     <section className="model-card decision-explorer">
       <h3>目标与约束余量</h3>
-      <p className="hint">
-        仅代入当前候选模型计算，不重新求解或修改已保存结果。约束余量为负表示超出该限制；等式显示左侧减右侧的偏差。
-      </p>
+      <p className="hint">只代入当前候选模型计算，不修改已保存结果。</p>
       <div className="explorer-output" aria-live="polite">
         {!valid ? (
           <p className="hint">请填写符合变量边界和类型的数值。</p>
@@ -215,7 +206,7 @@ export function Decision({
     const state = snapshot?.job?.status;
     if (hasFailure) return <>{failed}</>;
     if (["queued", "running", "needs_input"].includes(state)) return <LiveModeling snapshot={snapshot} />;
-    return <div className="empty-view"><div className="empty-icon">◇</div><h3>求解结果将在这里出现</h3><p className="hint">建模进行时，可在左侧查看实际步骤。</p></div>;
+    return <div className="empty-view"><div className="empty-icon">◇</div><h3>求解结果将在这里出现</h3></div>;
   }
   const values: [string, any][] = Object.entries(solution?.variables || {});
   const variableNames = new Map(
@@ -296,7 +287,6 @@ export function Decision({
               </div>
             ) : null}
           </div>
-          <p className="hint">各项来自已求解的目标函数；负数表示负贡献。</p>
         </section>
       ) : null}
       {solve.has_primal_solution &&

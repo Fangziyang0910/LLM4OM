@@ -21,7 +21,7 @@ export function Connectivity({ report }: { report: any }) {
         </p>
       ) : null}
       {result.status === "not_requested" ? (
-        <p className="hint">未请求网络检查。勾选上方选项后可读取模型目录。</p>
+        <p className="hint">未请求网络检查。</p>
       ) : (
         (result.checks || []).map((item: any, index: number) => (
           <div className="connectivity-row" key={index}>
@@ -36,9 +36,7 @@ export function Connectivity({ report }: { report: any }) {
           </div>
         ))
       )}
-      <p className="hint">
-        只读取目录，不发起文本生成。目录可能分页或使用别名；生成能力以实际运行结果为准。
-      </p>
+      <p className="hint">只读取目录，不发起文本生成；生成能力以实际运行结果为准。</p>
     </>
   );
 }

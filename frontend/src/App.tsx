@@ -1570,7 +1570,7 @@ export default function App() {
                               ? "求解实现正在形成"
                               : "建模输出正在形成"}
                         </h3>
-                        <p className="hint">完成的公开产物会自动出现在这里。可以在左侧查看当前的实际步骤。</p>
+                        <p className="hint">完成的公开产物会自动出现在这里。</p>
                       </div>
                     ) : (
                       <Records
@@ -1700,7 +1700,7 @@ function ExperimentResult({
       <div className="panel">
         <h3>分组比较</h3>
         <p className="hint">
-          各来源、配置和 repeat 分开统计。候选求解成功不等于原问题正确；未知费用保留 unknown。
+          各来源、配置和重复分开统计。候选求解成功不等于原问题正确；未知费用保留 unknown。
         </p>
         <div id="experiment-groups" className="table-scroll">
           {renderTable(

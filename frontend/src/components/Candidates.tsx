@@ -152,7 +152,7 @@ export function Candidates({
             </section>
           );
         })}
-      <p className="hint">各目标值属于各自的候选模型。候选之间可能改变目标或约束，不自动按目标值排名。</p>
+      <p className="hint">各候选可能改变目标或约束，目标值不可直接比较。</p>
     </>
   );
 }
