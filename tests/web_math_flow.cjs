@@ -34,6 +34,10 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
         { id: "C1", description: "2 * x_A + 1 * x_B >= 8", expression_text: "$2 xA + xB \\geq 8$" },
         { id: "C2", description: "resource limit", expression_text: "$2x_A + x_B <= 8$" },
         { id: "C3", description: "nonnegative", expression_text: "$x_A \\geq 0$" },
+        // LLM 常按 JSON 习惯写双反斜杠,并把变量并写为 xA:
+        // KaTeX 会把 \\ 当换行、geq 当变量渲染,必须先归一。
+        { id: "C4", description: "escaped form", expression_text: "$2 x_A + x_B \\\\geq 8$" },
+        { id: "C5", description: "juxtaposed", expression_text: "$xA \\\\geq 0$" },
       ];
       const host = document.createElement("div");
       document.querySelector("main").appendChild(host);
@@ -41,7 +45,8 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       const textPath = {
         katex: host.querySelectorAll(".katex").length,
         fallback: host.querySelectorAll(".math-fallback").length,
-        text: [...host.querySelectorAll(".math-tex")].map((el) => el.textContent).join(" "),
+        // 只取可见渲染文本;KaTeX 的 MathML 注记含原始源码,不能作为断言对象。
+        text: [...host.querySelectorAll(".katex-html")].map((el) => el.textContent).join(" "),
         all: host.textContent,
       };
       // 结构化路径:方法也会把约束存为 terms+sense+rhs,sense 用 \geq 这类 LaTeX 写法,
@@ -72,11 +77,13 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       };
     });
     assert.ok(rendered, "fixture 应包含 expression_text 表述");
-    assert.ok(rendered.katex >= 4, "目标与约束应渲染 KaTeX");
+    assert.ok(rendered.katex >= 5, "目标与约束应渲染 KaTeX");
     assert.equal(rendered.fallback, 0);
     assert.match(rendered.text, /min/);
     assert.match(rendered.text, /≥/);
     assert.match(rendered.text, /≤/);
+    // 双反斜杠归一后不得再出现 geq/leq 字样
+    assert.doesNotMatch(rendered.text, /geq|leq/, "LaTeX 命令不应作为变量渲染");
     // 裸公式 description 不再原样重复显示为文本
     assert.doesNotMatch(rendered.all, /2 \* x_A/);
     // 结构化路径:变量名 xA 排版为下标,LaTeX 写法的 sense(\geq)映射为 ≥,不再原样显示

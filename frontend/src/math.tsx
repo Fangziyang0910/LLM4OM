@@ -19,13 +19,25 @@ const word = (name: string) => {
   return `\\mathit{${name}}`;
 };
 
-// 标识符[索引,索引] → \mathit{名}_{索引…};标识符_后缀 → 下标。
+// 标识符[索引,索引] → \mathit{名}_{索引…};标识符_后缀 → 下标;
+// 无下划线的并写变量(xA)按 splitVarName 拆成字母+下标。
 function identifier(token: string, rest: string): [string, string] {
   const underscore = token.indexOf("_");
-  const name = underscore > 0 ? token.slice(0, underscore) : token;
-  const tail = underscore > 0 ? token.slice(underscore + 1) : "";
-  let latex = word(name);
-  if (tail) latex += `_{${indexItem(tail)}}`;
+  if (underscore > 0) {
+    const name = token.slice(0, underscore);
+    const tail = token.slice(underscore + 1);
+    let latex = word(name);
+    if (tail) latex += `_{${indexItem(tail)}}`;
+    const indexMatch = rest.match(/^\[([^\]]*)\]/);
+    if (indexMatch) {
+      latex += `_{${indexMatch[1].split(",").map((item) => indexItem(item.trim())).join(",")}}`;
+      rest = rest.slice(indexMatch[0].length);
+    }
+    return [latex, rest];
+  }
+  const [name, sub] = splitVarName(token);
+  let latex = sub ? name : word(name);
+  if (sub) latex += `_{${indexItem(sub)}}`;
   const indexMatch = rest.match(/^\[([^\]]*)\]/);
   if (indexMatch) {
     latex += `_{${indexMatch[1].split(",").map((item) => indexItem(item.trim())).join(",")}}`;
@@ -65,6 +77,33 @@ const deLatex = (text: string) =>
     .replace(/\\max\b/gi, "maximize")
     .replace(/\\sum_\{([^}]*)\}/g, "sum_{$1}")
     .replace(/\\[,; ]/g, " ");
+
+// LLM 常按 JSON 字符串习惯把反斜杠写成两个(\\geq),或把下标转义为 x\_A;
+// KaTeX 会把 \\ 当换行命令、geq 当变量名渲染,先归一成单反斜杠。
+function normalizeEscapes(text: string): string {
+  let current = text;
+  for (;;) {
+    const next = current.replace(/\\\\/g, "\\").replace(/\\_/g, "_");
+    if (next === current) return current;
+    current = next;
+  }
+}
+
+// 变量名拆分:xA/x_A/x1/xAB → 字母 + 下标;普通单词(cut)与中文名不拆。
+// 文本路径与结构化路径共用同一规则。
+export function splitVarName(name: string): [string, string | null] {
+  const text = String(name ?? "").trim();
+  const match = /^([A-Za-z])_?([A-Z0-9]{1,3})$/.exec(text);
+  if (match && (text.includes("_") || /^[\dA-Z]/.test(match[2]))) return [match[1], match[2]];
+  return [text, null];
+}
+
+// 无下划线的变量并写(xA + xB ≥ 8)补成下标;含 \text 等文本命令的表达式
+// 跳过,避免改动文字内容。
+function withSubscripts(latex: string): string {
+  if (/\\(text|math[a-z]*|operatorname)/.test(latex)) return latex;
+  return latex.replace(/(?<![A-Za-z_\\])([A-Za-z])([A-Z0-9]{1,3})(?![A-Za-z_])/g, "$1_$2");
+}
 
 function toLatexAscii(text: string): string | null {
   if (!mathy(text)) return null;
@@ -151,13 +190,14 @@ export const isBareFormula = (value: unknown): boolean => {
 };
 
 export function toLatex(text: string): string | null {
-  const stripped = stripDelimiters(String(text ?? ""));
+  const stripped = normalizeEscapes(stripDelimiters(String(text ?? "")));
   if (!stripped) return null;
-  // 已是 LaTeX(含命令且无 ASCII 关系符):直接交给 KaTeX,先验证可解析。
+  // 已是 LaTeX(含命令且无 ASCII 关系符):补变量下标后直接交给 KaTeX,先验证可解析。
   if (/\\[A-Za-z]+/.test(stripped) && !/<=|>=/.test(stripped)) {
+    const latex = withSubscripts(stripped);
     try {
-      katex.renderToString(stripped, { throwOnError: true, strict: "ignore" });
-      return stripped;
+      katex.renderToString(latex, { throwOnError: true, strict: "ignore" });
+      return latex;
     } catch {
       // 含未知命令时落到归一化后的 ASCII 转换
     }

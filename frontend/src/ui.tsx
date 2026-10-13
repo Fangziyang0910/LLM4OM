@@ -1,5 +1,6 @@
 // 与原 visuals.js 对齐的展示词汇与纯函数;结构化渲染组件在各组件文件中。
 import type { ArtifactRef, Snapshot } from "./types";
+import { splitVarName } from "./math";
 
 export const statusNames: Record<string, string> = {
   running: "进行中",
@@ -152,17 +153,17 @@ export function senseOperator(sense: unknown): string {
 }
 
 // 变量名排版:xA / x_A / x1 显示为字母 + 下标;普通单词与中文名原样显示。
+// 拆分规则与文本公式路径(math.splitVarName)一致。
 export function VarSymbol({ name }: { name: unknown }) {
-  const text = String(name ?? "").trim();
-  const match = /^([A-Za-z])_?([A-Za-z0-9]{1,3})$/.exec(text);
-  if (match && (text.includes("_") || /^[\dA-Z]/.test(match[2])))
+  const [head, sub] = splitVarName(String(name ?? ""));
+  if (sub)
     return (
       <>
-        <i>{match[1]}</i>
-        <sub>{match[2]}</sub>
+        <i>{head}</i>
+        <sub>{sub}</sub>
       </>
     );
-  return <>{text}</>;
+  return <>{head}</>;
 }
 export const assumptionStatusNames: Record<string, string> = {
   explicit: "原文声明",
