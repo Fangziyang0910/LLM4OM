@@ -1,6 +1,7 @@
 "use strict";
-// 数学排版验收:方法保存的 expression_text(无结构化 IR 项)经
-// window.UI 门面渲染为 KaTeX 排版;结构化 IR 路径的交互表达式不受影响。
+// 数学排版验收:方法保存的表达式(无结构化 IR 项)经 window.UI 门面渲染为
+// KaTeX 排版,覆盖 ASCII 线性语法、$定界 LaTeX、混合记号与裸公式 description;
+// 结构化 IR 路径的交互表达式不受影响。
 const assert = require("node:assert/strict");
 const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || "playwright");
 const url = process.env.LLM4OM_WEB_TEST_URL;
@@ -25,6 +26,15 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       if (!formulation?.representation?.objective?.expression_text) return null;
       for (const name of Object.keys(contents))
         if (/structured-ir|model-ir|supplied-ir/.test(name)) delete contents[name];
+      // 真实运行里模型常保存 $…$ 定界的 LaTeX、混合记号,以及把 ASCII 公式写进 description。
+      const state = formulation.representation.state || formulation.representation;
+      state.objective.expression_text = "$\\min 2x_A + 3x_B$";
+      state.objective.description = "The goal is to minimize the total cost";
+      state.constraints = [
+        { id: "C1", description: "2 * x_A + 1 * x_B >= 8", expression_text: "$2 xA + xB \\geq 8$" },
+        { id: "C2", description: "resource limit", expression_text: "$2x_A + x_B <= 8$" },
+        { id: "C3", description: "nonnegative", expression_text: "$x_A \\geq 0$" },
+      ];
       const host = document.createElement("div");
       document.querySelector("main").appendChild(host);
       UI.records(host, formulation, "formulation", contents);
@@ -32,13 +42,17 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
         katex: host.querySelectorAll(".katex").length,
         fallback: host.querySelectorAll(".math-fallback").length,
         text: [...host.querySelectorAll(".math-tex")].map((el) => el.textContent).join(" "),
+        all: host.textContent,
       };
     });
     assert.ok(rendered, "fixture 应包含 expression_text 表述");
-    assert.ok(rendered.katex >= 2, "目标与约束应渲染 KaTeX");
+    assert.ok(rendered.katex >= 4, "目标与约束应渲染 KaTeX");
     assert.equal(rendered.fallback, 0);
-    assert.match(rendered.text, /∑/);
+    assert.match(rendered.text, /min/);
+    assert.match(rendered.text, /≥/);
     assert.match(rendered.text, /≤/);
+    // 裸公式 description 不再原样重复显示为文本
+    assert.doesNotMatch(rendered.all, /2 \* x_A/);
     await page.click('[data-tab="formulation"]');
     assert.ok(
       (await page.locator(".math-variable").count()) > 0,
@@ -46,7 +60,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     );
     assert.deepEqual(errors, []);
     console.log(
-      "Math rendering: expression_text → KaTeX (∑/≤/下标), structured-IR interactive path preserved.",
+      "Math rendering: ASCII + $-delimited LaTeX + mixed notation → KaTeX (min/≥/≤), bare-formula description deduped, structured-IR interactive path preserved.",
     );
   } finally {
     await browser.close();

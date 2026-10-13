@@ -118,19 +118,6 @@ export function artifactKey(
     );
 }
 
-export const mathText = (value: unknown): string =>
-  String(value || "")
-    .replace(/\\leq\b/g, "≤")
-    .replace(/\\geq\b/g, "≥")
-    .replace(/\\cdot\b/g, "·")
-    .replace(/\\times\b/g, "×")
-    .replace(/\\sum\b/g, "∑")
-    .replace(/\\forall\b/g, "∀")
-    .replace(/\\in\b/g, "∈")
-    .replace(/\\mathbb\{R\}/g, "ℝ")
-    .replace(/\\mathbb\{Z\}/g, "ℤ")
-    .replace(/^\$+|\$+$/g, "");
-
 export function roleLabel(role: string | undefined): string {
   if (!role) return "";
   if (roles[role]) return roles[role];

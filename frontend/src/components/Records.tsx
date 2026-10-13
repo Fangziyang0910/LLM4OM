@@ -2,7 +2,7 @@
 import { useState } from "react";
 import type { DataPreview } from "../types";
 import { assumptionStatusNames, format, parameterValue, senseOperators, status } from "../ui";
-import { MathTex } from "../math";
+import { isBareFormula, MathTex } from "../math";
 import { tokenizeLines, type Token } from "../highlight";
 
 interface Term {
@@ -376,15 +376,26 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
     <>
       <section className="model-card objective-card">
         <h3>优化目标</h3>
-        <p className="hint">{objective?.description || "模型要达到的目标"}</p>
+        <p className="hint">
+          {isBareFormula(objective?.description) && (objective?.expression_text || objective?.formulation)
+            ? "目标函数"
+            : objective?.description || "模型要达到的目标"}
+        </p>
         <span className="pill">
           {sense === "min" ? "最小化 MIN" : sense === "max" ? "最大化 MAX" : "目标函数"}
         </span>
         {ir?.objective?.expression ? (
           <Expression value={ir.objective.expression} names={names} active={active} onSetActive={setActive} />
-        ) : objective?.expression_text || objective?.formulation ? (
+        ) : objective?.expression_text || objective?.formulation || isBareFormula(objective?.description) ? (
           <div className="math-expression">
-            <MathTex text={objective?.expression_text || objective?.formulation || ""} display />
+            <MathTex
+              text={
+                objective?.expression_text ||
+                objective?.formulation ||
+                (isBareFormula(objective?.description) ? objective.description : "")
+              }
+              display
+            />
           </div>
         ) : (
           <p className="hint">数学目标表达式尚未形成。</p>
@@ -440,7 +451,12 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
               <div className="constraint-row" key={item.id || index}>
                 <span className="constraint-number">{String(index + 1).padStart(2, "0")}</span>
                 <div className="constraint-content">
-                  <strong>{item.description || item.id || "约束 " + (index + 1)}</strong>
+                  <strong>
+                    {/* description 被方法写成裸公式时只保留编号标题,公式由下方数学行渲染,避免显示两遍 */}
+                    {isBareFormula(item.description) && (item.expression_text || item.formulation)
+                      ? item.id || "约束 " + (index + 1)
+                      : item.description || item.id || "约束 " + (index + 1)}
+                  </strong>
                   {item.expression ? (
                     <div className="math-expression">
                       <Expression value={item.expression} names={names} active={active} onSetActive={setActive} />
@@ -451,7 +467,13 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
                     </div>
                   ) : (
                     <div className="math-expression">
-                      <MathTex text={item.expression_text || item.formulation || ""} />
+                      <MathTex
+                        text={
+                          item.expression_text ||
+                          item.formulation ||
+                          (isBareFormula(item.description) ? item.description : "")
+                        }
+                      />
                     </div>
                   )}
                   <RequirementLinks ids={item.requirement_ids} requirements={requirements} />

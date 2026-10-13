@@ -1,6 +1,8 @@
-// ASCII 数学表达式 → LaTeX 的有界转换,配 KaTeX 渲染。
-// 表达式来自方法保存的 expression_text:sum_{p in S} a[i,j] * x[j] <= b[k]
-// 这类线性语法。任何超出该语法的内容返回 null,由调用方回退纯文本,
+// 方法保存的表达式 → LaTeX 的有界转换,配 KaTeX 渲染。
+// 输入两种形态:一是 ASCII 线性语法(sum_{p in S} a[i,j] * x[j] <= b[k]),
+// 二是模型直接写出的 LaTeX($\min 2x_A \geq 8$ 这类带定界符与命令的文本)。
+// 已是合法 LaTeX 的直接放行;混合写法先归一化记号再走 ASCII 转换;
+// 任何无法安全转换的内容返回 null,由调用方回退纯文本,
 // 因此自然语言描述与未知符号不会被误渲染。
 import { useMemo } from "react";
 import katex from "katex";
@@ -36,7 +38,35 @@ function indexItem(item: string): string {
   return ident.test(item) ? word(item) : item;
 }
 
-export function toLatex(text: string): string | null {
+// 剥离成对的数学定界符:$$…$$、$…$、\(…\)、\[…\](可嵌套多层外包裹)。
+function stripDelimiters(text: string): string {
+  let current = text.trim();
+  for (;;) {
+    const next = current
+      .replace(/^\$\$([\s\S]*)\$\$$/, "$1")
+      .replace(/^\$([^$]*)\$$/, "$1")
+      .replace(/^\\\(([\s\S]*)\\\)$/, "$1")
+      .replace(/^\\\[([\s\S]*)\\\]$/, "$1")
+      .trim();
+    if (next === current) return current;
+    current = next;
+  }
+}
+
+// 混合写法里的 LaTeX 记号 → 等价 ASCII,统一交给 ASCII 转换。
+const deLatex = (text: string) =>
+  text
+    .replace(/≥/g, ">=")
+    .replace(/≤/g, "<=")
+    .replace(/\\leq\b|\\le\b/g, "<=")
+    .replace(/\\geq\b|\\ge\b/g, ">=")
+    .replace(/\\cdot\b|\\times\b/g, "*")
+    .replace(/\\min\b/gi, "minimize")
+    .replace(/\\max\b/gi, "maximize")
+    .replace(/\\sum_\{([^}]*)\}/g, "sum_{$1}")
+    .replace(/\\[,; ]/g, " ");
+
+function toLatexAscii(text: string): string | null {
   if (!mathy(text)) return null;
   try {
     let out = "";
@@ -106,6 +136,33 @@ export function toLatex(text: string): string | null {
   } catch {
     return null;
   }
+}
+
+// 判断文本是否是"裸公式":可打印数学字符、含运算符、没有自然语言词。
+// 方法的 description 字段有时被写成 ASCII 公式,据此避免公式显示两遍。
+export const isBareFormula = (value: unknown): boolean => {
+  const text = String(value ?? "").trim();
+  return (
+    !!text &&
+    /^[\x20-\x7e\\$^_{}]*$/.test(text) &&
+    /[*<>=_[\]\\]|\\(?:geq|leq|ge|le|cdot|times|min|max|sum)/.test(text) &&
+    !/[A-Za-z]{4,}/.test(text)
+  );
+};
+
+export function toLatex(text: string): string | null {
+  const stripped = stripDelimiters(String(text ?? ""));
+  if (!stripped) return null;
+  // 已是 LaTeX(含命令且无 ASCII 关系符):直接交给 KaTeX,先验证可解析。
+  if (/\\[A-Za-z]+/.test(stripped) && !/<=|>=/.test(stripped)) {
+    try {
+      katex.renderToString(stripped, { throwOnError: true, strict: "ignore" });
+      return stripped;
+    } catch {
+      // 含未知命令时落到归一化后的 ASCII 转换
+    }
+  }
+  return toLatexAscii(deLatex(stripped));
 }
 
 export function MathTex({ text, display }: { text: string; display?: boolean }) {
