@@ -397,7 +397,6 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
                 objective?.formulation ||
                 (isBareFormula(objective?.description) ? objective.description : "")
               }
-              display
             />
           </div>
         ) : (

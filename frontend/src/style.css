@@ -1898,12 +1898,10 @@ th {
 }
 
 /* ---- 数学排版(KaTeX) ---- */
+/* 片段(span.math-part)直接成为 .math-expression 的 flex 子项,随容器换行;
+   不用 overflow 滚动容器,长公式不会被横向裁切。 */
 .math-expression .math-tex {
-  display: inline-block;
-  max-width: 100%;
-  overflow-x: auto;
-  padding: 2px 0;
-  vertical-align: middle;
+  display: contents;
 }
 .math-expression .katex {
   font-size: 1.08em;

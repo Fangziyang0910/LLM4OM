@@ -38,8 +38,16 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
         // KaTeX 会把 \\ 当换行、geq 当变量渲染,必须先归一。
         { id: "C4", description: "escaped form", expression_text: "$2 x_A + x_B \\\\geq 8$" },
         { id: "C5", description: "juxtaposed", expression_text: "$xA \\\\geq 0$" },
+        // 长公式必须在容器内换行,而不是横向滚动条裁切。
+        {
+          id: "C6",
+          description: "long",
+          expression_text:
+            "$x_A + x_B + x_A + x_B + x_A + x_B + x_A + x_B + x_A + x_B \\\\geq 100$",
+        },
       ];
       const host = document.createElement("div");
+      host.id = "math-host-1";
       document.querySelector("main").appendChild(host);
       UI.records(host, formulation, "formulation", contents);
       const textPath = {
@@ -90,6 +98,15 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     assert.ok(rendered.subscripts >= 2, "xA/xB 变量名应排版下标");
     assert.match(rendered.bound, /≥/);
     assert.doesNotMatch(rendered.raw, /geq/, "LaTeX sense 不应原样显示");
+    // 窄屏下长公式应换行,不产生横向溢出(滚动条裁切)
+    await page.setViewportSize({ width: 390, height: 844 });
+    const overflowing = await page.evaluate(() =>
+      [...document.querySelectorAll("#math-host-1 .math-expression")].filter(
+        (el) => el.scrollWidth > el.clientWidth + 1,
+      ).length,
+    );
+    assert.equal(overflowing, 0, "长公式应在容器内换行,不得横向裁切");
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.click('[data-tab="formulation"]');
     assert.ok(
       (await page.locator(".math-variable").count()) > 0,

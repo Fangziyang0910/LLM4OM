@@ -205,20 +205,65 @@ export function toLatex(text: string): string | null {
   return toLatexAscii(deLatex(stripped));
 }
 
-export function MathTex({ text, display }: { text: string; display?: boolean }) {
-  const html = useMemo(() => {
+// 顶层二元运算与关系符处切分为片段;.math-expression 是 flex-wrap 容器,
+// 片段作为独立子项自然换行,长公式不再被横向滚动条裁切。
+// 花括号内的内容(上下标、参数)不切;一元正负号(前界是运算符/开头)不切。
+function splitLatexParts(latex: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  let index = 0;
+  const binary = (position: number) => {
+    const before = latex.slice(0, position).trimEnd().at(-1);
+    return !!before && /[\w}\])]/.test(before);
+  };
+  const relations = /^(\\le|\\leq|\\leqslant|\\ge|\\geq|\\geqslant|\\ne|\\neq|\\equiv|\\approx)$/;
+  while (index < latex.length) {
+    const char = latex[index];
+    if (char === "{") depth += 1;
+    else if (char === "}") depth = Math.max(0, depth - 1);
+    else if (char === "\\") {
+      const command = /^\\[A-Za-z]+/.exec(latex.slice(index))?.[0] || "";
+      if (depth === 0 && relations.test(command) && binary(index)) {
+        if (index > start) parts.push(latex.slice(start, index));
+        parts.push(command);
+        index += command.length;
+        start = index;
+        continue;
+      }
+      index += command.length || 2;
+      continue;
+    } else if (depth === 0 && (char === "+" || char === "-" || char === "=") && binary(index)) {
+      if (index > start) parts.push(latex.slice(start, index));
+      parts.push(char);
+      start = index + 1;
+      index += 1;
+      continue;
+    }
+    index += 1;
+  }
+  if (start < latex.length) parts.push(latex.slice(start));
+  return parts.filter((part) => part.trim().length > 0);
+}
+
+export function MathTex({ text }: { text: string }) {
+  const parts = useMemo(() => {
     const latex = toLatex(text);
     if (latex == null) return null;
     try {
-      return katex.renderToString(latex, {
-        throwOnError: true,
-        strict: "ignore",
-        displayMode: !!display,
-      });
+      return splitLatexParts(latex).map((part) =>
+        katex.renderToString(part, { throwOnError: true, strict: "ignore" }),
+      );
     } catch {
       return null;
     }
-  }, [text, display]);
-  if (html == null) return <span className="math-fallback">{text}</span>;
-  return <span className="math-tex" dangerouslySetInnerHTML={{ __html: html }} />;
+  }, [text]);
+  if (parts == null) return <span className="math-fallback">{text}</span>;
+  return (
+    <span className="math-tex">
+      {parts.map((html, index) => (
+        <span className="math-part" key={index} dangerouslySetInnerHTML={{ __html: html }} />
+      ))}
+    </span>
+  );
 }
