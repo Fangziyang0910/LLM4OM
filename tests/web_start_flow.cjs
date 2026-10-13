@@ -25,15 +25,15 @@ for (const address of [url, provider])
     );
     const explainer = page.locator("#method-explainer");
     await page.selectOption("#method", "llm4om.methods.optimus_inline");
-    assert.match(await explainer.innerText(), /OptiMUS · 分步建模/);
+    assert.match(await page.locator("#method option:checked").innerText(), /OptiMUS · 分步建模/);
     assert.match(await explainer.innerText(), /依次理解目标与约束/);
     assert.match(await explainer.innerText(), /已按该方法声明的能力切换/);
-    assert.match(await page.locator("#budget-summary").innerText(), /模型请求 \d+/);
-    assert.match(await page.locator("#budget-summary").innerText(), /Token [\d,]+/);
-    assert.match(await page.locator("#budget-summary").innerText(), /时间 [\d,]+ 秒/);
-    assert.match(await page.locator("#budget-summary").innerText(), /显著增加真实模型请求/);
+    assert.match(await page.locator("#budget-summary").innerText(), /模型请求 ≤\d+/);
+    assert.match(await page.locator("#budget-summary").innerText(), /Token ≤[\d,]+/);
+    assert.match(await page.locator("#budget-summary").innerText(), /时间 ≤[\d,]+ 秒/);
+    assert.match(await page.locator("#budget-summary").innerText(), /真实请求与费用显著更高/);
     await page.selectOption("#method", "llm4om.methods.coe");
-    assert.match(await explainer.innerText(), /CoE · 专家协作/);
+    assert.match(await page.locator("#method option:checked").innerText(), /CoE · 专家协作/);
     const config = JSON.parse(await page.locator("#config-json").inputValue());
     config.method.plugin_id = "llm4om.methods.coe";
     config.model_backend.plugin_id = "llm4om.model_backends.gurobipy";
@@ -49,11 +49,11 @@ for (const address of [url, provider])
     const budgetInConfig = JSON.parse(await page.locator("#config-json").inputValue()).budget;
     const shown = await page.locator("#budget-summary").innerText();
     for (const [label, value] of [
-      ["模型请求", budgetInConfig.max_llm_attempts],
-      ["求解", budgetInConfig.max_solver_calls],
+      ["模型请求 ≤", budgetInConfig.max_llm_attempts],
+      ["求解 ≤", budgetInConfig.max_solver_calls],
     ])
       assert.ok(
-        shown.includes(`${label} ${value}`),
+        shown.includes(`${label}${value}`),
         `budget chip ${label} ${value} missing`,
       );
     await page.click("#doctor");

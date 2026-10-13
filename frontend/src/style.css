@@ -288,31 +288,6 @@ h1 {
   grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
   gap: 22px;
 }
-.intro-copy {
-  grid-column: 1/-1;
-  background: radial-gradient(ellipse at 85% 15%, var(--sage-88), transparent 65%);
-  border: 1px solid var(--sage-92);
-  border-radius: var(--radius-md);
-  padding: 30px 32px 24px;
-}
-.intro-copy > p {
-  color: var(--muted);
-  font-size: 14px;
-  margin-bottom: 22px;
-}
-.journey {
-  display: grid;
-  gap: 16px;
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.5px;
-  margin-bottom: 7px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 26px;
-}
-.journey span:first-child {
-  color: var(--accent);
-}
 .panel {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -1374,10 +1349,7 @@ pre {
     max-height: 330px;
     overflow: auto;
   }
-  .journey {
-    gap: 20px;
   }
-}
 @media (max-width: 650px) {
   .sidebar {
     position: relative;
@@ -1440,14 +1412,7 @@ pre {
   .eyebrow {
     font-size: 9px;
   }
-  .intro-copy > p {
-    font-size: 12px;
-  }
-  .journey {
-    gap: 17px;
-    font-size: 9px;
-  }
-  .panel {
+      .panel {
     padding: 19px;
     border-radius: var(--radius-xl);
   }
@@ -1732,57 +1697,18 @@ pre {
   font-size: 24px;
   margin-right: 5px;
 }
-.intro-copy h2 {
-  font-size: clamp(32px, 3.1vw, 46px);
-  letter-spacing: -1.7px;
-  line-height: 1.24;
-  margin-bottom: 16px;
-  font-weight: 750;
-}
-.intro-copy > .eyebrow {
-  color: var(--accent);
-  font-size: 11px;
-  margin-bottom: 15px;
-}
-.journey span {
-  display: grid;
-  grid-template-columns: 32px 1fr;
-  align-items: center;
-  column-gap: 11px;
-  padding: 14px;
-  border-radius: var(--radius-xl);
-  background: var(--overlay-soft);
-  border: 1px solid var(--sage-92);
-}
-.journey b {
-  grid-row: span 2;
-  color: var(--accent);
-  font-size: 16px;
-  font-weight: 500;
-}
-.journey strong {
-  color: var(--ink);
-  font-size: 14px;
-}
-.journey small {
-  font-size: 11px;
-}
-.budget-controls {
+.advanced-controls {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   padding: 12px;
   margin-bottom: 18px;
 }
-.budget-controls summary {
+.advanced-controls summary {
   font-size: 12px;
   font-weight: 600;
 }
-.budget-controls .field-grid label:first-child {
+.advanced-controls .field-grid label:first-child {
   grid-column: auto;
-}
-.budget-controls .hint {
-  font-size: 11px;
-  margin: 12px 0 0;
 }
 .model-grid:has(.variables-card):has(.constraints-card) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1807,26 +1733,7 @@ pre {
   }
 }
 @media (max-width: 620px) {
-  .intro-copy {
-    padding: 24px 20px 18px;
-  }
-  .journey {
-    gap: 6px;
-  }
-  .journey span {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 11px 8px;
-    gap: 4px;
-  }
-  .journey strong {
-    font-size: 12px;
-  }
-  .journey small {
-    font-size: 9px;
-  }
-  .brand .brand-symbol {
+            .brand .brand-symbol {
     display: none;
   }
 }

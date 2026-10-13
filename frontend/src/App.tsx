@@ -31,7 +31,7 @@ const problemExamples: Record<string, string> = {
 const methodRequirements: Record<string, string> = {
   "llm4om.methods.optimus":
     "需要上传 params 与 labels 两个数据文件(或自定义数据 ID);求解走 Gurobi。",
-  "llm4om.methods.coe": "多轮专家讨论,Token 消耗较高;求解走 Gurobi。",
+  "llm4om.methods.coe": "多轮专家讨论,求解走 Gurobi。",
 };
 
 const methodExplainers: Record<string, string> = {
@@ -726,13 +726,9 @@ export default function App() {
       </aside>
       <main>
         <header>
-          <div>
-            <p className="eyebrow">LLM4OM 工作台</p>
-            <h1>建模空间</h1>
-          </div>
-          <span className="badge">
-            <span className="status-dot"></span> 建模服务已连接
-          </span>
+          <h1>
+            {{ editor: "开始建模", run: "运行结果", "experiment-editor": "批量实验", "experiment-result": "实验结果" }[view] || "开始建模"}
+          </h1>
         </header>
         <div id="notice" role="status" hidden={!noticeState.text}>
           {noticeState.text}
@@ -740,32 +736,6 @@ export default function App() {
 
         {view === "editor" ? (
           <section id="editor" className="editor-grid">
-            <div className="intro-copy">
-              <p className="eyebrow">从自然语言，到优化决策</p>
-              <h2>
-                描述你的目标，
-                <br />
-                让模型一步步形成。
-              </h2>
-              <p>输入问题，选择建模方法。看清数学表述、求解实现与最终决策。</p>
-              <div className="journey">
-                <span>
-                  <b>01</b>
-                  <strong>提出问题</strong>
-                  <small>目标、规则与数据</small>
-                </span>
-                <span>
-                  <b>02</b>
-                  <strong>看清建模</strong>
-                  <small>数学表述与求解实现</small>
-                </span>
-                <span>
-                  <b>03</b>
-                  <strong>探索决策</strong>
-                  <small>结果、解释与新版本</small>
-                </span>
-              </div>
-            </div>
             <div className="panel problem-panel">
               <div className="panel-title">
                 <h2>描述问题</h2>
@@ -795,7 +765,7 @@ export default function App() {
                 id="description"
                 rows={9}
                 placeholder={
-                  "例如：我想制定工厂的生产计划。在原料和工时有限的情况下，决定每种产品的生产数量，让总利润最大。\n\n你可以说明目标、可做的决策，以及必须遵守的规则。"
+                  "例如：我想制定工厂的生产计划。在原料和工时有限的情况下，决定每种产品的生产数量，让总利润最大。"
                 }
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
@@ -815,7 +785,7 @@ export default function App() {
                         setUploads([]);
                       }}
                     >
-                      {{ production: "生产计划 ↗", projects: "项目选择 ↗", diet: "配餐优化 ↗" }[key]}
+                      {{ production: "生产计划", projects: "项目选择", diet: "配餐优化" }[key]}
                     </button>
                   </span>
                 ))}
@@ -863,7 +833,6 @@ export default function App() {
                     }}
                   />
                 </label>
-                <span>可选：补充数据文件</span>
               </div>
               <div id="uploads">
                 {uploads.map((upload, index) => (
@@ -927,7 +896,7 @@ export default function App() {
                 ))}
               </div>
               <details>
-                <summary>高级：结构化问题</summary>
+                <summary>高级：直接编辑问题 JSON</summary>
                 <textarea
                   id="problem-json"
                   rows={12}
@@ -939,8 +908,7 @@ export default function App() {
               </details>
             </div>
             <div className="panel settings-panel">
-              <h2>选择建模方式</h2>
-              <p className="hint">同一个问题，可以由不同的建模机制完成。</p>
+              <h2>建模方法</h2>
               <div className="field-grid">
                 <label>
                   建模方法
@@ -1036,15 +1004,11 @@ export default function App() {
                 </label>
               </div>
               <div id="method-explainer" className="method-explainer method-explainer-card">
-                <div className="panel-title">
-                  <h3>{shortMethod(config.method?.plugin_id)}</h3>
-                </div>
                 <p>{methodExplainers[config.method?.plugin_id] ||
                   "按所选方法的实际流程建模，保存公开步骤和输出。"}</p>
-                <p className="hint">
-                  {methodRequirements[config.method?.plugin_id] ||
-                    "直接输入问题描述即可开始;可附加 CSV / JSON 数据。"}
-                </p>
+                {methodRequirements[config.method?.plugin_id] ? (
+                  <p className="hint">{methodRequirements[config.method?.plugin_id]}</p>
+                ) : null}
                 {compatNote ? <p className="compat-note">{compatNote}</p> : null}
                 {solverSelectionDisabled ? (
                   <p className="compat-note warning">
@@ -1053,18 +1017,16 @@ export default function App() {
                 ) : null}
               </div>
               <div id="budget-summary" className="budget-visual" aria-live="polite">
-                <span className="pill">模型请求 {config.budget?.max_llm_attempts ?? "—"}</span>
-                <span className="pill">Token {format(config.budget?.max_total_tokens)}</span>
-                <span className="pill">时间 {format(config.budget?.wall_time_s)} 秒</span>
-                <span className="pill">求解 {config.budget?.max_solver_calls ?? "—"}</span>
-                <p className="hint">
-                  {/optimus|coe/.test(config.method?.plugin_id || "")
-                    ? "经典多角色方法会显著增加真实模型请求与费用;上限可在下方调整。"
-                    : "上限包含重试;实际消耗会保存在运行记录中。"}
-                </p>
+                <span className="pill">模型请求 ≤{config.budget?.max_llm_attempts ?? "—"}</span>
+                <span className="pill">Token ≤{format(config.budget?.max_total_tokens)}</span>
+                <span className="pill">时间 ≤{format(config.budget?.wall_time_s)} 秒</span>
+                <span className="pill">求解 ≤{config.budget?.max_solver_calls ?? "—"}</span>
+                {/optimus|coe/.test(config.method?.plugin_id || "") ? (
+                  <p className="hint">此方法真实请求与费用显著更高。</p>
+                ) : null}
               </div>
-              <details className="budget-controls">
-                <summary>调整本次运行上限</summary>
+              <details className="advanced-controls">
+                <summary>高级设置</summary>
                 <div className="field-grid">
                   <label>
                     模型请求次数
@@ -1112,10 +1074,6 @@ export default function App() {
                     />
                   </label>
                 </div>
-                <p className="hint">请求次数包含重试。实际消耗会保存在运行记录中。</p>
-              </details>
-              <details>
-                <summary>高级：模型接口、方法参数与预算</summary>
                 <textarea
                   id="config-json"
                   rows={15}
@@ -1140,6 +1098,15 @@ export default function App() {
                   应用完整配置
                 </button>
               </details>
+              <label className="connectivity-option">
+                <input
+                  id="check-connectivity"
+                  type="checkbox"
+                  checked={checkConnectivity}
+                  onChange={(event) => setCheckConnectivity(event.target.checked)}
+                />
+                检查配置时联网测试模型接口
+              </label>
               <div className="actions">
                 <button id="doctor" className="secondary" disabled={doctorBusy} onClick={runDoctor}>
                   检查配置
@@ -1148,15 +1115,6 @@ export default function App() {
                   开始建模 →
                 </button>
               </div>
-              <label className="connectivity-option">
-                <input
-                  id="check-connectivity"
-                  type="checkbox"
-                  checked={checkConnectivity}
-                  onChange={(event) => setCheckConnectivity(event.target.checked)}
-                />
-                同时读取模型目录，检查接口连通性
-              </label>
               <div id="doctor-result" className="doctor-result" hidden={!doctorResult}>
                 {doctorResult ? <Connectivity report={doctorResult} /> : null}
               </div>
