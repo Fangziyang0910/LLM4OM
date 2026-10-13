@@ -1890,3 +1890,26 @@ pre {
     margin-left: 29px;
   }
 }
+
+/* ---- 代码高亮 ---- */
+.code-line code .tok-kw {
+  color: #0e7490;
+  font-weight: 600;
+}
+.code-line code .tok-str {
+  color: #7c5cbf;
+}
+.code-line code .tok-num {
+  color: #b45309;
+}
+.code-line code .tok-com {
+  color: var(--muted);
+  font-style: italic;
+}
+.code-line code .tok-bi {
+  color: #087e71;
+}
+.code-line code .tok-def {
+  color: #1d4ed8;
+  font-weight: 600;
+}

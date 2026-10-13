@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { DataPreview } from "../types";
 import { assumptionStatusNames, format, mathText, parameterValue, senseOperators, status } from "../ui";
+import { tokenizeLines, type Token } from "../highlight";
 
 interface Term {
   coefficient: number;
@@ -239,6 +240,27 @@ function Coverage({
   );
 }
 
+function HighlightedCode({ code }: { code: string }) {
+  const lines = tokenizeLines(code);
+  return (
+    <div className="code-lines">
+      {lines.map((tokens, index) => (
+        <div className="code-line" key={index}>
+          <span className="line-number">{index + 1}</span>
+          <code>
+            {tokens.map((token: Token, position: number) => (
+              <span className={"tok-" + token.type} key={position}>
+                {token.text}
+              </span>
+            ))}
+            {!tokens.length ? " " : null}
+          </code>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CodeView({ value }: { value: any }) {
   const [copied, setCopied] = useState("");
   const source = typeof value === "string" ? value : value?.source;
@@ -274,13 +296,8 @@ function CodeView({ value }: { value: any }) {
           {copied || "复制代码"}
         </button>
       </div>
-      <div className="code-lines" ref={(el) => (linesRef.current = el)}>
-        {source.split("\n").map((text: string, index: number) => (
-          <div className="code-line" key={index}>
-            <span className="line-number">{index + 1}</span>
-            <code>{text || " "}</code>
-          </div>
-        ))}
+      <div ref={(el) => (linesRef.current = el)}>
+        <HighlightedCode code={source} />
       </div>
     </>
   );
@@ -505,16 +522,7 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
 }
 
 function CodeLines({ code }: { code: string }) {
-  return (
-    <div className="code-lines">
-      {code.split("\n").map((text, index) => (
-        <div className="code-line" key={index}>
-          <span className="line-number">{index + 1}</span>
-          <code>{text || " "}</code>
-        </div>
-      ))}
-    </div>
-  );
+  return <HighlightedCode code={code} />;
 }
 
 function DataView({ contents, dataPreviews }: { contents: Record<string, any>; dataPreviews: Record<string, DataPreview> }) {

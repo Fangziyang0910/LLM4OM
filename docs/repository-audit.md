@@ -276,7 +276,9 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/src/ui.tsx` | 展示词汇与纯函数 | 状态／方法／角色词、artifact引用匹配 |
 | `frontend/src/facade.tsx` | 浏览器级UI命令门面 | flushSync同步渲染、artifactKey等价 |
 | `frontend/src/main.tsx` | 应用入口 | 安装门面并挂载 |
-| `frontend/src/components/Records.tsx` | 数学表述、代码与数据视图渲染 | 五元素卡片、需求回链、代码行 |
+| `frontend/src/highlight.ts` | 无依赖 Python 语法着色扫描器 | 关键字/字符串/数字/注释/内建,跨三引号行拆分 |
+| `frontend/src/components/Records.tsx` | 数学表述、代码与数据视图渲染 | 五元素卡片、需求回链、高亮代码行 |
+| `tests/web_code_view_flow.cjs` | 代码视图浏览器验收 | 语法 token、复制入口、原始记录默认折叠、轮询与窄屏 |
 | `frontend/src/components/Candidates.tsx` | 候选与修正视图 | 选择理由、阶段、变化表 |
 | `frontend/src/components/Connectivity.tsx` | 配置体检结果呈现 | 分层目录检查、模型列出情况 |
 | `frontend/src/components/RuntimeDetails.tsx` | 资源账本、求解执行与调用记录 | 未知Token与费用不记零 |
