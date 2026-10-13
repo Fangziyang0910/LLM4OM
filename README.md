@@ -40,7 +40,7 @@ uv run --locked llm4om serve --workspace runs/web --port 8767 --host 127.0.0.1
 
 浏览器打开 `http://127.0.0.1:8767` 即可：输入自然语言问题与数据 → 选择方法 → 观察真实建模步骤 →
 查看五元素表述、求解代码、决策结果与运行记录，支持数据预览、模型数值编辑、派生求解、候选比较、
-决策试算与人工修订。访问令牌由服务启动时生成，页面自动获取；LLM 凭据只保留在服务端。
+决策试算、人工修订与数据集浏览（查看已导入基准的每条输入与参考答案，答案仅在本地工作台呈现）。访问令牌由服务启动时生成，页面自动获取；LLM 凭据只保留在服务端。
 `--host 0.0.0.0` 可供局域网访问，但此时 Origin 校验是 CSRF 缓解而非认证，请勿暴露于不受信网络。
 页面源码在 `frontend/`（React + TypeScript），仓库自带已构建的静态资源；改前端后 `npm --prefix frontend run build` 重新生成,流程与浏览器测试见 [CONTRIBUTING](CONTRIBUTING.md)与[S09-D](docs/development/s09-frontend-redesign.md)。
 

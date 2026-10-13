@@ -7,6 +7,7 @@ import { artifactKey, artifactLabel, activeStep, format, pretty, shortMethod, st
 import { Candidates } from "./components/Candidates";
 import { Connectivity } from "./components/Connectivity";
 import { Clarification } from "./components/Clarification";
+import { Datasets } from "./components/Datasets";
 import { Decision } from "./components/Decision";
 import { Records } from "./components/Records";
 import { RuntimeDetails } from "./components/RuntimeDetails";
@@ -57,7 +58,7 @@ const tabHeadings: Record<string, string> = {
   data: "问题与数据",
 };
 
-type View = "editor" | "run";
+type View = "editor" | "run" | "datasets";
 
 export default function App() {
   const [config, setConfig] = useState<RunConfig>({});
@@ -84,6 +85,7 @@ export default function App() {
   const [artifactChoice, setArtifactChoice] = useState("");
   const [artifactSelectedByUser, setArtifactSelectedByUser] = useState(false);
   const [view, setView] = useState<View>("editor");
+  const [datasets, setDatasets] = useState<any[]>([]);
   const [noticeState, setNoticeState] = useState<{ text: string; error: boolean }>({ text: "", error: false });
   const [doctorResult, setDoctorResult] = useState<any>(null);
   const [checkConnectivity, setCheckConnectivity] = useState(false);
@@ -115,6 +117,10 @@ export default function App() {
   const refreshJobs = async () => {
     const result = await api<{ jobs: JobRecord[] }>("/api/jobs");
     setJobs(result.jobs);
+  };
+  const refreshDatasets = async () => {
+    const result = await api<{ datasets: any[] }>("/api/datasets");
+    setDatasets(result.datasets);
   };
 
   const refreshRunFor = async (id: string, runId: string | null) => {
@@ -630,12 +636,26 @@ export default function App() {
             </button>
           ))}
         </div>
+        <h2 className="small-heading">数据集</h2>
+        <button
+          id="open-datasets"
+          className={"nav" + (view === "datasets" ? " active" : "")}
+          onClick={() => {
+            setCurrentJob(null);
+            setSelectedRun(null);
+            setSnapshot(null);
+            setView("datasets");
+            refreshDatasets().catch((error) => notice((error as Error).message, true));
+          }}
+        >
+          浏览数据集
+        </button>
         <p className="sidebar-footer">自然语言 → 优化模型 → 决策</p>
       </aside>
       <main>
         <header>
           <h1>
-            {view === "run" ? "运行结果" : "开始建模"}
+            {view === "run" ? "运行结果" : view === "datasets" ? "数据集" : "开始建模"}
           </h1>
         </header>
         <div id="notice" role="status" hidden={!noticeState.text}>
@@ -1028,6 +1048,10 @@ export default function App() {
               </div>
             </div>
           </section>
+        ) : null}
+
+        {view === "datasets" ? (
+          <Datasets datasets={datasets} refresh={refreshDatasets} />
         ) : null}
 
         {view === "run" && snapshot ? (

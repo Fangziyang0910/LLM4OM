@@ -157,6 +157,65 @@ class WebWorkspace:
                 'N_selected': manifest['N_selected'], 'adapter_id': manifest['adapter_id']})
         return result
 
+    @staticmethod
+    def _dataset_header(task_id: str, manifest: dict[str, Any]) -> dict[str, Any]:
+        source = manifest.get('source') or {}
+        return {'task_id': task_id, 'dataset_id': source.get('dataset_id'), 'source_version': source.get('source_version'),
+                'source_kind': source.get('source_kind'), 'protocol_id': manifest.get('protocol_id'),
+                'adapter_id': manifest.get('adapter_id'), 'N_selected': manifest.get('N_selected'),
+                'N_eligible': manifest.get('N_eligible'), 'N_cases': len(manifest.get('cases') or [])}
+
+    def list_datasets(self) -> list[dict[str, Any]]:
+        result = []
+        for task_id, path in self._tasks().items():
+            result.append(self._dataset_header(task_id, parse_reference_json(read_public_bytes(path, max_bytes=MAX_REQUEST))))
+        return sorted(result, key=lambda item: (str(item['dataset_id'] or ''), str(item['source_version'] or '')))
+
+    def dataset_detail(self, task_id: str, offset: int, limit: int) -> dict[str, Any]:
+        """逐条读取冻结快照的公开输入与参考答案,供本地所有者核对数据。
+
+        参考答案只在本地工作台呈现:不进入方法 Context、LLM 提示或公共导出。
+        单条字节校验失败只降级该条(记录错误码),不阻断整个数据集的浏览。
+        """
+        tasks = self._tasks()
+        if task_id not in tasks:
+            raise RunError('not_found', 'web', 'Dataset is not available in this workspace.')
+        manifest_path = tasks[task_id]
+        manifest = parse_reference_json(read_public_bytes(manifest_path, max_bytes=MAX_REQUEST))
+        cases = [entry for entry in manifest.get('cases') or [] if isinstance(entry, dict)]
+        def frozen(reference: Any) -> dict[str, Any] | None:
+            if not isinstance(reference, dict) or not isinstance(reference.get('relative_path'), str):
+                return None
+            raw = read_public_bytes(public_path(manifest_path.parent, reference['relative_path']), max_bytes=MAX_FILE)
+            if hashlib.sha256(raw).hexdigest() != reference.get('sha256') or len(raw) != reference.get('size_bytes'):
+                raise RunError('snapshot_hash_mismatch', 'web', 'Frozen case bytes changed.')
+            return parse_reference_json(raw)
+        selected = []
+        for entry in cases[offset:offset + limit]:
+            problem = None
+            reference = None
+            failure = None
+            try:
+                problem = frozen(entry.get('public_ref'))
+                reference = frozen(entry.get('oracle_ref'))
+            except RunError as error:
+                failure = error.code
+            item = {'case_id': entry.get('case_id'), 'sample_id': entry.get('sample_id'),
+                    'selected': entry.get('selected'), 'eligible': entry.get('eligible')}
+            for key in ('subset', 'exclusion_reason', 'reference_quality', 'checker_availability'):
+                if entry.get(key) is not None:
+                    item[key] = entry[key]
+            if failure is not None:
+                item['error'] = failure
+            item['problem'] = None if problem is None else {
+                'problem_id': problem.get('problem_id'), 'description': problem.get('description'),
+                'requirements': [{'id': row.get('id'), 'text': row.get('text')} for row in problem.get('requirements') or []],
+                'assumptions': [{'id': row.get('id'), 'text': row.get('text')} for row in problem.get('assumptions') or []],
+                'data_refs': [{'data_id': row.get('data_id'), 'format': row.get('format')} for row in problem.get('data_refs') or []]}
+            item['reference'] = reference
+            selected.append(item)
+        return {'dataset': self._dataset_header(task_id, manifest), 'total': len(cases), 'cases': selected}
+
     def _experiment(self, experiment_id: str) -> Path:
         path = public_path(self.root / 'experiments', _identifier(experiment_id), require_file=False)
         if not path.is_dir():
@@ -676,6 +735,16 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                     result = {**workspace.bootstrap(), 'token': token}
                 elif address.path == '/api/tasks' and not mutation:
                     result = {'tasks': workspace.list_tasks()}
+                elif address.path == '/api/datasets' and not mutation:
+                    result = {'datasets': workspace.list_datasets()}
+                elif len(parts) == 3 and parts[:2] == ['api', 'datasets'] and not mutation:
+                    query = parse_qs(address.query)
+                    try:
+                        offset = max(0, int(query.get('offset', ['0'])[0]))
+                        limit = min(200, max(1, int(query.get('limit', ['100'])[0])))
+                    except ValueError:
+                        raise RunError('invalid_request', 'web', 'Dataset paging needs integer offset and limit.')
+                    result = workspace.dataset_detail(_identifier(parts[2]), offset, limit)
                 elif address.path == '/api/experiments' and not mutation:
                     result = {'experiments': workspace.list_experiments()}
                 elif address.path == '/api/experiments' and mutation:

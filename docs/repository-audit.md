@@ -287,6 +287,9 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/src/components/Decision.tsx` | 决策面板、失败诊断与决策探索 | 候选模型结果、余量试算 |
 | `frontend/src/components/StoryFlow.tsx` | 垂直故事流:过程事件卡片与输出摘要 | 角色发言、状态预览、时间窗消耗、实时消耗条、产物直达 |
 | `tests/web_story_flow.cjs` | 故事流浏览器验收 | 里程碑卡片集、实时消耗、跳转、无原始 JSON、轮询与窄屏 |
+| `frontend/src/components/Datasets.tsx` | 数据集浏览:列表→条目→公开输入与结构化参考答案 | 侧栏入口、分页说明、参考目标/决策映射/探针点结构化渲染,无原始 JSON |
+| `tests/test_web_datasets.py` | 数据集 HTTP API 验收 | 列表与条目参考答案、哈希校验复用冻结语义、分页、未知名与跨源拒绝 |
+| `tests/web_datasets_flow.cjs` | 数据集页面浏览器验收 | 冻结导入→侧栏入口→列表→条目表→问题描述+参考答案、无原始 JSON、窄屏 |
 | `tests/web_keyboard_flow.cjs` | 键盘可达性浏览器验收 | 焦点环可见、无焦点陷阱、Enter 核心路径(运行→标签→产物→运行详情) |
 | `tests/web_math_flow.cjs` | 数学排版浏览器验收 | expression_text→KaTeX(∑/≤/下标),结构化 IR 交互路径保持 |
 | `frontend/src/math.tsx` | ASCII 数学→LaTeX 有界转换与 MathTex 组件 | 语法外输入回退纯文本 |
