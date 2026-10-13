@@ -1770,3 +1770,123 @@ pre {
     display: none;
   }
 }
+
+/* ---- 垂直故事流 ---- */
+.story-consumption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+.timeline-step.story-card {
+  display: block;
+  border-left: 1px solid var(--line);
+  margin-left: 10px;
+  padding: 0 0 14px 0;
+  cursor: pointer;
+}
+.timeline-step.story-card .story-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+}
+.timeline-step.story-card .step-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.timeline-step.story-card .story-artifact-button {
+  flex: none;
+  font-size: 12px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.timeline-step.story-card .story-body {
+  margin: 8px 0 0 29px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: default;
+}
+.timeline-step.story-card.running .story-body {
+  animation: story-pulse 1.6s ease-in-out infinite;
+}
+.timeline-step.story-card .story-summary {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.timeline-step.story-card .story-code {
+  margin: 0;
+  background: #10312b;
+  color: #d7ece4;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+}
+.timeline-step.story-card .story-comments details {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.timeline-step.story-card .story-comments summary {
+  font-size: 12px;
+  color: var(--muted);
+}
+.timeline-step.story-card .story-comments pre {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+.timeline-step.story-card .story-attempts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.timeline-step.story-card.ending {
+  border-left-color: transparent;
+}
+.timeline-step.story-card.ending .story-head .step-marker {
+  background: #dff2e7;
+  border-color: #c7e8d5;
+}
+.timeline-step.story-card.ending.failed .story-head .step-marker {
+  background: #fff0ec;
+}
+.timeline-step.story-card.ending .story-body {
+  margin-left: 29px;
+}
+#method-timeline.story-empty {
+  padding-bottom: 0;
+}
+@keyframes story-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (max-width: 720px) {
+  .timeline-step.story-card .story-head {
+    flex-wrap: wrap;
+  }
+  .timeline-step.story-card .story-artifact-button {
+    margin-left: 29px;
+  }
+}

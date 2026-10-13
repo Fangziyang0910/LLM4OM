@@ -281,7 +281,8 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/src/components/Connectivity.tsx` | 配置体检结果呈现 | 分层目录检查、模型列出情况 |
 | `frontend/src/components/RuntimeDetails.tsx` | 资源账本、求解执行与调用记录 | 未知Token与费用不记零 |
 | `frontend/src/components/Decision.tsx` | 决策面板、失败诊断与决策探索 | 候选模型结果、余量试算 |
-| `frontend/src/components/Timeline.tsx` | 方法过程时间线 | 步骤卡片、角色输出、产物直达 |
+| `frontend/src/components/StoryFlow.tsx` | 垂直故事流:过程事件卡片与输出摘要 | 角色发言、状态预览、时间窗消耗、实时消耗条、产物直达 |
+| `tests/web_story_flow.cjs` | 故事流浏览器验收 | 步骤顺序、展开摘要、消耗、跳转、轮询与窄屏 |
 | `frontend/src/components/Clarification.tsx` | 澄清问答表单与修订构建 | 确认／修订语义、预览 |
 | `frontend/src/components/Revision.tsx` | 人工修订字段规格与校验 | 问题／代码／严格IR、数值语义 |
 | `frontend/src/style.css` | 工作台布局与响应式样式源 | 焦点、表格与阶段卡片；视觉验收继续补齐 |

@@ -18,7 +18,7 @@ import { Decision } from "./components/Decision";
 import { Records } from "./components/Records";
 import { RuntimeDetails } from "./components/RuntimeDetails";
 import { RevisionFields, buildDoc, validateRevision } from "./components/Revision";
-import { Timeline } from "./components/Timeline";
+import { StoryFlow } from "./components/StoryFlow";
 
 const problemExamples: Record<string, string> = {
   production:
@@ -94,7 +94,6 @@ export default function App() {
   const [doctorResult, setDoctorResult] = useState<any>(null);
   const [checkConnectivity, setCheckConnectivity] = useState(false);
   const [environmentText, setEnvironmentText] = useState("");
-  const [stepOutput, setStepOutput] = useState<{ actor: string; comments: { name: string; text: string }[] } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [doctorBusy, setDoctorBusy] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -354,7 +353,6 @@ export default function App() {
     setSelectedRun(runId);
     setArtifactSelectedByUser(false);
     setEditOpen(false);
-    setStepOutput(null);
     setSnapshot(null);
     fingerprintRef.current = "";
     setArtifactChoice("");
@@ -639,7 +637,6 @@ export default function App() {
           id="new-run"
           className={"nav" + (view === "editor" ? " active" : "")}
           onClick={() => {
-            setStepOutput(null);
             setCurrentExperiment(null);
             setCurrentJob(null);
             setSelectedRun(null);
@@ -1240,7 +1237,6 @@ export default function App() {
                       fingerprintRef.current = "";
                       setSnapshot(null);
                       setEditOpen(false);
-                      setStepOutput(null);
                       setArtifactChoice("");
                       setArtifactSelectedByUser(false);
                       try {
@@ -1482,10 +1478,14 @@ export default function App() {
             </div>
             <div className="experience-grid">
               <aside id="process-panel" className="panel process-panel">
-                <Timeline
+                <StoryFlow
                   snapshot={snapshot}
+                  finalObjective={
+                    solve
+                      ? { value: solve.objective_value ?? null, termination: solve.termination }
+                      : null
+                  }
                   onOpenArtifact={openArtifact}
-                  onShowStepOutput={setStepOutput}
                 />
               </aside>
               <div className="output-column">
@@ -1514,19 +1514,6 @@ export default function App() {
                     solvedIR={solvedIR}
                     onOpenDiagnostics={() => setActiveTab("diagnostics")}
                   />
-                </div>
-                <div id="step-output" className="panel" hidden={!stepOutput}>
-                  {stepOutput ? (
-                    <>
-                      <h3>{stepOutput.actor + " · 已保存的角色输出"}</h3>
-                      {stepOutput.comments.map((comment) => (
-                        <details key={comment.name}>
-                          <summary>{comment.name.split("/").at(-1)}</summary>
-                          <pre>{comment.text}</pre>
-                        </details>
-                      ))}
-                    </>
-                  ) : null}
                 </div>
                 <div className="tabs" role="tablist">
                   {(
