@@ -190,15 +190,16 @@ class OptimusMethod:
 class OptimusFactory:
     def describe(self) -> dict[str, Any]:
         manifest = DirectFactory().describe()
-        manifest.update(plugin_id="llm4om.methods.optimus", display_name="OptiMUS0.3 fixed source main (EC, no RAG)",
-            description="Complete fixed-source clause formulation, code assembly and script-debug workflow.",
+        manifest.update(plugin_id="llm4om.methods.optimus", display_name="OptiMUS · natural-language modeling",
+            description="Natural-language input, fixed-source clause formulation, code assembly and script debugging.",
             source={"upstream_commit": COMMIT, "variant_id": VARIANT, "license": "MIT",
                     "paper_url": "https://arxiv.org/abs/2407.19633", "paper_version": "v3",
                     "citation_key": "ahmaditeshnizi2024optimus03", "source_model": "gpt-4o",
                     "adaptation": "fixed_source_main_external_chat_resource_bridges"},
             config_schema={"type": "object", "properties": {"rag_mode": {"enum": [None, "problem_description", "constraint_or_objective", "problem_labels"]},
                 "params_data_id": {"type": "string", "minLength": 1}, "labels_data_id": {"type": "string", "minLength": 1}},
-                "required": ["rag_mode", "params_data_id", "labels_data_id"], "additionalProperties": False})
+                "required": ["rag_mode"], "dependentRequired": {"params_data_id": ["labels_data_id"], "labels_data_id": ["params_data_id"]},
+                "additionalProperties": False})
         manifest["capabilities"].update(method_profile="native_script/0.1.0", data_access="full", formulation_representations=["native_formulation"],
             code_representations=["native_script"], model_backends=["llm4om.model_backends.gurobipy"],
             solvers=["llm4om.solvers.gurobi"], execution_modes=["container"])
@@ -211,7 +212,7 @@ class OptimusFactory:
         return capabilities
 
     def create(self, config: dict[str, Any]) -> OptimusMethod:
-        return OptimusMethod(config)
+        return OptimusMethod({**config, "public_input_mode": "provided_json" if "params_data_id" in config else "inline_public"})
 
 
 class OptimusInlineFactory(OptimusFactory):

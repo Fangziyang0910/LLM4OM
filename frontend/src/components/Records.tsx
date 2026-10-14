@@ -340,6 +340,13 @@ export function FormulationView({ value, contents }: { value: any; contents: Rec
   const variables = ir?.variables || entries(representation.variables);
   const objective = representation.objective;
   if (!objective && !variables.length && !representation.constraints) {
+    if (typeof representation.mathematical_model === "string") {
+      return (
+        <Card title="数学模型" subtitle={representation.retrieved_type ? `检索类型：${representation.retrieved_type}` : "方法生成的原始数学表述"}>
+          <p className="problem-text" style={{ whiteSpace: "pre-wrap" }}>{representation.mathematical_model}</p>
+        </Card>
+      );
+    }
     if (source.state) {
       const parameters = entries(representation.parameters);
       return (

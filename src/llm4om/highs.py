@@ -19,7 +19,7 @@ def runtime_versions() -> dict[str, str]:
         raise RunError("solver_unavailable", "admission", "Install the solve extra to use Pyomo and HiGHS.") from error
 
 
-def _time_limit(options: dict[str, Any]) -> float:
+def validated_time_limit(options: dict[str, Any]) -> float:
     limit = options.get("time_limit_s", 0)
     try:
         seconds = float(limit) if not isinstance(limit, bool) and isinstance(limit, (int, float)) else math.nan
@@ -32,12 +32,12 @@ def _time_limit(options: dict[str, Any]) -> float:
 
 
 def solve_highs(code: CompiledCode, options: dict[str, Any]) -> dict[str, Any]:
-    _time_limit(options)
+    validated_time_limit(options)
     return solve_highs_handle(PyomoFactoryBackend().load(code, {}), options)
 
 
 def solve_highs_handle(handle: ModelHandle, options: dict[str, Any]) -> dict[str, Any]:
-    seconds = _time_limit(options)
+    seconds = validated_time_limit(options)
     # The re-export validates the linear structure and decision coverage before the solver consumes the handle.
     PyomoFactoryBackend().export(handle)
     import highspy
@@ -50,7 +50,7 @@ def solve_highs_handle(handle: ModelHandle, options: dict[str, Any]) -> dict[str
     if len(objectives) != 1:
         raise RunError("invalid_factory_objective", "solve", "HiGHS requires exactly one active objective.")
     objective_model = objectives[0]
-    solver = highspy.Highs()  # type: ignore[no-untyped-call]
+    solver = highspy.Highs()
     def checked(status: Any) -> None:
         if status == highspy.HighsStatus.kError:
             raise RunError("solver_error", "solve", "HiGHS rejected a model or option operation.")

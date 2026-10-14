@@ -1180,7 +1180,7 @@ The runtime probe uses a bounded output allowance of at least 64 KiB for admissi
 
 ## 26. S03-C3b registered ModelBackend and SolverBackend (SDK 0.21.0)
 
-Both kinds use common describe()/create(config) factories and llm4om.plugins entry points. RunConfig.model_backend and solver accept plugin_id plus optional config; Solver options are checked against its self-contained options_schema. Current backend_profile and solver_profile are model_handle/0.1.0. Backends declare one handle_profile (pyomo_linear/0.1.0 or gurobipy_linear/0.1.0), and Solvers declare explicit handle_profiles and result_profile (highs_api/0.1.0 or gurobi_api/0.1.0). Problem types, configured artifacts, profile and actual dependency availability are checked before generation.
+Both kinds use common describe()/create(config) factories and llm4om.plugins entry points. RunConfig.model_backend and solver accept plugin_id plus optional config; Solver options are checked against its self-contained options_schema. Current backend_profile and solver_profile are model_handle/0.1.0. Backends declare one handle_profile (pyomo_linear/0.1.0 or gurobipy_linear/0.1.0), and Solvers declare explicit handle_profiles and result_profile (highs_api/0.1.0, gurobi_api/0.1.0 or ortools_api/0.1.0). Problem types, configured artifacts, profile and actual dependency availability are checked before generation.
 
 ModelBackend.load accepts parameterized source or CompiledCode with public data bytes and returns ModelHandle(model,decision_map,internal_variables=()). export validates the supported linear domain and explicit complete mapping. Compiled constant-only models may declare zero-bound internal variables; those variables do not become public decisions. NativeModelBackend also exposes read_transport(exported) as a context manager, using an independently read SDK model from bounded MPS transport. Handles stay inside Worker processes.
 
@@ -1303,3 +1303,9 @@ SDK／Worker0.34.0的Gateway公开attempt可增加connection_diagnostic，值限
 SDK0.31.0的内置HTTPTextFactory配置可增加proxy_url，值为无认证信息的HTTP代理地址，仅允许根路径／无query／fragment。HTTPS目标使用标准CONNECT与TLS校验；SOCKS和代理URL认证未支持。缺省保持直连，环境HTTPS_PROXY不自动选择路由。声明代理时，隔离传输子进程清除NO_PROXY／no_proxy对路由的覆盖；调用进程环境不修改。重定向、共享账本、deadline、取消和未知attempt的恢复规则不变。
 
 公开输入对proxy_url的认证／查询／非根路径执行与Provider URL相同的隐私拒绝。Web可将服务端LLM4OM_LLM_PROXY_URL映射到此公开无凭据配置，API key不进入配置或前端。详见 [实现与验收](development/s05-explicit-proxy.md)。
+
+## 22. Natural-language method expansion (2026-10-14)
+
+OptiMUS accepts natural-language input with `rag_mode: null`; explicit paired params_data_id/labels_data_id remain an optional CLI input mode. OR-LLM-Agent and OptiTree use the existing native_script/0.2.0 profile and native_formulation records. AutoFormulation uses grounded_candidates/0.1.0 with five-element Formulation and strict LPIR; its MCTS, self-evaluation and SMT pruning remain inside the Method. All three declare no internal continuation checkpoint. Completed output recovery remains governed by the existing core phase protocol.
+
+The OR-Tools Solver consumes pyomo_linear/0.1.0 handles and declares ortools_api/0.1.0 results. The package version is bound to ortools, internal evidence is trusted_ortools_api, and container results retain trusted_container_worker. It uses MPSolver/SCIP for LP/MILP; supported options are finite nonnegative time_limit_s, rounded up to milliseconds, with zero returning time_limit without solving. Unknown bounds and gaps remain null. This contract does not admit native OR-Tools code, CP-SAT or routing models. See [actual support and adaptation differences](development/s06-method-expansion.md).

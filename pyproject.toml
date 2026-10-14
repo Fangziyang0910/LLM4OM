@@ -12,9 +12,19 @@ license = "Apache-2.0"
 dependencies = ["PyYAML==6.0.1", "jsonschema==4.10.3"]
 
 [project.optional-dependencies]
-solve = ["Pyomo==6.10.1", "highspy==1.15.1"]
+# Match the HiGHS ABI bundled with OR-Tools 9.15 (google/or-tools#5246).
+solve = [
+    "Pyomo==6.10.1",
+    "highspy==1.12.0",
+]
 gurobi = ["Pyomo==6.10.1", "gurobipy==13.0.3", "packaging==25.0"]
 dev = ["mypy==2.4.0", "types-PyYAML==6.0.12.20260906", "types-jsonschema==4.26.0.20261006"]
+ortools = [
+    "ortools==9.15.6755",
+]
+search = [
+    "z3-solver==5.1.0.0",
+]
 
 [project.scripts]
 llm4om = "llm4om.cli:main"
@@ -28,7 +38,7 @@ strict = true
 files = ["src/llm4om"]
 
 [[tool.mypy.overrides]]
-module = ["pyomo.*", "highspy.*", "gurobipy.*"]
+module = ["pyomo.*", "highspy.*", "gurobipy.*", "ortools.*", "z3.*"]
 ignore_missing_imports = true
 
 [[tool.uv.index]]
@@ -36,4 +46,4 @@ url = "https://pypi.org/simple"
 default = true
 
 [tool.setuptools.package-data]
-llm4om = ["optimus_source/*.txt", "optimus_source/*.json", "nlp4lp_source.json", "web_assets/*.html", "web_assets/*.css", "web_assets/*.js"]
+llm4om = ["optimus_source/*.txt", "optimus_source/*.json", "optitree_source/*.txt", "optitree_source/*.json", "optitree_source/*.jsonl", "nlp4lp_source.json", "web_assets/*.html", "web_assets/*.css", "web_assets/*.js"]

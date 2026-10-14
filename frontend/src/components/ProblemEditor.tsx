@@ -61,6 +61,7 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted }: {
           .filter(
             (p) =>
               p.manifest.kind === kind &&
+              !(kind === "method" && presets[p.manifest.plugin_id]?.hidden) &&
               !p.manifest.capabilities.human_assisted &&
               (!allowed || allowed.includes(p.manifest.plugin_id)),
           )
@@ -70,7 +71,7 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted }: {
               kind === "method"
                 ? shortMethod(p.manifest.plugin_id)
                 : kind === "solver_backend"
-                  ? p.manifest.plugin_id.split(".").at(-1)!.toUpperCase()
+                  ? p.manifest.plugin_id === "llm4om.solvers.ortools" ? p.manifest.display_name : p.manifest.plugin_id.split(".").at(-1)!.toUpperCase()
                   : p.manifest.display_name,
           }));
         if (selected && !options.some((option) => option.value === selected))
@@ -83,7 +84,7 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted }: {
         backend: build("model_backend", config.model_backend?.plugin_id),
         solver: build("solver_backend", config.solver?.plugin_id, compatibleSolvers),
       };
-    }, [plugins, config.method?.plugin_id, config.llm?.provider_plugin_id, config.model_backend?.plugin_id, config.solver?.plugin_id, compatibleSolvers]);
+    }, [plugins, presets, config.method?.plugin_id, config.llm?.provider_plugin_id, config.model_backend?.plugin_id, config.solver?.plugin_id, compatibleSolvers]);
 
     const solverSelectionDisabled = Boolean(
       selectOptions.solver.find((option) => option.value === config.solver?.plugin_id)?.disabled,

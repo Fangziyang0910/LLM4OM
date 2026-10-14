@@ -285,7 +285,7 @@ class DirectFactory:
             "capabilities": {"method_profile": "grounded_single_candidate/0.1.0", "problem_types": ["lp", "milp"],
                 "input_artifact_kinds": ["public_problem"], "output_artifact_kinds": ["model_artifact"],
                 "formulation_representations": ["five_element"], "code_representations": ["python_factory"],
-                "model_backends": ["llm4om.model_backends.pyomo_factory"], "solvers": ["llm4om.solvers.highs", "llm4om.solvers.gurobi"],
+                "model_backends": ["llm4om.model_backends.pyomo_factory"], "solvers": ["llm4om.solvers.highs", "llm4om.solvers.gurobi", "llm4om.solvers.ortools"],
                 "llm_features": ["text"], "execution_modes": ["trusted_local", "container"],
                 "supports_checkpoint": True, "cancellation": "cooperative/0.1.0", "supports_clarification": False,
                 "data_access": "views", "oracle_requirements": []},

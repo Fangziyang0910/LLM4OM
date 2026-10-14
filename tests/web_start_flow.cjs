@@ -24,8 +24,8 @@ for (const address of [url, provider])
       () => document.querySelector("#method")?.options.length > 0,
     );
     const explainer = page.locator("#method-explainer");
-    await page.selectOption("#method", "llm4om.methods.optimus_inline");
-    assert.match(await page.locator("#method option:checked").innerText(), /OptiMUS · 分步建模/);
+    await page.selectOption("#method", "llm4om.methods.optimus");
+    assert.equal(await page.locator("#method option:checked").innerText(), "OptiMUS");
     assert.match(await explainer.innerText(), /依次理解目标与约束/);
     assert.match(await explainer.innerText(), /已按该方法声明的能力切换/);
     assert.match(await page.locator("#budget-summary").innerText(), /模型请求 ≤\d+/);

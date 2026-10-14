@@ -66,7 +66,7 @@ elif operation == "inspect":
 
     def test_incompatible_worker_response_does_not_become_a_solve_result(self) -> None:
         runtime = {"schema_version": "0.2.0", "runtime": {"python": "3.12.15", "llm4om": version("llm4om"),
-            "packages": {"Pyomo": "6.10.1", "highspy": "1.15.1"}}}
+            "packages": {"Pyomo": version("Pyomo"), "highspy": version("highspy")}}}
         runtime["compiler_identity"] = compiler_identity(resolve_compiler(
             {"plugin_id": "llm4om.compilers.lp_ir_to_pyomo"}, "llm4om.model_backends.pyomo_factory").binding)
         runtime["execution_identity"] = resolve_execution_resources(

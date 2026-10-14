@@ -151,6 +151,7 @@ export interface RunConfig {
 }
 
 export interface MethodPreset {
+  hidden?: boolean;
   config: Record<string, unknown>;
   model_backend: PluginSelection;
   solver: PluginSelection;

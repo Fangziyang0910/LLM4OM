@@ -1,0 +1,21 @@
+{
+  "upstream_url": "https://github.com/MIRALab-USTC/OptiTree",
+  "upstream_commit": "2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9",
+  "files": {
+    "thoughts.jsonl": {
+      "upstream_path": "tree_map/ds_tree.jsonl",
+      "sha256": "89296fd81734a8a21dcc27dc3b404dec1d3f9b6f13200d1e25c88549e16374bb",
+      "size_bytes": 1509503
+    },
+    "tree.json": {
+      "upstream_path": "tree_map/ds_tree_mapping.jsonl",
+      "sha256": "b8047496b3ae2d03d81adf2f581d997560a4478e3013988e0023bfe9d5d5faa1",
+      "size_bytes": 4637
+    },
+    "LICENSE.txt": {
+      "upstream_path": "LICENSE",
+      "sha256": "5b1bdc2b36f530f3ede18a9f1654d2ec59250aa87bd021e69928567c5d9e6a05",
+      "size_bytes": 1065
+    }
+  }
+}

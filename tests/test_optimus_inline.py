@@ -26,4 +26,12 @@ class OptimusInlineTests(unittest.TestCase):
         self.assertEqual(json.loads(tape.files['fidelity-report.json'])['status'],'match')
         self.assertEqual(outcome.proposal.artifact['provenance']['variant_id'],INLINE_VARIANT)
         self.assertEqual(json.loads(tape.files['public-input-projection.json'])['data_sha256']['parameters'],hashlib.sha256(raw).hexdigest())
-        self.assertEqual(OptimusFactory().describe()['config_schema']['required'],['rag_mode','params_data_id','labels_data_id'])
+        self.assertEqual(OptimusFactory().describe()['config_schema']['required'],['rag_mode'])
+
+    def test_primary_optimus_entry_accepts_natural_language_without_parameter_files(self):
+        tape = Tape([reply.replace('Capacity', '4') for reply in REPLIES])
+        problem = {"problem_id":"natural", "revision":"1", "description":"Maximize 3x for nonnegative integer x <= 4.", "data_refs":[]}
+        context = MethodContext(tape, {}, {"max_repairs":3,"wall_time_s":20}, "a"*64, resources=tape)
+        outcome = asyncio.run(OptimusFactory().create({"rag_mode":None}).run(problem,context))
+        self.assertEqual(outcome.status, 'candidate_selected')
+        self.assertEqual(json.loads(tape.files['state_1_params.json'])['parameters'], {})

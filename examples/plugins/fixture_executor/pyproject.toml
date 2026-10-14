@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "llm4om-fixture-executor"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["llm4om>=0.36,<0.37"]
+dependencies = ["llm4om>=0.37,<0.38"]
 
 [project.entry-points."llm4om.plugins"]
 fixture_container = "llm4om_fixture_executor:container_plugin"

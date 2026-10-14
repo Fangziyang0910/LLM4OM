@@ -1,6 +1,7 @@
 """An independently installed Executor participates in actual CLI/HiGHS execution."""
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import shutil
@@ -18,6 +19,15 @@ class ExecutorRegistryTests(unittest.TestCase):
             root = Path(directory)
             packet = root / 'public'
             shutil.copytree(repository / 'examples/specs', packet)
+            target = root / 'plugins'
+            built = subprocess.run(['uv', 'build', '--offline', str(repository / 'examples/plugins/fixture_executor'),
+                '--wheel', '--out-dir', str(root / 'wheel')], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            wheel = next((root / 'wheel').glob('*.whl'))
+            installed = subprocess.run(['uv', 'pip', 'install', '--offline', '--no-deps', '--target', str(target), str(wheel)],
+                capture_output=True, text=True)
+            self.assertEqual(installed.returncode, 0, installed.stderr)
+            environment = {**os.environ, 'PYTHONPATH': os.pathsep.join((str(repository / 'src'), str(target)))}
             for mode, plugin in [('container', 'container_executor'), ('trusted_local', 'local_executor')]:
                 settings = read_config(repository / 'examples/specs/run.yaml')
                 receipt = root / (mode + '.jsonl')
@@ -29,7 +39,7 @@ class ExecutorRegistryTests(unittest.TestCase):
                 config.write_text(json.dumps(settings))
                 process = subprocess.run([sys.executable, '-m', 'llm4om', 'run', '--problem',
                     str(packet / 'problem.json'), '--config', str(config), '--output', str(root / mode)],
-                    capture_output=True, text=True, timeout=40)
+                    env=environment, capture_output=True, text=True, timeout=40)
                 self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
                 result = json.loads(process.stdout)
                 self.assertEqual(result['status'], 'completed')

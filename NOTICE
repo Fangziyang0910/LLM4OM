@@ -13,3 +13,14 @@ The original license is retained in optimus_source/LICENSE.txt; manifest.json
 records the original file URLs and byte hashes. Platform bridges are separate
 from those unchanged files. No retrieval corpus or third-party benchmark
 dataset is bundled by this integration.
+
+OptiTree's fixed public modeling-thought library and tree mapping are bundled
+under their original MIT license in src/llm4om/optitree_source/.
+Copyright (c) 2025 MIRA Lab.
+Upstream: https://github.com/MIRALab-USTC/OptiTree
+Fixed commit: 2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9
+The original license is retained in optitree_source/LICENSE.txt; manifest.json
+records original paths and byte hashes. Inference prompts use type descriptions
+and modeling thoughts, excluding the example_application solved instances.
+OR-LLM-Agent and AutoFormulation adapters are independently implemented;
+no code or prompt text from those upstream repositories is redistributed.

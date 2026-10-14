@@ -24,11 +24,14 @@ export const statusNames: Record<string, string> = {
 };
 
 export const methodNames: Record<string, string> = {
-  "llm4om.methods.direct": "Direct · 直接建模",
-  "llm4om.methods.optimus_inline": "OptiMUS · 分步建模",
-  "llm4om.methods.optimus": "OptiMUS · 参数化输入",
+  "llm4om.methods.direct": "项目基线 · 单次生成",
+  "llm4om.methods.optimus_inline": "OptiMUS",
+  "llm4om.methods.optimus": "OptiMUS",
+  "llm4om.methods.or_llm_agent": "OR-LLM-Agent",
+  "llm4om.methods.optitree": "OptiTree",
+  "llm4om.methods.autoformulation": "AutoFormulation · MCTS",
   "llm4om.methods.coe": "CoE · 专家协作",
-  "llm4om.methods.feedback_repair": "反馈修正",
+  "llm4om.methods.feedback_repair": "项目基线 · 反馈修正",
   "llm4om.methods.assisted": "人工辅助修订",
 };
 

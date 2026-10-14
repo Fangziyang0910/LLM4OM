@@ -394,7 +394,7 @@ def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
             raise RunError("compiler_unavailable", "admission", "Worker lacks the exact admitted compiler implementation/config.")
         runtime = data["runtime"]
         gurobi = result_profile == "gurobi_api/0.1.0" if result_profile else solver_id == "llm4om.solvers.gurobi"
-        required_packages = {"Pyomo", "gurobipy"} if gurobi else {"Pyomo", "highspy"}
+        required_packages = {"Pyomo", "gurobipy"} if gurobi else {"Pyomo", "ortools"} if result_profile == "ortools_api/0.1.0" else {"Pyomo", "highspy"}
         if expected_execution is not None:
             required_packages.update(name for binding in expected_execution.values()
                 for name in binding["manifest"]["dependencies"].get("python", []))

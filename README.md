@@ -16,7 +16,9 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 当前开发交付以本机后端与Web能启动、展示并运行单问题流程为准。复用已有接口，按修改范围做聚焦检查；公网多人部署、多平台适配和正式发布不属于当前收尾范围。
 
-Direct、反馈修正、固定OptiMUS流程和CoE已接入；主要通过通用外部LLM生成表述或代码。HiGHS支持Pyomo路径，Gurobi支持当前声明的Pyomo与gurobipy路径；实际Gurobi验收限微型size-limited环境。具体组合与证据见[能力矩阵](docs/implementation-plan.md#1-首批能力矩阵)及[Web实现记录](docs/development/s09-user-experience.md)。
+OptiMUS、CoE、OptiTree、OR-LLM-Agent、AutoFormulation已提供自然语言输入入口，另保留单次生成与反馈修正两个项目基线。OptiMUS的Web入口不要求额外的params／labels文件。方法使用通用外部LLM；源码固定与流程差异见[方法与求解器扩展记录](docs/development/s06-method-expansion.md)。
+
+HiGHS和OR-Tools／SCIP支持当前Pyomo LP/MILP路径；Gurobi支持当前声明的Pyomo与gurobipy路径。原生Gurobi方法仍使用Gurobi；实际Gurobi验收限微型size-limited环境。具体组合与证据见[能力矩阵](docs/implementation-plan.md#1-首批能力矩阵)。
 
 NL4Opt、NLP4LP与MAMO已有导入和评测接口；CLI已有批量调度和报告。2026-10-11已按官方DeepSeek API完成三方法×三基准九格真实接入（连接失败清零、4/4数值参考匹配）与99格真实批量取消恢复验收；3格方法性失败如实记录。已有真实记录不代表完整发布已验收。
 
@@ -29,15 +31,15 @@ GitHub仓库当前为私有，采用Apache-2.0。详细历史证据见[开发计
 在仓库根目录执行，使用 Python 3.11／3.12：
 
 ```bash
-uv sync --locked --extra dev --extra solve          # 安装（含 Gurobi 再加 --extra gurobi）
-uv run --locked python scripts/build_worker_image.py  # 构建 Docker Worker 镜像（求解在容器内执行）
+uv sync --locked --all-extras                         # 本机开发所需依赖
+uv run --locked --all-extras python scripts/build_worker_image.py  # 构建 Docker Worker 镜像（求解在容器内执行）
 ```
 
 ### Web 工作台（推荐入口）
 
 ```bash
 # 在仓库根目录的 .env 配置 LLM4OM_LLM_BASE_URL / LLM4OM_LLM_MODEL / LLM4OM_LLM_API_KEY（见 .env.example）
-uv run --locked llm4om serve --workspace runs/web --port 8767 --host 127.0.0.1
+uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --host 127.0.0.1
 ```
 
 浏览器打开 `http://127.0.0.1:8767` 即可：输入自然语言问题与数据 → 选择方法 → 观察真实建模步骤 →
@@ -49,7 +51,7 @@ uv run --locked llm4om serve --workspace runs/web --port 8767 --host 127.0.0.1
 ### CLI 单次运行
 
 ```bash
-uv run --locked --extra solve llm4om plugins list
+uv run --locked --all-extras llm4om plugins list
 uv run --locked llm4om doctor --config examples/specs/run.yaml
 uv run --locked llm4om run --problem examples/specs/problem.json --config examples/specs/run.yaml
 uv run --locked llm4om run --offline --problem examples/specs/problem.json --config examples/specs/run.yaml
@@ -161,7 +163,7 @@ SDK 导出 `import_dataset`、`NL4OptAdapter`、`EvaluationCase`、`TaskAdapter`
 
 ```bash
 uv sync --locked --extra dev --extra solve --extra gurobi
-uv run --locked python scripts/build_worker_image.py
+uv run --locked --all-extras python scripts/build_worker_image.py
 uv run --locked llm4om doctor --config examples/specs/gurobi.yaml
 uv run --locked llm4om run --problem examples/specs/problem.json --config examples/specs/gurobi.yaml
 ```

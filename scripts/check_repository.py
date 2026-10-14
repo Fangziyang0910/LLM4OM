@@ -33,13 +33,14 @@ def reject_nonfinite(value: str) -> None:
 
 def check_json(files: list[Path]) -> list[str]:
     errors = []
+    pinned = fixed_upstream_files()
     for path in files:
         if path.suffix != ".json":
             continue
         content = path.read_text(encoding="utf-8")
         try:
             value = json.loads(content, object_pairs_hook=unique_object, parse_constant=reject_nonfinite)
-            if content != json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n":
+            if path not in pinned and content != json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n":
                 errors.append(f"{path.relative_to(ROOT)}: use two-space JSON formatting")
         except ValueError as error:
             errors.append(f"{path.relative_to(ROOT)}: {error}")
@@ -66,11 +67,19 @@ def markdown_anchors(text: str) -> set[str]:
     return anchors
 
 
-def check_text(files: list[Path]) -> list[str]:
-    errors = []
+def fixed_upstream_files() -> dict[Path, dict]:
     source = ROOT / "src/llm4om/optimus_source"
     manifest = json.loads((source / "manifest.json").read_text())
     pinned = {source / entry["file"]: entry for entry in manifest["files"].values()}
+    optitree = ROOT / "src/llm4om/optitree_source"
+    tree_manifest = json.loads((optitree / "manifest.json").read_text())
+    pinned.update({optitree / name: entry for name, entry in tree_manifest["files"].items()})
+    return pinned
+
+
+def check_text(files: list[Path]) -> list[str]:
+    errors = []
+    pinned = fixed_upstream_files()
     for path, entry in pinned.items():
         if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"] or path.stat().st_size != entry["size_bytes"]:
             errors.append(f"{path.relative_to(ROOT)}: fixed upstream bytes changed or missing")

@@ -1,4 +1,4 @@
-"""Selection of the two supported deterministic Solver adapters and runtimes."""
+"""Registered deterministic Solver adapters and runtimes."""
 
 from typing import Any, Protocol, cast
 from llm4om.contracts import RunError
@@ -34,6 +34,16 @@ class GurobiSolverBackend:
         return solve_native(handle, options)
 
 
+class ORToolsSolverBackend:
+    def runtime(self) -> dict[str, Any]:
+        from llm4om.ortools_solver import runtime_versions
+        return {"packages": runtime_versions()}
+
+    def solve(self, handle: ModelHandle, options: dict[str, Any]) -> dict[str, Any]:
+        from llm4om.ortools_solver import solve_ortools_handle
+        return solve_ortools_handle(handle, options)
+
+
 class HighsSolverFactory:
     plugin_id = "llm4om.solvers.highs"
     handle_profiles = ["pyomo_linear/0.1.0"]
@@ -67,6 +77,20 @@ class GurobiSolverFactory(HighsSolverFactory):
         if config:
             raise RunError("invalid_config", "admission", "The built-in Solver has no configuration options.")
         return GurobiSolverBackend()
+
+
+class ORToolsSolverFactory(HighsSolverFactory):
+    plugin_id = "llm4om.solvers.ortools"
+    result_profile = "ortools_api/0.1.0"
+    dependencies = ["Pyomo", "ortools"]
+
+    def describe(self) -> dict[str, Any]:
+        return {**super().describe(), "display_name": "OR-Tools · SCIP (LP/MILP)"}
+
+    def create(self, config: dict[str, Any]) -> SolverBackend:
+        if config:
+            raise RunError("invalid_config", "admission", "The built-in Solver has no configuration options.")
+        return ORToolsSolverBackend()
 
 
 def solver_packages(solver_id: str, *, config: dict[str, Any] | None = None) -> dict[str, str]:

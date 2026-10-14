@@ -29,7 +29,7 @@
 | AC-08 | 429、超时、未知 usage、并发预算竞争 | 重试有界，真实 attempt 计数；预算不被并发绕过，未知成本为 null | FR-16/17/30 |
 | AC-09 | 缺少业务规则的交互任务／无交互批次 | 交互待输入后恢复；批量 unresolved 保留分母；无 oracle 代填 | FR-19/33 |
 | AC-10 | 五元素文本与严格 IR；域、常数、重复项、移项、非法引用 | 自由文本不直接编译；严格 IR 语义保持；Code 的源表述、映射和非法引用可查 | FR-21/22 |
-| AC-11 | 同一 IR 用 HiGHS 与 Gurobi 求解 | 在记录的真实环境得到容差内相同目标、域与可行解；缺许可证明确报缺失 | FR-24/25，NFR-02 |
+| AC-11 | 同一IR用HiGHS、Gurobi与OR-Tools求解 | 在记录的真实环境得到容差内相同目标、域与可行解；缺许可证明确报缺失 | FR-24/25，NFR-02 |
 | AC-12 | OptiMUS／CoE 固定上游流程与 Adapter；训练类工作的提示变体 | 原模型、实际外部模型与流程差异可查；Code 来源可对照；未接入权重的变体不标为原训练模型复现 | FR-14/22/23/26，NFR-12 |
 | AC-13 | infeasible、unbounded、time_limit 有解／无解 | 原始状态保留，归一化不混淆，缺失解字段为 null | FR-24/29 |
 | AC-14 | 脚本网络访问、越界写入、无限循环、OOM、大输出 | 容器拒绝／限制／终止；调度器继续其他任务，无 API key 暴露 | FR-27，NFR-04/06/09 |
@@ -116,3 +116,7 @@ S07-D 的上述原问题反例与证据分层已在本机验收，见 [实现记
 公共候选评估、父子来源链、共享预算和最终执行复用见 [实现记录](development/s05-public-candidates.md)。该组件关联AC-06/07/09/12；修正与声明变化由 [S05-C2](development/s05-feedback-repair.md)验证，澄清由 [S05-D2](development/s05-clarification.md)验证。完整平台发布与独立审阅仍待完成，AC不因单个组件而自动勾选。
 
 S03-C2的独立任务／评估器及冻结身份见 [记录](development/s03-task-registry.md)；完整发布清单不因此自动勾选。
+
+## 2026-10-14 方法与求解器扩展
+
+OptiMUS主入口接受自然语言，不要求额外params／labels；OptiTree、OR-LLM-Agent、AutoFormulation新增公共SDK与Web入口。三方法完成确定性HTTP／真实容器Solver及官方DeepSeek微型MILP检查，均得到目标13；OR-Tools／SCIP完成LP/MILP、变量界、常数项与终止状态检查。固定来源、变体差异、请求数量与支持组合见[扩展记录](development/s06-method-expansion.md)。

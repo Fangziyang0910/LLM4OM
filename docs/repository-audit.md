@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-14；SDK／Worker开发版本：0.37.0。当前包含 331 个仓库文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-14；SDK／Worker开发版本：0.37.0。当前包含 346 个仓库文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -8,6 +8,21 @@
 
 | 文件 | 职责／事实来源 | 核验方式与保留理由 |
 |---|---|---|
+| `tests/web_methods_flow.cjs` | 五种研究方法、求解兼容性和原生数学表述展示 | 本地HTTP响应和真实构建页面；不提交运行 |
+| `tests/test_research_method_runs.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
+| `tests/test_prompt_methods.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
+| `tests/test_ortools_solver.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
+| `tests/test_autoformulation.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
+| `src/llm4om/prompt_methods.py` | 共享公开模型调用、过程与原生产物 | HTTP与SDK验收；不执行宿主生成代码 |
+| `src/llm4om/ortools_solver.py` | 可信OR-Tools／SCIP求解 | 真实LP/MILP、常数、变量界与终止状态 |
+| `src/llm4om/or_llm_agent.py` | OR-LLM-Agent数学建模／代码／调试适配 | 固定提交、流程差异与真实Gurobi |
+| `src/llm4om/optitree_source/tree.json` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
+| `src/llm4om/optitree_source/thoughts.jsonl` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
+| `src/llm4om/optitree_source/manifest.json` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
+| `src/llm4om/optitree_source/LICENSE.txt` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
+| `src/llm4om/optitree.py` | 固定官方类型树的推理适配 | 逐层匹配、思路投影、hash和真实Gurobi |
+| `src/llm4om/autoformulation.py` | 五阶段MCTS、语义自评与SMT剪枝 | 树搜索、回传、等价区分、可信Solver |
+| `docs/development/s06-method-expansion.md` | 新增方法、自然语言入口及求解器支持范围 | 固定来源、变体差异与验收证据 |
 | `src/llm4om/candidates.py` | 候选保存、编译、执行与中断阶段核对 | 单候选／修正共用；真实Solver与恢复测试 |
 | `src/llm4om/script_execution.py` | 原生脚本执行与可信结果复用 | OptiMUS／CoE、独立收集与预算测试 |
 | `src/llm4om/gateway.py` | 共享LLM预算、私有日志与恢复 | Provider、角色覆盖、未知用量与崩溃恢复测试 |

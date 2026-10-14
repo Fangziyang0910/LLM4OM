@@ -168,7 +168,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 for key in declared)
         else:
             compatible = (isinstance(declared, list) and set(value) <= set(declared)) if field in {
-            "input_artifact_kinds", "output_artifact_kinds", "model_backends", "solvers", "execution_modes"} else declared == value
+            "input_artifact_kinds", "output_artifact_kinds", "formulation_representations", "model_backends", "solvers", "execution_modes"} else declared == value
         if not compatible:
             raise RunError("capability_mismatch", "admission", "A method capability is unknown or incompatible with this profile.",
                            details={"path": ["method", "capabilities", field]})

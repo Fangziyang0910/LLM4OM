@@ -27,23 +27,23 @@
 当前平台使用 Python 3.11／3.12。依赖声明由 pyproject.toml 维护，完整解析由 uv.lock 固定；维护工具复用其中的 PyYAML／jsonschema。推荐执行：
 
 ```bash
-uv sync --locked --extra dev --extra solve --extra gurobi
-uv run --locked --extra dev --extra solve --extra gurobi mypy
+uv sync --locked --extra dev --extra solve --extra gurobi --extra ortools --extra search
+uv run --locked --all-extras mypy
 uv run --locked python scripts/build_worker_image.py
 uv build examples/plugins/fixture_execution --wheel --out-dir dist/fixtures
 EXECUTION_TEST_IMAGE="$(uv run --locked python -c 'from llm4om.executors import DEFAULT_IMAGE; print(DEFAULT_IMAGE + "-with-execution")')"
 uv run --locked python scripts/build_worker_image.py --tag "$EXECUTION_TEST_IMAGE" --plugin-wheel dist/fixtures/llm4om_fixture_execution-0.1.0-py3-none-any.whl
-uv run --locked --extra dev --extra solve --extra gurobi python scripts/render_references.py --check
-uv run --locked --extra dev --extra solve --extra gurobi python scripts/check_repository.py
-uv run --locked --extra dev --extra solve --extra gurobi python -m unittest discover -s tests -v
+uv run --locked --all-extras python scripts/render_references.py --check
+uv run --locked --all-extras python scripts/check_repository.py
+uv run --locked --all-extras python -m unittest discover -s tests -v
 uv build
 ```
 
-修改 `docs/references/catalog.json` 后先运行 `uv run --locked --extra dev --extra solve --extra gurobi python scripts/render_references.py` 生成资料页与 BibTeX，再执行检查。JSON 使用两空格布局；CSV 和授权原文保持字节稳定。所有纳入仓库的文件都在 [逐文件整理记录](docs/repository-audit.md)中说明职责与校验方式，新增文件同步记录。
+修改 `docs/references/catalog.json` 后先运行 `uv run --locked --all-extras python scripts/render_references.py` 生成资料页与 BibTeX，再执行检查。JSON 使用两空格布局；CSV 和授权原文保持字节稳定。所有纳入仓库的文件都在 [逐文件整理记录](docs/repository-audit.md)中说明职责与校验方式，新增文件同步记录。
 
 仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。容器测试要求可访问的 Docker daemon 和已构建的 Worker 镜像；真实测试不自动跳过。Linux 为当前完整隔离验证环境，macOS／Windows 尚未验收。平台测试从 CLI／SDK 与编译／Solver 公共接口验证离线、真实求解、独立方法安装及预检；维护检查不替代真实隔离测试、完整预算执行、恢复或 benchmark 验收。基础安装可省略 solve extra，完整测试须安装 solve 与 gurobi extras；Gurobi 实测仅证明当前 size-limited 微型环境。
 
-插件测试夹具沿用已安装SDK所需的构建依赖，使用`uv build --offline`；完成上述`uv sync`后不为夹具构建访问PyPI。
+插件测试夹具沿用已安装SDK所需的构建依赖，使用`uv build --offline`；完成上述`uv sync`后不为夹具构建访问PyPI。Executor、ArtifactStore和Reporter用例自行构建并安装到临时目录，不依赖本机预装测试插件。
 
 ### 前端构建与浏览器流程测试
 

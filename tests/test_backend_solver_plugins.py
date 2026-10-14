@@ -26,9 +26,11 @@ class BackendSolverContractTests(unittest.TestCase):
         backends = {item["plugin_id"]: item for item in plugins if item["kind"] == "model_backend"}
         solvers = {item["plugin_id"]: item for item in plugins if item["kind"] == "solver_backend"}
         self.assertEqual(set(backends), {"llm4om.model_backends.pyomo_factory", "llm4om.model_backends.gurobipy"})
-        self.assertEqual(set(solvers), {"llm4om.solvers.highs", "llm4om.solvers.gurobi"})
+        self.assertEqual(set(solvers), {"llm4om.solvers.highs", "llm4om.solvers.gurobi", "llm4om.solvers.ortools"})
         self.assertEqual(backends["llm4om.model_backends.pyomo_factory"]["capabilities"]["handle_profile"], "pyomo_linear/0.1.0")
         self.assertEqual(solvers["llm4om.solvers.highs"]["capabilities"]["handle_profiles"], ["pyomo_linear/0.1.0"])
+        self.assertEqual(solvers["llm4om.solvers.ortools"]["capabilities"]["handle_profiles"], ["pyomo_linear/0.1.0"])
+        self.assertEqual(solvers["llm4om.solvers.ortools"]["capabilities"]["result_profile"], "ortools_api/0.1.0")
 
     def test_pyomo_backend_and_highs_solver_use_an_explicit_model_handle(self):
         from llm4om.backends import PyomoFactoryBackend

@@ -6,12 +6,12 @@
 
 | 模块 | 1.0 MUST | 接入方式 | 主要验收 |
 |---|---|---|---|
-| 方法 | direct、optimus、coe | 工程对照、两个经典流程 Adapter；feedback_repair 可选 | 两阶段记录、通用外部 LLM、来源锁与流程差异 |
+| 方法 | optimus、coe、optitree、or_llm_agent、autoformulation；direct／feedback_repair 为项目基线 | 自然语言输入、固定来源的流程适配；搜索保留在方法内 | 两阶段记录、通用外部LLM、来源与差异；见[扩展记录](development/s06-method-expansion.md) |
 | LLM | openai_compatible、anthropic、mock | 独立协议 Adapter、确定性 fixture | 真实成功、超时、未知 usage、能力匹配 |
 | 任务 | user_problem、nl4opt、nlp4lp、mamo | 公开输入／私有参考投影、版本锁 | 数据绑定、来源、样本与 oracle 隔离 |
 | 编译 | lp_ir_to_pyomo | 确定性编译 | 域、目标常数、约束与 symbol map |
 | 建模后端 | pyomo_factory、native_gurobipy | 工厂／原生两条路径 | Worker 内构建与可靠结果抽取 |
-| 求解器 | highs、gurobi | 可选依赖与独立 capability | 真实 LP/MILP、终止状态与容差 |
+| 求解器 | highs、gurobi、ortools | 可选依赖与独立 capability；OR-Tools使用SCIP求解LP/MILP | 真实LP/MILP、终止状态、常数项与可信结果 |
 | 评估 | structural、objective_match、independent_checker | 共同 EvaluationResult | 正确性层次、漏约束反例、not_available |
 | 执行／存储／报告 | container／trusted_local、filesystem、JSONL／CSV／Markdown／HTML | 共同资源接口 | 权限、失败记录、恢复、可复算报告 |
 

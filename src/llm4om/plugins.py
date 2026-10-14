@@ -105,11 +105,14 @@ def resolve_configured_plugin(kind: str, selection: dict[str, Any], *,
 def discover_plugins() -> dict[tuple[str, str], Plugin]:
     from llm4om.coe import CoEFactory
     from llm4om.feedback_repair import FeedbackRepairFactory
+    from llm4om.or_llm_agent import ORLLMAgentFactory
+    from llm4om.optitree import OptiTreeFactory
+    from llm4om.autoformulation import AutoFormulationFactory
     from llm4om.providers import MockFactory, OpenAICompatibleFactory, AnthropicFactory
     from llm4om.task_plugins import builtin_factories
     from llm4om.compilers import LPIRPyomoFactory
     from llm4om.backends import PyomoBackendFactory, GurobiBackendFactory
-    from llm4om.solvers import HighsSolverFactory, GurobiSolverFactory
+    from llm4om.solvers import HighsSolverFactory, GurobiSolverFactory, ORToolsSolverFactory
     from llm4om.data_loaders import PublicDataFactory
     from llm4om.assisted import AssistedFactory
     from llm4om.reporters import builtin_reporters
@@ -117,8 +120,9 @@ def discover_plugins() -> dict[tuple[str, str], Plugin]:
     from llm4om.store_registry import FilesystemStoreFactory
     plugins: dict[tuple[str, str], Plugin] = {}
     for builtin in (DirectFactory(), OptimusFactory(), OptimusInlineFactory(), CoEFactory(), FeedbackRepairFactory(), AssistedFactory(),
+                    ORLLMAgentFactory(), OptiTreeFactory(), AutoFormulationFactory(),
                     MockFactory(), OpenAICompatibleFactory(), AnthropicFactory(), *builtin_factories(), LPIRPyomoFactory(),
-                    PyomoBackendFactory(), GurobiBackendFactory(), HighsSolverFactory(), GurobiSolverFactory(), PublicDataFactory(), *builtin_reporters(),
+                    PyomoBackendFactory(), GurobiBackendFactory(), HighsSolverFactory(), GurobiSolverFactory(), ORToolsSolverFactory(), PublicDataFactory(), *builtin_reporters(),
                     ContainerExecutorFactory(), TrustedLocalExecutorFactory(), FilesystemStoreFactory()):
         manifest = _manifest(builtin)
         plugin_type = MethodPlugin if manifest["kind"] == "method" else Plugin
@@ -195,7 +199,7 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
     handle_profiles: dict[str, Any] = {"type": "array", "items": {"enum": ["pyomo_linear/0.1.0", "gurobipy_linear/0.1.0"]}, "minItems": 1, "uniqueItems": True}
     capabilities.update(backend_profile={"const": "model_handle/0.1.0"}, handle_profile=handle_profiles["items"],
         solver_profile={"const": "model_handle/0.1.0"}, handle_profiles=handle_profiles,
-        result_profile={"enum": ["highs_api/0.1.0", "gurobi_api/0.1.0"]})
+        result_profile={"enum": ["highs_api/0.1.0", "gurobi_api/0.1.0", "ortools_api/0.1.0"]})
     fields = {"schema_version": {"const": "0.2.0"}, "plugin_id": {**text,
               "pattern": r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$"}, "kind": {"enum": ["method", "llm_provider", "task_adapter", "evaluator", "compiler", "model_backend", "solver_backend", "data_loader", "reporter", "executor", "artifact_store"]},
               "plugin_version": {"type": "string", "pattern": f"^{stable_version}$", "maxLength": 128},

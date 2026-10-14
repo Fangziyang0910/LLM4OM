@@ -59,7 +59,7 @@ def render(catalog: dict) -> dict[str, str]:
             "title": "{" + record["title"] + "}",
             "year": str(year),
             "url": record.get("publication_url") or record["paper_url"],
-            "note": f"{record['publication']}; metadata accessed {date}",
+            "note": f"{record['publication']}; metadata accessed {record.get('access_date', date)}",
         }
         if authors:
             fields["author"] = " and ".join(authors)

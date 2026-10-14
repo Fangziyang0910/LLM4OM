@@ -381,14 +381,18 @@ def validate_worker_response(payload: dict[str, Any], expected_runtime: dict[str
                              solver_id: str = "llm4om.solvers.highs",
                              model_backend: str = "llm4om.model_backends.pyomo_factory",
                              result_profile: str | None = None) -> None:
-    result_profile = result_profile or ("gurobi_api/0.1.0" if solver_id == "llm4om.solvers.gurobi" else "highs_api/0.1.0")
-    if result_profile not in ("highs_api/0.1.0", "gurobi_api/0.1.0"):
+    profiles = {"highs_api/0.1.0": ("highspy", "trusted_highs_api"),
+        "gurobi_api/0.1.0": ("gurobipy", "trusted_gurobi_api"),
+        "ortools_api/0.1.0": ("ortools", "trusted_ortools_api")}
+    result_profile = result_profile or {"llm4om.solvers.gurobi": "gurobi_api/0.1.0",
+        "llm4om.solvers.ortools": "ortools_api/0.1.0"}.get(solver_id, "highs_api/0.1.0")
+    if result_profile not in profiles:
         raise RunError("worker_protocol_error", "execution", "Unsupported declared Solver result profile.")
-    gurobi = result_profile == "gurobi_api/0.1.0"
+    package, evidence = profiles[result_profile]
     number = {"type": ["number", "null"]}
     result = _object({
         "solver_id": {"const": solver_id},
-        "solver_version": {"const": expected_runtime["packages"]["gurobipy" if gurobi else "highspy"]},
+        "solver_version": {"const": expected_runtime["packages"][package]},
         "model_backend": {"const": model_backend},
         "raw_status": TEXT, "termination": {"enum": ["optimal", "feasible", "infeasible", "unbounded",
             "infeasible_or_unbounded", "time_limit", "interrupted", "error", "unknown"]},
@@ -399,7 +403,7 @@ def validate_worker_response(payload: dict[str, Any], expected_runtime: dict[str
         "solve_time_s": {"type": "number", "minimum": 0},
         "options": _object({"time_limit_s": {"type": "number", "minimum": 0}}, []),
         "effective_options": {"type": "object"}, "numerical_limits": {"type": "object"},
-        "diagnostics": {"type": "array"}, "evidence_origin": {"const": "trusted_gurobi_api" if gurobi else "trusted_highs_api"},
+        "diagnostics": {"type": "array"}, "evidence_origin": {"const": evidence},
     })
     schema = {"oneOf": [
         _object({"schema_version": {"const": "0.2.0"}, "error": _object({"code": TEXT, "stage": TEXT, "message": TEXT})}),
