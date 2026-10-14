@@ -585,10 +585,12 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
         import yaml
         from llm4om.executors import DEFAULT_IMAGE
         from test_factory_run import FactoryRunTests
-        for mode, filename in (('python_factory', 'production.py'), ('native_gurobipy', 'production_gurobi.py')):
-            with self.subTest(mode=mode):
+        for mode, filename, solver in (('python_factory', 'production.py', 'highs'),
+                ('native_gurobipy', 'production_gurobi.py', 'gurobi'), ('python_factory', 'production.py', 'ortools')):
+            with self.subTest(mode=mode, solver=solver):
                 self.config = yaml.safe_load((self.inputs / 'run.yaml').read_text())
                 self.config['method']['config']['output_mode'] = mode
+                self.config['solver']['plugin_id'] = 'llm4om.solvers.' + solver
                 self.config['executor']['config']['image'] = os.environ.get('S04B_WORKER_IMAGE', DEFAULT_IMAGE)
                 if mode == 'native_gurobipy':
                     self.config['model_backend']['plugin_id'] = 'llm4om.model_backends.gurobipy'
@@ -596,7 +598,7 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
                 FactoryRunTests.start_provider(self, (ROOT / 'examples/factories' / filename).read_text())
                 if mode == 'native_gurobipy':
                     self.reply[mode] = self.reply.pop('python_factory')
-                config = self.inputs / (mode + '.yaml')
+                config = self.inputs / (mode + '-' + solver + '.yaml')
                 config.write_text(yaml.safe_dump(self.config))
                 os.environ['S02B_FIXTURE_KEY'] = 'synthetic-fixture'
                 self.addCleanup(os.environ.pop, 'S02B_FIXTURE_KEY', None)

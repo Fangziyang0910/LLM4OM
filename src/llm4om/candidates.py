@@ -448,7 +448,7 @@ def reconcile_execution(store: RunStore, settings: dict[str, Any]) -> None:
         solve_ref = execution["solve_result_ref"]
         solve = load(solve_ref)
         result_profile = store.state["admission"]["execution"]["solver"]["manifest"]["capabilities"]["result_profile"]
-        sdk_origin = "trusted_gurobi_api" if result_profile == "gurobi_api/0.1.0" else "trusted_highs_api"
+        sdk_origin = "trusted_" + result_profile.split("/", 1)[0]
         expected_origin = ("trusted_container_worker" if mode == "container" else
                            sdk_origin)
         if solve["termination"] == "error" or solve["evidence_origin"] != expected_origin:

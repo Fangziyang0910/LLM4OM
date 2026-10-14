@@ -1,5 +1,7 @@
 # S06-C CoE 实现
 
+历史记录：本文描述原源码或早期适配。2026-10-14已按用户要求改为保留核心编排、组合目标代码与求解器；当前行为和验收以[方法与求解器扩展](s06-method-expansion.md)为准。
+
 状态：SDK／Worker0.13.0 本机实现验收通过；2026-10-11独立Standards／Spec审阅通过：PASS-WITH-NOTES，无P1/P2，8条P3打磨项（报告/tmp/llm4om-reviews/s06-group.md）。[#28](https://github.com/Fangziyang0910/LLM4OM/issues/28)。基线9451afa的0.12.0已通过290项本机回归。规范见 [插件契约](../plugin-contracts.md)、[评测协议](../evaluation.md)与 [固定源码考察](s06c-coe-source.md)。此文件区分已实现行为与尚未完成的交付验收。
 
 当前保留7个专家、动态 conductor、顺序评论、reducer、可选公开测试和反向追责。匹配先扫描尚未参与的名称，再扫描整个注册表；允许重复专家。无效路由使用记录 seed 的随机回退。下一轮重新建立评论池，反思修改不重新执行 reducer。最后选择实际最后一次 reducer 原生代码，保留未执行的反思结果。

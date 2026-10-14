@@ -138,7 +138,10 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     allowed_types = settings.get("allowed_problem_types", ["lp", "milp"])
     execution = resolve_execution_resources(settings["model_backend"], settings["solver"], allowed_types, inventory=inventory,
         expected=expected.get("execution") if expected else None, check_dependencies=not offline and execution_mode != "container")
-    if execution.backend_binding["manifest"]["capabilities"]["handle_profile"] != ("gurobipy_linear/0.1.0" if native else "pyomo_linear/0.1.0"):
+    factory = profile in ("factory_single_candidate/0.1.0", "factory_candidates/0.1.0")
+    if factory:
+        native = execution.backend_binding["manifest"]["capabilities"]["handle_profile"] == "gurobipy_linear/0.1.0"
+    if not factory and execution.backend_binding["manifest"]["capabilities"]["handle_profile"] != ("gurobipy_linear/0.1.0" if native else "pyomo_linear/0.1.0"):
         raise RunError("capability_mismatch", "admission", "The output profile is incompatible with the selected Backend/Solver.")
     if ("native_code" if native else "python_factory") not in execution.backend_binding["manifest"]["capabilities"]["input_artifact_kinds"]:
         raise RunError("capability_mismatch", "admission", "Backend does not accept this Code representation.")
@@ -148,11 +151,13 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
         packages.update(compiler.binding["packages"])
     required = {"method_profile": profile,
                 "input_artifact_kinds": ["public_problem"], "output_artifact_kinds": ["model_artifact"],
-                "formulation_representations": [] if profile == "native_script/0.2.0" else ["native_formulation" if profile == "native_script/0.1.0" else "five_element"], "code_representations": ["native_script" if profile.startswith("native_script/") else "native_code" if native else "python_factory"],
+                "formulation_representations": [] if factory or profile == "native_script/0.2.0" else ["native_formulation" if profile == "native_script/0.1.0" else "five_element"], "code_representations": ["native_script" if profile.startswith("native_script/") else "native_code" if native else "python_factory"],
                 "model_backends": [settings["model_backend"]["plugin_id"]], "solvers": [settings["solver"]["plugin_id"]],
                 "llm_features": ["text"], "oracle_requirements": []}
     if not offline:
         required["execution_modes"] = [execution_mode]
+    if factory and not capabilities.get("formulation_representations"):
+        raise RunError("capability_mismatch", "admission", "Factory methods must declare a Formulation representation.")
     if not set(capabilities.get("llm_features", [])) <= set(provider_plugin.manifest["capabilities"].get("llm_features", [])):
         raise RunError("capability_mismatch", "admission", "Provider does not support the requested method features.")
     if any(not set(capabilities.get("llm_features", [])) <= set(selected.manifest["capabilities"].get("llm_features", [])) for selected in selected_providers[1:]):
@@ -168,7 +173,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
                 for key in declared)
         else:
             compatible = (isinstance(declared, list) and set(value) <= set(declared)) if field in {
-            "input_artifact_kinds", "output_artifact_kinds", "formulation_representations", "model_backends", "solvers", "execution_modes"} else declared == value
+            "input_artifact_kinds", "output_artifact_kinds", "formulation_representations", "code_representations", "model_backends", "solvers", "execution_modes"} else declared == value
         if not compatible:
             raise RunError("capability_mismatch", "admission", "A method capability is unknown or incompatible with this profile.",
                            details={"path": ["method", "capabilities", field]})

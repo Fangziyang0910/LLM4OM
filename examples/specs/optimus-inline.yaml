@@ -14,9 +14,9 @@ llm:
     max_retries: 0
     timeout_s: 180
 model_backend:
-  plugin_id: "llm4om.model_backends.gurobipy"
+  plugin_id: "llm4om.model_backends.pyomo_factory"
 solver:
-  plugin_id: "llm4om.solvers.gurobi"
+  plugin_id: "llm4om.solvers.highs"
   options:
     time_limit_s: 10
 executor:

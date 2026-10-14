@@ -1,5 +1,7 @@
 # S06-B OptiMUS fixed source workflow
 
+历史记录：本文描述原源码或早期适配。2026-10-14已按用户要求改为保留核心编排、组合目标代码与求解器；当前行为和验收以[方法与求解器扩展](s06-method-expansion.md)为准。
+
 Status: implementation and actual local acceptance in SDK/Worker 0.9.0,
 unpublished. 2026-10-11独立Standards／Spec审阅通过：PASS-WITH-NOTES，无P1/P2，8条P3打磨项（报告/tmp/llm4om-reviews/s06-group.md）。 Delivery: [draft PR23](https://github.com/Fangziyang0910/LLM4OM/pull/23). Scope: [Issue17](https://github.com/Fangziyang0910/LLM4OM/issues/17),
 FR-14/22–26, DD-03/05, AC-12/13/25. The [source investigation](s06b-optimus-source.md)

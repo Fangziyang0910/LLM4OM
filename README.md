@@ -18,7 +18,7 @@ LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输�
 
 OptiMUS、CoE、OptiTree、OR-LLM-Agent、AutoFormulation已提供自然语言输入入口，另保留单次生成与反馈修正两个项目基线。OptiMUS的Web入口不要求额外的params／labels文件。方法使用通用外部LLM；源码固定与流程差异见[方法与求解器扩展记录](docs/development/s06-method-expansion.md)。
 
-HiGHS和OR-Tools／SCIP支持当前Pyomo LP/MILP路径；Gurobi支持当前声明的Pyomo与gurobipy路径。原生Gurobi方法仍使用Gurobi；实际Gurobi验收限微型size-limited环境。具体组合与证据见[能力矩阵](docs/implementation-plan.md#1-首批能力矩阵)。
+七个自动建模方法均可选择HiGHS、Gurobi或OR-Tools／SCIP。方法保留各自编排与阶段提示，代码提示由所选建模后端和求解器组合。默认使用Pyomo LP/MILP路径；四个提示流程也支持选择gurobipy后端生成Gurobi原生工厂。实际Gurobi验收限微型size-limited环境。具体组合与证据见[能力矩阵](docs/implementation-plan.md#1-首批能力矩阵)。
 
 NL4Opt、NLP4LP与MAMO已有导入和评测接口；CLI已有批量调度和报告。2026-10-11已按官方DeepSeek API完成三方法×三基准九格真实接入（连接失败清零、4/4数值参考匹配）与99格真实批量取消恢复验收；3格方法性失败如实记录。已有真实记录不代表完整发布已验收。
 

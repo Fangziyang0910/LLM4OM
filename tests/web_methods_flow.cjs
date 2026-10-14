@@ -27,7 +27,13 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       assert.ok(!("params_data_id" in config.method.config));
       assert.ok(!("labels_data_id" in config.method.config));
       const solvers = await page.locator("#solver option").evaluateAll(options => options.map(option => option.value));
-      assert.equal(solvers.includes("llm4om.solvers.ortools"), method === "autoformulation");
+      assert.deepEqual(solvers.slice().sort(), ["llm4om.solvers.gurobi", "llm4om.solvers.highs", "llm4om.solvers.ortools"]);
+      for (const solver of solvers) {
+        await page.selectOption("#solver", solver);
+        const selected = JSON.parse(await page.locator("#config-json").inputValue());
+        assert.equal(selected.solver.plugin_id, solver);
+        assert.equal(selected.model_backend.plugin_id, "llm4om.model_backends.pyomo_factory");
+      }
     }
     await page.selectOption("#solver", "llm4om.solvers.ortools");
     assert.match(await page.locator("#solver option:checked").innerText(), /OR-Tools.*SCIP/);

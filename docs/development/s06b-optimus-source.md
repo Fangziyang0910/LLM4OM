@@ -1,5 +1,7 @@
 # S06-B OptiMUS-0.3 source investigation
 
+历史记录：本文描述原源码或早期适配。2026-10-14已按用户要求改为保留核心编排、组合目标代码与求解器；当前行为和验收以[方法与求解器扩展](s06-method-expansion.md)为准。
+
 Date: 2026-10-09. Status: **source investigation only**. This note specifies a faithful adaptation path; it does not report an implemented integration or a reference run. Scope is the approved [S06-B](../implementation-plan.md#s06-原生代码与经典方法适配). Platform baseline is `90d955ccc75140ee8bee53e6922f52539b4486e0`. Normative context: [coding standards](../../CODING_STANDARDS.md), [glossary](../../GLOSSARY.md), [contracts](../plugin-contracts.md), ADR [0001](../adr/0001-dual-artifact-paths.md), [0003](../adr/0003-independent-plugin-axes.md), [0004](../adr/0004-formulation-and-code.md), and [0005](../adr/0005-factory-collector-isolation.md). This extends the limited [earlier inspection](../references/source-inspection.md).
 
 ## Finding

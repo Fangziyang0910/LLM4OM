@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-14；SDK／Worker开发版本：0.37.0。当前包含 346 个仓库文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-14；SDK／Worker开发版本：0.37.0。当前包含 345 个仓库文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -13,18 +13,18 @@
 | `tests/test_prompt_methods.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
 | `tests/test_ortools_solver.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
 | `tests/test_autoformulation.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
-| `src/llm4om/prompt_methods.py` | 共享公开模型调用、过程与原生产物 | HTTP与SDK验收；不执行宿主生成代码 |
+| `src/llm4om/prompt_methods.py` | 共享公开模型调用、目标代码与候选反馈 | HTTP与SDK验收；不执行宿主生成代码 |
 | `src/llm4om/ortools_solver.py` | 可信OR-Tools／SCIP求解 | 真实LP/MILP、常数、变量界与终止状态 |
-| `src/llm4om/or_llm_agent.py` | OR-LLM-Agent数学建模／代码／调试适配 | 固定提交、流程差异与真实Gurobi |
+| `src/llm4om/or_llm_agent.py` | OR-LLM-Agent数学建模／代码／调试适配 | 固定提交、流程差异与三个真实Solver与可选原生Gurobi |
 | `src/llm4om/optitree_source/tree.json` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
 | `src/llm4om/optitree_source/thoughts.jsonl` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
 | `src/llm4om/optitree_source/manifest.json` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
 | `src/llm4om/optitree_source/LICENSE.txt` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
-| `src/llm4om/optitree.py` | 固定官方类型树的推理适配 | 逐层匹配、思路投影、hash和真实Gurobi |
+| `src/llm4om/optitree.py` | 固定官方类型树的推理适配 | 逐层匹配、思路投影、hash和三个真实Solver与可选原生Gurobi |
 | `src/llm4om/autoformulation.py` | 五阶段MCTS、语义自评与SMT剪枝 | 树搜索、回传、等价区分、可信Solver |
 | `docs/development/s06-method-expansion.md` | 新增方法、自然语言入口及求解器支持范围 | 固定来源、变体差异与验收证据 |
 | `src/llm4om/candidates.py` | 候选保存、编译、执行与中断阶段核对 | 单候选／修正共用；真实Solver与恢复测试 |
-| `src/llm4om/script_execution.py` | 原生脚本执行与可信结果复用 | OptiMUS／CoE、独立收集与预算测试 |
+| `src/llm4om/script_execution.py` | 原生脚本执行与可信结果复用 | 人工原生代码路径、独立收集与预算测试 |
 | `src/llm4om/gateway.py` | 共享LLM预算、私有日志与恢复 | Provider、角色覆盖、未知用量与崩溃恢复测试 |
 | `src/llm4om/run_records.py` | 不可变公共产物与引用图读取 | namespace／hash／大小校验；不读取私有oracle |
 | `src/llm4om/runtime_identity.py` | 运行、任务和实验共同SDK身份 | 固定源码hash；恢复兼容性测试 |
@@ -199,8 +199,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `docs/development/s05b-messages.md` | S05-B 实现与实际支持 | 本地 red/green、SDK/Worker 版本与真实验收／独立审查的待办边界 |
 
 | `src/llm4om/method_resources.py` | 运行拥有的脚本执行、预算、公开 artifact/event 与执行复用 | SDK 合成 HTTP＋实际 Gurobi，取消／结果收据／未知执行 |
-| `src/llm4om/optimus.py` | 固定 OptiMUS main 方法适配与 Gateway／资源驱动 | 实际固定 main 的同 tape 六状态／提示／修正／选择对照 |
-| `src/llm4om/optimus_runtime.py` | 受控固定源码加载与资源桥、独立 main 对照 | 原始 hash、公共输入、提示状态与 execution tape |
+| `src/llm4om/optimus.py` | OptiMUS逐条数学建模与目标代码编排 | 自然输入、逐条变量复用、辅助约束与公开代码修复 |
 | `src/llm4om/script_worker.py` | 原生脚本隔离执行与不可信 capture | 真实容器、source 诊断、MPS 捕获与新 collector 独立求解 |
 | `docs/development/s06b-optimus.md` | S06-B 开发实现与证据范围 | 实际支持、固定源码差异、本机验收及剩余条件 |
 | `examples/optimus/README.md` | OptiMUS 公开微型问题操作说明 | 明确付费流程、人工数学预期、占位端点和本地配置 |
@@ -208,8 +207,8 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/optimus/params.json` | 公开参数元数据与数值 | 保留 value／shape／definition 与手算目标12 |
 | `examples/optimus/labels.json` | 公开人工领域与问题类型标签 | 明确公开来源，无 oracle 推导 |
 | `examples/optimus/run.yaml` | OptiMUS 容器／外部文本 LLM 配置模板 | 明确 no-RAG、Solver/修正预算与占位 Provider 端点 |
-| `tests/test_optimus_method.py` | 固定源码流程忠实度 | 公共 MethodContext、实际 main 同 tape、quirks／修正／最终选择 |
-| `tests/test_optimus_run.py` | OptiMUS SDK 本机端到端验收 | 合成 HTTP、实际 Gurobi／Docker、预算、取消和未知／完整恢复 |
+| `tests/test_optimus_method.py` | OptiMUS公共流程与边界 | 公开MethodContext、阶段状态、目标配置与有界修复 |
+| `tests/test_optimus_run.py` | OptiMUS SDK 本机端到端验收 | 合成HTTP、真实容器Solver、预算和已完成恢复 |
 | `tests/test_public_json.py` | JSON 公开数据与原生 Formulation 契约 | 原始 state、不合法键／数值／oracle／schema |
 | `tests/test_script_worker.py` | 原生脚本 Worker 与可信 collector 公共行为 | 原始 bytes、多个模型拒绝、exit 诊断与独立 API 结果 |
 | `src/llm4om/optimus_source/LICENSE.txt` | 固定 MIT 上游源码／提示／授权或 manifest | 固定 e182e9e 提交；逐文件原始 URL、SHA-256、大小，保留字节 |
@@ -241,16 +240,16 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/checkers.py` | 原问题检查与受信任扩展接口 | 独立 CSV／Decimal 规则、版本／来源与输出校验 |
 | `tests/test_checker_evaluation.py` | 公共导入／评测与真实求解反例 | HiGHS／Gurobi、CLI 安装插件、错误状态与私有隔离 |
 | `tests/test_checkers.py` | 独立原问题数学检查 | 原始业务域／容量／利润与多最优解 |
-| `docs/development/s06-coe.md` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
-| `examples/coe/README.md` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
-| `examples/coe/data/capacities.csv` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
-| `examples/coe/data/products.csv` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
-| `examples/coe/problem.json` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
-| `examples/coe/public-interface.json` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
-| `examples/coe/run.yaml` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
-| `src/llm4om/coe.py` | CoE 原创流程与原生调用 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
-| `tests/test_coe_method.py` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
-| `tests/test_coe_run.py` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／真实 Gurobi 验收；来源、参数与阶段独立记录 |
+| `docs/development/s06-coe.md` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／三个真实Solver验收；来源、参数与阶段独立记录 |
+| `examples/coe/README.md` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／三个真实Solver验收；来源、参数与阶段独立记录 |
+| `examples/coe/data/capacities.csv` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／三个真实Solver验收；来源、参数与阶段独立记录 |
+| `examples/coe/data/products.csv` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／三个真实Solver验收；来源、参数与阶段独立记录 |
+| `examples/coe/problem.json` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／三个真实Solver验收；来源、参数与阶段独立记录 |
+| `examples/coe/public-interface.json` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／三个真实Solver验收；来源、参数与阶段独立记录 |
+| `examples/coe/run.yaml` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／三个真实Solver验收；来源、参数与阶段独立记录 |
+| `src/llm4om/coe.py` | CoE专家协作、reducer与反向反馈 | 公开 Source/Method/CLI/SDK／三个真实Solver验收；来源、参数与阶段独立记录 |
+| `tests/test_coe_method.py` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／三个真实Solver验收；来源、参数与阶段独立记录 |
+| `tests/test_coe_run.py` | CoE 公开输入／执行／契约证据 | 公开 Source/Method/CLI/SDK／三个真实Solver验收；来源、参数与阶段独立记录 |
 | `docs/development/s05-role-models.md` | 角色模型配置与共享资源证据 | 公共配置／Gateway／HTTP／SDK、身份与预算验收 |
 | `tests/test_role_models.py` | 角色模型配置与共享资源证据 | 公共配置／Gateway／HTTP／SDK、身份与预算验收 |
 | `tests/test_role_pipeline.py` | 角色模型配置与共享资源证据 | 公共配置／Gateway／HTTP／SDK、身份与预算验收 |
@@ -343,7 +342,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_web_assisted.py` | 公共HTTP编辑流程 | Problem revision、Code、实际Solver、请求计数与父记录 |
 | `docs/development/s09-assisted-edits.md` | 人工修订使用与支持记录 | 契约、真实入口证据与未验收范围 |
 
-| `tests/test_optimus_inline.py` | 明确输入变体的公共Method契约 | 固定main fidelity、空参数声明、原数据hash与原接口 |
+| `tests/test_optimus_inline.py` | 已有自然语言入口别名的公共Method契约 | 普通公开数据、无额外声明、原数据hash与目标配置 |
 | `examples/specs/optimus-inline.yaml` | 真实外部模型的inline-public配置 | 独立变体、公开输入、Gurobi与预算 |
 | `docs/development/s08-common-input.md` | 共同输入与三基准比较证据 | 原始来源、预选子集、未提供指标与变体 |
 

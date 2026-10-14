@@ -319,7 +319,12 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     context = MethodContext(gateway, MappingProxyType(data_content), MappingProxyType(deepcopy(settings["budget"])),
                             hashlib.sha256(source_problem).hexdigest(), store.cancellation, save_method_checkpoint,
                             RunMethodResources(store, public, settings, plan, responses=gateway.calls), plan.deadline,
-                            tuple(deepcopy(store.state.get("clarification_responses", []))), MappingProxyType(data_views))
+                            tuple(deepcopy(store.state.get("clarification_responses", []))), MappingProxyType(data_views),
+                            MappingProxyType({**plan.execution.backend_binding["manifest"]["capabilities"]["code_generation"],
+                                "model_backend": settings["model_backend"]["plugin_id"],
+                                "solver": settings["solver"]["plugin_id"],
+                                "solver_name": plan.execution.solver_binding["manifest"]["display_name"]})
+                            if plan.execution and "code_generation" in plan.execution.backend_binding["manifest"]["capabilities"] else None)
     store.state["method_started"] = True
     store.checkpoint()
     try:

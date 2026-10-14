@@ -716,17 +716,7 @@ Cancelling stops the owned script container and the fixed-source driver; a
 killed driver's pipes are drained before its event loop closes. Completed
 resume needs no new credential, model request or Solver call.
 
-OptiMUS uses the fixed default main (EC=true, RAG=None). All source calls use
-Gateway and deterministic replay IDs. The original three-execution repair loop
-and last-successful-executed selection remain; an unexecuted final repair cannot
-be selected as solved. When all three executions fail, the method still returns
-the last failed script as its selected candidate (candidate_selected) and the
-application layer records the explicit execution failure in the public bundle;
-"last-successful-executed" qualifies selection only when a successful execution
-exists, so exhaustion never masquerades as a verified solve. The inline_public
-variant aggregates public data behind a fixed 16MiB admission bound
-(data_view_limit) before any paid call. Requested RAG modes fail before paid calls until actual
-compatible rights-cleared corpus/index/embedding resources are admitted.
+OptiMUS的当前策略集成不再执行固定main；分步提取、逐条建模和调试通过共同方法资源运行，见第22节。上述native-script接口仍服务已有人工修订和显式原生脚本方法。
 
 ## 15. S07-C MAMO Task interface (SDK 0.10.0)
 
@@ -906,26 +896,7 @@ structurally passed. Core completed-Code recovery verifies the nullable referenc
 and the actual Code/source/method/data identities. Earlier profiles retain their
 required Formulation contract. No method-ID branch is added to orchestration.
 
-CoE public_contract_data_id is optional/null. The default is an original public
-prob_problem() stub. A selected public JSON contract has exactly code_example,
-entry_point and input keyword arguments. Config defaults are collaboration3,
-reflection=false, trials3 and seed0; actual routing seed/resolved behavior are
-recorded. The interface file is public input, never benchmark reference code.
-The method preserves all original native function bytes and appends a declared
-isolated invocation driver. Public reflection uses first-alphabetical prob_*
-discovery and generated public arguments, ignores returned values and may feed
-bounded source errors back to experts. Its diagnostics are untrusted source
-feedback, separate from trusted Solver evidence.
-
-Final execution uses the original declared entry_point and input, not a generated
-test's arguments. Reflection therefore has a separately counted final execution;
-only the matching final receipt is reused as the Run's SolveResult. Original
-source bytes, trial inputs/executions, reflections, last reducer selection and
-fidelity differences remain inspectable. No opaque return value or public test
-success creates independent original-problem correctness. Original prompts,
-one-import adaptation, seeded fallback and configured Provider sampling/caps are
-named changes; source-exact prompt/runtime and paper-score reproduction are not
-claimed.
+CoE的当前reducer同时提供数学表述与模型工厂，通过候选assess／select执行所选Solver，见第22节。public_contract_data_id仍是可选公开输入；不再执行prob_*函数或生成额外测试实例。
 
 ## 19. S05-D1 role model routing (SDK 0.14.0)
 
@@ -1258,7 +1229,7 @@ SDK0.26.0的`export_edit(run, operation)`与`edit_run(run, edits)`使用公开Ed
 
 ## OptiMUS公开输入变体与实验case选择
 
-SDK0.27.0提供`llm4om.methods.optimus_inline`，配置为`{rag_mode: null}`。固定main读取空params.json／labels.json，原始公开数据追加到描述；原参数声明接口仍由`llm4om.methods.optimus`提供，不默认替换。variant_id为optimus0.3-source_main-inline_public-ec_true-rag_none-external_chat，输入策略／有效描述hash／原数据hash保存在public-input-projection.json。主流程未增加LLM参数提取，也不注入参考材料。
+`llm4om.methods.optimus_inline`保留为OptiMUS自然语言入口的别名，配置与执行行为见第22节。原始公开数据保持原字节与hash；默认无需params／labels，未提供声明时由参数阶段从问题描述提取。
 
 ExperimentSpec.tasks的`{id, manifest}`可增加case_ids，表示原冻结selected案例的明确子集。资格、oracle、原manifest均不修改；具体共同case在实验快照冻结。N_selected为该实验子集，N_manifest_selected保留原总数；不同方法不按结果删样本。
 
@@ -1306,6 +1277,12 @@ SDK0.31.0的内置HTTPTextFactory配置可增加proxy_url，值为无认证信�
 
 ## 22. Natural-language method expansion (2026-10-14)
 
-OptiMUS accepts natural-language input with `rag_mode: null`; explicit paired params_data_id/labels_data_id remain an optional CLI input mode. OR-LLM-Agent and OptiTree use the existing native_script/0.2.0 profile and native_formulation records. AutoFormulation uses grounded_candidates/0.1.0 with five-element Formulation and strict LPIR; its MCTS, self-evaluation and SMT pruning remain inside the Method. All three declare no internal continuation checkpoint. Completed output recovery remains governed by the existing core phase protocol.
+OptiMUS accepts natural-language input with `rag_mode: null`; paired params_data_id/labels_data_id remain optional public inputs. OptiMUS, CoE, OR-LLM-Agent and OptiTree use factory_candidates/0.1.0 with supplied native_formulation and python_factory or native_code. AutoFormulation retains grounded_candidates/0.1.0, five-element Formulation and strict LPIR. All five declare no internal continuation checkpoint. Completed output recovery follows the existing core phase protocol.
+
+Model Backend Manifests may declare capabilities.code_generation={representation_kind, instruction}; representation_kind is python_factory or native_code and must belong to the Backend's input_artifact_kinds. MethodContext.code_target carries those admitted requirements plus model_backend, solver and solver_name. It contains no credentials or private reference material. The shared code prompt composes the Backend contract and Solver identity with each method's phase instructions. Methods generate build_model(data) factories; the platform invokes the configured Solver after isolated validation, rather than asking generated code to solve.
+
+Factory profiles admit supplied five_element or native_formulation representations according to the Method's declaration. They accept each supported code representation and Backend capability without a method-ID branch. The four prompt workflows declare both Pyomo and gurobipy construction paths and all three Solvers. Backend/Solver handle compatibility still rejects native gurobipy with HiGHS or OR-Tools. Default Web presets choose Pyomo/HiGHS and expose all three Solver choices.
+
+Public candidate assessment returns execution diagnostics and normalized Solver status. A valid infeasible or unbounded result does not trigger code debugging. Repair keeps the source Formulation and exact public bindings; parent relationships consume the shared repair budget. Selection reuses the saved assessment, without a second solve. CoE backward reflection can revise its mathematical contribution for the next reducer, retaining the feedback and parent candidate. Exhausted failures remain failures.
 
 The OR-Tools Solver consumes pyomo_linear/0.1.0 handles and declares ortools_api/0.1.0 results. The package version is bound to ortools, internal evidence is trusted_ortools_api, and container results retain trusted_container_worker. It uses MPSolver/SCIP for LP/MILP; supported options are finite nonnegative time_limit_s, rounded up to milliseconds, with zero returning time_limit without solving. Unknown bounds and gaps remain null. This contract does not admit native OR-Tools code, CP-SAT or routing models. See [actual support and adaptation differences](development/s06-method-expansion.md).

@@ -1,70 +1,65 @@
-# 自然语言方法与 OR-Tools 扩展
+# 自然语言方法与可组合求解器
 
-日期：2026-10-14。当前交付范围是本机后端、Web和LP/MILP。接口由[插件契约](../plugin-contracts.md)维护，固定源码与方法差异在本记录中说明。
+日期：2026-10-14。当前范围是本机后端、Web和LP/MILP。接口由[插件契约](../plugin-contracts.md)维护；架构选择见[独立配置](../adr/0003-independent-plugin-axes.md)。本文记录当前方法编排、来源与验收。
 
-## 输入与工作台
+## 目标与输入
 
-用户输入自然语言描述，可选上传业务数据。OptiMUS主入口不再要求用户制作params／labels文件。已有参数化CLI配置仍可显式提供两个数据ID；原optimus_inline插件保留用于已有配置，Web只显示一个OptiMUS入口。
+用户输入自然语言描述，可选上传业务数据，独立选择方法、LLM与求解器。研究方法集成其核心编排和阶段提示思路，论文的原始代码API不成为平台限制。完整论文复现不属于当前交付目标。
 
-Web显示五个研究方法：OptiMUS、CoE、OptiTree、OR-LLM-Agent、AutoFormulation。Direct和Feedback Repair明确标为项目基线，分别用于单次生成和公开反馈修正，不作为论文方法计数。人工辅助修订继续独立标记。
+Web显示OptiMUS、CoE、OptiTree、OR-LLM-Agent、AutoFormulation五个研究方法。Direct与Feedback Repair是单次生成与公开反馈修正两个项目基线。OptiMUS不要求额外params／labels文件；已有两个显式公开数据ID和optimus_inline插件ID仍可使用。CoE可读取已有公开输入契约，最终实现遵循平台的模型工厂契约。
 
 ## 实际支持
 
 | 方法／产物 | HiGHS | Gurobi | OR-Tools／SCIP |
 |---|---|---|---|
-| 项目基线：严格LPIR／Pyomo工厂 | 支持 | 支持 | 支持 |
+| Direct、Feedback Repair：严格LPIR／Pyomo工厂 | 支持 | 支持 | 支持 |
 | AutoFormulation：严格LPIR | 支持 | 支持 | 支持 |
-| OptiMUS、CoE、OptiTree、OR-LLM-Agent：原生gurobipy脚本 | — | 支持 | — |
+| OptiMUS、CoE、OptiTree、OR-LLM-Agent：Pyomo工厂 | 支持 | 支持 | 支持 |
+| 四个提示流程：可选gurobipy工厂 | — | 支持 | — |
 
-OR-Tools通过现有Pyomo Backend接入可信MPSolver／SCIP，支持连续变量、整数变量和二元变量的LP/MILP。它保留常数项、变量界、约束方向和原始目标方向。结果记录OR-Tools版本与实际SCIP引擎、终止状态、原始决策值及请求选项。没有CP-SAT、路由或非线性支持声明；原生Gurobi代码不自动转换成OR-Tools代码。
+默认使用已有Pyomo Backend，三个Solver读取它的受支持模型。OR-Tools使用可信MPSolver／SCIP求解LP/MILP，保留常数项、变量界和目标方向。Gurobi也可使用原生gurobipy Backend。当前未接入CP-SAT、路由、非线性或原生OR-Tools代码Backend。
 
-安装完整本机开发依赖：
+Backend在Manifest.capabilities.code_generation中声明representation_kind与instruction。应用把已预检的Backend、Solver身份和后端要求作为MethodContext.code_target提供给方法。共享代码提示将这些要求与方法的阶段提示组合；方法没有按Solver ID编写分支。选择gurobipy时提示要求构建Gurobi变量，选择Pyomo时要求构建Pyomo变量。生成代码只构建模型，平台使用所选Solver求解。
+
+复用FactoryCodeProposal、ModelHandle和候选assess／select路径，不增加执行器、转换服务或新方法profile。四个提示流程使用factory_candidates/0.1.0与native_formulation；代码修复保留原数学表述并记录父候选。每次评估占一个Solver slot，最终选择复用已有结果。不可行或无界属于Solver结果，不因缺少数值答案自动触发代码修复。所有预算、截止时间和隔离规则沿用已有资源接口。
+
+## 方法的编排与提示
+
+| 方法 | 保留的核心编排与提示思路 |
+|---|---|
+| OptiMUS | 提取参数、识别目标、提取并核对约束；逐条约束建模并维护变量和辅助约束；形成目标数学表述；代码组装与公开执行错误修复 |
+| CoE | 协调者动态选择专家；专家共享评论；reducer形成最终数学模型与代码；失败时按反向专家顺序定位原因，把修订评论带入下一轮 |
+| OptiTree | 逐层匹配问题类型；检索最具体匹配节点的建模思路；按实际数据实例化数学模型与目标代码；公开反馈调试 |
+| OR-LLM-Agent | 独立数学建模代理先完成模型；代码代理落实所选目标；有界执行错误调试 |
+| AutoFormulation | 参数、决策变量、目标、等式与不等式五层MCTS；假设生成与自评；UCT选择、奖励回传、严格LPIR等价剪枝与公开求解评估 |
+
+各方法独立编写阶段提示，保留来源中的任务划分、角色职责和关键约束。共享部分仅是公开输入、调用记录、目标代码契约、候选执行与修复。方法仍独立决定流程、搜索和选择。
+
+## 固定来源与适配
+
+- OptiMUS：[仓库](https://github.com/teshnizi/OptiMUS)，提交e182e9ef5841605c2a7e87467021fd83522b6484。当前变体optimus-clause_math-configured_code/0.2.0。固定源文件保留用于提示与流程考察，不再启动源码子进程或执行固定main忠实度对照。公开参数改为默认从描述提取；去重与覆盖核对放入约束提取提示，代码按配置生成。
+- CoE：考察提交afb89bf602690ea621f13a23c42722f20f653a43，当前变体coe-expert_reduce-public_reflection-configured_code/0.2.0。保留七类专家、动态路由、reducer与反向归因；使用真实候选执行反馈，移除prob_*调用驱动和额外生成测试参数。reducer显式提供数学表述；失败修订会进入下一轮，耗尽后不会声称成功。
+- OptiTree：[仓库](https://github.com/MIRALab-USTC/OptiTree)，提交2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9。当前变体optitree-fixed_ds_tree-configured_code/0.2.0。固定DeepSeek思路树包含320个节点，保留原字节、MIT许可与hash。提示只投影problem_type、description、reason_flow，不读取已解训练例或进行树训练。所选代码目标覆盖模板中的原API。
+- OR-LLM-Agent：[仓库](https://github.com/bwz96sco/or_llm_agent)，提交5dccdaab89ab91c3cb28066fe849423dc124d287。当前变体or_llm_agent-configured_math-code-debug/0.2.0。保留数学模型、代码、调试三阶段；采用一层有界调试，使用配置模型与Backend／Solver。
+- AutoFormulation：[仓库](https://github.com/jumpynitro/AutoFormulator)，提交52148018d04de23dc2d36d4281eb6244c2a42ffc，论文为[ICML 2025 Autoformulation](https://proceedings.mlr.press/v267/astorga25a.html)。当前变体autoformulation-bounded_mcts-grounded_lpir-smt/0.1.0。五阶段MCTS与语义奖励保持独立；完整数值LPIR用Z3证明等价才剪枝，不执行LLM生成的符号Python。未知等价结果保留，无效叶子记诊断和零奖励后继续搜索。
+
+每次运行保存源提交、变体、阶段回复、提示hash、实际模型调用、目标Backend／Solver、候选与反馈。四个提示流程未提供内部续跑checkpoint；已完成结果可恢复，不重复LLM或Solver工作。原生脚本资源仍用于已有人工修订路径。
+
+## 依赖与验收
 
 ```bash
-uv sync --locked --extra dev --extra solve --extra gurobi --extra ortools --extra search
+uv sync --locked --all-extras
 uv run --locked --all-extras python scripts/build_worker_image.py
 ```
 
-ortools extra包含OR-Tools；search extra包含AutoFormulation使用的Z3。Worker构建沿用原有脚本、镜像和隔离执行入口。
+HiGHS使用highspy1.12.0，与OR-Tools9.15捆绑版本一致，避免同一进程的原生符号冲突。依据见[上游问题](https://github.com/google/or-tools/issues/5246)与[OR-Tools9.15依赖](https://github.com/google/or-tools/releases/tag/v9.15)。两种库加载顺序均已真实求解。
 
-## 固定来源与适配差异
+2026-10-14公共SDK验收已通过七个自动方法×三个Solver的21个组合，以及四个提示流程×gurobipy／Gurobi的4个组合。使用确定性HTTP Provider与真实隔离Solver，每个组合得到手算目标13。默认路径每次候选仅一条Solver调用；OR-LLM-Agent执行错误修复后得到13，父候选、修复账本和已完成resume不重复求解均通过。工程fixture验证组合与流程。
 
-### OptiTree
+此前扩展已完成真实官方DeepSeek调用：OR-LLM-Agent与OptiTree经原脚本路径、AutoFormulation经OR-Tools均得到13。该历史证据保留，但不作为当前新代码路径的验收。凭据和运行日志只保留在本机临时工作区，不提交版本控制。
 
-来源：[官方仓库](https://github.com/MIRALab-USTC/OptiTree)，提交`2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9`。阅读范围为template_retrieve.py中的final_template、template_reduce，以及template_opt.py中的reason和reason_run。
+当前代码路径的真实外部模型验收使用配置的官方DeepSeek／deepseek-flash，四个改动方法均完成并得到目标13：OptiMUS→Pyomo／HiGHS（8次请求，32673 tokens），CoE→Pyomo／OR-Tools（3次，15113 tokens），OptiTree→Pyomo／Gurobi（3次，5609 tokens），OR-LLM-Agent→gurobipy／Gurobi（2次，7000 tokens）。运行ID分别为d52abc813770479a95275e6d8e84d0de、db33b677862b4bd3b426097f371390c8、6693f46919d74983949f8b6ae8c7a46e、4f811e5462dd49fdac81657536a5d9a5。记录保存在本机临时验收工作区。
 
-保留逐层类型匹配、终止于最具体可匹配节点、检索该节点的建模思路、实例化问题并按执行反馈调试的流程。固定官方DeepSeek思路树包含320个节点；原始文件、MIT许可和逐文件hash保留在optitree_source。
+完整回归443项，442项通过；唯一失败是仍按原CoE脚本契约编写的安装插件夹具，该夹具更新为新工厂输出后复测通过。新增的12项阶段／恢复检查通过，涵盖Reviewer提示职责、合法不可行结果不触发代码修复，以及三种Solver的已完成执行崩溃恢复。故障注入重现并修复了OR-Tools恢复时误用HiGHS证据来源的问题。当前共有445个测试入口；新增两个边界检查包含在上述聚焦验收中。
 
-本平台独立编写提示词。提示只投影problem_type、description和reason_flow，不读取example_application中的已解训练样例。生成阶段要求显式返回该问题的数学表述和代码；原实现的自由文本／代码输出格式相应改变。树只读，不调用使用参考解的dynamic_adjustment训练流程。模型、预算、资源、代码收集与重试上限由平台配置，因此这是固定树的推理适配，不是论文性能复现。
-
-### OR-LLM-Agent
-
-来源：[官方仓库](https://github.com/bwz96sco/or_llm_agent)，提交`5dccdaab89ab91c3cb28066fe849423dc124d287`。阅读范围为or_llm_eval_async_resilient.py的async_generate_math_model、async_generate_and_run_gurobi_code、async_generate_or_code_solver和async_or_llm_agent。
-
-启用数学建模→代码生成→公开执行错误调试三个阶段。保留原数学表述和各次代码／反馈，调试受方法上限与共享max_repairs双重约束。通过已有隔离Worker执行，独立Gurobi收集器重求解；不信任生成代码打印的目标值。
-
-提示词独立编写，不复制上游代码。采用单一有界调试循环，未保留上游额外的“无数值答案／多次失败后再次反思”外层循环；不可行模型不会因缺少数值答案自动被改成可行模型。使用配置的外部模型而非固定论文模型。实际来源和差异写入每次运行的fidelity-report.json。
-
-### AutoFormulation
-
-来源：[AutoFormulator仓库](https://github.com/jumpynitro/AutoFormulator)，提交`52148018d04de23dc2d36d4281eb6244c2a42ffc`；论文为[ICML 2025 Autoformulation](https://proceedings.mlr.press/v267/astorga25a.html)。阅读范围为MCTS_used.py的五阶段定义、_select_prior、_uct_select、_back_propagate和rollout，以及utils_diff.py的等价过滤。
-
-独立实现参数→决策变量→目标→等式约束→不等式约束五层搜索。每层分别调用假设生成器与自评器，按UCT选择路径；完整叶子转换成严格LPIR，经真实Solver评估，再用公共语义自评产生奖励并回传。保存完整搜索树、访问数、奖励、剪枝、候选和最终选择，不按不同候选的目标值大小排序。
-
-相同部分假设按JSON内容去重。完整LPIR用Z3证明可行域和目标函数等价后才剪枝；未知结果保留两个候选。与上游不同，SMT剪枝位于完整数值LPIR层，不执行LLM生成的符号Python；变量ID／域必须相同，未实现变量重命名等价。提示、表示、默认分支数和rollout数改变；使用分数自评，未实现上游成对排序／Bradley–Terry选项。它是公开输入的有界MCTS变体，不是源码逐字复现。
-
-## 验收
-
-新增检查覆盖真实OR-Tools连续／整数模型、常数项、不可行与无界状态；自然语言OptiMUS；OR-LLM-Agent的分阶段调试；OptiTree的真实树检索及未知类型拒绝；AutoFormulation的不同分支、奖励回传、语义选择和SMT等价／非等价区分。
-
-公共SDK集成测试使用确定性HTTP Provider和真实容器Solver，三种新增方法从自然语言描述生成、执行并保存结果。工程fixture不构成真实LLM效果或论文指标复现。2026-10-14，三个公共SDK集成用例全部通过：自然语言输入，无额外参数文件，真实Gurobi／OR-Tools均得到手算目标13。OR-LLM-Agent用例额外验证执行失败后修复与独立收集。
-
-真实外部模型检查使用已配置的官方DeepSeek接口与deepseek-flash，三种方法均完成并得到目标13：OR-LLM-Agent为2次请求、8799 tokens；OptiTree为3次请求、6486 tokens；AutoFormulation为12次请求、25193 tokens（1个rollout）。对应run_id分别为57e66b509ff240098becb8631c68aaf9、9317b018fa6f410eabe586b47a864530、78ab79f239f5471d9b632c74f268b131。记录位于本机临时验收工作区，凭据、问题运行记录和模型原始日志不提交版本控制。
-
-HiGHS与OR-Tools共存时使用highspy 1.12.0，与OR-Tools 9.15捆绑的HiGHS版本一致。原highspy 1.15.1会在同一进程导入OR-Tools时触发原生符号冲突；上游问题见[google/or-tools#5246](https://github.com/google/or-tools/issues/5246)，版本依据见[OR-Tools 9.15依赖说明](https://github.com/google/or-tools/releases/tag/v9.15)。已验证两种库加载顺序均能真实求解，未增加执行模块或平台适配层。
-
-AutoFormulation的无效LPIR叶子通过公共候选评估记录诊断并取得零奖励；搜索继续探索其他分支，不因一个无效候选终止整次搜索。
-
-最终回归共455项，454项通过；仅旧Executor用例依赖本机预装插件而失败。该用例现按其他插件测试的方式自行构建并安装临时夹具，SDK依赖范围同步至0.37，独立复测通过。求解器、库加载顺序和搜索失败分支的36项聚焦检查通过；mypy检查55个源码模块通过；Web起点、异步状态、模型展示和新增方法／求解兼容性检查通过。
-
-最终wheel／sdist构建与独立基础安装通过，34个插件可发现，离线产物流程通过；wheel源码、固定资源及前端文件与工作区逐字节一致。两类Worker镜像已按兼容依赖构建。本机8767服务已更新，五条运行记录和1262个历史文件保持原字节；真实页面的研究方法选择、兼容性过滤和数学表述展示通过。
+mypy检查54个源码模块通过；345文件仓库检查、引用检查、前端构建通过。临时Web与实际8767页面均通过五个研究方法×三个Solver选择及数学表述展示。最终wheel／sdist构建、独立基础安装、34插件发现、离线运行通过；75个包内源码、固定资源和前端文件与工作区逐字节一致。两类Worker镜像已更新。实现代码净减少504行；未增加新执行层或依赖。本机Web已更新，五条运行和1262个历史文件保持原字节。

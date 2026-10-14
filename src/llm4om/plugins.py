@@ -200,6 +200,9 @@ def _manifest(factory: Any, config: dict[str, Any] | None = None) -> dict[str, A
     capabilities.update(backend_profile={"const": "model_handle/0.1.0"}, handle_profile=handle_profiles["items"],
         solver_profile={"const": "model_handle/0.1.0"}, handle_profiles=handle_profiles,
         result_profile={"enum": ["highs_api/0.1.0", "gurobi_api/0.1.0", "ortools_api/0.1.0"]})
+    capabilities["code_generation"] = {"type": "object", "additionalProperties": False,
+        "required": ["representation_kind", "instruction"], "properties": {
+            "representation_kind": {"enum": ["python_factory", "native_code"]}, "instruction": text}}
     fields = {"schema_version": {"const": "0.2.0"}, "plugin_id": {**text,
               "pattern": r"^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)+$"}, "kind": {"enum": ["method", "llm_provider", "task_adapter", "evaluator", "compiler", "model_backend", "solver_backend", "data_loader", "reporter", "executor", "artifact_store"]},
               "plugin_version": {"type": "string", "pattern": f"^{stable_version}$", "maxLength": 128},

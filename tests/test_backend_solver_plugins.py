@@ -342,7 +342,7 @@ print(json.dumps({'runtime':runtime,'result':result}))
         self.assertEqual(solve["effective_options"]["fixture_component"], "selected_native")
         self.assertTrue((path / "candidates/001/native-model.mps").is_file())
 
-    def test_installed_native_pair_is_used_by_original_coe_script_and_independent_collector(self):
+    def test_installed_native_pair_is_used_by_coe_target_factory_and_independent_collector(self):
         import hashlib
         contract = json.dumps({"code_example": "def prob_case(capacity): pass", "entry_point": "prob_case", "input": {"capacity": 4}}).encode()
         (self.inputs / "contract.json").write_bytes(contract)
@@ -350,14 +350,21 @@ print(json.dumps({'runtime':runtime,'result':result}))
         problem.update(schema_version="0.3.0", description="Maximize 3x, with nonnegative integer x at most capacity.", requirements=[],
             data_refs=[{"data_id": "contract", "path": "contract.json", "format": "json", "schema": {"type": "object"}, "sha256": hashlib.sha256(contract).hexdigest()}])
         (self.inputs / "problem.json").write_text(json.dumps(problem))
-        source = """import gurobipy as gp
-def prob_case(capacity):
-    model = gp.Model()
+        source = """import json
+import gurobipy as gp
+from llm4om.backends import ModelHandle
+def build_model(data):
+    capacity = json.loads(data['contract'])['input']['capacity']
+    env = gp.Env(empty=True)
+    env.setParam('OutputFlag', 0)
+    env.setParam('LogFile', '')
+    env.start()
+    model = gp.Model(env=env)
     x = model.addVar(lb=0, vtype=gp.GRB.INTEGER, name="x")
     model.addConstr(x <= capacity)
     model.setObjective(3*x, gp.GRB.MAXIMIZE)
-    model.optimize()
-    return model.ObjVal
+    model.update()
+    return ModelHandle(model, {'x': x})
 """
         settings = yaml.safe_load((self.inputs / "gurobi.yaml").read_text())
         settings.pop("compiler")
@@ -367,8 +374,9 @@ def prob_case(capacity):
         settings["model_backend"] = {"plugin_id": "llm4om.examples.marking_gurobipy", "config": {"component": "selected_native"}}
         settings["solver"] = {"plugin_id": "llm4om.examples.checking_gurobi", "config": {"component": "selected_native"}}
         settings["executor"]["config"]["image"] = os.environ.get("LLM4OM_TEST_EXECUTION_IMAGE", DEFAULT_IMAGE + "-with-execution")
-        settings["llm"] = self.serve_replies(["Programming Expert", "Use integer x bounded by capacity.", source])
-        config = self.inputs / "script.yaml"
+        settings["llm"] = self.serve_replies(["Programming Expert", "Use integer x bounded by capacity.",
+            json.dumps({"formulation": "max 3x; 0 <= x <= capacity; x integer", "code": source})])
+        config = self.inputs / "coe-factory.yaml"
         config.write_text(yaml.safe_dump(settings))
         result = self.cli("run", "--problem", str(self.inputs / "problem.json"), "--config", str(config), "--output", str(self.root / "runs"))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -378,6 +386,7 @@ def prob_case(capacity):
         self.assertEqual(solve["objective_value"], 12)
         self.assertEqual(solve["effective_options"]["fixture_component"], "selected_native")
         self.assertEqual(solve["solver_id"], "llm4om.examples.checking_gurobi")
+        self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["solver_calls"], 1)
 
 
 if __name__ == "__main__":

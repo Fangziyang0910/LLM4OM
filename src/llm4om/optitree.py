@@ -8,13 +8,13 @@ from typing import Any
 from llm4om.contracts import RunError, parse_json
 from llm4om.methods import MethodContext, MethodOutcome
 from llm4om.or_llm_agent import ORLLMAgentFactory
-from llm4om.prompt_methods import PromptSession, NATIVE_CODE_INSTRUCTION, json_reply
+from llm4om.prompt_methods import PromptSession, json_reply
 
 
 SOURCE: dict[str, Any] = {"upstream_url": "https://github.com/MIRALab-USTC/OptiTree",
     "upstream_commit": "2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9",
-    "variant_id": "optitree-fixed_ds_tree-public_inference/0.1.0",
-    "adaptation": "original_prompts_no_example_answers_no_tree_training", "license": "MIT"}
+    "variant_id": "optitree-fixed_ds_tree-configured_code/0.2.0",
+    "adaptation": "thought_retrieval_configured_backend_solver_no_tree_training", "license": "MIT"}
 
 
 class OptiTreeMethod:
@@ -65,16 +65,16 @@ class OptiTreeMethod:
         session.record("retrieved-thoughts.json", {"node_ids": path, "thought_template": thought,
             "source_sha256": manifest["files"]["thoughts.jsonl"]["sha256"]})
         answer = json_reply(await session.complete("reasoner", "Use the retrieved modeling thoughts to formulate the public "
-            "problem. Include the full mathematical model, then its executable gurobipy implementation. " + NATIVE_CODE_INSTRUCTION
-            .replace("Return only the Python code in one code block.", "Return JSON {formulation:string, code:string}."),
+            "problem. Adapt the thought template to the actual public data. The configured code target overrides any "
+            "implementation API mentioned in the template. Include the full mathematical model and implementation. "
+            + session.code_instruction.replace("Return only the Python source in one code block.", "Return JSON {formulation:string, code:string}."),
             {**session.inputs, "thought_template": thought}))
         if (not isinstance(answer, dict) or set(answer) != {"formulation", "code"}
                 or any(not isinstance(answer[key], str) or not answer[key].strip() for key in answer)):
             raise RunError("invalid_method_reply", "formulation", "OptiTree requires a mathematical model and code.")
-        code, execution_id = await session.debug_script(answer["code"], {**session.inputs, "formulation": answer["formulation"]},
+        return await session.debug_factory(answer["code"], {"mathematical_model": answer["formulation"],
+            "retrieved_type": thought["problem_type"], "tree_path": path}, session.inputs,
             min(self.config["max_debug_attempts"], int(context.budget["max_repairs"])))
-        return session.outcome({"mathematical_model": answer["formulation"], "retrieved_type": thought["problem_type"],
-            "tree_path": path}, code, execution_id)
 
 
 class OptiTreeFactory:

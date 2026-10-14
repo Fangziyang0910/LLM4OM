@@ -99,6 +99,23 @@ class MethodContext:
     deadline: float | None = None
     clarifications: tuple[dict[str, Any], ...] = ()
     data_views: Mapping[str, "DataView"] = field(default_factory=dict)
+    code_target: Mapping[str, Any] | None = None
+
+
+def code_instructions(context: MethodContext) -> str:
+    """Compose the admitted backend contract with the selected Solver identity."""
+    target = context.code_target
+    if target is None:
+        raise RunError("capability_mismatch", "code", "The selected Backend has no code generation contract.")
+    return ("Write a complete Python model factory defining build_model(data). "
+        "data maps each public data_id to its original CSV/JSON bytes; parse the declared format. "
+        "Return llm4om.backends.ModelHandle(model, decision_map). decision_map must name every scalar decision "
+        "variable exactly once using stable public IDs. Use the actual public values, not example values. "
+        "Preserve all requirements, domains, bounds and objective/constraint constants. "
+        "Only finite linear LP/MILP models with one objective are supported. "
+        "Do not solve, print answers, read files/environment or access the network. "
+        "The platform invokes the selected Solver after validated model construction. "
+        + str(target["instruction"]) + "\nCode target: " + json.dumps(dict(target), ensure_ascii=False))
 
 
 class DirectMethod:
@@ -142,18 +159,11 @@ class DirectMethod:
                 "objective={sense:min|max,expression_text,requirement_ids}, "
                 "constraints=[{id,expression_text,requirement_ids}]. "
                 "Use parameterized expressions grounded in the public problem and provided data, not stale literal data. "
-                "python_factory defines build_model(data), where data maps each public data_id to raw CSV/JSON bytes. Parse the declared format. "
-                "Build a concrete Pyomo LP/MILP, and return llm4om.backends.ModelHandle(model, decision_map). "
-                "decision_map maps explicit stable decision IDs to every scalar Pyomo variable, one to one. "
-                "Only real/integer/binary interval domains and finite linear expressions are supported. "
-                "Exactly one active objective is required; preserve objective and constraint constants. "
-                "Do not solve or report answers, read files/environment, or create platform hashes/references. "
+                "Do not create platform hashes/references. "
                 "Source Formulation and factory must express the same public problem."
-            )
+            ) + " " + code_instructions(context)
         if self.output_mode == "native_gurobipy":
-            instructions = instructions.replace("python_factory", "native_gurobipy").replace("concrete Pyomo", "native gurobipy")
-            instructions = instructions.replace("scalar Pyomo variable", "scalar Gurobi variable (including range slack variables)")
-            instructions += " Use gp.Env(empty=True), OutputFlag=0, LogFile=\"\", env.start(), and gp.Model(env=env)."
+            instructions = instructions.replace("representation and python_factory (", "representation and native_gurobipy (")
         if feedback is not None:
             instructions += (" Repair the previous candidate using only the public feedback. "
                 "Also return repair_stage (formulation or code) and a nonempty change_reason. "

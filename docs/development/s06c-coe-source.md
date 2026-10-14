@@ -1,5 +1,7 @@
 # S06-C CoE source investigation
 
+历史记录：本文描述原源码或早期适配。2026-10-14已按用户要求改为保留核心编排、组合目标代码与求解器；当前行为和验收以[方法与求解器扩展](s06-method-expansion.md)为准。
+
 Date: 2026-10-09. Status: **source investigation only**. Platform baseline: `29879a1c2089c914615754d84b22f516697ce2a9`. Scope: approved [S06-C](../implementation-plan.md#s06-原生代码与经典方法适配), extending [source inspection](../references/source-inspection.md). Normative pointers: [GLOSSARY](../../GLOSSARY.md), [coding standards](../../CODING_STANDARDS.md), [contracts](../plugin-contracts.md), [evaluation](../evaluation.md), ADR [0001](../adr/0001-dual-artifact-paths.md), [0003](../adr/0003-independent-plugin-axes.md), [0004](../adr/0004-formulation-and-code.md), [0005](../adr/0005-factory-collector-isolation.md). Proposals below are implementation work, not new normative contracts or completed acceptance.
 
 ## Finding

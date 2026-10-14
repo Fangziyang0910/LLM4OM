@@ -15,7 +15,7 @@
 | 评估 | structural、objective_match、independent_checker | 共同 EvaluationResult | 正确性层次、漏约束反例、not_available |
 | 执行／存储／报告 | container／trusted_local、filesystem、JSONL／CSV／Markdown／HTML | 共同资源接口 | 权限、失败记录、恢复、可复算报告 |
 
-发布要求为 direct 的五元素＋严格 LPIR／工厂 → HiGHS；相同受支持实现 → Gurobi；OptiMUS／CoE 按各自上游实际输出走声明的原生路径。两种经典方法不被强制转换为统一 IR，模型主要使用通用外部 LLM，暂不加载专用训练权重。具体支持声明以真实验收为准。
+当前七个自动方法均通过Pyomo LP/MILP通道选择HiGHS、Gurobi或OR-Tools。OptiMUS／CoE／OptiTree／OR-LLM-Agent保留核心编排和提示思路，生成所选后端的模型工厂；可选gurobipy通道使用Gurobi。数学表述保留方法实际输出，不强制转换为统一IR。论文作为策略来源，完整论文复现不属于当前交付要求。具体支持与验收见[扩展记录](development/s06-method-expansion.md)。
 
 ## 2. 工作项的粒度
 

@@ -139,6 +139,9 @@ class PyomoBackendFactory:
     handle_profile = "pyomo_linear/0.1.0"
     representations = ["python_factory"]
     dependencies = ["Pyomo"]
+    code_generation = {"representation_kind": "python_factory",
+        "instruction": "Build a concrete Pyomo model using pyomo.environ. Use real/integer/binary interval domains. "
+            "The decision_map values are scalar Pyomo variables."}
 
     def describe(self) -> dict[str, Any]:
         return {"schema_version": "0.2.0", "plugin_id": self.plugin_id, "kind": "model_backend",
@@ -146,7 +149,7 @@ class PyomoBackendFactory:
             "description": "Worker-local linear model construction and validated export.",
             "capabilities": {"backend_profile": "model_handle/0.1.0", "handle_profile": self.handle_profile,
                 "problem_types": ["lp", "milp"], "input_artifact_kinds": self.representations,
-                "output_artifact_kinds": ["model_handle"]},
+                "output_artifact_kinds": ["model_handle"], "code_generation": self.code_generation},
             "config_schema": {"type": "object", "additionalProperties": False},
             "dependencies": {"python": self.dependencies}, "source": None}
 
@@ -161,6 +164,9 @@ class GurobiBackendFactory(PyomoBackendFactory):
     handle_profile = "gurobipy_linear/0.1.0"
     representations = ["native_code"]
     dependencies = ["gurobipy"]
+    code_generation = {"representation_kind": "native_code",
+        "instruction": "Build a native gurobipy model. Use gp.Env(empty=True), OutputFlag=0, LogFile='', "
+            "env.start() and gp.Model(env=env). The decision_map values are Gurobi variables, including range slack variables."}
 
     def create(self, config: dict[str, Any]) -> ModelBackend:
         if config:
