@@ -38,13 +38,13 @@ uv run --locked --all-extras python scripts/build_worker_image.py  # 构建 Dock
 ### Web 工作台（推荐入口）
 
 ```bash
-# 在仓库根目录的 .env 配置 LLM4OM_LLM_BASE_URL / LLM4OM_LLM_MODEL / LLM4OM_LLM_API_KEY（见 .env.example）
+# 可选：在 .env 设置默认服务；也可启动后在页面填写接口协议、地址、模型名和 API Key
 uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --host 127.0.0.1
 ```
 
 浏览器打开 `http://127.0.0.1:8767` 即可：输入自然语言问题与数据 → 选择方法 → 观察真实建模步骤 →
 查看五元素表述、求解代码、决策结果与运行记录，支持数据预览、模型数值编辑、派生求解、候选比较、
-决策试算、人工修订与内置 Benchmark 浏览。样例直接复用 OPT-Agent 已整理的 9 组、2033 条题面，可逐条复制或带入建模，无需上传数据集。详情见[内置样例记录](docs/development/s09-builtin-benchmarks.md)。访问令牌由服务启动时生成，页面自动获取；LLM 凭据只保留在服务端。
+决策试算、人工修订与内置 Benchmark 浏览。样例直接复用 OPT-Agent 已整理的 9 组、2033 条题面，可逐条复制或带入建模，无需上传数据集。详情见[内置样例记录](docs/development/s09-builtin-benchmarks.md)。访问令牌由服务启动时生成，页面自动获取。LLM 可在页面选择协议、填写 Base URL、模型名和 Key；密钥不写入公开配置、记录或导出。会话与恢复行为见[LLM 配置记录](docs/development/s09-llm-settings.md)。
 `--host 0.0.0.0` 可供局域网访问，但此时 Origin 校验是 CSRF 缓解而非认证，请勿暴露于不受信网络。
 页面源码在 `frontend/`（React + TypeScript），仓库自带已构建的静态资源；改前端后 `npm --prefix frontend run build` 重新生成,流程与浏览器测试见 [CONTRIBUTING](CONTRIBUTING.md)与[S09-D](docs/development/s09-frontend-redesign.md)。
 

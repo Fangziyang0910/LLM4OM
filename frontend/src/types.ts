@@ -292,6 +292,7 @@ export interface ExecutionResult {
 }
 
 export interface ArtifactContents extends Record<string, unknown> {
+  "requested-config.json"?: RunConfig;
   "public-config.json"?: RunConfig;
   "public-problem.json"?: PublicProblem;
   "budget-ledger.json"?: BudgetLedger;

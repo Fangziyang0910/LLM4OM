@@ -5,7 +5,7 @@ export function setApiToken(token: string) {
   apiToken = token;
 }
 
-export async function api<T = unknown>(path: string, value?: unknown): Promise<T> {
+export async function api<T = unknown>(path: string, value?: unknown, apiKey?: string): Promise<T> {
   const response = await fetch(
     path,
     value === undefined
@@ -15,6 +15,7 @@ export async function api<T = unknown>(path: string, value?: unknown): Promise<T
           headers: {
             "Content-Type": "application/json",
             "X-LLM4OM-Token": apiToken,
+            ...(apiKey ? { "X-LLM4OM-Provider-Key": apiKey } : {}),
           },
           body: JSON.stringify(value),
         },

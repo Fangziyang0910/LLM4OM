@@ -4,8 +4,9 @@ import { pretty } from "../ui";
 import { RevisionFields, buildDoc, validateRevision } from "./Revision";
 import type { EditDocument, Notice, Snapshot } from "../types";
 
-export function RevisionEditor({ snapshot, notice, onClose, onSubmitted }: {
+export function RevisionEditor({ snapshot, notice, onClose, onSubmitted, apiKey }: {
   snapshot: Snapshot; notice: Notice; onClose: () => void; onSubmitted: () => Promise<void>;
+  apiKey?: string;
 }) {
   const currentJob = snapshot.job.job_id;
   const current = useRef(snapshot);
@@ -53,7 +54,7 @@ export function RevisionEditor({ snapshot, notice, onClose, onSubmitted }: {
       await api(`/api/jobs/${currentJob}/edit`, {
         edits: problem,
         parent_run_id: editParent.current!.run,
-      });
+      }, apiKey || undefined);
       if (sequence !== requestSequence.current) return;
       onClose();
       notice("人工修订已提交。原运行保留，新结果会记录父运行和预算。");

@@ -31,6 +31,7 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
 }) {
   const [config, setConfig] = useState<RunConfig>(bootstrap.config);
   const [configDraft, setConfigDraft] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState("");
   const [compatNote, setCompatNote] = useState("");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [description, setDescription] = useState("");
@@ -70,6 +71,7 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
           .filter(
             (p) =>
               p.manifest.kind === kind &&
+              !(kind === "llm_provider" && p.manifest.capabilities.provider_profile !== "http_text/0.1.0") &&
               !(kind === "method" && presets[p.manifest.plugin_id]?.hidden) &&
               !p.manifest.capabilities.human_assisted &&
               (!allowed || allowed.includes(p.manifest.plugin_id)),
@@ -133,7 +135,7 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
           problem.description = description;
           payload.problem = problem;
         }
-        const job = await api<JobRecord>("/api/jobs", payload);
+        const job = await api<JobRecord>("/api/jobs", payload, apiKey || undefined);
         notice("运行已提交。");
         await onSubmitted(job);
       } catch (error) {
@@ -151,7 +153,7 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
         const result = await api<{ connectivity_checks: { status: string } }>("/api/doctor", {
           config,
           check_connectivity: checkConnectivity,
-        });
+        }, apiKey || undefined);
         setDoctorResult(result);
         notice(
           result.connectivity_checks.status === "failed"
@@ -340,7 +342,7 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
                 </details>
               </div>
               <div className="panel settings-panel">
-                <h2>建模方法</h2>
+                <h2>建模设置</h2>
                 <div className="field-grid">
                   <label>
                     建模方法
@@ -356,34 +358,61 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
                       ))}
                     </select>
                   </label>
-                  <label className="advanced-field">
-                    LLM 提供方
+                  <label>
+                    LLM 接口类型
                     <select
                       id="provider"
                       value={config.llm?.provider_plugin_id || ""}
                       onChange={(event) => {
+                        const defaults: Record<string, string> = {
+                          "llm4om.providers.openai_compatible": "https://api.openai.com/v1",
+                          "llm4om.providers.anthropic": "https://api.anthropic.com/v1",
+                        };
+                        const provider = event.target.value;
+                        const baseUrl = config.llm.config.base_url;
                         const next = {
                           ...config,
-                          llm: { ...config.llm, provider_plugin_id: event.target.value },
+                          llm: { ...config.llm, provider_plugin_id: provider, config: {
+                            ...config.llm.config,
+                            ...(defaults[provider] && (!baseUrl || Object.values(defaults).includes(baseUrl))
+                              ? { base_url: defaults[provider] } : {}),
+                          } },
                         };
                         setConfig(next);
                       }}
                     >
                       {selectOptions.provider.map((option) => (
                         <option key={option.value} value={option.value} disabled={option.disabled}>
-                          {option.label}
+                          {{ "llm4om.providers.openai_compatible": "OpenAI 兼容协议",
+                            "llm4om.providers.anthropic": "Anthropic 协议" }[option.value] || option.label}
                         </option>
                       ))}
                     </select>
                   </label>
                   <label className="wide">
-                    模型
+                    模型名称
                     <input
                       id="model"
-                      placeholder="模型 ID"
+                      placeholder="填写服务提供的模型 ID"
                       value={config.llm.model}
                       onChange={(event) => setConfig(prior => ({ ...prior, llm: { ...prior.llm, model: event.target.value } }))}
                     />
+                  </label>
+                  <label className="wide">
+                    API 地址（Base URL）
+                    <input id="llm-base-url" type="url" value={config.llm.config.base_url || ""}
+                      placeholder="https://你的服务地址/v1"
+                      disabled={!config.llm.config.credential_env}
+                      onChange={(event) => setConfig(prior => ({ ...prior, llm: { ...prior.llm,
+                        config: { ...prior.llm.config, base_url: event.target.value } } }))} />
+                  </label>
+                  <label className="wide">
+                    API Key
+                    <input id="llm-api-key" type="password" autoComplete="off" spellCheck={false}
+                      value={apiKey} disabled={!config.llm.config.credential_env} maxLength={4096}
+                      placeholder="留空使用本机默认服务的密钥；更换服务时请填写"
+                      onChange={(event) => setApiKey(event.target.value.trim())} />
+                    <span className="hint">密钥只用于当前本机服务会话，不写入运行记录。</span>
                   </label>
                   <label className="advanced-field">
                     建模后端

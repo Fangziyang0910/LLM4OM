@@ -1,0 +1,86 @@
+"use strict";
+const assert = require('node:assert/strict');
+const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || 'playwright');
+const url = process.env.LLM4OM_WEB_TEST_URL;
+assert.ok(url && ['127.0.0.1', 'localhost'].includes(new URL(url).hostname));
+(async () => {
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.LLM4OM_BROWSER_EXECUTABLE, args: ['--no-sandbox'] });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(url);
+    await page.locator('#provider').waitFor({ state: 'visible' });
+    assert.ok(await page.locator('#llm-base-url').isVisible());
+    assert.ok(await page.locator('#llm-api-key').isVisible());
+    assert.equal(await page.locator('#llm-api-key').getAttribute('type'), 'password');
+    await page.locator('#llm-base-url').fill('https://api.openai.com/v1');
+    await page.locator('#provider').selectOption('llm4om.providers.anthropic');
+    assert.equal(await page.locator('#llm-base-url').inputValue(), 'https://api.anthropic.com/v1');
+    const customUrl = 'http://127.0.0.1:9/v1';
+    await page.locator('#llm-base-url').fill(customUrl);
+    await page.locator('#model').fill('my-selected-model');
+    const key = 'synthetic-browser-private-key';
+    await page.locator('#llm-api-key').fill(key);
+    const llm = JSON.parse(await page.locator('#config-json').inputValue()).llm;
+    await page.locator('#method').selectOption('llm4om.methods.optimus');
+    await page.locator('#solver').selectOption('llm4om.solvers.ortools');
+    assert.deepEqual(JSON.parse(await page.locator('#config-json').inputValue()).llm, llm);
+    await page.locator('#provider').selectOption('llm4om.providers.openai_compatible');
+    assert.equal(await page.locator('#llm-base-url').inputValue(), customUrl);
+    assert.equal(await page.locator('#model').inputValue(), 'my-selected-model');
+    assert.equal(await page.locator('#llm-api-key').inputValue(), key);
+    const captures = [];
+    await page.route('**/api/doctor', async route => {
+      captures.push({ body: route.request().postDataJSON(), key: route.request().headers()['x-llm4om-provider-key'] });
+      await route.fulfill({ json: { connectivity_checks: { status: 'not_requested', checks: [] } } });
+    });
+    await page.locator('#doctor').click();
+    await page.waitForFunction(() => document.querySelector('#doctor-result')?.textContent?.includes('未请求网络检查'));
+    await page.route('**/api/jobs', async route => {
+      if (route.request().method() === 'POST') {
+        captures.push({ body: route.request().postDataJSON(), key: route.request().headers()['x-llm4om-provider-key'] });
+        await route.fulfill({ status: 400, json: { error: { message: 'LLM input fixture captured.' } } });
+      } else await route.continue();
+    });
+    await page.locator('#load-example').click();
+    await page.locator('#submit').click();
+    await page.waitForFunction(() => document.querySelector('#notice')?.textContent?.includes('LLM input fixture captured'));
+    assert.equal(captures.length, 2);
+    for (const capture of captures) {
+      assert.equal(capture.key, key);
+      assert.equal(capture.body.config.llm.model, 'my-selected-model');
+      assert.equal(capture.body.config.llm.config.base_url, customUrl);
+      assert.ok(!JSON.stringify(capture.body).includes(key));
+    }
+    assert.ok(!(await page.locator('#config-json').inputValue()).includes(key));
+    assert.ok(!await page.evaluate(value => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }).includes(value), key));
+    const id = 'b'.repeat(32);
+    const savedConfig = JSON.parse(await page.locator('#config-json').inputValue());
+    savedConfig.llm.config.credential_env = 'LLM4OM_WEB_API_KEY';
+    const job = { job_id: id, run_id: id, status: 'failed', created_at: 1, method: savedConfig.method.plugin_id,
+      model: savedConfig.llm.model, description: 'Saved page-key fixture' };
+    const snapshot = { job, bundle: { status: 'failed', error: { code: 'auth_error', message: 'Fixture requires a key.' } },
+      contents: { 'requested-config.json': savedConfig }, artifacts: [], events: [], versions: [], data_previews: {} };
+    await page.route('**/api/jobs/' + id, route => route.fulfill({ json: snapshot }));
+    await page.route('**/api/jobs', route => route.fulfill({ json: { jobs: [job] } }));
+    await page.goto(url);
+    await page.locator('[data-job-id="' + id + '"]').click();
+    await page.getByText('运行密钥', { exact: true }).click();
+    await page.locator('#run-api-key').fill(key);
+    let resumeKey;
+    await page.route('**/api/jobs/' + id + '/resume', async route => {
+      resumeKey = route.request().headers()['x-llm4om-provider-key'];
+      assert.ok(!route.request().postData().includes(key));
+      await route.fulfill({ json: { job_id: id, status: 'queued' } });
+    });
+    const reply = page.waitForResponse('**/api/jobs/' + id + '/resume');
+    await page.locator('#resume').click();
+    assert.equal((await reply).status(), 200);
+    assert.equal(resumeKey, key);
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    assert.deepEqual(errors, []);
+    console.log('Visible LLM protocol/address/model/key, independent choices, private key headers, saved-run refill and narrow layout passed.');
+  } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

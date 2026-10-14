@@ -41,6 +41,7 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
   const [artifactChoice, setArtifactChoice] = useState(new URLSearchParams(location.search).get("artifact") || "");
   const [artifactSelectedByUser, setArtifactSelectedByUser] = useState(Boolean(artifactChoice));
   const [editOpen, setEditOpen] = useState(false);
+  const [apiKey, setApiKey] = useState("");
   const contents = snapshot.contents || {};
   const publicValue = (ref: ArtifactRef | null | undefined) => artifactKey(snapshot, ref);
   const solve = contents[publicValue(snapshot.bundle?.solve_result_ref) || ""] as SolveResult | undefined;
@@ -200,7 +201,7 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
             hidden={snapshot.historical || !["failed", "cancelled"].includes(snapshot.job.status)}
             onClick={async () => {
               try {
-                await api(`/api/jobs/${currentJob}/resume`, {});
+                await api(`/api/jobs/${currentJob}/resume`, {}, apiKey || undefined);
                 notice("操作已提交。");
                 await refreshRun();
               } catch (error) {
@@ -220,7 +221,7 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
                   !confirm("创建派生运行并继承预算记录。真实 LLM 可能产生新的请求费用，是否继续？")
                 )
                   return;
-                await api(`/api/jobs/${currentJob}/resume`, { strategy: "rerun" });
+                await api(`/api/jobs/${currentJob}/resume`, { strategy: "rerun" }, apiKey || undefined);
                 notice("操作已提交。");
                 await refreshRun();
               } catch (error) {
@@ -258,8 +259,18 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
         </div>
       </div>
 
+      {contents['requested-config.json']?.llm?.config?.credential_env === 'LLM4OM_WEB_API_KEY' ? (
+        <details className="advanced-controls">
+          <summary>运行密钥</summary>
+          <label>API Key
+            <input id="run-api-key" type="password" autoComplete="off" spellCheck={false} maxLength={4096}
+              value={apiKey} onChange={(event) => setApiKey(event.target.value.trim())} />
+          </label>
+          <p className="hint">服务重启后，可在此重新提供该运行所用服务的密钥，再恢复、派生重跑或修订。</p>
+        </details>
+      ) : null}
       {editOpen ? (
-        <RevisionEditor key={snapshot.job.run_id} snapshot={snapshot} notice={notice}
+        <RevisionEditor key={snapshot.job.run_id} snapshot={snapshot} notice={notice} apiKey={apiKey}
           onClose={() => setEditOpen(false)} onSubmitted={() => selectRun(currentJob, null).then(() => {})} />
       ) : null}
 
@@ -306,7 +317,7 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
               request={clarificationRequest}
               problem={contents["public-problem.json"]}
               onSubmit={async (payload) => {
-                await api(`/api/jobs/${currentJob}/resume`, payload);
+                await api(`/api/jobs/${currentJob}/resume`, payload, apiKey || undefined);
                 notice("回答已提交，正在恢复。");
                 await refreshRun();
               }}

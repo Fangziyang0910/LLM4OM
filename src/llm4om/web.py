@@ -36,6 +36,7 @@ from llm4om.storage import cancel_run
 
 MAX_REQUEST = 24 * 1024 * 1024
 MAX_FILE = 8 * 1024 * 1024
+WEB_KEY_ENV = 'LLM4OM_WEB_API_KEY'
 
 
 def _json_file(path: Path, value: dict[str, Any]) -> None:
@@ -76,9 +77,10 @@ def _data_preview(raw: bytes, format_name: str, *, total_items: int | None = Non
 
 
 def _application(arguments: list[str], *, deadline: float,
-                 cancellation: CancellationToken) -> dict[str, Any]:
+                 cancellation: CancellationToken, environment: dict[str, str] | None = None) -> dict[str, Any]:
     raw, _, _ = run_owned_process([sys.executable, '-m', 'llm4om', *arguments], b'',
-        deadline=deadline, cancellation=cancellation, cancel_grace_s=10)
+        deadline=deadline, cancellation=cancellation, cancel_grace_s=10,
+        environment={**os.environ, **environment} if environment else None)
     try:
         result = parse_json(raw)
     except RunError as error:
@@ -95,6 +97,28 @@ class WebWorkspace:
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='llm4om-web')
         self.lock = threading.Lock()
         self.active: dict[str, CancellationToken] = {}
+        # shortcut: page keys live for this server session; add durable secrets only if persistent connections are needed.
+        self.credentials: dict[str, dict[str, str]] = {}
+
+    def _request_environment(self, config: dict[str, Any], api_key: str | None) -> dict[str, str]:
+        selected = config['llm']
+        if api_key is None:
+            if selected['config'].get('credential_env') == 'LLM4OM_LLM_API_KEY':
+                environment = credential_environment(Path.cwd() / '.env')
+                default_url = environment.get('LLM4OM_LLM_BASE_URL', 'https://api.openai.com/v1')
+                if (selected['provider_plugin_id'] != 'llm4om.providers.openai_compatible'
+                        or selected['config'].get('base_url', '').rstrip('/') != default_url.rstrip('/')):
+                    raise RunError('auth_error', 'web', 'Enter an API key for the selected LLM endpoint.')
+            return {}
+        if not isinstance(api_key, str) or not 1 <= len(api_key) <= 4096 or any(not 33 <= ord(char) <= 126 for char in api_key):
+            raise RunError('auth_error', 'web', 'API key must be a nonempty printable token without spaces.')
+        previous = selected['config'].get('credential_env')
+        if previous is None:
+            raise RunError('invalid_config', 'web', 'The selected Provider does not declare credential_env.')
+        for selection in [selected, *selected.get('role_models', {}).values()]:
+            if selection['config'].get('credential_env') == previous:
+                selection['config']['credential_env'] = WEB_KEY_ENV
+        return {WEB_KEY_ENV: api_key}
 
     def bootstrap(self) -> dict[str, Any]:
         environment = credential_environment(Path.cwd() / '.env')
@@ -127,15 +151,18 @@ class WebWorkspace:
             config['llm']['config']['proxy_url'] = proxy
         return {'config': config, 'method_presets': presets, 'plugins': inventory['plugins'], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
 
-    def doctor(self, config: dict[str, Any], *, check_connectivity: bool = False) -> dict[str, Any]:
+    def doctor(self, config: dict[str, Any], *, check_connectivity: bool = False,
+               api_key: str | None = None) -> dict[str, Any]:
         if type(check_connectivity) is not bool:
             raise RunError('invalid_request', 'web', 'Connectivity selection must be a boolean.')
+        config = deepcopy(config)
         validate_config(config)
+        environment = self._request_environment(config, api_key) if check_connectivity or api_key is not None else {}
         with tempfile.NamedTemporaryFile(prefix='.llm4om-web-doctor-', suffix='.json', dir=Path.cwd()) as temporary:
             path = Path(temporary.name)
             path.write_text(json.dumps(config, ensure_ascii=False, allow_nan=False))
             return _application(['doctor', '--config', str(path), *(['--check-connectivity'] if check_connectivity else [])], deadline=time.time() + 45,
-                                cancellation=CancellationToken())
+                                cancellation=CancellationToken(), environment=environment)
 
     def _tasks(self) -> dict[str, Path]:
         selected = {}
@@ -378,19 +405,20 @@ class WebWorkspace:
             raise RunError('not_found', 'web', 'No saved run is available to edit.')
         return export_edit(run, operation=operation)
 
-    def submit_edit(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def submit_edit(self, job_id: str, payload: dict[str, Any], *, api_key: str | None = None) -> dict[str, Any]:
         job = self._job(job_id)
         run = self._selected_run(job_id, payload.get('parent_run_id'))
         if run is None:
             raise RunError('not_found', 'web', 'No saved run is available to edit.')
         if not isinstance(payload.get('edits'), dict):
             raise RunError('invalid_edit', 'web', 'Submit a public edit document.')
-        self._start(job_id, 'edit', options={'edits': payload['edits'], 'parent_run_id': run.name})
+        self._start(job_id, 'edit', options={'edits': payload['edits'], 'parent_run_id': run.name}, api_key=api_key)
         return {'job_id': job_id, 'parent_run_id': run.name, 'status': 'queued'}
 
-    def submit(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def submit(self, payload: dict[str, Any], *, api_key: str | None = None) -> dict[str, Any]:
         config = deepcopy(payload['config'])
         validate_config(config)
+        environment = self._request_environment(config, api_key)
         job_id = uuid4().hex
         job = self.root / job_id
         job.mkdir()
@@ -436,18 +464,27 @@ class WebWorkspace:
         record = {'job_id': job_id, 'created_at': time.time(), 'status': 'queued', 'run_id': None,
             'description': problem['description'], 'method': config['method']['plugin_id'], 'model': config['llm']['model']}
         _json_file(job / 'job.json', record)
+        with self.lock:
+            self.credentials[job_id] = environment
         self._start(job_id)
         return record
 
-    def _start(self, job_id: str, action: str = 'run', *, options: dict[str, Any] | None = None) -> None:
+    def _start(self, job_id: str, action: str = 'run', *, options: dict[str, Any] | None = None,
+               api_key: str | None = None) -> None:
         job = self._job(job_id)
         with self.lock:
             if job_id in self.active:
                 raise RunError('run_active', 'web', 'This workspace job is already active.')
             if len(self.active) >= 8:
                 raise RunError('budget_exhausted', 'web', 'At most8 local jobs can be queued.')
+            if api_key is not None:
+                config = parse_json((job / 'input/config.json').read_bytes())
+                if config['llm']['config'].get('credential_env') != WEB_KEY_ENV:
+                    raise RunError('invalid_config', 'web', 'This run uses credentials configured on the server.')
+                self.credentials[job_id] = self._request_environment(config, api_key)
             token = CancellationToken()
             self.active[job_id] = token
+            environment = dict(self.credentials.get(job_id, {}))
         def work() -> None:
             record = parse_json((job / 'job.json').read_bytes())
             try:
@@ -490,7 +527,7 @@ class WebWorkspace:
                         arguments.extend(['--answers', str(answers)])
                     if revised is not None:
                         arguments.extend(['--revised-problem', str(revised)])
-                result = _application(arguments, deadline=deadline, cancellation=token)
+                result = _application(arguments, deadline=deadline, cancellation=token, environment=environment)
                 record.update(status=result['status'], run_id=result['run_id'])
                 record.pop('prior_runs', None)
                 record.pop('error', None)
@@ -514,10 +551,10 @@ class WebWorkspace:
         status = cancel_run(run) if run is not None else 'cancel_requested'
         return {'job_id': job.name, 'status': status}
 
-    def resume(self, job_id: str, options: dict[str, Any]) -> dict[str, Any]:
+    def resume(self, job_id: str, options: dict[str, Any], *, api_key: str | None = None) -> dict[str, Any]:
         if options.get('strategy', 'continue') not in {'continue', 'rerun'}:
             raise RunError('invalid_request', 'web', 'Select continue or explicit rerun.')
-        self._start(job_id, 'resume', options=options)
+        self._start(job_id, 'resume', options=options, api_key=api_key)
         return {'job_id': job_id, 'status': 'queued'}
 
     def read_ref(self, run: Path, ref: dict[str, Any]) -> bytes:
@@ -667,6 +704,9 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                     if not 0 < size <= MAX_REQUEST or self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
                         raise RunError('invalid_request', 'web', 'Send a bounded JSON request.')
                     payload = parse_json(self.rfile.read(size))
+                    api_key = self.headers.get('X-LLM4OM-Provider-Key')
+                    if api_key and json.dumps(api_key)[1:-1] in json.dumps(payload, ensure_ascii=False):
+                        raise RunError('private_input', 'web', 'API key must be separate from public inputs.')
                 if not mutation and address.path in {'/', '/app.js', '/visuals.js', '/style.css'}:
                     name = {'/': 'index.html', '/app.js': 'app.js', '/visuals.js': 'visuals.js', '/style.css': 'style.css'}[address.path]
                     media = {'/': 'text/html; charset=utf-8', '/app.js': 'text/javascript; charset=utf-8', '/visuals.js': 'text/javascript; charset=utf-8', '/style.css': 'text/css; charset=utf-8'}[address.path]
@@ -704,13 +744,14 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                 elif address.path == '/api/jobs' and not mutation:
                     result = {'jobs': workspace.list_jobs()}
                 elif address.path == '/api/doctor' and mutation:
-                    result = workspace.doctor(payload['config'], check_connectivity=payload.get('check_connectivity', False))
+                    result = workspace.doctor(payload['config'], check_connectivity=payload.get('check_connectivity', False),
+                        api_key=self.headers.get('X-LLM4OM-Provider-Key'))
                 elif address.path == '/api/data-preview' and mutation:
                     raw = base64.b64decode(payload['base64'], validate=True)
                     result = _data_preview(raw, payload['format'])
                     result.update(source_sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
                 elif address.path == '/api/jobs' and mutation:
-                    result = workspace.submit(payload)
+                    result = workspace.submit(payload, api_key=self.headers.get('X-LLM4OM-Provider-Key'))
                 elif len(parts) >= 3 and parts[:2] == ['api', 'jobs']:
                     job_id = _identifier(parts[2])
                     query = parse_qs(address.query)
@@ -721,11 +762,11 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                         operation = query.get('operation', ['code'])[0]
                         result = workspace.edit_template(job_id, operation, selected_run)
                     elif len(parts) == 4 and parts[3] == 'edit' and mutation:
-                        result = workspace.submit_edit(job_id, payload)
+                        result = workspace.submit_edit(job_id, payload, api_key=self.headers.get('X-LLM4OM-Provider-Key'))
                     elif len(parts) == 4 and parts[3] == 'cancel' and mutation:
                         result = workspace.cancel(job_id)
                     elif len(parts) == 4 and parts[3] == 'resume' and mutation:
-                        result = workspace.resume(job_id, payload)
+                        result = workspace.resume(job_id, payload, api_key=self.headers.get('X-LLM4OM-Provider-Key'))
                     elif len(parts) == 4 and parts[3] == 'export' and not mutation:
                         self.send(200, workspace.export(job_id, selected_run), 'application/zip')
                         return

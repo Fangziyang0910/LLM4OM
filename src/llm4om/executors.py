@@ -423,12 +423,13 @@ def worker_runtime(limits: dict[str, Any], *, deadline: float | None = None,
 
 
 def run_owned_process(command: list[str], payload: bytes, *, deadline: float,
-                      cancellation: CancellationToken, cancel_grace_s: float = 0) -> tuple[bytes, bytes, int]:
+                      cancellation: CancellationToken, cancel_grace_s: float = 0,
+                      environment: Mapping[str, str] | None = None) -> tuple[bytes, bytes, int]:
     """Supervise an owned trusted resource child under the same run deadline."""
     cancellation.check()
     _check_deadline(deadline)
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, start_new_session=True)
+                               stderr=subprocess.PIPE, start_new_session=True, env=environment)
     diagnostics: list[str] = []
     partial_out, partial_err = b"", b""
     stop_deadline: float | None = None

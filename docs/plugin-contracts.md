@@ -1273,7 +1273,7 @@ SDK／Worker0.34.0的Gateway公开attempt可增加connection_diagnostic，值限
 
 SDK0.31.0的内置HTTPTextFactory配置可增加proxy_url，值为无认证信息的HTTP代理地址，仅允许根路径／无query／fragment。HTTPS目标使用标准CONNECT与TLS校验；SOCKS和代理URL认证未支持。缺省保持直连，环境HTTPS_PROXY不自动选择路由。声明代理时，隔离传输子进程清除NO_PROXY／no_proxy对路由的覆盖；调用进程环境不修改。重定向、共享账本、deadline、取消和未知attempt的恢复规则不变。
 
-公开输入对proxy_url的认证／查询／非根路径执行与Provider URL相同的隐私拒绝。Web可将服务端LLM4OM_LLM_PROXY_URL映射到此公开无凭据配置，API key不进入配置或前端。详见 [实现与验收](development/s05-explicit-proxy.md)。
+公开输入对proxy_url的认证／查询／非根路径执行与Provider URL相同的隐私拒绝。Web可将服务端LLM4OM_LLM_PROXY_URL映射到此公开无凭据配置，API key不进入公开配置或查询响应。页面独立输入与传递 Key 的规则见[LLM 配置](development/s09-llm-settings.md)。详见 [代理实现与验收](development/s05-explicit-proxy.md)。
 
 ## 22. Natural-language method expansion (2026-10-14)
 
@@ -1292,3 +1292,9 @@ The OR-Tools Solver consumes pyomo_linear/0.1.0 handles and declares ortools_api
 GET /api/datasets returns the bundled catalog with task_id, dataset_id, title, description, source_version, source_url, license and N_cases. It is independent of workspace Task imports. GET /api/datasets/TASK_ID?offset&limit verifies bundled case bytes and returns dataset, total and cases; each case has case_id, sample_id, subset, a validated public problem, input={title,problem,data} and copy_text. Defaults are offset=0 and limit=100, with limit capped at 200. Unknown IDs are rejected.
 
 Question projections directly reuse OPT-Agent managers' public get_input() outputs. Private answers, reference solutions and solver code are not bundled or returned. Copy and modeling handoff use the same public input; selecting a sample does not submit a job or change the method/Solver configuration. Maintainer preparation records source commit, paths and hashes; runtime needs no external dataset directory. Original Task/Evaluation APIs remain separate. See [scope and evidence](development/s09-builtin-benchmarks.md).
+
+## 24. Web LLM settings and private keys (2026-10-14)
+
+Web selects an installed http_text/0.1.0 Provider, model and public config.base_url independently of Method/Solver. POST /api/doctor and /api/jobs may privately supply X-LLM4OM-Provider-Key; public JSON still rejects credential fields. Keys are bounded nonempty printable ASCII tokens, without spaces. Page keys replace the default credential_env reference and role references sharing it with LLM4OM_WEB_API_KEY; key values stay in per-job server memory and the owned application's private environment. Process-global environment, public files and generated-code environments are unchanged.
+
+POST /api/jobs/ID/resume or /edit may supply the same header to refill credentials for a saved page-key job after server restart. Existing server-environment jobs retain their original credential source. Page keys never enter bootstrap, inspection, public configuration or exports. Omitting a page key preserves the default .env service; redirecting that default key to another Provider/base_url is rejected before network checks or generation. Pure compatibility doctor calls remain credential-free. See [behavior and evidence](development/s09-llm-settings.md).
