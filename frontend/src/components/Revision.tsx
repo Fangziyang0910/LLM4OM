@@ -349,8 +349,8 @@ export function RevisionFields({
                   .filter(
                     (spec) =>
                       spec.path[0] === "structured_ir" &&
-                      spec.path[2] === "constraints" &&
-                      spec.path[3] === index,
+                      spec.path[1] === "constraints" &&
+                      spec.path[2] === index,
                   )
                   .map(render)}
               </div>

@@ -16,7 +16,7 @@
 
 在编码前确定公共 Interface／Seam 和测试预期。新行为采用一个测试 red → 最小实现 green → 必要重构的小循环。测试从用户入口或真实公共契约观察结果；确定性 fixture 验证工程流程，真实 Provider／Solver 支持仍需真实验收。
 
-按用户2026-10-10的明确指令，当前先编写并交付核心功能和用户界面，再逐步补齐细节与聚焦检查。保留必要信任边界校验、避免数据丢失的错误处理与可访问性；不因每个小改动重复整套回归。用户明确的开发顺序优先于默认的测试顺序。
+按用户2026-10-14的明确指令，当前交付目标是本机后端与Web能启动、展示并支持继续开发。复用已有模块，不新增公网多人部署或多平台适配；修改只检查受影响路径，较大交付节点再集中回归。保留必要信任边界校验、避免数据丢失的错误处理与可访问性。用户明确的开发范围和顺序优先于默认的发布验收流程。
 
 实现复用已有模块，新增 Adapter 对应真实变化维度。Formulation／Code 的公共输入输出和真实来源分别检查；修改阶段语义时读 ADR-0004 和契约。改变领域词时更新 glossary；发生需要留存的架构取舍时写简短 ADR。字段、状态、版本或指标变化同步其事实来源、使用方、fixture 与验收项。
 
@@ -62,14 +62,15 @@ uv run --locked --extra solve python tests/helpers/web_guidance_server.py --work
 LLM4OM_WEB_TEST_URL=http://127.0.0.1:8774 \
 LLM4OM_WEB_TEST_PROVIDER_URL=http://127.0.0.1:8775 \
 LLM4OM_WEB_TEST_WORKSPACE=/tmp/llm4om-web-fixture/jobs \
-LLM4OM_BROWSER_MODULE=frontend/node_modules/playwright \
-LLM4OM_BROWSER_EXECUTABLE="$HOME/.cache/ms-playwright/chromium-*/chrome-linux*/chrome" \
+LLM4OM_BROWSER_MODULE="$PWD/frontend/node_modules/playwright" \
+LLM4OM_BROWSER_EXECUTABLE=/absolute/path/to/chrome \
 node tests/web_story_flow.cjs
 ```
 
 - 直接读运行目录的用例（`web_edit_flow`／`web_model_edit_flow`／`web_clarification_flow`）要求 `LLM4OM_WEB_TEST_WORKSPACE` 指向 `<workspace>/jobs`（其下即 `<job_id>/`）；其余用例只需该变量存在。
-- fixture 顺序：`web_clarification_flow` 先跑（其末尾修订生成 revision-2 运行），`web_edit_flow` 依赖该已完成运行；`web_model_flow` 读取 jobs[0] 的最新版本，须在 `web_edit_flow` 之前（或独立工作区）运行，否则修订版本的假设记录会改变其断言对象；story／start／failure／keyboard 等自成体系，可独立工作区运行；`web_datasets_flow` 自带确定性导入，须以 `LLM4OM_WEB_TEST_WORKSPACE` 指向服务器工作区（`<ws>/jobs`）运行，测试会把数据集冻结到该工作区 `tasks/` 下。
-- `web_decision/data/process/links/runtime/candidates/connectivity_check/history` 依赖一次性真实历史运行数据，当前需另行准备真实记录工作区（对照证据见 [#87](https://github.com/Fangziyang0910/LLM4OM/issues/87)）。
+- fixture 顺序：`web_clarification_flow` 先跑（其末尾修订生成 revision-2 运行），`web_edit_flow` 依赖该已完成运行；`web_model_flow` 须在 `web_edit_flow` 之前（或独立工作区）运行，否则修订版本的假设记录会改变其断言对象。严格IR编辑使用独立工作区按 `web_story_flow` → `web_model_edit_flow` 运行，变量为 `qty_A/qty_B`，派生目标为3；story／start／failure／keyboard 等可独立运行。`web_datasets_flow` 自带确定性导入，测试会把数据集冻结到该工作区 `tasks/` 下。
+- 连通性测试单独使用 `uv run --locked --extra solve python tests/helpers/connectivity_server.py --workspace /tmp/llm4om-connectivity-fixture`，再以 `LLM4OM_WEB_TEST_URL=http://127.0.0.1:8796`、`LLM4OM_WEB_TEST_PROVIDER_URL=http://127.0.0.1:8797` 运行 `web_connectivity_check_flow.cjs`；guidance Provider不提供模型目录GET。
+- `web_decision/data/process/links/runtime/candidates/history` 是特定历史运行的手工复查脚本，需要匹配其样本、变量名、版本与调用记录；不把它们在通用guidance工作区中的失败作为本机启动展示的验收条件。当前核心流程以story、模型、编辑、数据集及对应公共HTTP测试验收；历史脚本来源见 [#87](https://github.com/Fangziyang0910/LLM4OM/issues/87)。
 - Chrome 路径按本机 Playwright 安装调整；`LLM4OM_BROWSER_MODULE` 指向 `frontend/node_modules/playwright`（devDependency）。
 
 ## 4. Review 与交付

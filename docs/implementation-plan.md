@@ -152,9 +152,11 @@ flowchart LR
     S09B --> S10
 ```
 
-当前SDK／Worker为0.36.0开发版本。单问题CLI／SDK／Web、外部Provider、HiGHS／微型Gurobi、Direct／反馈修正／固定OptiMUS／CoE、三个首批任务来源、批量调度与报告已有实现。各版本的支持组合与验收证据保留在对应切片记录；[用户界面](development/s09-user-experience.md)包含当前输入、真实步骤、数据、模型、决策与派生编辑。
+当前SDK／Worker为0.37.0开发版本。单问题CLI／SDK／Web、外部Provider、HiGHS／微型Gurobi、Direct／反馈修正／固定OptiMUS／CoE、三个首批任务来源、批量调度与报告已有实现。各版本的支持组合与验收证据保留在对应切片记录；[用户界面](development/s09-user-experience.md)包含当前输入、真实步骤、数据、模型、决策与派生编辑。
 
-2026-10-11 S08-B官方API全九格重跑完成：9/9真实接入、连接失败清零、4/4数值参考匹配，3格方法性失败（CoE collector×2、Direct单次输出×1）如实记录；五组切片独立Standards／Spec审阅全部完成（唯一P1/P2已当场修复）。剩余：S10发布验收；S08-C真实批量调度故障恢复已于2026-10-11通过（99格真实Provider、SIGINT取消＋resume零丢失，见[S08-C](development/s08-load-acceptance.md)）；全部插件种类已具备共同注册入口。当前按用户指令优先推进核心流程和Web，批量评测与底层扩展暂缓；完整1.0目标和验收范围保持。当前外部接口可达性以实际请求记录为依据，不由历史成功或Mock推定。2026-10-11起真实核心流程已按用户指令切换到DeepSeek官方API并完成端到端恢复（一次真实LLM调用、容器HiGHS目标13），此前中转链路的连接失败不再影响新运行。
+2026-10-14当前交付范围按用户指令收窄为本机后端与Web能启动、展示并继续开发。复用已有接口，聚焦验证受影响路径；公网多人部署、多平台适配和正式发布动作不作为本轮收尾条件。前端旧规格中的原始JSON与批量页面入口已由后续需求替换，当前界面和验收流程见 [S09-D](development/s09-frontend-redesign.md)。
+
+2026-10-11 S08-B官方API全九格重跑完成：9/9真实接入、连接失败清零、4/4数值参考匹配，3格方法性失败（CoE collector×2、Direct单次输出×1）如实记录；五组切片独立Standards／Spec审阅全部完成（唯一P1/P2已当场修复）。S08-C真实批量调度故障恢复已通过（99格真实Provider、SIGINT取消＋resume零丢失，见[S08-C](development/s08-load-acceptance.md)）；全部插件种类已具备共同注册入口。发行标签与公开发布动作留待实际发布任务安排。当前优先推进核心流程和Web，批量评测与底层扩展按实际需求安排。外部接口可达性以实际请求记录为依据，不由历史成功或Mock推定。2026-10-11起真实核心流程已切换到DeepSeek官方API并完成端到端恢复（一次真实LLM调用、容器HiGHS目标13），此前中转链路的连接失败不再影响新运行。
 
 2026-10-10按用户要求暂停开发，将现有代码与文档统一到main，并关闭当前全部PR和Issue。关闭工作项是本次仓库整理，不代表未完成能力已实现或完整1.0验收通过。后续工作以本计划与[验收清单](acceptance.md)为依据。暂停前两次最新真实LLM请求在连接阶段失败；2026-10-11恢复开发时已改用官方API完成真实端到端验证，该前提解除。
 
@@ -172,21 +174,21 @@ S07-B 当前已贯通 NLP4LP 固定发布导入、公开 JSON 参数／私有参
 
 S05-C1候选资源见 [记录](development/s05-public-candidates.md)；S05-C2有界修正、解析失败入账、声明变化与Code-only来源复用见 [记录](development/s05-feedback-repair.md)；S05-D2原声明确认、新修订与派生运行见 [记录](development/s05-clarification.md)。2026-10-11五组独立Standards／Spec审阅全部完成（唯一P1/P2已当场修复）。完整注册、批量／报告、Web及发布验收已按各自切片记录完成。
 
-S03-C1扩展当前Registry到独立文本Provider，见 [记录](development/s03-provider-registry.md)。其余插件种类仍待接入；该切片不替代S08／S09／S10。
+S03-C1独立文本Provider接入与身份校验见 [记录](development/s03-provider-registry.md)。全部插件种类的共同注册已完成，当前支持以各切片记录为准。
 
-S03-C2接入独立Task／Evaluator，见 [记录](development/s03-task-registry.md)。其余插件种类、S08／S09／S10及独立审阅继续推进。
+S03-C2独立Task／Evaluator接入与冻结身份见 [记录](development/s03-task-registry.md)；独立审阅已完成。
 
-S03-C3a接入独立grounded LPIR→Pyomo Compiler，见 [记录](development/s03-compiler-registry.md)。Backend／Solver已有本机验收，其他插件种类、S08／S09／S10和独立审阅继续推进。
+S03-C3a独立grounded LPIR→Pyomo Compiler与Worker身份见 [记录](development/s03-compiler-registry.md)；Backend／Solver及其余插件种类已有本机验收和独立审阅。
 
 S03-C3b由 [#43](https://github.com/Fangziyang0910/LLM4OM/issues/43)跟踪，Backend／Solver共同接口与实际Worker路径已完成本机验收，见 [开发状态](development/s03-solver-registry.md)。
 
-S03-C4由 [#45](https://github.com/Fangziyang0910/LLM4OM/issues/45)跟踪。DataLoader通过共同Registry接入；原始数据、有限视图与模型绑定分别保留，见 [开发状态](development/s03-data-loader.md)。Executor／ArtifactStore／Reporter和S08／S09／S10继续推进。
+S03-C4由 [#45](https://github.com/Fangziyang0910/LLM4OM/issues/45)跟踪。DataLoader通过共同Registry接入；原始数据、有限视图与模型绑定分别保留，见 [开发状态](development/s03-data-loader.md)。Executor／ArtifactStore／Reporter的共同注册也已完成。
 
 按2026-10-10用户对推进节奏的反馈，当前优先交付S09-A本地单问题工作台，再推进S08批量实验与报告。S09-A所需现有单问题、预检、隔离、取消／恢复已具备；其开发不依赖其余注册接口完成。完整插件注册与S09-B／S10仍在范围内，按实际使用路径补齐。开发采用聚焦测试与实际功能演示，完整回归集中到较大的交付节点。
 
 S09-A [#49](https://github.com/Fangziyang0910/LLM4OM/issues/49)已编写本地页面与运行接口，并完成真实网页HTTP→DeepSeek→容器HiGHS13。当前优先推进功能，之后集中完善细节与测试。浏览器视觉与完整交互已按 [S09用户体验](development/s09-user-experience.md)记录验收；S08批量／报告、S09-B、其余接口和S10见对应切片记录。
 
-S03 Reporter注册／单问题与实验呈现见[记录](development/s03-reporters.md)；ArtifactStore注册与run_store/0.1.0打开契约见[记录](development/s03-store-registry.md)；100任务批量故障恢复及完整S10继续推进。
+S03 Reporter注册／单问题与实验呈现见[记录](development/s03-reporters.md)；ArtifactStore注册与run_store/0.1.0打开契约见[记录](development/s03-store-registry.md)。批量故障恢复已有实际验收，发布动作不阻塞当前本机Web开发。
 
 2026-10-10 用户进一步明确优先级：先做好面向用户的单问题 Web 使用界面和真实核心流程，展示方法内部步骤、数学模型、求解实现与决策结果。批量 benchmark、其余边缘适配与大规模回归暂缓；完整1.0范围保持，但不以这些任务阻塞页面交付。当前实现见 [S09 用户体验](development/s09-user-experience.md)和 [#64](https://github.com/Fangziyang0910/LLM4OM/issues/64)。
 

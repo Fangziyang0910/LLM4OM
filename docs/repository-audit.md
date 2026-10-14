@@ -308,7 +308,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/specs/benchmark-run.yaml` | 真实外部模型／HiGHS 批量配置 | 无凭据、显式资源与预算 |
 | `docs/development/s08-benchmark.md` | 批量功能、使用入口与证据范围 | 接口与评测协议一致；剩余验收不冒称完成 |
 
-| `tests/test_web_experiments.py` | 公共HTTP批量入口验收 | SyntheticProvider、真实HiGHS、原问题检查、报告与完成继续 |
+| `tests/test_web_experiments.py` | 公共HTTP批量入口验收 | 临时工作目录隔离旧快照、SyntheticProvider、真实HiGHS、报告与完成继续 |
 | `docs/development/s09-batch-web.md` | 网页实验功能和实际支持 | 共同应用接口、私有边界、剩余验收 |
 
 | `src/llm4om/assisted.py` | 公开编辑文档、共同Method适配和派生用例 | 父引用、原始数据、表示契约、预算与assisted来源 |
@@ -357,7 +357,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/web_connection_flow.cjs` | 连接失败的本机Chrome验收 | 固定诊断解释、未知用量、旧记录和无关错误保持，零POST |
 | `tests/web_decision_flow.cjs` | 当前候选模型的决策试算交互 | 已保存真实解、目标／约束代入、恢复、轮询保持、窄屏，零POST |
 | `tests/web_candidates_flow.cjs` | 候选与修正的本机浏览器验收 | 实际双候选、最终选择、声明变化、模型／代码定位、完整列表与窄屏，零POST |
-| `tests/web_model_edit_flow.cjs` | 严格IR普通表单的浏览器验收 | 数值编辑／表述同步、派生版本、真实容器HiGHS、父记录与预算保持、窄屏 |
+| `tests/web_model_edit_flow.cjs` | 严格IR普通表单的浏览器验收 | guidance变量与容量约束、输入框完整、增删约束与文档同步、真实HiGHS3、父记录与预算保持 |
 | `tests/web_links_flow.cjs` | 运行页面链接的本机浏览器验收 | 固定版本链接、刷新恢复产物与导出、最新选择、新问题与窄屏，零POST |
 | `tests/web_runtime_flow.cjs` | 可读运行与求解资源的浏览器验收 | 实际版本资源、界限／Gap／执行资源、未知量保持、窄屏，零POST |
 | `tests/test_connectivity.py` | CLI显式目录检查 | 默认零HTTP、两协议认证、未知支持与零生成，凭据不导出 |

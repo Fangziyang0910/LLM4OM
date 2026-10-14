@@ -24,7 +24,16 @@
 ## 验收口径
 
 - 测试缝不变:Playwright `.cjs` 流程测试跑在**构建产物**上(真实 `serve_web` + `tests/helpers/web_guidance_server.py` 确定性 Provider),命令见 [CONTRIBUTING](../../CONTRIBUTING.md)。新增用例:story / code_view / start / failure / keyboard;回归通过:clarification / model / connection / edit(需按 #87 既定 fixture 顺序准备,见 CONTRIBUTING 注)。
-- 环境与 fixture 限制:#87 记录的 9 个历史数据型用例(decision/data/process/links/runtime/candidates/connectivity_check/history/model_edit)仍需另行准备真实记录工作区;`test_web_experiments.test_http_batch_real_solver` 在干净 HEAD 上同样失败(预先存在的环境问题)。
-- 后端契约零改动;唯一 Python 侧变化是 #87 披露的资产断言等价迁移。Python web API 测试(`test_web_*.py`)预期零改动,实际零改动。
+- 当前核心验收使用本机确定性Provider与真实HiGHS。批量HTTP测试从临时目录启动，避免误选仓库`runs/`里的旧SDK快照；严格IR编辑按story→model_edit使用`qty_A/qty_B`与容量约束fixture；连通性使用单独的metadata服务器。命令与顺序见CONTRIBUTING。
+- decision/data/process/links/runtime/candidates/history是指定历史样本的手工复查脚本，不在通用guidance工作区中混跑。当前用户要求是本机后端与Web能启动、展示并继续开发，这些特定历史重放不作为本轮收尾门槛。
+- React迁移保留原应用接口；后续#101增加数据集浏览接口。本轮未改生产后端契约，Python测试只修正批量服务器的工作目录。
+
+## 本机开发收尾（2026-10-14）
+
+- 按用户当前范围交付本机后端与Web，不增加公网多人部署、多平台适配或发布流程。旧规格的原始JSON入口与批量页面要求由#98替换。
+- 修复严格IR编辑器的约束字段筛选：字段路径为`structured_ir/constraints/index/...`，恢复系数、关系与右侧值输入。浏览器测试先复现缺少输入框，再经两行修复通过；测试同时更新为当前fixture标识，并等待React完成编辑文档更新。
+- 聚焦验收：批量HTTP两例通过；story、model_edit、datasets、code_view、keyboard通过。模型编辑实际HiGHS得到派生目标3，父目标13的bundle字节不变，没有新增模型请求。
+- 复用同一开发基线的既有441项回归中440项通过的证据；唯一失败的批量用例因误选SDK0.25快照，已修正工作目录并聚焦通过。此前12条浏览器核心流程与干净wheel／容器HiGHS13证据继续保留，没有再跑整套回归或付费LLM。
+- 本机8767后端已重启加载当前代码，页面、静态资源、数据集与运行接口均返回200；5个历史运行与工作区1262个文件的内容校验保持一致。前端构建通过，wheel包含当前三份静态资源。
 
 SDK／Worker 版本未变;无新增运行时外部依赖(React/Vite/TypeScript/Playwright 均为前端开发依赖,不进 Python 包)。

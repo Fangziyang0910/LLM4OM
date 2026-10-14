@@ -6,7 +6,7 @@ const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || "playwright");
 const url = process.env.LLM4OM_WEB_TEST_URL;
 const workspace = process.env.LLM4OM_WEB_TEST_WORKSPACE;
 assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
-assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
+assert.ok(workspace, "Use a disposable guidance workspace after web_story_flow.");
 (async () => {
   const browser = await chromium.launch({
     headless: true,
@@ -36,37 +36,41 @@ assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
     const bytes = fs.readFileSync(parent);
     await page.click("#edit-run");
     await page.selectOption("#edit-operation", "formulation");
-    await page.getByLabel("x_A · 上界", { exact: true }).waitFor();
+    await page.getByLabel("qty_A · 上界", { exact: true }).waitFor();
     assert.equal(
       await page.locator("#revision-advanced").getAttribute("open"),
       null,
     );
     for (const [label, value] of [
-      ["x_A · 上界", "1"],
-      ["x_B · 上界", "1"],
+      ["qty_A · 上界", "1"],
+      ["qty_B · 上界", "1"],
       ["目标 · 常数", "1"],
-      ["目标 · x_A 系数", "4"],
-      ["C_CUTTING · 右侧值", "3"],
-      ["C_FINISHING · 右侧值", "3"],
+      ["目标 · A 系数", "4"],
+      ["capacity_cutting · 右侧值", "3"],
+      ["capacity_finishing · 右侧值", "3"],
       ["候选总上限", "2"],
       ["求解次数总上限", "2"],
     ])
       await page.getByLabel(label, { exact: true }).fill(value);
     await page
       .getByLabel("修改原因", { exact: true })
-      .fill("调整已有数值，并新增 x_A ≤ 0 约束，检查普通表单的结构修订。");
+      .fill("调整已有数值，并新增 qty_A ≤ 0 约束，检查普通表单的结构修订。");
     await page
       .getByRole("button", { name: "＋ 添加约束", exact: true })
       .click();
-    await page.getByLabel("C_USER_1 · x_A 系数", { exact: true }).fill("1");
+    await page.getByLabel("C_USER_1 · A 系数", { exact: true }).fill("1");
     await page
       .getByRole("button", { name: "＋ 添加约束", exact: true })
       .click();
     await page
       .getByRole("button", { name: "移除约束 C_USER_2", exact: true })
       .click();
+    await page.waitForFunction(() => {
+      const draft = JSON.parse(document.querySelector("#assisted-document").value);
+      return draft.structured_ir.constraints.length === 3;
+    });
     assert.match(
-      await page.getByLabel("修改原因", { exact: true }).inputValue(),
+      await page.locator(".revision-field").filter({ hasText: "修改原因" }).locator("textarea").inputValue(),
       /新增/,
     );
     const draft = JSON.parse(
@@ -76,7 +80,7 @@ assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
     assert.equal(draft.formulation.representation.variables[0].upper_bound, 1);
     assert.match(
       draft.formulation.representation.objective.expression_text,
-      /4\*x_A/,
+      /4\*qty_A/,
     );
     assert.match(
       draft.formulation.representation.constraints[0].expression_text,
@@ -84,11 +88,11 @@ assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
     );
     assert.deepEqual(
       draft.structured_ir.constraints.map((item) => item.id),
-      ["C_CUTTING", "C_FINISHING", "C_USER_1"],
+      ["capacity_cutting", "capacity_finishing", "C_USER_1"],
     );
     assert.match(
       draft.formulation.representation.constraints.at(-1).expression_text,
-      /1\*x_A.*<= 0$/,
+      /1\*qty_A.*<= 0$/,
     );
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(

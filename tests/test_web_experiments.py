@@ -82,7 +82,7 @@ class WebExperimentTests(unittest.TestCase):
                 port = allocation.getsockname()[1]
             environment = {**os.environ, 'LLM4OM_WEB_BATCH_TEST_KEY': 'synthetic-web-batch-key'}
             process = subprocess.Popen([sys.executable, '-m', 'llm4om', 'serve', '--workspace', str(root), '--port', str(port)],
-                                       env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                                       cwd=root, env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             try:
                 opener = build_opener(ProxyHandler({}))
                 url = f'http://127.0.0.1:{port}'
