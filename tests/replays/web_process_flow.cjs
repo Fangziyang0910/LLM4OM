@@ -21,7 +21,7 @@ assert.ok(url && ["localhost", "127.0.0.1"].includes(new URL(url).hostname));
     });
     await page.goto(url);
     await page.waitForFunction(
-      () => document.querySelector("#method").options.length > 0,
+      () => document.querySelector("#method")?.options.length > 0,
     );
     for (const method of [
       "llm4om.methods.optimus_inline",

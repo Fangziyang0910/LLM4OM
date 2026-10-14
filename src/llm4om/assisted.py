@@ -112,29 +112,29 @@ def _config(store: RunStore) -> dict[str, Any]:
 
 
 def _template(store: RunStore, operation: str) -> dict[str, Any]:
-    from llm4om.application import _load_verified_record
+    from llm4om.run_records import load_run_record
     if operation not in ('problem', 'formulation', 'code'):
         raise RunError('invalid_edit', 'admission', 'Choose problem, formulation or code editing.')
     problem_ref = store.projections.get('public-problem.json')
     if problem_ref is None:
         raise RunError('edit_unavailable', 'admission', 'The parent has no saved public problem.')
-    problem = _load_verified_record(store, problem_ref)
+    problem = load_run_record(store, problem_ref)
     config = _config(store)
-    artifact = _load_verified_record(store, store.state['artifact_ref']) if store.state.get('artifact_ref') else None
+    artifact = load_run_record(store, store.state['artifact_ref']) if store.state.get('artifact_ref') else None
     formulation = ir = code = None
     if operation != 'problem':
         if artifact is None:
             raise RunError('edit_unavailable', 'admission', 'The parent has no saved modeling output.')
         if artifact.get('formulation_ref'):
-            formulation = _load_verified_record(store, artifact['formulation_ref'])
+            formulation = load_run_record(store, artifact['formulation_ref'])
             if formulation.get('structured_ir_ref'):
-                ir = _load_verified_record(store, formulation['structured_ir_ref'])
+                ir = load_run_record(store, formulation['structured_ir_ref'])
         if artifact.get('code_ref'):
-            saved = _load_verified_record(store, artifact['code_ref'])
+            saved = load_run_record(store, artifact['code_ref'])
             source_ref = saved['representation_ref']
             source = read_public_bytes(store.path / source_ref['relative_path'], max_bytes=8 * 1024 * 1024).decode()
             if operation == 'code' and saved['provenance']['origin'] == 'deterministic_compilation':
-                symbols = _load_verified_record(store, saved['provenance']['symbol_map_ref'])['variables']
+                symbols = load_run_record(store, saved['provenance']['symbol_map_ref'])['variables']
                 # Compiled factories return ConcreteModel; explicit edit source exposes the transport adapter.
                 source += ('\n# Assisted template: preserve the saved symbol map and return the common ModelHandle.\n'
                     'from llm4om.backends import ModelHandle\n_assisted_build = build_model\n'
@@ -142,7 +142,7 @@ def _template(store: RunStore, operation: str) -> dict[str, Any]:
                     f'    symbols = {symbols!r}\n'
                     '    return ModelHandle(model, {name: model.variables[index] for name, index in symbols.items()})\n')
             code = {'representation_kind': saved['representation_kind'], 'source': source,
-                    'data_json': _load_verified_record(store, saved['data_json_ref']) if saved.get('data_json_ref') else None}
+                    'data_json': load_run_record(store, saved['data_json_ref']) if saved.get('data_json_ref') else None}
         if operation == 'code' and code is None:
             raise RunError('edit_unavailable', 'admission', 'The parent has no saved executable code.')
     return {'schema_version': '0.1.0', 'operation': operation, 'reason': '', 'budget': config['budget'],
@@ -163,8 +163,9 @@ def export_edit(run: Path, *, operation: str = 'code') -> dict[str, Any]:
 
 def edit_run(run: Path, edits: Path, *, cancellation: CancellationToken | None = None) -> 'RunResult':
     """Create a new assisted revision, preserving parent bytes and paid/unknown usage."""
-    from llm4om.application import _load_verified_record, _initialize_derived_run
-    from llm4om.providers import Gateway
+    from llm4om.run_records import load_run_record
+    from llm4om.application import _initialize_derived_run
+    from llm4om.gateway import Gateway
     value = parse_json(read_public_bytes(edits, max_bytes=24 * 1024 * 1024))
     store = open_run_store(saved_store_selection(run), run.parent, resume=run)
     child = None

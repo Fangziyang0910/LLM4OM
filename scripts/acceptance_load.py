@@ -17,7 +17,7 @@ from typing import Any
 import yaml
 
 from llm4om import import_dataset, run_experiment
-from llm4om.application import _sdk_sha256
+from llm4om.runtime_identity import sdk_sha256
 
 
 def write(path: Path, value: dict[str, Any]) -> None:
@@ -105,7 +105,7 @@ def main() -> int:
     median = statistics.median(baseline)
     overhead = sorted(row["elapsed_s"] - median for row in rows)
     p95 = overhead[math.ceil(0.95 * len(overhead)) - 1]
-    record = {"runtime": {"python": platform.python_version(), "platform": platform.platform(), "sdk_sha256": _sdk_sha256(),
+    record = {"runtime": {"python": platform.python_version(), "platform": platform.platform(), "sdk_sha256": sdk_sha256(),
         "cpu_max": cpu, "memory_max": memory}, "N_selected": len(rows), "N_saved": len(rows),
         "baseline_N": len(baseline), "baseline_median_s": median, "batch_wall_time_s": elapsed,
         "scheduled_task_elapsed_s": [row["elapsed_s"] for row in rows], "extra_time_p95_s": p95,

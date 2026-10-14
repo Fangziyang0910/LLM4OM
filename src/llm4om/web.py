@@ -29,6 +29,8 @@ from llm4om.executors import run_owned_process
 from llm4om.experiments import LIMITS, cancel_experiment
 from llm4om.assisted import export_edit
 from llm4om.providers import credential_environment
+from llm4om.run_records import read_run_ref
+from llm4om.workbench import method_presets
 from llm4om.storage import cancel_run
 
 MAX_REQUEST = 24 * 1024 * 1024
@@ -95,19 +97,20 @@ class WebWorkspace:
 
     def bootstrap(self) -> dict[str, Any]:
         environment = credential_environment(Path.cwd() / '.env')
+        presets = method_presets()
+        preset = presets['llm4om.methods.direct']
         config: dict[str, Any] = {'schema_version': '0.2.0',
-            'method': {'plugin_id': 'llm4om.methods.direct', 'config': {'formulation_mode': 'five_element', 'output_mode': 'lp_ir'}},
+            'method': {'plugin_id': 'llm4om.methods.direct', 'config': preset['config']},
             'llm': {'provider_plugin_id': 'llm4om.providers.openai_compatible',
                 'model': environment.get('LLM4OM_LLM_MODEL', 'your-model'),
                 'config': {'base_url': environment.get('LLM4OM_LLM_BASE_URL', 'https://api.openai.com/v1'),
                     'credential_env': 'LLM4OM_LLM_API_KEY', 'max_retries': 0, 'timeout_s': 90, 'max_output_tokens': 32768}},
-            'compiler': {'plugin_id': 'llm4om.compilers.lp_ir_to_pyomo'},
-            'model_backend': {'plugin_id': 'llm4om.model_backends.pyomo_factory'},
-            'solver': {'plugin_id': 'llm4om.solvers.highs', 'options': {'time_limit_s': 30}},
+            'compiler': preset['compiler'],
+            'model_backend': preset['model_backend'],
+            'solver': {**preset['solver'], 'options': {'time_limit_s': 30}},
             'executor': {'plugin_id': 'llm4om.executors.container', 'config': {'network': False, 'cpu_limit': 1,
                 'memory_limit_mb': 1024, 'wall_time_s': 60}},
-            'budget': {'max_llm_attempts': 4, 'max_total_tokens': 100000, 'max_candidates': 4, 'max_repairs': 2,
-                'max_solver_calls': 4, 'wall_time_s': 180, 'max_concurrency': 1},
+            'budget': {**preset['budget'], 'max_concurrency': 1},
             'store': {'plugin_id': 'llm4om.stores.filesystem', 'config': {'root': 'runs'}},
             'reporters': [{'plugin_id': 'llm4om.reporters.jsonl'}, {'plugin_id': 'llm4om.reporters.markdown'}]}
         inventory = _application(['plugins', 'list'], deadline=time.time() + 30, cancellation=CancellationToken())
@@ -121,7 +124,7 @@ class WebWorkspace:
                     or any(ord(char) < 33 or char.isspace() for char in proxy)):
                 raise RunError('invalid_config', 'web', 'LLM4OM_LLM_PROXY_URL must be a plain http:// proxy URL without credentials.')
             config['llm']['config']['proxy_url'] = proxy
-        return {'config': config, 'plugins': inventory['plugins'], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
+        return {'config': config, 'method_presets': presets, 'plugins': inventory['plugins'], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
 
     def doctor(self, config: dict[str, Any], *, check_connectivity: bool = False) -> dict[str, Any]:
         if type(check_connectivity) is not bool:
@@ -576,12 +579,7 @@ class WebWorkspace:
         return {'job_id': job_id, 'status': 'queued'}
 
     def read_ref(self, run: Path, ref: dict[str, Any]) -> bytes:
-        if ref.get('namespace') != 'run_public':
-            raise RunError('private_reference', 'web', 'Only admitted public run references are readable.')
-        raw = read_public_bytes(public_path(run, ref['relative_path']), max_bytes=MAX_FILE)
-        if len(raw) != ref['size_bytes'] or hashlib.sha256(raw).hexdigest() != ref['sha256']:
-            raise RunError('artifact_hash_mismatch', 'web', 'Public artifact differs from its immutable reference.')
-        return raw
+        return read_run_ref(run, ref, max_bytes=MAX_FILE)
 
     def inspect(self, job_id: str, run_id: str | None = None) -> dict[str, Any]:
         job = self._job(job_id)
@@ -589,7 +587,8 @@ class WebWorkspace:
         latest = self._run_path(job_id)
         run = self._selected_run(job_id, run_id)
         if run is None:
-            return {'job': record, 'bundle': None, 'events': [], 'artifacts': []}
+            return {'job': record, 'bundle': None, 'events': [], 'artifacts': [], 'contents': {},
+                    'versions': [], 'latest_run_id': None, 'historical': False, 'data_previews': {}}
         bundle = parse_json((run / 'bundle.json').read_bytes()) if (run / 'bundle.json').is_file() else None
         events = []
         if (run / 'events.jsonl').is_file():

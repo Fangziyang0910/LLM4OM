@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-10；SDK／Worker 开发版本：0.23.0。当前包含 226 个源文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-14；SDK／Worker开发版本：0.37.0。当前包含 331 个仓库文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -8,6 +8,18 @@
 
 | 文件 | 职责／事实来源 | 核验方式与保留理由 |
 |---|---|---|
+| `src/llm4om/candidates.py` | 候选保存、编译、执行与中断阶段核对 | 单候选／修正共用；真实Solver与恢复测试 |
+| `src/llm4om/script_execution.py` | 原生脚本执行与可信结果复用 | OptiMUS／CoE、独立收集与预算测试 |
+| `src/llm4om/gateway.py` | 共享LLM预算、私有日志与恢复 | Provider、角色覆盖、未知用量与崩溃恢复测试 |
+| `src/llm4om/run_records.py` | 不可变公共产物与引用图读取 | namespace／hash／大小校验；不读取私有oracle |
+| `src/llm4om/runtime_identity.py` | 运行、任务和实验共同SDK身份 | 固定源码hash；恢复兼容性测试 |
+| `src/llm4om/workbench.py` | 内置方法工作台模板与说明 | bootstrap及浏览器配置切换；Planner仍负责兼容性 |
+| `frontend/src/useRunSnapshot.ts` | 当前任务／版本与顺序轮询 | 迟到响应、版本选择与浏览器回归 |
+| `frontend/src/components/ProblemEditor.tsx` | 问题、上传和单一有效运行配置 | 表单输入保留、配置草稿和提交验收 |
+| `frontend/src/components/RunView.tsx` | 版本、产物与运行结果展示 | 故事流、历史链接及候选展示 |
+| `frontend/src/components/RevisionEditor.tsx` | 人工修订模板与派生提交 | 模板响应失效、模型／代码编辑与父历史验收 |
+| `tests/helpers/browser_fixture.cjs` | 独立完整运行样本准备 | 只使用本地Provider与公共HTTP接口，无测试顺序依赖 |
+| `tests/web_state_flow.cjs` | 配置与异步运行选择回归 | 确定性HTTP响应；无任务提交或付费请求 |
 | `.editorconfig` | 编辑器格式 | UTF-8、LF、缩进；授权原文例外 |
 | `docs/development/s05-clarification.md` | 澄清、原声明确认与显式修订的实际支持 | CLI／SDK、真实Solver、父历史与恢复证据 |
 | `src/llm4om/clarification.py` | 公开请求、锚点与回答的信任边界 | 有界／唯一／原文绑定、确认与新信息分开 |
@@ -97,7 +109,7 @@
 | `src/llm4om/evaluation.py` | S07-A 单样本后置评测 | 公共运行结果、Code 实际来源、失败、checker error、零 eligible 与无 oracle 导出 |
 | `tests/test_task_evaluation.py` | S07-A 公共接口验收 | 独立 fixture 身份、实际 HTTP／Docker／HiGHS、篡改与失败记录 |
 | `examples/tasks/nl4opt-import.yaml` | 官方固定 dev split 的本地导入配置 | 已下载源字节 hash；路径以配置目录为根，不自动 fetch |
-| `src/llm4om/application.py` | 单问题应用流程 | 公开输入、候选与阶段原子完成事件；共用引用图校验，恢复完整 Formulation 及 Execution 的实际产物／绑定／Solver 证据 |
+| `src/llm4om/application.py` | 单问题用例编排 | 调用候选流水线、公共引用校验、恢复与派生用例 |
 | `src/llm4om/cli.py` | 用户 CLI | 参数解析、离线显式选择、JSON 摘要与退出码 |
 | `src/llm4om/contracts.py` | 运行边界校验 | 严格 JSON／YAML、CSV、路径、引用、五元素、输入绑定与 Worker 响应 |
 | `src/llm4om/executors.py` | 真实容器执行 Module | 公共 bytes、权限与资源、有界控制／清理、真实限制证据 |
@@ -107,7 +119,7 @@
 | `src/llm4om/methods.py` | 当前方法公共 profile | ModelProposal／MethodOutcome／Context／LLMResponse 和实际 direct Adapter |
 | `src/llm4om/plugins.py` | 方法发现与运行 Module | 动态 factory、版本／唯一键、JSON schema、同步／异步桥接与脱敏异常 |
 | `src/llm4om/preflight.py` | 共用运行 admission | 方法配置、实际能力、依赖、预算和固定计划；不发 Provider HTTP 请求 |
-| `src/llm4om/providers.py` | Provider 与共享 Gateway | 公共 HTTP seam、literal 凭据加载、原子资源／恢复和私有回复 |
+| `src/llm4om/providers.py` | Provider适配与HTTP通信 | 公共HTTP接口与literal凭据加载；共享Gateway由gateway.py维护 |
 | `src/llm4om/storage.py` | 运行文件存储 | 独占目录、祖先项 fsync、不可变引用与中断发布收据；不解释 Execution／Solve 语义 |
 | `src/llm4om/worker.py` | 镜像可信入口 | 严格 IR／实际代码 hash 核对、后端 API 求解、资源测量 |
 | `tests/test_cli_run.py` | S01 公共 CLI 行为测试 | 成功、失败、数据、路径、引用、配置、隐私、报告和存储 |
@@ -270,8 +282,8 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/vite.config.ts` | 前端构建输出契约 | 产物写入web_assets、服务路由与CSP不变 |
 | `docs/design/frontend-redesign-questionnaire.md` | 前端重构问卷与已选方向 | 过程产物，#93 归档；实现见 S09-D |
 | `frontend/index.html` | 应用挂载模板 | 构建后等价于工作台首页 |
-| `frontend/src/App.tsx` | 工作台应用状态、表单、轮询与视图编排 | 行为等价迁移自原生app.js |
-| `frontend/src/types.ts` | 公开运行数据外形声明 | 未知阶段如实缺失、不补造 |
+| `frontend/src/App.tsx` | 工作台启动、导航与页面组合 | 状态分别由问题编辑、运行快照与修订模块持有 |
+| `frontend/src/types.ts` | 运行配置、LPIR、编辑文档与产物类型 | 核心字段显式类型；扩展产物为unknown，缺失阶段不补造 |
 | `frontend/src/api.ts` | 唯一HTTP通道与变更令牌 | 沿用既有REST形状 |
 | `frontend/src/ui.tsx` | 展示词汇与纯函数 | 状态／方法／角色词、artifact引用匹配 |
 | `frontend/src/facade.tsx` | 浏览器级UI命令门面 | flushSync同步渲染、artifactKey等价 |
@@ -342,24 +354,24 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_provider_proxy.py` | 显式模型连接路线的公共接口检查 | Chat／Messages、NO_PROXY、非法地址与公开凭据拒绝 |
 | `docs/development/s05-explicit-proxy.md` | HTTP代理实际支持和验收 | 来源／默认直连／隐私边界／不可变Worker身份 |
 
-| `tests/web_process_flow.cjs` | 浏览器中的方法配置与公开中间版本验收 | 零POST、Manifest兼容选项、版本定位与选择保持、窄屏 |
+| `tests/replays/web_process_flow.cjs` | 浏览器中的方法配置与公开中间版本验收 | 零POST、Manifest兼容选项、版本定位与选择保持、窄屏 |
 
 | `tests/web_edit_flow.cjs` | 可读派生编辑的本机浏览器验收 | 临时完成run副本、真实容器HiGHS、父结果／模型计数／assisted标记 |
 
 | `tests/test_web_versions.py` | 历史版本与明确父运行的公共HTTP验收 | 实际HiGHS、读取／导出、派生lineage、父bundle和非法路径 |
-| `tests/web_history_flow.cjs` | 版本浏览的本机Chrome验收 | 零POST、13／5版本切换、选定父编辑、轮询保持和窄屏 |
+| `tests/replays/web_history_flow.cjs` | 版本浏览的本机Chrome验收 | 零POST、13／5版本切换、选定父编辑、轮询保持和窄屏 |
 
 | `tests/test_web_data_previews.py` | 有界公开数据预览的HTTP验收 | CSV逗号／多行／前导零、JSON类型表达、显示截断、来源hash和真实HiGHS |
-| `tests/web_data_flow.cjs` | 输入数据页的本机Chrome验收 | 已保存产品／产能表、完整视图／来源、无原始 JSON 展示、轮询与窄屏，零POST |
+| `tests/replays/web_data_flow.cjs` | 输入数据页的本机Chrome验收 | 已保存产品／产能表、完整视图／来源、无原始 JSON 展示、轮询与窄屏，零POST |
 
 | `tests/web_model_flow.cjs` | 模型声明与需求来源的本机Chrome验收 | 实际来源展开／关联／来源快照、合成声明的未知状态／候选隔离／安全文本，零POST |
 
 | `tests/web_connection_flow.cjs` | 连接失败的本机Chrome验收 | 固定诊断解释、未知用量、旧记录和无关错误保持，零POST |
-| `tests/web_decision_flow.cjs` | 当前候选模型的决策试算交互 | 已保存真实解、目标／约束代入、恢复、轮询保持、窄屏，零POST |
-| `tests/web_candidates_flow.cjs` | 候选与修正的本机浏览器验收 | 实际双候选、最终选择、声明变化、模型／代码定位、完整列表与窄屏，零POST |
+| `tests/replays/web_decision_flow.cjs` | 当前候选模型的决策试算交互 | 已保存真实解、目标／约束代入、恢复、轮询保持、窄屏，零POST |
+| `tests/replays/web_candidates_flow.cjs` | 候选与修正的本机浏览器验收 | 实际双候选、最终选择、声明变化、模型／代码定位、完整列表与窄屏，零POST |
 | `tests/web_model_edit_flow.cjs` | 严格IR普通表单的浏览器验收 | guidance变量与容量约束、输入框完整、增删约束与文档同步、真实HiGHS3、父记录与预算保持 |
-| `tests/web_links_flow.cjs` | 运行页面链接的本机浏览器验收 | 固定版本链接、刷新恢复产物与导出、最新选择、新问题与窄屏，零POST |
-| `tests/web_runtime_flow.cjs` | 可读运行与求解资源的浏览器验收 | 实际版本资源、界限／Gap／执行资源、未知量保持、窄屏，零POST |
+| `tests/replays/web_links_flow.cjs` | 运行页面链接的本机浏览器验收 | 固定版本链接、刷新恢复产物与导出、最新选择、新问题与窄屏，零POST |
+| `tests/replays/web_runtime_flow.cjs` | 可读运行与求解资源的浏览器验收 | 实际版本资源、界限／Gap／执行资源、未知量保持、窄屏，零POST |
 | `tests/test_connectivity.py` | CLI显式目录检查 | 默认零HTTP、两协议认证、未知支持与零生成，凭据不导出 |
 | `tests/helpers/connectivity_server.py` | 一次性Web／目录fixture | 本机合成凭据、目录计数、拒绝生成，临时workspace |
 | `tests/web_connectivity_check_flow.cjs` | 网页连通性开关 | 同一doctor、默认零请求／显式GET、可读目录结果与窄屏 |

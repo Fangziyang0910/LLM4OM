@@ -88,37 +88,28 @@ Formulation 与 Code 的阶段含义统一，实际步骤由方法决定。五�
 | Evaluator | 按版本化协议评分、给出证据与不可用原因 | 反馈参考目标以帮助方法选候选 |
 | ArtifactStore／Reporter | 产物寻址、事件持久化、汇总导出 | 将无证据字段填写为通过或零成本 |
 
-## 3. 模块包结构建议
+## 3. 当前源码职责
 
-这是未来结构，不是当前已实现目录：
+当前采用单个Python包和本机Web工作台。按实际职责集中实现，不按每一种插件预先建立目录。
 
-```text
-src/llm4om/
-  contracts/        # immutable data objects / errors / protocol versions
-  application/      # SDK use cases, run/experiment/report
-  core/             # registry, planning, orchestration, budgets, events
-  plugins/
-    methods/        # direct, optimus, coe; optional controls
-    providers/      # openai_compatible, anthropic, mock
-    tasks/          # user_problem, nl4opt, nlp4lp, mamo
-    data/           # csv, json
-    compilers/      # lp_ir_to_pyomo
-    model_backends/ # pyomo_factory, native_gurobipy
-    solvers/        # highs, gurobi
-    evaluators/     # structural, objective_match, independent_checker
-    executors/      # container, trusted_local
-    stores/         # filesystem
-    reporters/     # jsonl, csv, markdown, html
-  cli/
-  web/
-tests/
-  contracts/
-  fixtures/
-  integration/
-  external/
-```
+| 位置 | 职责 | 主要调用方向 |
+|---|---|---|
+| `application.py` | 单问题运行、报告、恢复与派生运行 | 调用候选流水线、方法资源、admission与存储 |
+| `candidates.py` | 候选产物保存、编译、执行及中断阶段核对 | 使用Compiler、Executor、脚本执行和公共记录 |
+| `method_resources.py` | 方法的预算、候选评估、选择与公开记录 | 调用候选流水线，不反向调用application |
+| `script_execution.py` | 原生脚本执行、独立收集及已有结果复用 | 使用admission资源与公共记录 |
+| `providers.py` | 凭据加载、Provider适配及HTTP通信 | 保留提供方接口；运行Gateway在独立模块 |
+| `gateway.py` | LLM调用预算、私有资源日志、恢复与检查点回调 | 通过Provider调用；不持有方法策略 |
+| `run_records.py` | 公共运行引用的namespace、hash、大小及引用图校验 | 应用、候选、脚本和Web共用；私有评测引用仍由Evaluator读取 |
+| `runtime_identity.py` | SDK源码身份 | 运行、任务与批量实验共用 |
+| `workbench.py` | 内置方法的工作台默认配置与说明 | Web bootstrap提供模板；兼容性由Manifest和Planner验证 |
+| `frontend/src/App.tsx` | 启动配置、导航与页面组合 | 组合问题编辑、运行查看与数据集浏览 |
+| `frontend/src/useRunSnapshot.ts` | 任务及版本选择、顺序轮询、过期响应过滤 | 通过已有HTTP接口读取运行 |
+| `frontend/src/components/ProblemEditor.tsx` | 问题、上传、有效配置与检查 | 表单只维护一份有效配置；JSON草稿显式应用 |
+| `frontend/src/components/RunView.tsx` | 运行结果、版本与产物展示 | 复用已有展示组件与修订编辑 |
+| `frontend/src/components/RevisionEditor.tsx` | 修订模板、编辑文档和派生提交 | 旧模板响应失效；运行版本变化后重新载入 |
 
-Core 依赖 contracts，不依赖具体 Provider／Solver SDK。插件依赖 contracts 与窄的资源 Context；入口依赖 application。插件之间需要协作时经声明接口，不直接导入另一插件的内部类。外部插件通过 entry points 安装，避免强制修改 `plugins/`。
+Formulation／Code与方法、Provider、Backend、Solver的公共契约保持不变。候选的不同执行路径共用产物与结果校验；脚本仍执行独立可信收集。历史运行可以继续浏览，严格恢复仍核对保存的源码、配置与资源身份，源码变化不会隐式重放旧请求。
 
 ## 4. Formulation 与 Code 的实现路径
 

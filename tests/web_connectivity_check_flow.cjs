@@ -22,7 +22,7 @@ assert.ok(
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(url);
     await page.waitForFunction(
-      () => document.querySelector("#method").options.length > 0,
+      () => document.querySelector("#method")?.options.length > 0,
     );
     await page.click("#doctor");
     await page.waitForSelector("#doctor-result strong");

@@ -5,7 +5,7 @@ export function setApiToken(token: string) {
   apiToken = token;
 }
 
-export async function api<T = any>(path: string, value?: unknown): Promise<T> {
+export async function api<T = unknown>(path: string, value?: unknown): Promise<T> {
   const response = await fetch(
     path,
     value === undefined

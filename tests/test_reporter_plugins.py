@@ -27,7 +27,7 @@ class ReporterPluginTests(unittest.TestCase):
         self.inputs = self.root / 'inputs'
         shutil.copytree(ROOT / 'examples/specs', self.inputs)
         target = self.root / 'plugins'
-        built = subprocess.run(['uv', 'build', str(ROOT / 'examples/plugins/fixture_reporter'), '--wheel',
+        built = subprocess.run(['uv', 'build', '--offline', str(ROOT / 'examples/plugins/fixture_reporter'), '--wheel',
             '--out-dir', str(self.root / 'wheel')], capture_output=True, text=True)
         self.assertEqual(built.returncode, 0, built.stderr)
         wheel = next((self.root / 'wheel').glob('*.whl'))

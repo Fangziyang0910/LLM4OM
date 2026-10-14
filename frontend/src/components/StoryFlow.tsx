@@ -2,7 +2,7 @@
 // 正在进行的步骤成为卡片;头部为实时消耗条,结束卡衔接结果区。
 // `.timeline-step[data-artifact]` 契约保持:run_public 产物事件挂 data-artifact。
 import { useMemo, useState } from "react";
-import type { Snapshot } from "../types";
+import type { CandidateAssessment, Snapshot } from "../types";
 import { artifactKey, artifactLabel, failureDiagnosis, format, phaseLabel, roleLabel, shortMethod, status } from "../ui";
 
 const eventLabels: Record<string, string> = {
@@ -138,11 +138,11 @@ const orderOf = (item: StoryItem, snapshot: Snapshot) => {
 
 function assessmentFeedback(snapshot: Snapshot, item: StoryItem) {
   if (!item.linkedArtifact?.includes("/assessment.json")) return null;
-  const assessment = snapshot.contents?.[item.linkedArtifact];
+  const assessment = snapshot.contents?.[item.linkedArtifact] as CandidateAssessment | undefined;
   if (!assessment) return null;
   const diagnostics = assessment.diagnostics || [];
   const stages = Object.entries(assessment.stages || {})
-    .filter(([, value]) => (value as any)?.status === "available")
+    .filter(([, value]) => value?.status === "available")
     .map(([key]) => ({ formulation: "数学表述", code: "求解实现", solve: "求解" })[key] || key);
   return { stages, diagnostics };
 }
@@ -163,7 +163,7 @@ export function StoryFlow({
     const collected: Attempt[] = [];
     for (const name of Object.keys(snapshot.contents || {}))
       if (/(?:^|\/)llm-trace\.json$/.test(name))
-        collected.push(...((snapshot.contents[name]?.attempts || []) as Attempt[]));
+        collected.push(...(((snapshot.contents[name] as { attempts?: Attempt[] })?.attempts || []) as Attempt[]));
     return collected;
   }, [snapshot]);
   const ledger = snapshot.contents?.["budget-ledger.json"];

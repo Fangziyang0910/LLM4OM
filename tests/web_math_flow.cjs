@@ -3,6 +3,7 @@
 // KaTeX 排版,覆盖 ASCII 线性语法、$定界 LaTeX、混合记号与裸公式 description;
 // 结构化 IR 路径的交互表达式不受影响。
 const assert = require("node:assert/strict");
+const { completedRun } = require("./helpers/browser_fixture.cjs");
 const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || "playwright");
 const url = process.env.LLM4OM_WEB_TEST_URL;
 assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
@@ -16,10 +17,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(url);
-    await page.waitForSelector(".job");
-    await page.locator(".job").first().click();
-    await page.waitForSelector(".objective-result strong");
+    await completedRun(page);
     const rendered = await page.evaluate(() => {
       const contents = { ...window.snapshot.contents };
       const formulation = contents["candidates/001/formulation.json"];

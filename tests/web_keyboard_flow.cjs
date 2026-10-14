@@ -2,6 +2,7 @@
 // 键盘可达性验收:Tab 焦点环可见、无焦点陷阱,核心路径
 // (打开运行 → 切换标签 → 故事卡打开产物 → 展开摘要)全部可用键盘完成。
 const assert = require("node:assert/strict");
+const { completedRun } = require("./helpers/browser_fixture.cjs");
 const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || "playwright");
 const url = process.env.LLM4OM_WEB_TEST_URL;
 assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
@@ -15,7 +16,9 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    const seeded = await completedRun(page);
     await page.goto(url);
+    await page.waitForSelector("#model");
     const focusable = await page.evaluate(() =>
       [...document.querySelectorAll('button,[href],input,select,textarea,[tabindex="0"]')]
         .filter((el) => el.offsetParent !== null && !el.disabled)
@@ -40,7 +43,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     }
     assert.ok(seen.size >= 2, "Tab 应能移动焦点,而不是被拦截");
     // 核心路径 1:Enter 打开历史运行
-    await page.locator(".job").first().focus();
+    await page.locator(`[data-job-id="${seeded.job.job_id}"]`).focus();
     await page.keyboard.press("Enter");
     await page.waitForSelector(".objective-result strong");
     // 核心路径 2:Enter 切换到代码标签

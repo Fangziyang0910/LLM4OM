@@ -1,12 +1,13 @@
 "use strict";
 const assert = require("node:assert/strict");
+const { completedRun } = require("./helpers/browser_fixture.cjs");
 const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || "playwright");
 const url = process.env.LLM4OM_WEB_TEST_URL;
 const workspace = process.env.LLM4OM_WEB_TEST_WORKSPACE;
 assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
-assert.ok(workspace, "Use a disposable guidance workspace after web_story_flow.");
+assert.ok(workspace, "Use a disposable guidance workspace; this test creates its own run.");
 (async () => {
   const browser = await chromium.launch({
     headless: true,
@@ -19,13 +20,8 @@ assert.ok(workspace, "Use a disposable guidance workspace after web_story_flow."
     });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(url);
-    await page.locator(".job").first().click();
-    await page.waitForSelector(".objective-result strong");
-    const before = await page.evaluate(async () => {
-      const { jobs } = await (await fetch("/api/jobs")).json();
-      return (await fetch("/api/jobs/" + jobs[0].job_id)).json();
-    });
+    await completedRun(page);
+    const before = await page.evaluate(() => window.snapshot);
     const parent = path.join(
       workspace,
       before.job.job_id,

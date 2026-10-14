@@ -1,7 +1,7 @@
 "use strict";
 // 结果区代码视图验收:语法高亮、复制入口、无原始 JSON 展示与深链稳定。
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
+const { completedRun } = require("./helpers/browser_fixture.cjs");
 const path = require("node:path");
 const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || "playwright");
 const url = process.env.LLM4OM_WEB_TEST_URL;
@@ -21,44 +21,7 @@ for (const address of [url, provider])
     const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(url);
-    await page.waitForFunction(
-      () => document.querySelector("#method").options.length > 0,
-    );
-    await page.selectOption("#method", "llm4om.methods.feedback_repair");
-    await page.click("#load-example");
-    const problem = JSON.parse(
-      fs.readFileSync(path.join(__dirname, "../examples/specs/problem.json"), "utf8"),
-    );
-    problem.data_refs = [];
-    await page.locator(".problem-panel > details summary").click();
-    await page.locator("#problem-json").fill(JSON.stringify(problem));
-    await page.locator(".problem-panel > details summary").click();
-    const config = JSON.parse(await page.locator("#config-json").inputValue());
-    config.llm = {
-      provider_plugin_id: "llm4om.providers.openai_compatible",
-      model: "synthetic-web-guidance",
-      config: {
-        base_url: provider,
-        credential_env: "LLM4OM_UI_GUIDANCE_TEST_KEY",
-        max_retries: 0,
-        max_output_tokens: 8192,
-        timeout_s: 30,
-      },
-    };
-    await page.locator("details:has(#config-json) > summary").click();
-    await page.locator("#config-json").fill(JSON.stringify(config));
-    await page.click("#apply-config");
-    await page.locator("details:has(#config-json) > summary").click();
-    await page.click("#submit");
-    await page.waitForSelector("#clarification:not([hidden])", { timeout: 20000 });
-    await page.locator("#clarification-questions select").selectOption("confirm");
-    await page.click("#answer-submit");
-    await page.waitForFunction(
-      () => document.querySelector(".objective-result strong")?.textContent === "13",
-      null,
-      { timeout: 30000 },
-    );
+    await completedRun(page);
     await page.click('[data-tab="code"]');
     await page.waitForSelector(".code-lines .code-line");
     const lines = await page.locator(".code-line").count();

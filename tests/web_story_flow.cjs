@@ -24,7 +24,7 @@ for (const address of [url, provider])
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(url);
     await page.waitForFunction(
-      () => document.querySelector("#method").options.length > 0,
+      () => document.querySelector("#method")?.options.length > 0,
     );
     await page.selectOption("#method", "llm4om.methods.feedback_repair");
     await page.click("#load-example");

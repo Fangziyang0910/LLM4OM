@@ -55,7 +55,7 @@ export interface Snapshot {
   bundle: RunBundle | null;
   events: RunEvent[];
   artifacts: ArtifactRef[];
-  contents: Record<string, any>;
+  contents: ArtifactContents;
   versions: RunVersion[];
   latest_run_id: string | null;
   historical: boolean;
@@ -89,7 +89,13 @@ export interface PluginManifest {
     kind: string;
     plugin_id: string;
     display_name: string;
-    capabilities: Record<string, any>;
+    capabilities: {
+      solvers?: string[];
+      handle_profile?: string;
+      handle_profiles?: string[];
+      human_assisted?: boolean;
+      [key: string]: unknown;
+    };
   };
 }
 
@@ -103,7 +109,205 @@ export interface ExperimentRecord {
   error?: unknown;
 }
 
-export type RunConfig = Record<string, any>;
+export interface PluginSelection {
+  plugin_id: string;
+  config?: Record<string, unknown>;
+}
+
+export interface Budget {
+  [key: string]: number | undefined;
+  max_llm_attempts: number;
+  max_total_tokens: number;
+  max_candidates: number;
+  max_repairs: number;
+  max_solver_calls: number;
+  wall_time_s: number;
+  max_concurrency: number;
+}
+
+export interface RunConfig {
+  schema_version: string;
+  method: PluginSelection;
+  llm: {
+    provider_plugin_id: string;
+    model: string;
+    config: {
+      base_url?: string;
+      proxy_url?: string;
+      credential_env?: string;
+      response_artifact?: string;
+      [key: string]: unknown;
+    };
+    role_models?: Record<string, unknown>;
+  };
+  compiler?: PluginSelection;
+  model_backend: PluginSelection;
+  solver: PluginSelection & { options?: Record<string, unknown> };
+  executor: PluginSelection;
+  store: PluginSelection;
+  budget: Budget;
+  reporters?: PluginSelection[];
+  [key: string]: unknown;
+}
+
+export interface MethodPreset {
+  config: Record<string, unknown>;
+  model_backend: PluginSelection;
+  solver: PluginSelection;
+  compiler?: PluginSelection;
+  budget: Partial<Budget>;
+  explanation: string;
+  requirements?: string;
+}
+
+export interface Bootstrap {
+  token: string;
+  config: RunConfig;
+  plugins: PluginManifest[];
+  method_presets: Record<string, MethodPreset>;
+}
+
+export interface PublicProblem {
+  schema_version: string;
+  problem_id: string;
+  revision: string;
+  description: string;
+  requirements: { id: string; text: string; [key: string]: unknown }[];
+  assumptions: { id: string; text: string; [key: string]: unknown }[];
+  data_refs: { data_id: string; path: string; [key: string]: unknown }[];
+  [key: string]: unknown;
+}
+
+export interface LinearExpression {
+  constant: number;
+  terms: { variable_id: string; coefficient: number }[];
+}
+
+export interface GroundedLPIR {
+  problem_type: "lp" | "milp";
+  variables: {
+    id: string;
+    name?: string;
+    domain: "continuous" | "integer" | "binary";
+    lower_bound: number | null;
+    upper_bound: number | null;
+    requirement_ids: string[];
+  }[];
+  objective: { sense: "min" | "max"; expression: LinearExpression; requirement_ids: string[] };
+  constraints: {
+    id: string;
+    expression: LinearExpression;
+    sense: "le" | "ge" | "eq";
+    rhs: number;
+    requirement_ids: string[];
+  }[];
+  [key: string]: unknown;
+}
+
+export interface FormulationArtifact {
+  representation_kind: string;
+  representation: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface EditDocument {
+  schema_version: string;
+  operation: "problem" | "formulation" | "code";
+  reason: string;
+  budget: Budget;
+  problem: PublicProblem;
+  formulation: FormulationArtifact | null;
+  structured_ir: GroundedLPIR | null;
+  code: { representation_kind: string; source: string; data_json: Record<string, unknown> | null } | null;
+  model_metadata: Record<string, unknown>;
+}
+
+export interface BudgetLedger {
+  llm_attempts?: number;
+  external_llm_requests?: number;
+  solver_calls?: number;
+  candidates?: number;
+  known_total_tokens?: number;
+  total_tokens?: number | null;
+  [key: string]: unknown;
+}
+
+export interface SolveResult {
+  termination: string;
+  objective_value: number | null;
+  has_primal_solution: boolean;
+  solution_ref: ArtifactRef | null;
+  [key: string]: unknown;
+}
+
+export interface ModelArtifact {
+  formulation_ref: ArtifactRef | null;
+  code_ref: ArtifactRef | null;
+  stage_status: Record<string, { status: string; reason?: string | null }>;
+}
+
+export interface CodeArtifact {
+  representation_ref: ArtifactRef;
+  provenance: { origin: string; source_ir_ref?: ArtifactRef };
+}
+
+export interface CandidateRecord {
+  candidate_id: string;
+  sequence_no: number;
+  status: string;
+  artifact_ref: ArtifactRef | null;
+  parent_ids?: string[];
+  change_reason?: string;
+}
+
+export interface CandidateAssessment {
+  stages: Record<string, { status: string }>;
+  solve_result_ref: ArtifactRef | null;
+  formulation_changes_ref: ArtifactRef | null;
+  diagnostics: { code: string; message?: string }[];
+}
+
+export interface FormulationChanges {
+  changed_sections: string[];
+  ir_changed_sections: string[];
+  constraint_ids_added: string[];
+  constraint_ids_removed: string[];
+  requirements_lost: string[];
+  source_formulation_available: boolean;
+}
+
+export interface LLMAttempt {
+  attempt_id?: string;
+  role?: string;
+  diagnostic?: string;
+  connection_diagnostic?: string;
+  usage?: { total_tokens?: number | null };
+  [key: string]: unknown;
+}
+
+export interface ExecutionResult {
+  wall_time_s?: number;
+  resources?: { cpu_time_s?: number | null; peak_memory_bytes?: number | null };
+}
+
+export interface ArtifactContents extends Record<string, unknown> {
+  "public-config.json"?: RunConfig;
+  "public-problem.json"?: PublicProblem;
+  "budget-ledger.json"?: BudgetLedger;
+  "llm-trace.json"?: { attempts: LLMAttempt[] };
+  "candidate-selection.json"?: { candidate_id: string; reason: string; rule: string };
+}
+
+export type Notice = (text: string, error?: boolean) => void;
+
+export interface DatasetSummary {
+  task_id: string;
+  dataset_id: string | null;
+  source_version: string | null;
+  adapter_id: string;
+  N_cases: number;
+  N_selected: number;
+}
 
 export interface UploadItem {
   name: string;

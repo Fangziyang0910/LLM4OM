@@ -19,7 +19,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(url);
     await page.waitForFunction(
-      () => document.querySelector("#method").options.length > 0,
+      () => document.querySelector("#method")?.options.length > 0,
     );
     await page.click("#load-example");
     const problem = JSON.parse(

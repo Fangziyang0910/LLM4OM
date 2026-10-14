@@ -28,7 +28,7 @@ assert.ok(workspace, "A disposable fixture workspace is required.");
     for (const revise of [false, true]) {
       await page.goto(url);
       await page.waitForFunction(
-        () => document.querySelector("#method").options.length > 0,
+        () => document.querySelector("#method")?.options.length > 0,
       );
       await page.selectOption("#method", "llm4om.methods.feedback_repair");
       await page.click("#load-example");

@@ -1,21 +1,21 @@
 // 运行详情:资源账本、求解与执行记录、模型调用与最近事件。
-import type { Snapshot } from "../types";
+import type { Budget, ExecutionResult, LLMAttempt, Snapshot, SolveResult } from "../types";
 import { artifactKey, format, roleLabel, status } from "../ui";
 import { Card, Table } from "./Records";
 
 export function RuntimeDetails({ snapshot }: { snapshot: Snapshot | null | undefined }) {
   const contents = snapshot?.contents || {};
   const ledger = contents["budget-ledger.json"] || {};
-  const budget = contents["public-config.json"]?.budget || {};
+  const budget: Partial<Budget> = contents["public-config.json"]?.budget || {};
   const shown = (value: unknown) => (value == null ? "未提供" : format(value));
-  const solve = contents[artifactKey(snapshot, snapshot?.bundle?.solve_result_ref) || ""];
-  const execution = contents[artifactKey(snapshot, snapshot?.bundle?.execution_result_ref) || ""];
-  const attempts = new Map<string, any>();
+  const solve = contents[artifactKey(snapshot, snapshot?.bundle?.solve_result_ref) || ""] as SolveResult | undefined;
+  const execution = contents[artifactKey(snapshot, snapshot?.bundle?.execution_result_ref) || ""] as ExecutionResult | undefined;
+  const attempts = new Map<string, LLMAttempt & { source: string }>();
   for (const [name, trace] of Object.entries(contents).sort(
     ([a], [b]) => Number(b === "llm-trace.json") - Number(a === "llm-trace.json"),
   )) {
     if (!/(?:^|\/)llm-trace\.json$/.test(name)) continue;
-    (trace.attempts || []).forEach((item: any, index: number) => {
+    ((trace as { attempts?: LLMAttempt[] }).attempts || []).forEach((item, index) => {
       const key = item.attempt_id || name + "#" + index;
       if (!attempts.has(key))
         attempts.set(key, {

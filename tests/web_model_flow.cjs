@@ -1,5 +1,6 @@
 "use strict";
 const assert = require("node:assert/strict");
+const { completedRun } = require("./helpers/browser_fixture.cjs");
 const path = require("node:path");
 const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || "playwright");
 const url = process.env.LLM4OM_WEB_TEST_URL;
@@ -20,10 +21,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     page.on("request", (request) => {
       if (request.method() === "POST") mutations.push(request.url());
     });
-    await page.goto(url);
-    await page.waitForSelector(".job");
-    await page.locator(".job").first().click();
-    await page.waitForSelector(".objective-result strong");
+    await completedRun(page);
     const profit = page
       .locator(".requirement-link")
       .filter({ hasText: "R-PROFIT" })
@@ -146,7 +144,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     assert.deepEqual(errors, []);
     assert.deepEqual(mutations, []);
     console.log(
-      "Actual requirement disclosures and mobile layout; UI fixture assumptions/warnings/missing mappings/candidate isolation/native availability/safe text: passed; zero POST/model calls.",
+      "Actual requirement disclosures and mobile layout; UI fixture assumptions/warnings/missing mappings/candidate isolation/native availability/safe text: passed; read-only view after independent local fixture setup.",
     );
   } finally {
     await browser.close();

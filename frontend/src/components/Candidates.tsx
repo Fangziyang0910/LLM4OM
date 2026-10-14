@@ -1,5 +1,5 @@
 // 候选与修正视图:候选状态、阶段、求解结果、变化与最终选择理由。
-import type { Snapshot } from "../types";
+import type { ArtifactRef, CandidateAssessment, CandidateRecord, CodeArtifact, FormulationChanges, ModelArtifact, Snapshot, SolveResult } from "../types";
 import { artifactKey, format, status } from "../ui";
 import { EmptyView, Table } from "./Records";
 
@@ -11,11 +11,12 @@ export function Candidates({
   onOpenArtifact: (tab: string, key: string) => void;
 }) {
   const contents = snapshot?.contents || {};
-  const get = (reference: any) => contents[artifactKey(snapshot, reference) || ""];
+  const get = <T,>(reference: ArtifactRef | null | undefined) => contents[artifactKey(snapshot, reference) || ""] as T | undefined;
   const selection = contents["candidate-selection.json"];
   const selectedId = snapshot?.bundle?.final_candidate_id || selection?.candidate_id;
-  const records = new Map<string, any>();
-  for (const [name, item] of Object.entries(contents)) {
+  const records = new Map<string, CandidateRecord>();
+  for (const [name, value] of Object.entries(contents)) {
+    const item = value as CandidateRecord | undefined;
     if (!/^candidates\/[^/]+\/candidate(?:-snapshot)?\.json$/.test(name) || !item?.candidate_id)
       continue;
     if (name.endsWith("/candidate.json") || !records.has(item.candidate_id))
@@ -40,14 +41,14 @@ export function Candidates({
       {[...records.values()]
         .sort((a, b) => a.sequence_no - b.sequence_no)
         .map((candidate) => {
-          const assessment = contents[`candidates/${candidate.candidate_id}/assessment.json`];
-          const model = get(candidate.artifact_ref);
-          const codeArtifact = get(model?.code_ref);
-          const solve = get(
+          const assessment = contents[`candidates/${candidate.candidate_id}/assessment.json`] as CandidateAssessment | undefined;
+          const model = get<ModelArtifact>(candidate.artifact_ref);
+          const codeArtifact = get<CodeArtifact>(model?.code_ref);
+          const solve = get<SolveResult>(
             assessment?.solve_result_ref ||
               (candidate.candidate_id === selectedId ? snapshot.bundle?.solve_result_ref : null),
           );
-          const changes = get(assessment?.formulation_changes_ref);
+          const changes = get<FormulationChanges>(assessment?.formulation_changes_ref);
           const names = {
             sets: "集合",
             parameters: "参数",
@@ -99,7 +100,7 @@ export function Candidates({
                   <strong>候选目标 {format(solve.objective_value)}</strong>
                 </div>
               ) : null}
-              {(assessment?.diagnostics || []).map((diagnostic: any, index: number) => (
+              {(assessment?.diagnostics || []).map((diagnostic, index) => (
                 <p className="candidate-diagnostic" key={index}>
                   {diagnostic.message || diagnostic.code}
                 </p>
@@ -138,7 +139,7 @@ export function Candidates({
                   [
                     ["查看数学模型", "formulation", model?.formulation_ref],
                     ["查看求解代码", "code", codeArtifact?.representation_ref],
-                  ] as [string, string, any][]
+                  ] as [string, string, ArtifactRef | null | undefined][]
                 ).map(([label, tab, reference]) => {
                   const key = artifactKey(snapshot, reference);
                   if (!key) return null;

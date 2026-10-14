@@ -69,7 +69,7 @@ node tests/web_clarification_flow.cjs
 
 OptiMUS六个保存状态按实际事件顺序出现：问题与参数、优化目标初稿、约束识别、约束数学表述、完整数学表述、数学表述与代码片段。点击选择对应状态；轮询保留用户选择。未形成数学模型时展示原问题与参数定义，代码片段保留真实bytes文本。最终源码仍在求解代码中。历史角色清单使用实际source-calls.json，不能从文件名猜测调用数量。
 
-本机Chrome以既有真实OptiMUS记录验收六个状态的逐次定位、代码片段、历史选择保持、390px无溢出、无页面错误；方法选择与不可用配置标记通过。整个浏览器检查零POST／零LLM调用，不重建Worker或重跑求解。入口为tests/web_process_flow.cjs，环境变量LLM4OM_BROWSER_MODULE／LLM4OM_BROWSER_EXECUTABLE／LLM4OM_WEB_TEST_URL沿用上节。
+本机Chrome以既有真实OptiMUS记录验收六个状态的逐次定位、代码片段、历史选择保持、390px无溢出、无页面错误；方法选择与不可用配置标记通过。整个浏览器检查零POST／零LLM调用，不重建Worker或重跑求解。入口为tests/replays/web_process_flow.cjs，环境变量LLM4OM_BROWSER_MODULE／LLM4OM_BROWSER_EXECUTABLE／LLM4OM_WEB_TEST_URL沿用上节。
 
 ## 可读的派生编辑
 
@@ -87,7 +87,7 @@ OptiMUS六个保存状态按实际事件顺序出现：问题与参数、优化�
 
 本机公共HTTP验收：确定性Provider加实际HiGHS得到原始13，手工Code派生用容器HiGHS得到5，再明确选择原始父版本修订问题并重新建模得到13。只有两次合成Provider请求，父bundle bytes不变；读取和导出选定版本、父lineage及非法路径拒绝通过。tests/test_web_versions.py单项16.308s通过。
 
-Chrome通过原始13／派生5的版本切换、对应导出链接、原始父版本编辑、轮询选择保持及390px无溢出／无页面错误。入口tests/web_history_flow.cjs只读检查，零POST／零模型调用。证据在本机/tmp/llm4om-web-history-evidence，不提交运行数据。Worker0.32.0最终身份为sha256:2e02db6e72b1477c4403a5068aa23c71a0b59afcad2c6fb4ed3d959769d769cd；初次预检查镜像保留为0.32.0-precheck，没有用它验收。
+Chrome通过原始13／派生5的版本切换、对应导出链接、原始父版本编辑、轮询选择保持及390px无溢出／无页面错误。入口tests/replays/web_history_flow.cjs只读检查，零POST／零模型调用。证据在本机/tmp/llm4om-web-history-evidence，不提交运行数据。Worker0.32.0最终身份为sha256:2e02db6e72b1477c4403a5068aa23c71a0b59afcad2c6fb4ed3d959769d769cd；初次预检查镜像保留为0.32.0-precheck，没有用它验收。
 
 ## 可读的输入数据
 
@@ -95,7 +95,7 @@ Chrome通过原始13／派生5的版本切换、对应导出链接、原始父�
 
 页面预览只读取已保存的公开content_ref。标准库CSV解析保留引号内逗号、多行文本和前导零；JSON中的false／null保持原类型的序列化表达。页面最多20行／16列，JSON最多20个字段，长单元格显示前256字符。完整已保存视图仍在公共导出中；预览不变更方法输入，也不声称已经查看全部原始数据。
 
-本机公共HTTP单项5.420s通过：确定性Provider和Worker0.33.0容器HiGHS目标13；25行CSV页面仅20行但模型视图仍完整，逗号／换行／003保留，JSON数值／数组／false／null正确显示，原始来源hash一致。入口tests/test_web_data_previews.py不使用真实云模型。Chrome以既有真实运行的隔离副本核对products／capacities表值、完整视图标记、来源hash、原始记录折叠、轮询和390px布局，无页面错误、零POST。入口tests/web_data_flow.cjs只读，沿用本机浏览器环境变量。
+本机公共HTTP单项5.420s通过：确定性Provider和Worker0.33.0容器HiGHS目标13；25行CSV页面仅20行但模型视图仍完整，逗号／换行／003保留，JSON数值／数组／false／null正确显示，原始来源hash一致。入口tests/test_web_data_previews.py不使用真实云模型。Chrome以既有真实运行的隔离副本核对products／capacities表值、完整视图标记、来源hash、原始记录折叠、轮询和390px布局，无页面错误、零POST。入口tests/replays/web_data_flow.cjs只读，沿用本机浏览器环境变量。
 
 证据位于/tmp/llm4om-web-data-evidence。Worker0.33.0身份为sha256:374489b868185d15b4a5d0c6047a666ba6b5edaf76d69a18789c20f548cc7b92；只构建此开发身份一次。未新增付费请求、批量benchmark、重复全量回归或GitHub Actions。
 
@@ -127,7 +127,7 @@ SDK／Worker0.34.0新增脱敏连接诊断，网页可以按已保存的attempt�
 
 入口只接受最终ModelArtifact关联Code的确定性编译source_ir_ref，并要求保存的解包含全部变量值。不从其他候选、自由文本、原生代码或人工编辑前的IR猜测当前模型。原生方法的结果与决策值照常呈现，当前没有这一试算入口。页面计算用于理解候选模型，不替代独立Evaluator。
 
-本机Chrome使用既有真实DeepSeek／容器HiGHS运行的隔离副本：原解目标13；将A从3改为2时试算目标10，改为5时目标19且两项约束余量为-4／-1，页面以红色标出；保存结果仍为13。恢复、轮询保持与390px无溢出通过。入口tests/web_decision_flow.cjs，截图位于/tmp/llm4om-web-decision-evidence。受影响的模型展开检查也通过。全部零POST／零模型和求解调用，SDK／Worker不变，未运行全量回归或Actions。
+本机Chrome使用既有真实DeepSeek／容器HiGHS运行的隔离副本：原解目标13；将A从3改为2时试算目标10，改为5时目标19且两项约束余量为-4／-1，页面以红色标出；保存结果仍为13。恢复、轮询保持与390px无溢出通过。入口tests/replays/web_decision_flow.cjs，截图位于/tmp/llm4om-web-decision-evidence。受影响的模型展开检查也通过。全部零POST／零模型和求解调用，SDK／Worker不变，未运行全量回归或Actions。
 
 ## 候选与修正卡片
 
@@ -137,7 +137,7 @@ SDK／Worker0.34.0新增脱敏连接诊断，网页可以按已保存的attempt�
 
 引用解析复用同一前端函数，核对公开namespace、relative_path、SHA-256和大小；完成时读取public_projections，进行中使用HTTP返回的已校验公开artifacts。页面不沿引用下载其他路径。
 
-本机Chrome使用既有真实反馈修正运行的隔离副本：候选001未通过检查，候选002修正自001、真实HiGHS目标13并被选择。两张卡片、保存的选择理由、声明变化、模型／代码跳转、原始记录切换时保留全列表、轮询展开状态和390px布局通过；公开引用检查拒绝不匹配hash。入口tests/web_candidates_flow.cjs，截图位于/tmp/llm4om-web-candidates-evidence。零POST／模型／Solver调用，SDK／Worker仍0.34.0，未运行全量回归或Actions。
+本机Chrome使用既有真实反馈修正运行的隔离副本：候选001未通过检查，候选002修正自001、真实HiGHS目标13并被选择。两张卡片、保存的选择理由、声明变化、模型／代码跳转、原始记录切换时保留全列表、轮询展开状态和390px布局通过；公开引用检查拒绝不匹配hash。入口tests/replays/web_candidates_flow.cjs，截图位于/tmp/llm4om-web-candidates-evidence。零POST／模型／Solver调用，SDK／Worker仍0.34.0，未运行全量回归或Actions。
 
 ## 可读的严格IR编辑
 
@@ -153,7 +153,7 @@ SDK／Worker0.34.0新增脱敏连接诊断，网页可以按已保存的attempt�
 
 “此版本链接”固定当前已显示的run，可以保存或复制；它在普通HTTP远程访问时也可使用，不依赖浏览器剪贴板权限。链接不带凭据、编辑草稿、原始问题内容或运行数据，也不提交任务。新建问题时清空运行定位；进入开发者实验界面也清除单问题定位。
 
-本机Chrome使用已保存原版13／派生版7的临时副本，核对最新版本链接、历史原版的代码产物书签、刷新恢复、选定版本导出、轮询保持、新问题清空和390px布局。入口tests/web_links_flow.cjs通过，零POST／模型／Solver调用。SDK／Worker仍0.34.0，未运行全量回归或Actions。
+本机Chrome使用已保存原版13／派生版7的临时副本，核对最新版本链接、历史原版的代码产物书签、刷新恢复、选定版本导出、轮询保持、新问题清空和390px布局。入口tests/replays/web_links_flow.cjs通过，零POST／模型／Solver调用。SDK／Worker仍0.34.0，未运行全量回归或Actions。
 
 ## 可读运行资源与求解摘要
 
@@ -163,7 +163,7 @@ SDK／Worker0.34.0新增脱敏连接诊断，网页可以按已保存的attempt�
 
 公开父历史中的调用按attempt_id去重；当前版本记录优先，来源显示当前／父版本。过程区方法名也读取选定版本的public-config，不把原始job方法名当作人工修订的方法。
 
-本机Chrome以既有真实13／派生7记录核对累计调用／预算、Best bound／Gap、CPU／内存、父调用来源和版本切换；合成公开UI输入核对总Token未知、已知0、预留37和费用未提供，缺失求解记录不补造求解摘要。390px无溢出／页面无错误通过。入口tests/web_runtime_flow.cjs，截图位于/tmp/llm4om-web-runtime-evidence；零POST／模型／Solver调用，SDK／Worker0.34.0不变，未运行全量回归或Actions。
+本机Chrome以既有真实13／派生7记录核对累计调用／预算、Best bound／Gap、CPU／内存、父调用来源和版本切换；合成公开UI输入核对总Token未知、已知0、预留37和费用未提供，缺失求解记录不补造求解摘要。390px无溢出／页面无错误通过。入口tests/replays/web_runtime_flow.cjs，截图位于/tmp/llm4om-web-runtime-evidence；零POST／模型／Solver调用，SDK／Worker0.34.0不变，未运行全量回归或Actions。
 
 SDK／Worker0.35.0的配置区支持显式[模型目录检查](s03-connectivity.md)，CLI与Web共享预检和目录读取；默认不发HTTP，目录结果不冒充生成能力。浏览器本机fixture验证了零默认请求／一次显式GET，未生成文本或提交任务。
 
@@ -173,7 +173,7 @@ SDK0.36.0的结果页直接展示严格IR目标函数中各变量的贡献卡片
 
 约束活动值、关系、余量与适用的资源用量条在结果页默认可见。交互输入折叠在同一卡片下；展开后可代入新决策，恢复按钮回到保存解。保存目标和贡献卡片始终对应Solver结果，试算目标在单独区域更新。
 
-本机Chrome读取已有真实Direct／HiGHS记录：目标13的贡献为9与4；交互试算得到10／19并显示超限，恢复得到13。轮询保留输入，390px无横向溢出／页面错误，零POST、零新模型或Solver调用。沿用`tests/web_decision_flow.cjs`，未新增浏览器框架或执行全量回归。截图与本机输出位于`/tmp/llm4om-decision-visuals-evidence`。
+本机Chrome读取已有真实Direct／HiGHS记录：目标13的贡献为9与4；交互试算得到10／19并显示超限，恢复得到13。轮询保留输入，390px无横向溢出／页面错误，零POST、零新模型或Solver调用。沿用`tests/replays/web_decision_flow.cjs`，未新增浏览器框架或执行全量回归。截图与本机输出位于`/tmp/llm4om-decision-visuals-evidence`。
 
 ## 动态建模状态卡片
 
@@ -201,6 +201,6 @@ SDK0.36.0的结果页直接展示严格IR目标函数中各变量的贡献卡片
 
 上传控件在初始化取得服务token后启用，避免页面刚打开时发送未准备好的请求。测试过程中发现这一时序并在实际入口修正，未放宽服务端检查。
 
-本机43模块类型检查通过。沿用一次公共HTTP检查：新预览保持CSV特殊字符／003／总25行，预览后jobs为空；随后既有数据经工程回复和真实容器HiGHS得到13，保存视图与来源保持。浏览器在已有运行临时副本中通过两个上传预览、20／25截断、false／null、安全文本、移除、已有结果数据页与390px无溢出；仅两个本机预览POST，零新增run／模型／Solver调用。入口仍为`tests/test_web_data_previews.py`和`tests/web_data_flow.cjs`，证据在`/tmp/llm4om-upload-preview-evidence`。
+本机43模块类型检查通过。沿用一次公共HTTP检查：新预览保持CSV特殊字符／003／总25行，预览后jobs为空；随后既有数据经工程回复和真实容器HiGHS得到13，保存视图与来源保持。浏览器在已有运行临时副本中通过两个上传预览、20／25截断、false／null、安全文本、移除、已有结果数据页与390px无溢出；仅两个本机预览POST，零新增run／模型／Solver调用。入口仍为`tests/test_web_data_previews.py`和`tests/replays/web_data_flow.cjs`，证据在`/tmp/llm4om-upload-preview-evidence`。
 
 SDK／Worker仍0.36.0，这次改变宿主Web入口；Worker求解代码与镜像保持。未添加依赖、接口框架或新测试套件，未执行全量回归、batch或Actions。

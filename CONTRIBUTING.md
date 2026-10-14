@@ -43,6 +43,8 @@ uv build
 
 仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。容器测试要求可访问的 Docker daemon 和已构建的 Worker 镜像；真实测试不自动跳过。Linux 为当前完整隔离验证环境，macOS／Windows 尚未验收。平台测试从 CLI／SDK 与编译／Solver 公共接口验证离线、真实求解、独立方法安装及预检；维护检查不替代真实隔离测试、完整预算执行、恢复或 benchmark 验收。基础安装可省略 solve extra，完整测试须安装 solve 与 gurobi extras；Gurobi 实测仅证明当前 size-limited 微型环境。
 
+插件测试夹具沿用已安装SDK所需的构建依赖，使用`uv build --offline`；完成上述`uv sync`后不为夹具构建访问PyPI。
+
 ### 前端构建与浏览器流程测试
 
 Workbench 前端源在 `frontend/`（React + Vite + TypeScript），构建产物以固定文件名输出到 `src/llm4om/web_assets/` 随包分发。修改前端后必须重新构建，流程测试跑在构建产物上：
@@ -68,9 +70,9 @@ node tests/web_story_flow.cjs
 ```
 
 - 直接读运行目录的用例（`web_edit_flow`／`web_model_edit_flow`／`web_clarification_flow`）要求 `LLM4OM_WEB_TEST_WORKSPACE` 指向 `<workspace>/jobs`（其下即 `<job_id>/`）；其余用例只需该变量存在。
-- fixture 顺序：`web_clarification_flow` 先跑（其末尾修订生成 revision-2 运行），`web_edit_flow` 依赖该已完成运行；`web_model_flow` 须在 `web_edit_flow` 之前（或独立工作区）运行，否则修订版本的假设记录会改变其断言对象。严格IR编辑使用独立工作区按 `web_story_flow` → `web_model_edit_flow` 运行，变量为 `qty_A/qty_B`，派生目标为3；story／start／failure／keyboard 等可独立运行。`web_datasets_flow` 自带确定性导入，测试会把数据集冻结到该工作区 `tasks/` 下。
+- 核心流程没有执行顺序要求。模型、代码、数学排版、键盘与编辑用例通过 `tests/helpers/browser_fixture.cjs` 的公共HTTP接口各自创建完整运行，再检查自己的结果；严格IR变量为 `qty_A/qty_B`，派生目标为3。story／clarification／start／failure等各自建立所需场景。`web_state_flow` 使用确定性HTTP响应检查配置输入保留、迟到响应、轮询和历史链接，不提交运行。`web_datasets_flow` 自带确定性导入，数据集只写入一次性工作区。
 - 连通性测试单独使用 `uv run --locked --extra solve python tests/helpers/connectivity_server.py --workspace /tmp/llm4om-connectivity-fixture`，再以 `LLM4OM_WEB_TEST_URL=http://127.0.0.1:8796`、`LLM4OM_WEB_TEST_PROVIDER_URL=http://127.0.0.1:8797` 运行 `web_connectivity_check_flow.cjs`；guidance Provider不提供模型目录GET。
-- `web_decision/data/process/links/runtime/candidates/history` 是特定历史运行的手工复查脚本，需要匹配其样本、变量名、版本与调用记录；不把它们在通用guidance工作区中的失败作为本机启动展示的验收条件。当前核心流程以story、模型、编辑、数据集及对应公共HTTP测试验收；历史脚本来源见 [#87](https://github.com/Fangziyang0910/LLM4OM/issues/87)。
+- `tests/replays/` 保存特定历史运行的手工复查脚本，需要匹配样本、变量名、版本与调用记录。当前核心流程使用`tests/web_*flow.cjs`及公共HTTP测试验收；历史脚本来源见 [#87](https://github.com/Fangziyang0910/LLM4OM/issues/87)。
 - Chrome 路径按本机 Playwright 安装调整；`LLM4OM_BROWSER_MODULE` 指向 `frontend/node_modules/playwright`（devDependency）。
 
 ## 4. Review 与交付

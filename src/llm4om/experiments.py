@@ -14,7 +14,7 @@ from pathlib import Path
 from uuid import uuid4
 from typing import Any, Iterator
 
-from llm4om.application import _sdk_sha256
+from llm4om.runtime_identity import sdk_sha256
 from llm4om.contracts import (RunError, parse_json, parse_reference_json, read_config,
                               public_path, validate_problem, validate_data)
 from llm4om.control import CancellationToken
@@ -192,7 +192,7 @@ def _prepare(config: Path, offline: bool) -> tuple[dict[str, Any], list[dict[str
     if not jobs:
         raise RunError('invalid_experiment', 'admission', 'The matrix has no included jobs.')
     snapshot = {'schema_version': '0.1.0', 'experiment_id': experiment_id, 'offline': offline, 'repeats': repeats,
-        'budget': budget, 'sdk': version('llm4om'), 'sdk_sha256': _sdk_sha256(), 'python': platform.python_version(), 'cells': cells, 'reporters': selections, 'reporter_bindings': [reporter.binding for reporter in reporters]}
+        'budget': budget, 'sdk': version('llm4om'), 'sdk_sha256': sdk_sha256(), 'python': platform.python_version(), 'cells': cells, 'reporters': selections, 'reporter_bindings': [reporter.binding for reporter in reporters]}
     return {**snapshot, '_input_sources': sources}, jobs
 
 
@@ -382,7 +382,7 @@ def report_experiment(output: Path) -> dict[str, Any]:
     """Export public JSONL/CSV and per-protocol/config/repeat Markdown/HTML summaries."""
     state = parse_reference_json((output / '.private/experiment-state.json').read_bytes())
     snapshot = state['snapshot']
-    if (snapshot.get('sdk') != version('llm4om') or snapshot.get('sdk_sha256') != _sdk_sha256()
+    if (snapshot.get('sdk') != version('llm4om') or snapshot.get('sdk_sha256') != sdk_sha256()
             or 'reporters' not in snapshot or 'reporter_bindings' not in snapshot):
         raise RunError('checkpoint_incompatible', 'reporting', 'Saved experiment has no compatible SDK/Reporter identities.')
     rows = [state['results'].get(job['job_id'], _empty(job, job['status'])) for job in state['jobs']]

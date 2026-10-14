@@ -1,4 +1,6 @@
 // 人工修订:问题/代码/严格IR 三种编辑范围;字段规格、数值转换与校验同源。
+import type { ChangeEvent } from "react";
+import type { BudgetLedger, EditDocument, LinearExpression } from "../types";
 import { format } from "../ui";
 
 type Path = (string | number)[];
@@ -16,31 +18,32 @@ export interface FieldSpec {
   className?: string;
 }
 
-const getPath = (source: any, path: Path): any => {
-  let target = source;
-  for (const key of path) target = target?.[key];
+const getPath = (source: EditDocument, path: Path): unknown => {
+  let target: unknown = source;
+  for (const key of path) target = (target as Record<string | number, unknown> | undefined)?.[key];
   return target;
 };
 
-const setPath = (target: any, path: Path, value: any) => {
-  let cursor = target;
-  for (const key of path.slice(0, -1)) cursor = cursor[key];
+const setPath = (target: EditDocument, path: Path, value: unknown) => {
+  let cursor = target as unknown as Record<string | number, unknown>;
+  for (const key of path.slice(0, -1)) cursor = cursor[key] as Record<string | number, unknown>;
   cursor[path.at(-1) as string | number] = value;
 };
 
 const keyOf = (path: Path) => path.join(".");
 
-export function synchronizeFormulation(value: any) {
+export function synchronizeFormulation(value: EditDocument) {
   const ir = value.structured_ir;
-  ir.problem_type = ir.variables.every((item: any) => item.domain === "continuous") ? "lp" : "milp";
+  if (!ir) return;
+  ir.problem_type = ir.variables.every((item) => item.domain === "continuous") ? "lp" : "milp";
   if (value.formulation?.representation_kind !== "five_element") return;
-  const text = (expression: any) =>
-    [expression.constant, ...expression.terms.map((term: any) => `${term.coefficient}*${term.variable_id}`)].join(
+  const text = (expression: LinearExpression) =>
+    [expression.constant, ...expression.terms.map((term) => `${term.coefficient}*${term.variable_id}`)].join(
       " + ",
     );
   const representation = value.formulation.representation;
   representation.variables = ir.variables.map(
-    ({ id, domain, lower_bound, upper_bound, requirement_ids }: any) => ({
+    ({ id, domain, lower_bound, upper_bound, requirement_ids }) => ({
       id,
       index_sets: [],
       domain,
@@ -54,7 +57,7 @@ export function synchronizeFormulation(value: any) {
     expression_text: text(ir.objective.expression),
     requirement_ids: ir.objective.requirement_ids,
   };
-  representation.constraints = ir.constraints.map((item: any) => ({
+  representation.constraints = ir.constraints.map((item) => ({
     id: item.id,
     expression_text: `${text(item.expression)} ${({ le: "<=", ge: ">=", eq: "=" } as Record<string, string>)[item.sense]} ${item.rhs}`,
     requirement_ids: item.requirement_ids,
@@ -62,7 +65,7 @@ export function synchronizeFormulation(value: any) {
 }
 
 // 与原表单一致的数值语义:数字字段空值仅在可空边界处为 null,其余为 NaN 并被校验阻止。
-export function buildDoc(base: any, overrides: Record<string, string>, template: any): any {
+export function buildDoc(base: EditDocument, overrides: Record<string, string>, template: EditDocument): EditDocument {
   const value = structuredClone(base);
   for (const spec of fieldSpecs(base)) {
     const raw = overrides[keyOf(spec.path)];
@@ -80,14 +83,14 @@ export function buildDoc(base: any, overrides: Record<string, string>, template:
   return value;
 }
 
-export function fieldSpecs(base: any): FieldSpec[] {
+export function fieldSpecs(base: EditDocument): FieldSpec[] {
   const specs: FieldSpec[] = [];
   const ir = base.structured_ir;
   if (base.operation === "problem") {
     specs.push({ label: "新版本标识", path: ["problem", "revision"], kind: "text" });
     specs.push({ label: "完整问题描述", path: ["problem", "description"], kind: "textarea", rows: 7 });
     for (const group of ["requirements", "assumptions"] as const)
-      (base.problem[group] || []).forEach((item: any, index: number) =>
+      (base.problem[group] || []).forEach((item, index) =>
         specs.push({
           label: item.id,
           path: ["problem", group, index, "text"],
@@ -105,7 +108,7 @@ export function fieldSpecs(base: any): FieldSpec[] {
       spellcheck: false,
     });
   } else if (ir) {
-    const names = Object.fromEntries(ir.variables.map((item: any) => [item.id, item.name || item.id]));
+    const names = Object.fromEntries(ir.variables.map((item) => [item.id, item.name || item.id]));
     specs.push({
       label: "优化方向",
       path: ["structured_ir", "objective", "sense"],
@@ -120,14 +123,14 @@ export function fieldSpecs(base: any): FieldSpec[] {
       path: ["structured_ir", "objective", "expression", "constant"],
       kind: "number",
     });
-    ir.objective.expression.terms.forEach((term: any, index: number) =>
+    ir.objective.expression.terms.forEach((term, index) =>
       specs.push({
         label: "目标 · " + names[term.variable_id] + " 系数",
         path: ["structured_ir", "objective", "expression", "terms", index, "coefficient"],
         kind: "number",
       }),
     );
-    ir.variables.forEach((item: any, index: number) => {
+    ir.variables.forEach((item, index) => {
       specs.push({
         label: item.id + " · 类型",
         path: ["structured_ir", "variables", index, "domain"],
@@ -149,13 +152,13 @@ export function fieldSpecs(base: any): FieldSpec[] {
           nullable: true,
         });
     });
-    ir.constraints.forEach((item: any, index: number) => {
+    ir.constraints.forEach((item, index) => {
       specs.push({
         label: item.id + " · 常数",
         path: ["structured_ir", "constraints", index, "expression", "constant"],
         kind: "number",
       });
-      item.expression.terms.forEach((term: any, tIndex: number) =>
+      item.expression.terms.forEach((term, tIndex) =>
         specs.push({
           label: item.id + " · " + names[term.variable_id] + " 系数",
           path: ["structured_ir", "constraints", index, "expression", "terms", tIndex, "coefficient"],
@@ -198,9 +201,9 @@ export function fieldSpecs(base: any): FieldSpec[] {
   return specs;
 }
 
-export function validateRevision(document: any, template: any, consumed: any): string | null {
+export function validateRevision(document: EditDocument, template: EditDocument, consumed: BudgetLedger | undefined): string | null {
   const invalid = (value: unknown) => value == null || typeof value !== "number" || !Number.isFinite(value);
-  const walk = (node: any): unknown[] =>
+  const walk = (node: unknown): unknown[] =>
     node == null
       ? []
       : Array.isArray(node)
@@ -224,7 +227,7 @@ export function validateRevision(document: any, template: any, consumed: any): s
       document.problem.revision === template.problem.revision)
   )
     return "问题修订需要完整描述和新的版本标识。";
-  if (document.operation === "code" && !document.code.source.trim()) return "求解代码不能留空。";
+  if (document.operation === "code" && !document.code?.source.trim()) return "求解代码不能留空。";
   if (document.budget.max_candidates <= (consumed?.candidates || 0))
     return "候选总上限需要覆盖已有候选和本次新增候选。";
   return null;
@@ -238,12 +241,12 @@ export function RevisionFields({
   onAddConstraint,
   ledger,
 }: {
-  base: any;
+  base: EditDocument;
   overrides: Record<string, string>;
   onInput: (key: string, value: string) => void;
   onRemoveConstraint: (index: number) => void;
   onAddConstraint: () => void;
-  ledger: any;
+  ledger: BudgetLedger | undefined;
 }) {
   const specs = fieldSpecs(base);
   const ir = base.structured_ir;
@@ -252,7 +255,7 @@ export function RevisionFields({
   const render = (spec: FieldSpec) => {
     const key = keyOf(spec.path);
     const raw = overrides[key] ?? String(getPath(base, spec.path) ?? "");
-    const common = { value: raw, onChange: (event: any) => onInput(key, event.target.value) };
+    const common = { value: raw, onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => onInput(key, event.target.value) };
     if (spec.kind === "textarea")
       return (
         <label className={"revision-field" + (spec.className ? " " + spec.className : "")} key={key}>
@@ -270,7 +273,7 @@ export function RevisionFields({
       return (
         <label className="revision-field" key={key}>
           {spec.label}
-          <input type="number" min={0} step="any" placeholder={spec.nullable ? "无界" : undefined} {...common} />
+          <input type="number" min={spec.path[0] === "budget" ? 0 : undefined} step="any" placeholder={spec.nullable ? "无界" : undefined} {...common} />
         </label>
       );
     if (spec.kind === "select")
@@ -316,7 +319,7 @@ export function RevisionFields({
                 .map(render)}
             </div>
           </div>
-          {ir.variables.map((item: any, index: number) => (
+          {ir.variables.map((item, index) => (
             <div className="revision-model-group" key={item.id}>
               <h4>{"变量 · " + (item.name || item.id)}</h4>
               <div className="field-grid">
@@ -331,7 +334,7 @@ export function RevisionFields({
               </div>
             </div>
           ))}
-          {ir.constraints.map((item: any, index: number) => (
+          {ir.constraints.map((item, index) => (
             <div className="revision-model-group" key={item.id}>
               <h4>
                 {"约束 · " + item.id}

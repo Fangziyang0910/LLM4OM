@@ -103,8 +103,8 @@ def _select(inventory: dict[tuple[str, str], Plugin], kind: str, plugin_id: str,
 
 
 def _runtime() -> dict[str, str]:
-    from llm4om.application import _sdk_sha256
-    return {"sdk_version": version("llm4om"), "sdk_sha256": _sdk_sha256()}
+    from llm4om.runtime_identity import sdk_sha256
+    return {"sdk_version": version("llm4om"), "sdk_sha256": sdk_sha256()}
 
 
 def _prepare_task(settings: dict[str, Any]) -> tuple[Plugin, TaskAdapter, dict[str, Any]]:

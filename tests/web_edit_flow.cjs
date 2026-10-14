@@ -1,5 +1,6 @@
 "use strict";
 const assert = require("node:assert/strict");
+const { completedRun } = require("./helpers/browser_fixture.cjs");
 const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || "playwright");
@@ -17,14 +18,12 @@ assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
     const p = await b.newPage({ viewport: { width: 1440, height: 1100 } });
     const errors = [];
     p.on("pageerror", (e) => errors.push(e.message));
-    await p.goto(url);
-    await p.waitForSelector(".job");
-    await p.locator(".job").first().click();
-    await p.waitForSelector(".objective-result strong");
+    await completedRun(p);
     const before = await p.evaluate(() => ({
       job: currentJob,
       run: snapshot.job.run_id,
       ledger: snapshot.contents["budget-ledger.json"],
+      revision: snapshot.contents["public-problem.json"].revision,
     }));
     const parent = path.join(
         workspace,
@@ -55,7 +54,10 @@ assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
     const problem = JSON.parse(
       await p.locator("#assisted-document").inputValue(),
     );
-    assert.notEqual(problem.problem.revision, "1");
+    assert.equal(problem.problem.revision, before.revision);
+    await p.getByLabel("新版本标识", { exact: true }).fill(before.revision + ".preview");
+    await p.waitForFunction(revision => JSON.parse(document.querySelector("#assisted-document").value).problem.revision === revision,
+      before.revision + ".preview");
     await p.selectOption("#edit-operation", "code");
     await p.waitForSelector(".source-editor");
     const source = await p.locator(".source-editor").inputValue();

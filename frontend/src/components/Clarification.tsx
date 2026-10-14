@@ -9,6 +9,11 @@ interface Question {
   statement_ref?: { kind: string; id: string } | null;
 }
 
+export interface ClarificationRequest {
+  request_id: string;
+  questions: Question[];
+}
+
 export interface ClarificationPayload {
   answers?: unknown;
   revised_problem?: any;
