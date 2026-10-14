@@ -11,8 +11,7 @@ Upstream: https://github.com/teshnizi/OptiMUS
 Fixed commit: e182e9ef5841605c2a7e87467021fd83522b6484
 The original license is retained in optimus_source/LICENSE.txt; manifest.json
 records the original file URLs and byte hashes. Platform bridges are separate
-from those unchanged files. No retrieval corpus or third-party benchmark
-dataset is bundled by this integration.
+from those unchanged files. No retrieval corpus is bundled by this integration.
 
 OptiTree's fixed public modeling-thought library and tree mapping are bundled
 under their original MIT license in src/llm4om/optitree_source/.
@@ -24,3 +23,16 @@ records original paths and byte hashes. Inference prompts use type descriptions
 and modeling thoughts, excluding the example_application solved instances.
 OR-LLM-Agent and AutoFormulation adapters are independently implemented;
 no code or prompt text from those upstream repositories is redistributed.
+
+Public benchmark question projections are bundled in
+src/llm4om/benchmark_sources/ from the user's prepared OPT-Agent data.
+Source: https://github.com/Fangziyang0910/OPT-Agent
+Fixed commit: ad1c15bed95af0efc7de7d28c38baf2ad2f12351
+catalog.json records the source paths, byte hashes and question counts.
+Only existing managers' get_input() outputs and sample IDs are retained;
+answers, reference solutions and solver code are excluded.
+These data retain their source terms, separate from the platform code license.
+NL4Opt's MIT notice and MAMO's CC-BY-SA-4.0 license are retained as
+benchmark_sources/NL4Opt-LICENSE.txt and benchmark_sources/MAMO-LICENSE.txt.
+The OPT-Agent snapshot does not specify individual licenses for its other
+prepared datasets; the catalog records that absence without assigning one.

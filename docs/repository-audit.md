@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-14；SDK／Worker开发版本：0.37.0。当前包含 345 个仓库文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-14；SDK／Worker开发版本：0.37.0。当前包含 360 个仓库文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -313,9 +313,9 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/src/components/Decision.tsx` | 决策面板、失败诊断与决策探索 | 候选模型结果、余量试算 |
 | `frontend/src/components/StoryFlow.tsx` | 垂直故事流:过程事件卡片与输出摘要 | 角色发言、状态预览、时间窗消耗、实时消耗条、产物直达 |
 | `tests/web_story_flow.cjs` | 故事流浏览器验收 | 里程碑卡片集、实时消耗、跳转、无原始 JSON、轮询与窄屏 |
-| `frontend/src/components/Datasets.tsx` | 数据集浏览:列表→条目→公开输入与结构化参考答案 | 侧栏入口、分页说明、参考目标/决策映射/探针点结构化渲染,无原始 JSON |
-| `tests/test_web_datasets.py` | 数据集 HTTP API 验收 | 列表与条目参考答案、哈希校验复用冻结语义、分页、未知名与跨源拒绝 |
-| `tests/web_datasets_flow.cjs` | 数据集页面浏览器验收 | 冻结导入→侧栏入口→列表→条目表→问题描述+参考答案、无原始 JSON、窄屏 |
+| `frontend/src/components/Datasets.tsx` | 内置 Benchmark 列表、题面与单问题试用 | 分页、复制、公开业务数据、带入建模、键盘与窄屏 |
+| `tests/test_web_datasets.py` | 内置 Benchmark 公共 HTTP 验收 | 九组2033条公开题面、分页、不混入工作区任务、公开输入与参考字段隔离 |
+| `tests/web_datasets_flow.cjs` | 内置 Benchmark 浏览器验收 | 九组浏览、复制、带入建模、参数携带、配置保留与窄屏 |
 | `tests/web_keyboard_flow.cjs` | 键盘可达性浏览器验收 | 焦点环可见、无焦点陷阱、Enter 核心路径(运行→标签→产物→运行详情) |
 | `tests/web_math_flow.cjs` | 数学排版浏览器验收 | expression_text→KaTeX(∑/≤/下标),结构化 IR 交互路径保持 |
 | `frontend/src/math.tsx` | ASCII 数学→LaTeX 有界转换与 MathTex 组件 | 语法外输入回退纯文本 |
@@ -404,3 +404,19 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/plugins/fixture_store/pyproject.toml` | 独立ArtifactStore分发和entry point | 单独wheel安装与范围依赖 |
 | `examples/plugins/fixture_store/src/llm4om_fixture_store/__init__.py` | ArtifactStore工程fixture | 打开记录与标准文件系统契约委托 |
 | `examples/plugins/fixture_store/README.md` | fixture_store使用说明 | wheel构建、安装与插件列表入口 |
+
+| `scripts/prepare_benchmarks.py` | 维护端复用 OPT-Agent 管理器生成公开题面 | 原来源提交、题面非空、ID唯一与可重复输出 |
+| `src/llm4om/benchmarks.py` | 内置目录与公开建模输入 | 资源哈希、公共问题与数据契约、分页及参考隔离 |
+| `docs/development/s09-builtin-benchmarks.md` | 内置样例产品行为、来源与验收 | 九组完整题面、维护入口、试用流程与求解范围 |
+| `src/llm4om/benchmark_sources/MAMO-LICENSE.txt` | 固定原许可文本 | 原始字节SHA-256保持 |
+| `src/llm4om/benchmark_sources/NL4Opt-LICENSE.txt` | 固定原许可文本 | 原始字节SHA-256保持 |
+| `src/llm4om/benchmark_sources/catalog.json` | 内置目录及来源哈希 | 来源提交、原路径、数量与公开资源哈希 |
+| `src/llm4om/benchmark_sources/complexor.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
+| `src/llm4om/benchmark_sources/industryor.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
+| `src/llm4om/benchmark_sources/mamo_complex.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
+| `src/llm4om/benchmark_sources/mamo_easy.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
+| `src/llm4om/benchmark_sources/nl4cop.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
+| `src/llm4om/benchmark_sources/nl4lp.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
+| `src/llm4om/benchmark_sources/nl4opt.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
+| `src/llm4om/benchmark_sources/optibench.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
+| `src/llm4om/benchmark_sources/optmath.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |

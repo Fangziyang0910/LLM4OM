@@ -70,7 +70,7 @@ node tests/web_story_flow.cjs
 ```
 
 - 直接读运行目录的用例（`web_edit_flow`／`web_model_edit_flow`／`web_clarification_flow`）要求 `LLM4OM_WEB_TEST_WORKSPACE` 指向 `<workspace>/jobs`（其下即 `<job_id>/`）；其余用例只需该变量存在。
-- 核心流程没有执行顺序要求。模型、代码、数学排版、键盘与编辑用例通过 `tests/helpers/browser_fixture.cjs` 的公共HTTP接口各自创建完整运行，再检查自己的结果；严格IR变量为 `qty_A/qty_B`，派生目标为3。story／clarification／start／failure等各自建立所需场景。`web_state_flow` 使用确定性HTTP响应检查配置输入保留、迟到响应、轮询和历史链接，不提交运行。`web_datasets_flow` 自带确定性导入，数据集只写入一次性工作区。
+- 核心流程没有执行顺序要求。模型、代码、数学排版、键盘与编辑用例通过 `tests/helpers/browser_fixture.cjs` 的公共HTTP接口各自创建完整运行，再检查自己的结果；严格IR变量为 `qty_A/qty_B`，派生目标为3。story／clarification／start／failure等各自建立所需场景。`web_state_flow` 使用确定性HTTP响应检查配置输入保留、迟到响应、轮询和历史链接，不提交运行。`web_datasets_flow` 直接浏览随包提供的内置题面，另以独立 fixture 验证业务参数携带与参考答案隔离，无需导入数据集。
 - 连通性测试单独使用 `uv run --locked --extra solve python tests/helpers/connectivity_server.py --workspace /tmp/llm4om-connectivity-fixture`，再以 `LLM4OM_WEB_TEST_URL=http://127.0.0.1:8796`、`LLM4OM_WEB_TEST_PROVIDER_URL=http://127.0.0.1:8797` 运行 `web_connectivity_check_flow.cjs`；guidance Provider不提供模型目录GET。
 - `tests/replays/` 保存特定历史运行的手工复查脚本，需要匹配样本、变量名、版本与调用记录。当前核心流程使用`tests/web_*flow.cjs`及公共HTTP测试验收；历史脚本来源见 [#87](https://github.com/Fangziyang0910/LLM4OM/issues/87)。
 - Chrome 路径按本机 Playwright 安装调整；`LLM4OM_BROWSER_MODULE` 指向 `frontend/node_modules/playwright`（devDependency）。

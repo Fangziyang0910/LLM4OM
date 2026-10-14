@@ -2,7 +2,7 @@
 
 **自动优化建模集成平台 · A modular platform for automated optimization modeling**
 
-LLM4OM 是面向科研与开发者的自动优化建模集成平台。用户输入自然语言描述与可选数据，指定建模方法、LLM 和兼容求解配置，获得可检查的建模输出与求解结果。平台提供 CLI 与 Web 可视化工作台，持续接入不同 benchmark、建模方法和求解器，作为通用智能优化平台的 1.0。
+LLM4OM 是让普通使用者通过自然语言解决优化问题的平台。输入问题与可选业务数据，选择建模方法和求解器，即可查看数学表述、代码与求解结果。Web 提供平台内置 Benchmark 的逐条浏览、复制和带入建模；数据由平台维护。开发者可通过 CLI、SDK 与插件继续接入方法、LLM、求解器和评测。
 
 核心流程：**问题描述与数据 → Formulation（数学表述）→ Code（求解实现）→ Solve → 决策结果与运行记录**。不同方法可以联合生成或往返修正两阶段输出；Benchmark 在同一流程上组织批量实验与方法比较。
 
@@ -44,7 +44,7 @@ uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --hos
 
 浏览器打开 `http://127.0.0.1:8767` 即可：输入自然语言问题与数据 → 选择方法 → 观察真实建模步骤 →
 查看五元素表述、求解代码、决策结果与运行记录，支持数据预览、模型数值编辑、派生求解、候选比较、
-决策试算、人工修订与数据集浏览（查看已导入基准的每条输入与参考答案，答案仅在本地工作台呈现）。访问令牌由服务启动时生成，页面自动获取；LLM 凭据只保留在服务端。
+决策试算、人工修订与内置 Benchmark 浏览。样例直接复用 OPT-Agent 已整理的 9 组、2033 条题面，可逐条复制或带入建模，无需上传数据集。详情见[内置样例记录](docs/development/s09-builtin-benchmarks.md)。访问令牌由服务启动时生成，页面自动获取；LLM 凭据只保留在服务端。
 `--host 0.0.0.0` 可供局域网访问，但此时 Origin 校验是 CSRF 缓解而非认证，请勿暴露于不受信网络。
 页面源码在 `frontend/`（React + TypeScript），仓库自带已构建的静态资源；改前端后 `npm --prefix frontend run build` 重新生成,流程与浏览器测试见 [CONTRIBUTING](CONTRIBUTING.md)与[S09-D](docs/development/s09-frontend-redesign.md)。
 

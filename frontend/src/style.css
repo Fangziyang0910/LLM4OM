@@ -1913,7 +1913,7 @@ th {
 }
 .dataset-row:hover,
 .dataset-row.selected {
-  background: var(--sage-20);
+  background: var(--soft);
 }
 .dataset-row:focus-visible {
   outline: 2px solid var(--accent);
@@ -1924,27 +1924,6 @@ th {
   grid-template-columns: 1fr;
   gap: 14px;
   margin-top: 16px;
-}
-.reference-table td.reference-key {
-  color: var(--muted);
-  width: 132px;
-}
-.reference-item {
-  padding: 2px 0;
-}
-.reference-item + .reference-item {
-  border-top: 1px solid var(--line);
-}
-.reference-objective {
-  font-size: 15px;
-}
-.reference-objective strong {
-  font-size: 22px;
-}
-@media (min-width: 1100px) {
-  .dataset-case {
-    grid-template-columns: 1fr 1fr;
-  }
 }
 .dataset-pager {
   display: flex;

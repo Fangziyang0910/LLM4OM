@@ -1,4 +1,7 @@
-"""数据集浏览 API:本地所有者可逐条查看冻结快照的公开输入与参考答案。"""
+"""The public example browser uses platform benchmarks, independent of user imports."""
+
+import base64
+import hashlib
 import json
 import signal
 import socket
@@ -17,18 +20,16 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 class WebDatasetTests(unittest.TestCase):
-    def test_dataset_listing_and_case_reference_browsing(self):
-        with tempfile.TemporaryDirectory() as root:
-            workspace = Path(root)
-            (workspace / 'tasks').mkdir()
-            manifest = import_dataset(REPO / 'examples/specs/import-checker.json', workspace / 'tasks' / 'micro')
-            self.assertTrue(manifest.is_file())
+    def test_builtin_listing_browsing_and_copy_input_hide_workspace_fixtures(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            import_dataset(REPO / 'examples/specs/import-checker.json', workspace / 'tasks' / 'micro')
             with socket.socket() as allocation:
                 allocation.bind(('127.0.0.1', 0))
                 port = allocation.getsockname()[1]
-                allocation.close()
-            process = subprocess.Popen([sys.executable, '-m', 'llm4om', 'serve', '--host', '127.0.0.1', '--port', str(port),
-                                        '--workspace', str(workspace)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            process = subprocess.Popen([sys.executable, '-m', 'llm4om', 'serve', '--host', '127.0.0.1',
+                '--port', str(port), '--workspace', str(workspace)], cwd=temporary,
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             try:
                 opener = build_opener(ProxyHandler({}))
                 url = f'http://127.0.0.1:{port}'
@@ -41,60 +42,58 @@ class WebDatasetTests(unittest.TestCase):
                         time.sleep(0.05)
                 else:
                     self.fail('Web server did not start.')
-                headers = {'Origin': url}
-                with opener.open(Request(url + '/api/datasets', headers=headers), timeout=3) as response:
-                    listing = json.load(response)
-                datasets = {item['dataset_id']: item for item in listing['datasets']}
-                self.assertIn('original-production-micro-fixture', datasets)
-                entry = datasets['original-production-micro-fixture']
-                self.assertEqual(entry['source_version'], 'v1')
-                self.assertEqual(entry['protocol_id'], 'llm4om.eval.checker-v0.1')
-                self.assertEqual(entry['adapter_id'], 'llm4om.tasks.checker_fixture')
-                self.assertEqual(entry['N_selected'], 1)
-                self.assertEqual(entry['N_cases'], 1)
-                task_id = entry['task_id']
-                with opener.open(Request(f'{url}/api/datasets/{task_id}', headers=headers), timeout=3) as response:
-                    detail = json.load(response)
-                self.assertEqual(detail['dataset']['dataset_id'], 'original-production-micro-fixture')
-                self.assertEqual(detail['total'], 1)
+                def get(path):
+                    with opener.open(Request(url + path, headers={'Origin': url}), timeout=5) as response:
+                        return json.load(response)
+                datasets = {item['dataset_id']: item for item in get('/api/datasets')['datasets']}
+                counts = {'nl4opt': 205, 'nl4lp': 178, 'mamo_easy': 642, 'mamo_complex': 210,
+                    'industryor': 99, 'complexor': 18, 'optibench': 403, 'optmath': 128, 'nl4cop': 150}
+                self.assertEqual({key: item['N_cases'] for key, item in datasets.items()}, counts)
+                for dataset in datasets.values():
+                    cases = []
+                    for offset in range(0, dataset['N_cases'], 200):
+                        sample = get('/api/datasets/' + dataset['task_id'] + f'?offset={offset}&limit=200')
+                        self.assertEqual(sample['total'], dataset['N_cases'])
+                        cases.extend(sample['cases'])
+                    self.assertEqual(len(cases), dataset['N_cases'])
+                    self.assertEqual(len({case['case_id'] for case in cases}), dataset['N_cases'])
+                    for public_case in cases:
+                        self.assertTrue(public_case['problem']['description'].strip())
+                        self.assertEqual(public_case['copy_text'], public_case['problem']['description'])
+                        self.assertEqual(public_case['input']['data'], [])
+                        self.assertEqual(set(public_case['input']), {'title', 'problem', 'data'})
+                        self.assertNotIn('reference', public_case)
+                entry = datasets['nl4opt']
+                detail = get('/api/datasets/' + entry['task_id'] + '?offset=0&limit=2')
+                self.assertEqual(detail['total'], 205)
+                self.assertEqual(len(detail['cases']), 2)
                 case = detail['cases'][0]
-                self.assertEqual(case['case_id'], 'fixture-production-milp-001')
-                self.assertTrue(case['selected'])
-                self.assertTrue(case['eligible'])
-                self.assertIn('生产数量', case['problem']['description'])
-                self.assertEqual(case['problem']['requirements'][0]['id'], 'R-PROFIT')
-                reference = case['reference']
-                self.assertEqual(reference['reference_objective']['value'], 13)
-                self.assertEqual(reference['decision_mapping'], {'A': 'qty_A', 'B': 'qty_B'})
-                # 分页:offset 越界返回空窗口,total 不变
-                with opener.open(Request(f'{url}/api/datasets/{task_id}?offset=5&limit=10', headers=headers), timeout=3) as response:
-                    beyond = json.load(response)
-                self.assertEqual(beyond['cases'], [])
-                self.assertEqual(beyond['total'], 1)
-                # 单条参考答案字节被改动:只降级该条,数据集整体仍可浏览
-                oracle = workspace / 'tasks' / 'micro' / 'private' / '0.json'
-                original = oracle.read_bytes()
-                oracle.write_bytes(original[:-1] + b' ')
-                try:
-                    with opener.open(Request(f'{url}/api/datasets/{task_id}', headers=headers), timeout=3) as response:
-                        degraded = json.load(response)
-                    self.assertEqual(degraded['total'], 1)
-                    self.assertEqual(degraded['cases'][0]['error'], 'snapshot_hash_mismatch')
-                    self.assertIsNone(degraded['cases'][0]['reference'])
-                finally:
-                    oracle.write_bytes(original)
-                # 未知数据集与跨源访问按既有错误语义拒绝
-                with self.assertRaises(HTTPError) as unknown:
-                    opener.open(Request(f'{url}/api/datasets/{("0" * 32)}', headers=headers), timeout=3)
-                self.assertEqual(json.load(unknown.exception)['error']['code'], 'not_found')
-                with self.assertRaises(HTTPError) as foreign:
+                self.assertTrue(case['problem']['description'])
+                self.assertEqual(case['copy_text'], case['problem']['description'])
+                self.assertEqual(case['input']['problem']['source']['dataset_id'], 'nl4opt')
+                self.assertNotIn('reference', case)
+                self.assertNotIn('eligible', case)
+                self.assertNotIn('selected', case)
+                self.assertEqual(get('/api/datasets/' + entry['task_id'] + '?offset=9999')['cases'], [])
+                with self.assertRaises(HTTPError):
+                    get('/api/datasets/' + '0'*32)
+                with self.assertRaises(HTTPError):
                     opener.open(Request(url + '/api/datasets', headers={'Host': f'192.0.2.10:{port}',
                         'Origin': f'http://192.0.2.10:{port}'}), timeout=3)
-                self.assertEqual(json.load(foreign.exception)['error']['code'], 'invalid_origin')
             finally:
                 process.send_signal(signal.SIGINT)
                 process.communicate(timeout=10)
 
-
-if __name__ == '__main__':
-    unittest.main()
+    def test_modeling_input_retains_business_data_and_omits_reference_fields(self):
+        from llm4om.benchmarks import modeling_input
+        raw = b'{"Capacity":4,"Count":"5"}'
+        case = {'case_id':'example:1','sample_id':'1','subset':'example','description':'Maximize production with public Capacity.',
+            'solution':'PRIVATE-SOLUTION-SENTINEL','reference_objective':12345,
+            'data':[{'name':'parameters.json','data_id':'parameters','format':'json','base64':base64.b64encode(raw).decode(),
+                'size':len(raw),'schema':{'type':'object'}}]}
+        header = {'dataset_id':'example','title':'Example','source_version':'v1','source_url':'https://example.com'}
+        result = modeling_input(case, header)
+        self.assertEqual(base64.b64decode(result['data'][0]['base64']), raw)
+        self.assertEqual(result['problem']['data_refs'][0]['sha256'], hashlib.sha256(raw).hexdigest())
+        self.assertNotIn('PRIVATE-', json.dumps(result))
+        self.assertNotIn('reference_objective', json.dumps(result))

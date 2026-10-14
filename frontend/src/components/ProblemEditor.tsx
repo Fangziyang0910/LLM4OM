@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { format, pretty, shortMethod } from "../ui";
 import { Connectivity } from "./Connectivity";
-import type { Bootstrap, JobRecord, Notice, PublicProblem, RunConfig, UploadItem } from "../types";
+import type { BenchmarkInput, Bootstrap, JobRecord, Notice, PublicProblem, RunConfig, UploadItem } from "../types";
 
 const problemExamples: Record<string, string> = {
   production:
@@ -25,8 +25,9 @@ function parseConfig(raw: string): RunConfig {
   return value;
 }
 
-export function ProblemEditor({ bootstrap, notice, onSubmitted }: {
+export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }: {
   bootstrap: Bootstrap; notice: Notice; onSubmitted: (job: JobRecord) => Promise<void>;
+  benchmarkInput?: BenchmarkInput | null;
 }) {
   const [config, setConfig] = useState<RunConfig>(bootstrap.config);
   const [configDraft, setConfigDraft] = useState<string | null>(null);
@@ -38,6 +39,14 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted }: {
   const [checkConnectivity, setCheckConnectivity] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [doctorBusy, setDoctorBusy] = useState(false);
+  useEffect(() => {
+    if (!benchmarkInput) return;
+    setDescription(benchmarkInput.problem.description);
+    setProblemJson(JSON.stringify(benchmarkInput.problem, null, 2));
+    setUploads(benchmarkInput.data.map((item) => ({ ...item })));
+    setDoctorResult(null);
+    document.getElementById("description")?.focus();
+  }, [benchmarkInput]);
   const plugins = bootstrap.plugins;
   const presets = bootstrap.method_presets;
   const methodManifest = plugins.find(

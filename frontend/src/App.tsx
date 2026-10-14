@@ -5,7 +5,7 @@ import { shortMethod, status } from "./ui";
 import { Datasets } from "./components/Datasets";
 import { ProblemEditor } from "./components/ProblemEditor";
 import { RunView } from "./components/RunView";
-import type { Bootstrap, DatasetSummary, JobRecord } from "./types";
+import type { BenchmarkInput, Bootstrap, DatasetSummary, JobRecord } from "./types";
 
 type View = "editor" | "run" | "datasets";
 
@@ -13,6 +13,7 @@ export default function App() {
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
   const [view, setView] = useState<View>("editor");
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
+  const [benchmarkInput, setBenchmarkInput] = useState<BenchmarkInput | null>(null);
   const [noticeState, setNoticeState] = useState({ text: "", error: false });
   const notice = useCallback((text: string, error = false) => setNoticeState({ text, error }), []);
   const { jobs, currentJob, selectedRun, snapshot, selectRun, refreshRun, refreshJobs } = useRunSnapshot(notice);
@@ -61,7 +62,7 @@ export default function App() {
         <a className="brand" href="/">
           <span className="brand-symbol">∑</span> LLM<span>4</span>OM
         </a>
-        <p className="subtitle">优化建模工作台</p>
+        <p className="subtitle">用自然语言解决优化问题</p>
         <button
           id="new-run"
           className={"nav" + (view === "editor" ? " active" : "")}
@@ -91,7 +92,7 @@ export default function App() {
             </button>
           ))}
         </div>
-        <h2 className="small-heading">数据集</h2>
+        <h2 className="small-heading">参考样例</h2>
         <button
           id="open-datasets"
           className={"nav" + (view === "datasets" ? " active" : "")}
@@ -101,14 +102,14 @@ export default function App() {
             refreshDatasets().catch((error) => notice((error as Error).message, true));
           }}
         >
-          浏览数据集
+          内置 Benchmark
         </button>
         <p className="sidebar-footer">自然语言 → 优化模型 → 决策</p>
       </aside>
       <main>
         <header>
           <h1>
-            {view === "run" ? "运行结果" : view === "datasets" ? "数据集" : "开始建模"}
+            {view === "run" ? "运行结果" : view === "datasets" ? "内置 Benchmark" : "开始建模"}
           </h1>
         </header>
         <div id="notice" role="status" hidden={!noticeState.text}>
@@ -116,10 +117,11 @@ export default function App() {
         </div>
 
         <div hidden={view !== "editor"}>
-          {bootstrap ? <ProblemEditor bootstrap={bootstrap} notice={notice}
+          {bootstrap ? <ProblemEditor bootstrap={bootstrap} notice={notice} benchmarkInput={benchmarkInput}
             onSubmitted={async (job: JobRecord) => { await refreshJobs(); await openJob(job.job_id); }} /> : <p>正在读取配置…</p>}
         </div>
-        {view === "datasets" ? <Datasets datasets={datasets} refresh={refreshDatasets} /> : null}
+        {view === "datasets" ? <Datasets datasets={datasets} refresh={refreshDatasets} notice={notice}
+          onTry={(input) => { setBenchmarkInput({ ...input }); setView("editor"); notice("已带入样例，可选择方法并开始建模。"); }} /> : null}
         {view === "run" && snapshot ? <RunView key={currentJob} snapshot={snapshot} selectedRun={selectedRun}
           selectRun={selectRun} refreshRun={refreshRun} notice={notice} /> : null}
       </main>

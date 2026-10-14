@@ -1,0 +1,784 @@
+{
+  "schema_version": "0.1.0",
+  "benchmarks": [
+    {
+      "task_id": "04c73f88abab710dbeb7629fc505df89",
+      "dataset_id": "nl4opt",
+      "title": "NL4Opt",
+      "description": "自然语言线性优化问题。",
+      "source_version": "ad1c15bed95af0efc7de7d28c38baf2ad2f12351",
+      "source_url": "https://github.com/Fangziyang0910/OPT-Agent/tree/ad1c15bed95af0efc7de7d28c38baf2ad2f12351/benchmark",
+      "license": "MIT",
+      "N_cases": 205,
+      "cases_file": "nl4opt.json",
+      "sha256": "f867002d4a345ce99069ed6583d6713d40589ecae2afd36fc469a6c038d44be2",
+      "size_bytes": 136764,
+      "sources": [
+        {
+          "path": "benchmark/NL4Opt.jsonl",
+          "sha256": "b05cdcb7c7e68cd2225fe4d012fc49b096c42355bd66f2a38bde45b7fe050401"
+        }
+      ]
+    },
+    {
+      "task_id": "a48cc9e9e13da53e0862b93887b2e6eb",
+      "dataset_id": "nl4lp",
+      "title": "NL4LP",
+      "description": "已整理为完整题面的线性优化问题。",
+      "source_version": "ad1c15bed95af0efc7de7d28c38baf2ad2f12351",
+      "source_url": "https://github.com/Fangziyang0910/OPT-Agent/tree/ad1c15bed95af0efc7de7d28c38baf2ad2f12351/benchmark",
+      "license": "来源项目未标注",
+      "N_cases": 178,
+      "cases_file": "nl4lp.json",
+      "sha256": "0f25fa6ff329263fab9ea7bbe62476df0c7cf40fddc19470e88356cd8a1f5683",
+      "size_bytes": 118874,
+      "sources": [
+        {
+          "path": "benchmark/NL4LP.jsonl",
+          "sha256": "cb1a9f021dfcdd41b5392c42ce72a94f03e0bab3f2965dad259ec4c4c5064d82"
+        }
+      ]
+    },
+    {
+      "task_id": "42542e70f68916ea18845eee577bb583",
+      "dataset_id": "mamo_easy",
+      "title": "MAMO Easy",
+      "description": "基础优化建模问题。",
+      "source_version": "ad1c15bed95af0efc7de7d28c38baf2ad2f12351",
+      "source_url": "https://github.com/Fangziyang0910/OPT-Agent/tree/ad1c15bed95af0efc7de7d28c38baf2ad2f12351/benchmark",
+      "license": "CC-BY-SA-4.0",
+      "N_cases": 642,
+      "cases_file": "mamo_easy.json",
+      "sha256": "feb029d396640b7ca0dbd6f92640dd173c244d30c3e10700d66ed3a4c5f913c4",
+      "size_bytes": 767031,
+      "sources": [
+        {
+          "path": "benchmark/Mamo_easy.jsonl",
+          "sha256": "4da0859f25754fe28c79d0ec59c7336158c16e4717cf2bc234f45e8989ea16cc"
+        }
+      ]
+    },
+    {
+      "task_id": "a2526498af85c9c036946aaa951f4037",
+      "dataset_id": "mamo_complex",
+      "title": "MAMO Complex",
+      "description": "复杂优化建模问题。",
+      "source_version": "ad1c15bed95af0efc7de7d28c38baf2ad2f12351",
+      "source_url": "https://github.com/Fangziyang0910/OPT-Agent/tree/ad1c15bed95af0efc7de7d28c38baf2ad2f12351/benchmark",
+      "license": "CC-BY-SA-4.0",
+      "N_cases": 210,
+      "cases_file": "mamo_complex.json",
+      "sha256": "dea3158dbbe3446fbe9d9d2a6343956eb220b2aca6804a4cd8bef7475bddb26b",
+      "size_bytes": 407586,
+      "sources": [
+        {
+          "path": "benchmark/Mamo_complex.jsonl",
+          "sha256": "4b0a1263309a5a000bd2c652798a2caa560884d683e5c4a3839b8b3cb42450ab"
+        }
+      ]
+    },
+    {
+      "task_id": "3b39448a37ba8e48ae05e06df62b1978",
+      "dataset_id": "industryor",
+      "title": "IndustryOR",
+      "description": "来自业务场景的运筹优化问题。",
+      "source_version": "ad1c15bed95af0efc7de7d28c38baf2ad2f12351",
+      "source_url": "https://github.com/Fangziyang0910/OPT-Agent/tree/ad1c15bed95af0efc7de7d28c38baf2ad2f12351/benchmark",
+      "license": "来源项目未标注",
+      "N_cases": 99,
+      "cases_file": "industryor.json",
+      "sha256": "97744d57ff3c62cdd8feab49fe6da3857eb300daf884ae27aff314f50484f522",
+      "size_bytes": 119044,
+      "sources": [
+        {
+          "path": "benchmark/IndustryOR.jsonl",
+          "sha256": "0ad27710853cef02889d5721233d38d27246b9a56a0f541f8435be90be5a2820"
+        }
+      ]
+    },
+    {
+      "task_id": "b0d8b6a8a86850aae4474512ac15d9a0",
+      "dataset_id": "complexor",
+      "title": "ComplexOR",
+      "description": "复杂业务场景的优化问题。",
+      "source_version": "ad1c15bed95af0efc7de7d28c38baf2ad2f12351",
+      "source_url": "https://github.com/Fangziyang0910/OPT-Agent/tree/ad1c15bed95af0efc7de7d28c38baf2ad2f12351/benchmark",
+      "license": "来源项目未标注",
+      "N_cases": 18,
+      "cases_file": "complexor.json",
+      "sha256": "74c7d25cbce272079d1b329f65c8a2a3983257ba88003d4d0947eb0b150c3d20",
+      "size_bytes": 25662,
+      "sources": [
+        {
+          "path": "benchmark/ComplexOR.jsonl",
+          "sha256": "cc83774a3eaa31ae4d958fadd7847cdda8691b085ebf45b3a497a0aee4bd738f"
+        }
+      ]
+    },
+    {
+      "task_id": "74223692385e75f77722fd8925bedf93",
+      "dataset_id": "optibench",
+      "title": "OptiBench",
+      "description": "多种类型的优化问题。",
+      "source_version": "ad1c15bed95af0efc7de7d28c38baf2ad2f12351",
+      "source_url": "https://github.com/Fangziyang0910/OPT-Agent/tree/ad1c15bed95af0efc7de7d28c38baf2ad2f12351/benchmark",
+      "license": "来源项目未标注",
+      "N_cases": 403,
+      "cases_file": "optibench.json",
+      "sha256": "0bd967055018a683889838f55e937bf11e39e649929da24c1a0b2bef69162d9e",
+      "size_bytes": 308410,
+      "sources": [
+        {
+          "path": "benchmark/OptiBench.jsonl",
+          "sha256": "2233f1ac13044e3ad5a21b13e30189f7f79138d88a6f0f37274fd870af51ea72"
+        }
+      ]
+    },
+    {
+      "task_id": "6d5ccda69e015d7d135621fea39a79aa",
+      "dataset_id": "optmath",
+      "title": "OptMATH",
+      "description": "较长题面的优化建模问题。",
+      "source_version": "ad1c15bed95af0efc7de7d28c38baf2ad2f12351",
+      "source_url": "https://github.com/Fangziyang0910/OPT-Agent/tree/ad1c15bed95af0efc7de7d28c38baf2ad2f12351/benchmark",
+      "license": "来源项目未标注",
+      "N_cases": 128,
+      "cases_file": "optmath.json",
+      "sha256": "c86ba9cb553d7ac8de5897ad1ce4fba30ec857223001a1e45f93cd7e72baf18a",
+      "size_bytes": 418407,
+      "sources": [
+        {
+          "path": "benchmark/Optmath.jsonl",
+          "sha256": "9032b2cc0ec6110a1ca748fe3c717460ac101f40ffc73480dd930fec26e6f176"
+        }
+      ]
+    },
+    {
+      "task_id": "90a551e2c5905c9c385e1b47b7f20a8a",
+      "dataset_id": "nl4cop",
+      "title": "NL4COP",
+      "description": "组合优化问题及其具体实例。",
+      "source_version": "ad1c15bed95af0efc7de7d28c38baf2ad2f12351",
+      "source_url": "https://github.com/Fangziyang0910/OPT-Agent/tree/ad1c15bed95af0efc7de7d28c38baf2ad2f12351/benchmark",
+      "license": "来源项目未标注",
+      "N_cases": 150,
+      "cases_file": "nl4cop.json",
+      "sha256": "638e6664edd3d80dd846ac563387662482f7c1edc076fe3678072d1c3f2a5cd6",
+      "size_bytes": 515847,
+      "sources": [
+        {
+          "path": "benchmark/NL4COP/aircraft_landing_001.json",
+          "sha256": "f040cb5a937653c1d356fce678b5669c4e91ab573b9867e5bc30dd629b220935"
+        },
+        {
+          "path": "benchmark/NL4COP/aircraft_landing_002.json",
+          "sha256": "fe23020a73818bf7b2a6542b4767de3be69fe5a206f426590e8803ee352a1387"
+        },
+        {
+          "path": "benchmark/NL4COP/aircraft_landing_003.json",
+          "sha256": "ea178f212a19824822faf0925f5e128a8049ad00b8bdcd155794da0f0fafcb63"
+        },
+        {
+          "path": "benchmark/NL4COP/assignment_problem_001.json",
+          "sha256": "43216b3dd035ffd063e1c4d4821df40482ecd9081a2cdbd74c847d683e33f134"
+        },
+        {
+          "path": "benchmark/NL4COP/assignment_problem_002.json",
+          "sha256": "cef12a258339f559e058f16e430ea76349da5dc1133a6e8f607ede76ef5206ed"
+        },
+        {
+          "path": "benchmark/NL4COP/assignment_problem_003.json",
+          "sha256": "4fbfc1ee46c025420ce1fc1c91be71a449410d2d6643ee3a94fd38c356360b04"
+        },
+        {
+          "path": "benchmark/NL4COP/assortment_problem_001.json",
+          "sha256": "7fb1b245a867ccd7dc63467b067450f77f7d7010473ad576468f6b81ba18306d"
+        },
+        {
+          "path": "benchmark/NL4COP/assortment_problem_002.json",
+          "sha256": "e02f495c4b290bc74b17a1336879192987e9c84941af3f63493ab00aec09bbd2"
+        },
+        {
+          "path": "benchmark/NL4COP/assortment_problem_003.json",
+          "sha256": "2d165f00a0fe5fc4fc1ff9ae05c89e9a99fb8018aad7ea989049cfc0acb5045a"
+        },
+        {
+          "path": "benchmark/NL4COP/bin_packing_001.json",
+          "sha256": "8e473a08dbfb76f0dec619bb208b2bc491a7dbc4cca1c65b590e6d19ab3f3284"
+        },
+        {
+          "path": "benchmark/NL4COP/bin_packing_002.json",
+          "sha256": "8fad0a5a83f985f4c6e1148620a67d0f530001c16d4672b43184b2969fe6e771"
+        },
+        {
+          "path": "benchmark/NL4COP/bin_packing_003.json",
+          "sha256": "c0ede5e5fa4c60fc69e99096ea6c81b8ea7eb6bfce7df7497bc88e706447c3c6"
+        },
+        {
+          "path": "benchmark/NL4COP/capacitated_vehicle_routing_001.json",
+          "sha256": "9ecb0e31a3184e21c1ec0a58f5778c8f4e1a6ae0e65a8344f1f1b97fec9683ca"
+        },
+        {
+          "path": "benchmark/NL4COP/capacitated_vehicle_routing_002.json",
+          "sha256": "41654f5800b37676ed1473ee2cd0fa0528ea7f127289e1e9cad0d4ce9cf64a9e"
+        },
+        {
+          "path": "benchmark/NL4COP/capacitated_vehicle_routing_003.json",
+          "sha256": "58d788c3523ddb5d9d9b9c3e5a6c130a89f0fdf9b7ea7d54166aee18ba25d3db"
+        },
+        {
+          "path": "benchmark/NL4COP/capacitated_warehouse_location_001.json",
+          "sha256": "756ef46a259b440484156eb1fcec25b82ebea6eded96d278c8e804efe3995535"
+        },
+        {
+          "path": "benchmark/NL4COP/capacitated_warehouse_location_002.json",
+          "sha256": "5e1af02ac2c55f192076e80059a12ecdc72a7138a67982bdca46318c21b4de48"
+        },
+        {
+          "path": "benchmark/NL4COP/capacitated_warehouse_location_003.json",
+          "sha256": "2d081a01fbf9f4a11b91ddced649625f9be3b8a1b690b69e69c3a7f3a01d1572"
+        },
+        {
+          "path": "benchmark/NL4COP/chinese_postman_001.json",
+          "sha256": "94fc34ae9ee3d5dbab4a5f5b872ba772985e68b06d1626a44b661be94c4e123d"
+        },
+        {
+          "path": "benchmark/NL4COP/chinese_postman_002.json",
+          "sha256": "22d51b27d0daa92ada254b8eb7d5b0aa2073b6ca124668845ae654906da95776"
+        },
+        {
+          "path": "benchmark/NL4COP/chinese_postman_003.json",
+          "sha256": "6e397a7e773611326b847eb2e896033c3b9325b218a47e4d358a6ae20ec432c7"
+        },
+        {
+          "path": "benchmark/NL4COP/common_due_date_scheduling_001.json",
+          "sha256": "daf530a57d0966d0bb3d67eb690b894493ef78199153db1dc5fe4a5ae4b34b30"
+        },
+        {
+          "path": "benchmark/NL4COP/common_due_date_scheduling_002.json",
+          "sha256": "972b01cc940671e0559cc73f09c0d56ad3f07f4ca50b2a3bfbae790ea4972d01"
+        },
+        {
+          "path": "benchmark/NL4COP/common_due_date_scheduling_003.json",
+          "sha256": "7d88c3f7bece67eebdfb80722c36ce08fb8ca9557303898d7aaaa3a0bd58e0d3"
+        },
+        {
+          "path": "benchmark/NL4COP/constrained_guillotine_cutting_001.json",
+          "sha256": "bcdd3751f23ed013dc7a0b282e5cb5990c58f0e98236a634a17e2c6e329d0050"
+        },
+        {
+          "path": "benchmark/NL4COP/constrained_guillotine_cutting_002.json",
+          "sha256": "80906bf1684c847f5b3f073d9aa71f54088d6822e9ceebf737f7e06c941dea48"
+        },
+        {
+          "path": "benchmark/NL4COP/constrained_guillotine_cutting_003.json",
+          "sha256": "e918c37181061a6d3f9bfa491dc5ebbaa310f97df3364622fcb06e1643a1a94e"
+        },
+        {
+          "path": "benchmark/NL4COP/constrained_non_guillotine_cutting_001.json",
+          "sha256": "8c6e6ee27a9c335017822834dae117518a38f826e57eac0e370fbe9ef8568d2c"
+        },
+        {
+          "path": "benchmark/NL4COP/constrained_non_guillotine_cutting_002.json",
+          "sha256": "85b9f7749993a2ec18666976eee33a0b71e526b17359676040a7cfb71aacfc7b"
+        },
+        {
+          "path": "benchmark/NL4COP/constrained_non_guillotine_cutting_003.json",
+          "sha256": "f2774db08812755c3c058933820b3b9dd96adb4dc1b4b5ac19834b908a7d4043"
+        },
+        {
+          "path": "benchmark/NL4COP/container_loading_001.json",
+          "sha256": "e9c93837bd70bc8af230903402c7e5618df122626127b780125c930814358ee1"
+        },
+        {
+          "path": "benchmark/NL4COP/container_loading_002.json",
+          "sha256": "b921bda43c62afee1f47955b9528345a0ee4e179ef2b7ecadabc1b274b82a7d6"
+        },
+        {
+          "path": "benchmark/NL4COP/container_loading_003.json",
+          "sha256": "c668790a09dbef8503af967288a56cc280c772a75cf2c99d85e3f97e4f9a467b"
+        },
+        {
+          "path": "benchmark/NL4COP/container_loading_with_weight_restrictions_001.json",
+          "sha256": "0a2d38da4e60b1e1385dd305cf7b6e68786ff12dd02a954f3f4c54e1de0163c8"
+        },
+        {
+          "path": "benchmark/NL4COP/container_loading_with_weight_restrictions_002.json",
+          "sha256": "60415343ada22d32753e645319eec200e60462f6e8f70f419b1eba3eed46a59c"
+        },
+        {
+          "path": "benchmark/NL4COP/container_loading_with_weight_restrictions_003.json",
+          "sha256": "aa0f727dbc482df3c39b6bf70a398c753cda5f1ab003d8f146ce33d0265692d4"
+        },
+        {
+          "path": "benchmark/NL4COP/covering_location_001.json",
+          "sha256": "216bed39c3c5e05475d441ae6be17f635db9f1038dfbba56dfe3d1fb45ea4f89"
+        },
+        {
+          "path": "benchmark/NL4COP/covering_location_002.json",
+          "sha256": "20bfd309b672ba976b2a22fdd3fda2ab88874295acdb58278bad7af42ea20000"
+        },
+        {
+          "path": "benchmark/NL4COP/covering_location_003.json",
+          "sha256": "e73b7813cae9da869b7b2f4070f0beae6fb2017f7c76a9321a4e164f8a74b3b8"
+        },
+        {
+          "path": "benchmark/NL4COP/crew_scheduling_001.json",
+          "sha256": "8f2493d99a6445d51bf63262219fe737871d33630bacb8d4061339a44ab40e47"
+        },
+        {
+          "path": "benchmark/NL4COP/crew_scheduling_002.json",
+          "sha256": "7be8989c3eb90711f7bce55e00af6161f4143f0a916d093632b9e52e214093c1"
+        },
+        {
+          "path": "benchmark/NL4COP/crew_scheduling_003.json",
+          "sha256": "2df079b25c8aa60828027f798cceb72ea60b7df8107e37cdaf1fc820716c3084"
+        },
+        {
+          "path": "benchmark/NL4COP/equitable_partitioning_001.json",
+          "sha256": "7f1d3d84547f15ccf7ab482a0b72b974e766a0483abdc57a0dde1499d580dcb2"
+        },
+        {
+          "path": "benchmark/NL4COP/equitable_partitioning_002.json",
+          "sha256": "70aca47df2134ba157020d1aae7ea794e5930c59dfef2860082de0b5ddf4225a"
+        },
+        {
+          "path": "benchmark/NL4COP/equitable_partitioning_003.json",
+          "sha256": "c252f3a9bb56fcc56e08fb812a47a9e8cd63b9388bb4fa4726f7ad5cb6ea364c"
+        },
+        {
+          "path": "benchmark/NL4COP/flow_shop_scheduling_001.json",
+          "sha256": "1345d9a0bf5257c4e16883897b2d16fcdd0619d66b1b0f4aec3d4c598aa7ee7e"
+        },
+        {
+          "path": "benchmark/NL4COP/flow_shop_scheduling_002.json",
+          "sha256": "95842c50e248a5cbc59ce61cc368355e173e795569eb65e4b538d7a69621c7ab"
+        },
+        {
+          "path": "benchmark/NL4COP/flow_shop_scheduling_003.json",
+          "sha256": "c1e4b2d3f33b0d8baf81096ca83513dfae1336baeab630d332ccfefe10d18070"
+        },
+        {
+          "path": "benchmark/NL4COP/generalised_assignment_001.json",
+          "sha256": "2c6aa0946afbcf776fc9598788943cb22d98211bafb64c95e26611c859260b34"
+        },
+        {
+          "path": "benchmark/NL4COP/generalised_assignment_002.json",
+          "sha256": "fa2de5e0c67c61ebeaac4f17f8917c01b109ed0f4a4d65bbfb963fbf045a6fb1"
+        },
+        {
+          "path": "benchmark/NL4COP/generalised_assignment_003.json",
+          "sha256": "05876a9dbe9ff85cd9fc63022a94b5b964d125130c33dfe4cd0e07cf349e6506"
+        },
+        {
+          "path": "benchmark/NL4COP/graph_coloring_001.json",
+          "sha256": "a3a79817efd8789acc0b9d8ef003981fb48ce15c62015f64b3e770716c5eaa20"
+        },
+        {
+          "path": "benchmark/NL4COP/graph_coloring_002.json",
+          "sha256": "32b542471773a16fe94eafdd7edab5160ed0d86da1ec4ae3ba7ac3aea0234598"
+        },
+        {
+          "path": "benchmark/NL4COP/graph_coloring_003.json",
+          "sha256": "df28db58722c12e47d1137b32050a5a300cfbe041930cbecffc0a14173592775"
+        },
+        {
+          "path": "benchmark/NL4COP/hybrid_reentrant_shop_scheduling_001.json",
+          "sha256": "6a9d22a926a85dd71ec4e2f2850c973271657525300a4142fc1bc22cf5602435"
+        },
+        {
+          "path": "benchmark/NL4COP/hybrid_reentrant_shop_scheduling_002.json",
+          "sha256": "e85c0d9526ffb6777ad77c679c536fe34373c40cd4b030b2d892af1dcdff8ce2"
+        },
+        {
+          "path": "benchmark/NL4COP/hybrid_reentrant_shop_scheduling_003.json",
+          "sha256": "880e1adef7c564a5c686c5b1d1d5ca8c1e84820fc377e7a9fd46e75527ed0e6d"
+        },
+        {
+          "path": "benchmark/NL4COP/job_shop_scheduling_001.json",
+          "sha256": "6a96aaf1db18c67b63350c5e474c267b58ad18609b924e18693faad6b5d52ea2"
+        },
+        {
+          "path": "benchmark/NL4COP/job_shop_scheduling_002.json",
+          "sha256": "213bd68e65f83d807f35bdfb0227dcf77367f9817606212fb23a24caae526901"
+        },
+        {
+          "path": "benchmark/NL4COP/job_shop_scheduling_003.json",
+          "sha256": "a5bb58363d99e93943556c80d8fd8f14cf0da80a0db05ce9984401523ad811f9"
+        },
+        {
+          "path": "benchmark/NL4COP/k_shortest_paths_001.json",
+          "sha256": "d0c9fa661f4307eaa0be359af48fd53f15d514de5f87cd737cd51d877c97ba1e"
+        },
+        {
+          "path": "benchmark/NL4COP/k_shortest_paths_002.json",
+          "sha256": "a5d353143234c006807cfa6108fb9d581daa99359aaf28148e770e2837a9c6fd"
+        },
+        {
+          "path": "benchmark/NL4COP/k_shortest_paths_003.json",
+          "sha256": "ca334829e3666ee332f58f35ed994c3e40f47ed15ed1c46748c279bb9e9687df"
+        },
+        {
+          "path": "benchmark/NL4COP/location_routing_problem_001.json",
+          "sha256": "4f9f3a3b317b45c3c05adc175bc1ff28d8d30dc398b6cb7a84dfa71b2ca629ba"
+        },
+        {
+          "path": "benchmark/NL4COP/location_routing_problem_002.json",
+          "sha256": "f3446f8fc303e7b9a82dfa8dd24b86e7bee2c27c61d12e7f31887fd71453ca20"
+        },
+        {
+          "path": "benchmark/NL4COP/location_routing_problem_003.json",
+          "sha256": "c07c4ef35f36baacab719cdfc7dfa542a5a5ab5963d5ee5d5a5ee1bb897b4b68"
+        },
+        {
+          "path": "benchmark/NL4COP/maximum_clique_001.json",
+          "sha256": "91e2fea187ec52f2e8d322d62b00aa63432938fca6dd10614dbc3a50d9d4d438"
+        },
+        {
+          "path": "benchmark/NL4COP/maximum_clique_002.json",
+          "sha256": "360a298ac16c472bf1ef4413e072226a2603cd41bfa30446a4d284e1ef78798a"
+        },
+        {
+          "path": "benchmark/NL4COP/maximum_clique_003.json",
+          "sha256": "f73a9094799c07b3fc100324e4b937bf841f0b1cfb1d639e65989de8a91e7ec3"
+        },
+        {
+          "path": "benchmark/NL4COP/maximum_flow_001.json",
+          "sha256": "1870f69f3dc0de39985bc11607ff81da278116d4c552dd20de8b1180a0c4f7a1"
+        },
+        {
+          "path": "benchmark/NL4COP/maximum_flow_002.json",
+          "sha256": "66b5b28aca44397a1c14cce55d79075e0413f463261f6148e9c58ad2404fdf78"
+        },
+        {
+          "path": "benchmark/NL4COP/maximum_flow_003.json",
+          "sha256": "e31b66ff30ad72f87ed52bdadb9329e01e968304f9602015ec0a03d554684c88"
+        },
+        {
+          "path": "benchmark/NL4COP/maximum_independent_set_001.json",
+          "sha256": "0e432cf428fa565d746269530ea8662624f9335a7d4db39ccb52a0388528ad39"
+        },
+        {
+          "path": "benchmark/NL4COP/maximum_independent_set_002.json",
+          "sha256": "1f1e501e4edf44b278bc59db59f80e4c770f180f90856bd438ad7b24095a78d1"
+        },
+        {
+          "path": "benchmark/NL4COP/maximum_independent_set_003.json",
+          "sha256": "7f2a6c4dbf098cea29ed0cd0b3c57e67cef30847edf385571878084980cd3b97"
+        },
+        {
+          "path": "benchmark/NL4COP/mdmkp_001.json",
+          "sha256": "f1f0bc6bc411da8066f7a90f34cba38f41db1fdf04685c8cbc6651a024a4407e"
+        },
+        {
+          "path": "benchmark/NL4COP/mdmkp_002.json",
+          "sha256": "3dbe17d07afe68f0c9a91338179626d40347361d8fe2eeade2c3a0b3f686ab1b"
+        },
+        {
+          "path": "benchmark/NL4COP/mdmkp_003.json",
+          "sha256": "3c38192080765907d423f6e6edbf2375944d646cf9fc2f88b571ebe1d357e7ba"
+        },
+        {
+          "path": "benchmark/NL4COP/minimum_cost_maximum_flow_001.json",
+          "sha256": "d8786b56216c4c49bacd509dd2f18d854cba0d377a66e37a40df3c9d1546fa74"
+        },
+        {
+          "path": "benchmark/NL4COP/minimum_cost_maximum_flow_002.json",
+          "sha256": "8d796b1da66e1575b44ff645489dfcf264ed0a47c604ce6bb641bcd763df719f"
+        },
+        {
+          "path": "benchmark/NL4COP/minimum_cost_maximum_flow_003.json",
+          "sha256": "523cd7954640f56f76235b387656fd84f4dcc99002b318c8e6a5ff3a59d51ddb"
+        },
+        {
+          "path": "benchmark/NL4COP/minimum_cut_001.json",
+          "sha256": "3105cb1b307c335cf7fa03f6e0e756013cb19046837d3c49f1b36652b17d6332"
+        },
+        {
+          "path": "benchmark/NL4COP/minimum_cut_002.json",
+          "sha256": "a729a94320100cc8bd2041c30928a823651cee9c8c414704ea1a040ed03ed5c1"
+        },
+        {
+          "path": "benchmark/NL4COP/minimum_cut_003.json",
+          "sha256": "0f3979f95d5b791d997db1e73c8466b36cf78c476e4b811a64bbf1dd6c18df12"
+        },
+        {
+          "path": "benchmark/NL4COP/minimum_vertex_cover_001.json",
+          "sha256": "a6950240101a17f019b70fc6898ec9ed50d7935f081b1728b0c47e52ccba7283"
+        },
+        {
+          "path": "benchmark/NL4COP/minimum_vertex_cover_002.json",
+          "sha256": "442cf581a446961686b597f59c65b2b3fcab67cf0cd41c861b2c9c7ba210dab0"
+        },
+        {
+          "path": "benchmark/NL4COP/minimum_vertex_cover_003.json",
+          "sha256": "d0099f097f206044356e587fbc12d331bbfe3e47dbafdc8821aa9a8e4d902c36"
+        },
+        {
+          "path": "benchmark/NL4COP/mixed_chinese_postman_001.json",
+          "sha256": "97d7fd84bc3915bb8ea0496ef149eecb24dbf2cb62411d4d6fbdeaa9e8c322f5"
+        },
+        {
+          "path": "benchmark/NL4COP/mixed_chinese_postman_002.json",
+          "sha256": "d60978aeac58d7383f3508c3697c91221e755f60245dcc77a98472f95927fc6f"
+        },
+        {
+          "path": "benchmark/NL4COP/mixed_chinese_postman_003.json",
+          "sha256": "b6451342e2bb0e3267f64bbe0241bc41b9c2a123b1fe106ae052404083e984d0"
+        },
+        {
+          "path": "benchmark/NL4COP/mkp_001.json",
+          "sha256": "547226affe3e1017ef3f1d673789a84eb6a6905ec7ffc7e6719235fe646d6e91"
+        },
+        {
+          "path": "benchmark/NL4COP/mkp_002.json",
+          "sha256": "54f91658fbe5301acd8f734229c97e4e274411e8be4ee96cb2c5faaf8098fe15"
+        },
+        {
+          "path": "benchmark/NL4COP/mkp_003.json",
+          "sha256": "88c4693ea25b679a53beb28938b652637ed447d5a9276b4cd43b784c6411b692"
+        },
+        {
+          "path": "benchmark/NL4COP/open_shop_scheduling_001.json",
+          "sha256": "ee8633e6236d79f0182ef83e0115d7f0f1db222643ad30c85bf5c2c1bc04a328"
+        },
+        {
+          "path": "benchmark/NL4COP/open_shop_scheduling_002.json",
+          "sha256": "3ffb9df74c183533735aff5714ddd6bff0850c3decc3b261a6b20ad46388a3e1"
+        },
+        {
+          "path": "benchmark/NL4COP/open_shop_scheduling_003.json",
+          "sha256": "cf986819dd179534455ae8dd7e70c09bb1940628d01ac70f4e783de71194c7be"
+        },
+        {
+          "path": "benchmark/NL4COP/orienteering_problem_001.json",
+          "sha256": "86784e113786fda7081bafbccea7c654652b8747f22e05b3f3701e30081a3fa7"
+        },
+        {
+          "path": "benchmark/NL4COP/orienteering_problem_002.json",
+          "sha256": "f64cdcf4a4eee1fff09e1f6d23a335b6f1d77c345d5959b4b3592ed05035f430"
+        },
+        {
+          "path": "benchmark/NL4COP/orienteering_problem_003.json",
+          "sha256": "0c305270d98d383eb0dc9f2f6bfa286436dadad7c30bd932cae39a94ddcb18c1"
+        },
+        {
+          "path": "benchmark/NL4COP/packing_rectangles_001.json",
+          "sha256": "1c71d80e63efba55198e5023808ceeb75b56c3f5cb61543d79daad4d1322a22b"
+        },
+        {
+          "path": "benchmark/NL4COP/packing_rectangles_002.json",
+          "sha256": "c2aff25f8380e2bd298cd8f6b4d4acb5cdd06fff59100694bd6c9b4798844723"
+        },
+        {
+          "path": "benchmark/NL4COP/packing_rectangles_003.json",
+          "sha256": "2fa6932b87330e3dd182f6f0bdfc469f9c3413b67f3337f73c1afcbb690f8f7e"
+        },
+        {
+          "path": "benchmark/NL4COP/packing_unequal_circles_001.json",
+          "sha256": "8b895f286c896cf3a997ce035340240c61d23bbfc6cc0681805f4740c5ba77a9"
+        },
+        {
+          "path": "benchmark/NL4COP/packing_unequal_circles_002.json",
+          "sha256": "0d443ae0f79c3827d24785625ba1a4c75e36ef75e845980a37a571cc3570c04a"
+        },
+        {
+          "path": "benchmark/NL4COP/packing_unequal_circles_003.json",
+          "sha256": "30c59fcf7e2cbd609a87b2fff31b99f086ed95eff1c4e2223f0811c7ce6b1f07"
+        },
+        {
+          "path": "benchmark/NL4COP/packing_unequal_rectangles_and_squares_001.json",
+          "sha256": "ec073b76201bee39f4c8b08a262ec28370b9be69c48f9aefbf66bfdfb17ff844"
+        },
+        {
+          "path": "benchmark/NL4COP/packing_unequal_rectangles_and_squares_002.json",
+          "sha256": "e8bb1aa267f57b96fbb0c2f8460f6fe41fc9bdacb9a012a26539e163166cea4b"
+        },
+        {
+          "path": "benchmark/NL4COP/packing_unequal_rectangles_and_squares_003.json",
+          "sha256": "c88bc68948917373953e6f3a78ea911cddab142c4f5504daee8d2b49d71e98c1"
+        },
+        {
+          "path": "benchmark/NL4COP/period_vehicle_routing_001.json",
+          "sha256": "b61d4ecc38d249127d2ff626735cbaa1f3f2a3fe012fff87971b1af1ba881aa9"
+        },
+        {
+          "path": "benchmark/NL4COP/period_vehicle_routing_002.json",
+          "sha256": "89885dd595efd2e1a7e0a341d21d713636b1da87d4862d20aaeb99970ed10643"
+        },
+        {
+          "path": "benchmark/NL4COP/period_vehicle_routing_003.json",
+          "sha256": "adef5487b7e2816b799a292b57aaef52ed617d99af4ec5fdd0e78512daa37e3e"
+        },
+        {
+          "path": "benchmark/NL4COP/pmed_uncap_001.json",
+          "sha256": "2c8c4415fe415a01e5971699615f479191dd61397a33035167062fe1d4c2d99f"
+        },
+        {
+          "path": "benchmark/NL4COP/pmed_uncap_002.json",
+          "sha256": "76f2c85b7ca2a488c18c122e508b31adab64797291550aa1109c8e442b3124c9"
+        },
+        {
+          "path": "benchmark/NL4COP/pmed_uncap_003.json",
+          "sha256": "88ee7e1a4d94835c8b655ee70f955d345def1c97b859ad54767da7b62515f0c4"
+        },
+        {
+          "path": "benchmark/NL4COP/pmedcap_001.json",
+          "sha256": "9955e3033d620ad708b5fbeb32405bdc5aa56fd02215330613c55b8f1131c071"
+        },
+        {
+          "path": "benchmark/NL4COP/pmedcap_002.json",
+          "sha256": "dbc60f2003231848098f1a4d9ae0f1ea03f402728859dd762a4a66fa2abc71b5"
+        },
+        {
+          "path": "benchmark/NL4COP/pmedcap_003.json",
+          "sha256": "9b718b997c4e50cca6a2c1dcf04b47f91cb18471df76c69ec9445cadd4c61361"
+        },
+        {
+          "path": "benchmark/NL4COP/quadratic_knapsack_with_conflict_graphs_001.json",
+          "sha256": "32a1d4457e8121110b49df4cab2b7d32395bc5c6ae3b07e4b01446b14a458c3f"
+        },
+        {
+          "path": "benchmark/NL4COP/quadratic_knapsack_with_conflict_graphs_002.json",
+          "sha256": "7c40f215c7b49c2254f70ec1f749f306beb3c587d7268cc7e2672bc74f797f9e"
+        },
+        {
+          "path": "benchmark/NL4COP/quadratic_knapsack_with_conflict_graphs_003.json",
+          "sha256": "cf36810750de9ac8924d1362a88c15c58dc38f26a4b70c997e55cf929177f472"
+        },
+        {
+          "path": "benchmark/NL4COP/resource_constrained_shortest_path_001.json",
+          "sha256": "b52503fc55554ce5ddc13e7a173e930b39a0fc86ca175cc138e096b896d6064a"
+        },
+        {
+          "path": "benchmark/NL4COP/resource_constrained_shortest_path_002.json",
+          "sha256": "aa4725470be9f131c85fa5a3ee6994113bfb76343c7041a07040c5901746520e"
+        },
+        {
+          "path": "benchmark/NL4COP/resource_constrained_shortest_path_003.json",
+          "sha256": "96a65393ab9a9f8df82c1ce4d7db833b5e2c1307c4f21f49b1bd2b007142084f"
+        },
+        {
+          "path": "benchmark/NL4COP/set_covering_001.json",
+          "sha256": "d16e13382c18cf319e00fad953a7aa6f6b1bf0623101705bc6081738a6093a5c"
+        },
+        {
+          "path": "benchmark/NL4COP/set_covering_002.json",
+          "sha256": "658b3db265661aab1489581b9d8422beec51d4ce6c54e7910981b8b2b1c07f5f"
+        },
+        {
+          "path": "benchmark/NL4COP/set_covering_003.json",
+          "sha256": "ef8a5adbb11a0d1035cc884ac5e9e1646a1b528abdb6d6c088032c2e2ff1b4fc"
+        },
+        {
+          "path": "benchmark/NL4COP/set_partitioning_001.json",
+          "sha256": "9b5ecec6c5761da31679b5757a5808c87cb22ede34965e1a8f514fb0c0e611ab"
+        },
+        {
+          "path": "benchmark/NL4COP/set_partitioning_002.json",
+          "sha256": "0c6c432da1c5a55ed5d7463d7f3ef4cbea106ebc7037245edad4567ad1de8da9"
+        },
+        {
+          "path": "benchmark/NL4COP/set_partitioning_003.json",
+          "sha256": "2ccf5a6f291456ada55035b3d01a4cc9b2473bf3e51174e27a02f63978ccc99f"
+        },
+        {
+          "path": "benchmark/NL4COP/travelling_salesman_problem_001.json",
+          "sha256": "6ae67301175d375edd54d2516ee91c964875e2fe91d600e16207c931a26ff1a4"
+        },
+        {
+          "path": "benchmark/NL4COP/travelling_salesman_problem_002.json",
+          "sha256": "07a27b72a9dbd66fb2328cb416c8deeaed29ba39f83d424ce5052bca5ed0d56d"
+        },
+        {
+          "path": "benchmark/NL4COP/travelling_salesman_problem_003.json",
+          "sha256": "8db4d2ff84e7430e407b542dd5699818187bc43e4bc7dd9ab6e6452a9efd127a"
+        },
+        {
+          "path": "benchmark/NL4COP/travelling_thief_problem_001.json",
+          "sha256": "31f5886a803eca00f907401bcbe24a87fcf253ca17cf4048845f859447e807d9"
+        },
+        {
+          "path": "benchmark/NL4COP/travelling_thief_problem_002.json",
+          "sha256": "f7a0a1afd8d414cd53b8e6c9c20261820a5b28e9574ac44672bdcdeda4a7ef0f"
+        },
+        {
+          "path": "benchmark/NL4COP/travelling_thief_problem_003.json",
+          "sha256": "dc0290593fbc563b5d9c8b0f84ae01b37b06dea35312f18fa41d1f33c1d2580a"
+        },
+        {
+          "path": "benchmark/NL4COP/uncapacitated_warehouse_location_001.json",
+          "sha256": "81d734bcfc2a959349a2cad6abef5295c73f8edf1c571c36f3398174c539581a"
+        },
+        {
+          "path": "benchmark/NL4COP/uncapacitated_warehouse_location_002.json",
+          "sha256": "6d33c3c0bb5f382f0d1466d7ddf982bd7ac1eb32cb5c3410fa83a20ae0d6aab0"
+        },
+        {
+          "path": "benchmark/NL4COP/uncapacitated_warehouse_location_003.json",
+          "sha256": "597530872b7d5dff52b55ff4f42cb1fec399235eb5007b5c0c7edfa8e956b1ce"
+        },
+        {
+          "path": "benchmark/NL4COP/unconstrained_guillotine_cutting_001.json",
+          "sha256": "0ffef8f81757ca278d467efdb84739bd6d19987c4ef9fdcea3fa2c8859abf2c4"
+        },
+        {
+          "path": "benchmark/NL4COP/unconstrained_guillotine_cutting_002.json",
+          "sha256": "70c802864f87f646c7d9e1861d39f807e5e8d7104e51b20895ff29a54832a23f"
+        },
+        {
+          "path": "benchmark/NL4COP/unconstrained_guillotine_cutting_003.json",
+          "sha256": "f67d46f85cc85692be034a384641b96ec17ff715b56a8d6b5e02fa0c7bb7af41"
+        },
+        {
+          "path": "benchmark/NL4COP/unconstrained_non_guillotine_cutting_001.json",
+          "sha256": "02cc8329804539a2769531c6609aaeb0902434cd426d190e3c870cb6baf302e4"
+        },
+        {
+          "path": "benchmark/NL4COP/unconstrained_non_guillotine_cutting_002.json",
+          "sha256": "3c4794a54650d544eddfddf3c916678b46395d1d4c65872bfdfee023779668fe"
+        },
+        {
+          "path": "benchmark/NL4COP/unconstrained_non_guillotine_cutting_003.json",
+          "sha256": "4a98b43e8ba83b84cb27ab3f8f346c56dc4c52ab28e5da3532bba57a254efe55"
+        },
+        {
+          "path": "benchmark/NL4COP/vehicle_routing_problem_with_time_window_001.json",
+          "sha256": "2de884e1aa6b7aa875971f10f4d1762dfef31f3dc21ac86c2b7ac7ed189bc7a7"
+        },
+        {
+          "path": "benchmark/NL4COP/vehicle_routing_problem_with_time_window_002.json",
+          "sha256": "df84ca1e60898e1cee9ffc8bd01bf9e0712e858b6cac8d06b892bb315798c745"
+        },
+        {
+          "path": "benchmark/NL4COP/vehicle_routing_problem_with_time_window_003.json",
+          "sha256": "5b0b5159906e38b26d20354abac64ffaaadce3300a196eae912385d93be0dca9"
+        },
+        {
+          "path": "benchmark/NL4COP/windy_rural_postman_001.json",
+          "sha256": "95df60cbb7913b63865f5d003b34f96e1b5c5aa1638075912e2d15cb6aa5dedc"
+        },
+        {
+          "path": "benchmark/NL4COP/windy_rural_postman_002.json",
+          "sha256": "913769ae347ed3c923c467285543cc6ca1154085da95c5a89d8c76ce4b6f08a2"
+        },
+        {
+          "path": "benchmark/NL4COP/windy_rural_postman_003.json",
+          "sha256": "6ee0f4ef89fa4ac656abafd7fbac9aaef41c671f69c014e1f87f1e14e359a943"
+        }
+      ]
+    }
+  ],
+  "attribution_files": {
+    "NL4Opt-LICENSE.txt": {
+      "sha256": "d8165362b50a26ccad4bc717c050c86db776b1c6d2ec40f288e416d0ecb62399",
+      "size_bytes": 1076,
+      "url": "https://github.com/nl4opt/nl4opt-competition/blob/49f1e0d66b7fdcd33305a7f281c2a7c13f5620ea/LICENSE"
+    },
+    "MAMO-LICENSE.txt": {
+      "sha256": "187442db4df3afd21f2f0525739fd4beac28a62daaba3ee8d3533f60e7c33ec7",
+      "size_bytes": 20138,
+      "url": "https://github.com/FreedomIntelligence/Mamo/blob/2c91069dee5c1e4db4b899eb176ec987d0251bb3/LICENSE"
+    }
+  }
+}

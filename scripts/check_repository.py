@@ -74,6 +74,9 @@ def fixed_upstream_files() -> dict[Path, dict]:
     optitree = ROOT / "src/llm4om/optitree_source"
     tree_manifest = json.loads((optitree / "manifest.json").read_text())
     pinned.update({optitree / name: entry for name, entry in tree_manifest["files"].items()})
+    benchmarks = ROOT / "src/llm4om/benchmark_sources"
+    catalog = json.loads((benchmarks / "catalog.json").read_text())
+    pinned.update({benchmarks / name: entry for name, entry in catalog["attribution_files"].items()})
     return pinned
 
 

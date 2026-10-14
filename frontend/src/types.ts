@@ -303,11 +303,28 @@ export type Notice = (text: string, error?: boolean) => void;
 
 export interface DatasetSummary {
   task_id: string;
-  dataset_id: string | null;
-  source_version: string | null;
-  adapter_id: string;
+  dataset_id: string;
+  title: string;
+  description: string;
+  source_version: string;
+  source_url: string;
+  license: string;
   N_cases: number;
-  N_selected: number;
+}
+
+export interface BenchmarkInput {
+  title: string;
+  problem: PublicProblem;
+  data: UploadItem[];
+}
+
+export interface BenchmarkCase {
+  case_id: string;
+  sample_id: string;
+  subset: string;
+  problem: PublicProblem;
+  input: BenchmarkInput;
+  copy_text: string;
 }
 
 export interface UploadItem {
