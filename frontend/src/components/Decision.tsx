@@ -213,13 +213,13 @@ export function DecisionSummary({ solve, snapshot, onOpenDiagnostics }: {
     return <p className="hint">本次运行尚无求解结果，可查看已生成的模型与代码。</p>;
   }
   return <>{failure}<div className="decision-hero">
-    <div>
+    <div className="objective-result"><span>目标值</span><strong>{format(solve.objective_value)}</strong></div>
+    <div className="solution-status">
       <span className="eyebrow">{solve.has_primal_solution ? "求解完成" : "求解状态"}</span>
       <h2>{status(solve.termination)}</h2>
       <span className="hint">{(solve.solver_id || "").split(".").at(-1).toUpperCase()}
         {snapshot.bundle?.assisted ? " · 人工辅助结果" : ""}</span>
     </div>
-    <div className="objective-result"><span className="hint">目标值</span><strong>{format(solve.objective_value)}</strong></div>
   </div></>;
 }
 

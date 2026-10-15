@@ -1,4 +1,5 @@
 "use strict";
+const { editorDialog, closeDialog } = require("./helpers/browser_fixture.cjs");
 const assert = require("node:assert/strict");
 const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || "playwright");
 const url = process.env.LLM4OM_WEB_TEST_URL;
@@ -24,6 +25,7 @@ assert.ok(
     await page.waitForFunction(
       () => document.querySelector("#method")?.options.length > 0,
     );
+    await editorDialog(page, 'model');
     await page.locator('#llm-model-list').waitFor();
     assert.match(await page.locator('#llm-model-list option:checked').innerText(), /Fixture Model v2.*fixture-model/);
     await page.selectOption('#llm-model-list', 'alternate-model');
@@ -31,6 +33,7 @@ assert.ok(
     await page.locator('#model').fill('manual-model-id');
     assert.equal(await page.locator('#llm-model-list').inputValue(), '');
     await page.selectOption('#llm-model-list', 'fixture-model');
+    await editorDialog(page, 'options');
     await page.getByText('高级设置', { exact: true }).click();
     await page.click("#doctor");
     await page.waitForSelector("#doctor-result strong");
@@ -56,6 +59,7 @@ assert.ok(
     ).json();
     assert.equal(after.metadata_gets, 2);
     assert.equal(after.generation_posts, 0);
+    await editorDialog(page, 'model');
     await page.route('**/api/llm-models', route => route.fulfill({ status: 400, json: { error: { message: '目录暂不可用' } } }));
     await page.locator('#fetch-models').click();
     await page.waitForFunction(() => document.querySelector('#model-directory-status')?.textContent?.includes('目录暂不可用'));
@@ -79,7 +83,6 @@ assert.ok(
     await page.locator('#fetch-models').click();
     await oldRequest;
     await page.locator('#provider').selectOption('google');
-    await page.locator('#llm-connection > summary').click();
     await page.locator('#llm-api-key').fill('synthetic-google-directory-key');
     await page.locator('#fetch-models').click();
     await page.locator('#llm-model-list option[value="new-model"]').waitFor({ state: 'attached' });

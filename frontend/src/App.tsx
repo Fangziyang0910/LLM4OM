@@ -5,6 +5,7 @@ import { shortMethod, status } from "./ui";
 import { Datasets } from "./components/Datasets";
 import { ProblemEditor } from "./components/ProblemEditor";
 import { RunView } from "./components/RunView";
+import { Dialog } from "./components/Dialog";
 import type { BenchmarkInput, Bootstrap, DatasetSummary, JobRecord } from "./types";
 
 type View = "editor" | "run" | "datasets";
@@ -13,6 +14,7 @@ export default function App() {
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
   const [view, setView] = useState<View>(() => new URLSearchParams(location.search).get("job") ? "run" : "editor");
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [benchmarkInput, setBenchmarkInput] = useState<BenchmarkInput | null>(null);
   const [noticeState, setNoticeState] = useState({ text: "", error: false });
   const notice = useCallback((text: string, error = false) => setNoticeState({ text, error }), []);
@@ -27,6 +29,8 @@ export default function App() {
       history.replaceState(null, "", address.pathname + address.search);
     }
     setView("run");
+    setHistoryOpen(false);
+    notice("");
     await selectRun(id, run);
   };
   const refreshDatasets = async () => {
@@ -58,14 +62,14 @@ export default function App() {
   }, [view]);
   return (
     <>
-      <aside className="sidebar">
+      <header className="app-bar">
         <a className="brand" href="/">
           <span className="brand-symbol">∑</span> LLM<span>4</span>OM
         </a>
-        <button
+        <nav aria-label="工作台导航"><button
           aria-current={view === "editor" ? "page" : undefined}
           id="new-run"
-          className={"nav" + (view === "editor" ? " active" : "")}
+          className={"nav-link" + (view === "editor" ? " active" : "")}
           onClick={() => {
             void selectRun(null);
             setView("editor");
@@ -74,19 +78,22 @@ export default function App() {
         >
           <span aria-hidden="true">＋</span> 新建问题
         </button>
-        <button
-          aria-current={view === "datasets" ? "page" : undefined}
-          id="open-datasets"
-          className={"nav" + (view === "datasets" ? " active" : "")}
-          onClick={() => {
-            void selectRun(null);
-            setView("datasets");
-            refreshDatasets().catch((error) => notice((error as Error).message, true));
-          }}
-        >
-          <span aria-hidden="true">▦</span> 内置 Benchmark
-        </button>
-        <h2 className="small-heading">运行记录</h2>
+          <button
+            aria-current={view === "datasets" ? "page" : undefined}
+            id="open-datasets"
+            className={"nav-link" + (view === "datasets" ? " active" : "")}
+            onClick={() => {
+              void selectRun(null);
+              setView("datasets");
+              refreshDatasets().catch((error) => notice((error as Error).message, true));
+            }}
+          >
+            示例题库
+          </button>
+          <button id="open-history" className="nav-link" onClick={() => setHistoryOpen(true)}>历史记录</button>
+        </nav>
+      </header>
+      <Dialog open={historyOpen} title="历史记录" onClose={() => setHistoryOpen(false)}>
         <div id="jobs" aria-label="运行记录">
           {!jobs.length ? <p className="history-empty">你的建模记录会保存在这里</p> : null}
           {jobs.map((job) => (
@@ -106,20 +113,13 @@ export default function App() {
             </button>
           ))}
         </div>
-        <p className="sidebar-footer">LLM4OM · 建模工作台</p>
-      </aside>
-      <main>
-        <header className="app-header">
-          <span className="workspace-label">工作空间 <span aria-hidden="true">/</span></span>
-          <h1>
-            {view === "run" ? "建模过程与产物" : view === "datasets" ? "内置 Benchmark" : "新建问题"}
-          </h1>
-        </header>
+      </Dialog>
+      <main className={view === "run" ? "workspace" : "landing"}>
         <div id="notice" className={noticeState.error ? "error" : ""} role={noticeState.error ? "alert" : "status"} hidden={!noticeState.text}>
           {noticeState.text}
         </div>
 
-        <div hidden={view !== "editor"}>
+        <div className="editor-page" hidden={view !== "editor"}>
           {bootstrap ? <ProblemEditor bootstrap={bootstrap} active={view === "editor"} notice={notice} benchmarkInput={benchmarkInput}
             onSubmitted={async (job: JobRecord) => { await refreshJobs(); await openJob(job.job_id); }} /> : <p>正在读取配置…</p>}
         </div>

@@ -49,4 +49,17 @@ async function completedRun(page, { descriptionSuffix = "" } = {}) {
   return result;
 }
 
-module.exports = { completedRun };
+// Navigate the same native dialogs as a user; changing settings never bypasses the UI.
+async function closeDialog(page) {
+  if (await page.locator("dialog[open]").count()) await page.keyboard.press("Escape");
+}
+
+async function editorDialog(page, kind) {
+  const title = kind === "model" ? "选择模型" : "建模选项";
+  if (await page.getByRole("dialog", { name: title, exact: true }).isVisible()) return;
+  await closeDialog(page);
+  await page.locator(kind === "model" ? "#choose-model" : "#open-options").click();
+  await page.getByRole("dialog", { name: title, exact: true }).waitFor();
+}
+
+module.exports = { completedRun, editorDialog, closeDialog };

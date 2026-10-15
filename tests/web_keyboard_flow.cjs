@@ -18,7 +18,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     page.on("pageerror", (error) => errors.push(error.message));
     const seeded = await completedRun(page);
     await page.goto(url);
-    await page.waitForSelector("#model");
+    await page.waitForSelector("#description");
     const focusable = await page.evaluate(() =>
       [...document.querySelectorAll('button,[href],input,select,textarea,[tabindex="0"]')]
         .filter((el) => el.offsetParent !== null && !el.disabled)
@@ -42,10 +42,31 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       seen.add(await page.evaluate(() => document.activeElement?.tagName || ""));
     }
     assert.ok(seen.size >= 2, "Tab 应能移动焦点,而不是被拦截");
+    // 原生弹窗限制 Tab 在窗口内，Escape 关闭并恢复触发按钮焦点。
+    await page.locator("#choose-model").focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("dialog", { name: "选择模型", exact: true }).waitFor();
+    for (let i = 0; i < 20; i++) {
+      await page.keyboard.press("Tab");
+      // Chrome also visits browser chrome (reported as BODY); background controls stay inert.
+      assert.equal(await page.evaluate(() => document.activeElement === document.body ||
+        Boolean(document.activeElement.closest("dialog:modal"))), true);
+    }
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator("dialog[open]").count(), 0);
+    assert.equal(await page.evaluate(() => document.activeElement.id), "choose-model");
     // 核心路径 1:Enter 打开历史运行
+    await page.locator("#open-history").focus();
+    await page.keyboard.press("Enter");
     await page.locator(`[data-job-id="${seeded.job.job_id}"]`).focus();
     await page.keyboard.press("Enter");
     await page.waitForSelector(".objective-result strong");
+    await page.getByLabel("更多运行操作").click();
+    await page.locator("#edit-run").click();
+    await page.getByRole("dialog", { name: "编辑新版本", exact: true }).waitFor();
+    assert.equal(await page.locator(".run-tools").getAttribute("open"), null);
+    await page.keyboard.press("Escape");
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute("aria-label")), "更多运行操作");
     // 核心路径 2:Enter 切换到代码标签
     await page.locator('[data-tab="code"]').focus();
     await page.keyboard.press("Enter");
@@ -58,10 +79,11 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     assert.equal(await page.getByRole("tab", { name: "求解结果" }).getAttribute("aria-selected"), "true");
     assert.equal(await page.locator(".decision-row").count(), 2);
     await page.keyboard.press("End");
-    assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "diagnostics");
+    assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "code");
     await page.keyboard.press("Home");
-    assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "formulation");
+    assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "result");
     // 核心路径 3:Enter 在带产物按钮的故事卡上打开对应产物
+    await page.locator("#toggle-process").click();
     const artifactCard = page
       .locator(".timeline-step.story-card")
       .filter({ hasText: "数学表述已保存" })
@@ -73,6 +95,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       return tab === "formulation" && document.querySelector("#artifact-choice")?.value;
     });
     // 核心路径 4:Enter 在求解完成卡上打开结果
+    await page.locator("#toggle-process").click();
     const solved = page
       .locator(".timeline-step.story-card")
       .filter({ hasText: "求解完成" })

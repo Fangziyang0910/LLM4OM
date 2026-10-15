@@ -1,4 +1,5 @@
 "use strict";
+const { editorDialog, closeDialog } = require("./helpers/browser_fixture.cjs");
 // 垂直故事流验收:确定性 Provider 走 提交 → 澄清确认 → 完整求解,
 // 检查真实步骤、阶段产物、折叠用量、产物跳转与轮询稳定性。
 const assert = require("node:assert/strict");
@@ -26,8 +27,9 @@ for (const address of [url, provider])
     await page.waitForFunction(
       () => document.querySelector("#method")?.options.length > 0,
     );
-    await page.selectOption("#method", "llm4om.methods.feedback_repair");
     await page.click("#load-example");
+    await editorDialog(page, "options");
+    await page.selectOption("#method", "llm4om.methods.feedback_repair");
     const problem = JSON.parse(
       fs.readFileSync(path.join(__dirname, "../examples/specs/problem.json"), "utf8"),
     );
@@ -51,8 +53,10 @@ for (const address of [url, provider])
     await page.locator("#config-json").fill(JSON.stringify(config));
     await page.click("#apply-config");
     await page.locator("details:has(#config-json) > summary").click();
+    await closeDialog(page);
     await page.click("#submit");
     await page.waitForSelector("#clarification:not([hidden])", { timeout: 20000 });
+    assert.equal(await page.locator("#toggle-process").getAttribute("aria-expanded"), "true");
     const waiting = page
       .locator(".timeline-step.story-card")
       .filter({ hasText: "等待补充信息" });
@@ -73,6 +77,8 @@ for (const address of [url, provider])
       null,
       { timeout: 30000 },
     );
+    assert.equal(await page.locator("#process-panel").isVisible(), false);
+    await page.locator("#toggle-process").click();
     const cards = page.locator(".timeline-step.story-card");
     const count = await cards.count();
     const labels = [];
@@ -109,7 +115,7 @@ for (const address of [url, provider])
       "checks/001/formulation.json",
     );
     assert.match(
-      await page.locator(".story-consumption").innerText(),
+      await page.locator(".story-consumption").textContent(),
       /模型请求 \d+/,
     );
     // 独立页面 fixture：核心 code_saved 引用 ModelArtifact，跳转须读取其 Code 产物。
@@ -119,6 +125,7 @@ for (const address of [url, provider])
     await page.route("**/api/jobs/" + codeEventSnapshot.job.job_id,
       route => route.fulfill({ json: codeEventSnapshot }));
     await page.reload();
+    await page.locator("#toggle-process").click();
     await page.locator(".story-card").filter({ hasText: "求解实现已保存" }).locator(".story-head").click();
     assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "code");
     await page.locator(".code-lines").waitFor();

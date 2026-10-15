@@ -46,7 +46,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       ];
       const host = document.createElement("div");
       host.id = "math-host-1";
-      document.querySelector("main").appendChild(host);
+      document.body.appendChild(host);
       UI.records(host, formulation, "formulation", contents);
       const textPath = {
         katex: host.querySelectorAll(".katex").length,
@@ -73,7 +73,8 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
         },
       ];
       const irHost = document.createElement("div");
-      document.querySelector("main").appendChild(irHost);
+      irHost.id = "math-host-2";
+      document.body.appendChild(irHost);
       UI.records(irHost, formulation, "formulation", contents);
       return {
         ...textPath,
@@ -105,6 +106,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       ).length,
     );
     assert.equal(overflowing, 0, "长公式应在容器内换行,不得横向裁切");
+    await page.evaluate(() => document.querySelectorAll('[id^="math-host-"]').forEach(host => host.remove()));
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.click('[data-tab="formulation"]');
     assert.ok(

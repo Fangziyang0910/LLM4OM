@@ -1,6 +1,7 @@
 "use strict";
+const { editorDialog, closeDialog } = require("./helpers/browser_fixture.cjs");
 // 失败与诊断验收:指向不可达端点的配置产生确定性失败运行,
-// 检查人话诊断、建议动作、技术详情折叠、故事流失败标记与侧栏辨识。
+// 检查人话诊断、建议动作、技术详情折叠、故事流失败标记与历史记录辨识。
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -22,6 +23,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       () => document.querySelector("#method")?.options.length > 0,
     );
     await page.click("#load-example");
+    await editorDialog(page, "options");
     const problem = JSON.parse(
       fs.readFileSync(path.join(__dirname, "../examples/specs/problem.json"), "utf8"),
     );
@@ -47,6 +49,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     await page.locator("#config-json").fill(JSON.stringify(config));
     await page.click("#apply-config");
     await page.locator("details:has(#config-json) > summary").click();
+    await closeDialog(page);
     await page.click("#submit");
     await page.waitForSelector(".failure-summary", { timeout: 45000 });
     assert.match(
@@ -75,11 +78,14 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     assert.equal(await ending.locator(".failure-detail").count(), 0);
     await ending.getByRole("button", { name: "查看运行详情 →" }).click();
     assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "diagnostics");
-    assert.match(await detail.innerText(), /provider_connection_error/);
+    await page.getByRole("tab", { name: "求解结果" }).click();
+    assert.match(await page.locator(".failure-summary").innerText(), /provider_connection_error/);
     assert.equal(await page.locator("#resume").isVisible(), true);
+    await page.locator("#open-history").click();
     const sidebar = page.locator("#jobs .job").first();
     assert.match(await sidebar.innerText(), /未完成/);
     assert.ok((await sidebar.getAttribute("class")).includes("failed"));
+    await closeDialog(page);
     await page.waitForTimeout(1700);
     assert.ok(
       (await page.locator(".failure-summary").count()) > 0,
@@ -92,7 +98,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     );
     assert.deepEqual(errors, []);
     console.log(
-      "Failure UX: human diagnosis, suggested action, collapsible technical detail, story ending card, sidebar marker, resume entry and mobile passed.",
+      "Failure UX: human diagnosis, suggested action, collapsible technical detail, story ending card, history marker, resume entry and mobile passed.",
     );
   } finally {
     await browser.close();

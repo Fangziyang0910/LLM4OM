@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-14；SDK／Worker开发版本：0.37.0。当前包含 363 个仓库文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-15；SDK／Worker开发版本：0.37.0。当前包含 368 个仓库文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -30,10 +30,11 @@
 | `src/llm4om/runtime_identity.py` | 运行、任务和实验共同SDK身份 | 固定源码hash；恢复兼容性测试 |
 | `src/llm4om/workbench.py` | 内置方法模板、供应商固定地址预设与说明 | bootstrap及浏览器配置切换、固定地址校验；Planner仍负责兼容性 |
 | `frontend/src/useRunSnapshot.ts` | 当前任务／版本与顺序轮询 | 迟到响应、版本选择与浏览器回归 |
-| `frontend/src/components/ProblemEditor.tsx` | 问题、上传和单一有效运行配置 | 表单／配置保存、模型目录与 ID 选择、迟到响应隔离和提交验收 |
-| `frontend/src/components/RunView.tsx` | 版本、产物与运行结果展示 | 故事流、历史链接及阶段修正历史 |
+| `frontend/src/components/ProblemEditor.tsx` | 问题输入区与模型／建模选项窗口 | 主操作首屏、配置保存、模型目录、迟到响应隔离和提交验收 |
+| `frontend/src/components/Dialog.tsx` | 配置、历史与修订共用的原生弹窗 | Escape、焦点恢复、背景不可交互与窄屏滚动 |
+| `frontend/src/components/RunView.tsx` | 全幅产物工作区与可开合过程 | 默认结果、过程自动展开／收起、历史链接、修正历史与窄屏切换 |
 | `frontend/src/components/RevisionEditor.tsx` | 人工修订模板与派生提交 | 模板响应失效、模型／代码编辑与父历史验收 |
-| `tests/helpers/browser_fixture.cjs` | 独立完整运行样本准备 | 只使用本地Provider与公共HTTP接口，无测试顺序依赖 |
+| `tests/helpers/browser_fixture.cjs` | 独立完整运行样本准备 | 只使用本地Provider与公共HTTP接口，按用户路径打开配置窗口，无测试顺序依赖 |
 | `tests/web_state_flow.cjs` | 配置与异步运行选择回归 | 确定性HTTP响应；无任务提交或付费请求 |
 | `.editorconfig` | 编辑器格式 | UTF-8、LF、缩进；授权原文例外 |
 | `docs/development/s05-clarification.md` | 澄清、原声明确认与显式修订的实际支持 | CLI／SDK、真实Solver、父历史与恢复证据 |
@@ -310,7 +311,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/src/legacyRun.ts` | 旧候选布局运行的只读映射 | 只改内存中的快照名称，不改写已保存文件 |
 | `frontend/src/components/Connectivity.tsx` | 配置体检结果呈现 | 通过/未通过分层摘要、目录检查、建议动作 |
 | `tests/web_start_flow.cjs` | 起点页浏览器验收 | 方法解释卡、切换提示、不兼容警示、预算 chips、体检分层 |
-| `tests/web_failure_flow.cjs` | 失败与诊断浏览器验收 | 人话诊断、建议动作、技术详情折叠、故事结束卡、侧栏辨识 |
+| `tests/web_failure_flow.cjs` | 失败与诊断浏览器验收 | 人话诊断、建议动作、技术详情折叠、故事结束卡、历史记录辨识 |
 | `frontend/src/components/RuntimeDetails.tsx` | 资源账本、求解执行与调用记录 | 未知Token与费用不记零 |
 | `frontend/src/components/Decision.tsx` | 紧凑求解摘要、失败诊断与结果详情 | 部分结果保留、变量值、按需展开目标构成与余量试算 |
 | `frontend/src/components/StoryFlow.tsx` | 建模过程时间线 | 真实方法步骤、阶段产物、检查诊断、选择依据、折叠用量、产物直达 |
@@ -320,13 +321,13 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/src/components/Datasets.tsx` | 内置 Benchmark 列表、题面与单问题试用 | 分页、复制、公开业务数据、带入建模、键盘与窄屏 |
 | `tests/test_web_datasets.py` | 内置 Benchmark 公共 HTTP 验收 | 九组2033条公开题面、分页、不混入工作区任务、公开输入与参考字段隔离 |
 | `tests/web_datasets_flow.cjs` | 内置 Benchmark 浏览器验收 | 九组浏览、复制、带入建模、参数携带、配置保留与窄屏 |
-| `tests/web_keyboard_flow.cjs` | 键盘可达性浏览器验收 | 焦点环可见、无焦点陷阱、方向键／Home／End 页签切换、Enter 产物与结果跳转 |
+| `tests/web_keyboard_flow.cjs` | 键盘可达性浏览器验收 | 焦点环、弹窗内背景不可交互与 Escape 恢复焦点、方向键／Home／End 页签切换、Enter 产物与结果跳转 |
 | `tests/web_math_flow.cjs` | 数学排版浏览器验收 | expression_text→KaTeX(∑/≤/下标),结构化 IR 交互路径保持 |
 | `frontend/src/math.tsx` | ASCII 数学→LaTeX 有界转换与 MathTex 组件 | 语法外输入回退纯文本 |
 | `frontend/src/vendor/katex.css` | KaTeX 样式与字族裁剪(仅 Main/Math/Size) | 字体经 node_modules 相对路径引用,构建时 woff2 内联进 style.css,仓库不存二进制 |
 | `frontend/src/components/Clarification.tsx` | 澄清问答表单与修订构建 | 确认／修订语义、预览 |
 | `frontend/src/components/Revision.tsx` | 人工修订字段规格与校验 | 问题／代码／严格IR、数值语义 |
-| `frontend/src/style.css` | 工作台布局与响应式样式源 | 语义色与统一间距、过程与产物并排、按需展开控件、可见焦点、窄屏与减少动画偏好 |
+| `frontend/src/style.css` | 工作台布局与响应式样式源 | 单一输入区、全幅产物与右侧过程、原生弹窗、焦点、窄屏与减少动画偏好 |
 | `src/llm4om/web_assets/index.html` | 构建产物：工作台首页 | 由frontend构建生成，不手改 |
 | `src/llm4om/web_assets/app.js` | 构建产物：应用与渲染逻辑 | 由frontend构建生成，不手改 |
 | `src/llm4om/web_assets/style.css` | 构建产物：样式 | 由frontend构建生成，不手改 |

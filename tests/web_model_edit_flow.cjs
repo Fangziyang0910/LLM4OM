@@ -30,6 +30,7 @@ assert.ok(workspace, "Use a disposable guidance workspace; this test creates its
       "bundle.json",
     );
     const bytes = fs.readFileSync(parent);
+    await page.getByLabel("更多运行操作").click();
     await page.click("#edit-run");
     await page.selectOption("#edit-operation", "formulation");
     await page.getByLabel("qty_A · 上界", { exact: true }).waitFor();

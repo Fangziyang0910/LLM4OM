@@ -22,11 +22,17 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       if (request.method() === "POST") mutations.push(request.url());
     });
     const run = await completedRun(page);
-    const objective = await page.locator(".objective-card").boundingBox();
-    assert.ok(objective.y + objective.height < 1000, "数学目标应在桌面首屏完整展示");
-    const processBox = await page.locator("#process-panel").boundingBox();
+    const objective = await page.locator(".objective-result").boundingBox();
+    assert.ok(objective.y + objective.height < 1000, "求解目标值应在桌面首屏完整展示");
+    assert.equal(await page.locator("#process-panel").isVisible(), false);
+    assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "result");
     const output = await page.locator(".artifact-panel").boundingBox();
-    assert.ok(processBox.x + processBox.width <= output.x, "建模过程与产物并排展示");
+    assert.ok(output.width > 1400, "完成后产物占满工作区");
+    await page.locator("#toggle-process").click();
+    const processBox = await page.locator("#process-panel").boundingBox();
+    const splitOutput = await page.locator(".artifact-panel").boundingBox();
+    assert.ok(splitOutput.x + splitOutput.width <= processBox.x, "展开的过程位于产物右侧");
+    await page.getByRole("button", { name: "收起建模过程" }).click();
     assert.ok(!(await page.locator(".run-heading").innerText()).includes(run.job.job_id));
     assert.equal(await page.locator(".problem-brief").getAttribute("open"), null);
     await page.getByRole("tab", { name: "求解结果" }).click();
@@ -76,6 +82,12 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
         fullPage: true,
       });
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator("#toggle-process").click();
+    assert.equal(await page.locator("#process-panel").isVisible(), true);
+    assert.equal(await page.locator(".artifact-panel").isVisible(), false);
+    await page.getByRole("tab", { name: "数学模型" }).click();
+    assert.equal(await page.locator("#process-panel").isVisible(), false);
+    assert.equal(await page.locator(".artifact-panel").isVisible(), true);
     assert.equal(
       await page.evaluate(
         () => document.documentElement.scrollWidth > innerWidth,
@@ -164,6 +176,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     await page.locator('#llm-model-list option[value="editor-model"]').waitFor({ state: "attached" });
     assert.deepEqual(mutations, [url + "/api/llm-models"]);
     await page.locator("#description").fill("保留未提交的问题草稿。");
+    await page.locator("#open-history").click();
     await page.locator(`[data-job-id="${run.job.job_id}"]`).click();
     await page.locator("#model-view").waitFor();
     assert.deepEqual(mutations, [url + "/api/llm-models"]);

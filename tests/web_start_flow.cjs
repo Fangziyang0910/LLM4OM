@@ -1,5 +1,6 @@
 "use strict";
-// 起点页体验验收:方法解释卡、兼容性提示、预算可视化与体检分层。
+const { editorDialog, closeDialog } = require("./helpers/browser_fixture.cjs");
+// 起点页体验验收:单一输入区、配置窗口、兼容性提示、预算与配置检查。
 const assert = require("node:assert/strict");
 const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || "playwright");
 const url = process.env.LLM4OM_WEB_TEST_URL;
@@ -25,8 +26,14 @@ for (const address of [url, provider])
     );
     const explainer = page.locator("#method-explainer");
     assert.equal(await page.locator(".advanced-controls").getAttribute("open"), null);
-    assert.equal(await page.locator("#llm-connection").getAttribute("open"), null);
-    assert.equal(await page.locator("#llm-key-status").isVisible(), true);
+    assert.equal(await page.locator("dialog[open]").count(), 0);
+    assert.equal(await page.locator("#submit").isDisabled(), true);
+    assert.match(await page.locator("#choose-model").innerText(), /已配置/);
+    const composer = await page.locator(".composer").boundingBox();
+    const submit = await page.locator("#submit").boundingBox();
+    assert.ok(submit.y + submit.height < 844 && submit.x >= composer.x);
+    await page.locator("#load-example").click();
+    await editorDialog(page, "options");
     await page.getByText("高级设置", { exact: true }).click();
     await page.selectOption("#method", "llm4om.methods.optimus");
     assert.equal(await page.locator("#method option:checked").innerText(), "OptiMUS");
@@ -46,7 +53,9 @@ for (const address of [url, provider])
     await page.click("#apply-config");
     assert.equal(await page.locator("#submit").isDisabled(), true);
     assert.match(await explainer.innerText(), /不兼容/);
+    await closeDialog(page);
     await page.selectOption("#solver", "llm4om.solvers.gurobi");
+    await editorDialog(page, "options");
     assert.equal(await page.locator("#submit").isDisabled(), false);
     assert.doesNotMatch(await explainer.innerText(), /不兼容/);
     const budgetInConfig = JSON.parse(await page.locator("#config-json").inputValue()).budget;

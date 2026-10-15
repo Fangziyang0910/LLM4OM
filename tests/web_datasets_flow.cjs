@@ -1,4 +1,5 @@
 "use strict";
+const { editorDialog, closeDialog } = require("./helpers/browser_fixture.cjs");
 // 平台内置样例 → 查看问题 → 复制公开输入 → 带入建模；不要求用户导入数据集。
 const assert = require("node:assert/strict");
 const { chromium } = require(process.env.LLM4OM_BROWSER_MODULE || "playwright");
@@ -16,7 +17,9 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(url);
+    await editorDialog(page, "options");
     await page.locator('#method').selectOption('llm4om.methods.optitree');
+    await closeDialog(page);
     await page.locator('#solver').selectOption('llm4om.solvers.ortools');
     const configBefore = await page.locator('#config-json').inputValue();
     await page.locator("#open-datasets").click();

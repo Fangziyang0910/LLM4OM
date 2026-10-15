@@ -33,6 +33,7 @@ assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
         "bundle.json",
       ),
       bytes = fs.readFileSync(parent);
+    await p.getByLabel("更多运行操作").click();
     await p.click("#edit-run");
     await p.waitForSelector(".source-editor");
     assert.equal(
@@ -44,6 +45,7 @@ assert.ok(workspace, "Use a disposable workspace with a copied completed run.");
       document.querySelector("#notice").textContent.includes("修改原因"),
     );
     assert.match(await p.locator("#notice").innerText(), /修改原因/);
+    assert.match(await p.locator('dialog[open] [role="alert"]').innerText(), /修改原因/);
     await p.selectOption("#edit-operation", "problem");
     await p.waitForFunction(() =>
       document

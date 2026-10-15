@@ -3,10 +3,11 @@ import { api } from "../api";
 import { artifactKey, artifactLabel, activeStep, shortMethod, status } from "../ui";
 import { StageHistory } from "./StageHistory";
 import { Clarification, type ClarificationRequest } from "./Clarification";
-import { Decision, DecisionSummary } from "./Decision";
+import { Decision } from "./Decision";
 import { Records } from "./Records";
 import { RuntimeDetails } from "./RuntimeDetails";
 import { StoryFlow } from "./StoryFlow";
+import { Dialog } from "./Dialog";
 import { RevisionEditor } from "./RevisionEditor";
 import type { ArtifactRef, CodeArtifact, ModelArtifact, Notice, Snapshot, SolveResult } from "../types";
 
@@ -34,12 +35,13 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
   const currentJob = snapshot.job.job_id;
   const [activeTab, setActiveTab] = useState(() => {
     const tab = new URLSearchParams(location.search).get("tab");
-    return tab && Object.hasOwn(tabPatterns, tab) ? tab :
-      snapshot.bundle?.stages?.formulation?.status === "not_available" ? "code" : "formulation";
+    return tab && Object.hasOwn(tabPatterns, tab) ? tab : "result";
   });
   const [artifactChoice, setArtifactChoice] = useState(new URLSearchParams(location.search).get("artifact") || "");
   const [artifactSelectedByUser, setArtifactSelectedByUser] = useState(Boolean(artifactChoice));
   const [editOpen, setEditOpen] = useState(false);
+  const [processPreference, setProcessPreference] = useState<boolean | null>(null);
+  const [editNotice, setEditNotice] = useState({ text: "", error: false });
   const [apiKey, setApiKey] = useState("");
   const contents = snapshot.contents || {};
   const publicValue = (ref: ArtifactRef | null | undefined) => artifactKey(snapshot, ref);
@@ -84,7 +86,7 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
     if (currentJob) {
       url.searchParams.set("job", currentJob);
       if (runId) url.searchParams.set("run", runId);
-      if (activeTab !== "formulation") url.searchParams.set("tab", activeTab);
+      if (activeTab !== "result") url.searchParams.set("tab", activeTab);
       if (artifactSelectedByUser && artifactChoice) url.searchParams.set("artifact", artifactChoice);
     }
     return url;
@@ -107,10 +109,10 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
     : null;
   const isolatedContents = checkPrefix
     ? Object.fromEntries(
-        Object.entries(contents).filter(
-          ([key]) => !key.startsWith("checks/") || key.startsWith(`checks/${checkPrefix}/`),
-        ),
-      )
+      Object.entries(contents).filter(
+        ([key]) => !key.startsWith("checks/") || key.startsWith(`checks/${checkPrefix}/`),
+      ),
+    )
     : contents;
   const recordView =
     activeTab === "formulation" && selectedName.startsWith("method/state_")
@@ -121,12 +123,19 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
 
   const openArtifact = (tab: string, key?: string) => {
     setActiveTab(tab);
+    setProcessPreference(false);
     if (key) {
       setArtifactChoice(key);
       setArtifactSelectedByUser(true);
     }
   };
 
+  const finished = ["completed", "artifact_ready"].includes(snapshot.job.status);
+  const processOpen = processPreference ?? !finished;
+  useEffect(() => { setProcessPreference(null); }, [snapshot.job.run_id]);
+  useEffect(() => {
+    if (snapshot.job.status === "needs_input") setProcessPreference(null);
+  }, [snapshot.job.status]);
   const runBusy = ["running", "queued"].includes(snapshot.job.status);
   const runningStep = runBusy ? activeStep(snapshot) : null;
   const method = shortMethod(contents["public-config.json"]?.method?.plugin_id || snapshot.job.method);
@@ -140,17 +149,16 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
   };
   return (
     <section id="result">
-      <div className="run-heading">
+      <header className="run-heading">
         <div className="run-intro">
-          <div id="run-meta" className="run-meta">
-            <span className={"run-status " + snapshot.job.status}>{status(snapshot.job.status)}</span>
-            <span>{method}</span>
-            {snapshot.historical ? <span>历史版本</span> : null}
-          </div>
-          <h2 id="run-title">{title.length > 64 ? title.slice(0, 64) + "…" : title}</h2>
-          <details className="problem-brief"><summary>查看完整问题</summary>
+          <div className="run-meta" id="run-meta"><span className={"run-status " + snapshot.job.status}>{status(snapshot.job.status)}</span>
+            <span>{method}</span>{snapshot.historical ? <span>历史版本</span> : null}</div>
+          <h1 id="run-title">{title.length > 64 ? title.slice(0, 64) + "…" : title}</h1>
+          <details className="problem-brief"><summary>查看问题</summary>
             <p className="problem-text">{contents["public-problem.json"]?.description || snapshot.job.description}</p>
           </details>
+        </div>
+        <div className="run-actions">
           <label className="version-selector" hidden={(snapshot.versions || []).length < 2}>
             运行版本
             <select id="run-version" aria-label="选择运行版本" value={selectedRun || ""}
@@ -165,8 +173,6 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
               </option>)}
             </select>
           </label>
-        </div>
-        <div className="actions run-actions">
           <button id="cancel" className="secondary" hidden={snapshot.historical || !runBusy}
             onClick={async () => {
               try { await api(`/api/jobs/${currentJob}/cancel`, {}); notice("操作已提交。"); await refreshRun(); }
@@ -177,11 +183,21 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
               try { await api(`/api/jobs/${currentJob}/resume`, {}, apiKey || undefined); notice("操作已提交。"); await refreshRun(); }
               catch (error) { notice((error as Error).message, true); }
             }}>继续恢复</button>
-          <button id="edit-run" className="secondary" disabled={runBusy} onClick={() => setEditOpen(true)}>编辑新版本</button>
           <a id="export" className="secondary" href={`/api/jobs/${currentJob}/export${selectedRun ? "?run_id=" + selectedRun : ""}`}
-            hidden={!snapshot.bundle}>下载产物 ↓</a>
+            hidden={!snapshot.bundle}>导出产物 ↓</a>
           <details className="run-tools"><summary className="secondary" aria-label="更多运行操作">···</summary>
-            <div className="run-tools-menu">
+            <div className="run-tools-menu" onClick={event => {
+              const menu = event.currentTarget.closest("details")!;
+              menu.open = false;
+              menu.querySelector("summary")?.focus();
+            }}>
+              <button id="edit-run" disabled={runBusy} onClick={() => { setEditNotice({ text: "", error: false }); setEditOpen(true); }}>编辑新版本</button>
+              {["data", "diagnostics"].map(tab => <button key={tab} id={`tab-${tab}`} data-tab={tab}
+                className={"tab auxiliary-tab" + (activeTab === tab ? " active" : "")}
+                onClick={() => {
+                  setActiveTab(tab); setArtifactSelectedByUser(false); setProcessPreference(false);
+                }}>
+                {tab === "data" ? "问题数据" : "运行详情"}</button>)}
               <a id="run-link" href={runLink.href} hidden={runLink.hidden}>此版本链接 ↗</a>
               <button id="rerun" hidden={Boolean(snapshot.historical)} disabled={runBusy}
                 onClick={async () => {
@@ -194,24 +210,63 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
             </div>
           </details>
         </div>
+      </header>
+      <div className="workspace-toolbar">
+        <div className="tabs" role="tablist" aria-label="建模产物">
+          {[["result", "求解结果"], ["formulation", "数学模型"], ["code", "求解代码"]].map(([tab, label], index) => {
+            const state = stageState(tab);
+            return <button key={tab} id={`tab-${tab}`} role="tab" aria-selected={activeTab === tab}
+              aria-controls="artifact-reader" tabIndex={activeTab === tab || !["result", "formulation", "code"].includes(activeTab) && index === 0 ? 0 : -1}
+              className={"tab" + (activeTab === tab ? " active" : "")} data-tab={tab}
+              onClick={() => { setActiveTab(tab); setArtifactSelectedByUser(false); setProcessPreference(false); }}
+              onKeyDown={event => {
+                const tabs = Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+                const target = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft"
+                  ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
+                if (target !== null) { event.preventDefault(); tabs[target].focus(); tabs[target].click(); }
+              }}>
+              <span className={"stage-dot " + state} title={status(state || "pending")} aria-hidden="true" />{label}
+            </button>;
+          })}
+        </div>
+        <button id="toggle-process" className={"process-toggle" + (processOpen ? " active" : "")} aria-expanded={processOpen}
+          aria-controls="process-panel" onClick={() => setProcessPreference(!processOpen)}>
+          <span className={"stage-dot " + (runBusy ? "running" : finished ? "available" : "pending")} aria-hidden="true" />
+          {runBusy ? "正在建模" : "建模过程"}<span aria-hidden="true">{processOpen ? "↗" : "↙"}</span>
+        </button>
       </div>
-      {contents['requested-config.json']?.llm?.config?.credential_env === 'LLM4OM_WEB_API_KEY' ? (
-        <details className="run-key-settings">
-          <summary>运行密钥</summary>
-          <label>API Key<input id="run-api-key" type="password" autoComplete="off" spellCheck={false} maxLength={4096}
-            value={apiKey} onChange={event => setApiKey(event.target.value.trim())} /></label>
-          <p className="hint">默认使用已保存的密钥。这里填写的密钥只用于本次恢复或修订。</p>
-        </details>
-      ) : null}
-      {editOpen ? <RevisionEditor key={snapshot.job.run_id} snapshot={snapshot} notice={notice} apiKey={apiKey}
-        onClose={() => setEditOpen(false)} onSubmitted={() => selectRun(currentJob, null).then(() => {})} /> : null}
-      <div className="experience-grid">
-        <aside id="process-panel" className="panel process-panel" aria-label="建模过程">
-          <StoryFlow snapshot={snapshot}
-            finalObjective={solve ? { value: solve.objective_value ?? null, termination: solve.termination } : null}
-            onOpenArtifact={openArtifact} onOpenResult={() => setActiveTab(solve ? "result" : "diagnostics")} />
-        </aside>
-        <div className="output-column">
+      <div className="run-workspace" data-process-open={processOpen}>
+        <section className="artifact-panel" aria-label="建模产物">
+          <div id="artifact-reader" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
+            <div className="artifact-toolbar">
+              <h2 id="output-heading">{tabHeadings[activeTab]}</h2>
+              <select id="artifact-choice" aria-label="选择阶段记录" hidden={artifactEntries.length < 2} value={artifactChoice}
+                onChange={event => { setArtifactChoice(event.target.value); setArtifactSelectedByUser(true); }}>
+                {artifactEntries.map(([name]) => <option key={name} value={name}>
+                  {(name.startsWith("checks/") ? "检查 " + name.split("/")[1] + " · " : "") +
+                    (name === "运行事件" ? "运行事件" : artifactLabel(name))}
+                </option>)}
+              </select>
+
+            </div>
+            <div id="model-view" className="model-grid">
+              {activeTab === "formulation" || activeTab === "code" ? <StageHistory snapshot={snapshot} stage={activeTab}
+                current={artifactChoice} onOpen={key => openArtifact(activeTab, key)} /> : null}
+              {activeTab === "diagnostics" ? <RuntimeDetails snapshot={snapshot} /> : activeTab === "result" ? (
+                <div id="decision"><Decision solve={solve} solution={solution} snapshot={snapshot}
+                  solvedIR={solvedIR} onOpenDiagnostics={() => { setActiveTab("diagnostics"); setProcessPreference(false); }} /></div>
+              ) : selectedArtifact === undefined && ["running", "queued", "needs_input"].includes(snapshot.job.status) ? (
+                <div className="empty-view"><div className="empty-icon" aria-hidden="true">∑</div>
+                  <h3>{snapshot.job.status === "needs_input" ? "补充信息后继续建模" : activeTab === "code" ? "正在生成求解代码" : "正在构建数学模型"}</h3>
+                  <p className="hint">生成的产物会自动显示在这里。</p>
+                </div>
+              ) : <Records value={recordView} tab={activeTab} contents={isolatedContents} dataPreviews={snapshot.data_previews} />}
+            </div>
+          </div>
+        </section>
+        <aside id="process-panel" className="process-panel" aria-label="建模过程" hidden={!processOpen}>
+          <div className="process-heading"><h2>建模过程</h2><button className="icon-button" aria-label="收起建模过程"
+            onClick={() => setProcessPreference(false)}>×</button></div>
           {snapshot.job.status === "needs_input" && clarificationRequest ? (
             <Clarification key={clarificationRequest.request_id} request={clarificationRequest}
               problem={contents["public-problem.json"]}
@@ -220,56 +275,28 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
                 notice("回答已提交，正在恢复。"); await refreshRun();
               }} onError={message => notice(message, true)} />
           ) : <div id="clarification" hidden />}
-          <div id="decision" className="panel decision-summary">
-            <DecisionSummary solve={solve} snapshot={snapshot} onOpenDiagnostics={() => setActiveTab("diagnostics")} />
-          </div>
-          <section className="panel artifact-panel" aria-label="建模产物">
-            <div className="tabs" role="tablist" aria-label="建模产物">
-              {[["formulation", "数学模型"], ["code", "求解代码"], ["result", "求解结果"],
-                ["data", "问题数据"], ["diagnostics", "运行详情"]].map(([tab, label], index) => {
-                const state = stageState(tab);
-                return <button key={tab} id={`tab-${tab}`} role="tab" aria-selected={activeTab === tab}
-                  aria-controls="artifact-reader" tabIndex={activeTab === tab ? 0 : -1}
-                  className={"tab" + (activeTab === tab ? " active" : "") + (state ? "" : " secondary-tab")} data-tab={tab}
-                  onClick={() => { setActiveTab(tab); setArtifactSelectedByUser(false); }}
-                  onKeyDown={event => {
-                    const tabs = Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-                    const target = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft"
-                      ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
-                    if (target !== null) { event.preventDefault(); tabs[target].focus(); tabs[target].click(); }
-                  }}>
-                  {state ? <span className={"stage-dot " + state} title={status(state)} aria-label={status(state)} /> : null}{label}
-                </button>;
-              })}
-            </div>
-            <div id="artifact-reader" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
-              <div className="artifact-toolbar">
-                <h3 id="output-heading">{tabHeadings[activeTab]}</h3>
-                <select id="artifact-choice" aria-label="选择阶段记录" hidden={artifactEntries.length < 2} value={artifactChoice}
-                  onChange={event => { setArtifactChoice(event.target.value); setArtifactSelectedByUser(true); }}>
-                  {artifactEntries.map(([name]) => <option key={name} value={name}>
-                    {(name.startsWith("checks/") ? "检查 " + name.split("/")[1] + " · " : "") +
-                      (name === "运行事件" ? "运行事件" : artifactLabel(name))}
-                  </option>)}
-                </select>
-              </div>
-              <div id="model-view" className="model-grid">
-                {activeTab === "formulation" || activeTab === "code" ? <StageHistory snapshot={snapshot} stage={activeTab}
-                  current={artifactChoice} onOpen={key => openArtifact(activeTab, key)} /> : null}
-                {activeTab === "diagnostics" ? <RuntimeDetails snapshot={snapshot} /> : activeTab === "result" ? (
-                  <Decision solve={solve} solution={solution} snapshot={snapshot}
-                    solvedIR={solvedIR} showSummary={false} onOpenDiagnostics={() => setActiveTab("diagnostics")} />
-                ) : selectedArtifact === undefined && ["running", "queued", "needs_input"].includes(snapshot.job.status) ? (
-                  <div className="empty-view"><div className="empty-icon" aria-hidden="true">∑</div>
-                    <h3>{snapshot.job.status === "needs_input" ? "补充信息后继续建模" : activeTab === "code" ? "正在生成求解代码" : "正在构建数学模型"}</h3>
-                    <p className="hint">完成后自动展示，可在左侧查看建模进展。</p>
-                  </div>
-                ) : <Records value={recordView} tab={activeTab} contents={isolatedContents} dataPreviews={snapshot.data_previews} />}
-              </div>
-            </div>
-          </section>
-        </div>
+
+          <StoryFlow snapshot={snapshot}
+            finalObjective={solve ? { value: solve.objective_value ?? null, termination: solve.termination } : null}
+            onOpenArtifact={openArtifact} onOpenResult={() => { setActiveTab(solve ? "result" : "diagnostics"); setProcessPreference(false); }} />
+          {contents['requested-config.json']?.llm?.config?.credential_env === 'LLM4OM_WEB_API_KEY' ? (
+            <details className="run-key-settings">
+              <summary>运行密钥</summary>
+              <label>API Key<input id="run-api-key" type="password" autoComplete="off" spellCheck={false} maxLength={4096}
+                value={apiKey} onChange={event => setApiKey(event.target.value.trim())} /></label>
+              <p className="hint">默认使用已保存的密钥。这里填写的密钥只用于本次恢复或修订。</p>
+            </details>
+          ) : null}
+
+        </aside>
       </div>
+      <Dialog open={editOpen} title="编辑新版本" onClose={() => setEditOpen(false)} wide>
+        {editNotice.text ? <p className={"dialog-notice" + (editNotice.error ? " error" : "")}
+          role={editNotice.error ? "alert" : "status"}>{editNotice.text}</p> : null}
+        {editOpen ? <RevisionEditor key={snapshot.job.run_id} snapshot={snapshot}
+          notice={(message, error = false) => { setEditNotice({ text: message, error }); notice(message, error); }} apiKey={apiKey}
+          onClose={() => setEditOpen(false)} onSubmitted={async () => { await selectRun(currentJob, null); setEditOpen(false); }} /> : null}
+      </Dialog>
     </section>
   );
 }

@@ -41,6 +41,7 @@ const legacy = [
     const versions = page.locator(".stage-history li");
     assert.equal(await versions.count(), 2);
     assert.match(await versions.nth(1).innerText(), /第 2 版 · 检查 002 · 最终选择[\s\S]*修正自检查 001/);
+    await page.locator("#toggle-process").click();
     const titles = await page.locator("#method-timeline .story-card .step-content strong").allInnerTexts();
     assert.equal(titles.filter((title) => title === "公开检查").length, 2);
     assert.deepEqual(errors, []);

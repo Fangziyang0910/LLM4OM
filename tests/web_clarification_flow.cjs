@@ -1,4 +1,5 @@
 "use strict";
+const { editorDialog, closeDialog } = require("./helpers/browser_fixture.cjs");
 // Run against the local deterministic responder documented in s09-user-experience.md.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -30,7 +31,6 @@ assert.ok(workspace, "A disposable fixture workspace is required.");
       await page.waitForFunction(
         () => document.querySelector("#method")?.options.length > 0,
       );
-      await page.selectOption("#method", "llm4om.methods.feedback_repair");
       await page.click("#load-example");
       if (revise)
         await page
@@ -47,6 +47,8 @@ assert.ok(workspace, "A disposable fixture workspace is required.");
       );
       problem.data_refs = [];
       problem.description = await page.locator("#description").inputValue();
+      await editorDialog(page, "options");
+      await page.selectOption("#method", "llm4om.methods.feedback_repair");
       await page.locator(".problem-panel > details summary").click();
       await page.locator("#problem-json").fill(JSON.stringify(problem));
       await page.locator(".problem-panel > details summary").click();
@@ -68,6 +70,7 @@ assert.ok(workspace, "A disposable fixture workspace is required.");
       await page.locator("#config-json").fill(JSON.stringify(config));
       await page.click("#apply-config");
       await page.locator("details:has(#config-json) > summary").click();
+      await closeDialog(page);
       await page.click("#submit");
       if (process.env.LLM4OM_WEB_TEST_LIVE_PROGRESS) {
         await page
@@ -75,9 +78,9 @@ assert.ok(workspace, "A disposable fixture workspace is required.");
           .waitFor({ timeout: 20000 });
         assert.match(
           await page.locator(".modeling-detail").innerText(),
-          /Formulation/,
+          /数学表述/,
         );
-        assert.equal(await page.locator(".stage.running").count(), 1);
+        assert.equal(await page.locator(".tabs .stage-dot.running").count(), 1);
         if (process.env.LLM4OM_WEB_SCREENSHOTS)
           await page
             .locator("#decision")

@@ -192,8 +192,7 @@ export function StoryFlow({
   );
   return (
     <>
-      <div className="panel-title">
-        <h3>建模过程</h3>
+      <div className="process-intro">
         <span id="process-state" className="pill">
           {status(job.status)}
         </span>
