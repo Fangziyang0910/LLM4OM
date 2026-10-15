@@ -29,18 +29,20 @@ class WebLLMSettingsTests(unittest.TestCase):
             ('problem_type', 'variables', 'objective', 'constraints', 'assumptions')}})
         requests = []
         keys = ['synthetic-private-chat-key', 'synthetic-private-messages-key']
+        directory_reply = {'status': 200, 'data': [{'id': 'chosen-chat', 'name': 'Chosen Chat'},
+            {'id': 'chosen-messages', 'display_name': 'Chosen Messages'}]}
 
         class Provider(BaseHTTPRequestHandler):
-            def send_json(self, value):
+            def send_json(self, value, status=200):
                 raw = json.dumps(value).encode()
-                self.send_response(200)
+                self.send_response(status)
                 self.send_header('Content-Length', str(len(raw)))
                 self.end_headers()
                 self.wfile.write(raw)
 
             def do_GET(self):
                 requests.append(('GET', self.path, self.headers.get('Authorization'), self.headers.get('x-api-key')))
-                self.send_json({'data': [{'id': 'chosen-chat'}, {'id': 'chosen-messages'}]})
+                self.send_json({'data': directory_reply['data']}, directory_reply['status'])
 
             def do_POST(self):
                 body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
@@ -123,6 +125,24 @@ class WebLLMSettingsTests(unittest.TestCase):
                     self.assertEqual(doctor['connectivity_checks']['status'], 'passed', doctor)
                     self.assertEqual(doctor['connectivity_checks']['checks'][0]['status'], 'reachable')
                     self.assertNotIn(keys[index], json.dumps(doctor))
+                    selection = deepcopy(config['llm'])
+                    selection['model'] = ''
+                    directory = api('/api/llm-models', {'llm': selection}, keys[index])
+                    self.assertEqual(directory['models'], [{'id': 'chosen-chat', 'name': 'Chosen Chat'},
+                        {'id': 'chosen-messages', 'name': 'Chosen Messages'}])
+                    self.assertNotIn(keys[index], json.dumps(directory))
+                for status in (404, 401):
+                    directory_reply['status'] = status
+                    with self.assertRaises(HTTPError) as unavailable:
+                        api('/api/llm-models', {'llm': configs[0]['llm']}, keys[0])
+                    self.assertEqual(json.loads(unavailable.exception.read())['error']['code'], 'model_directory_unavailable')
+                directory_reply['status'] = 200
+                directory_reply['data'][0]['name'] = keys[0]
+                with self.assertRaises(HTTPError) as private_directory:
+                    api('/api/llm-models', {'llm': configs[0]['llm']}, keys[0])
+                self.assertNotIn(keys[0], private_directory.exception.read().decode())
+                directory_reply['data'][0]['name'] = 'Chosen Chat'
+                self.assertTrue(all(request[0] == 'GET' for request in requests))
                 google = deepcopy(configs[0])
                 google['llm']['config']['base_url'] = presets['google']['base_url']
                 google['llm']['model'] = 'saved-google-model'
@@ -179,6 +199,8 @@ class WebLLMSettingsTests(unittest.TestCase):
                 self.assertEqual(bootstrap['config']['llm'], configs[0]['llm'])
                 self.assertEqual(bootstrap['llm_profiles']['google']['model'], 'saved-google-model')
                 self.assertEqual(len(bootstrap['llm_credentials']), 2)
+                directory = api('/api/llm-models', {'llm': configs[0]['llm']})
+                self.assertEqual(directory['models'][0]['id'], 'chosen-chat')
                 api('/api/doctor', {'config': configs[0], 'check_connectivity': True})
                 api('/api/jobs/' + jobs[0]['job_id'] + '/resume', {'strategy': 'rerun'})
                 for _ in range(200):

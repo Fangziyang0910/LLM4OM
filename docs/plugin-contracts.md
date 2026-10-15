@@ -319,7 +319,7 @@ SDK 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对�
 
 doctor 与 run 共用 prepare_run；先验证参数，再匹配当前表示、目标类型、Backend／Solver、Provider 功能和 Executor，再检查分发包与真实求解依赖。缺失能力为未知；请求的资源须被方法声明，当前表示 profile 固定，不能靠枚举并集暗示 native_code 可用。allowed_problem_types 缺省 lp／milp，实际 IR 类型在产出后再次核对。真实运行保存 admission_plan_ref；离线计划只准备回放，不标记 Code／Solve 已执行。未知方法异常与 SystemExit 转为稳定错误和脱敏 frame，原错误参数／源码行与插件 Python 输出不进入公开结果。
 
-示例、字段级诊断与实际版本见 [S03](development/s03-plugins.md)。SDK／Worker0.35.0的显式模型目录检查见 [连通性检查](development/s03-connectivity.md)：默认不联系模型端点；HTTP Provider可声明`connectivity_check: models_get/0.1.0`并实现`check_connectivity(timeout)`。返回`status: reachable | not_supported`及可选布尔`model_listed`，不返回目录原文或凭据。目录可达与文本生成能力分别呈现。SDK 包、核心对象0.2.0、IR0.1.0和各profile版本分别管理。
+示例、字段级诊断与实际版本见 [S03](development/s03-plugins.md)。SDK／Worker0.35.0的显式模型目录检查见 [连通性检查](development/s03-connectivity.md)：默认 doctor 不联系模型端点；HTTP Provider可声明`connectivity_check: models_get/0.1.0`并实现`check_connectivity(timeout)`。返回`status: reachable | not_supported`及可选布尔`model_listed`；可达目录另提供规范化`models=[{id,name}]`和`has_more`，不返回目录原文或凭据。目录可达与文本生成能力分别呈现。SDK 包、核心对象0.2.0、IR0.1.0和各profile版本分别管理。
 
 ### S04-A 已落实的容器子集
 
@@ -1304,3 +1304,5 @@ Bootstrap and save responses include llm_profiles (preset ID to public LLM selec
 Those POST endpoints may privately supply X-LLM4OM-Provider-Key; public JSON still rejects credential fields. Keys are bounded nonempty printable ASCII tokens, without spaces. Runtime resolves an explicit key, then the saved endpoint key, then the matching .env source. It replaces the credential_env reference and role references sharing it with LLM4OM_WEB_API_KEY for private application-process injection, without changing process-global environment or generated-code environments. Public runs and exports contain no keys.
 
 After restart, POST /api/jobs/ID/resume or /edit resolves the saved run's Provider/base_url without requiring another key header. The same header remains an optional temporary override for page-key jobs. A default .env key is never forwarded to a different Provider/base_url. Pure compatibility doctor calls remain credential-free. See [behavior and evidence](development/s09-llm-settings.md).
+
+POST /api/llm-models accepts a public llm selection and optional llm_preset, plus the same private key header. It resolves the selected endpoint's credentials and uses the existing Provider models_get transport; a model ID is not required to read the directory. The result is models=[{id,name}] and has_more. Names come from the service's name or display_name, falling back to id; selections always write id into llm.model. Only directory metadata is read, bounded by 10 seconds and 1 MiB, without generation or run creation. HTTP failures are sanitized and retain manual model input. The page automatically fetches for endpoints with saved/default credentials and supports an explicit refresh for a newly entered key. Late responses cannot replace the currently selected endpoint's list.

@@ -238,9 +238,16 @@ class HTTPTextProvider:
             value = parse_json(raw)
             models = value["data"]
             if (not isinstance(models, list) or _contains_credential(value, self._credential)
-                    or any(not isinstance(item, dict) or not isinstance(item.get("id"), str) for item in models)):
+                    or any(not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item['id'] for item in models)):
                 raise ValueError("Invalid model list.")
-            return {"status": "reachable", "model_listed": any(item["id"] == self.model for item in models)}
+            available = []
+            for item in models:
+                name = item.get('name') or item.get('display_name') or item['id']
+                if not isinstance(name, str):
+                    raise ValueError('Invalid model display name.')
+                available.append({'id': item['id'], 'name': name})
+            return {"status": "reachable", "model_listed": any(item["id"] == self.model for item in models),
+                'models': available, 'has_more': value.get('has_more') is True}
         except (RunError, ValueError, KeyError, TypeError):
             raise RunError("invalid_provider_response", "admission", "Model directory returned invalid metadata.") from None
 

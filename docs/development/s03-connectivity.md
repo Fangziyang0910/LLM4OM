@@ -9,11 +9,11 @@ llm4om doctor --config /path/to/run.yaml
 llm4om doctor --config /path/to/run.yaml --check-connectivity
 ```
 
-默认只检查配置、依赖、实际Solver环境与兼容性，不向模型端点发送HTTP。显式开关检查默认Provider及角色Provider的模型目录。Web勾选“同时读取模型目录，检查接口连通性”后点击“检查配置”，调用相同CLI；结果直接显示在配置区，完整报告保留在高级环境信息中。
+默认 doctor 只检查配置、依赖、实际Solver环境与兼容性，不向模型端点发送HTTP。显式开关检查默认Provider及角色Provider的模型目录。Web勾选“检查配置时联网测试模型接口”后点击“检查配置”，调用相同CLI；结果直接显示在配置区，完整报告保留在高级环境信息中。Web 的模型选择区另会按已保存密钥自动读取目录，详见[模型选择](s09-llm-settings.md)。
 
 HTTP文本Provider通过可选`models_get/0.1.0`能力和`check_connectivity(timeout)`接入；`plugins list`显示该声明。当前OpenAI-compatible与Messages Adapter分别发送各自认证格式的GET `/models`，不调用文本生成端点，不使用生成重试或Run Gateway。Mock为`not_applicable`，无声明的Provider为`not_supported`；不回退到生成请求。
 
-检查复用已有隔离传输、显式代理、禁止重定向和凭据保护。每个端点最多一次HTTP尝试／10秒，总检查最多20秒且不超过admission deadline；响应上限1MiB。报告只保留状态、角色、模型、耗时、HTTP状态和固定诊断，不返回模型目录原文或认证header。
+检查复用已有隔离传输、显式代理、禁止重定向和凭据保护。每个端点最多一次HTTP尝试／10秒，总检查最多20秒且不超过admission deadline；响应上限1MiB。报告保留状态、角色、模型、耗时、HTTP状态、固定诊断，以及可用于选择模型的规范化 ID／展示名称和 has_more；不返回模型目录原文或认证header。
 
 目录响应可达并符合结构时记录`reachable`；`model_listed`只表示该页包含请求的模型ID。分页和别名可导致未列出，因此不把这个布尔值作为生成能力或建模质量证明。两个协议的目录与认证字段依据[OpenAI模型目录](https://developers.openai.com/api/reference/resources/models/methods/list)和[Claude模型目录](https://platform.claude.com/docs/en/api/models/list)，读取日期2026-10-10。
 

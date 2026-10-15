@@ -9,6 +9,7 @@ assert.ok(url && ['127.0.0.1', 'localhost'].includes(new URL(url).hostname));
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/api/llm-models', route => route.fulfill({ json: { models: [], has_more: false } }));
     await page.goto(url);
     await page.locator('#provider').waitFor({ state: 'visible' });
     assert.ok(await page.locator('#llm-base-url').isVisible());

@@ -24,6 +24,13 @@ assert.ok(
     await page.waitForFunction(
       () => document.querySelector("#method")?.options.length > 0,
     );
+    await page.locator('#llm-model-list').waitFor();
+    assert.match(await page.locator('#llm-model-list option:checked').innerText(), /Fixture Model v2.*fixture-model/);
+    await page.selectOption('#llm-model-list', 'alternate-model');
+    assert.equal(await page.locator('#model').inputValue(), 'alternate-model');
+    await page.locator('#model').fill('manual-model-id');
+    assert.equal(await page.locator('#llm-model-list').inputValue(), '');
+    await page.selectOption('#llm-model-list', 'fixture-model');
     await page.click("#doctor");
     await page.waitForSelector("#doctor-result strong");
     assert.match(
@@ -33,7 +40,7 @@ assert.ok(
     const before = await (
       await page.request.get(providerUrl + "/requests")
     ).json();
-    assert.equal(before.metadata_gets, 0);
+    assert.equal(before.metadata_gets, 1);
     await page.check("#check-connectivity");
     await page.click("#doctor");
     await page.waitForFunction(() =>
@@ -46,8 +53,41 @@ assert.ok(
     const after = await (
       await page.request.get(providerUrl + "/requests")
     ).json();
-    assert.equal(after.metadata_gets, 1);
+    assert.equal(after.metadata_gets, 2);
     assert.equal(after.generation_posts, 0);
+    await page.route('**/api/llm-models', route => route.fulfill({ status: 400, json: { error: { message: '目录暂不可用' } } }));
+    await page.locator('#fetch-models').click();
+    await page.waitForFunction(() => document.querySelector('#model-directory-status')?.textContent?.includes('目录暂不可用'));
+    await page.locator('#model').fill('manual-after-failure');
+    assert.equal(await page.locator('#model').inputValue(), 'manual-after-failure');
+    await page.unroute('**/api/llm-models');
+    let releaseOld, oldStarted;
+    const oldGate = new Promise(resolve => { releaseOld = resolve; });
+    const oldRequest = new Promise(resolve => { oldStarted = resolve; });
+    await page.route('**/api/llm-models', async route => {
+      if (route.request().postDataJSON().llm.config.base_url.includes('127.0.0.1')) {
+        oldStarted();
+        await oldGate;
+        await route.fulfill({ json: { models: [{ id: 'old-model', name: 'Old Vendor Model' }] } });
+      } else {
+        assert.equal(route.request().headers()['x-llm4om-provider-key'], 'synthetic-google-directory-key');
+        assert.ok(!route.request().postData().includes('synthetic-google-directory-key'));
+        await route.fulfill({ json: { models: [{ id: 'new-model', name: 'New Vendor Model' }] } });
+      }
+    });
+    await page.locator('#fetch-models').click();
+    await oldRequest;
+    await page.locator('#provider').selectOption('google');
+    await page.locator('#llm-api-key').fill('synthetic-google-directory-key');
+    await page.locator('#fetch-models').click();
+    await page.locator('#llm-model-list option[value="new-model"]').waitFor({ state: 'attached' });
+    const oldResponse = page.waitForResponse(response => response.url().endsWith('/api/llm-models') &&
+      response.request().postDataJSON().llm.config.base_url.includes('127.0.0.1'));
+    releaseOld();
+    await oldResponse;
+    await page.locator('#llm-model-list').selectOption('new-model');
+    assert.equal(await page.locator('#model').inputValue(), 'new-model');
+    assert.equal(await page.locator('#llm-model-list option[value="old-model"]').count(), 0);
     assert.equal(
       await page.evaluate(
         () => document.documentElement.scrollWidth > innerWidth,
@@ -56,7 +96,7 @@ assert.ok(
     );
     assert.deepEqual(errors, []);
     console.log(
-      "Web doctor: default zero HTTP, explicit one modelsGET, readable availability, zero generation/jobs, mobile passed.",
+      "Automatic model directory, display name/API ID selection, manual fallback, stale-response isolation, explicit doctor and zero generation passed.",
     );
   } finally {
     await browser.close();

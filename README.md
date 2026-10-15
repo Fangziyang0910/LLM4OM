@@ -46,6 +46,7 @@ uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --hos
 查看五元素表述、求解代码、决策结果与运行记录，支持数据预览、模型数值编辑、派生求解、候选比较、
 决策试算、人工修订与内置 Benchmark 浏览。样例直接复用 OPT-Agent 已整理的 9 组、2033 条题面，可逐条复制或带入建模，无需上传数据集。详情见[内置样例记录](docs/development/s09-builtin-benchmarks.md)。访问令牌由服务启动时生成，页面自动获取。LLM 可选择 OpenAI、Google、Kimi、GLM、OpenRouter、阿里云百炼、DeepSeek 或 Anthropic，填写模型名和 Key；预设地址固定，只有 OpenAI 兼容选项允许自定义地址。页面显示密钥配置状态和掩码预览，密钥不写入公开配置、记录或导出。会话与恢复行为见[LLM 配置记录](docs/development/s09-llm-settings.md)。
 点击“保存模型配置与密钥”即可按供应商保存，开始建模前也会自动保存。刷新页面或重启同一工作区后自动恢复。设置位于 `<workspace>/.private/llm-settings.local.json`，文件权限为 600，已由 Git 忽略；原 `.env` 默认服务继续可用。
+已有密钥时会自动读取服务的模型目录，也可点击“获取模型列表”。列表显示展示名称和 API ID，选择后填写正确的请求 ID；仍可手动填写。目录读取只查询元数据，不发起文本生成。
 `--host 0.0.0.0` 可供局域网访问，但此时 Origin 校验是 CSRF 缓解而非认证，请勿暴露于不受信网络。
 页面源码在 `frontend/`（React + TypeScript），仓库自带已构建的静态资源；改前端后 `npm --prefix frontend run build` 重新生成,流程与浏览器测试见 [CONTRIBUTING](CONTRIBUTING.md)与[S09-D](docs/development/s09-frontend-redesign.md)。
 

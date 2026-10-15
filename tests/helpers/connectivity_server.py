@@ -22,7 +22,8 @@ def main() -> None:
                 value = counts
             else:
                 counts['metadata_gets'] += 1
-                value = {'data': [{'id': 'fixture-model'}]}
+                value = {'data': [{'id': 'fixture-model', 'name': 'Fixture Model v2'},
+                    {'id': 'alternate-model', 'display_name': 'Alternate Model'}]}
             self.send_response(200)
             self.end_headers()
             self.wfile.write(json.dumps(value).encode())

@@ -30,6 +30,8 @@ function credentialId(provider: string, baseUrl = ""): string {
   return JSON.stringify([provider, baseUrl.replace(/\/+$/, "")]);
 }
 
+type ModelDirectory = { endpoint: string; loading: boolean; models: { id: string; name: string }[]; has_more?: boolean; error?: string };
+
 export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }: {
   bootstrap: Bootstrap; notice: Notice; onSubmitted: (job: JobRecord) => Promise<void>;
   benchmarkInput?: BenchmarkInput | null;
@@ -62,6 +64,22 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
   const [checkConnectivity, setCheckConnectivity] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [doctorBusy, setDoctorBusy] = useState(false);
+  const [modelDirectory, setModelDirectory] = useState<ModelDirectory | null>(null);
+  const directory = modelDirectory?.endpoint === keyId ? modelDirectory : null;
+  const fetchModels = async () => {
+    const pending: ModelDirectory = { endpoint: keyId, loading: true, models: [] };
+    setModelDirectory(pending);
+    try {
+      const result = await api<Pick<ModelDirectory, "models" | "has_more">>("/api/llm-models",
+        { llm: config.llm, llm_preset: llmPreset?.id }, apiKey || undefined);
+      setModelDirectory(current => current === pending ? { ...pending, ...result, loading: false } : current);
+    } catch (error) {
+      setModelDirectory(current => current === pending ? { ...pending, loading: false, error: (error as Error).message } : current);
+    }
+  };
+  useEffect(() => {
+    if (savedCredential || hasDefaultKey) void fetchModels();
+  }, [keyId, savedCredential?.preview, hasDefaultKey]);
   useEffect(() => {
     if (!benchmarkInput) return;
     setDescription(benchmarkInput.problem.description);
@@ -418,15 +436,34 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
                       {!llmPreset ? <option value="unavailable" disabled>当前配置 · {config.llm.provider_plugin_id}</option> : null}
                     </select>
                   </label>
-                  <label className="wide">
-                    模型名称
+                  <div className="wide">
+                    <label htmlFor="model">模型名称／API ID</label>
                     <input
                       id="model"
                       placeholder="填写服务提供的模型 ID"
                       value={config.llm.model}
                       onChange={(event) => setConfig(prior => ({ ...prior, llm: { ...prior.llm, model: event.target.value } }))}
                     />
-                  </label>
+                    <div className="actions">
+                      <button id="fetch-models" className="secondary" disabled={directory?.loading || !(apiKey || savedCredential || hasDefaultKey)}
+                        onClick={fetchModels}>{directory?.loading ? "正在获取…" : "获取模型列表"}</button>
+                    </div>
+                    {directory?.models.length ? (
+                      <select id="llm-model-list" aria-label="服务返回的模型"
+                        value={directory.models.some(model => model.id === config.llm.model) ? config.llm.model : ""}
+                        onChange={event => event.target.value && setConfig(prior => ({ ...prior, llm: { ...prior.llm, model: event.target.value } }))}>
+                        <option value="">选择服务返回的模型</option>
+                        {directory.models.map(model => <option key={model.id} value={model.id}>
+                          {model.name === model.id ? model.id : model.name + " · " + model.id}
+                        </option>)}
+                      </select>
+                    ) : null}
+                    <p id="model-directory-status" className="hint" aria-live="polite">
+                      {directory?.error ? directory.error + " 可继续手动填写模型 ID。" : directory?.loading ? "正在读取模型目录，不发起文本生成。"
+                        : directory ? `已获取 ${directory.models.length} 个模型${directory.has_more ? "（当前页）" : ""}，选择后自动填写 API ID。`
+                        : "已配置密钥时自动读取模型目录，也可手动填写 API ID。"}
+                    </p>
+                  </div>
                   <label className="wide">
                     API 地址（Base URL）
                     <input id="llm-base-url" type="url" value={config.llm.config.base_url || ""}

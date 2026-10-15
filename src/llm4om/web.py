@@ -19,6 +19,7 @@ import tempfile
 import threading
 import time
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 import zipfile
@@ -28,7 +29,7 @@ from llm4om.control import CancellationToken
 from llm4om.executors import run_owned_process
 from llm4om.experiments import LIMITS, cancel_experiment
 from llm4om.assisted import export_edit
-from llm4om.providers import credential_environment
+from llm4om.providers import credential_environment, provider_factory, HTTPTextFactory
 from llm4om.plugins import discover_plugins
 from llm4om.run_records import read_run_ref
 from llm4om.benchmarks import list_benchmarks, benchmark_detail
@@ -251,6 +252,31 @@ class WebWorkspace:
             path.write_text(json.dumps(config, ensure_ascii=False, allow_nan=False))
             return _application(['doctor', '--config', str(path), *(['--check-connectivity'] if check_connectivity else [])], deadline=time.time() + 45,
                                 cancellation=CancellationToken(), environment=environment)
+
+    def list_models(self, payload: dict[str, Any], *, api_key: str | None = None) -> dict[str, Any]:
+        selected = deepcopy(payload['llm'])
+        selected['model'] = selected.get('model') or 'model-directory'
+        validate_llm_preset({'llm': selected}, payload.get('llm_preset'))
+        factory = provider_factory(selected['provider_plugin_id'])
+        if not isinstance(factory, HTTPTextFactory):
+            raise RunError('capability_mismatch', 'web', '当前接口不支持模型列表，请手动填写模型 ID。')
+        factory.validate(selected['config'], selected['model'])
+        environment = self._request_environment({'llm': selected}, api_key)
+        provider = factory.create(selected['config'], selected['model'],
+            environment={**credential_environment(Path.cwd() / '.env'), **environment})
+        try:
+            result = provider.check_connectivity(min(provider.timeout_s, 10))
+        except HTTPError as error:
+            status = error.code
+            error.close()
+            message = ('当前服务不支持模型列表，请手动填写模型 ID。' if status in {404, 405}
+                else f'读取模型列表失败（HTTP {status}），请检查密钥和服务地址。')
+            raise RunError('model_directory_unavailable', 'web', message) from None
+        except (RunError, TimeoutError):
+            raise RunError('model_directory_unavailable', 'web', '读取模型列表失败，请检查连接后重试，或手动填写模型 ID。') from None
+        if result['status'] != 'reachable':
+            raise RunError('capability_mismatch', 'web', '当前接口不支持模型列表，请手动填写模型 ID。')
+        return {'models': result['models'], 'has_more': result.get('has_more', False)}
 
     def _tasks(self) -> dict[str, Path]:
         selected = {}
@@ -808,6 +834,8 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                     result = {**workspace.bootstrap(), 'token': token}
                 elif address.path == '/api/llm-settings' and mutation:
                     result = workspace.save_llm_settings(payload, api_key=self.headers.get('X-LLM4OM-Provider-Key'))
+                elif address.path == '/api/llm-models' and mutation:
+                    result = workspace.list_models(payload, api_key=self.headers.get('X-LLM4OM-Provider-Key'))
                 elif address.path == '/api/tasks' and not mutation:
                     result = {'tasks': workspace.list_tasks()}
                 elif address.path == '/api/datasets' and not mutation:

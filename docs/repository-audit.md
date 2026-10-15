@@ -30,7 +30,7 @@
 | `src/llm4om/runtime_identity.py` | 运行、任务和实验共同SDK身份 | 固定源码hash；恢复兼容性测试 |
 | `src/llm4om/workbench.py` | 内置方法模板、供应商固定地址预设与说明 | bootstrap及浏览器配置切换、固定地址校验；Planner仍负责兼容性 |
 | `frontend/src/useRunSnapshot.ts` | 当前任务／版本与顺序轮询 | 迟到响应、版本选择与浏览器回归 |
-| `frontend/src/components/ProblemEditor.tsx` | 问题、上传和单一有效运行配置 | 表单输入保留、配置草稿和提交验收 |
+| `frontend/src/components/ProblemEditor.tsx` | 问题、上传和单一有效运行配置 | 表单／配置保存、模型目录与 ID 选择、迟到响应隔离和提交验收 |
 | `frontend/src/components/RunView.tsx` | 版本、产物与运行结果展示 | 故事流、历史链接及候选展示 |
 | `frontend/src/components/RevisionEditor.tsx` | 人工修订模板与派生提交 | 模板响应失效、模型／代码编辑与父历史验收 |
 | `tests/helpers/browser_fixture.cjs` | 独立完整运行样本准备 | 只使用本地Provider与公共HTTP接口，无测试顺序依赖 |
@@ -134,7 +134,7 @@
 | `src/llm4om/methods.py` | 当前方法公共 profile | ModelProposal／MethodOutcome／Context／LLMResponse 和实际 direct Adapter |
 | `src/llm4om/plugins.py` | 方法发现与运行 Module | 动态 factory、版本／唯一键、JSON schema、同步／异步桥接与脱敏异常 |
 | `src/llm4om/preflight.py` | 共用运行 admission | 方法配置、实际能力、依赖、预算和固定计划；不发 Provider HTTP 请求 |
-| `src/llm4om/providers.py` | Provider适配与HTTP通信 | 公共HTTP接口与literal凭据加载；共享Gateway由gateway.py维护 |
+| `src/llm4om/providers.py` | Provider适配与HTTP通信 | 公共HTTP、literal凭据、目录 ID／名称投影；共享Gateway由gateway.py维护 |
 | `src/llm4om/storage.py` | 运行文件存储 | 独占目录、祖先项 fsync、不可变引用与中断发布收据；不解释 Execution／Solve 语义 |
 | `src/llm4om/worker.py` | 镜像可信入口 | 严格 IR／实际代码 hash 核对、后端 API 求解、资源测量 |
 | `tests/test_cli_run.py` | S01 公共 CLI 行为测试 | 成功、失败、数据、路径、引用、配置、隐私、报告和存储 |
@@ -387,8 +387,8 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/replays/web_links_flow.cjs` | 运行页面链接的本机浏览器验收 | 固定版本链接、刷新恢复产物与导出、最新选择、新问题与窄屏，零POST |
 | `tests/replays/web_runtime_flow.cjs` | 可读运行与求解资源的浏览器验收 | 实际版本资源、界限／Gap／执行资源、未知量保持、窄屏，零POST |
 | `tests/test_connectivity.py` | CLI显式目录检查 | 默认零HTTP、两协议认证、未知支持与零生成，凭据不导出 |
-| `tests/helpers/connectivity_server.py` | 一次性Web／目录fixture | 本机合成凭据、目录计数、拒绝生成，临时workspace |
-| `tests/web_connectivity_check_flow.cjs` | 网页连通性开关 | 同一doctor、默认零请求／显式GET、可读目录结果与窄屏 |
+| `tests/helpers/connectivity_server.py` | 一次性Web／目录fixture | 合成凭据、模型 ID／展示名、目录计数、拒绝生成，临时workspace |
+| `tests/web_connectivity_check_flow.cjs` | 网页模型目录和连通性开关 | 自动目录／ID 选择、手动回退、迟到响应隔离、doctor 增量请求与零生成 |
 | `docs/development/s03-connectivity.md` | FR-06实际能力与验收 | 共享Provider传输、目录证据边界、实际网络结果与复查入口 |
 | `docs/development/s05-connection-diagnostics.md` | 连接观察、诊断支持与证据 | 原运行不改写、免费GET与生成验收区别、公共固定类别和未知预算 |
 
