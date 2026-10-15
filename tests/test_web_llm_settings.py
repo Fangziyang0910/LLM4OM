@@ -42,7 +42,7 @@ class WebLLMSettingsTests(unittest.TestCase):
 
             def do_GET(self):
                 requests.append(('GET', self.path, self.headers.get('Authorization'), self.headers.get('x-api-key')))
-                self.send_json({'data': directory_reply['data']}, directory_reply['status'])
+                self.send_json(directory_reply.get('body', {'data': directory_reply['data']}), directory_reply['status'])
 
             def do_POST(self):
                 body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
@@ -131,6 +131,29 @@ class WebLLMSettingsTests(unittest.TestCase):
                     self.assertEqual(directory['models'], [{'id': 'chosen-chat', 'name': 'Chosen Chat'},
                         {'id': 'chosen-messages', 'name': 'Chosen Messages'}])
                     self.assertNotIn(keys[index], json.dumps(directory))
+                native = deepcopy(configs[0]['llm'])
+                native['config']['base_url'] = f'http://127.0.0.1:{provider.server_port}/compatible-mode/v1'
+                native['model'] = ''
+                directory_reply['body'] = {'success': True, 'output': {'total': 101, 'page_no': 1, 'page_size': 100,
+                    'models': [{'model': 'native-chat', 'name': 'Native Chat'}]}}
+                self.assertEqual(api('/api/llm-models', {'llm': native}, keys[0]),
+                    {'models': [{'id': 'native-chat', 'name': 'Native Chat'}], 'has_more': True})
+                self.assertEqual(requests[-1][1], '/api/v1/models?capabilities=TG&page_no=1&page_size=100')
+                for invalid in ({'success': False}, {'output': {'total': True, 'page_no': 1, 'page_size': 100, 'models': []}},
+                        {'debug': {'credential': keys[0]}}, {'output': {'total': 1, 'page_no': 1, 'page_size': 100,
+                            'models': [{'model': 1, 'name': 'Invalid ID'}]}}):
+                    original = directory_reply['body']
+                    directory_reply['body'] = {**original, **invalid}
+                    with self.assertRaises(HTTPError) as invalid_directory:
+                        api('/api/llm-models', {'llm': native}, keys[0])
+                    self.assertEqual(invalid_directory.exception.code, 400)
+                    error = invalid_directory.exception.read().decode()
+                    self.assertEqual(json.loads(error)['error']['code'], 'model_directory_unavailable')
+                    self.assertNotIn(keys[0], error)
+                    directory_reply['body'] = original
+                directory_reply['body']['output']['total'] = 1
+                self.assertFalse(api('/api/llm-models', {'llm': native}, keys[0])['has_more'])
+                directory_reply.pop('body')
                 for status in (404, 401):
                     directory_reply['status'] = status
                     with self.assertRaises(HTTPError) as unavailable:

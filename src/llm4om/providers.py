@@ -231,23 +231,33 @@ class HTTPTextProvider:
             return {"status": "not_supported"}
         proxy = self.config.get("proxy_url")
         with build_opener(_NoRedirect(), ProxyHandler({"http": proxy, "https": proxy} if proxy else {})).open(request, timeout=timeout) as response:
-            raw = response.read(1024 * 1024 + 1)
+            raw = response.read(8 * 1024 * 1024 + 1)
         try:
-            if len(raw) > 1024 * 1024:
+            if len(raw) > 8 * 1024 * 1024:
                 raise ValueError("Oversized metadata.")
             value = parse_json(raw)
-            models = value["data"]
+            id_field = 'id'
+            has_more = value.get('has_more') is True
+            if 'data' in value:
+                models = value['data']
+            else:
+                output = value['output']
+                total, page, size = (output[field] for field in ('total', 'page_no', 'page_size'))
+                if (value.get('success') is False or type(total) is not int or total < 0
+                        or type(page) is not int or page < 1 or type(size) is not int or size < 1):
+                    raise ValueError('Invalid directory pagination.')
+                models, id_field, has_more = output['models'], 'model', total > page * size
             if (not isinstance(models, list) or _contains_credential(value, self._credential)
-                    or any(not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item['id'] for item in models)):
+                    or any(not isinstance(item, dict) or not isinstance(item.get(id_field), str) or not item[id_field] for item in models)):
                 raise ValueError("Invalid model list.")
             available = []
             for item in models:
-                name = item.get('name') or item.get('display_name') or item['id']
+                name = item.get('name') or item.get('display_name') or item[id_field]
                 if not isinstance(name, str):
                     raise ValueError('Invalid model display name.')
-                available.append({'id': item['id'], 'name': name})
-            return {"status": "reachable", "model_listed": any(item["id"] == self.model for item in models),
-                'models': available, 'has_more': value.get('has_more') is True}
+                available.append({'id': item[id_field], 'name': name})
+            return {"status": "reachable", "model_listed": any(item["id"] == self.model for item in available),
+                'models': available, 'has_more': has_more}
         except (RunError, ValueError, KeyError, TypeError):
             raise RunError("invalid_provider_response", "admission", "Model directory returned invalid metadata.") from None
 
@@ -287,7 +297,12 @@ class OpenAICompatibleProvider(HTTPTextProvider):
     connectivity_profile = "models_get/0.1.0"
 
     def _models_request(self) -> Request:
-        return Request(self.config["base_url"].rstrip("/") + "/models",
+        base = self.config['base_url'].rstrip('/')
+        url = base + '/models'
+        # DashScope's compatibility route uses its native directory on the same origin.
+        if urlsplit(base).path == '/compatible-mode/v1':
+            url = base.removesuffix('/compatible-mode/v1') + '/api/v1/models?capabilities=TG&page_no=1&page_size=100'
+        return Request(url,
                        headers={"Authorization": "Bearer " + self._credential}, method="GET")
 
     def _request(self, messages: list[dict[str, Any]]) -> Request:
