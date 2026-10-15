@@ -289,7 +289,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `examples/plugins/fixture_data_loader/src/llm4om_fixture_data_loader/__init__.py` | 真正改变CSV暴露列顺序的工程Adapter | 配置生效、路径无关输入、核心独立校验 |
 | `tests/test_data_loader_plugins.py` | 公开数据加载与真实LLM视图验收 | HTTP、HiGHS／容器、原始检查、拒绝与恢复 |
 
-| `src/llm4om/web.py` | 本地Web工作区与公共HTTP接口 | 核心运行／恢复、公开引用、工作项内存密钥与独立进程环境 |
+| `src/llm4om/web.py` | 本地Web工作区与公共HTTP接口 | 核心运行／恢复、公开引用、供应商设置私有持久化与独立进程环境 |
 | `frontend/package.json` | React前端构建源与依赖声明 | 固定文件名产物、无外部CDN、playwright仅测试 |
 | `frontend/package-lock.json` | 前端依赖锁定 | 与package.json一致、可复现构建 |
 | `frontend/tsconfig.json` | 前端TypeScript编译选项 | 严格模式、noEmit类型检查 |
@@ -421,6 +421,6 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/benchmark_sources/optibench.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
 | `src/llm4om/benchmark_sources/optmath.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
 
-| `tests/test_web_llm_settings.py` | 页面模型与私有密钥的公共 HTTP 验收 | 供应商预设／固定地址、密钥状态／掩码、两协议认证、实际 HiGHS、无公开 Key、重启重填 |
-| `tests/web_llm_settings_flow.cjs` | 通用 LLM 配置浏览器验收 | 预设／只读地址、密钥状态与隔离、方法／Solver 独立、请求头隔离、已有运行重填与窄屏 |
-| `docs/development/s09-llm-settings.md` | 供应商预设、密钥会话与证据 | 官方固定地址、现有 Provider 抽象、公开／私有输入分离、原默认服务与重启行为 |
+| `tests/test_web_llm_settings.py` | 页面模型与私有密钥的公共 HTTP 验收 | 供应商设置保存／重启恢复／600 权限、固定地址、两协议认证、实际 HiGHS、无公开 Key |
+| `tests/web_llm_settings_flow.cjs` | 通用 LLM 配置浏览器验收 | 预设／只读地址、供应商配置保存与刷新恢复、掩码／密钥隔离、空输入保留、已有运行覆盖与窄屏 |
+| `docs/development/s09-llm-settings.md` | 供应商预设、本地设置持久化与证据 | 官方固定地址、现有 Provider 抽象、私有文件／Git 忽略、公开／私有输入分离与重启行为 |

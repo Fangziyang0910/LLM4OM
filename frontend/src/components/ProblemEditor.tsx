@@ -37,10 +37,12 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
   const [config, setConfig] = useState<RunConfig>(bootstrap.config);
   const [configDraft, setConfigDraft] = useState<string | null>(null);
   const llmPresets = bootstrap.llm_presets;
-  const [llmPresetId, setLlmPresetId] = useState(() => llmPresets.find(preset =>
+  const [llmPresetId, setLlmPresetId] = useState(() => bootstrap.selected_llm_preset || llmPresets.find(preset =>
     preset.provider_plugin_id === bootstrap.config.llm.provider_plugin_id && preset.base_url &&
     preset.base_url === bootstrap.config.llm.config.base_url?.replace(/\/+$/, ""))?.id || "openai_compatible");
-  const [llmDrafts, setLlmDrafts] = useState<Record<string, RunConfig["llm"]>>({});
+  const [llmDrafts, setLlmDrafts] = useState(bootstrap.llm_profiles);
+  const [savedCredentials, setSavedCredentials] = useState(bootstrap.llm_credentials);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const keyId = credentialId(config.llm.provider_plugin_id, config.llm.config.base_url);
   const apiKey = apiKeys[keyId] || "";
@@ -49,8 +51,9 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
   const defaultCredential = bootstrap.default_credential;
   const hasDefaultKey = defaultCredential.configured && config.llm.config.credential_env === "LLM4OM_LLM_API_KEY" &&
     credentialId(defaultCredential.provider_plugin_id, defaultCredential.base_url) === keyId;
+  const savedCredential = savedCredentials[keyId];
   const keyPreview = apiKey ? (apiKey.length > 12 ? apiKey.slice(0, 4) + "••••" + apiKey.slice(-4) : "••••")
-    : hasDefaultKey ? defaultCredential.preview : "";
+    : savedCredential?.preview || (hasDefaultKey ? defaultCredential.preview : "");
   const [compatNote, setCompatNote] = useState("");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [description, setDescription] = useState("");
@@ -133,9 +136,23 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
       setCompatNote(preset ? "已按该方法声明的能力切换:建模后端 " + preset.model_backend.plugin_id.split(".").at(-1) +
         " · 求解器 " + preset.solver.plugin_id.split(".").at(-1)?.toUpperCase() + "。可在下方手动调整。" : "");
     };
+    const saveSettings = async () => {
+      if (!llmPreset) return;
+      setSavingSettings(true);
+      try {
+        const saved = await api<Pick<Bootstrap, "llm_profiles" | "llm_credentials" | "selected_llm_preset">>("/api/llm-settings",
+          { config, llm_preset: llmPreset.id }, apiKey || undefined);
+        setSavedCredentials(saved.llm_credentials);
+        setApiKeys(prior => prior[keyId] === apiKey ? { ...prior, [keyId]: "" } : prior);
+      } finally {
+        setSavingSettings(false);
+      }
+    };
+
     const submitRun = async () => {
       try {
         setSubmitting(true);
+        await saveSettings();
         const next = config;
         const payload: { description: string; config: RunConfig; llm_preset?: string; data: unknown[]; problem?: PublicProblem } = {
           description,
@@ -424,14 +441,21 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
                     API Key
                     <input id="llm-api-key" type="password" autoComplete="off" spellCheck={false}
                       value={apiKey} disabled={!config.llm.config.credential_env} maxLength={4096}
-                      placeholder={hasDefaultKey ? "本机已有密钥；填写可替换本次使用的密钥" : "填写该供应商的 API Key"}
+                      placeholder={savedCredential || hasDefaultKey ? "本机已有密钥；留空保留，填写可更新" : "填写该供应商的 API Key"}
                       onChange={(event) => setApiKeys(prior => ({ ...prior, [keyId]: event.target.value.trim() }))} />
                     <output id="llm-key-status" className="hint" aria-live="polite">
-                      {apiKey ? "已填写（本页）" : hasDefaultKey ? "已配置（本机）" : "未配置密钥"}
+                      {apiKey ? "已填写（未保存）" : savedCredential ? "已保存（本机）" : hasDefaultKey ? "已配置（本机）" : "未配置密钥"}
                       {keyPreview ? " · " + keyPreview : ""}
                     </output>
-                    <span className="hint">切换供应商分别保留本页输入；刷新页面后需重新填写。密钥不写入运行记录。</span>
+                    <span className="hint">填写后点保存，刷新或重启后自动恢复；留空会保留已有密钥。开始建模前也会自动保存。</span>
                   </label>
+                  <div className="wide">
+                    <button id="save-llm-settings" className="secondary" disabled={savingSettings || !llmPreset || !config.llm.model.trim()}
+                      onClick={async () => {
+                        try { await saveSettings(); notice("模型配置和密钥已保存到本机。"); }
+                        catch (error) { notice((error as Error).message, true); }
+                      }}>{savingSettings ? "保存中…" : "保存模型配置与密钥"}</button>
+                  </div>
                   <label className="advanced-field">
                     建模后端
                     <select
@@ -584,10 +608,10 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
                   检查配置时联网测试模型接口
                 </label>
                 <div className="actions">
-                  <button id="doctor" className="secondary" disabled={doctorBusy} onClick={runDoctor}>
+                  <button id="doctor" className="secondary" disabled={doctorBusy || savingSettings} onClick={runDoctor}>
                     检查配置
                   </button>
-                  <button id="submit" className="primary" disabled={submitting || solverSelectionDisabled} onClick={submitRun}>
+                  <button id="submit" className="primary" disabled={submitting || savingSettings || solverSelectionDisabled} onClick={submitRun}>
                     开始建模 →
                   </button>
                 </div>

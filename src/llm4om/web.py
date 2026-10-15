@@ -29,6 +29,7 @@ from llm4om.executors import run_owned_process
 from llm4om.experiments import LIMITS, cancel_experiment
 from llm4om.assisted import export_edit
 from llm4om.providers import credential_environment
+from llm4om.plugins import discover_plugins
 from llm4om.run_records import read_run_ref
 from llm4om.benchmarks import list_benchmarks, benchmark_detail
 from llm4om.workbench import llm_presets, method_presets, validate_llm_preset
@@ -37,6 +38,29 @@ from llm4om.storage import cancel_run
 MAX_REQUEST = 24 * 1024 * 1024
 MAX_FILE = 8 * 1024 * 1024
 WEB_KEY_ENV = 'LLM4OM_WEB_API_KEY'
+
+
+def _credential_id(selected: dict[str, Any]) -> str:
+    return json.dumps([selected['provider_plugin_id'], selected['config'].get('base_url', '').rstrip('/')],
+        ensure_ascii=False, separators=(',', ':'))
+
+
+def _key_preview(key: str) -> str:
+    return key[:4] + '••••' + key[-4:] if len(key) > 12 else '••••' if key else ''
+
+
+def _validate_key(key: str) -> None:
+    if not isinstance(key, str) or not 1 <= len(key) <= 4096 or any(not 33 <= ord(char) <= 126 for char in key):
+        raise RunError('auth_error', 'web', 'API key must be a nonempty printable token without spaces.')
+
+
+def _validate_saved_llm(selected: dict[str, Any], preset_id: str) -> None:
+    if preset_id not in {preset['id'] for preset in llm_presets()}:
+        raise RunError('invalid_config', 'web', 'Select a known LLM preset before saving settings.')
+    parse_json(json.dumps(selected, allow_nan=False).encode())
+    validate_llm_preset({'llm': selected}, preset_id)
+    plugin = discover_plugins()[('llm_provider', selected['provider_plugin_id'])]
+    plugin.factory.validate(selected['config'], selected['model'])
 
 
 def _json_file(path: Path, value: dict[str, Any]) -> None:
@@ -97,21 +121,76 @@ class WebWorkspace:
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='llm4om-web')
         self.lock = threading.Lock()
         self.active: dict[str, CancellationToken] = {}
-        # shortcut: page keys live for this server session; add durable secrets only if persistent connections are needed.
         self.credentials: dict[str, dict[str, str]] = {}
+        self.settings_path = self.root / '.private/llm-settings.local.json'
+        self.llm_settings: dict[str, Any] = {'profiles': {}, 'credentials': {}, 'selected_preset': None}
+        if self.settings_path.exists():
+            try:
+                saved = json.loads(self.settings_path.read_text())
+                if not isinstance(saved['profiles'], dict) or not isinstance(saved['credentials'], dict):
+                    raise ValueError('Invalid local settings.')
+                for preset_id, selected in saved['profiles'].items():
+                    _validate_saved_llm(selected, preset_id)
+                for key in saved['credentials'].values():
+                    _validate_key(key)
+                if saved['selected_preset'] not in saved['profiles']:
+                    raise ValueError('Missing saved selection.')
+                self.llm_settings = saved
+            except (OSError, ValueError, KeyError, TypeError, AttributeError, RunError) as error:
+                raise RunError('invalid_config', 'web', 'Cannot read local LLM settings; check .private/llm-settings.local.json.') from error
+
+    def _public_llm_settings(self) -> dict[str, Any]:
+        with self.lock:
+            saved = deepcopy(self.llm_settings)
+        return {'llm_profiles': saved['profiles'], 'selected_llm_preset': saved['selected_preset'],
+            'llm_credentials': {identifier: {'preview': _key_preview(key)} for identifier, key in saved['credentials'].items()}}
+
+    def save_llm_settings(self, payload: dict[str, Any], *, api_key: str | None = None) -> dict[str, Any]:
+        config = payload['config']
+        validate_config(config)
+        selected = config['llm']
+        preset_id = payload.get('llm_preset')
+        if not isinstance(preset_id, str):
+            raise RunError('invalid_request', 'web', 'Choose an LLM preset to save.')
+        _validate_saved_llm(selected, preset_id)
+        if api_key is not None:
+            _validate_key(api_key)
+        with self.lock:
+            saved = deepcopy(self.llm_settings)
+            saved['profiles'][preset_id] = deepcopy(selected)
+            saved['selected_preset'] = preset_id
+            if api_key is not None:
+                saved['credentials'][_credential_id(selected)] = api_key
+            self.settings_path.parent.mkdir(mode=0o700, exist_ok=True)
+            with tempfile.NamedTemporaryFile(mode='w', prefix='llm-settings.local.json.',
+                    dir=self.settings_path.parent, encoding='utf-8', delete=False) as temporary:
+                path = Path(temporary.name)
+                try:
+                    json.dump(saved, temporary, ensure_ascii=False, indent=2, allow_nan=False)
+                    temporary.write('\n')
+                    temporary.flush()
+                    path.replace(self.settings_path)
+                finally:
+                    path.unlink(missing_ok=True)
+            self.llm_settings = saved
+        return self._public_llm_settings()
 
     def _request_environment(self, config: dict[str, Any], api_key: str | None) -> dict[str, str]:
         selected = config['llm']
         if api_key is None:
-            if selected['config'].get('credential_env') == 'LLM4OM_LLM_API_KEY':
+            api_key = self.llm_settings['credentials'].get(_credential_id(selected))
+        if api_key is None:
+            if selected['config'].get('credential_env') in {'LLM4OM_LLM_API_KEY', WEB_KEY_ENV}:
                 environment = credential_environment(Path.cwd() / '.env')
                 default_url = environment.get('LLM4OM_LLM_BASE_URL', 'https://api.openai.com/v1')
                 if (selected['provider_plugin_id'] != 'llm4om.providers.openai_compatible'
                         or selected['config'].get('base_url', '').rstrip('/') != default_url.rstrip('/')):
                     raise RunError('auth_error', 'web', 'Enter an API key for the selected LLM endpoint.')
-            return {}
-        if not isinstance(api_key, str) or not 1 <= len(api_key) <= 4096 or any(not 33 <= ord(char) <= 126 for char in api_key):
-            raise RunError('auth_error', 'web', 'API key must be a nonempty printable token without spaces.')
+                if selected['config']['credential_env'] == WEB_KEY_ENV:
+                    api_key = environment.get('LLM4OM_LLM_API_KEY') or None
+            if api_key is None:
+                return {}
+        _validate_key(api_key)
         previous = selected['config'].get('credential_env')
         if previous is None:
             raise RunError('invalid_config', 'web', 'The selected Provider does not declare credential_env.')
@@ -152,8 +231,11 @@ class WebWorkspace:
         key = environment.get('LLM4OM_LLM_API_KEY', '')
         credential = {'provider_plugin_id': config['llm']['provider_plugin_id'],
             'base_url': config['llm']['config']['base_url'], 'configured': bool(key),
-            'preview': key[:4] + '••••' + key[-4:] if len(key) > 12 else '••••' if key else ''}
-        return {'config': config, 'method_presets': presets, 'llm_presets': llm_presets(),
+            'preview': _key_preview(key)}
+        saved = self._public_llm_settings()
+        if saved['selected_llm_preset'] is not None:
+            config['llm'] = deepcopy(saved['llm_profiles'][saved['selected_llm_preset']])
+        return {**saved, 'config': config, 'method_presets': presets, 'llm_presets': llm_presets(),
             'default_credential': credential, 'plugins': inventory['plugins'], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
 
     def doctor(self, config: dict[str, Any], *, check_connectivity: bool = False,
@@ -489,6 +571,9 @@ class WebWorkspace:
                 if config['llm']['config'].get('credential_env') != WEB_KEY_ENV:
                     raise RunError('invalid_config', 'web', 'This run uses credentials configured on the server.')
                 self.credentials[job_id] = self._request_environment(config, api_key)
+            elif job_id not in self.credentials:
+                config = parse_json((job / 'input/config.json').read_bytes())
+                self.credentials[job_id] = self._request_environment(config, None)
             token = CancellationToken()
             self.active[job_id] = token
             environment = dict(self.credentials.get(job_id, {}))
@@ -721,6 +806,8 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                     return
                 if address.path == '/api/bootstrap' and not mutation:
                     result = {**workspace.bootstrap(), 'token': token}
+                elif address.path == '/api/llm-settings' and mutation:
+                    result = workspace.save_llm_settings(payload, api_key=self.headers.get('X-LLM4OM-Provider-Key'))
                 elif address.path == '/api/tasks' and not mutation:
                     result = {'tasks': workspace.list_tasks()}
                 elif address.path == '/api/datasets' and not mutation:

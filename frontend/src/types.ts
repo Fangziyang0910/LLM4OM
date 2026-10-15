@@ -168,6 +168,9 @@ export interface Bootstrap {
   method_presets: Record<string, MethodPreset>;
   llm_presets: { id: string; label: string; provider_plugin_id: string; base_url: string }[];
   default_credential: { provider_plugin_id: string; base_url: string; configured: boolean; preview: string };
+  llm_profiles: Record<string, RunConfig["llm"]>;
+  llm_credentials: Record<string, { preview: string }>;
+  selected_llm_preset: string | null;
 }
 
 export interface PublicProblem {

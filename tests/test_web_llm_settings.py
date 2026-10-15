@@ -1,4 +1,4 @@
-"""Page-supplied LLM settings cross the public HTTP entry without persisting keys."""
+"""Local LLM settings survive restart while public runs and exports exclude keys."""
 
 from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -123,7 +123,26 @@ class WebLLMSettingsTests(unittest.TestCase):
                     self.assertEqual(doctor['connectivity_checks']['status'], 'passed', doctor)
                     self.assertEqual(doctor['connectivity_checks']['checks'][0]['status'], 'reachable')
                     self.assertNotIn(keys[index], json.dumps(doctor))
-                jobs = [api('/api/jobs', {'description': 'Maximize production A and B within capacities.', 'config': config}, keys[index])
+                google = deepcopy(configs[0])
+                google['llm']['config']['base_url'] = presets['google']['base_url']
+                google['llm']['model'] = 'saved-google-model'
+                api('/api/llm-settings', {'config': google, 'llm_preset': 'google'}, 'synthetic-google-private-key')
+                saved = api('/api/llm-settings', {'config': configs[0], 'llm_preset': 'openai_compatible'}, keys[0])
+                self.assertEqual(saved['llm_profiles']['google']['model'], 'saved-google-model')
+                self.assertEqual(len(saved['llm_credentials']), 2)
+                settings_path = root / '.private/llm-settings.local.json'
+                self.assertEqual(settings_path.stat().st_mode & 0o777, 0o600)
+                before = settings_path.read_bytes()
+                tampered = deepcopy(google)
+                tampered['llm']['config']['base_url'] = configs[0]['llm']['config']['base_url']
+                with self.assertRaises(HTTPError):
+                    api('/api/llm-settings', {'config': tampered, 'llm_preset': 'google'}, keys[0])
+                self.assertEqual(settings_path.read_bytes(), before)
+                public_settings = api('/api/bootstrap')
+                for key in [*keys, 'synthetic-google-private-key']:
+                    self.assertNotIn(key, json.dumps(public_settings))
+                self.assertEqual(public_settings['config']['llm'], configs[0]['llm'])
+                jobs = [api('/api/jobs', {'description': 'Maximize production A and B within capacities.', 'config': config}, keys[index] if index else None)
                     for index, config in enumerate(configs)]
                 for job in jobs:
                     for _ in range(200):
@@ -156,7 +175,12 @@ class WebLLMSettingsTests(unittest.TestCase):
                     self.fail('Web did not restart.')
                 self.assertFalse(bootstrap['default_credential']['configured'])
                 self.assertEqual(bootstrap['default_credential']['preview'], '')
-                api('/api/jobs/' + jobs[0]['job_id'] + '/resume', {'strategy': 'rerun'}, keys[0])
+                self.assertEqual(bootstrap['selected_llm_preset'], 'openai_compatible')
+                self.assertEqual(bootstrap['config']['llm'], configs[0]['llm'])
+                self.assertEqual(bootstrap['llm_profiles']['google']['model'], 'saved-google-model')
+                self.assertEqual(len(bootstrap['llm_credentials']), 2)
+                api('/api/doctor', {'config': configs[0], 'check_connectivity': True})
+                api('/api/jobs/' + jobs[0]['job_id'] + '/resume', {'strategy': 'rerun'})
                 for _ in range(200):
                     result = api('/api/jobs/' + jobs[0]['job_id'])
                     if result['job']['status'] in {'completed', 'failed'} and len(result['versions']) == 2:
@@ -166,7 +190,7 @@ class WebLLMSettingsTests(unittest.TestCase):
                 self.assertEqual(len(result['versions']), 2)
                 self.assertEqual(result['contents']['candidates/001/solve-result.json']['objective_value'], 13)
                 for path in root.rglob('*'):
-                    if path.is_file():
+                    if path.is_file() and path != settings_path:
                         for key in keys:
                             self.assertNotIn(key.encode(), path.read_bytes(), str(path))
                 with self.assertRaises(HTTPError) as invalid_key:
@@ -174,6 +198,7 @@ class WebLLMSettingsTests(unittest.TestCase):
                 self.assertEqual(invalid_key.exception.code, 400)
                 wrong_default = deepcopy(configs[0])
                 wrong_default['llm']['config']['credential_env'] = 'LLM4OM_LLM_API_KEY'
+                wrong_default['llm']['config']['base_url'] = 'http://127.0.0.1:1/v1'
                 before = len(requests)
                 with self.assertRaises(HTTPError):
                     api('/api/doctor', {'config': wrong_default, 'check_connectivity': True})

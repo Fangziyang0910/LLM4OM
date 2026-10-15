@@ -266,7 +266,7 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
             <input id="run-api-key" type="password" autoComplete="off" spellCheck={false} maxLength={4096}
               value={apiKey} onChange={(event) => setApiKey(event.target.value.trim())} />
           </label>
-          <p className="hint">服务重启后，可在此重新提供该运行所用服务的密钥，再恢复、派生重跑或修订。</p>
+          <p className="hint">恢复、派生重跑或修订会使用该服务已保存的密钥。需要替换本次使用的密钥时，可在此填写。</p>
         </details>
       ) : null}
       {editOpen ? (

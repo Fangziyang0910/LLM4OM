@@ -1,6 +1,7 @@
 # Secrets and environment
 .env
 .llm4om-web-doctor-*.json
+llm-settings.local.json*
 .env.*
 !.env.example
 *.key
