@@ -26,6 +26,8 @@
 
 当前平台使用 Python 3.11／3.12。依赖声明由 pyproject.toml 维护，完整解析由 uv.lock 固定；维护工具复用其中的 PyYAML／jsonschema。推荐执行：
 
+更新 Python 后端代码后，按原工作区和启动参数重启长驻 Web 服务，并刷新页面。服务在启动时加载方法模板和配置校验；重启使它们与新启动的执行程序保持一致。`web_methods_flow` 从页面选择生成配置，再向真实预检接口验证七种方法与三种求解器的全部组合。
+
 ```bash
 uv sync --locked --extra dev --extra solve --extra gurobi --extra ortools --extra search
 uv run --locked --all-extras mypy

@@ -42,6 +42,8 @@ uv run --locked --all-extras python scripts/build_worker_image.py  # 构建 Dock
 uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --host 127.0.0.1
 ```
 
+更新 Python 后端代码后，重启服务并刷新页面，使页面配置与执行程序保持一致。
+
 浏览器打开 `http://127.0.0.1:8767` 即可：输入问题 → 在输入区底部选择模型和求解器 → 开始求解。提交后进入全幅工作区，默认展示目标值和决策结果；“数学模型／求解代码”可直接切换。建模时自动展开右侧过程，完成后收起，也可随时重开；需要补充信息时直接在过程中回答。方法选择位于“建模选项”，历史记录和示例题库位于顶部导航。支持可选数据附件、模型编辑、修正历史与人工修订。
 内置 Benchmark 以卡片展示，点开后可并排浏览题目列表和完整问题。样例直接复用 OPT-Agent 已整理的 9 组、2033 条题面，可逐条复制或带入建模，无需上传数据集。详情见[内置样例记录](docs/development/s09-builtin-benchmarks.md)。访问令牌由服务启动时生成，页面自动获取。LLM 可选择 OpenAI、Google、Kimi、GLM、OpenRouter、阿里云百炼、DeepSeek 或 Anthropic，填写模型名和 Key；预设地址固定，只有 OpenAI 兼容选项允许自定义地址。页面显示密钥配置状态和掩码预览，密钥不写入公开配置、记录或导出。会话与恢复行为见[LLM 配置记录](docs/development/s09-llm-settings.md)。
 点击输入区底部的模型按钮，在“选择模型”窗口填写密钥并保存，开始求解前也会自动保存。预算与配置检查放在“建模选项”的“高级设置”。刷新页面或重启同一工作区后自动恢复已保存的供应商设置。设置位于 `<workspace>/.private/llm-settings.local.json`，文件权限为 600，已由 Git 忽略；原 `.env` 默认服务继续可用。

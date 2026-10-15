@@ -8,7 +8,7 @@
 
 | 文件 | 职责／事实来源 | 核验方式与保留理由 |
 |---|---|---|
-| `tests/web_methods_flow.cjs` | 五种研究方法、求解兼容性和原生数学表述展示 | 本地HTTP响应和真实构建页面；不提交运行 |
+| `tests/web_methods_flow.cjs` | 七种方法与三种求解器的页面配置和原生表述展示 | 页面生成的 21 个配置逐一请求真实预检，避免模板与执行校验不一致；不调用生成模型 |
 | `tests/test_research_method_runs.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
 | `tests/test_prompt_methods.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
 | `tests/test_ortools_solver.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
