@@ -36,7 +36,7 @@ class ORLLMAgentFactory:
             description="Mathematical modeling, configured target code and bounded public-feedback debugging.", source=SOURCE,
             config_schema={"type": "object", "properties": {"max_debug_attempts": {"type": "integer", "minimum": 0, "maximum": 10}},
                 "additionalProperties": False})
-        manifest["capabilities"].update(method_profile="factory_candidates/0.1.0", data_access="full",
+        manifest["capabilities"].update(method_profile="factory_checked/0.2.0", data_access="full",
             formulation_representations=["native_formulation"], code_representations=["python_factory", "native_code"],
             model_backends=["llm4om.model_backends.pyomo_factory", "llm4om.model_backends.gurobipy"],
             execution_modes=["container"], supports_checkpoint=False)

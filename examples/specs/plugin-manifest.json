@@ -7,7 +7,7 @@
   "display_name": "Direct (declared text output)",
   "description": "One public text response produces a five-element Formulation with grounded LPIR or parameterized Python factory.",
   "capabilities": {
-    "method_profile": "grounded_single_candidate/0.1.0",
+    "method_profile": "grounded_single/0.2.0",
     "problem_types": [
       "lp",
       "milp"

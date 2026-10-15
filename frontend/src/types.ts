@@ -66,7 +66,7 @@ export interface RunBundle {
   status: string;
   assisted?: boolean;
   error?: { code: string; message: string } | null;
-  final_candidate_id?: string;
+  selected_check_id?: string;
   stages?: Record<string, { status: string; reason: string | null }>;
   model_artifact_ref?: ArtifactRef | null;
   solve_result_ref?: ArtifactRef | null;
@@ -118,7 +118,7 @@ export interface Budget {
   [key: string]: number | undefined;
   max_llm_attempts: number;
   max_total_tokens: number;
-  max_candidates: number;
+  max_checks: number;
   max_repairs: number;
   max_solver_calls: number;
   wall_time_s: number;
@@ -232,7 +232,7 @@ export interface BudgetLedger {
   llm_attempts?: number;
   external_llm_requests?: number;
   solver_calls?: number;
-  candidates?: number;
+  checks?: number;
   known_total_tokens?: number;
   total_tokens?: number | null;
   [key: string]: unknown;
@@ -257,8 +257,8 @@ export interface CodeArtifact {
   provenance: { origin: string; source_ir_ref?: ArtifactRef };
 }
 
-export interface CandidateRecord {
-  candidate_id: string;
+export interface CheckRecord {
+  check_id: string;
   sequence_no: number;
   status: string;
   artifact_ref: ArtifactRef | null;
@@ -266,7 +266,7 @@ export interface CandidateRecord {
   change_reason?: string;
 }
 
-export interface CandidateAssessment {
+export interface CheckResult {
   stages: Record<string, { status: string }>;
   solve_result_ref: ArtifactRef | null;
   formulation_changes_ref: ArtifactRef | null;
@@ -302,7 +302,7 @@ export interface ArtifactContents extends Record<string, unknown> {
   "public-problem.json"?: PublicProblem;
   "budget-ledger.json"?: BudgetLedger;
   "llm-trace.json"?: { attempts: LLMAttempt[] };
-  "candidate-selection.json"?: { candidate_id: string; reason: string; rule: string };
+  "selection.json"?: { check_id: string; reason: string; rule: string };
 }
 
 export type Notice = (text: string, error?: boolean) => void;

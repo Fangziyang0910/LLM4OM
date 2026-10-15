@@ -24,7 +24,7 @@ class AssistedEditTests(unittest.TestCase):
         fixture = Path(__file__).resolve().parents[1] / 'examples/specs'
         shutil.copytree(fixture, self.root / 'input')
         config = yaml.safe_load((fixture / 'solve.yaml').read_text())
-        config['budget'].update(max_candidates=4, max_solver_calls=4)
+        config['budget'].update(max_checks=4, max_solver_calls=4)
         (self.root / 'input/run.json').write_text(json.dumps(config))
         self.parent = run_problem(self.root / 'input/problem.json', self.root / 'input/run.json', output_root=self.root / 'runs')
         self.assertEqual(self.parent.status, 'completed')
@@ -47,7 +47,7 @@ class AssistedEditTests(unittest.TestCase):
         ledger = json.loads((child.bundle_path / 'budget-ledger.json').read_text())
         self.assertEqual(ledger['llm_attempts'], 1)
         self.assertEqual(ledger['solver_calls'], 2)
-        self.assertEqual(ledger['candidates'], 2)
+        self.assertEqual(ledger['checks'], 2)
         self.assertEqual(ledger['evidence_origin'], 'assisted')
         for relative, digest in self.before.items():
             self.assertEqual(hashlib.sha256((self.parent.bundle_path / relative).read_bytes()).hexdigest(), digest, relative)
@@ -64,6 +64,22 @@ class AssistedEditTests(unittest.TestCase):
         continued = resume_run(child.bundle_path)
         self.assertEqual(continued.run_id, child.run_id)
         self.assertEqual(json.loads((child.bundle_path / 'budget-ledger.json').read_text())['solver_calls'], 2)
+
+    def test_runs_saved_with_the_candidate_layout_are_read_only(self):
+        value = export_edit(self.parent.bundle_path, operation='formulation')
+        value['reason'] = 'Edit a run saved before ADR-0006.'
+        checkpoint = self.parent.bundle_path / 'checkpoint.json'
+        envelope = json.loads(checkpoint.read_text())
+        ledger = envelope['payload']['state']['ledger']
+        ledger['candidates'] = ledger.pop('checks')
+        encode = lambda value: (json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + '\n').encode()
+        envelope['sha256'] = hashlib.sha256(encode(envelope['payload'])).hexdigest()
+        raw = encode(envelope)
+        checkpoint.write_bytes(raw)
+        (self.parent.bundle_path / 'checkpoints' / (hashlib.sha256(raw).hexdigest() + '.json')).write_bytes(raw)
+        with self.assertRaises(RunError) as raised:
+            edit_run(self.parent.bundle_path, self.write(value))
+        self.assertEqual(raised.exception.code, 'checkpoint_incompatible')
 
     def test_edit_compiled_python_runs_only_in_container_without_another_llm_call(self):
         value = export_edit(self.parent.bundle_path, operation='code')
@@ -83,7 +99,7 @@ class AssistedEditTests(unittest.TestCase):
         problem = json.loads((self.root / 'input/problem.json').read_text())
         base = yaml.safe_load((self.root / 'input/gurobi.yaml').read_text())
         base['model_backend']['plugin_id'] = 'llm4om.model_backends.gurobipy'
-        base['budget'].update(max_candidates=3, max_solver_calls=8)
+        base['budget'].update(max_checks=3, max_solver_calls=8)
         base['llm'] = {'provider_plugin_id': 'llm4om.providers.mock', 'model': 'no-model-human-fixture',
                        'config': {'response_artifact': 'script-edits.json'}}
         representation = json.loads((self.root / 'input/formulation.json').read_text())
@@ -142,7 +158,7 @@ m.addConstr(a + 2*b <= 8)
         value = json.loads(command.stdout)
         self.assertEqual(value['operation'], 'formulation')
         value['reason'] = 'Preserve the original artifact but explicitly test admission.'
-        value['budget']['max_candidates'] = 1
+        value['budget']['max_checks'] = 1
         with self.assertRaises(RunError) as exhausted:
             edit_run(self.parent.bundle_path, self.write(value))
         self.assertEqual(exhausted.exception.code, 'budget_exhausted')

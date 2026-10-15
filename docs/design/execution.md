@@ -30,7 +30,7 @@
 对应 FR-01～06/14/22/23；AC-01/02/12/21。
 ## DD-04 建模输出与数据绑定
 
-ModelArtifact 是共同封装，formulation_ref 与 code_ref 分别指向数学表述和求解实现；stage_status 记录可用、待生成或不可用。字段的唯一来源是 [接口契约](../plugin-contracts.md#34-candidate--modelartifact--阶段输出)。数学模型、求解代码、参数来源、假设与需求映射是不同信息，应分别标识其来源与可用性。
+ModelArtifact 是共同封装，formulation_ref 与 code_ref 分别指向数学表述和求解实现；stage_status 记录可用、待生成或不可用。字段的唯一来源是 [接口契约](../plugin-contracts.md#34-公开检查记录--modelartifact--阶段产物)。数学模型、求解代码、参数来源、假设与需求映射是不同信息，应分别标识其来源与可用性。
 
 ### 表述与实现的对应路径
 
@@ -68,7 +68,7 @@ SDK0.20.0通过共同Registry选择独立Compiler，宿主与Worker使用相同�
 
 工厂返回 Worker 内的后端模型，平台掌握求解调用。Legacy 脚本可包含求解过程；适配器必须声明入口、依赖、求解组合及提取方式。stdout 中的自报数字与从后端 API 提取的结果具有不同证据来源。
 
-生成实现形成 CodeArtifact，关联源 Formulation；Solver 只执行实际实现，不从五元素文本自动猜测约束。默认容器只挂载公开数据和候选目录。LLM 调用在宿主 Gateway 完成，密钥与隐藏参考材料不传给 Worker。容器失败不能自动降级到本地执行。
+生成实现形成 CodeArtifact，关联源 Formulation；Solver 只执行实际实现，不从五元素文本自动猜测约束。默认容器只挂载公开数据和当前检查目录。LLM 调用在宿主 Gateway 完成，密钥与隐藏参考材料不传给 Worker。容器失败不能自动降级到本地执行。
 
 ### 结果归一化
 

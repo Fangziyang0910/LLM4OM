@@ -90,7 +90,7 @@ def main() -> int:
             "config": {"base_url": f"http://127.0.0.1:{provider.server_port}/v1", "credential_env": "LLM4OM_FAULT_TEST_KEY",
                 "max_retries": 1 if model.startswith("rate-") else 0, "timeout_s": 0.5 if model.startswith("timeout-") else 10,
                 "max_output_tokens": 8192}}
-        config["budget"].update(max_llm_attempts=4, max_total_tokens=100000, max_solver_calls=4, max_candidates=4)
+        config["budget"].update(max_llm_attempts=4, max_total_tokens=100000, max_solver_calls=4, max_checks=4)
         write(output / "config.json", config)
         command = ["run", "--problem", str(fixture / "problem.json"), "--config", str(output / "config.json"),
                    "--output", str(output / "runs")]

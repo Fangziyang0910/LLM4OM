@@ -18,20 +18,20 @@ class SearchTape(Tape):
         self.invalid_first = invalid_first
 
     def remaining_budget(self):
-        return {"candidates": 4 - len(self.assessments), "solver_calls": 4, "llm_attempts": len(self.replies),
+        return {"checks": 4 - len(self.assessments), "solver_calls": 4, "llm_attempts": len(self.replies),
             "total_tokens": 100000, "wall_time_s": 100}
 
-    async def assess(self, candidate_id, proposal, **kwargs):
+    async def check(self, check_id, proposal, **kwargs):
         self.assessments.append(proposal)
-        if self.invalid_first and candidate_id == "001":
-            return {"candidate_id": candidate_id, "has_primal_solution": False, "termination": None,
+        if self.invalid_first and check_id == "001":
+            return {"check_id": check_id, "has_primal_solution": False, "termination": None,
                 "solve_result_ref": None, "diagnostics": [{"code": "invalid_ir", "stage": "compile"}]}
-        return {"candidate_id": candidate_id, "has_primal_solution": True, "termination": "optimal",
-            "solve_result_ref": {"id": candidate_id}, "diagnostics": []}
+        return {"check_id": check_id, "has_primal_solution": True, "termination": "optimal",
+            "solve_result_ref": {"id": check_id}, "diagnostics": []}
 
-    def select(self, candidate_id, **kwargs):
-        self.selection = {"candidate_id": candidate_id, **kwargs}
-        return MethodOutcome("candidate_selected", candidate_id, None)
+    def select(self, check_id, **kwargs):
+        self.selection = {"check_id": check_id, **kwargs}
+        return MethodOutcome("selected", check_id, None)
 
 
 class AutoFormulationTests(unittest.TestCase):
@@ -67,7 +67,7 @@ class AutoFormulationTests(unittest.TestCase):
         problem = {"problem_id": "natural", "revision": "1", "description": "Public production planning problem.", "data_refs": []}
         context = MethodContext(tape, {}, {"max_repairs": 0, "wall_time_s": 100}, "a" * 64, resources=tape)
         result = asyncio.run(AutoFormulationFactory().create({"rollouts": 2, "branching": 2}).run(problem, context))
-        self.assertEqual(result.final_candidate_id, "002")
+        self.assertEqual(result.selected_check_id, "002")
         self.assertEqual(len(tape.assessments), 2)
         tree = json.loads(tape.files["search-tree.json"])
         self.assertEqual(tree["nodes"][0]["visits"], 2)

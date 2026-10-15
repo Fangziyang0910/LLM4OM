@@ -73,7 +73,7 @@ class AssistedMethod:
             'provenance': provenance, 'stage_status': {'formulation': {'status': 'available' if formulation is not None else 'not_available',
             'reason': None if formulation is not None else 'The source method supplied no Formulation.'},
             'code': {'status': 'pending', 'reason': 'Validate or compile the supplied public revision.'}}}
-        return MethodOutcome('candidate_selected', '001', ModelProposal(artifact, formulation, ir, code, execution_id))
+        return MethodOutcome('selected', '001', ModelProposal(artifact, formulation, ir, code, execution_id))
 
 
 class AssistedFactory:
@@ -91,10 +91,10 @@ class AssistedFactory:
         capabilities: dict[str, Any] = self.describe()['capabilities']
         kind = config['code_kind']
         if kind != 'lp_ir':
-            capabilities.update(execution_modes=['container'], method_profile='factory_single_candidate/0.1.0')
+            capabilities.update(execution_modes=['container'], method_profile='factory_single/0.2.0')
         if kind in ('native_code', 'native_script'):
             capabilities.update(model_backends=['llm4om.model_backends.gurobipy'], solvers=['llm4om.solvers.gurobi'],
-                                code_representations=[kind], method_profile='native_single_candidate/0.1.0')
+                                code_representations=[kind], method_profile='native_single/0.2.0')
         if kind == 'native_script':
             native_formulation = config['formulation_kind'] == 'native_formulation'
             capabilities.update(method_profile='native_script/0.1.0' if native_formulation else 'native_script/0.2.0',
@@ -226,8 +226,10 @@ def edit_run(run: Path, edits: Path, *, cancellation: CancellationToken | None =
                 'formulation_kind': value['formulation']['representation_kind'] if value['formulation'] else 'not_available', 'edits': value}}
             settings['llm'] = {'provider_plugin_id': 'llm4om.providers.mock', 'model': 'no-llm-human-edit', 'config': {'response_artifact': 'edits.json'}}
         validate_config(settings)
-        if settings['budget']['max_candidates'] <= store.state['ledger']['candidates']:
-            raise RunError('budget_exhausted', 'admission', 'The revised budget must cover the inherited candidates and this new candidate.')
+        if 'candidates' in store.state['ledger']:
+            raise RunError('checkpoint_incompatible', 'admission', 'Runs saved before the modeling-process layout (ADR-0006) are read-only.')
+        if settings['budget']['max_checks'] <= store.state['ledger']['checks']:
+            raise RunError('budget_exhausted', 'admission', 'The revised budget must cover the inherited public checks and this new check.')
         child = open_run_store(saved_store_selection(store.path), store.path.parent, cancellation=cancellation)
         inputs = child.path / 'input'
         inputs.mkdir()

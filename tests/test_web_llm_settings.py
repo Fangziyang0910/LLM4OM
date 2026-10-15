@@ -194,7 +194,7 @@ class WebLLMSettingsTests(unittest.TestCase):
                             break
                         time.sleep(.05)
                     self.assertEqual(result['job']['status'], 'completed', (result.get('bundle') or {}).get('error'))
-                    self.assertEqual(result['contents']['candidates/001/solve-result.json']['objective_value'], 13)
+                    self.assertEqual(result['contents']['checks/001/solve-result.json']['objective_value'], 13)
                     for key in keys:
                         self.assertNotIn(key, json.dumps(result))
                     with opener.open(url + '/api/jobs/' + job['job_id'] + '/export') as response:
@@ -233,7 +233,7 @@ class WebLLMSettingsTests(unittest.TestCase):
                     time.sleep(.05)
                 self.assertEqual(result['job']['status'], 'completed', (result.get('bundle') or {}).get('error'))
                 self.assertEqual(len(result['versions']), 2)
-                self.assertEqual(result['contents']['candidates/001/solve-result.json']['objective_value'], 13)
+                self.assertEqual(result['contents']['checks/001/solve-result.json']['objective_value'], 13)
                 for path in root.rglob('*'):
                     if path.is_file() and path != settings_path:
                         for key in keys:

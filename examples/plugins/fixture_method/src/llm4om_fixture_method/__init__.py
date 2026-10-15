@@ -23,7 +23,7 @@ class FixtureMethod:
         value["structured_ir"]["objective"]["expression"]["constant"] += self.offset
         value["formulation"]["representation"]["objective"]["expression_text"] += f" + {self.offset}"
         value["artifact"]["provenance"]["method_variant"] = "engineering_objective_offset"
-        return MethodOutcome("candidate_selected", "001", ModelProposal(value["artifact"], value["formulation"], value["structured_ir"]))
+        return MethodOutcome("selected", "001", ModelProposal(value["artifact"], value["formulation"], value["structured_ir"]))
 
 
 class FixtureFactory:

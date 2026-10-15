@@ -143,7 +143,7 @@ class HTTPPipelineTests(unittest.TestCase):
                 self.assertEqual(trace['attempts'][0]['usage']['total_tokens'], 500)
                 return
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            solve = json.loads((path / 'candidates/001/solve-result.json').read_text())
+            solve = json.loads((path / 'checks/001/solve-result.json').read_text())
             self.assertAlmostEqual(solve['objective_value'], 40 / 3 if no_data else 13)
             self.assertEqual(solve['termination'], 'optimal')
             self.assertEqual(len(requests), 1)
@@ -163,6 +163,6 @@ class HTTPPipelineTests(unittest.TestCase):
             self.assertTrue((path.parent / '.private' / path.name / 'state.json').exists())
             bundle = json.loads((path / 'bundle.json').read_text())
             self.assertFalse(any('.private' in ref['relative_path'] for ref in bundle['artifacts']))
-            artifact = json.loads((path / 'candidates/001/artifact.json').read_text())
+            artifact = json.loads((path / 'checks/001/artifact.json').read_text())
             self.assertEqual(artifact['provenance']['origin'], 'external_provider')
             self.assertNotIn('hand_authored_design_fixture', json.dumps(artifact))

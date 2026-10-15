@@ -112,7 +112,7 @@ class TaskPluginTests(unittest.TestCase):
         run = self.cli("run", "--problem", str(public), "--config", str(self.run_config(inputs)), "--output", str(self.root / "runs"))
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         path = Path(json.loads(run.stdout)["bundle_path"])
-        self.assertEqual(json.loads((path / "candidates/001/solve-result.json").read_text())["objective_value"], 13)
+        self.assertEqual(json.loads((path / "checks/001/solve-result.json").read_text())["objective_value"], 13)
         result = self.cli("evaluate", "--manifest", str(manifest_path), "--case-id", entry["case_id"], "--run", str(path), "--output", str(self.root / "evaluation.json"))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         evaluation = json.loads(result.stdout)

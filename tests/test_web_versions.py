@@ -79,8 +79,8 @@ class WebVersionTests(unittest.TestCase):
                 child = complete(parent); child_id = child['job']['run_id']
                 old = api(base + '?run_id=' + parent)
                 self.assertTrue(old['historical']); self.assertEqual(old['latest_run_id'], child_id)
-                self.assertEqual(old['contents']['candidates/001/solve-result.json']['objective_value'], 13)
-                self.assertEqual(child['contents']['candidates/001/solve-result.json']['objective_value'], 5)
+                self.assertEqual(old['contents']['checks/001/solve-result.json']['objective_value'], 13)
+                self.assertEqual(child['contents']['checks/001/solve-result.json']['objective_value'], 5)
                 self.assertEqual({v['run_id'] for v in old['versions']}, {parent, child_id})
                 self.assertEqual(next(v for v in old['versions'] if v['run_id'] == child_id)['parent_run_id'], parent)
                 with opener.open(url + base + '/export?run_id=' + parent) as response:
@@ -95,7 +95,7 @@ class WebVersionTests(unittest.TestCase):
                 branch = complete(child_id)
                 self.assertEqual(branch['contents']['lineage.json']['parent_run_id'], parent)
                 self.assertEqual(branch['contents']['public-problem.json']['revision'], '2')
-                self.assertEqual(branch['contents']['candidates/001/solve-result.json']['objective_value'], 13)
+                self.assertEqual(branch['contents']['checks/001/solve-result.json']['objective_value'], 13)
                 self.assertEqual(len(requests), 2); self.assertEqual(bundle_path.read_bytes(), parent_bytes)
             finally:
                 process.send_signal(signal.SIGINT); process.communicate(timeout=15)

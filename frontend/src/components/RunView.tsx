@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { artifactKey, artifactLabel, activeStep, shortMethod, status } from "../ui";
-import { Candidates } from "./Candidates";
+import { StageHistory } from "./StageHistory";
 import { Clarification, type ClarificationRequest } from "./Clarification";
 import { Decision } from "./Decision";
 import { Records } from "./Records";
@@ -13,8 +13,6 @@ import type { ArtifactRef, CodeArtifact, ModelArtifact, Notice, Snapshot, SolveR
 const tabPatterns: Record<string, RegExp> = {
   formulation: /formulation|model-ir|structured-ir|method\/state_/,
   code: /code|build|symbol-map|model\.py|factory\.py|native.*\.py/,
-  candidates:
-    /(?:^|\/)(?:candidate(?:-snapshot|-selection)?|assessment|formulation-changes|repair-state|evaluation)\.json$/,
   diagnostics: /diagnostic|execution|budget|report|trace/,
   data: /public-problem|data-views|dataset-manifest|data-bind/,
 };
@@ -22,7 +20,6 @@ const tabPatterns: Record<string, RegExp> = {
 const tabHeadings: Record<string, string> = {
   formulation: "数学模型",
   code: "求解实现",
-  candidates: "候选与修正",
   diagnostics: "实际运行记录",
   data: "问题与数据",
 };
@@ -58,17 +55,15 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
       tabPatterns[activeTab].test(key),
     );
     if (activeTab === "diagnostics") entries.unshift(["运行事件", snapshot.events || []]);
-    const finalCandidate = snapshot.bundle?.final_candidate_id || "001";
+    const selectedCheck = snapshot.bundle?.selected_check_id || "001";
     const score = ([name, value]: [string, unknown]) =>
-      activeTab === "candidates"
-        ? Number(name === "candidate-selection.json")
-        : activeTab === "code"
-          ? name === `candidates/${finalCandidate}/model.py`
-            ? 2
-            : Number(name.endsWith(".py"))
-          : value && typeof value === "object" && "representation" in value && value.representation
-            ? 100 + Number(name.startsWith(`candidates/${finalCandidate}/`))
-            : Number(name.match(/method\/state_(\d+)/)?.[1] || 0);
+      activeTab === "code"
+        ? name === `checks/${selectedCheck}/model.py`
+          ? 2
+          : Number(name.endsWith(".py"))
+        : value && typeof value === "object" && "representation" in value && value.representation
+          ? 100 + Number(name.startsWith(`checks/${selectedCheck}/`))
+          : Number(name.match(/method\/state_(\d+)/)?.[1] || 0);
     entries.sort((a, b) => score(b) - score(a));
     return entries;
   }, [snapshot, activeTab]);
@@ -105,13 +100,13 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
 
   const selectedArtifact = artifactEntries.find(([name]) => name === artifactChoice)?.[1];
   const selectedName = artifactChoice;
-  const candidatePrefix = selectedName.startsWith("candidates/")
+  const checkPrefix = selectedName.startsWith("checks/")
     ? selectedName.split("/")[1]
     : null;
-  const isolatedContents = candidatePrefix
+  const isolatedContents = checkPrefix
     ? Object.fromEntries(
         Object.entries(contents).filter(
-          ([key]) => !key.startsWith("candidates/") || key.startsWith(`candidates/${candidatePrefix}/`),
+          ([key]) => !key.startsWith("checks/") || key.startsWith(`checks/${checkPrefix}/`),
         ),
       )
     : contents;
@@ -341,7 +336,6 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
               [
                 ["formulation", "数学模型"],
                 ["code", "求解代码"],
-                ["candidates", "候选方案"],
                 ["diagnostics", "运行详情"],
                 ["data", "输入数据"],
               ] as [string, string][]
@@ -365,7 +359,7 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
             </div>
             <select
               id="artifact-choice"
-              aria-label={activeTab === "candidates" ? "选择原始候选记录" : "选择阶段记录"}
+              aria-label="选择阶段记录"
               hidden={artifactEntries.length < 2}
               value={artifactChoice}
               onChange={(event) => {
@@ -375,15 +369,21 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
             >
               {artifactEntries.map(([name]) => (
                 <option key={name} value={name}>
-                  {(name.startsWith("candidates/") ? "候选 " + name.split("/")[1] + " · " : "") +
+                  {(name.startsWith("checks/") ? "检查 " + name.split("/")[1] + " · " : "") +
                     (name === "运行事件" ? "运行事件" : artifactLabel(name))}
                 </option>
               ))}
             </select>
             <div id="model-view" className="model-grid">
-              {activeTab === "candidates" ? (
-                <Candidates snapshot={snapshot} onOpenArtifact={openArtifact} />
-              ) : activeTab === "diagnostics" ? (
+              {activeTab === "formulation" || activeTab === "code" ? (
+                <StageHistory
+                  snapshot={snapshot}
+                  stage={activeTab}
+                  current={artifactChoice}
+                  onOpen={(key) => openArtifact(activeTab, key)}
+                />
+              ) : null}
+              {activeTab === "diagnostics" ? (
                 <RuntimeDetails snapshot={snapshot} />
               ) : selectedArtifact === undefined &&
                 ["running", "queued", "needs_input"].includes(snapshot.job.status) ? (

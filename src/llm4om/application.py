@@ -16,7 +16,7 @@ from llm4om.control import CancellationToken
 from llm4om.gateway import Gateway
 from llm4om.runtime_identity import sdk_sha256
 from llm4om.run_records import load_run_record
-from llm4om.candidates import (persist_proposal, compile_candidate, execute_candidate,
+from llm4om.checks import (persist_proposal, compile_model, execute_model,
     restored_compilation, reconcile_formulation, reconcile_execution)
 from llm4om.methods import MethodContext, ModelProposal
 from llm4om.method_resources import RunMethodResources
@@ -75,7 +75,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
     mode = "offline_mock" if offline else "not_resolved"
     store.emit("run_resumed" if "problem" in store.state else "run_started", mode=mode)
     ledger: dict[str, Any] = {"schema_version": "0.2.0", "llm_attempts": 0,
-                             "solver_calls": 0, "external_llm_requests": 0, "candidates": 0, "total_tokens": None,
+                             "solver_calls": 0, "external_llm_requests": 0, "checks": 0, "total_tokens": None,
                              "cost": 0, "evidence_origin": "mock_fixture"}
     error_record: dict[str, Any] | None = None
     artifact_ref = store.state.get("artifact_ref")
@@ -127,7 +127,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
         mode = plan.snapshot["mode"]
         if plan.method.manifest["capabilities"].get("human_assisted"):
             store.state["assisted"] = True
-        if plan.snapshot["method_profile"] in ("factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0"):
+        if plan.snapshot["method_profile"] in ("factory_single/0.2.0", "factory_checked/0.2.0", "native_single/0.2.0", "native_checked/0.2.0", "native_script/0.1.0", "native_script/0.2.0"):
             code_level = "native_script_contract" if plan.snapshot["method_profile"] in ("native_script/0.1.0", "native_script/0.2.0") else "factory_contract"
         if plan.snapshot["method_profile"] in ("native_script/0.1.0", "native_script/0.2.0") and "admission" not in store.state:
             ledger["admission_solver_probe_calls"] = ledger.get("admission_solver_probe_calls", 0) + 2
@@ -136,14 +136,14 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
         store.state["host"] = {"python": platform.python_version(), "sdk_sha256": sdk_sha256(),
                                "packages": {name: version(name) for name in ("PyYAML", "jsonschema")}}
         store.checkpoint()
-        if artifact_ref is None or store.state.get("candidate_assessment_pending"):
-            artifact_ref, stages = _prepare_candidate(store, problem, config, settings, ledger, offline, plan)
+        if artifact_ref is None or store.state.get("check_pending"):
+            artifact_ref, stages = _prepare_proposal(store, problem, config, settings, ledger, offline, plan)
             solve_ref = store.state.get("solve_ref")
             execution_ref = store.state.get("execution_ref")
         status = "artifact_ready"
         if not offline:
             if store.state["phase"] == "method_done":
-                artifact_ref, compiled = compile_candidate(store, artifact_ref, settings)
+                artifact_ref, compiled = compile_model(store, artifact_ref, settings)
                 stages["code"] = {"status": "available", "reason": None}
                 store.state.update(artifact_ref=artifact_ref, phase="code_done")
                 store.emit("code_saved", artifact_ref=artifact_ref,
@@ -153,7 +153,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
             cancellation.check()
             stages["code"] = {"status": "available", "reason": None}
             if store.state["phase"] != "execute_done":
-                solve_ref, execution_ref, execution_error = execute_candidate(store, compiled, artifact_ref, settings, ledger, plan)
+                solve_ref, execution_ref, execution_error = execute_model(store, compiled, artifact_ref, settings, ledger, plan)
                 artifact_ref = store.state.get("executed_artifact_ref", artifact_ref)
             else:
                 execution_error = None
@@ -215,7 +215,7 @@ def _run_problem(problem: Path, config: Path, store: RunStore, *, offline: bool 
                "clarification_request_ref": store.state.get("clarification_request_ref"),
                "clarification_response_refs": store.state.get("clarification_response_refs", []),
                "public_projections": {name: ref for name, ref in store.projections.items() if name != "bundle.json"},
-               "final_candidate_id": store.state.get("candidate_id", "001") if status == "completed" else None,
+               "selected_check_id": store.state.get("check_id", "001") if status == "completed" else None,
                "execution_plan": {name: {"requested_plugin_id": settings.get(name, {}).get("plugin_id"),
                     "resolved_plugin_id": settings[name]["plugin_id"] if resource_status[name] != "not_available" else None,
                     "status": resource_status[name],
@@ -260,7 +260,7 @@ def report_run(run: Path) -> dict[str, Any]:
         store.close()
 
 
-def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: dict[str, Any],
+def _prepare_proposal(store: RunStore, problem: Path, config: Path, settings: dict[str, Any],
                  ledger: dict[str, Any], offline: bool, plan: AdmissionPlan) -> tuple[dict[str, Any], dict[str, Any]]:
     method = plan.method
     source_problem = read_public_bytes(problem)
@@ -293,7 +293,7 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
     if "root" in public_config["store"]["config"]:
         public_config["store"]["config"]["root"] = "."
     if "response_artifact" in public_config["llm"]["config"]:
-        public_config["llm"]["config"]["response_artifact"] = "candidates/001/artifact.json"
+        public_config["llm"]["config"]["response_artifact"] = "checks/001/artifact.json"
     public_config.setdefault("evaluation", {"protocol_id": "llm4om.eval.public-v0.1",
                                             "evaluator_plugin_id": "llm4om.evaluators.structural"})
     store.json("public-config.json", public_config, "config")
@@ -303,7 +303,7 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
                             **plan.snapshot["packages"]},
                "mode": plan.snapshot["mode"],
                "method": {"manifest": method.manifest, "origin": method.origin},
-               "method_variant": (method.manifest["source"] or {}).get("variant_id", "grounded_single_candidate")}, "environment")
+               "method_variant": (method.manifest["source"] or {}).get("variant_id", "grounded_single")}, "environment")
     if plan.provider is None:
         raise RunError("checkpoint_incompatible", "admission", "Identity-only admission cannot run a method.")
     gateway = plan.provider.gateway(public, hashlib.sha256(source_problem).hexdigest(), store, ledger,
@@ -339,7 +339,7 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
         store.checkpoint()
     if outcome.status == "needs_input":
         if (not method.manifest["capabilities"].get("supports_clarification") or outcome.proposal is not None
-                or outcome.final_candidate_id is not None or outcome.clarification is None
+                or outcome.selected_check_id is not None or outcome.clarification is None
                 or store.state.get("method_checkpoint") is None):
             raise RunError("invalid_method_outcome", "formulation", "Clarification requires a declared capability, request and versioned method checkpoint.")
         request = prepare_clarification(outcome.clarification, public, store.run_id, context.problem_sha256,
@@ -348,17 +348,17 @@ def _prepare_candidate(store: RunStore, problem: Path, config: Path, settings: d
         store.state.update(clarification_request_ref=ref, clarification_answered=False, phase="needs_input")
         store.emit("clarification_requested", request_ref=ref)
         raise RunError("clarification_required", "formulation", "Public clarification is required.")
-    if outcome.status in ("failed", "exhausted") and outcome.final_candidate_id is None and outcome.proposal is None:
+    if outcome.status in ("failed", "exhausted") and outcome.selected_check_id is None and outcome.proposal is None:
         store.json("method/outcome.json", {"schema_version": "0.1.0", "status": outcome.status,
-            "final_candidate_id": None}, "method-outcome")
-        raise RunError("method_" + outcome.status, "formulation", "The method ended without a selectable candidate; existing attempts are retained.")
-    if outcome.status == "candidate_selected" and outcome.proposal is None:
-        return RunMethodResources(store, public, settings, plan).selected(outcome.final_candidate_id)
-    if plan.snapshot["method_profile"] in ("grounded_candidates/0.1.0", "factory_candidates/0.1.0", "native_candidates/0.1.0"):
-        raise RunError("invalid_method_outcome", "formulation", "The candidate profile requires a saved assessment and selection.")
-    if outcome.status != "candidate_selected" or outcome.final_candidate_id != "001" or not isinstance(outcome.proposal, ModelProposal):
-        raise RunError("invalid_method_outcome", "formulation", "This profile requires one selected candidate with ID 001.")
-    store.state["candidate_id"] = "001"
+            "selected_check_id": None}, "method-outcome")
+        raise RunError("method_" + outcome.status, "formulation", "The method ended without a selectable checked proposal; existing attempts are retained.")
+    if outcome.status == "selected" and outcome.proposal is None:
+        return RunMethodResources(store, public, settings, plan).selected(outcome.selected_check_id)
+    if plan.snapshot["method_profile"] in ("grounded_checked/0.2.0", "factory_checked/0.2.0", "native_checked/0.2.0"):
+        raise RunError("invalid_method_outcome", "formulation", "The checked profile requires a saved public check and selection.")
+    if outcome.status != "selected" or outcome.selected_check_id != "001" or not isinstance(outcome.proposal, ModelProposal):
+        raise RunError("invalid_method_outcome", "formulation", "This profile requires one proposal.")
+    store.state["check_id"] = "001"
     replay = {"mode": gateway.calls[-1].evidence_origin if gateway.calls else "no_calls",
               "call_ids": [call.call_id for call in gateway.calls],
               "response_sha256": gateway.calls[-1].source_sha256 if gateway.calls else None}
@@ -539,6 +539,6 @@ def _initialize_derived_run(child: RunStore, store: RunStore, resource_records: 
     child.state.update(lineage_ref=lineage_ref, inherited_ledger=ledger, ledger=deepcopy(ledger), interactive=store.state.get("interactive", False))
     if edit is not None:
         child.state["assisted"] = True
-        child.state["ledger"]["candidates"] += 1
+        child.state["ledger"]["checks"] += 1
     return _run_problem(problem or Path(store.state["problem"]), config or Path(store.state["config"]), child,
                         offline=False if edit is not None else store.state["offline"])

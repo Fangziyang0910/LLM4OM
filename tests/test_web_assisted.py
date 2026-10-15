@@ -75,7 +75,7 @@ class WebAssistedTests(unittest.TestCase):
                 config['llm'] = {'provider_plugin_id': 'llm4om.providers.openai_compatible', 'model': 'synthetic-edit',
                     'config': {'base_url': f'http://127.0.0.1:{provider.server_port}/v1', 'credential_env': 'LLM4OM_WEB_EDIT_TEST_KEY',
                                'max_retries': 0, 'max_output_tokens': 8192, 'timeout_s': 10}}
-                config['budget'].update(max_llm_attempts=4, max_total_tokens=100000, max_solver_calls=4, max_candidates=4)
+                config['budget'].update(max_llm_attempts=4, max_total_tokens=100000, max_solver_calls=4, max_checks=4)
                 import base64
                 data = [{'data_id': ref['data_id'], 'format': ref['format'], 'schema': ref['schema'],
                          'base64': base64.b64encode((fixture / ref['path']).read_bytes()).decode()} for ref in problem['data_refs']]
@@ -125,7 +125,7 @@ class WebAssistedTests(unittest.TestCase):
                 ledger = json.loads((run / 'budget-ledger.json').read_text())
                 self.assertEqual(ledger['llm_attempts'], 2)
                 self.assertEqual(ledger['solver_calls'], 3)
-                self.assertEqual(ledger['candidates'], 3)
+                self.assertEqual(ledger['checks'], 3)
                 self.assertEqual(ledger['evidence_origin'], 'assisted')
                 slow_problem = {**problem, 'description': problem['description'] + ' cancel-this-public-request'}
                 cancelled_id = api('/api/jobs', {**payload, 'problem': slow_problem})['job_id']

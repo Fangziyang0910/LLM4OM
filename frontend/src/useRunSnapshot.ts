@@ -1,3 +1,4 @@
+import { currentLayout } from "./legacyRun";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import type { JobRecord, Notice, Snapshot } from "./types";
@@ -24,7 +25,7 @@ export function useRunSnapshot(notice: Notice) {
     const sequence = ++requestSequence.current;
     let result: Snapshot;
     try {
-      result = await api<Snapshot>(`/api/jobs/${selection.job}${selection.run ? "?run_id=" + selection.run : ""}`);
+      result = currentLayout(await api<Snapshot>(`/api/jobs/${selection.job}${selection.run ? "?run_id=" + selection.run : ""}`));
     } catch (error) {
       if (sequence !== requestSequence.current || target.current !== selection) return null;
       throw error;

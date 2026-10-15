@@ -53,7 +53,7 @@ class ResumeRunTests(unittest.TestCase):
         restored = resume_run(result.bundle_path)
         self.assertEqual(restored, result)
         self.assertEqual((result.bundle_path / 'events.jsonl').read_bytes(), before)
-        (result.bundle_path / 'candidates/001/formulation.json').write_text('{}')
+        (result.bundle_path / 'checks/001/formulation.json').write_text('{}')
         with self.assertRaises(RunError) as caught:
             resume_run(result.bundle_path)
         self.assertEqual(caught.exception.code, 'checkpoint_incompatible')

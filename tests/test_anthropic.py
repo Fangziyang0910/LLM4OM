@@ -422,7 +422,7 @@ class MessagesRecoveryTests(unittest.TestCase):
                 self.assertEqual(ledger['solver_calls'], 1)
                 trace = json.loads((path / 'llm-trace.json').read_text())['attempts']
                 self.assertEqual([item['request_id'] for item in trace], [request_id])
-                self.assertEqual(json.loads((path / 'candidates/001/solve-result.json').read_text())['objective_value'], 13)
+                self.assertEqual(json.loads((path / 'checks/001/solve-result.json').read_text())['objective_value'], 13)
 
     def test_durable_success_replays_without_credentials_after_both_commit_windows(self):
         from llm4om import resume_run
@@ -441,7 +441,7 @@ class MessagesRecoveryTests(unittest.TestCase):
                 with patch.object(Path, 'read_text', public_text):
                     result = resume_run(path)
                 self.assertEqual(result.status, 'completed')
-                solve = json.loads((path / 'candidates/001/solve-result.json').read_text())
+                solve = json.loads((path / 'checks/001/solve-result.json').read_text())
                 self.assertEqual(solve['objective_value'], 13)
                 ledger = json.loads((path / 'budget-ledger.json').read_text())
                 self.assertEqual(ledger['external_llm_requests'], 1)
@@ -513,7 +513,7 @@ class MessagesRecoveryTests(unittest.TestCase):
                 self.assertEqual(bundle['error']['code'], 'llm_output_truncated')
                 self.assertIsNone(bundle['model_artifact_ref'])
             else:
-                solve = json.loads((path / 'candidates/001/solve-result.json').read_text())
+                solve = json.loads((path / 'checks/001/solve-result.json').read_text())
                 self.assertEqual(solve['objective_value'], 13)
                 self.assertEqual(solve['termination'], 'optimal')
                 sent = self.requests[-1][2]
@@ -521,7 +521,7 @@ class MessagesRecoveryTests(unittest.TestCase):
                 self.assertEqual([message['role'] for message in sent['messages']], ['user'])
                 prompt = json.loads(sent['messages'][0]['content'])
                 self.assertIn('A,3,2,1', prompt['data']['products'])
-                artifact = json.loads((path / 'candidates/001/artifact.json').read_text())
+                artifact = json.loads((path / 'checks/001/artifact.json').read_text())
                 self.assertEqual(artifact['provenance']['origin'], 'external_provider')
             exported = '\n'.join(file.read_text() for file in path.rglob('*') if file.is_file())
             self.assertNotIn('synthetic-secret', exported)

@@ -228,7 +228,7 @@ class TaskEvaluationTests(unittest.TestCase):
             (outcome / "bundle.json").write_text(original_bundle)
             for name in ["artifact.json", "formulation.json", "structured-ir.json", "model.py"]:
                 with self.subTest(changed_evidence=name):
-                    file = outcome / "candidates/001" / name
+                    file = outcome / "checks/001" / name
                     original = file.read_bytes()
                     file.write_bytes(b"corrupted evidence\n")
                     broken = NL4OptEvaluator().evaluate(case, outcome)
@@ -237,7 +237,7 @@ class TaskEvaluationTests(unittest.TestCase):
                     self.assertEqual(broken["formulation_validation"]["status"], "error")
                     self.assertEqual(broken["code_validation"]["status"], "error")
             # Corrupted evidence is a retained checker error, never a pass.
-            (outcome / "candidates/001/solve-result.json").write_text("{}")
+            (outcome / "checks/001/solve-result.json").write_text("{}")
             broken = NL4OptEvaluator().evaluate(case, outcome)
             self.assertEqual(broken["checker_error"]["code"], "evidence_hash_mismatch")
             self.assertEqual(broken["candidate_primal"]["status"], "error")

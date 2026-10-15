@@ -26,7 +26,7 @@ FR-11 当前内置样例验收：直接复用 OPT-Agent 的九组2033条题面�
 | AC-03 | 中文描述＋产品／产能 CSV | 原文、hash 与需求 ID 保留，默认五元素及关联 Code 可查，生产 MILP 目标 13 | FR-07/09/12/20 |
 | AC-04 | NL4Opt、NLP4LP、MAMO 的固定版／子集与派生版 | 显示原始 ID、版本、split、清洗理由和不同 fingerprint | FR-10/11/31/32 |
 | AC-05 | 方法、LLM trace、Worker 尝试读取 oracle | Context 无 oracle，未授权引用拒绝，容器无 oracle 文件 | FR-08/27/28 |
-| AC-06 | direct、OptiMUS、CoE 使用同一通用外部 LLM；联合／分步两阶段输出 | Formulation／Code、专家策略、候选链和修正原因可见；同一 call_id 不重复计费；缺失阶段如实标记 | FR-13/14/15/18 |
+| AC-06 | direct、OptiMUS、CoE 使用同一通用外部 LLM；联合／分步两阶段输出 | Formulation／Code、专家策略、建模步骤、阶段产物修正链和改动理由可见；同一 call_id 不重复计费；缺失阶段如实标记 | FR-13/14/15/18 |
 | AC-07 | OpenAI-compatible 与 Anthropic 真实任务 | 原始响应、归一化字段与 usage 可查；能力不足、认证错误正确处理 | FR-15/16，NFR-08 |
 | AC-08 | 429、超时、未知 usage、并发预算竞争 | 重试有界，真实 attempt 计数；预算不被并发绕过，未知成本为 null | FR-16/17/30 |
 | AC-09 | 缺少业务规则的交互任务／无交互批次 | 交互待输入后恢复；批量 unresolved 保留分母；无 oracle 代填 | FR-19/33 |
@@ -44,7 +44,7 @@ FR-11 当前内置样例验收：直接复用 OPT-Agent 的九组2033条题面�
 | AC-21 | 不支持契约版本与不同协议的记录 | 执行前拒绝不支持版本；不同协议分组报告，原输出不可变 | FR-01/32，NFR-10 |
 | AC-22 | 1,000 个短任务／100 个混合故障任务 | 无任务丢失／串结果，性能与资源报告符合 NFR 目标或明确修订 | NFR-03/05/06/07 |
 | AC-23 | 仅自然语言＋公开数据、requirements 为空、无 oracle，经 CLI/Web 运行 | 可建模和真实求解，返回产物、决策解、目标与状态；独立检查为 not_available；两种入口调用同一流程 | FR-07/13/20/24/29/35/36 |
-| AC-24 | 文件 hash 正确但交换利润绑定，或绑定错误产品键 | 绑定来源可检查；候选自身最优与原问题目标质量分别评价；不能只凭候选自报目标通过独立检查 | FR-09/12/20/26/29 |
+| AC-24 | 文件 hash 正确但交换利润绑定，或绑定错误产品键 | 绑定来源可检查；模型自身最优与原问题目标质量分别评价；不能只凭模型自报目标通过独立检查 | FR-09/12/20/26/29 |
 | AC-25 | 两份同名 benchmark fixture manifest、一个方法论文／版本引用 | 来源 ID、release、citation_key 与内容 hash 分别保留；未知书目信息不虚构，报告不按名字合并 | FR-10/14/31/32 |
 
 ## 3. 编译与评测的必需微型 fixture
@@ -57,11 +57,11 @@ FR-11 当前内置样例验收：直接复用 OPT-Agent 的九组2033条题面�
 - [x] 域与界：binary、整数实数边界、null 界、lower>upper、重复 ID、NaN 拒绝。
 - [x] 多最优解：不以解向量与某个参考解完全相等作为唯一成功条件。
 - [x] infeasible：A≥2 且 A≤1；unbounded：max A 且 A≥0，无上界。
-- [x] 遗漏域：用 LP 解冒充要求整数的原问题，候选 optimal 但独立检查失败。
+- [x] 遗漏域：用 LP 解冒充要求整数的原问题，模型 optimal 但独立检查失败。
 - [x] 遗漏约束：删除一个资源约束，代码成功但独立业务可行性失败。
-- [x] 目标偶合：要求 A≤1，候选允许 A≤2，目标恒为 0；目标一致仍不证明模型等价。
+- [x] 目标偶合：要求 A≤1，模型允许 A≤2，目标恒为 0；目标一致仍不证明模型等价。
 - [x] 目标数值相同但单位不同：未声明的缩放映射不自动修正。
-- [x] 利润绑定交换：候选 max 2A+3B 得 A=2/B=3、自报 13；原目标 3A+2B 为 12。独立可行检查通过，但原目标质量检查失败。
+- [x] 利润绑定交换：模型 max 2A+3B 得 A=2/B=3、自报 13；原目标 3A+2B 为 12。独立可行检查通过，但原目标质量检查失败。
 
 - [x] 原 Formulation 正确但 Code 错系数；Code 忠实实现错误 Formulation；两类失败的来源分别记录。安装方法objective_offset错系数与修正阶段来源（method_decoder／repair_stage）已在插件与修正套件覆盖。
 - [x] 一次调用联合输出两阶段，阶段轨迹共享 call_id，账本只记一次；修改 Formulation 后旧 Code 不复用。真实证据：S08-B九格Direct各行1 attempt同时产出两阶段；修正后旧Code不复用由修正套件验证。
@@ -115,7 +115,7 @@ S07-D 的上述原问题反例与证据分层已在本机验收，见 [实现记
 
 ## S05-C1 开发验收记录
 
-公共候选评估、父子来源链、共享预算和最终执行复用见 [实现记录](development/s05-public-candidates.md)。该组件关联AC-06/07/09/12；修正与声明变化由 [S05-C2](development/s05-feedback-repair.md)验证，澄清由 [S05-D2](development/s05-clarification.md)验证。完整平台发布与独立审阅仍待完成，AC不因单个组件而自动勾选。
+公开检查、父子来源链、共享预算和最终执行复用见 [实现记录](development/s05-public-candidates.md)。该组件关联AC-06/07/09/12；修正与声明变化由 [S05-C2](development/s05-feedback-repair.md)验证，澄清由 [S05-D2](development/s05-clarification.md)验证。完整平台发布与独立审阅仍待完成，AC不因单个组件而自动勾选。
 
 S03-C2的独立任务／评估器及冻结身份见 [记录](development/s03-task-registry.md)；完整发布清单不因此自动勾选。
 

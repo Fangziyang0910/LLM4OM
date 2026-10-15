@@ -147,7 +147,7 @@ class InstalledExecutionTests(unittest.TestCase):
 
     def test_installed_pair_is_admitted_and_actually_constructs_and_solves(self):
         path = self.run_installed_pair()
-        solve = json.loads((path / "candidates/001/solve-result.json").read_text())
+        solve = json.loads((path / "checks/001/solve-result.json").read_text())
         self.assertEqual(solve["objective_value"], 13)
         self.assertEqual(solve["solver_id"], "llm4om.examples.checking_highs")
         self.assertEqual(solve["model_backend"], "llm4om.examples.renaming_pyomo")
@@ -190,8 +190,8 @@ class InstalledExecutionTests(unittest.TestCase):
         artifact["problem_ref"].update(sha256=hashlib.sha256(raw).hexdigest(), size_bytes=len(raw))
         (self.inputs / "model-artifact.json").write_text(json.dumps(artifact))
         path = self.run_installed_pair()
-        result = json.loads((path / "candidates/001/solve-result.json").read_text())
-        solution = json.loads((path / "candidates/001/solution.json").read_text())["variables"]
+        result = json.loads((path / "checks/001/solve-result.json").read_text())
+        solution = json.loads((path / "checks/001/solution.json").read_text())["variables"]
         self.assertAlmostEqual(result["objective_value"], 40 / 3)
         self.assertAlmostEqual(solution["qty_A"], 8 / 3)
         self.assertAlmostEqual(solution["qty_B"], 8 / 3)
@@ -313,12 +313,12 @@ print(json.dumps({'runtime':runtime,'result':result}))
         result = self.cli("run", "--problem", str(self.inputs / "problem.json"), "--config", str(config), "--output", str(self.root / "runs"))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         path = Path(json.loads(result.stdout)["bundle_path"])
-        solve = json.loads((path / "candidates/001/solve-result.json").read_text())
+        solve = json.loads((path / "checks/001/solve-result.json").read_text())
         self.assertEqual(solve["objective_value"], 13)
         self.assertEqual(solve["effective_options"]["fixture_component"], "selected_decisions")
-        decision_map = json.loads((path / "candidates/001/decision-map.json").read_text())["decisions"]
+        decision_map = json.loads((path / "checks/001/decision-map.json").read_text())["decisions"]
         self.assertTrue(all(name.startswith("selected_decisions[") for name in decision_map.values()))
-        code = json.loads((path / "candidates/001/code-artifact.json").read_text())
+        code = json.loads((path / "checks/001/code-artifact.json").read_text())
         self.assertEqual(code["provenance"]["origin"], "method_generated")
 
     def test_installed_native_pair_constructs_and_reads_mps_before_actual_gurobi_solve(self):
@@ -336,11 +336,11 @@ print(json.dumps({'runtime':runtime,'result':result}))
         result = self.cli("run", "--problem", str(self.inputs / "problem.json"), "--config", str(config), "--output", str(self.root / "runs"))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         path = Path(json.loads(result.stdout)["bundle_path"])
-        solve = json.loads((path / "candidates/001/solve-result.json").read_text())
+        solve = json.loads((path / "checks/001/solve-result.json").read_text())
         self.assertEqual(solve["objective_value"], 13)
         self.assertEqual(solve["solver_id"], "llm4om.examples.checking_gurobi")
         self.assertEqual(solve["effective_options"]["fixture_component"], "selected_native")
-        self.assertTrue((path / "candidates/001/native-model.mps").is_file())
+        self.assertTrue((path / "checks/001/native-model.mps").is_file())
 
     def test_installed_native_pair_is_used_by_coe_target_factory_and_independent_collector(self):
         import hashlib

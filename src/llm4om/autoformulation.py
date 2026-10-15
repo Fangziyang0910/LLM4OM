@@ -21,7 +21,7 @@ STAGES = ("parameters", "decision_variables", "objective", "equality_constraints
 
 
 def equivalent_models(left: dict[str, Any], right: dict[str, Any]) -> bool:
-    """Only prune proven equivalence; unknown SMT results retain both candidates."""
+    """Only prune proven equivalence; unknown SMT results retain both proposals."""
     import z3
 
     left_vars = {entry["id"]: entry["domain"] for entry in left["variables"]}
@@ -66,7 +66,7 @@ class SearchNode:
     expanded: bool = False
     visits: int = 0
     reward_sum: float = 0
-    candidate_id: str | None = None
+    check_id: str | None = None
     terminal_reward: float | None = None
 
 
@@ -152,10 +152,10 @@ class AutoFormulationMethod:
             ir = deepcopy(value["structured_ir"])
             if set(ir) != {"problem_type", "variables", "objective", "constraints", "assumptions"}:
                 raise RunError("invalid_method_reply", "code", "Grounded LPIR contains unsupported or missing fields.")
-            candidate_id = f"{len(evaluated) + 1:03d}"
+            check_id = f"{len(evaluated) + 1:03d}"
             provenance = {**SOURCE, "origin": "mcts_selected_hypotheses", "node_id": node.node_id,
                 "call_ids": [call["call_id"] for call in session.calls], "ir_relationship": "grounded_from_selected_hypotheses"}
-            ir.update(schema_version="0.1.0", ir_kind="grounded_lp", model_id="autoformulation-ir-" + candidate_id,
+            ir.update(schema_version="0.1.0", ir_kind="grounded_lp", model_id="autoformulation-ir-" + check_id,
                 problem_id=problem["problem_id"], problem_revision=problem["revision"], data_bindings=session.bindings, provenance=provenance)
             # Symbolic code is constructed from validated affine IR, never LLM Python.
             validated = True
@@ -167,37 +167,37 @@ class AutoFormulationMethod:
                 validated = False
             for previous, previous_id, reward in evaluated:
                 if validated and previous is not None and equivalent_models(previous, ir):
-                    node.candidate_id, node.terminal_reward = previous_id, reward
-                    pruned.append({"node_id": node.node_id, "equivalent_candidate_id": previous_id, "reason": "smt_proven_equivalent"})
+                    node.check_id, node.terminal_reward = previous_id, reward
+                    pruned.append({"node_id": node.node_id, "equivalent_check_id": previous_id, "reason": "smt_proven_equivalent"})
                     return reward
-            formulation = {"schema_version": "0.2.0", "formulation_id": "autoformulation-formulation-" + candidate_id,
+            formulation = {"schema_version": "0.2.0", "formulation_id": "autoformulation-formulation-" + check_id,
                 "problem_id": problem["problem_id"], "problem_revision": problem["revision"], "representation_kind": "five_element",
                 "representation": value["representation"], "structured_ir_ref": {}, "data_bindings": session.bindings, "provenance": provenance}
-            artifact = {"schema_version": "0.2.0", "artifact_id": "autoformulation-artifact-" + candidate_id,
+            artifact = {"schema_version": "0.2.0", "artifact_id": "autoformulation-artifact-" + check_id,
                 "problem_ref": {"sha256": context.problem_sha256}, "formulation_ref": {}, "code_ref": None,
                 "data_bindings": session.bindings, "assumptions": ir["assumptions"], "requirement_traces": [],
                 "diagnostics": [], "warnings": [], "optional_views": [], "provenance": provenance,
                 "stage_status": {"formulation": {"status": "available", "reason": None},
                     "code": {"status": "pending", "reason": "Deterministic compilation has not run."}}}
-            assessment = await session.resources.assess(candidate_id, ModelProposal(artifact, formulation, ir))
+            checked = await session.resources.check(check_id, ModelProposal(artifact, formulation, ir))
             judgment = json_reply(await session.complete("evaluate.complete", "Evaluate whether the complete formulation "
                 "faithfully models every public requirement. Solver success verifies execution, not semantic correctness. "
                 "Do not compare objective values between different models. Return JSON {score:number,reason:string}, score in [0,1].",
-                {**session.inputs, "selected_hypotheses": node.partial, "formulation": value["representation"], "solver_feedback": assessment}))
+                {**session.inputs, "selected_hypotheses": node.partial, "formulation": value["representation"], "solver_feedback": checked}))
             if not isinstance(judgment, dict) or not isinstance(judgment.get("reason"), str):
                 raise RunError("invalid_method_reply", "formulation", "Complete self-evaluation needs a score and reason.")
-            reward = _score(judgment.get("score")) if not assessment["diagnostics"] and assessment["has_primal_solution"] else 0
-            if not assessment["diagnostics"] and assessment["solve_result_ref"] is not None:
-                legal[candidate_id] = reward
-            evaluated.append((ir if validated else None, candidate_id, reward))
-            node.candidate_id, node.terminal_reward = candidate_id, reward
-            session.record("rewards.json", {"candidates": legal, "latest_judgment": judgment})
+            reward = _score(judgment.get("score")) if not checked["diagnostics"] and checked["has_primal_solution"] else 0
+            if not checked["diagnostics"] and checked["solve_result_ref"] is not None:
+                legal[check_id] = reward
+            evaluated.append((ir if validated else None, check_id, reward))
+            node.check_id, node.terminal_reward = check_id, reward
+            session.record("rewards.json", {"checks": legal, "latest_judgment": judgment})
             return reward
 
         for _ in range(self.config["rollouts"]):
             context.cancellation.check()
             remaining = session.resources.remaining_budget()
-            if any(remaining[key] <= 0 for key in ("candidates", "solver_calls", "llm_attempts", "total_tokens", "wall_time_s")):
+            if any(remaining[key] <= 0 for key in ("checks", "solver_calls", "llm_attempts", "total_tokens", "wall_time_s")):
                 break
             path = [nodes[0]]
             try:
@@ -224,7 +224,7 @@ class AutoFormulationMethod:
             return MethodOutcome("exhausted", None, None)
         selected = max(legal, key=lambda key: legal[key])
         return session.resources.select(selected, rule="mcts-public-semantic-reward/0.1.0",
-            reason=f"Selected trusted legal candidate {selected} with the highest public formulation self-evaluation score ({legal[selected]:g}).")
+            reason=f"Selected trusted legal check {selected} with the highest public formulation self-evaluation score ({legal[selected]:g}).")
 
 
 class AutoFormulationFactory:
@@ -236,7 +236,7 @@ class AutoFormulationFactory:
             config_schema={"type": "object", "properties": {"rollouts": {"type": "integer", "minimum": 1, "maximum": 20},
                 "branching": {"type": "integer", "minimum": 1, "maximum": 8},
                 "exploration": {"type": "number", "minimum": 0, "maximum": 10}}, "additionalProperties": False})
-        manifest["capabilities"].update(method_profile="grounded_candidates/0.1.0", data_access="full", supports_checkpoint=False)
+        manifest["capabilities"].update(method_profile="grounded_checked/0.2.0", data_access="full", supports_checkpoint=False)
         return manifest
 
     def create(self, config: dict[str, Any]) -> AutoFormulationMethod:

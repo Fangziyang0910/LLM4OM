@@ -29,7 +29,7 @@ executor:
 budget:
   max_llm_attempts: 30
   max_total_tokens: 300000
-  max_candidates: 4
+  max_checks: 4
   max_repairs: 3
   max_solver_calls: 12
   wall_time_s: 1800

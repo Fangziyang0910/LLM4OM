@@ -23,7 +23,7 @@ class CoERunTests(RunHarness):
         self.assertIn("return a ModelHandle",json.dumps(requests[5]))
         ledger=json.loads((path/"budget-ledger.json").read_text())
         self.assertEqual((ledger["solver_calls"],ledger["repairs"]),(2,1))
-        self.assertEqual(json.loads((path/"method/selection.json").read_text())["candidate_id"],"002")
+        self.assertEqual(json.loads((path/"method/selection.json").read_text())["check_id"],"002")
 
     def test_generated_return_value_cannot_manufacture_a_trusted_solution(self):
         _,bundle,_=self.run_case("coe",method_replies("coe","def build_model(data): return 13"),
@@ -46,7 +46,7 @@ class CoERunTests(RunHarness):
         source="import time\ndef build_model(data):\n    time.sleep(100)\n"
         path,bundle,_=self.run_case("coe",method_replies("coe",source),expected="cancelled",cancel=True)
         self.assertEqual(bundle["error"]["code"],"run_cancelled")
-        execution=json.loads((path/"candidates/001/execution.json").read_text())
+        execution=json.loads((path/"checks/001/execution.json").read_text())
         self.assertEqual(execution["status"],"cancelled")
         self.assertTrue(execution["container_id"])
         self.assertNotEqual(subprocess.run(["docker","inspect",execution["container_id"]],capture_output=True).returncode,0)

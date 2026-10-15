@@ -35,7 +35,7 @@ export function RuntimeDetails({ snapshot }: { snapshot: Snapshot | null | undef
             [
               ["模型尝试", "llm_attempts", "max_llm_attempts"],
               ["外部模型请求", "external_llm_requests"],
-              ["候选", "candidates", "max_candidates"],
+              ["公开检查", "checks", "max_checks"],
               ["求解", "solver_calls", "max_solver_calls"],
             ] as [string, string, string?][]
           ).map(([label, key, limit]) => (
@@ -64,7 +64,7 @@ export function RuntimeDetails({ snapshot }: { snapshot: Snapshot | null | undef
       </Card>
       {solve || execution ? (
         <Card
-          title="最终候选的求解与执行"
+          title="最终选择的求解与执行"
           subtitle="耗时与资源按记录来源分别呈现；Gap保留求解器报告原值。"
           className="model-card runtime-card"
         >
@@ -73,7 +73,7 @@ export function RuntimeDetails({ snapshot }: { snapshot: Snapshot | null | undef
               ["求解器", solve?.solver_id || "未提供"],
               ["终止状态", solve ? status(solve.termination) : "未提供"],
               ["原始状态", solve?.raw_status || "未提供"],
-              ["候选模型可行解", solve ? (solve.has_primal_solution ? "有" : "无") : "未提供"],
+              ["模型可行解", solve ? (solve.has_primal_solution ? "有" : "无") : "未提供"],
               ["目标值", shown(solve?.objective_value)],
               ["最优界", shown(solve?.best_bound)],
               ["报告 Gap", shown(solve?.reported_gap)],

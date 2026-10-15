@@ -30,8 +30,8 @@ class GurobiRunTests(unittest.TestCase):
     def test_grounded_pyomo_gurobi_real_container(self):
         path, bundle = self.run_case()
         self.assertEqual(bundle['status'], 'completed', bundle.get('error'))
-        solve = json.loads((path / 'candidates/001/solve-result.json').read_text())
-        solution = json.loads((path / 'candidates/001/solution.json').read_text())
+        solve = json.loads((path / 'checks/001/solve-result.json').read_text())
+        solution = json.loads((path / 'checks/001/solution.json').read_text())
         self.assertEqual((solve['termination'], solve['objective_value'], solution['variables']),
                          ('optimal', 13, {'qty_A': 3, 'qty_B': 2}))
         self.assertEqual(solve['evidence_origin'], 'trusted_container_worker')
@@ -47,7 +47,7 @@ class GurobiRunTests(unittest.TestCase):
             path, bundle = self.run_case(offline)
             self.assertEqual(bundle['error']['code'], 'capability_mismatch')
             ledger = json.loads((path / 'budget-ledger.json').read_text())
-            self.assertEqual((ledger['candidates'], ledger['external_llm_requests'], ledger['solver_calls']), (0, 0, 0))
+            self.assertEqual((ledger['checks'], ledger['external_llm_requests'], ledger['solver_calls']), (0, 0, 0))
 
     def save_config(self):
         path = self.inputs / 'gurobi.yaml'
@@ -70,7 +70,7 @@ class GurobiRunTests(unittest.TestCase):
         self.serve_candidate('python_factory', (ROOT / 'examples/factories/production.py').read_text())
         path, bundle = self.run_cli()
         self.assertEqual(bundle['status'], 'completed', bundle.get('error'))
-        result = json.loads((path / 'candidates/001/solve-result.json').read_text())
+        result = json.loads((path / 'checks/001/solve-result.json').read_text())
         self.assertEqual(result['objective_value'], 13)
         # New public revision, same source template: resource capacity now allows A=2, B=2.
         raw = (self.inputs / 'data/capacities.csv').read_bytes().replace(b'8', b'6')
@@ -84,8 +84,8 @@ class GurobiRunTests(unittest.TestCase):
         (self.inputs / 'problem.json').write_text(json.dumps(problem))
         path, bundle = self.run_cli()
         self.assertEqual(bundle['status'], 'completed', bundle.get('error'))
-        self.assertEqual(json.loads((path / 'candidates/001/solve-result.json').read_text())['objective_value'], 10)
-        self.assertEqual((path / 'candidates/001/model.py').read_text(), self.source)
+        self.assertEqual(json.loads((path / 'checks/001/solve-result.json').read_text())['objective_value'], 10)
+        self.assertEqual((path / 'checks/001/model.py').read_text(), self.source)
 
     def test_native_gurobi_retains_source_and_uses_independent_sdk(self):
         source = (ROOT / 'examples/factories/production_gurobi.py').read_text()
@@ -94,17 +94,17 @@ class GurobiRunTests(unittest.TestCase):
         self.serve_candidate('native_gurobipy', source)
         path, bundle = self.run_cli()
         self.assertEqual(bundle['status'], 'completed', bundle.get('error'))
-        result = json.loads((path / 'candidates/001/solve-result.json').read_text())
+        result = json.loads((path / 'checks/001/solve-result.json').read_text())
         self.assertEqual((result['objective_value'], result['raw_status'], result['best_bound']), (13, '2', 13))
-        self.assertEqual((path / 'candidates/001/model.py').read_text(), source)
-        self.assertTrue((path / 'candidates/001/native-model.mps').is_file())
-        code = json.loads((path / 'candidates/001/code-artifact.json').read_text())
+        self.assertEqual((path / 'checks/001/model.py').read_text(), source)
+        self.assertTrue((path / 'checks/001/native-model.mps').is_file())
+        code = json.loads((path / 'checks/001/code-artifact.json').read_text())
         self.assertEqual((code['representation_kind'], code['provenance']['origin']), ('native_code', 'method_generated'))
-        formulation = json.loads((path / 'candidates/001/formulation.json').read_text())
+        formulation = json.loads((path / 'checks/001/formulation.json').read_text())
         self.assertIsNone(formulation['structured_ir_ref'])
-        view = json.loads((path / 'candidates/001/factory-instance.json').read_text())
+        view = json.loads((path / 'checks/001/factory-instance.json').read_text())
         self.assertEqual(view['provenance']['origin'], 'native_exported_instance')
-        self.assertEqual(json.loads((path / 'candidates/001/solution.json').read_text())['variables'], {'qty_A': 3, 'qty_B': 2})
+        self.assertEqual(json.loads((path / 'checks/001/solution.json').read_text())['variables'], {'qty_A': 3, 'qty_B': 2})
 
     def test_native_quadratic_mps_cannot_bypass_the_trusted_collector(self):
         source = (ROOT / 'examples/factories/production_gurobi.py').read_text()
@@ -115,7 +115,7 @@ class GurobiRunTests(unittest.TestCase):
         path, bundle = self.run_cli()
         self.assertEqual(bundle['error']['code'], 'unsupported_native_structure')
         self.assertIsNone(bundle['solve_result_ref'])
-        self.assertEqual((path / 'candidates/001/model.py').read_text(), source)
+        self.assertEqual((path / 'checks/001/model.py').read_text(), source)
 
     def test_native_stdout_and_construction_limits_cannot_create_solver_results(self):
         source = (ROOT / 'examples/factories/production_gurobi.py').read_text()
@@ -133,4 +133,4 @@ class GurobiRunTests(unittest.TestCase):
                 path, bundle = self.run_cli()
                 self.assertEqual(bundle['error']['code'], code)
                 self.assertIsNone(bundle['solve_result_ref'])
-                self.assertEqual((path / 'candidates/001/model.py').read_text(), changed)
+                self.assertEqual((path / 'checks/001/model.py').read_text(), changed)

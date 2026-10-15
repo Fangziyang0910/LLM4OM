@@ -413,10 +413,27 @@ def report_experiment(output: Path) -> dict[str, Any]:
                 group[field] = {status: sum(row.get('evaluation', {}).get(field, {}).get('status', 'not_available') == status for row in selected)
                     for status in sorted({row.get('evaluation', {}).get(field, {}).get('status', 'not_available') for row in selected})}
             groups.append(group)
+    pass_at_k = []
+    for cell in snapshot['cells']:
+        if cell['status'] == 'excluded':
+            continue
+        cases: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            if row['task_id'] == cell['task_id'] and row['configuration_id'] == cell['configuration_id']:
+                cases.setdefault(row['case_id'], []).append(row)
+        entry: dict[str, Any] = {'task_id': cell['task_id'], 'configuration_id': cell['configuration_id'],
+                                 'protocol_id': cell['protocol_id'], 'k': snapshot['repeats']}
+        for metric in METRICS:
+            eligible = [runs for runs in cases.values() if any(row[metric + '_denominator'] for row in runs)]
+            numerator = sum(any(row[metric + '_numerator'] for row in runs) for runs in eligible)
+            entry.update({metric + '_numerator': numerator, metric + '_denominator': len(eligible),
+                          metric + '_rate': numerator / len(eligible) if eligible else None})
+        pass_at_k.append(entry)
     summary = {'schema_version': '0.1.0', 'experiment_id': snapshot['experiment_id'], 'groups': groups,
+               'pass_at_k': pass_at_k,
                'excluded_cells': [cell for cell in snapshot['cells'] if cell['status'] == 'excluded'],
                'budget': snapshot['budget'], 'reserved_run_caps': state['reserved'], 'elapsed_s': state.get('elapsed_s'),
-               'policy': 'Groups keep protocol/source/config/repeat separate. Mock is engineering evidence; assisted results require a separate human-assisted comparison. Unknown costs/tokens are null. Unfinished and failed jobs retain frozen denominators.'}
+               'policy': 'Groups keep protocol/source/config/repeat separate. Mock is engineering evidence; assisted results require a separate human-assisted comparison. Unknown costs/tokens are null. Unfinished and failed jobs retain frozen denominators. pass_at_k counts a case once if any of its k independent repeats succeeds; repairs inside one run are not samples.'}
     reporters = resolve_reporters(snapshot['reporters'], 'experiment', expected=snapshot['reporter_bindings'])
     refs, errors = render_reports(reporters, {'id': snapshot['experiment_id'], 'rows': rows, 'summary': summary},
         'experiment', lambda name, raw, ref: publish_report(output, name, raw, ref))

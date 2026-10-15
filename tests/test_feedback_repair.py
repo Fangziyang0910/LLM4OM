@@ -30,7 +30,7 @@ class FeedbackRepairTests(unittest.TestCase):
             key: ir[key] for key in ("problem_type", "variables", "objective", "constraints", "assumptions")}}
         self.settings = yaml.safe_load((self.inputs / "solve.yaml").read_text())
         self.settings["method"]["plugin_id"] = "llm4om.methods.feedback_repair"
-        self.settings["budget"].update(max_llm_attempts=3, max_total_tokens=30000, max_candidates=3,
+        self.settings["budget"].update(max_llm_attempts=3, max_total_tokens=30000, max_checks=3,
                                       max_repairs=2, max_solver_calls=3, wall_time_s=90)
 
     def run_responses(self, responses: list[dict | str], *, crash_script: str | None = None) -> tuple[Path, dict, list[dict]]:
@@ -79,21 +79,21 @@ class FeedbackRepairTests(unittest.TestCase):
                       "change_reason": "Restore the declared decision ID and keep both resource constraints."}
         path, bundle, requests = self.run_responses([invalid, correction])
         self.assertEqual(bundle["status"], "completed", bundle.get("error"))
-        self.assertEqual(bundle["final_candidate_id"], "002")
+        self.assertEqual(bundle["selected_check_id"], "002")
         self.assertEqual(len(requests), 2)
         feedback = json.loads(requests[1]["messages"][-1]["content"])["feedback"]
-        self.assertEqual(feedback["assessment"]["diagnostics"][0]["code"], "invalid_ir")
-        child = json.loads((path / "candidates/002/candidate.json").read_text())
+        self.assertEqual(feedback["checked"]["diagnostics"][0]["code"], "invalid_ir")
+        child = json.loads((path / "checks/002/record.json").read_text())
         self.assertEqual(child["parent_ids"], ["001"])
         self.assertIn("keep both", child["change_reason"])
         solve = json.loads((path / bundle["solve_result_ref"]["relative_path"]).read_text())
         self.assertEqual(solve["objective_value"], 13)
         ledger = json.loads((path / "budget-ledger.json").read_text())
-        self.assertEqual((ledger["external_llm_requests"], ledger["candidates"], ledger["repairs"], ledger["solver_calls"]), (2, 2, 1, 1))
-        parent = json.loads((path / "candidates/001/formulation-snapshot.json").read_text())
+        self.assertEqual((ledger["external_llm_requests"], ledger["checks"], ledger["repairs"], ledger["solver_calls"]), (2, 2, 1, 1))
+        parent = json.loads((path / "checks/001/formulation-snapshot.json").read_text())
         child_artifact = json.loads((path / bundle["model_artifact_ref"]["relative_path"]).read_text())
         self.assertNotEqual(parent["formulation_ref"], child_artifact["formulation_ref"])
-        changes = json.loads((path / "candidates/002/formulation-changes.json").read_text())
+        changes = json.loads((path / "checks/002/formulation-changes.json").read_text())
         self.assertEqual(changes["ir_changed_sections"], ["objective"])
 
     def test_zero_repairs_keeps_invalid_attempt_and_returns_explicit_exhaustion(self) -> None:
@@ -104,19 +104,19 @@ class FeedbackRepairTests(unittest.TestCase):
         self.assertEqual(bundle["status"], "failed")
         self.assertEqual(bundle["error"]["code"], "method_exhausted")
         self.assertEqual(len(requests), 1)
-        self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["candidates"], 1)
+        self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["checks"], 1)
 
     def test_malformed_generation_is_a_counted_parent_with_private_raw_reply(self) -> None:
         correction = {**self.compact, "repair_stage": "formulation", "change_reason": "Replace invalid JSON with the complete public mathematical output."}
         path, bundle, requests = self.run_responses(["MALFORMED-RAW-RESPONSE-SENTINEL {", correction])
         self.assertEqual(bundle["status"], "completed", bundle.get("error"))
-        self.assertEqual(bundle["final_candidate_id"], "002")
-        parent = json.loads((path / "candidates/001/assessment.json").read_text())
+        self.assertEqual(bundle["selected_check_id"], "002")
+        parent = json.loads((path / "checks/001/check.json").read_text())
         self.assertEqual(parent["diagnostics"][0]["code"], "invalid_json")
         self.assertEqual(parent["diagnostics"][0]["origin"], "method_decoder")
         self.assertEqual(parent["status"], "invalid")
         ledger = json.loads((path / "budget-ledger.json").read_text())
-        self.assertEqual((ledger["candidates"], ledger["repairs"], ledger["external_llm_requests"]), (2, 1, 2))
+        self.assertEqual((ledger["checks"], ledger["repairs"], ledger["external_llm_requests"]), (2, 1, 2))
         for file in path.rglob("*"):
             if file.is_file():
                 self.assertNotIn(b"MALFORMED-RAW-RESPONSE-SENTINEL", file.read_bytes())
@@ -141,10 +141,10 @@ class FeedbackRepairTests(unittest.TestCase):
         self.settings["budget"]["max_repairs"] = 1
         path, bundle, requests = self.run_responses([invalid, removed])
         self.assertEqual(bundle["status"], "failed")
-        self.assertIsNone(bundle["final_candidate_id"])
-        child = json.loads((path / "candidates/002/assessment.json").read_text())
+        self.assertIsNone(bundle["selected_check_id"])
+        child = json.loads((path / "checks/002/check.json").read_text())
         self.assertEqual(child["diagnostics"][0]["code"], "requirement_coverage_lost")
-        changes = json.loads((path / "candidates/002/formulation-changes.json").read_text())
+        changes = json.loads((path / "checks/002/formulation-changes.json").read_text())
         self.assertEqual(changes["requirements_lost"], ["R-FINISHING"])
         self.assertEqual(changes["constraint_ids_removed"], ["capacity_finishing"])
         self.assertEqual(len(requests), 2)
@@ -159,7 +159,7 @@ class FeedbackRepairTests(unittest.TestCase):
             "repair_stage": "code", "change_reason": "Fix Python syntax while retaining the original mathematical formulation."}
         path, bundle, requests = self.run_responses([first, second])
         self.assertEqual(bundle["status"], "completed", bundle.get("error"))
-        parent = json.loads((path / "candidates/001/formulation-snapshot.json").read_text())
+        parent = json.loads((path / "checks/001/formulation-snapshot.json").read_text())
         child = json.loads((path / bundle["model_artifact_ref"]["relative_path"]).read_text())
         self.assertEqual(child["formulation_ref"], parent["formulation_ref"])
         code = json.loads((path / child["code_ref"]["relative_path"]).read_text())
@@ -184,9 +184,9 @@ class FeedbackRepairTests(unittest.TestCase):
         second["representation"]["variables"][0]["domain"] = "continuous"
         path, bundle, requests = self.run_responses([first, second])
         self.assertEqual(bundle["status"], "failed")
-        assessment = json.loads((path / "candidates/002/assessment.json").read_text())
+        assessment = json.loads((path / "checks/002/check.json").read_text())
         self.assertEqual(assessment["diagnostics"][0]["code"], "invalid_code_repair")
-        self.assertEqual(json.loads((path / "candidates/002/formulation-changes.json").read_text())["changed_sections"], ["variables"])
+        self.assertEqual(json.loads((path / "checks/002/formulation-changes.json").read_text())["changed_sections"], ["variables"])
         self.assertEqual(len(requests), 2)
         self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["solver_calls"], 1)
 
@@ -201,7 +201,7 @@ class FeedbackRepairTests(unittest.TestCase):
             "repair_stage": "code", "change_reason": "Correct the Python source while preserving the source mathematical formulation."}
         path, bundle, requests = self.run_responses([first, second])
         self.assertEqual(bundle["status"], "completed", bundle.get("error"))
-        parent = json.loads((path / "candidates/001/formulation-snapshot.json").read_text())
+        parent = json.loads((path / "checks/001/formulation-snapshot.json").read_text())
         child = json.loads((path / bundle["model_artifact_ref"]["relative_path"]).read_text())
         self.assertEqual(child["formulation_ref"], parent["formulation_ref"])
         solve = json.loads((path / bundle["solve_result_ref"]["relative_path"]).read_text())
@@ -209,7 +209,7 @@ class FeedbackRepairTests(unittest.TestCase):
         self.assertEqual(len(requests), 2)
 
     def test_crash_before_method_accepts_assessment_replays_without_credentials_or_more_budget(self) -> None:
-        self.settings["budget"].update(max_candidates=1, max_repairs=0, max_llm_attempts=1, max_solver_calls=1)
+        self.settings["budget"].update(max_checks=1, max_repairs=0, max_llm_attempts=1, max_solver_calls=1)
         script = '''import json, os, sys
 from pathlib import Path
 from llm4om.cli import main
@@ -218,7 +218,7 @@ def crash(source, target, *args, **kwargs):
     result = replace(source, target, *args, **kwargs)
     if Path(target).name == "events.jsonl" and "history" not in Path(target).parts:
         record = json.loads(Path(target).read_text().splitlines()[-1])
-        if record.get("kind") == "candidate_assessed":
+        if record.get("kind") == "check_finished":
             os._exit(91)
     return result
 os.replace = crash
@@ -227,7 +227,7 @@ sys.exit(main())'''
         self.assertEqual(bundle["status"], "completed", bundle.get("error"))
         self.assertEqual(len(requests), 1)
         ledger = json.loads((path / "budget-ledger.json").read_text())
-        self.assertEqual((ledger["candidates"], ledger["solver_calls"], ledger["external_llm_requests"]), (1, 1, 1))
+        self.assertEqual((ledger["checks"], ledger["solver_calls"], ledger["external_llm_requests"]), (1, 1, 1))
 
     def test_legitimate_infeasibility_is_selectable_without_deleting_constraints(self) -> None:
         import hashlib
@@ -246,7 +246,7 @@ sys.exit(main())'''
         self.assertEqual(solve["termination"], "infeasible")
         self.assertFalse(solve["has_primal_solution"])
         self.assertEqual(len(requests), 1)
-        self.assertEqual(bundle["final_candidate_id"], "001")
+        self.assertEqual(bundle["selected_check_id"], "001")
 
     def test_pending_unknown_request_does_not_resend_on_method_resume(self) -> None:
         script = '''import json, os, sys

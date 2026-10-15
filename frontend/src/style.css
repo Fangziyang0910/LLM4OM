@@ -911,8 +911,7 @@ details textarea {
   margin: 22px 0;
   background: var(--sage-98);
 }
-.candidate-card,
-.candidate-selection,
+.stage-history,
 .runtime-card {
   grid-column: 1 / -1;
 }
@@ -952,53 +951,21 @@ details textarea {
   margin-top: 4px;
   color: var(--muted);
 }
-.candidate-selection,
-.final-candidate {
-  border-color: var(--sage-79);
-  background: var(--sage-98);
-}
-.candidate-reason {
-  margin: 12px 0;
-  line-height: 1.8;
-}
-.candidate-stages {
+.stage-history ol {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin: 18px 0;
+  margin: 0;
+  padding-left: 18px;
 }
-.candidate-stages > div {
-  padding: 12px;
-  background: var(--sage-94);
-  border-radius: var(--radius-lg);
-}
-.candidate-stages span,
-.candidate-stages strong {
-  display: block;
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-.candidate-stages span {
-  color: var(--muted);
-  margin-bottom: 5px;
-}
-.candidate-result {
+.stage-history li {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 0;
-  border-top: 1px solid var(--line);
+  align-items: center;
+  gap: 8px;
 }
-.candidate-diagnostic {
-  color: var(--red-46);
-  margin: 12px 0;
-}
-.candidate-changes {
-  margin: 15px 0;
-}
-.candidate-changes table {
-  margin-top: 15px;
+.stage-history button.active {
+  border-color: var(--sage-79);
+  background: var(--sage-98);
 }
 .decision-explorer summary {
   font-size: 14px;

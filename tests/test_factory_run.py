@@ -149,7 +149,7 @@ class FactoryRunTests(unittest.TestCase):
         self.assertEqual(bundle["error"]["code"], "factory_exception")
         self.assertIn("OSError", bundle["error"]["message"])
         self.assertIsNone(bundle["solve_result_ref"])
-        self.assertEqual((path / "candidates/001/model.py").read_text(), source)
+        self.assertEqual((path / "checks/001/model.py").read_text(), source)
         self.assertIsNotNone(bundle["model_artifact_ref"])
         self.assertEqual(bundle["stages"]["formulation"]["status"], "available")
         self.assertEqual(bundle["stages"]["code"]["status"], "available")
@@ -160,7 +160,7 @@ class FactoryRunTests(unittest.TestCase):
         package = project / "src/llm4om_fixture_method"
         manifest = json.loads((package / "manifest.json").read_text())
         manifest["plugin_id"] = "test.methods.parameterized"
-        manifest["capabilities"]["method_profile"] = "factory_single_candidate/0.1.0"
+        manifest["capabilities"]["method_profile"] = "factory_single/0.2.0"
         manifest["capabilities"]["execution_modes"] = ["container"]
         manifest["config_schema"] = {"type": "object", "properties": {"binding": {"enum": ["current", "stale", "bad_hash", "future"]}},
                                      "required": ["binding"], "additionalProperties": False}
@@ -191,7 +191,7 @@ class Method:
             bound[0]["sha256"] = "0" * 64
         digest = "0" * 64 if self.config["binding"] == "bad_hash" else hashlib.sha256(source.encode()).hexdigest()
         version = "99.0.0" if self.config["binding"] == "future" else "0.1.0"
-        return MethodOutcome("candidate_selected", "001", ModelProposal(artifact, formulation,
+        return MethodOutcome("selected", "001", ModelProposal(artifact, formulation,
                              code=FactoryCodeProposal(source, digest, bound, version)))
 class Factory:
     def describe(self):
@@ -232,14 +232,14 @@ print(json.dumps({"bundle_path": str(result.bundle_path)}))
             capture_output=True, text=True, timeout=30)
         self.assertEqual(doctor.returncode, 0, doctor.stdout + doctor.stderr)
         declaration = json.loads(doctor.stdout)["execution_plan"]
-        self.assertEqual(declaration["method_profile"], "factory_single_candidate/0.1.0")
+        self.assertEqual(declaration["method_profile"], "factory_single/0.2.0")
         self.assertEqual(declaration["packages"]["Pyomo"], "6.10.1")
         self.assertFalse((self.root / "runs").exists())
         path, bundle = self.run_installed_sdk()
         self.assertEqual(bundle["status"], "completed", bundle["error"])
         plan = json.loads((path / bundle["admission_plan_ref"]["relative_path"]).read_text())
         self.assertEqual(plan["method"]["origin"]["kind"], "installed")
-        self.assertEqual(plan["method_profile"], "factory_single_candidate/0.1.0")
+        self.assertEqual(plan["method_profile"], "factory_single/0.2.0")
         self.assertIsNone(plan["compiler_id"])
         solve = json.loads((path / bundle["solve_result_ref"]["relative_path"]).read_text())
         self.assertEqual(solve["objective_value"], 13)
@@ -250,8 +250,8 @@ print(json.dumps({"bundle_path": str(result.bundle_path)}))
                 path, bundle = self.run_installed_sdk()
                 self.assertEqual(bundle["error"]["code"], code)
                 self.assertIsNone(bundle["solve_result_ref"])
-                self.assertTrue((path / "candidates/001/model.py").exists())
-                self.assertTrue((path / "candidates/001/supplied-formulation.json").exists())
+                self.assertTrue((path / "checks/001/model.py").exists())
+                self.assertTrue((path / "checks/001/supplied-formulation.json").exists())
                 self.assertEqual(json.loads((path / "budget-ledger.json").read_text())["llm_attempts"], 0)
 
     def test_factory_rejects_nonlinear_domains_bad_handles_maps_and_exceptions(self):
@@ -274,7 +274,7 @@ print(json.dumps({"bundle_path": str(result.bundle_path)}))
                 self.assertEqual(bundle["error"]["code"], expected)
                 self.assertIsNone(bundle["solve_result_ref"])
                 self.assertIsNotNone(bundle["execution_result_ref"])
-                self.assertEqual((path / "candidates/001/model.py").read_text(), changed)
+                self.assertEqual((path / "checks/001/model.py").read_text(), changed)
                 self.assertEqual(bundle["stages"]["formulation"]["status"], "available")
                 self.assertEqual(bundle["stages"]["code"]["status"], "available")
 
@@ -288,7 +288,7 @@ print(json.dumps({"bundle_path": str(result.bundle_path)}))
         self.assertEqual(bundle["status"], "completed", bundle["error"])
         solve = json.loads((path / bundle["solve_result_ref"]["relative_path"]).read_text())
         self.assertEqual(solve["objective_value"], 20)
-        view = json.loads((path / "candidates/001/factory-instance.json").read_text())
+        view = json.loads((path / "checks/001/factory-instance.json").read_text())
         self.assertEqual(view["objective"]["expression"]["constant"], 7)
         self.assertEqual(view["constraints"][0]["expression"]["constant"], 5)
 
@@ -343,7 +343,7 @@ print(json.dumps({"bundle_path": str(result.bundle_path)}))
                 self.assertEqual(bundle["error"]["code"], expected)
                 self.assertIsNone(bundle["solve_result_ref"])
                 self.assertIsNotNone(bundle["execution_result_ref"])
-                self.assertEqual((path / "candidates/001/model.py").read_text(), source)
+                self.assertEqual((path / "checks/001/model.py").read_text(), source)
                 self.assertEqual(bundle["stages"]["code"]["status"], "available")
 
     def test_factory_continuous_lp_uses_the_existing_real_solver_path(self):
@@ -359,7 +359,7 @@ print(json.dumps({"bundle_path": str(result.bundle_path)}))
         solution = json.loads((path / solve["solution_ref"]["relative_path"]).read_text())
         self.assertAlmostEqual(solution["variables"]["qty_A"], 8/3)
         self.assertAlmostEqual(solution["variables"]["qty_B"], 8/3)
-        self.assertEqual(json.loads((path / "candidates/001/factory-instance.json").read_text())["problem_type"], "lp")
+        self.assertEqual(json.loads((path / "checks/001/factory-instance.json").read_text())["problem_type"], "lp")
 
     def test_factory_cannot_write_through_the_trusted_collectors_stdout(self):
         source = (ROOT / "examples/factories/production.py").read_text()
@@ -369,4 +369,4 @@ print(json.dumps({"bundle_path": str(result.bundle_path)}))
         self.assertEqual(bundle["error"]["code"], "factory_exception")
         self.assertIn("PermissionError", bundle["error"]["message"])
         self.assertIsNone(bundle["solve_result_ref"])
-        self.assertEqual((path / "candidates/001/model.py").read_text(), source)
+        self.assertEqual((path / "checks/001/model.py").read_text(), source)

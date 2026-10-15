@@ -77,13 +77,13 @@ class MethodContext(Protocol):
 
 Context 中不存在 Evaluator、EvaluationOracle 或原始完整 EvaluationCase；内部方法不能自行构造 Provider 绕过 Gateway。角色模型选择经 `llm.complete(request, role="critic")` 等请求，由实验配置控制，记录具体角色和模型。当前主要调用通用外部 LLM；专用训练模型未来通过同一 Provider／model 配置接入。
 
-MethodOutcome 的 `status` 为 `candidate_selected | needs_input | failed | exhausted`。包含最终 candidate_id（可空）、公开 candidates 引用、诊断、ClarificationRequest（可空）及 opaque checkpoint（可空）。checkpoint 必须可序列化、版本化；不能 pickle 任意运行对象以假装可移植。
+MethodOutcome 的 `status` 为 `selected | needs_input | failed | exhausted`。包含最终 check_id（可空）、公开检查引用、诊断、ClarificationRequest（可空）及 opaque checkpoint（可空）。checkpoint 必须可序列化、版本化；不能 pickle 任意运行对象以假装可移植。
 
 `supports_checkpoint=false` 的方法必须拒绝非空 checkpoint。checkpoint 引用其方法版本、公开输入 hash、配置 hash 与预算／事件位置。恢复经过应用层兼容校验后传入，不要求核心解释方法内部状态。
 
-MethodEvent 记录 `stage=formulation|code|selection`、candidate_id、阶段输入／输出引用和 call_ids。一次调用联合产生两阶段输出时，两份阶段记录可引用同一 call_id；账本按真实 attempt_id 计费，不重复计量。方法可在 Code／Solve 的公开反馈后返回 Formulation；不强制两个独立方法入口或固定两次调用。
+MethodEvent 记录 `stage=formulation|code|selection`、check_id、阶段输入／输出引用和 call_ids。一次调用联合产生两阶段输出时，两份阶段记录可引用同一 call_id；账本按真实 attempt_id 计费，不重复计量。方法可在 Code／Solve 的公开反馈后返回 Formulation；不强制两个独立方法入口或固定两次调用。
 
-ExecutionGateway 最小方法为 `async execute_candidate(candidate_ref) -> ExecutionResult`，使用 run 已锁定的表示转换、后端、求解参数与执行配置，负责预算和结果记录。它提供公开编译／执行／求解反馈，不调用隐藏 benchmark 评分。方法可以按需要执行中间候选；最终阶段复用配置一致的已有记录或补齐执行，见 DD-01/02。
+ExecutionGateway 最小方法为 `async execute_model(artifact_ref) -> ExecutionResult`，使用 run 已锁定的表示转换、后端、求解参数与执行配置，负责预算和结果记录。它提供公开编译／执行／求解反馈，不调用隐藏 benchmark 评分。方法可以按需要执行中间候选；最终阶段复用配置一致的已有记录或补齐执行，见 DD-01/02。
 
 最终候选由方法根据公开证据选择，评分开始前冻结。评估器不得在全部候选中用隐藏正确答案挑选最好结果；若报告 oracle-best，应独立列作诊断指标而非默认成功率。
 
@@ -130,11 +130,11 @@ Case 包含公开问题、dataset manifest 引用及私有 `oracle_ref`。Oracle
 
 reference_objective 可记录 `quality_label=optimal|best_known|feasible_reference|unknown` 及其求解／验证证据。TaskAdapter 依据实际参考记录确定标签，不从文件名或字段名推断最优性。缺乏最优性证据的参考保留其质量语义，见评测协议。
 
-### 3.4 Candidate / ModelArtifact / 阶段输出
+### 3.4 公开检查记录 / ModelArtifact / 阶段产物
 
-Candidate 必需：`candidate_id`、`run_id`、`parent_ids`、`sequence_no`、`artifact_ref`、`created_by`、`status`。`created_by` 包含方法／版本／variant_id、call_ids、提示 hash 与角色；候选状态为 proposed／invalid／executed／rejected／selected，求解终止状态另存。
+表述阶段产物与代码阶段产物分别由 ModelArtifact 的 `formulation_ref` 与 `code_ref` 引用。只改代码的修正复用父检查的 `formulation_ref`，因此同一表述阶段产物保持同一引用。每次公开检查保存检查记录 `checks/<check_id>/record.json`，必需：`check_id`、`run_id`、`parent_ids`、`sequence_no`、`change_reason`、`artifact_ref`、`created_by`、`status`。`created_by` 包含方法／版本／variant_id、call_ids、提示 hash 与修正阶段；状态为 proposed／invalid／executed／selected，求解终止状态另存。检查结果为 `checks/<check_id>/check.json`，最终选择为 `selection.json`（check_id、rule、reason、check_ref）。
 
-ModelArtifact 是整个候选建模输出的共同封装：
+ModelArtifact 是建模输出的共同封装：
 
 | 字段 | 含义 |
 |---|---|
@@ -230,7 +230,7 @@ LLMResponse 包含 provider request ID、模型实际标识（可未知）、原
 
 ## 5. 预算与候选选择契约
 
-预算字段至少包括 max_llm_attempts、max_total_tokens、max_candidates、max_repairs、max_solver_calls、wall_time_s、max_concurrency。调用／候选／并发 admission 由核心原子计数；多 Agent 共享 run 预算，不能各自重复分配全额。
+预算字段至少包括 max_llm_attempts、max_total_tokens、max_checks、max_repairs、max_solver_calls、wall_time_s、max_concurrency。调用／候选／并发 admission 由核心原子计数；多 Agent 共享 run 预算，不能各自重复分配全额。
 
 Token 阈值采用发送前估算＋最大输出预留和响应后结算；估算、未知供应方用量、最后一次调用越界分别报告。调用次数可严格限制，token／费用不能在供应方信息不足时伪称绝对硬上限。新调用必须在剩余预算不足时拒绝；未知结果保守占用预留，不直接当零。
 
@@ -240,7 +240,7 @@ Token 阈值采用发送前估算＋最大输出预留和响应后结算；估�
 
 ## 6. 错误、取消与版本校验
 
-统一 PluginError 包含 `code`、`stage`、`message`、`retryable`、`plugin_id`、`run_id`、`candidate_id`、`details_ref`。标准 code：CONFIG_INVALID、CAPABILITY_MISMATCH、DEPENDENCY_MISSING、AUTH_ERROR、RATE_LIMIT、PROVIDER_TIMEOUT、BUDGET_EXHAUSTED、DATA_INVALID、ARTIFACT_INVALID、COMPILATION_ERROR、EXECUTION_TIMEOUT、EXECUTION_OOM、SOLVER_ERROR、ORACLE_UNAVAILABLE、EVALUATION_ERROR、CHECKPOINT_INCOMPATIBLE、CANCELLED。
+统一 PluginError 包含 `code`、`stage`、`message`、`retryable`、`plugin_id`、`run_id`、`check_id`、`details_ref`。标准 code：CONFIG_INVALID、CAPABILITY_MISMATCH、DEPENDENCY_MISSING、AUTH_ERROR、RATE_LIMIT、PROVIDER_TIMEOUT、BUDGET_EXHAUSTED、DATA_INVALID、ARTIFACT_INVALID、COMPILATION_ERROR、EXECUTION_TIMEOUT、EXECUTION_OOM、SOLVER_ERROR、ORACLE_UNAVAILABLE、EVALUATION_ERROR、CHECKPOINT_INCOMPATIBLE、CANCELLED。
 
 业务模型 infeasible 是 SolveResult；不自动包装成 SolverError。缺少参考答案是证据 not_available；评估器程序抛异常才是 EVALUATION_ERROR。未知插件异常保留脱敏 traceback 并转为稳定错误，不能使其他 run 退出。
 
@@ -278,7 +278,9 @@ run-id/
   dataset-manifest.json
   budget-ledger.json
   events.jsonl
-  candidates/<candidate-id>/
+  checks/<check-id>/
+    record.json
+    check.json              # when the method requested the check
     artifact.json
     formulation.json
     structured-ir.json       # when available
@@ -287,6 +289,7 @@ run-id/
     build.json
     execution.json
     solve-result.json
+  selection.json            # when the method selected a check
   evaluation.json
   reports/report.md
 ```
@@ -297,9 +300,9 @@ run-id/
 
 应用入口为 `run_problem(problem: Path, config: Path, *, offline=False, output_root=None) -> RunResult`；RunResult 包含 run_id、bundle_path 和 status。CLI 要求显式 `--offline`。此入口读取文件型 ProblemSpec／RunConfig；对象型 SDK、完整 MethodContext、Registry 和真实资源接口按后续切片落实。
 
-`bundle.json` 使用 0.2.0，包含 run_id、mode=`offline_mock`、status=`artifact_ready|failed`、stages、error、model_artifact_ref、execution_plan 和 artifacts。artifact_ready 表示工程产物已保存，不是 MethodOutcome 的 candidate_selected，更不是求解完成；Candidate 仍为 proposed。error 为 null 或 `{code, stage, message}`；执行计划分别保存请求插件与实际 not_available 状态。所有 ArtifactRef 均以运行目录为 namespace 根，manifest 不包含自引用。
+`bundle.json` 使用 0.2.0，包含 run_id、mode=`offline_mock`、status=`artifact_ready|failed`、stages、error、model_artifact_ref、execution_plan 和 artifacts。artifact_ready 表示工程产物已保存，不是 MethodOutcome 的 selected，更不是求解完成；检查记录仍为 proposed。error 为 null 或 `{code, stage, message}`；执行计划分别保存请求插件与实际 not_available 状态。所有 ArtifactRef 均以运行目录为 namespace 根，manifest 不包含自引用。
 
-离线结构评估使用公开默认协议：Formulation 的字段和绑定检查通过时为 structural pass；Code 与语义检查为 not_available。严格 IR 此时只验证引用和数据绑定，完整编译语义归 S02-A。预算账本记录 Mock attempt／candidate 数量、external_llm_requests=0、solver_calls=0、total_tokens=null 和 cost=0；它不声称已实现外部预算预留或墙钟中断。
+离线结构评估使用公开默认协议：Formulation 的字段和绑定检查通过时为 structural pass；Code 与语义检查为 not_available。严格 IR 此时只验证引用和数据绑定，完整编译语义归 S02-A。预算账本记录 Mock attempt／公开检查数量、external_llm_requests=0、solver_calls=0、total_tokens=null 和 cost=0；它不声称已实现外部预算预留或墙钟中断。
 
 失败输入在存储可写时留下 bundle；存储错误由 SDK 抛出 OSError，CLI 返回退出码 2 和不含输入值的 store_unavailable。公开输入保留边界错误码，详细命令与 profile 见 [S01 实现记录](development/s01-offline-run.md)。
 
@@ -309,13 +312,13 @@ run-id/
 
 RunConfig 可以显式选择 trusted_local，config 为空对象；container 由 S04-A 实际执行，也可离线回放，不会自动降级。solve extra 提供 Pyomo／HiGHS，缺失依赖或零 Solver 预算在 Mock 前拒绝。当前 Solver options 只支持 time_limit_s，实际容差和原生数值阈值随结果保存。
 
-真实 bundle mode 为 trusted_local，执行完成为 completed；termination 与 primal 可用性由 SolveResult 分别表达。增加 solve_result_ref、execution_result_ref 和 final_candidate_id；执行错误仍保存已完成阶段。编译前快照与最终候选分别保存，旧事件引用不可失效。Code 的编译检查通过不推导 semantic_validation 通过；infeasible／unbounded 是实际结果。ExecutionResult 的 exit_code、CPU 与内存未测量时为 null。solver_calls 计 Solver 适配器尝试，外部 LLM 请求仍为零；容器资源限制由 S04-A 实施；当前取消／恢复与固定预算见 S04-B；完整多方法／batch 预算仍按后续切片落实。
+真实 bundle mode 为 trusted_local，执行完成为 completed；termination 与 primal 可用性由 SolveResult 分别表达。增加 solve_result_ref、execution_result_ref 和 selected_check_id；执行错误仍保存已完成阶段。编译前快照与最终候选分别保存，旧事件引用不可失效。Code 的编译检查通过不推导 semantic_validation 通过；infeasible／unbounded 是实际结果。ExecutionResult 的 exit_code、CPU 与内存未测量时为 null。solver_calls 计 Solver 适配器尝试，外部 LLM 请求仍为零；容器资源限制由 S04-A 实施；当前取消／恢复与固定预算见 S04-B；完整多方法／batch 预算仍按后续切片落实。
 
 ### S03 已落实的方法 profile 与预检子集
 
-SDK 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对象，S03-A／B初始版本只装载method；SDK0.18.0的Provider扩展见第23节。Manifest 的 capabilities.method_profile 为 grounded_single_candidate/0.1.0；plugin_version 当前为稳定 major.minor.patch，contract_range 为 `>=X.Y.Z,<A.B.C` 并包含核心契约 0.2.0。config_schema 自包含，允许本地片段引用，暂不接受 $id 或远程 $ref／$dynamicRef；dependencies.python 为分发包名称列表，记录已安装版本。source 暂不接受额外 ArtifactRef，研究 URL／固定版本／变体等文字元数据可保存。
+SDK 的 entry point 分组 llm4om.plugins 导出 describe／create(config) 对象，S03-A／B初始版本只装载method；SDK0.18.0的Provider扩展见第23节。Manifest 的 capabilities.method_profile 为 grounded_single/0.2.0；plugin_version 当前为稳定 major.minor.patch，contract_range 为 `>=X.Y.Z,<A.B.C` 并包含核心契约 0.2.0。config_schema 自包含，允许本地片段引用，暂不接受 $id 或远程 $ref／$dynamicRef；dependencies.python 为分发包名称列表，记录已安装版本。source 暂不接受额外 ArtifactRef，研究 URL／固定版本／变体等文字元数据可保存。
 
-当前 async run 返回内存 MethodOutcome：status=candidate_selected、final_candidate_id=001、proposal=ModelProposal(artifact, formulation, structured_ir)。核心验证原问题 hash／revision、声明的 Formulation 和数据绑定，生成实际引用与候选记录；多 revision／原生脚本资源见第 14 节，内部 checkpoint 扩展见第 12 节。MethodContext 提供 llm、只读公开 data／预算上限和 problem_sha256，以及可选运行资源。LLMResponse 提供 text、call_id、evidence_origin、source_sha256，以及可选 finish_reason；真实 Provider 完整 usage 与身份保存在 Gateway trace。
+当前 async run 返回内存 MethodOutcome：status=selected、selected_check_id=001、proposal=ModelProposal(artifact, formulation, structured_ir)。核心验证原问题 hash／revision、声明的 Formulation 和数据绑定，生成实际引用与候选记录；多 revision／原生脚本资源见第 14 节，内部 checkpoint 扩展见第 12 节。MethodContext 提供 llm、只读公开 data／预算上限和 problem_sha256，以及可选运行资源。LLMResponse 提供 text、call_id、evidence_origin、source_sha256，以及可选 finish_reason；真实 Provider 完整 usage 与身份保存在 Gateway trace。
 
 doctor 与 run 共用 prepare_run；先验证参数，再匹配当前表示、目标类型、Backend／Solver、Provider 功能和 Executor，再检查分发包与真实求解依赖。缺失能力为未知；请求的资源须被方法声明，当前表示 profile 固定，不能靠枚举并集暗示 native_code 可用。allowed_problem_types 缺省 lp／milp，实际 IR 类型在产出后再次核对。真实运行保存 admission_plan_ref；离线计划只准备回放，不标记 Code／Solve 已执行。未知方法异常与 SystemExit 转为稳定错误和脱敏 frame，原错误参数／源码行与插件 Python 输出不进入公开结果。
 
@@ -405,9 +408,9 @@ preflight validates and records the resolved declaration. Other installed factor
 this same seam, or a static factory profile. Old factories without it retain their existing
 Manifest behavior. Core does not inspect method IDs or plugin-specific config keys.
 
-`factory_single_candidate/0.1.0` requires five-element Formulation, python_factory, Pyomo,
+`factory_single/0.2.0` requires five-element Formulation, python_factory, Pyomo,
 HiGHS, public data only, and container execution. Both `doctor` and `run` reject offline or
-trusted_local before generation. Grounded profile stays `grounded_single_candidate/0.1.0`.
+trusted_local before generation. Grounded profile stays `grounded_single/0.2.0`.
 The compiler selection is required only for grounded LPIR. It is unused for supplied Code;
 admission records `compiler_id=null`, `code_origin=method_generated` for factories.
 S02-B introduced SDK/Worker 0.5.0; current tag is 0.6.0; core objects remain 0.2.0 and grounded LPIR 0.1.0.
@@ -425,7 +428,7 @@ code = FactoryCodeProposal(
     schema_version="0.1.0",
 )
 proposal = ModelProposal(artifact, formulation, code=code)
-return MethodOutcome("candidate_selected", "001", proposal)
+return MethodOutcome("selected", "001", proposal)
 ```
 
 Artifact input uses existing pending-Code envelope. Source Formulation has
@@ -463,7 +466,7 @@ prevent same-UID child access to collector memory and `/proc` parent fds. See [A
 
 The bundle retains original Formulation/Code, plus an `optional_views` reference to
 `factory-instance.json` and `decision-map.json`. Their origin is `factory_exported_instance`,
-with source hash, current bindings and problem revision. This is an extracted candidate
+with source hash, current bindings and problem revision. This is an extracted model
 instance, not original Formulation, deterministic compilation of supplied Python, or semantic
 proof. Code validation level is `factory_contract`; successful solver evidence remains
 `trusted_container_worker`. Structural checks and independently checked business semantics
@@ -487,7 +490,7 @@ RunConfig Solver IDs accept `llm4om.solvers.highs|llm4om.solvers.gurobi`; Backen
 or license parameters are admitted. Effective options and native numerical limits accompany results.
 
 The resolved grounded and Pyomo factory profiles may declare Gurobi; installed methods must declare
-it explicitly. `native_single_candidate/0.1.0` requires five_element Formulation, `native_code`,
+it explicitly. `native_single/0.2.0` requires five_element Formulation, `native_code`,
 gurobipy Backend, Gurobi Solver, public data only and container execution. Direct resolves this profile
 only for its declared `output_mode=native_gurobipy`. Core never infers plugin config or branches on
 method IDs. Both doctor and run use this compatibility/dependency seam before generation.
@@ -503,7 +506,7 @@ Neither original source nor Formulation is replaced by an LLM-written universal 
 `export(handle)` writes SDK MPS and maps explicit decision IDs to every unique scalar variable name.
 The child protocol contains base64 MPS bytes and mapping, never a solution. Names with whitespace
 are rejected for MPS transport. The trusted collector uses a fresh SDK environment/model to read,
-validate and optimize the native model; it does not call candidate optimize or read candidate X/ObjVal.
+validate and optimize the native model; it does not call generated-code optimize or read generated-code X/ObjVal.
 `ModelHandle` stays Worker-local. Supported native structure is single-objective linear LP/MILP;
 quadratic/general/nonlinear/multiobjective/scenario/SOS/PWL and semi-domains fail before optimization.
 Range slack variables must be explicitly mapped. SDK model constants, sense, bounds, types and linear rows are preserved in MPS transport. MPS cannot confer semantic equivalence to source or business requirements.
@@ -519,7 +522,7 @@ container results. The Worker protocol validates selected Solver, package versio
 primal consistency and fields. Raw status is the SDK integer rendered as a string. Statuses 2/3/4/5/9/11
 map to optimal/infeasible/infeasible_or_unbounded/unbounded/time_limit/interrupted; others remain unknown.
 SolCount gates primal/vector/objective. Unavailable or nonfinite bound/gap is null. Runtime is actual SDK
-Runtime. Options come from the platform, not candidate state or a model-file settings file.
+Runtime. Options come from the platform, not generated-code state or a model-file settings file.
 
 Selected Gurobi runtime packages are Pyomo/gurobipy; optional SDK discovery and bounded doctor probes
 record `solver_environment={availability,micro_model_verified,size_boundary_error}`. Availability is
@@ -681,7 +684,7 @@ class MethodResources(Protocol):
 ```
 
 SDK0.15.0 supplies public record/emit resources to admitted methods. Script
-execution remains restricted to the native-script profiles; candidate assessment
+execution remains restricted to the native-script profiles; public check
 uses the explicitly admitted profile in section 20. Context also carries the original absolute
 `deadline`; existing cancellation and save_checkpoint contracts remain.
 No hidden evaluator, credential or unrestricted host execution is supplied.
@@ -696,7 +699,7 @@ Execution feedback contains source exit/status/stdout/stderr, original source
 and data refs, untrusted capture refs, optional trusted solve_result_ref and
 collector_error. Source exit and collector status remain distinct. The raw
 script runs in a protected child inside the read-only, network-disabled Worker;
-its capture is a candidate transport. The fresh collector validates MPS,
+its capture is an untrusted transport. The fresh collector validates MPS,
 variable map and supported structure before solving through actual SDK APIs.
 Source text/stdout/capture attributes cannot assert trusted result fields.
 
@@ -896,7 +899,7 @@ structurally passed. Core completed-Code recovery verifies the nullable referenc
 and the actual Code/source/method/data identities. Earlier profiles retain their
 required Formulation contract. No method-ID branch is added to orchestration.
 
-CoE的当前reducer同时提供数学表述与模型工厂，通过候选assess／select执行所选Solver，见第22节。public_contract_data_id仍是可选公开输入；不再执行prob_*函数或生成额外测试实例。
+CoE的当前reducer同时提供数学表述与模型工厂，通过公开检查 check／select 执行所选Solver，见第22节。public_contract_data_id仍是可选公开输入；不再执行prob_*函数或生成额外测试实例。
 
 ## 19. S05-D1 role model routing (SDK 0.14.0)
 
@@ -922,64 +925,64 @@ outcome cannot produce a silent replay/resubmit. Credentials are resolved using
 the selected role's credential_env and literal .env fallback; completed replay
 needs no new credential and keeps its original call_id and accounting.
 
-## 20. S05-C1 public candidate assessment (SDK 0.15.0)
+## 20. S05-C1 public checks (SDK 0.15.0)
 
-`grounded_candidates/0.1.0` admits five-element Formulation plus grounded LPIR,
+`grounded_checked/0.2.0` admits five-element Formulation plus grounded LPIR,
 with the same explicit compiler, Pyomo backend and declared LP/MILP Solver matrix
-as the original grounded profile. The current real candidate assessment evidence
+as the original grounded profile. The current real public check evidence
 covers HiGHS in trusted_local and container modes. Generated factory/native Code
 and native-script feedback retain their existing profiles; they do not yet imply
-this multi-candidate assessment interface. Offline replay rejects this profile
+this multi-public check interface. Offline replay rejects this profile
 during preflight because it has no actual Solver execution.
 
 ```python
 class MethodResources(Protocol):
-    async def assess(self, candidate_id: str, proposal: ModelProposal, *,
+    async def check(self, check_id: str, proposal: ModelProposal, *,
                      parent_id: str | None = None,
                      change_reason: str | None = None) -> dict[str, Any]: ...
-    def select(self, candidate_id: str, *, rule: str, reason: str) -> MethodOutcome: ...
+    def select(self, check_id: str, *, rule: str, reason: str) -> MethodOutcome: ...
 ```
 
-Assessment admits one bounded candidate ID and charges the shared candidate count
-before parsing, compilation or execution. A repair requires an already assessed
+A public check admits one bounded check ID and charges the shared public check count
+before parsing, compilation or execution. A repair requires an already checked
 parent in this run and a nonempty public change_reason; it also charges max_repairs.
-`max_repairs=0` is valid. Root candidates and repairs share max_candidates; actual
+`max_repairs=0` is valid. Root checks and repairs share max_checks; actual
 Solver attempts share max_solver_calls and the original absolute deadline. Budget
-refusal before candidate admission creates no candidate and no extra Solver call.
+refusal before check admission creates no check and no extra Solver call.
 The existing LLM Gateway continues to own all actual LLM usage and reservations.
 
-Assessment0.1.0 returns candidate_id, proposal_sha256, the supplied public proposal
+Check0.1.0 returns check_id, proposal_sha256, the supplied public proposal
 text reference, status=`invalid|executed`, per-stage availability, actual artifact,
 execution and Solve references, has_primal_solution, termination and public stage
-diagnostics. Invalid output and its diagnostics remain in the candidate directory.
+diagnostics. Invalid output and its diagnostics remain in the check directory.
 The proposal hash binds the full declared proposal, parent and change reason;
-candidate IDs cannot be rebound. Candidate metadata records parent_ids, sequence,
+check IDs cannot be rebound. Check record metadata records parent_ids, sequence,
 actual method identity and change_reason. Supplied proposals are public modeling
 outputs; full raw Provider responses retain their existing private archive boundary.
 
 The common application machinery validates input hashes/revision/data bindings,
 Formulation and actual LPIR type, compiles Code and runs the admitted Solver.
 No hidden oracle or independent benchmark result is passed to the method. A
-trusted primal demonstrates candidate execution, not correctness for the original
-natural-language problem. Assessment diagnostics are engine observations; a
+trusted primal demonstrates model execution, not correctness for the original
+natural-language problem. Check diagnostics are engine observations; a
 method's change_reason and selection explanation are declared reasoning.
 
-Selection requires an assessed candidate with trusted completed Solver evidence
-and no assessment error. A legal infeasible/unbounded result can be selected; a
+Selection requires an checked proposal with trusted completed Solver evidence
+and no check error. A legal infeasible/unbounded result can be selected; a
 primal is not fabricated. The method declares rule and reason. The core preserves
-these in immutable candidate-selection0.1.0 and validates run membership. It does
-not infer mathematical optimality or compare objectives across candidate models.
-The selected MethodOutcome has proposal=null and the real candidate ID. The
-application reuses that candidate's verified execution without another Solver call.
-Original single-candidate outcomes keep their existing proposal and ID001 behavior.
+these in immutable selection0.1.0 and validates run membership. It does
+not infer mathematical optimality or compare objectives across checked models.
+The selected MethodOutcome has proposal=null and the real check ID. The
+application reuses that check's verified execution without another Solver call.
+Single-proposal outcomes keep their existing proposal; the platform performs check 001.
 
-Same-identity completed assessment replay verifies all referenced bytes and consumes
-no extra candidate/repair/Solver slot. Hard-exit recovery accepts a completed
-assessment publication receipt with matching proposal hash and candidate ID.
-An interrupted final-selection publication is verified against that assessment
+Same-identity completed public check replay verifies all referenced bytes and consumes
+no extra check/repair/Solver slot. Hard-exit recovery accepts a completed
+public check publication receipt with matching proposal hash and check ID.
+An interrupted final-selection publication is verified against that public check
 and frozen before method reentry; recovery does not ask the method to choose again.
 Methods need their declared versioned checkpoint to resume unfinished reasoning.
-An admitted assessment with no completed receipt is execution_outcome_unknown;
+An admitted public check with no completed receipt is execution_outcome_unknown;
 it is never automatically executed again. SDK/source/Worker identity checks stay
 strict across resume. SDK0.16.0 implements the feedback method and factory Code-only
 reuse in section21; SDK0.15.0 evidence remains version-specific.
@@ -988,32 +991,32 @@ reuse in section21; SDK0.15.0 evidence remains version-specific.
 
 The project-authored `llm4om.methods.feedback_repair` baseline reuses Direct's
 compact five-element output. Configuration keeps formulation_mode and output_mode;
-lp_ir uses grounded_candidates/0.1.0, python_factory uses factory_candidates/0.1.0,
-and native_gurobipy uses native_candidates/0.1.0. Factory profiles require container
-execution. Native candidates require gurobipy/Gurobi; unsupported matrices reject
-preflight before generation. Offline candidate profiles remain unsupported.
+lp_ir uses grounded_checked/0.2.0, python_factory uses factory_checked/0.2.0,
+and native_gurobipy uses native_checked/0.2.0. Factory profiles require container
+execution. Native checked profiles require gurobipy/Gurobi; unsupported matrices reject
+preflight before generation. Offline checked profiles remain unsupported.
 
-`MethodResources.remaining_budget()` returns remaining candidates, repairs,
+`MethodResources.remaining_budget()` returns remaining checks, repairs,
 solver_calls, llm_attempts, conservative total_tokens and wall_time_s. It reads the
 shared ledger and original deadline. Gateway still owns atomic LLM admission and
 unknown reservations; this view is not an independent allocation. The sequential
 baseline checks it before new generation. A pending request resumes only through
-Gateway's existing same-identity replay/unknown rules and assessment receipts.
+Gateway's existing same-identity replay/unknown rules and public check receipts.
 
-`GenerationFailure(call_id, response_sha256, code, stage, message)` extends assess's
+`GenerationFailure(call_id, response_sha256, code, stage, message)` extends check's
 proposal input. Supported decoder failures are invalid_json, invalid_object,
 invalid_method_outcome and llm_output_truncated; stage is formulation or code.
 The resource verifies that the response actually exists in its Gateway responses,
-and bounds the public diagnostic. It charges the candidate/repair just like a
+and bounds the public diagnostic. It charges the public check/repair just like a
 ModelProposal, stores diagnostic origin=method_decoder and leaves Formulation,
 Code and Solve unavailable. Raw reply text is not in the failure object, public
 checkpoint or repair prompt. This records a method decoder observation, not an
 independent semantic judgment. Transport/auth/unknown failures are not fabricated
-as malformed mathematical candidates.
+as malformed mathematical proposals.
 
 Repair requests use logical role=repair; the initial request uses formulation.
 The original public problem/data remain the generation input. Feedback contains
-the previous public assessment and declared output. A successful repair response
+the previous public check and declared output. A successful repair response
 adds repair_stage=formulation|code and a bounded nonempty change_reason. LPIR
 corrections declare formulation because LPIR is executable mathematical output.
 Factory Code-only repair may omit representation and reuse the previous source
@@ -1023,7 +1026,7 @@ the code label.
 The core checks Code-only Formulation/problem/revision/data identity against the
 parent's actual source Formulation reference. It reuses that exact reference;
 the new Code's generation provenance identifies the new actual call. Mathematical
-repairs receive a new Formulation reference and matching Code. Old single-candidate
+repairs receive a new Formulation reference and matching Code. Old single-proposal
 profiles do not activate the new Code-only parent semantics by a provenance label.
 
 Each modeled child saves formulation-changes0.1.0: changed five-element chapters,
@@ -1035,17 +1038,17 @@ Changed domains/objectives/coefficients remain observable with a change reason;
 preserved IDs do not certify correct natural-language modeling.
 
 Selection rule legal-primal-completeness-latest/0.1.0 prefers legal trusted primals,
-then available public stages and latest attempt. It does not compare candidate
+then available public stages and latest attempt. It does not compare checked
 objectives or use reference answers. A trusted legal infeasible/unbounded outcome
 can remain selected. The method stops on its first legal primal or shared limits.
-No legal candidate yields MethodOutcome exhausted and a saved method_exhausted
+No legal check yields MethodOutcome exhausted and a saved method_exhausted
 Run error/outcome; attempts remain public. Failed outcomes similarly retain
 method_failed, rather than being mislabeled invalid_method_outcome.
 
 The versioned method checkpoint stores a stable request_id, request_pending,
-assessments and public feedback. It is saved before requesting and after accepting
-an assessment. Replaying a completed but not yet accepted assessment consumes no
-extra call or candidate; completed primals are selected before any new generation.
+public checks and public feedback. It is saved before requesting and after accepting
+a public check. Replaying a completed but not yet accepted public check consumes no
+extra call or check; completed primals are selected before any new generation.
 Core selection receipt recovery freezes a completed choice before method reentry.
 No unknown admitted execution or LLM request is silently repeated. Existing
 cancellation, private archive and strict SDK/source/Worker identity rules apply.
@@ -1053,7 +1056,7 @@ cancellation, private archive and strict SDK/source/Worker identity rules apply.
 ## 22. S05-D2 clarification (SDK 0.17.0)
 
 MethodOutcome adds optional clarification. A needs_input outcome requires no
-selected candidate/proposal, declared supports_clarification and a saved versioned
+selected check/proposal, declared supports_clarification and a saved versioned
 method checkpoint. FeedbackRepair implements this capability; legacy manifests
 retain their own declarations. Direct's optional compact decoder accepts
 `{clarification:{questions:[...]}}` only when its caller enables clarification.
@@ -1092,7 +1095,7 @@ with the same problem_id and a changed revision. Revision data are validated/has
 checked before derived admission. The core uses its existing derived-run machinery:
 new run/deadline, lineage.operation=clarification_revision, public parent history
 copies, response reference and carried prior usage/unknown reservations. Parent
-problem, candidates, responses and scoring are not rewritten; a private derivation
+problem, stage artifacts, responses and scoring are not rewritten; a private derivation
 coordinator records the operation. Different content/answers cannot rebind the same
 request+problem+revision operation. Identical retries resume the existing child.
 Revised problems do not inherit stale confirmation records as fresh problem facts.
@@ -1147,7 +1150,7 @@ The platform's grounded Worker request includes ir, source_sha256, symbol_map, s
 
 scripts/build_worker_image.py accepts repeatable --plugin-wheel for explicitly trusted prebuilt wheels. It prevents SDK replacement and filename collisions, installs those wheels without resolving dependencies, and uses only wheels/locked requirements as Docker context. Additional dependencies must already be in the locked runtime. It never mounts host source or installs plugins during a run. Actual supported paths and evidence: [S03-C3a](development/s03-compiler-registry.md).
 
-The runtime probe uses a bounded output allowance of at least 64 KiB for admission metadata. Candidate execution retains the configured output limit. Malformed runtime envelopes remain executor_unavailable; absent/different compiler identities are compiler_unavailable.
+The runtime probe uses a bounded output allowance of at least 64 KiB for admission metadata. Model execution retains the configured output limit. Malformed runtime envelopes remain executor_unavailable; absent/different compiler identities are compiler_unavailable.
 
 ## 26. S03-C3b registered ModelBackend and SolverBackend (SDK 0.21.0)
 
@@ -1159,7 +1162,7 @@ Generated factories execute only in the isolated construction child. That child 
 
 Admission freezes full Backend/Solver Manifest, config, origin and applicable host package versions. Container hosts do not need unused numerical SDKs; the Worker checks declared dependencies, SDK availability and versions. Portable execution_identity excludes host numerical dependency packages while retaining executable package content, Manifest and config. Actual Worker package versions are bound by runtime/admission and immutable image ID. Grounded, factory and collector requests carry execution selections and execution_identity. Changed host bindings or Worker image identity cannot silently resume.
 
-Solver runtime and results require finite JSON, explicit version strings, declared result profiles, exact requested options and complete public decision keys. Exception text, plugin stdout and private error details are suppressed at the selected Solver interface. Numerical SDK version/evidence interpretation follows result_profile rather than third-party ID. The platform binds actual Solver/Backend plugin IDs after the selected adapters execute. Solve success is evidence about the candidate model, not formulation correctness.
+Solver runtime and results require finite JSON, explicit version strings, declared result profiles, exact requested options and complete public decision keys. Exception text, plugin stdout and private error details are suppressed at the selected Solver interface. Numerical SDK version/evidence interpretation follows result_profile rather than third-party ID. The platform binds actual Solver/Backend plugin IDs after the selected adapters execute. Solve success is evidence about the checked model, not formulation correctness.
 
 The SDK exports ModelBackend, NativeModelBackend, SolverBackend, their built-in factories, ExecutionResources and resolve_execution_resources. The public solvers.solve entry accepts optional config and backend_selection; solver_runtime/solver_packages can query an installed Solver with config. Trusted plugin wheels enter an immutable image at build time. Engineering examples and actual local support are recorded in [S03-C3b](development/s03-solver-registry.md); no general nonlinear support is claimed.
 
@@ -1277,13 +1280,13 @@ SDK0.31.0的内置HTTPTextFactory配置可增加proxy_url，值为无认证信�
 
 ## 22. Natural-language method expansion (2026-10-14)
 
-OptiMUS accepts natural-language input with `rag_mode: null`; paired params_data_id/labels_data_id remain optional public inputs. OptiMUS, CoE, OR-LLM-Agent and OptiTree use factory_candidates/0.1.0 with supplied native_formulation and python_factory or native_code. AutoFormulation retains grounded_candidates/0.1.0, five-element Formulation and strict LPIR. All five declare no internal continuation checkpoint. Completed output recovery follows the existing core phase protocol.
+OptiMUS accepts natural-language input with `rag_mode: null`; paired params_data_id/labels_data_id remain optional public inputs. OptiMUS, CoE, OR-LLM-Agent and OptiTree use factory_checked/0.2.0 with supplied native_formulation and python_factory or native_code. AutoFormulation retains grounded_checked/0.2.0, five-element Formulation and strict LPIR. All five declare no internal continuation checkpoint. Completed output recovery follows the existing core phase protocol.
 
 Model Backend Manifests may declare capabilities.code_generation={representation_kind, instruction}; representation_kind is python_factory or native_code and must belong to the Backend's input_artifact_kinds. MethodContext.code_target carries those admitted requirements plus model_backend, solver and solver_name. It contains no credentials or private reference material. The shared code prompt composes the Backend contract and Solver identity with each method's phase instructions. Methods generate build_model(data) factories; the platform invokes the configured Solver after isolated validation, rather than asking generated code to solve.
 
 Factory profiles admit supplied five_element or native_formulation representations according to the Method's declaration. They accept each supported code representation and Backend capability without a method-ID branch. The four prompt workflows declare both Pyomo and gurobipy construction paths and all three Solvers. Backend/Solver handle compatibility still rejects native gurobipy with HiGHS or OR-Tools. Default Web presets choose Pyomo/HiGHS and expose all three Solver choices.
 
-Public candidate assessment returns execution diagnostics and normalized Solver status. A valid infeasible or unbounded result does not trigger code debugging. Repair keeps the source Formulation and exact public bindings; parent relationships consume the shared repair budget. Selection reuses the saved assessment, without a second solve. CoE backward reflection can revise its mathematical contribution for the next reducer, retaining the feedback and parent candidate. Exhausted failures remain failures.
+The public check returns execution diagnostics and normalized Solver status. A valid infeasible or unbounded result does not trigger code debugging. Repair keeps the source Formulation and exact public bindings; parent relationships consume the shared repair budget. Selection reuses the saved assessment, without a second solve. CoE backward reflection can revise its mathematical contribution for the next reducer, retaining the feedback and parent check. Exhausted failures remain failures.
 
 The OR-Tools Solver consumes pyomo_linear/0.1.0 handles and declares ortools_api/0.1.0 results. The package version is bound to ortools, internal evidence is trusted_ortools_api, and container results retain trusted_container_worker. It uses MPSolver/SCIP for LP/MILP; supported options are finite nonnegative time_limit_s, rounded up to milliseconds, with zero returning time_limit without solving. Unknown bounds and gaps remain null. This contract does not admit native OR-Tools code, CP-SAT or routing models. See [actual support and adaptation differences](development/s06-method-expansion.md).
 
@@ -1306,3 +1309,20 @@ Those POST endpoints may privately supply X-LLM4OM-Provider-Key; public JSON sti
 After restart, POST /api/jobs/ID/resume or /edit resolves the saved run's Provider/base_url without requiring another key header. The same header remains an optional temporary override for page-key jobs. A default .env key is never forwarded to a different Provider/base_url. Pure compatibility doctor calls remain credential-free. See [behavior and evidence](development/s09-llm-settings.md).
 
 POST /api/llm-models accepts a public llm selection and optional llm_preset, plus the same private key header. It resolves the selected endpoint's credentials and uses the existing Provider models_get transport; a model ID is not required to read the directory. The result is models=[{id,name}] and has_more. Names come from the service's name or display_name, falling back to id; selections always write id into llm.model. OpenAI-compatible routes use GET /models; a base URL with path /compatible-mode/v1 uses the same origin's GET /api/v1/models?capabilities=TG&page_no=1&page_size=100. This DashScope response uses output.models[].model as the ID and output.total/page_no/page_size to report has_more. Messages uses its existing authentication and data[].display_name. Only one directory page is read, bounded by 10 seconds and 8 MiB, without generation or run creation. HTTP failures are sanitized and retain manual model input. The page automatically fetches for endpoints with saved/default credentials and supports an explicit refresh for a newly entered key. Late responses cannot replace the currently selected endpoint's list.
+
+## 25. Modeling process and public checks (2026-10-15)
+
+[ADR-0006](adr/0006-modeling-process-replaces-candidate.md) removes the candidate concept. Retries, repairs, checks and selection are modeling steps; Formulation and Code keep their own stage artifacts. Sections 20–21 use the current names below. Saved runs with the earlier layout are read only through the Web adapter; their checkpoints are not resumed.
+
+| Earlier name | Current name |
+|---|---|
+| `resources.assess(candidate_id, …)` | `resources.check(check_id, …)` |
+| `MethodOutcome("candidate_selected", final_candidate_id, …)` | `MethodOutcome("selected", selected_check_id, …)` |
+| `grounded/factory/native_single_candidate/0.1.0` | `grounded/factory/native_single/0.2.0` |
+| `grounded/factory/native_candidates/0.1.0` | `grounded/factory/native_checked/0.2.0` |
+| budget `max_candidates`, ledger `candidates` | `max_checks`, `checks` |
+| `candidates/<id>/candidate.json`, `assessment.json` | `checks/<id>/record.json`, `check.json` |
+| `candidate-selection.json`, bundle `final_candidate_id` | `selection.json`, bundle `selected_check_id` |
+| error `invalid_candidate` | `invalid_proposal` |
+
+Events: a completed public check emits `check_finished` (check_id, check_ref). The first saved final selection emits `selection_saved` (check_id, rule, reason); recovery of the same selection emits nothing. Single-proposal profiles still receive one platform check `001`. A code-only repair reuses the parent check's `formulation_ref`, so the Formulation stage artifact keeps its identity.

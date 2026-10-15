@@ -129,7 +129,7 @@ class RunHarness(unittest.TestCase):
             "config": {"base_url": f"http://127.0.0.1:{server.server_port}/v1", "credential_env": "RESEARCH_METHOD_TEST_KEY",
                 "max_retries": 0, "max_output_tokens": 2048}}
         config["budget"].update({"max_llm_attempts": 30, "max_total_tokens": 100000, "max_solver_calls": 4,
-            "max_candidates": 4, "max_repairs": 2, "wall_time_s": 150, **(budget or {})})
+            "max_checks": 4, "max_repairs": 2, "wall_time_s": 150, **(budget or {})})
         (root / "config.yaml").write_text(yaml.safe_dump(config))
         with patch.dict(os.environ, {"RESEARCH_METHOD_TEST_KEY": "fixture-not-a-real-key"}):
             result = run_problem(root / "problem.json", root / "config.yaml", output_root=root / "runs", cancellation=cancellation)
@@ -159,7 +159,7 @@ class ResearchMethodRunTests(RunHarness):
                     path, _, requests = self.run_case(method, solver=solver)
                     ledger = json.loads((path / "budget-ledger.json").read_text())
                     self.assertEqual(ledger["solver_calls"], 1)
-                    self.assertEqual(ledger["candidates"], 1)
+                    self.assertEqual(ledger["checks"], 1)
                     if method in ("optimus", "coe", "optitree", "or_llm_agent"):
                         self.assertIn("llm4om.solvers." + solver, json.dumps(requests))
                         report = json.loads((path / "method/fidelity-report.json").read_text())
@@ -174,7 +174,7 @@ class ResearchMethodRunTests(RunHarness):
         replies = [MATH, "raise ValueError('fixture runtime failure')", CODE]
         path, _, requests = self.run_case("or_llm_agent", replies, solver="ortools")
         ledger = json.loads((path / "budget-ledger.json").read_text())
-        self.assertEqual((ledger["solver_calls"], ledger["candidates"], ledger["repairs"]), (2, 2, 1))
+        self.assertEqual((ledger["solver_calls"], ledger["checks"], ledger["repairs"]), (2, 2, 1))
         self.assertIn("llm4om.solvers.ortools", json.dumps(requests[-1]))
         self.assertEqual(resume_run(path).status, "completed")
         self.assertEqual(len(requests), 3)

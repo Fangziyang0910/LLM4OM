@@ -126,19 +126,19 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     execution_mode = executor.mode
     capabilities = method.manifest["capabilities"]
     profile = capabilities.get("method_profile")
-    if profile not in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0", "factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0"):
+    if profile not in ("grounded_single/0.2.0", "grounded_checked/0.2.0", "factory_single/0.2.0", "factory_checked/0.2.0", "native_single/0.2.0", "native_checked/0.2.0", "native_script/0.1.0", "native_script/0.2.0"):
         raise RunError("capability_mismatch", "admission", "Method profile is not supported.")
-    if profile == "grounded_candidates/0.1.0" and offline:
-        raise RunError("capability_mismatch", "admission", "Candidate assessment requires an actual Solver execution plan.")
-    if profile in ("factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0") and (offline or execution_mode != "container"):
+    if profile == "grounded_checked/0.2.0" and offline:
+        raise RunError("capability_mismatch", "admission", "Public checks require an actual Solver execution plan.")
+    if profile in ("factory_single/0.2.0", "factory_checked/0.2.0", "native_single/0.2.0", "native_checked/0.2.0", "native_script/0.1.0", "native_script/0.2.0") and (offline or execution_mode != "container"):
         raise RunError("capability_mismatch", "admission", "Generated factories require container execution, including generation.")
-    if profile in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0") and "compiler" not in settings:
+    if profile in ("grounded_single/0.2.0", "grounded_checked/0.2.0") and "compiler" not in settings:
         raise RunError("invalid_config", "admission", "Grounded LPIR requires its explicit compiler.")
-    native = profile in ("native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0")
+    native = profile in ("native_single/0.2.0", "native_checked/0.2.0", "native_script/0.1.0", "native_script/0.2.0")
     allowed_types = settings.get("allowed_problem_types", ["lp", "milp"])
     execution = resolve_execution_resources(settings["model_backend"], settings["solver"], allowed_types, inventory=inventory,
         expected=expected.get("execution") if expected else None, check_dependencies=not offline and execution_mode != "container")
-    factory = profile in ("factory_single_candidate/0.1.0", "factory_candidates/0.1.0")
+    factory = profile in ("factory_single/0.2.0", "factory_checked/0.2.0")
     if factory:
         native = execution.backend_binding["manifest"]["capabilities"]["handle_profile"] == "gurobipy_linear/0.1.0"
     if not factory and execution.backend_binding["manifest"]["capabilities"]["handle_profile"] != ("gurobipy_linear/0.1.0" if native else "pyomo_linear/0.1.0"):
@@ -146,7 +146,7 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
     if ("native_code" if native else "python_factory") not in execution.backend_binding["manifest"]["capabilities"]["input_artifact_kinds"]:
         raise RunError("capability_mismatch", "admission", "Backend does not accept this Code representation.")
     compiler = resolve_compiler(settings["compiler"], settings["model_backend"]["plugin_id"], inventory=inventory,
-        expected=expected.get("compiler") if expected else None) if profile in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0") else None
+        expected=expected.get("compiler") if expected else None) if profile in ("grounded_single/0.2.0", "grounded_checked/0.2.0") else None
     if compiler is not None:
         packages.update(compiler.binding["packages"])
     required = {"method_profile": profile,
@@ -240,8 +240,8 @@ def prepare_run(settings: dict[str, Any], *, offline: bool = False, config_dir: 
             packages.update(local_runtime["packages"])
     return AdmissionPlan(method, {"schema_version": "0.2.0", "mode": "offline_mock" if offline else execution_mode,
         "method": {"manifest": method.manifest, "origin": method.origin},
-        "method_profile": profile, "method_cancellation": capabilities.get("cancellation", "unknown"), "code_origin": "method_generated" if profile in ("factory_single_candidate/0.1.0", "factory_candidates/0.1.0", "native_single_candidate/0.1.0", "native_candidates/0.1.0", "native_script/0.1.0", "native_script/0.2.0") else "deterministic_compilation",
-        "compiler_id": settings["compiler"]["plugin_id"] if profile in ("grounded_single_candidate/0.1.0", "grounded_candidates/0.1.0") else None, "model_backend_id": settings["model_backend"]["plugin_id"],
+        "method_profile": profile, "method_cancellation": capabilities.get("cancellation", "unknown"), "code_origin": "method_generated" if profile in ("factory_single/0.2.0", "factory_checked/0.2.0", "native_single/0.2.0", "native_checked/0.2.0", "native_script/0.1.0", "native_script/0.2.0") else "deterministic_compilation",
+        "compiler_id": settings["compiler"]["plugin_id"] if profile in ("grounded_single/0.2.0", "grounded_checked/0.2.0") else None, "model_backend_id": settings["model_backend"]["plugin_id"],
         "compiler": compiler.binding if compiler else None,
         "data_loader": data_loader.binding, "data_view": data_loader.limits,
         "execution": {"model_backend": execution.backend_binding, "solver": execution.solver_binding},

@@ -20,7 +20,7 @@ function parseConfig(raw: string): RunConfig {
       (value.llm.config.base_url !== undefined && typeof value.llm.config.base_url !== "string") ||
       !object(value.budget) || !["method", "model_backend", "solver", "executor", "store"].every(key =>
         object(value[key]) && typeof (value[key] as { plugin_id?: unknown }).plugin_id === "string") ||
-      !["max_llm_attempts", "max_total_tokens", "max_candidates", "max_repairs", "max_solver_calls", "wall_time_s", "max_concurrency"].every(key =>
+      !["max_llm_attempts", "max_total_tokens", "max_checks", "max_repairs", "max_solver_calls", "wall_time_s", "max_concurrency"].every(key =>
         typeof value.budget[key] === "number" && Number.isFinite(value.budget[key])))
     throw new Error("请提供完整的运行配置、模型和有效的预算数值。");
   return value;

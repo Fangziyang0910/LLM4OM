@@ -72,7 +72,7 @@ return manifest'''
         if mode != 'grounded':
             native = mode == 'native_gurobipy'
             capabilities = f'''manifest['capabilities'].update(
-    method_profile={'native_single_candidate/0.1.0' if native else 'factory_single_candidate/0.1.0'!r},
+    method_profile={'native_single/0.2.0' if native else 'factory_single/0.2.0'!r},
     code_representations={['native_code' if native else 'python_factory']!r},
     model_backends={['llm4om.model_backends.gurobipy' if native else 'llm4om.model_backends.pyomo_factory']!r},
     solvers={['llm4om.solvers.gurobi' if native else 'llm4om.solvers.highs']!r}, execution_modes=['container'])'''
@@ -89,8 +89,8 @@ value = json.loads(response.text)
 if 'source' in value:
     code = FactoryCodeProposal(value['source'], sha256(value['source'].encode()).hexdigest(),
         value['artifact']['data_bindings'], representation_kind={'native_code' if mode == 'native_gurobipy' else 'python_factory'!r})
-    return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'], value['formulation'], code=code))
-return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'], value['formulation'], value['structured_ir']))""")
+    return MethodOutcome('selected', '001', ModelProposal(value['artifact'], value['formulation'], code=code))
+return MethodOutcome('selected', '001', ModelProposal(value['artifact'], value['formulation'], value['structured_ir']))""")
         manifest = json.loads((self.packages / 'llm4om_fixture_method/manifest.json').read_text())
         self.assertFalse(manifest['capabilities']['supports_checkpoint'])
         reply = {key: json.loads((self.inputs / filename).read_text()) for key, filename in (
@@ -149,33 +149,33 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
     def test_installed_noncheckpoint_method_resumes_committed_formulation_event(self):
         path = self.installed_stage_crash('Path(target).name == "checkpoint.json" and '
             'any(event["kind"] == "formulation_saved" for event in record["payload"]["events"])')
-        saved = json.loads((path / 'candidates/001/formulation-snapshot.json').read_text())
+        saved = json.loads((path / 'checks/001/formulation-snapshot.json').read_text())
         state = json.loads((path / 'checkpoint.json').read_text())['payload']['state']
         self.assertEqual(state['phase'], 'method_done')
         self.assertIsNotNone(state['artifact_ref'])
         self.assert_installed_stage_resume(path)
-        self.assertEqual(json.loads((path / 'candidates/001/formulation-snapshot.json').read_text()), saved)
+        self.assertEqual(json.loads((path / 'checks/001/formulation-snapshot.json').read_text()), saved)
 
     def test_installed_noncheckpoint_method_resumes_early_formulation_publication(self):
         path = self.installed_stage_crash('"history" not in Path(target).parts and '
             'record.get("stage_status", {}).get("formulation", {}).get("status") == "available" and '
             '"artifact_id" in record and "formulation_ref" in record')
-        saved = (path / 'candidates/001/formulation-snapshot.json').read_bytes()
+        saved = (path / 'checks/001/formulation-snapshot.json').read_bytes()
         state = json.loads((path / 'checkpoint.json').read_text())['payload']['state']
         self.assertIsNone(state['artifact_ref'])
         self.assert_installed_stage_resume(path)
-        self.assertEqual((path / 'candidates/001/formulation-snapshot.json').read_bytes(), saved)
+        self.assertEqual((path / 'checks/001/formulation-snapshot.json').read_bytes(), saved)
 
     def test_completed_code_event_commits_phase_and_is_not_duplicated(self):
         path = self.installed_stage_crash('Path(target).name == "checkpoint.json" and '
             'any(event["kind"] == "code_saved" for event in record["payload"]["events"])')
-        saved = (path / 'candidates/001/artifact.json').read_bytes()
+        saved = (path / 'checks/001/artifact.json').read_bytes()
         state = json.loads((path / 'checkpoint.json').read_text())['payload']['state']
         self.assertEqual(state['phase'], 'code_done')
         self.assertEqual(state['stages']['code']['status'], 'available')
         self.assert_installed_stage_resume(path)
-        self.assertEqual((path / 'candidates/001/artifact.json').read_bytes(), saved)
-        self.assertTrue((path / 'candidates/001/build.json').is_file())
+        self.assertEqual((path / 'checks/001/artifact.json').read_bytes(), saved)
+        self.assertTrue((path / 'checks/001/build.json').is_file())
 
     def test_installed_noncheckpoint_method_can_start_from_cold_admission(self):
         path = self.installed_stage_crash('Path(target).name == "checkpoint.json" and '
@@ -189,7 +189,7 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
         path = self.installed_stage_crash('"history" not in Path(target).parts and '
             'record.get("stage_status", {}).get("formulation", {}).get("status") == "available" and '
             '"artifact_id" in record and "formulation_ref" in record')
-        artifact = json.loads((path / 'candidates/001/formulation-snapshot.json').read_text())
+        artifact = json.loads((path / 'checks/001/formulation-snapshot.json').read_text())
         problem = self.inputs / 'problem.json'
         original = problem.read_bytes()
         problem.write_bytes(original + b' ')
@@ -222,7 +222,7 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
             'Path(target).name == "checkpoint.json" and '
             'any(event["kind"] == "code_saved" for event in record["payload"]["events"])')
         path = self.installed_stage_crash(condition, mode=mode)
-        saved = (path / 'candidates/001/formulation-snapshot.json').read_bytes()
+        saved = (path / 'checks/001/formulation-snapshot.json').read_bytes()
         artifact = json.loads(saved)
         code = json.loads((path / artifact['code_ref']['relative_path']).read_text())
         source = (path / code['representation_ref']['relative_path']).read_bytes()
@@ -232,7 +232,7 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
         self.assertEqual(restored['formulation_ref'], artifact['formulation_ref'])
         self.assertEqual(restored['data_bindings'], artifact['data_bindings'])
         self.assertEqual((path / code['representation_ref']['relative_path']).read_bytes(), source)
-        self.assertEqual((path / 'candidates/001/formulation-snapshot.json').read_bytes(), saved)
+        self.assertEqual((path / 'checks/001/formulation-snapshot.json').read_bytes(), saved)
 
     def test_unclean_owner_does_not_allow_corrupt_committed_public_bytes(self):
         path = self.crashed_run()
@@ -462,7 +462,7 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
         self.assertEqual(result.status, 'completed', json.loads((path / 'bundle.json').read_text()).get('error'))
         ledger = json.loads((path / 'budget-ledger.json').read_text())
         self.assertEqual(ledger['solver_calls'], 1)
-        self.assertEqual(json.loads((path / 'candidates/001/solve-result.json').read_text())['objective_value'], 13)
+        self.assertEqual(json.loads((path / 'checks/001/solve-result.json').read_text())['objective_value'], 13)
         events = [json.loads(line) for line in (path / 'events.jsonl').read_text().splitlines()]
         self.assertEqual(sum(event['kind'] == 'solver_started' for event in events), 1)
         self.assertEqual(sum(event['kind'] == 'execution_reused' for event in events), 1)
@@ -485,7 +485,7 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
     def test_completed_execution_projection_reuses_solve_before_core_done(self):
         from unittest.mock import patch
         path = self.completed_execution_crash()
-        execution = json.loads((path / 'candidates/001/execution.json').read_text())
+        execution = json.loads((path / 'checks/001/execution.json').read_text())
         self.assertEqual(execution['status'], 'completed')
         with patch('subprocess.Popen', side_effect=AssertionError('Completed recovery must not launch another Solver')):
             result = resume_run(path)
@@ -511,11 +511,11 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
         result = resume_run(path)
         self.assertEqual(result.status, 'completed')
         self.assertEqual(json.loads((path / 'budget-ledger.json').read_text())['solver_calls'], 1)
-        self.assertEqual(json.loads((path / 'candidates/001/solve-result.json').read_text())['objective_value'], 13)
+        self.assertEqual(json.loads((path / 'checks/001/solve-result.json').read_text())['objective_value'], 13)
 
     def test_completed_execution_requires_actual_immutable_result_bytes(self):
         path = self.completed_execution_crash()
-        execution = json.loads((path / 'candidates/001/execution.json').read_text())
+        execution = json.loads((path / 'checks/001/execution.json').read_text())
         immutable = path / execution['solve_result_ref']['relative_path']
         original = immutable.read_bytes()
         immutable.write_bytes(original + b' ')
@@ -547,7 +547,7 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
 
     def test_unrecorded_completed_public_execution_cannot_replace_solver_evidence(self):
         path = self.completed_execution_crash()
-        projection = path / 'candidates/001/execution.json'
+        projection = path / 'checks/001/execution.json'
         original = projection.read_bytes()
         execution = json.loads(original)
         execution['solve_result_ref']['sha256'] = '0' * 64
@@ -562,10 +562,10 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
         import hashlib
         from unittest.mock import patch
         path = self.completed_execution_crash()
-        name = 'candidates/001/execution.json'
+        name = 'checks/001/execution.json'
         execution = json.loads((path / name).read_text())
         checkpoint = json.loads((path / 'checkpoint.json').read_text())['payload']
-        execution['input_artifact_ref'] = checkpoint['projections']['candidates/001/formulation-snapshot.json']
+        execution['input_artifact_ref'] = checkpoint['projections']['checks/001/formulation-snapshot.json']
         raw = (json.dumps(execution, ensure_ascii=False, indent=2) + '\n').encode()
         publication = json.loads((path / 'publication.json').read_text())
         ref = publication['projections'][name][-1]
@@ -603,7 +603,7 @@ return MethodOutcome('candidate_selected', '001', ModelProposal(value['artifact'
                 os.environ['S02B_FIXTURE_KEY'] = 'synthetic-fixture'
                 self.addCleanup(os.environ.pop, 'S02B_FIXTURE_KEY', None)
                 path = self.completed_execution_crash(config)
-                execution = json.loads((path / 'candidates/001/execution.json').read_text())
+                execution = json.loads((path / 'checks/001/execution.json').read_text())
                 process = subprocess.run([sys.executable, '-m', 'llm4om', 'resume', '--run-id', path.name,
                     '--output', str(path.parent)], capture_output=True, text=True, timeout=30)
                 self.assertEqual(process.returncode, 0, process.stdout + process.stderr)

@@ -89,25 +89,25 @@ class CoEMethod:
             if (set(answer) != {"formulation", "code"} or any(not isinstance(answer[key], str)
                     or not answer[key].strip() for key in answer)):
                 raise RunError("invalid_method_reply", "code", "CoE requires a final mathematical model and code.")
-            candidate_id = f"{trial:03d}"
+            check_id = f"{trial:03d}"
             session.resources.record(f"trial-{trial:03d}-code.py", answer["code"].encode())
             session.record(f"trial-{trial:03d}-comments.json", {"comments": pool})
-            assessment = await session.resources.assess(candidate_id,
+            checked = await session.resources.check(check_id,
                 session.proposal({"mathematical_model": answer["formulation"]}, answer["code"]), parent_id=parent,
                 change_reason="CoE expert reflection from public execution feedback." if parent else None)
-            trials.append({"trial": trial, "candidate_id": candidate_id, "diagnostics": assessment["diagnostics"],
-                "termination": assessment["termination"]})
+            trials.append({"trial": trial, "check_id": check_id, "diagnostics": checked["diagnostics"],
+                "termination": checked["termination"]})
             session.record("trials.json", {"trials": trials})
-            if not assessment["diagnostics"] and assessment["solve_result_ref"] is not None:
-                session.record("selection.json", {"candidate_id": candidate_id, "public_check": "passed"})
-                return session.resources.select(candidate_id, rule="first_executable_reducer",
+            if not checked["diagnostics"] and checked["solve_result_ref"] is not None:
+                session.record("selection.json", {"check_id": check_id, "public_check": "passed"})
+                return session.resources.select(check_id, rule="first_executable_reducer",
                     reason="Expert reduction passed isolated construction and configured Solver execution.")
             if trial == trial_limit:
                 raise RunError("method_debug_exhausted", "code", "CoE exhausted its public-feedback trials.")
             remaining_slots = session.resources.remaining_budget()
-            if not remaining_slots["candidates"] or not remaining_slots["solver_calls"]:
-                raise RunError("budget_exhausted", "code", "No candidate or Solver slot remains for expert reflection.")
-            feedback = [("execution", str(assessment))]
+            if not remaining_slots["checks"] or not remaining_slots["solver_calls"]:
+                raise RunError("budget_exhausted", "code", "No public check or Solver slot remains for expert reflection.")
+            feedback = [("execution", str(checked))]
             backward = []
             while stack:
                 expert = stack.pop()
@@ -131,7 +131,7 @@ class CoEMethod:
                 if revised["is_caused_by_you"]:
                     break
             session.record(f"trial-{trial:03d}-backward.json", {"backward": backward, "feedback": feedback})
-            parent = candidate_id
+            parent = check_id
         raise AssertionError("Bounded CoE trials must return or raise.")
 
 

@@ -49,6 +49,11 @@ def main() -> None:
                 result = {'clarification': {'questions': [question]}}
             else:
                 result = deepcopy(compact)
+                if 'need-repair' in payload['problem']['description']:
+                    if 'feedback' in payload:
+                        result.update(repair_stage='formulation', change_reason='修正变量引用 qty_X → qty_A。')
+                    else:
+                        result['structured_ir']['objective']['expression']['terms'][0]['variable_id'] = 'qty_X'
                 if revised:
                     result['representation']['constraints'].append({'id': 'limit_A',
                         'expression_text': 'qty[A] <= 2', 'requirement_ids': revised})

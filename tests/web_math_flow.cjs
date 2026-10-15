@@ -20,7 +20,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     await completedRun(page);
     const rendered = await page.evaluate(() => {
       const contents = { ...window.snapshot.contents };
-      const formulation = contents["candidates/001/formulation.json"];
+      const formulation = contents["checks/001/formulation.json"];
       if (!formulation?.representation?.objective?.expression_text) return null;
       for (const name of Object.keys(contents))
         if (/structured-ir|model-ir|supplied-ir/.test(name)) delete contents[name];

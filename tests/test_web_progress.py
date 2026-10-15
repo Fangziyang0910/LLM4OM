@@ -100,9 +100,9 @@ class WebProgressTests(unittest.TestCase):
                         break
                     time.sleep(0.05)
                 self.assertEqual(final['job']['status'], 'completed', final.get('bundle', {}).get('error'))
-                solve = final['contents']['candidates/001/solve-result.json']
+                solve = final['contents']['checks/001/solve-result.json']
                 self.assertEqual(solve['objective_value'], 13)
-                self.assertEqual(final['contents']['candidates/001/solution.json']['variables'], {'qty_A': 3.0, 'qty_B': 2.0})
+                self.assertEqual(final['contents']['checks/001/solution.json']['variables'], {'qty_A': 3.0, 'qty_B': 2.0})
                 self.assertTrue(any(event.get('method_event', {}).get('status') == 'completed' for event in final['events']))
             finally:
                 release.set()

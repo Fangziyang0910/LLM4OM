@@ -137,7 +137,7 @@ function DecisionExplorer({ ir, solution }: { ir: any; solution: any }) {
   return (
     <section className="model-card decision-explorer">
       <h3>目标与约束余量</h3>
-      <p className="hint">只代入当前候选模型计算，不修改已保存结果。</p>
+      <p className="hint">只代入当前模型计算，不修改已保存结果。</p>
       <div className="explorer-output" aria-live="polite">
         {!valid ? (
           <p className="hint">请填写符合变量边界和类型的数值。</p>
@@ -238,7 +238,7 @@ export function Decision({
       <div className="decision-hero">
         <div>
           <span className="eyebrow">求解结果</span>
-          <h2>{solve.has_primal_solution ? "候选模型求解完成" : status(solve.termination)}</h2>
+          <h2>{solve.has_primal_solution ? "模型求解完成" : status(solve.termination)}</h2>
         </div>
         <div className="objective-result">
           <span className="hint">目标值</span>
@@ -315,7 +315,7 @@ export function Decision({
       ) : null}
       <Checks evaluation={snapshot?.contents?.["evaluation.json"]} />
       <p className="evidence-note">
-        以上是当前候选模型的求解结果。原问题的独立验证以已保存的检查证据为准。
+        以上是当前模型的求解结果。原问题的独立验证以已保存的检查证据为准。
       </p>
     </>
   );

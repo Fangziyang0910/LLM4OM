@@ -44,7 +44,7 @@ assert.ok(workspace, "Use a disposable guidance workspace; this test creates its
       ["目标 · A 系数", "4"],
       ["capacity_cutting · 右侧值", "3"],
       ["capacity_finishing · 右侧值", "3"],
-      ["候选总上限", "2"],
+      ["公开检查上限", "2"],
       ["求解次数总上限", "2"],
     ])
       await page.getByLabel(label, { exact: true }).fill(value);

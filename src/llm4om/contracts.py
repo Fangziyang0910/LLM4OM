@@ -441,7 +441,7 @@ def validate_config(settings: dict[str, Any]) -> None:
         "executor": _object({"plugin_id": TEXT, "config": {"type": "object"}}),
         "budget": _object({name: ({"type": "number", "exclusiveMinimum": 0} if name == "wall_time_s"
                                  else POSITIVE if name == "max_concurrency" else NONNEGATIVE)
-                           for name in ["max_llm_attempts", "max_total_tokens", "max_candidates",
+                           for name in ["max_llm_attempts", "max_total_tokens", "max_checks",
                                         "max_repairs", "max_solver_calls", "wall_time_s", "max_concurrency"]}),
         "store": _object({"plugin_id": TEXT, "config": {"type": "object"}}),
         "reporters": {"type": "array", "maxItems": 32, "items": _object({"plugin_id": TEXT,
@@ -455,5 +455,5 @@ def validate_config(settings: dict[str, Any]) -> None:
         jsonschema.Draft202012Validator(schema).validate(settings)
     except jsonschema.ValidationError as error:
         raise RunError("invalid_config", "admission", "RunConfig is outside the supported text/grounded-LPIR profile.") from error
-    if settings["budget"]["max_llm_attempts"] < 1 or settings["budget"]["max_candidates"] < 1:
-        raise RunError("unsupported_config", "admission", "Offline replay requires one Mock attempt and one candidate slot.")
+    if settings["budget"]["max_llm_attempts"] < 1 or settings["budget"]["max_checks"] < 1:
+        raise RunError("unsupported_config", "admission", "Offline replay requires one Mock attempt and one public check slot.")

@@ -25,7 +25,7 @@ class PromptMethodTests(unittest.TestCase):
             with self.subTest(solver=solver):
                 tape = Tape(["max 3x, 0 <= x <= 4", "raise ValueError('public failure')", CODE], exits=(1, 0))
                 outcome = self.run_method(ORLLMAgentFactory(), tape, code_target=target(solver))
-                self.assertEqual(outcome.final_candidate_id, "002")
+                self.assertEqual(outcome.selected_check_id, "002")
                 self.assertEqual([request["role"] for request in tape.requests],
                     ["or_llm_agent.math_model", "or_llm_agent.code", "or_llm_agent.debug"])
                 self.assertIn("public invocation failed", tape.requests[-1]["messages"][-1]["content"])
@@ -62,10 +62,10 @@ class PromptMethodTests(unittest.TestCase):
     def test_valid_infeasible_solver_result_does_not_trigger_code_repair(self):
         from llm4om.or_llm_agent import ORLLMAgentFactory
         class InfeasibleTape(Tape):
-            async def assess(self, candidate_id, proposal, **kwargs):
-                result = await super().assess(candidate_id, proposal, **kwargs)
+            async def check(self, check_id, proposal, **kwargs):
+                result = await super().check(check_id, proposal, **kwargs)
                 return {**result, "has_primal_solution": False, "termination": "infeasible"}
         tape = InfeasibleTape(["x <= -1 and x >= 0", CODE])
         result = self.run_method(ORLLMAgentFactory(), tape)
-        self.assertEqual(result.final_candidate_id, "001")
+        self.assertEqual(result.selected_check_id, "001")
         self.assertEqual(len(tape.requests), 2)

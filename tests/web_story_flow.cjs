@@ -98,13 +98,13 @@ for (const address of [url, provider])
     await formulationCard.locator(".story-artifact-button").click();
     assert.equal(
       await page.locator("#artifact-choice").inputValue(),
-      "candidates/001/formulation-snapshot.json",
+      "checks/001/formulation-snapshot.json",
     );
     assert.ok((await page.locator("#model-view").innerText()).length > 0);
     await page.waitForTimeout(1700);
     assert.equal(
       await page.locator("#artifact-choice").inputValue(),
-      "candidates/001/formulation-snapshot.json",
+      "checks/001/formulation-snapshot.json",
     );
     assert.match(
       await page.locator(".story-consumption").innerText(),

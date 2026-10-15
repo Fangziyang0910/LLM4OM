@@ -38,7 +38,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     assert.equal(await profit.getAttribute("open"), "");
     await page.selectOption(
       "#artifact-choice",
-      "candidates/001/formulation-snapshot.json",
+      "checks/001/formulation-snapshot.json",
     );
     assert.match(
       await page.locator("#model-view .objective-card").innerText(),
@@ -101,12 +101,12 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
         "public-problem.json": {
           requirements: [{ id: "R-UNMAPPED", text: "Unmapped rule." }],
         },
-        "candidates/002/artifact.json": {
+        "checks/002/artifact.json": {
           formulation_ref: { artifact_id: "f2" },
           assumptions: [],
           warnings: ["OTHER-CANDIDATE"],
         },
-        "candidates/001/artifact.json": metadata,
+        "checks/001/artifact.json": metadata,
       });
       host.querySelector(".model-coverage").open = true;
       const result = {
@@ -123,7 +123,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
         },
         "formulation",
         {
-          "candidates/002/structured-ir.json": {
+          "checks/002/structured-ir.json": {
             objective: { expression: { terms: [] } },
             variables: [{ id: "OTHER" }],
           },

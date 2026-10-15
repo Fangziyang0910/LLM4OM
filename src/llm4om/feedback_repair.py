@@ -1,4 +1,4 @@
-"""Project-authored bounded repair using public candidate assessment only."""
+"""Project-authored bounded repair using public checks only."""
 
 from copy import deepcopy
 from dataclasses import replace
@@ -17,7 +17,7 @@ class FeedbackRepairMethod:
     async def run(self, problem: dict[str, Any], context: MethodContext,
                   *, checkpoint: dict[str, Any] | None = None) -> MethodOutcome:
         if context.resources is None:
-            raise RunError("capability_mismatch", "admission", "Public candidate resources are required.")
+            raise RunError("capability_mismatch", "admission", "Public check resources are required.")
         state = deepcopy(checkpoint) if checkpoint is not None else {
             "schema_version": "0.2.0", "request_id": uuid4().hex, "request_pending": False, "attempts": [], "feedback": None,
             "clarification": None, "clarification_count": 0}
@@ -32,12 +32,12 @@ class FeedbackRepairMethod:
                 return MethodOutcome("needs_input", None, None, state["clarification"])
             state.update(clarification=None, clarification_count=len(context.clarifications), request_id=uuid4().hex,
                          request_pending=False)
-        while (len(state["attempts"]) < min(context.budget["max_candidates"], context.budget["max_repairs"] + 1)
+        while (len(state["attempts"]) < min(context.budget["max_checks"], context.budget["max_repairs"] + 1)
                 and not any(not a["diagnostics"] and a["has_primal_solution"] for a in state["attempts"])):
             context.cancellation.check()
             remaining = context.resources.remaining_budget()
             if not state["request_pending"] and (any(remaining[name] <= 0 for name in (
-                    "candidates", "solver_calls", "llm_attempts", "total_tokens", "wall_time_s"))
+                    "checks", "solver_calls", "llm_attempts", "total_tokens", "wall_time_s"))
                     or state["attempts"] and remaining["repairs"] <= 0):
                 break
             state["request_pending"] = True
@@ -61,15 +61,15 @@ class FeedbackRepairMethod:
                     raise
                 proposal = GenerationFailure(error.details["call_id"], error.details["response_sha256"], error.code,
                     "code" if error.stage == "code" else "formulation", str(error))
-            candidate_id = f"{len(state['attempts']) + 1:03d}"
-            parent_id = state["attempts"][-1]["candidate_id"] if state["attempts"] else None
+            check_id = f"{len(state['attempts']) + 1:03d}"
+            parent_id = state["attempts"][-1]["check_id"] if state["attempts"] else None
             reason = (proposal.artifact["provenance"].get("repair", {}).get("reason") if isinstance(proposal, ModelProposal)
                       else "Regeneration still failed decoding; retain its public diagnostic and actual call identity.")
             if parent_id is None:
                 reason = None
-            assessment = await context.resources.assess(candidate_id, proposal, parent_id=parent_id, change_reason=reason)
-            state["attempts"].append(assessment)
-            state["feedback"] = {"assessment": assessment, "previous_output": {
+            checked = await context.resources.check(check_id, proposal, parent_id=parent_id, change_reason=reason)
+            state["attempts"].append(checked)
+            state["feedback"] = {"checked": checked, "previous_output": {
                 "representation": proposal.formulation["representation"] if proposal.formulation else None,
                 "source_formulation": proposal.formulation,
                 "structured_ir": proposal.structured_ir,
@@ -78,7 +78,7 @@ class FeedbackRepairMethod:
             state["request_pending"] = False
             if context.save_checkpoint is not None:
                 context.save_checkpoint(state)
-            if not assessment["diagnostics"] and assessment["has_primal_solution"]:
+            if not checked["diagnostics"] and checked["has_primal_solution"]:
                 break
         legal = [a for a in state["attempts"] if not a["diagnostics"] and a["solve_result_ref"] is not None]
         context.resources.record("repair-state.json", json.dumps({**state,
@@ -88,8 +88,8 @@ class FeedbackRepairMethod:
         selected = max(enumerate(legal), key=lambda item: (item[1]["has_primal_solution"],
             sum(s["status"] == "available" for s in item[1]["stages"].values()), item[0]))[1]
         completed = sum(s["status"] == "available" for s in selected["stages"].values())
-        return context.resources.select(selected["candidate_id"], rule="legal-primal-completeness-latest/0.1.0",
-            reason=f"Selected {selected['candidate_id']}: trusted_primal={selected['has_primal_solution']}, completed_stages={completed}; prefer legal primals, then completeness and latest attempt. No reference or cross-model objective comparison.")
+        return context.resources.select(selected["check_id"], rule="legal-primal-completeness-latest/0.1.0",
+            reason=f"Selected {selected['check_id']}: trusted_primal={selected['has_primal_solution']}, completed_stages={completed}; prefer legal primals, then completeness and latest attempt. No reference or cross-model objective comparison.")
 
 
 class FeedbackRepairFactory:
@@ -98,15 +98,15 @@ class FeedbackRepairFactory:
         manifest.update(plugin_id="llm4om.methods.feedback_repair", display_name="Public Feedback Repair",
             description="Bounded project-authored repair from public stage diagnostics and trusted Solver evidence.",
             source={"kind": "engineering_baseline", "variant_id": "public_feedback_repair/0.1.0"})
-        manifest["capabilities"]["method_profile"] = "grounded_candidates/0.1.0"
+        manifest["capabilities"]["method_profile"] = "grounded_checked/0.2.0"
         manifest["capabilities"]["supports_clarification"] = True
         return manifest
 
     def resolve_capabilities(self, config: dict[str, Any]) -> dict[str, Any]:
         capabilities = DirectFactory().resolve_capabilities(config)
         capabilities["supports_clarification"] = True
-        capabilities["method_profile"] = {"lp_ir": "grounded_candidates/0.1.0",
-            "python_factory": "factory_candidates/0.1.0", "native_gurobipy": "native_candidates/0.1.0"}[config["output_mode"]]
+        capabilities["method_profile"] = {"lp_ir": "grounded_checked/0.2.0",
+            "python_factory": "factory_checked/0.2.0", "native_gurobipy": "native_checked/0.2.0"}[config["output_mode"]]
         return capabilities
 
     def create(self, config: dict[str, Any]) -> FeedbackRepairMethod:

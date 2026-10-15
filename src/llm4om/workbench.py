@@ -6,9 +6,9 @@ from typing import Any
 from llm4om.contracts import RunError
 
 STANDARD_BUDGET = {"max_llm_attempts": 4, "max_total_tokens": 100000, "max_solver_calls": 4,
-                   "max_repairs": 2, "max_candidates": 4, "wall_time_s": 180}
+                   "max_repairs": 2, "max_checks": 4, "wall_time_s": 180}
 NATIVE_BUDGET = {"max_llm_attempts": 30, "max_total_tokens": 300000, "max_solver_calls": 12,
-                 "max_repairs": 3, "max_candidates": 4, "wall_time_s": 1800}
+                 "max_repairs": 3, "max_checks": 4, "wall_time_s": 1800}
 
 
 def llm_presets() -> list[dict[str, str]]:
@@ -58,7 +58,7 @@ def method_presets() -> dict[str, dict[str, Any]]:
         "llm4om.methods.optitree": {**prompt, "config": {"max_debug_attempts": 2},
             "explanation": "在固定的官方问题类型树中逐层检索建模思路，再针对你的问题形成表述与代码，并执行调试。"},
         "llm4om.methods.autoformulation": {**grounded, "config": {"rollouts": 2, "branching": 2, "exploration": 1.4},
-            "budget": {**NATIVE_BUDGET, "max_llm_attempts": 40, "max_candidates": 2, "max_solver_calls": 2},
+            "budget": {**NATIVE_BUDGET, "max_llm_attempts": 40, "max_checks": 2, "max_solver_calls": 2},
             "explanation": "用 MCTS 搜索参数、变量、目标、等式与不等式约束的表述；用独立自评、求解反馈和 SMT 等价剪枝引导选择。"},
         "llm4om.methods.coe": {**prompt,
             "config": {"max_collaborate_nums": 1, "enable_reflection": True, "max_trials": 2, "seed": 0},

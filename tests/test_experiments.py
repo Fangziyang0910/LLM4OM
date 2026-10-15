@@ -103,6 +103,10 @@ class ExperimentTests(unittest.TestCase):
             self.assertEqual(group['solver_calls'], 1)
             self.assertIsNone(group['total_tokens'])
             self.assertEqual(group['evidence_origins'], ['mock_fixture'])
+        # Pass@k counts each case once across its k independent runs, never each run as a sample.
+        [cell] = summary['pass_at_k']
+        self.assertEqual(cell['k'], 2)
+        self.assertEqual((cell['verified_solution_numerator'], cell['verified_solution_denominator']), (1, 1))
         before = sorted(str(path) for path in output.glob('runs/*/*/bundle.json'))
         continued = run_experiment(self.path, output, resume=True)
         self.assertEqual(before, sorted(str(path) for path in output.glob('runs/*/*/bundle.json')))

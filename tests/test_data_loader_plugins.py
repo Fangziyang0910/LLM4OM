@@ -96,9 +96,9 @@ class DataLoaderPluginTests(unittest.TestCase):
         views = json.loads((path / "data-views.json").read_text())["views"]
         self.assertEqual(views["products"]["source_sha256"], hashlib.sha256(original).hexdigest())
         self.assertEqual((path / views["products"]["content_ref"]["relative_path"]).read_bytes().decode(), payload["data"]["products"])
-        solve = json.loads((path / "candidates/001/solve-result.json").read_text())
+        solve = json.loads((path / "checks/001/solve-result.json").read_text())
         self.assertEqual(solve["objective_value"], 13)
-        self.assertEqual(json.loads((path / "candidates/001/solution.json").read_text())["variables"], {"qty_A": 3.0, "qty_B": 2.0})
+        self.assertEqual(json.loads((path / "checks/001/solution.json").read_text())["variables"], {"qty_A": 3.0, "qty_B": 2.0})
         plan = json.loads((path / "admission-plan.json").read_text())
         self.assertEqual(plan["data_loader"]["manifest"]["kind"], "data_loader")
         trace = json.loads((path / "llm-trace.json").read_text())

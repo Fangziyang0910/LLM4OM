@@ -23,19 +23,19 @@ class Tape:
         text = self.replies.pop(0)
         return LLMResponse(text, str(len(self.requests)), "mock_fixture", hashlib.sha256(text.encode()).hexdigest())
 
-    async def assess(self, candidate_id, proposal, **kwargs):
-        self.assessments.append((candidate_id, proposal, kwargs))
+    async def check(self, check_id, proposal, **kwargs):
+        self.assessments.append((check_id, proposal, kwargs))
         failed = bool(self.exits.pop(0) if self.exits else 0) or self.collector_error is not None
-        return {"candidate_id": candidate_id, "has_primal_solution": not failed,
-            "termination": None if failed else "optimal", "solve_result_ref": None if failed else {"id": candidate_id},
+        return {"check_id": check_id, "has_primal_solution": not failed,
+            "termination": None if failed else "optimal", "solve_result_ref": None if failed else {"id": check_id},
             "diagnostics": [{"code": "worker_failed", "stage": "execution", "message": "public invocation failed"}] if failed else []}
 
-    def select(self, candidate_id, **kwargs):
-        self.selection = {"candidate_id": candidate_id, **kwargs}
-        return MethodOutcome("candidate_selected", candidate_id, None)
+    def select(self, check_id, **kwargs):
+        self.selection = {"check_id": check_id, **kwargs}
+        return MethodOutcome("selected", check_id, None)
 
     def remaining_budget(self):
-        return {"candidates": 4-len(self.assessments), "solver_calls": 4-len(self.assessments)}
+        return {"checks": 4-len(self.assessments), "solver_calls": 4-len(self.assessments)}
 
     def record(self, name, value):
         self.files[name] = value
@@ -66,7 +66,7 @@ class CoEMethodTests(unittest.TestCase):
     def test_dynamic_routing_combines_comments_into_a_supplied_formulation_and_target_code(self):
         tape = Tape(["Programming Expert", "first-comment", "Modeling Expert", "second-comment", reduced()])
         result = self.run_tape(tape)
-        self.assertEqual(result.final_candidate_id, "001")
+        self.assertEqual(result.selected_check_id, "001")
         self.assertEqual([call["role"] for call in tape.requests], ["coe.conductor", "coe.Programming Expert",
             "coe.conductor", "coe.Modeling Expert", "coe.reducer"])
         self.assertIn("first-comment", tape.requests[3]["messages"][-1]["content"])
@@ -80,7 +80,7 @@ class CoEMethodTests(unittest.TestCase):
             '{"is_caused_by_you":true,"reason":"runtime error","refined_result":"use corrected model construction"}',
             "Programming Expert", "second-comment", reduced()], exits=(1, 0))
         result = self.run_tape(tape, reflection=True, collaboration=1)
-        self.assertEqual(result.final_candidate_id, "002")
+        self.assertEqual(result.selected_check_id, "002")
         self.assertIn("public invocation failed", tape.requests[3]["messages"][-1]["content"])
         self.assertIn("use corrected model construction", tape.requests[5]["messages"][-1]["content"])
         self.assertEqual(tape.assessments[1][2]["parent_id"], "001")

@@ -41,7 +41,7 @@ DESCRIBE_BODY
 CREATE_BODY
 plugin = TestFactory()
 '''
-            body = run_body or 'return MethodOutcome("candidate_selected", "001", None)'
+            body = run_body or 'return MethodOutcome("selected", "001", None)'
             describe = describe_body or 'return json.loads(files(__package__).joinpath("manifest.json").read_text())'
             source = source.replace("RUN_BODY", indent(body, "        ")).replace("DESCRIBE_BODY", indent(describe, "        "))
             source = source.replace("CREATE_BODY", indent(create_body or "return TestMethod()", "        "))
@@ -73,7 +73,7 @@ plugin = TestFactory()
         self.assertEqual(result.returncode, 0, result.stderr)
         record = json.loads(result.stdout)["plugins"][0]
         self.assertEqual(record["manifest"]["plugin_id"], "llm4om.methods.direct")
-        self.assertEqual(record["manifest"]["capabilities"]["method_profile"], "grounded_single_candidate/0.1.0")
+        self.assertEqual(record["manifest"]["capabilities"]["method_profile"], "grounded_single/0.2.0")
         self.assertEqual(record["origin"]["kind"], "builtin")
 
     def test_independently_installed_method_is_discovered_and_used_by_run(self) -> None:
@@ -87,7 +87,7 @@ plugin = TestFactory()
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         solve = json.loads((path / bundle["solve_result_ref"]["relative_path"]).read_text())
         self.assertAlmostEqual(solve["objective_value"], 20)
-        candidate = json.loads((path / "candidates/001/candidate.json").read_text())
+        candidate = json.loads((path / "checks/001/record.json").read_text())
         self.assertEqual(candidate["created_by"]["method_id"], "llm4om.examples.objective_offset")
 
     def test_installed_method_cannot_override_a_builtin_registry_key(self) -> None:
@@ -151,7 +151,7 @@ raise RuntimeError("Budget was not enforced.")''')
         self.install_method(run_body='''reply = await context.llm.complete({"messages": [{"role": "user", "content": "fixture"}]})
 payload = json.loads(reply.text)
 payload["structured_ir"]["problem_id"] = "another-problem"
-return MethodOutcome("candidate_selected", "001", ModelProposal(payload["artifact"], payload["formulation"], payload["structured_ir"]))''')
+return MethodOutcome("selected", "001", ModelProposal(payload["artifact"], payload["formulation"], payload["structured_ir"]))''')
         result, path, bundle = self.configured_run()
         self.assertEqual(result.returncode, 1)
         self.assertEqual(bundle["error"]["code"], "artifact_problem_mismatch")
@@ -211,7 +211,7 @@ return MethodOutcome("candidate_selected", "001", ModelProposal(payload["artifac
         self.assertEqual(json.loads(report.stdout)["error"]["code"], "budget_exhausted")
 
     def test_malformed_method_outcome_still_saves_a_failed_bundle(self) -> None:
-        self.install_method(run_body='return MethodOutcome("candidate_selected", "001", {})')
+        self.install_method(run_body='return MethodOutcome("selected", "001", {})')
         result, path, bundle = self.configured_run()
         self.assertEqual(result.returncode, 1)
         self.assertEqual(bundle["error"]["code"], "invalid_method_outcome")

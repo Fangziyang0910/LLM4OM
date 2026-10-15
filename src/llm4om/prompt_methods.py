@@ -1,4 +1,4 @@
-"""Shared public calls, target code and candidate feedback for prompt methods."""
+"""Shared public calls, target code and public check feedback for prompt methods."""
 
 import hashlib
 import json
@@ -100,22 +100,22 @@ class PromptSession:
     async def debug_factory(self, source: str, state: dict[str, Any], inputs: dict[str, Any], limit: int) -> MethodOutcome:
         parent = None
         for attempt in range(limit + 1):
-            candidate_id = f"{attempt + 1:03d}"
-            assessment = await self.resources.assess(candidate_id, self.proposal(state, source, code_repair=parent is not None),
+            check_id = f"{attempt + 1:03d}"
+            checked = await self.resources.check(check_id, self.proposal(state, source, code_repair=parent is not None),
                 parent_id=parent, change_reason="Repair from public execution feedback." if parent else None)
-            if not assessment["diagnostics"] and assessment["solve_result_ref"] is not None:
-                self.record("selection.json", {"candidate_id": candidate_id, "debug_attempts": attempt})
-                return self.resources.select(candidate_id, rule="first_executable_model",
+            if not checked["diagnostics"] and checked["solve_result_ref"] is not None:
+                self.record("selection.json", {"check_id": check_id, "debug_attempts": attempt})
+                return self.resources.select(check_id, rule="first_executable_model",
                     reason="The configured Solver returned a trusted result without execution diagnostics.")
             if attempt == limit:
                 raise RunError("method_debug_exhausted", "code", "The method exhausted its bounded debugging attempts.")
             remaining = self.resources.remaining_budget()
-            if not remaining["candidates"] or not remaining["solver_calls"]:
-                raise RunError("budget_exhausted", "code", "No candidate or Solver slot remains for code repair.")
-            self.record(f"debug-{attempt + 1:03d}.json", assessment)
+            if not remaining["checks"] or not remaining["solver_calls"]:
+                raise RunError("budget_exhausted", "code", "No public check or Solver slot remains for code repair.")
+            self.record(f"debug-{attempt + 1:03d}.json", checked)
             source = await self.complete("debug", self.code_instruction + " Repair the previous code using public execution "
                 "feedback. Preserve the mathematical formulation and all business requirements. An infeasible or unbounded "
                 "model is not a code error; never relax requirements to manufacture a solution.",
-                {**inputs, "formulation": state, "previous_code": source, "feedback": assessment}, phase="code")
-            parent = candidate_id
+                {**inputs, "formulation": state, "previous_code": source, "feedback": checked}, phase="code")
+            parent = check_id
         raise AssertionError("Bounded debug loop must return or raise.")

@@ -44,13 +44,13 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
         "13",
     );
     await page.locator('[data-tab="code"]').click();
-    await page.selectOption("#artifact-choice", "candidates/001/model.py");
+    await page.selectOption("#artifact-choice", "checks/001/model.py");
     const bookmark = page.url();
     assert.equal(new URL(bookmark).searchParams.get("run"), original.run_id);
     assert.equal(new URL(bookmark).searchParams.get("tab"), "code");
     assert.equal(
       new URL(bookmark).searchParams.get("artifact"),
-      "candidates/001/model.py",
+      "checks/001/model.py",
     );
     await page.reload();
     await page.waitForSelector(".code-lines");
@@ -64,7 +64,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     );
     assert.equal(
       await page.locator("#artifact-choice").inputValue(),
-      "candidates/001/model.py",
+      "checks/001/model.py",
     );
     assert.ok((await page.locator(".code-line").count()) > 0);
     assert.match(
@@ -74,7 +74,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     await page.waitForTimeout(1600);
     assert.equal(
       new URL(page.url()).searchParams.get("artifact"),
-      "candidates/001/model.py",
+      "checks/001/model.py",
     );
     await page.click("#new-run");
     assert.equal(new URL(page.url()).search, "");

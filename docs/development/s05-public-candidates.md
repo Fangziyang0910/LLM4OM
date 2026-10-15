@@ -1,6 +1,6 @@
 # S05-C1 公共候选评估与选择
 
-SDK／Worker0.15.0 的开发切片；工作项为 [#32](https://github.com/Fangziyang0910/LLM4OM/issues/32)。字段与错误语义见 [接口契约第20节](../plugin-contracts.md#20-s05-c1-public-candidate-assessment-sdk-0150)，方法流程见 [DD-02](../design/modeling-methods.md#dd-02-方法内部生成修正与选择)。本切片完成候选资源，不将整个 S05-C 或1.0标为完成。
+SDK／Worker0.15.0 的开发切片；工作项为 [#32](https://github.com/Fangziyang0910/LLM4OM/issues/32)。字段与错误语义见 [接口契约第20节](../plugin-contracts.md#20-s05-c1-public-checks-sdk-0150)，方法流程见 [DD-02](../design/modeling-methods.md#dd-02-方法内部生成修正与选择)。本切片完成候选资源，不将整个 S05-C 或1.0标为完成。
 
 ## 实际行为
 

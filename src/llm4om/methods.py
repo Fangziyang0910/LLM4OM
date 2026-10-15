@@ -1,4 +1,4 @@
-"""The grounded single-candidate method profile and built-in direct method."""
+"""The grounded single-proposal method profile and built-in direct method."""
 
 from dataclasses import dataclass
 from copy import deepcopy
@@ -62,9 +62,9 @@ class ScriptCodeProposal:
 
 class MethodResources(Protocol):
     def remaining_budget(self) -> dict[str, Any]: ...
-    async def assess(self, candidate_id: str, proposal: "ModelProposal | GenerationFailure", *, parent_id: str | None = None,
+    async def check(self, check_id: str, proposal: "ModelProposal | GenerationFailure", *, parent_id: str | None = None,
                      change_reason: str | None = None) -> dict[str, Any]: ...
-    def select(self, candidate_id: str, *, rule: str, reason: str) -> "MethodOutcome": ...
+    def select(self, check_id: str, *, rule: str, reason: str) -> "MethodOutcome": ...
     async def execute(self, execution_id: str, code: ScriptCodeProposal) -> dict[str, Any]: ...
     def record(self, name: str, value: bytes) -> dict[str, Any]: ...
     def emit(self, event: dict[str, Any]) -> None: ...
@@ -82,7 +82,7 @@ class ModelProposal:
 @dataclass(frozen=True)
 class MethodOutcome:
     status: str
-    final_candidate_id: str | None
+    selected_check_id: str | None
     proposal: ModelProposal | None
     clarification: dict[str, Any] | None = None
 
@@ -165,7 +165,7 @@ class DirectMethod:
         if self.output_mode == "native_gurobipy":
             instructions = instructions.replace("representation and python_factory (", "representation and native_gurobipy (")
         if feedback is not None:
-            instructions += (" Repair the previous candidate using only the public feedback. "
+            instructions += (" Repair the previous model using only the public feedback. "
                 "Also return repair_stage (formulation or code) and a nonempty change_reason. "
                 "Preserve every business requirement, variable domain and data binding. "
                 "Do not delete or relax requirements just to obtain a feasible model. "
@@ -247,7 +247,7 @@ class DirectMethod:
                                            representation_kind="native_code" if self.output_mode == "native_gurobipy" else "python_factory")
                 if repair is not None:
                     artifact["provenance"]["repair"] = repair
-                return MethodOutcome("candidate_selected", "001", ModelProposal(artifact, formulation, code=code))
+                return MethodOutcome("selected", "001", ModelProposal(artifact, formulation, code=code))
             if "artifact" in value:
                 if response.evidence_origin != "mock_fixture":
                     raise RunError("invalid_method_outcome", "formulation", "External Direct requires the compact mathematical output.")
@@ -278,7 +278,7 @@ class DirectMethod:
                 proposal = ModelProposal(artifact, formulation, ir)
             if repair is not None:
                 proposal.artifact["provenance"]["repair"] = repair
-            return MethodOutcome("candidate_selected", "001", proposal)
+            return MethodOutcome("selected", "001", proposal)
         except RunError as error:
             raise RunError(error.code, error.stage, str(error),
                 details={"call_id": response.call_id, "response_sha256": response.source_sha256}) from error
@@ -292,7 +292,7 @@ class DirectFactory:
             "plugin_version": "0.18.0", "contract_range": ">=0.2.0,<0.3.0",
             "display_name": "Direct (declared text output)",
             "description": "One public text response produces a five-element Formulation with grounded LPIR or parameterized Python factory.",
-            "capabilities": {"method_profile": "grounded_single_candidate/0.1.0", "problem_types": ["lp", "milp"],
+            "capabilities": {"method_profile": "grounded_single/0.2.0", "problem_types": ["lp", "milp"],
                 "input_artifact_kinds": ["public_problem"], "output_artifact_kinds": ["model_artifact"],
                 "formulation_representations": ["five_element"], "code_representations": ["python_factory"],
                 "model_backends": ["llm4om.model_backends.pyomo_factory"], "solvers": ["llm4om.solvers.highs", "llm4om.solvers.gurobi", "llm4om.solvers.ortools"],
@@ -308,9 +308,9 @@ class DirectFactory:
     def resolve_capabilities(self, config: dict[str, Any]) -> dict[str, Any]:
         capabilities: dict[str, Any] = self.describe()["capabilities"]
         if config["output_mode"] == "python_factory":
-            capabilities.update(method_profile="factory_single_candidate/0.1.0", execution_modes=["container"])
+            capabilities.update(method_profile="factory_single/0.2.0", execution_modes=["container"])
         if config["output_mode"] == "native_gurobipy":
-            capabilities.update(method_profile="native_single_candidate/0.1.0", execution_modes=["container"],
+            capabilities.update(method_profile="native_single/0.2.0", execution_modes=["container"],
                 code_representations=["native_code"], model_backends=["llm4om.model_backends.gurobipy"],
                 solvers=["llm4om.solvers.gurobi"])
         return capabilities

@@ -2,7 +2,7 @@
 // 正在进行的步骤成为卡片;头部为实时消耗条,结束卡衔接结果区。
 // `.timeline-step[data-artifact]` 契约保持:run_public 产物事件挂 data-artifact。
 import { useMemo, useState } from "react";
-import type { CandidateAssessment, Snapshot } from "../types";
+import type { CheckResult, Snapshot } from "../types";
 import { artifactKey, artifactLabel, failureDiagnosis, format, phaseLabel, roleLabel, shortMethod, status } from "../ui";
 
 const eventLabels: Record<string, string> = {
@@ -11,9 +11,10 @@ const eventLabels: Record<string, string> = {
   solver_started: "调用求解器",
   solver_finished: "求解完成",
   code_output_saved: "原生代码已生成",
-  method_execution_finished: "执行候选代码",
+  method_execution_finished: "执行生成代码",
   clarification_requested: "等待补充信息",
-  candidate_assessed: "候选已评估",
+  check_finished: "公开检查",
+  selection_saved: "最终选择",
   execution_reused: "复用已执行脚本",
 };
 
@@ -39,6 +40,7 @@ interface StoryItem {
   linkedArtifact?: string;
   artifactTab: string;
   milestone?: boolean;
+  detail?: string;
 }
 
 function collectItems(snapshot: Snapshot): StoryItem[] {
@@ -89,16 +91,16 @@ function collectItems(snapshot: Snapshot): StoryItem[] {
           ? artifactKey(snapshot, (event as any).solve_result_ref)
           : event.kind === "code_saved"
             ? artifactKey(snapshot, (event as any).artifact_ref)
-            : event.kind === "candidate_assessed"
-              ? artifactKey(snapshot, (event as any).assessment_ref)
+            : event.kind === "check_finished"
+              ? artifactKey(snapshot, (event as any).check_ref)
               : undefined;
     items.set("event-" + event.sequence_no, {
       id: "event-" + event.sequence_no,
       label,
       actor: event.kind === "solver_started" || event.kind === "solver_finished" ? "求解器" : undefined,
-      phase: event.kind.startsWith("solver")
+      phase: event.kind.startsWith("solver") || event.kind === "check_finished"
         ? "solve"
-        : event.kind === "clarification_requested"
+        : event.kind === "clarification_requested" || event.kind === "selection_saved"
           ? "coordination"
           : event.kind.startsWith("code") || event.kind.startsWith("method_execution")
             ? "code"
@@ -112,7 +114,12 @@ function collectItems(snapshot: Snapshot): StoryItem[] {
       // 方法事件之外的核心事件不占用 data-artifact 契约,产物经按钮跳转。
       linkedArtifact: linked,
       // 澄清问答本身是建模输出(答复构成后续输入),无论何时都展示。
-      milestone: event.kind === "clarification_requested",
+      milestone: event.kind === "clarification_requested" || event.kind === "selection_saved",
+      detail: event.kind === "selection_saved"
+        ? `检查 ${(event as any).check_id} · ${(event as any).reason}`
+        : event.kind === "check_finished"
+          ? `检查 ${(event as any).check_id}`
+          : undefined,
       artifactTab: event.kind === "solver_finished" ? "diagnostics" : "formulation",
     });
   }
@@ -137,8 +144,8 @@ const orderOf = (item: StoryItem, snapshot: Snapshot) => {
 };
 
 function assessmentFeedback(snapshot: Snapshot, item: StoryItem) {
-  if (!item.linkedArtifact?.includes("/assessment.json")) return null;
-  const assessment = snapshot.contents?.[item.linkedArtifact] as CandidateAssessment | undefined;
+  if (!item.linkedArtifact?.includes("/check.json")) return null;
+  const assessment = snapshot.contents?.[item.linkedArtifact] as CheckResult | undefined;
   if (!assessment) return null;
   const diagnostics = assessment.diagnostics || [];
   const stages = Object.entries(assessment.stages || {})
@@ -243,6 +250,7 @@ export function StoryFlow({
                   <strong>{roleLabel(item.label)}</strong>
                   <span>
                     {phaseLabel(item.phase)}
+                    {item.detail ? " · " + item.detail : ""}
                     {item.status === "running" && !failedStep ? " · 进行中" : ""}
                   </span>
                 </div>
@@ -264,7 +272,7 @@ export function StoryFlow({
                   {feedback.stages.length ? (
                     <p className="hint">已通过检查的阶段:{feedback.stages.join("、")}</p>
                   ) : (
-                    <p className="hint">该候选尚无通过记录的阶段。</p>
+                    <p className="hint">该检查尚无通过记录的阶段。</p>
                   )}
                   {feedback.diagnostics.length ? (
                     feedback.diagnostics.map((diagnostic: any, index: number) => (

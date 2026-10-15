@@ -13,7 +13,7 @@
 | `tests/test_prompt_methods.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
 | `tests/test_ortools_solver.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
 | `tests/test_autoformulation.py` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
-| `src/llm4om/prompt_methods.py` | 共享公开模型调用、目标代码与候选反馈 | HTTP与SDK验收；不执行宿主生成代码 |
+| `src/llm4om/prompt_methods.py` | 共享公开模型调用、目标代码与公开检查反馈 | HTTP与SDK验收；不执行宿主生成代码 |
 | `src/llm4om/ortools_solver.py` | 可信OR-Tools／SCIP求解 | 真实LP/MILP、常数、变量界与终止状态 |
 | `src/llm4om/or_llm_agent.py` | OR-LLM-Agent数学建模／代码／调试适配 | 固定提交、流程差异与三个真实Solver与可选原生Gurobi |
 | `src/llm4om/optitree_source/tree.json` | 方法扩展的固定资源或公共行为测试 | 来源hash／许可或聚焦SDK与Solver验收 |
@@ -23,7 +23,7 @@
 | `src/llm4om/optitree.py` | 固定官方类型树的推理适配 | 逐层匹配、思路投影、hash和三个真实Solver与可选原生Gurobi |
 | `src/llm4om/autoformulation.py` | 五阶段MCTS、语义自评与SMT剪枝 | 树搜索、回传、等价区分、可信Solver |
 | `docs/development/s06-method-expansion.md` | 新增方法、自然语言入口及求解器支持范围 | 固定来源、变体差异与验收证据 |
-| `src/llm4om/candidates.py` | 候选保存、编译、执行与中断阶段核对 | 单候选／修正共用；真实Solver与恢复测试 |
+| `src/llm4om/checks.py` | 阶段产物保存、编译、执行与中断阶段核对 | 单提案／修正共用；真实Solver与恢复测试 |
 | `src/llm4om/script_execution.py` | 原生脚本执行与可信结果复用 | 人工原生代码路径、独立收集与预算测试 |
 | `src/llm4om/gateway.py` | 共享LLM预算、私有日志与恢复 | Provider、角色覆盖、未知用量与崩溃恢复测试 |
 | `src/llm4om/run_records.py` | 不可变公共产物与引用图读取 | namespace／hash／大小校验；不读取私有oracle |
@@ -31,7 +31,7 @@
 | `src/llm4om/workbench.py` | 内置方法模板、供应商固定地址预设与说明 | bootstrap及浏览器配置切换、固定地址校验；Planner仍负责兼容性 |
 | `frontend/src/useRunSnapshot.ts` | 当前任务／版本与顺序轮询 | 迟到响应、版本选择与浏览器回归 |
 | `frontend/src/components/ProblemEditor.tsx` | 问题、上传和单一有效运行配置 | 表单／配置保存、模型目录与 ID 选择、迟到响应隔离和提交验收 |
-| `frontend/src/components/RunView.tsx` | 版本、产物与运行结果展示 | 故事流、历史链接及候选展示 |
+| `frontend/src/components/RunView.tsx` | 版本、产物与运行结果展示 | 故事流、历史链接及阶段修正历史 |
 | `frontend/src/components/RevisionEditor.tsx` | 人工修订模板与派生提交 | 模板响应失效、模型／代码编辑与父历史验收 |
 | `tests/helpers/browser_fixture.cjs` | 独立完整运行样本准备 | 只使用本地Provider与公共HTTP接口，无测试顺序依赖 |
 | `tests/web_state_flow.cjs` | 配置与异步运行选择回归 | 确定性HTTP响应；无任务提交或付费请求 |
@@ -40,10 +40,10 @@
 | `src/llm4om/clarification.py` | 公开请求、锚点与回答的信任边界 | 有界／唯一／原文绑定、确认与新信息分开 |
 | `tests/test_clarification.py` | 公共交互、修订及落盘恢复验收 | HTTP、HiGHS、拒绝、unresolved与OS硬退出 |
 | `docs/development/s05-public-candidates.md` | 公共候选评估、来源链、预算与最终选择的实际范围 | 本机 CLI／HiGHS／容器、恢复证据与剩余 S05-C 范围 |
-| `tests/test_candidate_feedback.py` | 安装方法使用候选资源的公共行为验收 | 真实 HiGHS、预算、身份、最终选择、硬退出与 publication 恢复 |
+| `tests/test_check_feedback.py` | 安装方法使用公开检查资源的公共行为验收 | 真实 HiGHS、预算、身份、最终选择、硬退出与 publication 恢复 |
 | `docs/development/s05-feedback-repair.md` | 公共反馈修正方法、阶段来源与验收范围 | 本机 HTTP／真实 Solver、预算、声明比较和恢复证据 |
 | `examples/specs/feedback-repair.yaml` | 外部文本模型的反馈修正配置 | 显式 Provider／模型、共享预算、真实隔离及无密钥模板 |
-| `src/llm4om/feedback_repair.py` | 项目自编的有界公开反馈方法 | 共用 Direct 输出约定、候选资源、无 oracle 选择与版本化状态 |
+| `src/llm4om/feedback_repair.py` | 项目自编的有界公开反馈方法 | 共用 Direct 输出约定、公开检查资源、无 oracle 选择与版本化状态 |
 | `tests/test_feedback_repair.py` | CLI 的真实修正流程验收 | HTTP／HiGHS／Gurobi、失败入账、代码修复、约束变化与崩溃重放 |
 | `.env.example` | 本地 LLM 凭据变量模板 | 无真实密钥；S05-A 非执行加载，进程环境优先 |
 | `.gitattributes` | Git 文本格式 | 全部当前文本类型使用 LF |
@@ -124,7 +124,7 @@
 | `src/llm4om/evaluation.py` | S07-A 单样本后置评测 | 公共运行结果、Code 实际来源、失败、checker error、零 eligible 与无 oracle 导出 |
 | `tests/test_task_evaluation.py` | S07-A 公共接口验收 | 独立 fixture 身份、实际 HTTP／Docker／HiGHS、篡改与失败记录 |
 | `examples/tasks/nl4opt-import.yaml` | 官方固定 dev split 的本地导入配置 | 已下载源字节 hash；路径以配置目录为根，不自动 fetch |
-| `src/llm4om/application.py` | 单问题用例编排 | 调用候选流水线、公共引用校验、恢复与派生用例 |
+| `src/llm4om/application.py` | 单问题用例编排 | 调用公开检查流水线、公共引用校验、恢复与派生用例 |
 | `src/llm4om/cli.py` | 用户 CLI | 参数解析、离线显式选择、JSON 摘要与退出码 |
 | `src/llm4om/contracts.py` | 运行边界校验 | 严格 JSON／YAML、CSV、路径、引用、五元素、输入绑定与 Worker 响应 |
 | `src/llm4om/executors.py` | 真实容器执行 Module | 公共 bytes、权限与资源、有界控制／清理、真实限制证据 |
@@ -174,6 +174,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_factory_run.py` | S02-B 公开 CLI/SDK 验收 | HTTP fixture、真实 Docker/HiGHS、独立安装方法、revision、伪造攻击与失败保留 |
 | `examples/factories/production.py` | 真正按公开 CSV 构建模型的参数化工厂 fixture | 同源模板交换利润改变整数解；明确手工来源 |
 | `docs/adr/0005-factory-collector-isolation.md` | 工厂构建与求解证据隔离取舍 | 子进程导出、可信重构求解、不声称语义等价 |
+| `docs/adr/0006-modeling-process-replaces-candidate.md` | 以建模过程与阶段产物取代候选 | 公开检查仍是信任边界；Pass@k 只在独立运行间统计 |
 | `docs/development/s02b-factory.md` | S02-B 实现、验收与实际限制 | 公共 seams 的 red/green、Docker 数值证据、已完成外部模型／重绑定与独立审阅后修复 |
 
 | `src/llm4om/gurobi.py` | 可选实际 Gurobi LP/MILP API、许可证微型分类与原生 MPS 读取／检查 | Solver/Backend 手算 LP/MILP、真实状态、原生结构／map、派生视图 |
@@ -305,14 +306,17 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/src/highlight.ts` | 无依赖 Python 语法着色扫描器 | 关键字/字符串/数字/注释/内建,跨三引号行拆分 |
 | `frontend/src/components/Records.tsx` | 数学表述、代码与数据视图渲染 | 五元素卡片、需求回链、高亮代码行 |
 | `tests/web_code_view_flow.cjs` | 代码视图浏览器验收 | 语法 token、复制入口、无原始 JSON 展示、轮询与窄屏 |
-| `frontend/src/components/Candidates.tsx` | 候选与修正视图 | 选择理由、阶段、变化表 |
+| `frontend/src/components/StageHistory.tsx` | 两阶段产物修正历史 | 父检查、改动理由、最终选择与版本切换 |
+| `frontend/src/legacyRun.ts` | 旧候选布局运行的只读映射 | 只改内存中的快照名称，不改写已保存文件 |
 | `frontend/src/components/Connectivity.tsx` | 配置体检结果呈现 | 通过/未通过分层摘要、目录检查、建议动作 |
 | `tests/web_start_flow.cjs` | 起点页浏览器验收 | 方法解释卡、切换提示、不兼容警示、预算 chips、体检分层 |
 | `tests/web_failure_flow.cjs` | 失败与诊断浏览器验收 | 人话诊断、建议动作、技术详情折叠、故事结束卡、侧栏辨识 |
 | `frontend/src/components/RuntimeDetails.tsx` | 资源账本、求解执行与调用记录 | 未知Token与费用不记零 |
-| `frontend/src/components/Decision.tsx` | 决策面板、失败诊断与决策探索 | 候选模型结果、余量试算 |
+| `frontend/src/components/Decision.tsx` | 决策面板、失败诊断与决策探索 | 模型结果、余量试算 |
 | `frontend/src/components/StoryFlow.tsx` | 垂直故事流:过程事件卡片与输出摘要 | 角色发言、状态预览、时间窗消耗、实时消耗条、产物直达 |
 | `tests/web_story_flow.cjs` | 故事流浏览器验收 | 里程碑卡片集、实时消耗、跳转、无原始 JSON、轮询与窄屏 |
+| `tests/web_stage_history_flow.cjs` | 两阶段修正历史与建模过程步骤的浏览器验收 | 确定性修正运行、版本切换、无代码产物时不显示历史、公开检查与最终选择步骤 |
+| `tests/web_legacy_run_flow.cjs` | 早于 ADR-0006 的候选布局运行只读浏览验收 | 真实修正运行映射回旧布局，修正历史与公开检查步骤仍可见 |
 | `frontend/src/components/Datasets.tsx` | 内置 Benchmark 列表、题面与单问题试用 | 分页、复制、公开业务数据、带入建模、键盘与窄屏 |
 | `tests/test_web_datasets.py` | 内置 Benchmark 公共 HTTP 验收 | 九组2033条公开题面、分页、不混入工作区任务、公开输入与参考字段隔离 |
 | `tests/web_datasets_flow.cjs` | 内置 Benchmark 浏览器验收 | 九组浏览、复制、带入建模、参数携带、配置保留与窄屏 |
@@ -378,11 +382,10 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_web_data_previews.py` | 有界公开数据预览的HTTP验收 | CSV逗号／多行／前导零、JSON类型表达、显示截断、来源hash和真实HiGHS |
 | `tests/replays/web_data_flow.cjs` | 输入数据页的本机Chrome验收 | 已保存产品／产能表、完整视图／来源、无原始 JSON 展示、轮询与窄屏，零POST |
 
-| `tests/web_model_flow.cjs` | 模型声明与需求来源的本机Chrome验收 | 实际来源展开／关联／来源快照、合成声明的未知状态／候选隔离／安全文本，零POST |
+| `tests/web_model_flow.cjs` | 模型声明与需求来源的本机Chrome验收 | 实际来源展开／关联／来源快照、合成声明的未知状态／检查隔离／安全文本，零POST |
 
 | `tests/web_connection_flow.cjs` | 连接失败的本机Chrome验收 | 固定诊断解释、未知用量、旧记录和无关错误保持，零POST |
-| `tests/replays/web_decision_flow.cjs` | 当前候选模型的决策试算交互 | 已保存真实解、目标／约束代入、恢复、轮询保持、窄屏，零POST |
-| `tests/replays/web_candidates_flow.cjs` | 候选与修正的本机浏览器验收 | 实际双候选、最终选择、声明变化、模型／代码定位、完整列表与窄屏，零POST |
+| `tests/replays/web_decision_flow.cjs` | 当前模型的决策试算交互 | 已保存真实解、目标／约束代入、恢复、轮询保持、窄屏，零POST |
 | `tests/web_model_edit_flow.cjs` | 严格IR普通表单的浏览器验收 | guidance变量与容量约束、输入框完整、增删约束与文档同步、真实HiGHS3、父记录与预算保持 |
 | `tests/replays/web_links_flow.cjs` | 运行页面链接的本机浏览器验收 | 固定版本链接、刷新恢复产物与导出、最新选择、新问题与窄屏，零POST |
 | `tests/replays/web_runtime_flow.cjs` | 可读运行与求解资源的浏览器验收 | 实际版本资源、界限／Gap／执行资源、未知量保持、窄屏，零POST |
@@ -424,3 +427,4 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_web_llm_settings.py` | 页面模型与私有密钥的公共 HTTP 验收 | 供应商设置保存／重启恢复／600 权限、固定地址、两协议认证、实际 HiGHS、无公开 Key |
 | `tests/web_llm_settings_flow.cjs` | 通用 LLM 配置浏览器验收 | 预设／只读地址、供应商配置保存与刷新恢复、掩码／密钥隔离、空输入保留、已有运行覆盖与窄屏 |
 | `docs/development/s09-llm-settings.md` | 供应商预设、本地设置持久化与证据 | 官方固定地址、现有 Provider 抽象、私有文件／Git 忽略、公开／私有输入分离与重启行为 |
+| `docs/development/s09-modeling-process.md` | 建模过程与阶段产物取代候选的行为与证据 | 公开检查与最终选择步骤、修正历史、旧运行只读、Pass@k 口径 |

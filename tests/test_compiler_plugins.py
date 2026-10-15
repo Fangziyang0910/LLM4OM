@@ -71,11 +71,11 @@ class CompilerPluginTests(unittest.TestCase):
                           "--output", str(self.root / "runs"))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         path = Path(json.loads(result.stdout)["bundle_path"])
-        self.assertIn("COMPILER_MARKER = 'selected_compiler'", (path / "candidates/001/model.py").read_text())
-        solve = json.loads((path / "candidates/001/solve-result.json").read_text())
+        self.assertIn("COMPILER_MARKER = 'selected_compiler'", (path / "checks/001/model.py").read_text())
+        solve = json.loads((path / "checks/001/solve-result.json").read_text())
         self.assertEqual(solve["objective_value"], 13)
-        self.assertEqual(json.loads((path / "candidates/001/solution.json").read_text())["variables"], {"qty_A": 3.0, "qty_B": 2.0})
-        code = json.loads((path / "candidates/001/code-artifact.json").read_text())
+        self.assertEqual(json.loads((path / "checks/001/solution.json").read_text())["variables"], {"qty_A": 3.0, "qty_B": 2.0})
+        code = json.loads((path / "checks/001/code-artifact.json").read_text())
         self.assertEqual(code["provenance"]["compiler_id"], "llm4om.examples.ast_compiler")
 
     def test_missing_compiler_in_worker_rejects_before_generation_or_solver_attempt(self):
@@ -206,7 +206,7 @@ class CompilerPluginTests(unittest.TestCase):
         result = self.cli("run", "--problem", str(self.inputs / "problem.json"), "--config", str(config), "--output", str(self.root / "runs"))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         path = Path(json.loads(result.stdout)["bundle_path"])
-        self.assertAlmostEqual(json.loads((path / "candidates/001/solve-result.json").read_text())["objective_value"], 40 / 3)
+        self.assertAlmostEqual(json.loads((path / "checks/001/solve-result.json").read_text())["objective_value"], 40 / 3)
 
 
 if __name__ == "__main__":

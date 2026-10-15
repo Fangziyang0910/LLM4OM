@@ -29,7 +29,7 @@ class OptimusMethodTests(unittest.TestCase):
     def test_natural_input_retains_parameter_objective_clause_and_code_stages(self):
         tape = Tape(REPLIES)
         result = self.run_tape(tape)
-        self.assertEqual(result.final_candidate_id,"001")
+        self.assertEqual(result.selected_check_id,"001")
         self.assertEqual([call["role"] for call in tape.requests], ["optimus.parameters", "optimus.objective",
             "optimus.constraints", "optimus.constraint_model", "optimus.objective_model", "optimus.code"])
         self.assertEqual(len([name for name in tape.files if name.startswith("state_")]),6)
@@ -49,7 +49,7 @@ class OptimusMethodTests(unittest.TestCase):
     def test_failed_code_is_repaired_without_repeating_formulation(self):
         tape = Tape(REPLIES+["def build_model(data): pass # corrected"],exits=(1,0))
         result = self.run_tape(tape)
-        self.assertEqual(result.final_candidate_id,"002")
+        self.assertEqual(result.selected_check_id,"002")
         self.assertEqual(len(tape.requests),7)
         self.assertEqual(tape.assessments[0][1].formulation["representation"],tape.assessments[1][1].formulation["representation"])
 

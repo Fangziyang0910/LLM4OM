@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 // Each view/edit test creates its own run through the public HTTP interface.
-async function completedRun(page) {
+async function completedRun(page, { descriptionSuffix = "" } = {}) {
   const url = process.env.LLM4OM_WEB_TEST_URL;
   const provider = process.env.LLM4OM_WEB_TEST_PROVIDER_URL;
   for (const address of [url, provider])
@@ -17,6 +17,7 @@ async function completedRun(page) {
       max_output_tokens: 8192, timeout_s: 30 } };
   const problem = JSON.parse(fs.readFileSync(path.join(__dirname, "../../examples/specs/problem.json"), "utf8"));
   problem.data_refs = [];
+  problem.description += descriptionSuffix;
   const headers = { "X-LLM4OM-Token": bootstrap.token };
   const created = await page.request.post(url + "/api/jobs", { headers, data: { config, problem, data: [] } });
   assert.ok(created.ok(), await created.text());

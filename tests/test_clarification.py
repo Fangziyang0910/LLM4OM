@@ -43,7 +43,7 @@ class ClarificationTests(unittest.TestCase):
         solve = json.loads((path / completed["solve_result_ref"]["relative_path"]).read_text())
         self.assertEqual(solve["objective_value"], 13)
         ledger = json.loads((path / "budget-ledger.json").read_text())
-        self.assertEqual((ledger["external_llm_requests"], ledger["candidates"], ledger["solver_calls"]), (2, 1, 1))
+        self.assertEqual((ledger["external_llm_requests"], ledger["checks"], ledger["solver_calls"]), (2, 1, 1))
 
     def test_published_answer_recovers_without_resubmitting_the_response_file(self) -> None:
         self.run_arguments = ["--interactive"]

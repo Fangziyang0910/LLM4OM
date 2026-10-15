@@ -12,7 +12,7 @@ LLM4OM 是让普通使用者通过自然语言解决优化问题的平台。输�
 
 ## 当前状态
 
-当前SDK／Worker为0.37.0开发版本，尚未发布完整1.0。CLI与Web已提供输入问题、选择方法、展示真实建模步骤、五元素表述、求解代码、决策结果和保存版本。结果页支持数据预览、模型数值编辑、派生求解、候选比较、决策试算与运行资源展示。
+当前SDK／Worker为0.37.0开发版本，尚未发布完整1.0。CLI与Web已提供输入问题、选择方法、展示真实建模步骤、五元素表述、求解代码、决策结果和保存版本。结果页支持数据预览、模型数值编辑、派生求解、修正历史浏览、决策试算与运行资源展示。
 
 当前开发交付以本机后端与Web能启动、展示并运行单问题流程为准。复用已有接口，按修改范围做聚焦检查；公网多人部署、多平台适配和正式发布不属于当前收尾范围。
 
@@ -43,7 +43,7 @@ uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --hos
 ```
 
 浏览器打开 `http://127.0.0.1:8767` 即可：输入自然语言问题与数据 → 选择方法 → 观察真实建模步骤 →
-查看五元素表述、求解代码、决策结果与运行记录，支持数据预览、模型数值编辑、派生求解、候选比较、
+查看五元素表述、求解代码、决策结果与运行记录，支持数据预览、模型数值编辑、派生求解、修正历史浏览、
 决策试算、人工修订与内置 Benchmark 浏览。样例直接复用 OPT-Agent 已整理的 9 组、2033 条题面，可逐条复制或带入建模，无需上传数据集。详情见[内置样例记录](docs/development/s09-builtin-benchmarks.md)。访问令牌由服务启动时生成，页面自动获取。LLM 可选择 OpenAI、Google、Kimi、GLM、OpenRouter、阿里云百炼、DeepSeek 或 Anthropic，填写模型名和 Key；预设地址固定，只有 OpenAI 兼容选项允许自定义地址。页面显示密钥配置状态和掩码预览，密钥不写入公开配置、记录或导出。会话与恢复行为见[LLM 配置记录](docs/development/s09-llm-settings.md)。
 点击“保存模型配置与密钥”即可按供应商保存，开始建模前也会自动保存。刷新页面或重启同一工作区后自动恢复。设置位于 `<workspace>/.private/llm-settings.local.json`，文件权限为 600，已由 Git 忽略；原 `.env` 默认服务继续可用。
 已有密钥时会自动读取服务的模型目录，也可点击“获取模型列表”。列表显示展示名称和 API ID，选择后填写正确的请求 ID；仍可手动填写。目录读取只查询元数据，不发起文本生成。
@@ -124,7 +124,7 @@ SDK 使用 CancellationToken／cancel_run／resume_run，CLI SIGINT 走同一取
 
 ## 开发约定
 
-每个插件必须声明能力和兼容矩阵，不允许自动降级后仍把结果标成原方法；每个评估结论必须说明证据级别。**求解器报告最优，只表示候选模型被求解，不证明模型符合业务需求。**
+每个插件必须声明能力和兼容矩阵，不允许自动降级后仍把结果标成原方法；每个评估结论必须说明证据级别。**求解器报告最优，只表示模型被求解，不证明模型符合业务需求。**
 
 已完成 S01／S02-A／S02-B／S03／S04-A／S04-B／S05-A／S05-B／S07-A／S06-A 当前范围；后续工作与依赖见 [开发计划](docs/implementation-plan.md)。变更功能范围或契约时同步更新规格、示例和验收清单。详细贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
@@ -143,7 +143,7 @@ uv run --locked llm4om evaluate --manifest runs/nl4opt-dev/manifest.json --case-
 SDK 导出 `import_dataset`、`NL4OptAdapter`、`EvaluationCase`、`TaskAdapter`、`Evaluator`、
 `NL4OptEvaluator` 和 `evaluate_case`；已有 `run_problem` 直接接受 case 的公开问题路径。
 只导出 `public/` 和公开 run bundle；manifest 与 `private/` 留在导入／评测端。
-原始标注不是参考最优值。数值目标评测不可用，eligible 分母为零，候选求解证据独立保存。
+原始标注不是参考最优值。数值目标评测不可用，eligible 分母为零，模型求解证据独立保存。
 实际外部模型样本与独立审阅后修复已验收；数值参考条件与其余范围见 [实现证据](docs/development/s07-nl4opt.md)。
 
 ## 切片实现索引
@@ -154,7 +154,7 @@ SDK 导出 `import_dataset`、`NL4OptAdapter`、`EvaluationCase`、`TaskAdapter`
 
 - Direct（默认五元素 Formulation，LPIR／python_factory／native 输出）：见快速开始配置与 [S01](docs/development/s01-offline-run.md)。
 - 参数化工厂（S02-B）：`output_mode: python_factory` 与版本化独立方法 Code proposal。公开 CSV bytes 按 data ID 传入 `build_model(data)`；只在容器子进程构建 Pyomo ModelHandle，可信 Worker 校验导出实例后独立调用 HiGHS。换数据／revision 可复用相同工厂源模板。旧 LPIR、trusted_local 与独立安装 fixture 行为保持，见 [契约](docs/plugin-contracts.md#10-s02-b-parameterized-factory-interface-sdk-050)与[本地验收记录](docs/development/s02b-factory.md)。
-- [公共候选评估](docs/development/s05-public-candidates.md)（0.15.0）：来源链与最终选择。
+- [公开检查](docs/development/s05-public-candidates.md)（0.15.0）：来源链与最终选择；当前以[建模过程与阶段产物](docs/development/s09-modeling-process.md)记录，不再使用候选概念。
 - [反馈修正方法](docs/development/s05-feedback-repair.md)（0.16.0）：解析失败入账、阶段变化、Code-only 来源复用和共享预算。
 - [澄清流程](docs/development/s05-clarification.md)（0.17.0）：显式交互、原声明确认和新问题修订；非交互任务保留 unresolved，不从隐藏答案补齐。
 - [角色模型覆盖](docs/development/s05-role-models.md)（0.14.0）与共享预算。
@@ -188,7 +188,7 @@ uv run --locked llm4om run --problem examples/specs/problem.json --config exampl
 - 本地 Web 首版见 [S09-A](docs/development/s09-web.md)；网页接口已真实调用指定 DeepSeek 并经容器 HiGHS 求得 13。
 - 批量提交、进度、逐样本结果和公共报告下载见 [S09-B](docs/development/s09-batch-web.md)：HTTP 接口保留并由 API 测试覆盖；页面入口已从工作台移除（2026-10-13），日常批量实验走 `llm4om benchmark`／`report` CLI。
 - 人工派生编辑见 [S09-C](docs/development/s09-assisted-edits.md)：CLI 使用 `llm4om edit` 导出文档并执行新版本，网页使用“编辑并创建派生版本”；父产物和预算保留，结果明确标记人工辅助。
-- [S09 用户体验](docs/development/s09-user-experience.md)：决策试算、候选修正浏览、运行版本选择；数值表单编辑后复用 Compiler／Solver 创建人工辅助版本，保留父记录与累计预算。
+- [S09 用户体验](docs/development/s09-user-experience.md)：决策试算、修正历史浏览、运行版本选择；数值表单编辑后复用 Compiler／Solver 创建人工辅助版本，保留父记录与累计预算。
 - [S09-D 前端重构](docs/development/s09-frontend-redesign.md)：React + Vite + TypeScript 构建链、垂直故事流、结构化结果区与起点页、人话失败诊断、统一设计令牌与键盘可达；后端契约零改动。
 - 已保存的单问题可用 `llm4om report --run runs/RUN_ID` 重新呈现，不重调模型／Solver。
 

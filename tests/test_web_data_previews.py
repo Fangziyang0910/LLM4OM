@@ -90,7 +90,7 @@ class WebDataPreviewTests(unittest.TestCase):
                     ['enabled', 'false'], ['unknown', 'null']])
                 refs = {ref['data_id']: ref for ref in result['contents']['public-problem.json']['data_refs']}
                 self.assertEqual(notes['metadata']['source_sha256'], refs['notes']['sha256'])
-                self.assertEqual(result['contents']['candidates/001/solve-result.json']['objective_value'], 13)
+                self.assertEqual(result['contents']['checks/001/solve-result.json']['objective_value'], 13)
                 self.assertFalse(any('private' in ref['relative_path'] for ref in result['artifacts']))
             finally:
                 process.send_signal(signal.SIGTERM)

@@ -7,7 +7,7 @@
   "display_name": "Engineering Objective Offset",
   "description": "An independently installed method; intentionally shifts a fixture objective to expose the integration path.",
   "capabilities": {
-    "method_profile": "grounded_single_candidate/0.1.0",
+    "method_profile": "grounded_single/0.2.0",
     "problem_types": [
       "lp",
       "milp"

@@ -18,6 +18,6 @@ class OptimusInlineTests(unittest.TestCase):
         context = MethodContext(tape,{"business_data":raw},{"max_repairs":2,"wall_time_s":20},"a"*64,
             resources=tape,code_target=target())
         result = asyncio.run(OptimusInlineFactory().create({"rag_mode":None}).run(problem,context))
-        self.assertEqual(result.status,"candidate_selected")
+        self.assertEqual(result.status,"selected")
         self.assertIn("Capacity",tape.requests[0]["messages"][-1]["content"])
         self.assertEqual(tape.assessments[0][1].code.data_bindings,problem["data_refs"])

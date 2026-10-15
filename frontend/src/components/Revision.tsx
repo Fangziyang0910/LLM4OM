@@ -194,7 +194,7 @@ export function fieldSpecs(base: EditDocument): FieldSpec[] {
     ["max_llm_attempts", "模型请求总上限"],
     ["max_total_tokens", "Token 总上限"],
     ["max_solver_calls", "求解次数总上限"],
-    ["max_candidates", "候选总上限"],
+    ["max_checks", "公开检查上限"],
     ["wall_time_s", "新运行时间上限（秒）"],
   ] as [string, string][])
     specs.push({ label, path: ["budget", key], kind: "number" });
@@ -215,7 +215,7 @@ export function validateRevision(document: EditDocument, template: EditDocument,
           : [];
   if (walk(document.structured_ir).some(invalid))
     return "请填写有效的数值。只有变量边界可以留空。";
-  if (["max_llm_attempts", "max_total_tokens", "max_solver_calls", "max_candidates", "wall_time_s"].some((key) =>
+  if (["max_llm_attempts", "max_total_tokens", "max_solver_calls", "max_checks", "wall_time_s"].some((key) =>
     invalid(document.budget[key]),
   ))
     return "请填写有效的数值。只有变量边界可以留空。";
@@ -228,8 +228,8 @@ export function validateRevision(document: EditDocument, template: EditDocument,
   )
     return "问题修订需要完整描述和新的版本标识。";
   if (document.operation === "code" && !document.code?.source.trim()) return "求解代码不能留空。";
-  if (document.budget.max_candidates <= (consumed?.candidates || 0))
-    return "候选总上限需要覆盖已有候选和本次新增候选。";
+  if (document.budget.max_checks <= (consumed?.checks || 0))
+    return "公开检查上限需要覆盖已有检查和本次新增检查。";
   return null;
 }
 
@@ -371,8 +371,8 @@ export function RevisionFields({
           format(consumed.llm_attempts) +
           " 次 · 求解 " +
           format(consumed.solver_calls) +
-          " 次 · 候选 " +
-          format(consumed.candidates) +
+          " 次 · 公开检查 " +
+          format(consumed.checks) +
           " 个 · 已知 Token " +
           format(consumed.known_total_tokens ?? consumed.total_tokens) +
           "。下方是包含这些消耗的总上限。"}
