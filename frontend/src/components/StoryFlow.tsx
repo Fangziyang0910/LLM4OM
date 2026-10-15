@@ -1,6 +1,7 @@
 // 按真实事件展示方法步骤与阶段产物，点击有产物的步骤进入对应阅读区。
 // `.timeline-step[data-artifact]` 契约保持:run_public 产物事件挂 data-artifact。
 import { useMemo, useState } from "react";
+import { Icon } from "./Icon";
 import type { ArtifactRef, CheckResult, CodeArtifact, ModelArtifact, Snapshot } from "../types";
 import { artifactKey, artifactLabel, failureDiagnosis, format, phaseLabel, roleLabel, shortMethod, status } from "../ui";
 
@@ -221,14 +222,14 @@ export function StoryFlow({
                   if (expandable) setExpanded(prior => ({ ...prior, [item.id]: !isOpen }));
                 }}>
                 <span className="step-marker" aria-hidden="true">
-                  {item.status === "completed" ? "✓" : failedStep ? "!" : item.status === "needs_input" ? "?" : ""}
+                  {item.status === "completed" ? <Icon name="check" size={13} /> : failedStep ? "!" : item.status === "needs_input" ? "?" : ""}
                 </span>
                 <span className="step-content">
                   <strong>{roleLabel(item.label)}</strong>
                   <span>{phaseLabel(item.phase)}{item.status === "running" && !failedStep ? " · 进行中" : ""}</span>
                 </span>
-                {expandable ? <span aria-hidden="true">{isOpen ? "−" : "+"}</span> : jumpKey ? (
-                  <span className="story-artifact-button" title={artifactLabel(jumpKey)} aria-label={"查看" + artifactLabel(jumpKey)}>↗</span>
+                {expandable ? <span className={"story-expand" + (isOpen ? " open" : "")}><Icon name="down" size={14} /></span> : jumpKey ? (
+                  <span className="story-artifact-button" title={artifactLabel(jumpKey)} aria-label={"查看" + artifactLabel(jumpKey)}><Icon name="external" size={14} /></span>
                 ) : null}
               </button>
               {item.detail ? <details className="step-detail"><summary>{item.label === "最终选择" ? "选择依据" : "检查记录"}</summary>
@@ -274,7 +275,7 @@ export function StoryFlow({
             </header>
             <div className="story-body">
               <button type="button" className="secondary" onClick={onOpenResult}>
-                {finished ? "查看求解结果 →" : "查看运行详情 →"}
+                {finished ? "查看求解结果" : "查看运行详情"}<Icon name="arrow" size={15} />
               </button>
             </div>
           </article>

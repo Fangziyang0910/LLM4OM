@@ -6,6 +6,7 @@ import { Datasets } from "./components/Datasets";
 import { ProblemEditor } from "./components/ProblemEditor";
 import { RunView } from "./components/RunView";
 import { Dialog } from "./components/Dialog";
+import { Icon } from "./components/Icon";
 import type { BenchmarkInput, Bootstrap, DatasetSummary, JobRecord } from "./types";
 
 type View = "editor" | "run" | "datasets";
@@ -64,7 +65,7 @@ export default function App() {
     <>
       <header className="app-bar">
         <a className="brand" href="/">
-          <span className="brand-symbol">∑</span> LLM<span>4</span>OM
+          <span className="brand-symbol"><Icon name="brand" size={26} /></span> LLM<span>4</span>OM
         </a>
         <nav aria-label="工作台导航"><button
           aria-current={view === "editor" ? "page" : undefined}
@@ -76,7 +77,7 @@ export default function App() {
             notice("");
           }}
         >
-          <span aria-hidden="true">＋</span> 新建问题
+          <Icon name="plus" size={16} /> 新建问题
         </button>
           <button
             aria-current={view === "datasets" ? "page" : undefined}
@@ -88,9 +89,9 @@ export default function App() {
               refreshDatasets().catch((error) => notice((error as Error).message, true));
             }}
           >
-            示例题库
+            <Icon name="book" size={16} /> 示例题库
           </button>
-          <button id="open-history" className="nav-link" onClick={() => setHistoryOpen(true)}>历史记录</button>
+          <button id="open-history" className="nav-link" onClick={() => setHistoryOpen(true)}><Icon name="history" size={16} />历史记录</button>
         </nav>
       </header>
       <Dialog open={historyOpen} title="历史记录" onClose={() => setHistoryOpen(false)}>

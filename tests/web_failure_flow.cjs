@@ -76,7 +76,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     );
     assert.match(await ending.innerText(), /检查/);
     assert.equal(await ending.locator(".failure-detail").count(), 0);
-    await ending.getByRole("button", { name: "查看运行详情 →" }).click();
+    await ending.getByRole("button", { name: "查看运行详情", exact: true }).click();
     assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "diagnostics");
     await page.getByRole("tab", { name: "求解结果" }).click();
     assert.match(await page.locator(".failure-summary").innerText(), /provider_connection_error/);

@@ -1,5 +1,6 @@
 // 内置 benchmark 样例浏览；只复制公开问题和业务数据。
 import { useEffect, useState } from "react";
+import { Icon } from "./Icon";
 import { api } from "../api";
 import { format } from "../ui";
 import type { BenchmarkCase, BenchmarkInput, DatasetSummary, Notice } from "../types";
@@ -94,8 +95,8 @@ export function Datasets({ datasets, refresh, onTry, notice }: {
     <p className="hint">浏览已集成的问题集，选一条题目直接试试建模。</p>
     <div className="benchmark-grid">
       {datasets.map(item => <button key={item.task_id} className="dataset-row benchmark-card" onClick={() => setOpenId(item.task_id)}>
-        <div className="benchmark-card-top"><span className="benchmark-symbol" aria-hidden="true">▦</span><span>{format(item.N_cases)} 个问题</span></div>
-        <h3>{item.title}</h3><p>{item.description}</p><span className="benchmark-open">浏览样例 <span aria-hidden="true">↗</span></span>
+        <div className="benchmark-card-top"><span className="benchmark-symbol"><Icon name="book" size={21} /></span><span>{format(item.N_cases)} 个问题</span></div>
+        <h3>{item.title}</h3><p>{item.description}</p><span className="benchmark-open">浏览样例 <Icon name="arrow" size={16} /></span>
       </button>)}
     </div>
     {!datasets.length ? <p className="hint">正在读取平台样例，请稍后刷新。</p> : null}

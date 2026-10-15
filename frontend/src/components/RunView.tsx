@@ -8,6 +8,7 @@ import { Records } from "./Records";
 import { RuntimeDetails } from "./RuntimeDetails";
 import { StoryFlow } from "./StoryFlow";
 import { Dialog } from "./Dialog";
+import { Icon } from "./Icon";
 import { RevisionEditor } from "./RevisionEditor";
 import type { ArtifactRef, CodeArtifact, ModelArtifact, Notice, Snapshot, SolveResult } from "../types";
 
@@ -184,8 +185,8 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
               catch (error) { notice((error as Error).message, true); }
             }}>继续恢复</button>
           <a id="export" className="secondary" href={`/api/jobs/${currentJob}/export${selectedRun ? "?run_id=" + selectedRun : ""}`}
-            hidden={!snapshot.bundle}>导出产物 ↓</a>
-          <details className="run-tools"><summary className="secondary" aria-label="更多运行操作">···</summary>
+            hidden={!snapshot.bundle}><Icon name="download" size={16} />导出产物</a>
+          <details className="run-tools"><summary className="secondary" aria-label="更多运行操作"><Icon name="more" /></summary>
             <div className="run-tools-menu" onClick={event => {
               const menu = event.currentTarget.closest("details")!;
               menu.open = false;
@@ -198,7 +199,7 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
                   setActiveTab(tab); setArtifactSelectedByUser(false); setProcessPreference(false);
                 }}>
                 {tab === "data" ? "问题数据" : "运行详情"}</button>)}
-              <a id="run-link" href={runLink.href} hidden={runLink.hidden}>此版本链接 ↗</a>
+              <a id="run-link" href={runLink.href} hidden={runLink.hidden}>此版本链接 <Icon name="external" size={14} /></a>
               <button id="rerun" hidden={Boolean(snapshot.historical)} disabled={runBusy}
                 onClick={async () => {
                   try {
@@ -225,14 +226,15 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
                   ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
                 if (target !== null) { event.preventDefault(); tabs[target].focus(); tabs[target].click(); }
               }}>
-              <span className={"stage-dot " + state} title={status(state || "pending")} aria-hidden="true" />{label}
+              <Icon name={tab === "result" ? "chart" : tab === "code" ? "code" : "model"} size={17} />{label}
+              <span className={"stage-dot " + state} title={status(state || "pending")} aria-hidden="true" />
             </button>;
           })}
         </div>
         <button id="toggle-process" className={"process-toggle" + (processOpen ? " active" : "")} aria-expanded={processOpen}
           aria-controls="process-panel" onClick={() => setProcessPreference(!processOpen)}>
           <span className={"stage-dot " + (runBusy ? "running" : finished ? "available" : "pending")} aria-hidden="true" />
-          {runBusy ? "正在建模" : "建模过程"}<span aria-hidden="true">{processOpen ? "↗" : "↙"}</span>
+          {runBusy ? "正在建模" : "建模过程"}<Icon name={processOpen ? "close" : "history"} size={16} />
         </button>
       </div>
       <div className="run-workspace" data-process-open={processOpen}>
@@ -256,7 +258,7 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
                 <div id="decision"><Decision solve={solve} solution={solution} snapshot={snapshot}
                   solvedIR={solvedIR} onOpenDiagnostics={() => { setActiveTab("diagnostics"); setProcessPreference(false); }} /></div>
               ) : selectedArtifact === undefined && ["running", "queued", "needs_input"].includes(snapshot.job.status) ? (
-                <div className="empty-view"><div className="empty-icon" aria-hidden="true">∑</div>
+                <div className="empty-view"><div className="empty-icon"><Icon name={activeTab === "code" ? "code" : "model"} size={27} /></div>
                   <h3>{snapshot.job.status === "needs_input" ? "补充信息后继续建模" : activeTab === "code" ? "正在生成求解代码" : "正在构建数学模型"}</h3>
                   <p className="hint">生成的产物会自动显示在这里。</p>
                 </div>
@@ -265,8 +267,8 @@ export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }
           </div>
         </section>
         <aside id="process-panel" className="process-panel" aria-label="建模过程" hidden={!processOpen}>
-          <div className="process-heading"><h2>建模过程</h2><button className="icon-button" aria-label="收起建模过程"
-            onClick={() => setProcessPreference(false)}>×</button></div>
+          <div className="process-heading"><h2><Icon name="history" />建模过程</h2><button className="icon-button" aria-label="收起建模过程"
+            onClick={() => setProcessPreference(false)}><Icon name="close" size={17} /></button></div>
           {snapshot.job.status === "needs_input" && clarificationRequest ? (
             <Clarification key={clarificationRequest.request_id} request={clarificationRequest}
               problem={contents["public-problem.json"]}

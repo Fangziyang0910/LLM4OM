@@ -83,6 +83,8 @@ for (const address of [url, provider])
     const doctorText = await page.locator("#doctor-result").innerText();
     assert.match(doctorText, /HTTP 501|接口可达/);
     assert.match(doctorText, /建议检查服务地址与凭据后重试|可以提交运行/);
+    const optionsAction = await page.getByRole('button', { name: '完成设置', exact: true }).boundingBox();
+    assert.ok(optionsAction.y >= 0 && optionsAction.y + optionsAction.height <= 844, '长配置中的确认按钮应保持可见');
     assert.equal(
       await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
       false,

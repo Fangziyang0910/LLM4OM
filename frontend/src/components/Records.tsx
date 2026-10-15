@@ -1,5 +1,6 @@
 // 数学表述、求解代码与数据视图的结构化渲染,移植自原 visuals.js 的同名逻辑。
 import { useState } from "react";
+import { Icon } from "./Icon";
 import type { DataPreview } from "../types";
 import { assumptionStatusNames, format, parameterValue, senseOperator, status, VarSymbol } from "../ui";
 import { isBareFormula, MathTex } from "../math";
@@ -287,17 +288,17 @@ function CodeView({ value }: { value: any }) {
     }
   };
   return (
-    <>
+    <section className="code-view">
       <div className="code-toolbar">
         <span className="pill">Python · 求解实现</span>
         <button className="secondary" onClick={copy}>
-          {copied || "复制代码"}
+          <Icon name="copy" size={15} />{copied || "复制代码"}
         </button>
       </div>
       <div ref={(el) => (linesRef.current = el)}>
         <HighlightedCode code={source} />
       </div>
-    </>
+    </section>
   );
 }
 

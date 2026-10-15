@@ -1,6 +1,6 @@
 # 仓库文件职责与核验索引
 
-日期：2026-10-15；SDK／Worker开发版本：0.37.0。当前包含 368 个仓库文件；切片验收范围见各实现记录，完整1.0尚在开发。
+日期：2026-10-15；SDK／Worker开发版本：0.37.0。当前包含 369 个仓库文件；切片验收范围见各实现记录，完整1.0尚在开发。
 
 规范由 [CODING_STANDARDS](../CODING_STANDARDS.md)维护，任务流程由 [CONTRIBUTING](../CONTRIBUTING.md)维护。文件按当前职责组织；生成文件只修改来源并重建。
 
@@ -31,7 +31,8 @@
 | `src/llm4om/workbench.py` | 内置方法模板、供应商固定地址预设与说明 | bootstrap及浏览器配置切换、固定地址校验；Planner仍负责兼容性 |
 | `frontend/src/useRunSnapshot.ts` | 当前任务／版本与顺序轮询 | 迟到响应、版本选择与浏览器回归 |
 | `frontend/src/components/ProblemEditor.tsx` | 问题输入区与模型／建模选项窗口 | 主操作首屏、配置保存、模型目录、迟到响应隔离和提交验收 |
-| `frontend/src/components/Dialog.tsx` | 配置、历史与修订共用的原生弹窗 | Escape、焦点恢复、背景不可交互与窄屏滚动 |
+| `frontend/src/components/Dialog.tsx` | 配置、历史与修订共用的原生弹窗 | Escape、焦点恢复、独立滚动与常显确认操作 |
+| `frontend/src/components/Icon.tsx` | 工作台共用的本地 SVG 图标 | 控件与产物使用同一笔画、尺寸和颜色；装饰图标不重复朗读 |
 | `frontend/src/components/RunView.tsx` | 全幅产物工作区与可开合过程 | 默认结果、过程自动展开／收起、历史链接、修正历史与窄屏切换 |
 | `frontend/src/components/RevisionEditor.tsx` | 人工修订模板与派生提交 | 模板响应失效、模型／代码编辑与父历史验收 |
 | `tests/helpers/browser_fixture.cjs` | 独立完整运行样本准备 | 只使用本地Provider与公共HTTP接口，按用户路径打开配置窗口，无测试顺序依赖 |
@@ -327,7 +328,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `frontend/src/vendor/katex.css` | KaTeX 样式与字族裁剪(仅 Main/Math/Size) | 字体经 node_modules 相对路径引用,构建时 woff2 内联进 style.css,仓库不存二进制 |
 | `frontend/src/components/Clarification.tsx` | 澄清问答表单与修订构建 | 确认／修订语义、预览 |
 | `frontend/src/components/Revision.tsx` | 人工修订字段规格与校验 | 问题／代码／严格IR、数值语义 |
-| `frontend/src/style.css` | 工作台布局与响应式样式源 | 单一输入区、全幅产物与右侧过程、原生弹窗、焦点、窄屏与减少动画偏好 |
+| `frontend/src/style.css` | 工作台布局与响应式样式源 | 输入区、产物文档、过程、统一视觉变量与控件；弹窗分栏、焦点、窄屏与减少动画偏好 |
 | `src/llm4om/web_assets/index.html` | 构建产物：工作台首页 | 由frontend构建生成，不手改 |
 | `src/llm4om/web_assets/app.js` | 构建产物：应用与渲染逻辑 | 由frontend构建生成，不手改 |
 | `src/llm4om/web_assets/style.css` | 构建产物：样式 | 由frontend构建生成，不手改 |

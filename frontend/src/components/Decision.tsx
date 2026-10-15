@@ -1,5 +1,6 @@
 // 决策面板:失败诊断、进行中提示、求解结果、决策探索与独立检查。
 import { useState } from "react";
+import { Icon } from "./Icon";
 import type { Snapshot } from "../types";
 import { activeStep, failureDiagnosis, format, roleLabel, senseKey, senseOperator, shortMethod, status } from "../ui";
 
@@ -50,7 +51,7 @@ function LiveModeling({ snapshot }: { snapshot: Snapshot }) {
   return (
     <div className={"live-modeling " + state} role="status" aria-live="polite">
       <div className="modeling-orbit" aria-hidden="true">
-        ∑
+        <Icon name="brand" size={29} />
       </div>
       <div className="modeling-copy">
         <span className="eyebrow">
@@ -216,7 +217,7 @@ export function DecisionSummary({ solve, snapshot, onOpenDiagnostics }: {
     <div className="objective-result"><span>目标值</span><strong>{format(solve.objective_value)}</strong></div>
     <div className="solution-status">
       <span className="eyebrow">{solve.has_primal_solution ? "求解完成" : "求解状态"}</span>
-      <h2>{status(solve.termination)}</h2>
+      <h2>{solve.has_primal_solution ? <Icon name="check" size={19} /> : null}{status(solve.termination)}</h2>
       <span className="hint">{(solve.solver_id || "").split(".").at(-1).toUpperCase()}
         {snapshot.bundle?.assisted ? " · 人工辅助结果" : ""}</span>
     </div>

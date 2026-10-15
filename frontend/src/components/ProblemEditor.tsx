@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { format, pretty, shortMethod } from "../ui";
 import { Dialog } from "./Dialog";
+import { Icon } from "./Icon";
 import { Connectivity } from "./Connectivity";
 import type { BenchmarkInput, Bootstrap, JobRecord, Notice, PublicProblem, RunConfig, UploadItem } from "../types";
 
@@ -233,11 +234,16 @@ export function ProblemEditor({ bootstrap, active, notice: notifyParent, onSubmi
   return (
     <section id="editor">
       <div className="editor-intro">
-        <span className="eyebrow">从一个问题开始</span>
-        <h1>你想解决什么问题？</h1>
-        <p>描述目标与条件，让模型为你建模、求解。</p>
+        <div><h1>描述问题，开始求解。</h1>
+          <p>描述你的目标与条件，交给模型来建模和求解。</p></div>
+        <div className="modeling-route" aria-label="从问题到求解结果">
+          <span><Icon name="book" size={21} /><small>描述问题</small></span><Icon name="right" size={14} />
+          <span><Icon name="model" size={21} /><small>建立模型</small></span><Icon name="right" size={14} />
+          <span><Icon name="chart" size={21} /><small>得到结果</small></span>
+        </div>
       </div>
       <div className="composer">
+        <div className="composer-heading"><label htmlFor="description">问题描述</label><span>支持自然语言</span></div>
         <textarea
           id="description"
           rows={6} aria-label="问题描述"
@@ -317,7 +323,7 @@ export function ProblemEditor({ bootstrap, active, notice: notifyParent, onSubmi
         <div className="composer-attachments">
           <div className="upload-line">
             <label className="file-button">
-              ＋ 添加 CSV / JSON
+              <Icon name="attach" size={16} />添加 CSV / JSON
               <input
                 id="data-files"
                 type="file"
@@ -360,16 +366,17 @@ export function ProblemEditor({ bootstrap, active, notice: notifyParent, onSubmi
             </label>
           </div>
 
-          <span className="shortcut-hint">⌘ / Ctrl + Enter 开始</span>
+          <span className="shortcut-hint"><kbd>Ctrl / ⌘</kbd> + <kbd>Enter</kbd> 开始</span>
         </div>
         <div className="composer-toolbar">
           <button id="choose-model" className="model-choice" onClick={() => openDialog("model")} aria-haspopup="dialog">
-            <span className={"credential-dot" + (apiKey || savedCredential || hasDefaultKey ? " configured" : "")} aria-hidden="true" />
-            <span>{directory?.models.find(item => item.id === config.llm.model)?.name || config.llm.model || "选择模型"}</span>
-            <small>{apiKey || savedCredential || hasDefaultKey ? "已配置" : "未配置密钥"}</small><span aria-hidden="true">⌄</span>
+            <Icon name="model" />
+            <span className="model-choice-text"><span>{directory?.models.find(item => item.id === config.llm.model)?.name || config.llm.model || "选择模型"}</span>
+              <small><span className={"credential-dot" + (apiKey || savedCredential || hasDefaultKey ? " configured" : "")} aria-hidden="true" />
+                {apiKey || savedCredential || hasDefaultKey ? "已配置" : "未配置密钥"}</small></span><Icon name="down" size={14} />
           </button>
           <label className="solver-choice">
-            求解器
+            <Icon name="settings" size={17} /><span>求解器</span>
             <select
               id="solver"
               value={config.solver?.plugin_id || ""}
@@ -386,9 +393,9 @@ export function ProblemEditor({ bootstrap, active, notice: notifyParent, onSubmi
             </select>
           </label>
 
-          <button id="open-options" className="options-button" aria-haspopup="dialog" onClick={() => openDialog("options")}>建模选项</button>
+          <button id="open-options" className="options-button" aria-haspopup="dialog" onClick={() => openDialog("options")}><Icon name="settings" size={16} />建模选项</button>
           <button id="submit" className="primary" disabled={submitting || savingSettings || solverSelectionDisabled || !description.trim()}
-            onClick={submitRun}>{submitting ? "正在提交…" : "开始求解"}<span aria-hidden="true">↗</span></button>
+            onClick={submitRun}><Icon name="play" size={16} />{submitting ? "正在提交…" : "开始求解"}</button>
         </div>
       </div>
       {solverSelectionDisabled ? <p className="model-warning">所选方法与求解器不兼容，请在建模选项中调整。</p> : null}
@@ -397,114 +404,118 @@ export function ProblemEditor({ bootstrap, active, notice: notifyParent, onSubmi
           <button type="button" className="example-chip" data-example={key} key={key}
             id={key === "production" ? "load-example" : undefined}
             onClick={() => { setDescription(text); setProblemJson(""); setUploads([]); document.getElementById("description")?.focus(); }}>
-            <strong>{{ production: "生产计划", projects: "项目选择", diet: "配餐优化" }[key]} <span aria-hidden="true">↗</span></strong>
-            <span>{{ production: "资源有限，如何安排产量？", projects: "预算之内，如何选择项目？", diet: "满足营养，如何降低成本？" }[key]}</span>
+            <span className="example-symbol"><Icon name={key === "production" ? "factory" : key === "projects" ? "projects" : "leaf"} size={21} /></span>
+            <span className="example-copy"><strong>{{ production: "生产计划", projects: "项目选择", diet: "配餐优化" }[key]}</strong>
+              <span>{{ production: "资源有限，如何安排产量？", projects: "预算之内，如何选择项目？", diet: "满足营养，如何降低成本？" }[key]}</span></span>
+            <Icon name="right" size={15} />
           </button>
         ))}
       </div>
-      <Dialog open={dialog === "model"} title="选择模型" onClose={() => setDialog(null)}>
+      <Dialog open={dialog === "model"} title="选择模型" onClose={() => setDialog(null)} wide
+        footer={<button className="primary" onClick={() => setDialog(null)}><Icon name="check" size={16} />使用此模型</button>}>
         {feedbackView}
-        <div className="field-grid">
-          <label className="wide">
-            LLM 供应商
-            <select
-              id="provider"
-              value={llmPreset?.id || "unavailable"}
-              onChange={(event) => {
-                const preset = llmPresets.find(item => item.id === event.target.value)!;
-                if (llmPreset) setLlmDrafts(prior => ({ ...prior, [llmPreset.id]: config.llm }));
-                setLlmPresetId(preset.id);
-                setConfig({
-                  ...config, llm: llmDrafts[preset.id] || {
-                    provider_plugin_id: preset.provider_plugin_id, model: "",
-                    config: {
-                      ...config.llm.config, base_url: preset.base_url || "https://api.openai.com/v1",
-                      credential_env: "LLM4OM_LLM_API_KEY"
-                    },
-                  }
-                });
-              }}
-            >
-              {llmPresets.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label}
-                </option>
-              ))}
-              {!llmPreset ? <option value="unavailable" disabled>当前配置 · {config.llm.provider_plugin_id}</option> : null}
-            </select>
-          </label>
-          <div className="wide">
-            <label htmlFor="model">使用模型</label>
-            <input
-              id="model"
-              placeholder="选择或填写模型 ID"
-              value={config.llm.model}
-              onChange={(event) => setConfig(prior => ({ ...prior, llm: { ...prior.llm, model: event.target.value } }))}
-            />
-            <div className="actions">
-              <button id="fetch-models" className="secondary" disabled={directory?.loading || !(apiKey || savedCredential || hasDefaultKey)}
-                onClick={fetchModels}>{directory?.loading ? "正在获取…" : "获取模型列表"}</button>
-            </div>
-            {directory?.models.length ? (
-              <select id="llm-model-list" aria-label="服务返回的模型"
-                value={directory.models.some(model => model.id === config.llm.model) ? config.llm.model : ""}
-                onChange={event => event.target.value && setConfig(prior => ({ ...prior, llm: { ...prior.llm, model: event.target.value } }))}>
-                <option value="">选择服务返回的模型</option>
-                {directory.models.map(model => <option key={model.id} value={model.id}>
-                  {model.name === model.id ? model.id : model.name + " · " + model.id}
-                </option>)}
-              </select>
-            ) : null}
-            <p id="model-directory-status" className="hint" aria-live="polite">
-              {directory?.error ? directory.error + " 可继续手动填写模型 ID。" : directory?.loading ? "正在获取可用模型…"
-                : directory ? `已获取 ${directory.models.length} 个模型${directory.has_more ? "（当前页）" : ""}。`
-                  : "支持从列表选择，也可直接填写模型 ID。"}
-            </p>
-          </div>
-        </div>
-
-        <section id="llm-connection">
-          <div className="connection-heading"><span>连接与密钥</span>
-            <output id="llm-key-status" className="hint" aria-live="polite">
-              {apiKey ? "已填写（未保存）" : savedCredential ? "已保存（本机）" : hasDefaultKey ? "已配置（本机）" : "未配置密钥"}
-              {keyPreview ? " · " + keyPreview : ""}
-            </output></div>
+        <div className="model-settings">
           <div className="field-grid">
             <label className="wide">
-              API 地址（Base URL）
-              <input id="llm-base-url" type="url" value={config.llm.config.base_url || ""}
-                placeholder="https://你的服务地址/v1"
-                readOnly={Boolean(llmPreset?.base_url)}
-                disabled={!llmPreset}
-                onChange={(event) => setConfig(prior => ({
-                  ...prior, llm: {
-                    ...prior.llm,
-                    config: { ...prior.llm.config, base_url: event.target.value }
-                  }
-                }))} />
-              <span className="hint">{llmPreset?.base_url ? "供应商预设地址，不能修改。" : "填写 OpenAI 兼容服务的 API 地址。"}</span>
-            </label>
-            <label className="wide">
-              API Key
-              <input id="llm-api-key" type="password" autoComplete="off" spellCheck={false}
-                value={apiKey} disabled={!config.llm.config.credential_env} maxLength={4096}
-                placeholder={savedCredential || hasDefaultKey ? "本机已有密钥；留空保留，填写可更新" : "填写该供应商的 API Key"}
-                onChange={(event) => setApiKeys(prior => ({ ...prior, [keyId]: event.target.value.trim() }))} />
-
-              <span className="hint">密钥保存在本机；留空保留已有密钥。</span>
+              LLM 供应商
+              <select
+                id="provider"
+                value={llmPreset?.id || "unavailable"}
+                onChange={(event) => {
+                  const preset = llmPresets.find(item => item.id === event.target.value)!;
+                  if (llmPreset) setLlmDrafts(prior => ({ ...prior, [llmPreset.id]: config.llm }));
+                  setLlmPresetId(preset.id);
+                  setConfig({
+                    ...config, llm: llmDrafts[preset.id] || {
+                      provider_plugin_id: preset.provider_plugin_id, model: "",
+                      config: {
+                        ...config.llm.config, base_url: preset.base_url || "https://api.openai.com/v1",
+                        credential_env: "LLM4OM_LLM_API_KEY"
+                      },
+                    }
+                  });
+                }}
+              >
+                {llmPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+                {!llmPreset ? <option value="unavailable" disabled>当前配置 · {config.llm.provider_plugin_id}</option> : null}
+              </select>
             </label>
             <div className="wide">
-              <button id="save-llm-settings" className="secondary" disabled={savingSettings || !llmPreset || !config.llm.model.trim()}
-                onClick={async () => {
-                  try { await saveSettings(); notice("模型配置和密钥已保存到本机。"); }
-                  catch (error) { notice((error as Error).message, true); }
-                }}>{savingSettings ? "保存中…" : "保存模型配置与密钥"}</button>
-            </div></div>
-        </section>
+              <label htmlFor="model">使用模型</label>
+              <input
+                id="model"
+                placeholder="选择或填写模型 ID"
+                value={config.llm.model}
+                onChange={(event) => setConfig(prior => ({ ...prior, llm: { ...prior.llm, model: event.target.value } }))}
+              />
+              <div className="actions">
+                <button id="fetch-models" className="secondary" disabled={directory?.loading || !(apiKey || savedCredential || hasDefaultKey)}
+                  onClick={fetchModels}>{directory?.loading ? "正在获取…" : "获取模型列表"}</button>
+              </div>
+              {directory?.models.length ? (
+                <select id="llm-model-list" aria-label="服务返回的模型"
+                  value={directory.models.some(model => model.id === config.llm.model) ? config.llm.model : ""}
+                  onChange={event => event.target.value && setConfig(prior => ({ ...prior, llm: { ...prior.llm, model: event.target.value } }))}>
+                  <option value="">选择服务返回的模型</option>
+                  {directory.models.map(model => <option key={model.id} value={model.id}>
+                    {model.name === model.id ? model.id : model.name + " · " + model.id}
+                  </option>)}
+                </select>
+              ) : null}
+              <p id="model-directory-status" className="hint" aria-live="polite">
+                {directory?.error ? directory.error + " 可继续手动填写模型 ID。" : directory?.loading ? "正在获取可用模型…"
+                  : directory ? `已获取 ${directory.models.length} 个模型${directory.has_more ? "（当前页）" : ""}。`
+                    : "支持从列表选择，也可直接填写模型 ID。"}
+              </p>
+            </div>
+          </div>
 
-        <div className="dialog-actions"><button className="primary" onClick={() => setDialog(null)}>使用此模型</button></div>
+          <section id="llm-connection">
+            <div className="connection-heading"><span>连接与密钥</span>
+              <output id="llm-key-status" className="hint" aria-live="polite">
+                {apiKey ? "已填写（未保存）" : savedCredential ? "已保存（本机）" : hasDefaultKey ? "已配置（本机）" : "未配置密钥"}
+                {keyPreview ? " · " + keyPreview : ""}
+              </output></div>
+            <div className="field-grid">
+              <label className="wide" hidden={Boolean(llmPreset?.base_url)}>
+                API 地址（Base URL）
+                <input id="llm-base-url" type="url" value={config.llm.config.base_url || ""}
+                  placeholder="https://你的服务地址/v1"
+                  readOnly={Boolean(llmPreset?.base_url)}
+                  disabled={!llmPreset}
+                  onChange={(event) => setConfig(prior => ({
+                    ...prior, llm: {
+                      ...prior.llm,
+                      config: { ...prior.llm.config, base_url: event.target.value }
+                    }
+                  }))} />
+                <span className="hint">{llmPreset?.base_url ? "供应商预设地址，不能修改。" : "填写 OpenAI 兼容服务的 API 地址。"}</span>
+              </label>
+              <label className="wide">
+                API Key
+                <input id="llm-api-key" type="password" autoComplete="off" spellCheck={false}
+                  value={apiKey} disabled={!config.llm.config.credential_env} maxLength={4096}
+                  placeholder={savedCredential || hasDefaultKey ? "本机已有密钥；留空保留，填写可更新" : "填写该供应商的 API Key"}
+                  onChange={(event) => setApiKeys(prior => ({ ...prior, [keyId]: event.target.value.trim() }))} />
+
+                <span className="hint">密钥保存在本机；留空保留已有密钥。</span>
+              </label>
+              <div className="wide">
+                <button id="save-llm-settings" className="secondary" disabled={savingSettings || !llmPreset || !config.llm.model.trim()}
+                  onClick={async () => {
+                    try { await saveSettings(); notice("模型配置和密钥已保存到本机。"); }
+                    catch (error) { notice((error as Error).message, true); }
+                  }}>{savingSettings ? "保存中…" : "保存模型配置与密钥"}</button>
+              </div></div>
+          </section>
+        </div>
       </Dialog>
-      <Dialog open={dialog === "options"} title="建模选项" onClose={() => setDialog(null)} wide>
+      <Dialog open={dialog === "options"} title="建模选项" onClose={() => setDialog(null)} wide
+        footer={<button className="primary" onClick={() => setDialog(null)}><Icon name="check" size={16} />完成设置</button>}>
         {feedbackView}
         <div className="options-grid"><section>
           <label>
@@ -692,7 +703,6 @@ export function ProblemEditor({ bootstrap, active, notice: notifyParent, onSubmi
         <div id="doctor-result" className="doctor-result" hidden={!doctorResult}>
           {doctorResult ? <Connectivity report={doctorResult} /> : null}
         </div>
-        <div className="dialog-actions"><button className="primary" onClick={() => setDialog(null)}>完成设置</button></div>
       </Dialog>
     </section>
   );

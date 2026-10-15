@@ -27,7 +27,13 @@ assert.ok(url && ['127.0.0.1', 'localhost'].includes(new URL(url).hostname));
       await page.locator('#provider').selectOption(preset.id);
       assert.equal(await page.locator('#llm-base-url').inputValue(), preset.base_url);
       assert.equal(await page.locator('#llm-base-url').isEditable(), false);
+      assert.equal(await page.locator('#llm-base-url').isVisible(), false);
     }
+    await page.setViewportSize({ width: 390, height: 844 });
+    const modelAction = await page.getByRole('button', { name: '使用此模型', exact: true }).boundingBox();
+    assert.ok(modelAction.y >= 0 && modelAction.y + modelAction.height <= 844, '模型确认按钮应始终在窗口内');
+    assert.equal(await page.locator('#llm-api-key').isVisible(), true);
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.locator('#provider').selectOption('google');
     await page.locator('#model').fill('my-google-model');
     await page.locator('#llm-api-key').fill('synthetic-google-key');
