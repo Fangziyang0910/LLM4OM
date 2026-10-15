@@ -3,10 +3,38 @@
 from copy import deepcopy
 from typing import Any
 
+from llm4om.contracts import RunError
+
 STANDARD_BUDGET = {"max_llm_attempts": 4, "max_total_tokens": 100000, "max_solver_calls": 4,
                    "max_repairs": 2, "max_candidates": 4, "wall_time_s": 180}
 NATIVE_BUDGET = {"max_llm_attempts": 30, "max_total_tokens": 300000, "max_solver_calls": 12,
                  "max_repairs": 3, "max_candidates": 4, "wall_time_s": 1800}
+
+
+def llm_presets() -> list[dict[str, str]]:
+    return [{'id': identifier, 'label': label, 'provider_plugin_id': 'llm4om.providers.openai_compatible', 'base_url': url}
+        for identifier, label, url in (
+            ('openai', 'OpenAI', 'https://api.openai.com/v1'),
+            ('google', 'Google Gemini', 'https://generativelanguage.googleapis.com/v1beta/openai'),
+            ('kimi', 'Kimi', 'https://api.moonshot.cn/v1'),
+            ('glm', 'GLM（智谱）', 'https://open.bigmodel.cn/api/paas/v4'),
+            ('openrouter', 'OpenRouter', 'https://openrouter.ai/api/v1'),
+            ('bailian', '阿里云百炼（北京）', 'https://dashscope.aliyuncs.com/compatible-mode/v1'),
+            ('deepseek', 'DeepSeek', 'https://api.deepseek.com/v1'),
+            ('openai_compatible', 'OpenAI 兼容（自定义地址）', ''),
+        )] + [{'id': 'anthropic', 'label': 'Anthropic', 'provider_plugin_id': 'llm4om.providers.anthropic',
+            'base_url': 'https://api.anthropic.com/v1'}]
+
+
+def validate_llm_preset(config: dict[str, Any], preset_id: str | None) -> None:
+    if preset_id is None:
+        return
+    preset = next((item for item in llm_presets() if item['id'] == preset_id), None)
+    selected = config['llm']
+    url = selected['config'].get('base_url')
+    if (preset is None or selected['provider_plugin_id'] != preset['provider_plugin_id']
+            or preset['base_url'] and (not isinstance(url, str) or url.rstrip('/') != preset['base_url'])):
+        raise RunError('invalid_config', 'web', 'Preset LLM endpoints are fixed; select OpenAI compatible for a custom URL.')
 
 
 def method_presets() -> dict[str, dict[str, Any]]:

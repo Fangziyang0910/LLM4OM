@@ -31,7 +31,7 @@ from llm4om.assisted import export_edit
 from llm4om.providers import credential_environment
 from llm4om.run_records import read_run_ref
 from llm4om.benchmarks import list_benchmarks, benchmark_detail
-from llm4om.workbench import method_presets
+from llm4om.workbench import llm_presets, method_presets, validate_llm_preset
 from llm4om.storage import cancel_run
 
 MAX_REQUEST = 24 * 1024 * 1024
@@ -149,14 +149,20 @@ class WebWorkspace:
                     or any(ord(char) < 33 or char.isspace() for char in proxy)):
                 raise RunError('invalid_config', 'web', 'LLM4OM_LLM_PROXY_URL must be a plain http:// proxy URL without credentials.')
             config['llm']['config']['proxy_url'] = proxy
-        return {'config': config, 'method_presets': presets, 'plugins': inventory['plugins'], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
+        key = environment.get('LLM4OM_LLM_API_KEY', '')
+        credential = {'provider_plugin_id': config['llm']['provider_plugin_id'],
+            'base_url': config['llm']['config']['base_url'], 'configured': bool(key),
+            'preview': key[:4] + '••••' + key[-4:] if len(key) > 12 else '••••' if key else ''}
+        return {'config': config, 'method_presets': presets, 'llm_presets': llm_presets(),
+            'default_credential': credential, 'plugins': inventory['plugins'], 'jobs': self.list_jobs(), 'tasks': self.list_tasks(), 'experiments': self.list_experiments()}
 
     def doctor(self, config: dict[str, Any], *, check_connectivity: bool = False,
-               api_key: str | None = None) -> dict[str, Any]:
+               api_key: str | None = None, llm_preset: str | None = None) -> dict[str, Any]:
         if type(check_connectivity) is not bool:
             raise RunError('invalid_request', 'web', 'Connectivity selection must be a boolean.')
         config = deepcopy(config)
         validate_config(config)
+        validate_llm_preset(config, llm_preset)
         environment = self._request_environment(config, api_key) if check_connectivity or api_key is not None else {}
         with tempfile.NamedTemporaryFile(prefix='.llm4om-web-doctor-', suffix='.json', dir=Path.cwd()) as temporary:
             path = Path(temporary.name)
@@ -418,6 +424,7 @@ class WebWorkspace:
     def submit(self, payload: dict[str, Any], *, api_key: str | None = None) -> dict[str, Any]:
         config = deepcopy(payload['config'])
         validate_config(config)
+        validate_llm_preset(config, payload.get('llm_preset'))
         environment = self._request_environment(config, api_key)
         job_id = uuid4().hex
         job = self.root / job_id
@@ -745,7 +752,7 @@ def serve_web(root: Path, *, port: int = 8765, host: str = '127.0.0.1') -> None:
                     result = {'jobs': workspace.list_jobs()}
                 elif address.path == '/api/doctor' and mutation:
                     result = workspace.doctor(payload['config'], check_connectivity=payload.get('check_connectivity', False),
-                        api_key=self.headers.get('X-LLM4OM-Provider-Key'))
+                        api_key=self.headers.get('X-LLM4OM-Provider-Key'), llm_preset=payload.get('llm_preset'))
                 elif address.path == '/api/data-preview' and mutation:
                     raw = base64.b64decode(payload['base64'], validate=True)
                     result = _data_preview(raw, payload['format'])

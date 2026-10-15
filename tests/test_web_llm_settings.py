@@ -89,6 +89,27 @@ class WebLLMSettingsTests(unittest.TestCase):
                     with opener.open(Request(url + path, data=raw, headers=headers), timeout=10) as response:
                         return json.load(response)
 
+                presets = {item['id']: item for item in bootstrap['llm_presets']}
+                self.assertEqual(set(presets), {'openai', 'google', 'kimi', 'glm', 'openrouter',
+                    'bailian', 'deepseek', 'anthropic', 'openai_compatible'})
+                credential = bootstrap['default_credential']
+                self.assertTrue(credential['configured'])
+                self.assertEqual(credential['preview'], 'synt••••-key')
+                self.assertNotIn('synthetic-server-default-key', json.dumps(bootstrap))
+                for preset_id, preset in presets.items():
+                    if preset_id == 'openai_compatible':
+                        continue
+                    config = deepcopy(bootstrap['config'])
+                    config['llm']['provider_plugin_id'] = preset['provider_plugin_id']
+                    config['llm']['config']['base_url'] = preset['base_url']
+                    self.assertEqual(api('/api/doctor', {'config': config, 'llm_preset': preset_id})
+                        ['connectivity_checks']['status'], 'not_requested')
+                    config['llm']['config']['base_url'] = 'https://rewritten.invalid/v1'
+                    for endpoint in ('/api/doctor', '/api/jobs'):
+                        with self.assertRaises(HTTPError) as fixed_url:
+                            api(endpoint, {'config': config, 'llm_preset': preset_id, 'description': 'Public input'})
+                        self.assertEqual(fixed_url.exception.code, 400)
+
                 configs = []
                 for index, protocol in enumerate(('openai_compatible', 'anthropic')):
                     config = deepcopy(bootstrap['config'])
@@ -122,6 +143,7 @@ class WebLLMSettingsTests(unittest.TestCase):
                 self.assertIn(('POST', '/v1/messages', None, keys[1], 'chosen-messages'), requests)
                 process.send_signal(signal.SIGINT)
                 process.communicate(timeout=15)
+                environment['LLM4OM_LLM_API_KEY'] = ''
                 process = subprocess.Popen([sys.executable, '-m', 'llm4om', 'serve', '--workspace', str(root), '--port', str(port)],
                     cwd=temporary, env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
                 for _ in range(100):
@@ -132,6 +154,8 @@ class WebLLMSettingsTests(unittest.TestCase):
                         time.sleep(.05)
                 else:
                     self.fail('Web did not restart.')
+                self.assertFalse(bootstrap['default_credential']['configured'])
+                self.assertEqual(bootstrap['default_credential']['preview'], '')
                 api('/api/jobs/' + jobs[0]['job_id'] + '/resume', {'strategy': 'rerun'}, keys[0])
                 for _ in range(200):
                     result = api('/api/jobs/' + jobs[0]['job_id'])

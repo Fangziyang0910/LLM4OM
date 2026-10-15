@@ -44,7 +44,7 @@ uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --hos
 
 浏览器打开 `http://127.0.0.1:8767` 即可：输入自然语言问题与数据 → 选择方法 → 观察真实建模步骤 →
 查看五元素表述、求解代码、决策结果与运行记录，支持数据预览、模型数值编辑、派生求解、候选比较、
-决策试算、人工修订与内置 Benchmark 浏览。样例直接复用 OPT-Agent 已整理的 9 组、2033 条题面，可逐条复制或带入建模，无需上传数据集。详情见[内置样例记录](docs/development/s09-builtin-benchmarks.md)。访问令牌由服务启动时生成，页面自动获取。LLM 可在页面选择协议、填写 Base URL、模型名和 Key；密钥不写入公开配置、记录或导出。会话与恢复行为见[LLM 配置记录](docs/development/s09-llm-settings.md)。
+决策试算、人工修订与内置 Benchmark 浏览。样例直接复用 OPT-Agent 已整理的 9 组、2033 条题面，可逐条复制或带入建模，无需上传数据集。详情见[内置样例记录](docs/development/s09-builtin-benchmarks.md)。访问令牌由服务启动时生成，页面自动获取。LLM 可选择 OpenAI、Google、Kimi、GLM、OpenRouter、阿里云百炼、DeepSeek 或 Anthropic，填写模型名和 Key；预设地址固定，只有 OpenAI 兼容选项允许自定义地址。页面显示密钥配置状态和掩码预览，密钥不写入公开配置、记录或导出。会话与恢复行为见[LLM 配置记录](docs/development/s09-llm-settings.md)。
 `--host 0.0.0.0` 可供局域网访问，但此时 Origin 校验是 CSRF 缓解而非认证，请勿暴露于不受信网络。
 页面源码在 `frontend/`（React + TypeScript），仓库自带已构建的静态资源；改前端后 `npm --prefix frontend run build` 重新生成,流程与浏览器测试见 [CONTRIBUTING](CONTRIBUTING.md)与[S09-D](docs/development/s09-frontend-redesign.md)。
 

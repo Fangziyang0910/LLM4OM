@@ -28,7 +28,7 @@
 | `src/llm4om/gateway.py` | 共享LLM预算、私有日志与恢复 | Provider、角色覆盖、未知用量与崩溃恢复测试 |
 | `src/llm4om/run_records.py` | 不可变公共产物与引用图读取 | namespace／hash／大小校验；不读取私有oracle |
 | `src/llm4om/runtime_identity.py` | 运行、任务和实验共同SDK身份 | 固定源码hash；恢复兼容性测试 |
-| `src/llm4om/workbench.py` | 内置方法工作台模板与说明 | bootstrap及浏览器配置切换；Planner仍负责兼容性 |
+| `src/llm4om/workbench.py` | 内置方法模板、供应商固定地址预设与说明 | bootstrap及浏览器配置切换、固定地址校验；Planner仍负责兼容性 |
 | `frontend/src/useRunSnapshot.ts` | 当前任务／版本与顺序轮询 | 迟到响应、版本选择与浏览器回归 |
 | `frontend/src/components/ProblemEditor.tsx` | 问题、上传和单一有效运行配置 | 表单输入保留、配置草稿和提交验收 |
 | `frontend/src/components/RunView.tsx` | 版本、产物与运行结果展示 | 故事流、历史链接及候选展示 |
@@ -421,6 +421,6 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `src/llm4om/benchmark_sources/optibench.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
 | `src/llm4om/benchmark_sources/optmath.json` | OPT-Agent 公开题面投影 | 逐条等于既有管理器输入、ID唯一、不含答案或参考代码 |
 
-| `tests/test_web_llm_settings.py` | 页面模型与私有密钥的公共 HTTP 验收 | 两协议认证／模型、独立 Key、实际 HiGHS、无持久化／导出、重启重填与拒绝公开 Key |
-| `tests/web_llm_settings_flow.cjs` | 通用 LLM 配置浏览器验收 | 协议／地址／模型／密码表单、方法／Solver 独立、请求头隔离、已有运行重填与窄屏 |
-| `docs/development/s09-llm-settings.md` | 通用模型设置、密钥会话与证据 | 现有 Provider 抽象、公开／私有输入分离、原默认服务与重启行为 |
+| `tests/test_web_llm_settings.py` | 页面模型与私有密钥的公共 HTTP 验收 | 供应商预设／固定地址、密钥状态／掩码、两协议认证、实际 HiGHS、无公开 Key、重启重填 |
+| `tests/web_llm_settings_flow.cjs` | 通用 LLM 配置浏览器验收 | 预设／只读地址、密钥状态与隔离、方法／Solver 独立、请求头隔离、已有运行重填与窄屏 |
+| `docs/development/s09-llm-settings.md` | 供应商预设、密钥会话与证据 | 官方固定地址、现有 Provider 抽象、公开／私有输入分离、原默认服务与重启行为 |

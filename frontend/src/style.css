@@ -395,6 +395,11 @@ textarea::placeholder {
   margin-top: 7px;
   background: var(--paper);
 }
+#llm-key-status {
+  display: block;
+  color: var(--accent);
+  font-weight: 600;
+}
 .advanced-field {
   display: none;
 }

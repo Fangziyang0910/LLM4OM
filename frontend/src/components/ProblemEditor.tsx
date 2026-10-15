@@ -17,6 +17,7 @@ function parseConfig(raw: string): RunConfig {
   const object = (item: unknown) => item !== null && typeof item === "object" && !Array.isArray(item);
   if (!object(value) || !object(value.llm) || !object(value.llm.config) ||
       typeof value.llm.model !== "string" || typeof value.llm.provider_plugin_id !== "string" ||
+      (value.llm.config.base_url !== undefined && typeof value.llm.config.base_url !== "string") ||
       !object(value.budget) || !["method", "model_backend", "solver", "executor", "store"].every(key =>
         object(value[key]) && typeof (value[key] as { plugin_id?: unknown }).plugin_id === "string") ||
       !["max_llm_attempts", "max_total_tokens", "max_candidates", "max_repairs", "max_solver_calls", "wall_time_s", "max_concurrency"].every(key =>
@@ -25,13 +26,31 @@ function parseConfig(raw: string): RunConfig {
   return value;
 }
 
+function credentialId(provider: string, baseUrl = ""): string {
+  return JSON.stringify([provider, baseUrl.replace(/\/+$/, "")]);
+}
+
 export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }: {
   bootstrap: Bootstrap; notice: Notice; onSubmitted: (job: JobRecord) => Promise<void>;
   benchmarkInput?: BenchmarkInput | null;
 }) {
   const [config, setConfig] = useState<RunConfig>(bootstrap.config);
   const [configDraft, setConfigDraft] = useState<string | null>(null);
-  const [apiKey, setApiKey] = useState("");
+  const llmPresets = bootstrap.llm_presets;
+  const [llmPresetId, setLlmPresetId] = useState(() => llmPresets.find(preset =>
+    preset.provider_plugin_id === bootstrap.config.llm.provider_plugin_id && preset.base_url &&
+    preset.base_url === bootstrap.config.llm.config.base_url?.replace(/\/+$/, ""))?.id || "openai_compatible");
+  const [llmDrafts, setLlmDrafts] = useState<Record<string, RunConfig["llm"]>>({});
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  const keyId = credentialId(config.llm.provider_plugin_id, config.llm.config.base_url);
+  const apiKey = apiKeys[keyId] || "";
+  const llmPreset = llmPresets.find(preset => preset.id === llmPresetId &&
+    preset.provider_plugin_id === config.llm.provider_plugin_id);
+  const defaultCredential = bootstrap.default_credential;
+  const hasDefaultKey = defaultCredential.configured && config.llm.config.credential_env === "LLM4OM_LLM_API_KEY" &&
+    credentialId(defaultCredential.provider_plugin_id, defaultCredential.base_url) === keyId;
+  const keyPreview = apiKey ? (apiKey.length > 12 ? apiKey.slice(0, 4) + "••••" + apiKey.slice(-4) : "••••")
+    : hasDefaultKey ? defaultCredential.preview : "";
   const [compatNote, setCompatNote] = useState("");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [description, setDescription] = useState("");
@@ -71,7 +90,6 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
           .filter(
             (p) =>
               p.manifest.kind === kind &&
-              !(kind === "llm_provider" && p.manifest.capabilities.provider_profile !== "http_text/0.1.0") &&
               !(kind === "method" && presets[p.manifest.plugin_id]?.hidden) &&
               !p.manifest.capabilities.human_assisted &&
               (!allowed || allowed.includes(p.manifest.plugin_id)),
@@ -91,11 +109,10 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
       };
       return {
         method: build("method", config.method?.plugin_id),
-        provider: build("llm_provider", config.llm?.provider_plugin_id),
         backend: build("model_backend", config.model_backend?.plugin_id),
         solver: build("solver_backend", config.solver?.plugin_id, compatibleSolvers),
       };
-    }, [plugins, presets, config.method?.plugin_id, config.llm?.provider_plugin_id, config.model_backend?.plugin_id, config.solver?.plugin_id, compatibleSolvers]);
+    }, [plugins, presets, config.method?.plugin_id, config.model_backend?.plugin_id, config.solver?.plugin_id, compatibleSolvers]);
 
     const solverSelectionDisabled = Boolean(
       selectOptions.solver.find((option) => option.value === config.solver?.plugin_id)?.disabled,
@@ -120,9 +137,10 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
       try {
         setSubmitting(true);
         const next = config;
-        const payload: { description: string; config: RunConfig; data: unknown[]; problem?: PublicProblem } = {
+        const payload: { description: string; config: RunConfig; llm_preset?: string; data: unknown[]; problem?: PublicProblem } = {
           description,
           config: next,
+          llm_preset: llmPreset?.id,
           data: uploads.map(({ data_id, format, base64, schema }) => ({
             data_id,
             format,
@@ -152,6 +170,7 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
         notice("正在检查实际环境与兼容路径…");
         const result = await api<{ connectivity_checks: { status: string } }>("/api/doctor", {
           config,
+          llm_preset: llmPreset?.id,
           check_connectivity: checkConnectivity,
         }, apiKey || undefined);
         setDoctorResult(result);
@@ -358,35 +377,28 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
                       ))}
                     </select>
                   </label>
-                  <label>
-                    LLM 接口类型
+                  <label className="wide">
+                    LLM 供应商
                     <select
                       id="provider"
-                      value={config.llm?.provider_plugin_id || ""}
+                      value={llmPreset?.id || "unavailable"}
                       onChange={(event) => {
-                        const defaults: Record<string, string> = {
-                          "llm4om.providers.openai_compatible": "https://api.openai.com/v1",
-                          "llm4om.providers.anthropic": "https://api.anthropic.com/v1",
-                        };
-                        const provider = event.target.value;
-                        const baseUrl = config.llm.config.base_url;
-                        const next = {
-                          ...config,
-                          llm: { ...config.llm, provider_plugin_id: provider, config: {
-                            ...config.llm.config,
-                            ...(defaults[provider] && (!baseUrl || Object.values(defaults).includes(baseUrl))
-                              ? { base_url: defaults[provider] } : {}),
-                          } },
-                        };
-                        setConfig(next);
+                        const preset = llmPresets.find(item => item.id === event.target.value)!;
+                        if (llmPreset) setLlmDrafts(prior => ({ ...prior, [llmPreset.id]: config.llm }));
+                        setLlmPresetId(preset.id);
+                        setConfig({ ...config, llm: llmDrafts[preset.id] || {
+                          provider_plugin_id: preset.provider_plugin_id, model: "",
+                          config: { ...config.llm.config, base_url: preset.base_url || "https://api.openai.com/v1",
+                            credential_env: "LLM4OM_LLM_API_KEY" },
+                        } });
                       }}
                     >
-                      {selectOptions.provider.map((option) => (
-                        <option key={option.value} value={option.value} disabled={option.disabled}>
-                          {{ "llm4om.providers.openai_compatible": "OpenAI 兼容协议",
-                            "llm4om.providers.anthropic": "Anthropic 协议" }[option.value] || option.label}
+                      {llmPresets.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.label}
                         </option>
                       ))}
+                      {!llmPreset ? <option value="unavailable" disabled>当前配置 · {config.llm.provider_plugin_id}</option> : null}
                     </select>
                   </label>
                   <label className="wide">
@@ -402,17 +414,23 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
                     API 地址（Base URL）
                     <input id="llm-base-url" type="url" value={config.llm.config.base_url || ""}
                       placeholder="https://你的服务地址/v1"
-                      disabled={!config.llm.config.credential_env}
+                      readOnly={Boolean(llmPreset?.base_url)}
+                      disabled={!llmPreset}
                       onChange={(event) => setConfig(prior => ({ ...prior, llm: { ...prior.llm,
                         config: { ...prior.llm.config, base_url: event.target.value } } }))} />
+                    <span className="hint">{llmPreset?.base_url ? "供应商预设地址，不能修改。" : "填写 OpenAI 兼容服务的 API 地址。"}</span>
                   </label>
                   <label className="wide">
                     API Key
                     <input id="llm-api-key" type="password" autoComplete="off" spellCheck={false}
                       value={apiKey} disabled={!config.llm.config.credential_env} maxLength={4096}
-                      placeholder="留空使用本机默认服务的密钥；更换服务时请填写"
-                      onChange={(event) => setApiKey(event.target.value.trim())} />
-                    <span className="hint">密钥只用于当前本机服务会话，不写入运行记录。</span>
+                      placeholder={hasDefaultKey ? "本机已有密钥；填写可替换本次使用的密钥" : "填写该供应商的 API Key"}
+                      onChange={(event) => setApiKeys(prior => ({ ...prior, [keyId]: event.target.value.trim() }))} />
+                    <output id="llm-key-status" className="hint" aria-live="polite">
+                      {apiKey ? "已填写（本页）" : hasDefaultKey ? "已配置（本机）" : "未配置密钥"}
+                      {keyPreview ? " · " + keyPreview : ""}
+                    </output>
+                    <span className="hint">切换供应商分别保留本页输入；刷新页面后需重新填写。密钥不写入运行记录。</span>
                   </label>
                   <label className="advanced-field">
                     建模后端
@@ -542,6 +560,9 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
                     onClick={() => {
                       try {
                         const next = parseConfig(configDraft ?? pretty(config));
+                        if (llmPreset?.base_url && (next.llm.provider_plugin_id !== llmPreset.provider_plugin_id ||
+                            next.llm.config.base_url?.replace(/\/+$/, "") !== llmPreset.base_url))
+                          throw new Error("预设供应商的地址不能修改。请先选择 OpenAI 兼容，再填写自定义地址。");
                         setConfig(next);
                         setConfigDraft(null);
                         notice("完整配置已应用。");
