@@ -32,8 +32,8 @@ function credentialId(provider: string, baseUrl = ""): string {
 
 type ModelDirectory = { endpoint: string; loading: boolean; models: { id: string; name: string }[]; has_more?: boolean; error?: string };
 
-export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }: {
-  bootstrap: Bootstrap; notice: Notice; onSubmitted: (job: JobRecord) => Promise<void>;
+export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmarkInput }: {
+  bootstrap: Bootstrap; active: boolean; notice: Notice; onSubmitted: (job: JobRecord) => Promise<void>;
   benchmarkInput?: BenchmarkInput | null;
 }) {
   const [config, setConfig] = useState<RunConfig>(bootstrap.config);
@@ -78,8 +78,8 @@ export function ProblemEditor({ bootstrap, notice, onSubmitted, benchmarkInput }
     }
   };
   useEffect(() => {
-    if (savedCredential || hasDefaultKey) void fetchModels();
-  }, [keyId, savedCredential?.preview, hasDefaultKey]);
+    if (active && (savedCredential || hasDefaultKey)) void fetchModels();
+  }, [active, keyId, savedCredential?.preview, hasDefaultKey]);
   useEffect(() => {
     if (!benchmarkInput) return;
     setDescription(benchmarkInput.problem.description);

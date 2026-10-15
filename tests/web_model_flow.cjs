@@ -21,7 +21,7 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     page.on("request", (request) => {
       if (request.method() === "POST") mutations.push(request.url());
     });
-    await completedRun(page);
+    const run = await completedRun(page);
     const profit = page
       .locator(".requirement-link")
       .filter({ hasText: "R-PROFIT" })
@@ -143,8 +143,25 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     assert.match(fixture.nativeText, /公开检查/);
     assert.deepEqual(errors, []);
     assert.deepEqual(mutations, []);
+
+    await page.route("**/api/llm-models", route => route.fulfill({ json: {
+      models: [{ id: "editor-model", name: "Editor Model" }], has_more: false,
+    } }));
+    await page.locator("#new-run").click();
+    await page.locator('#llm-model-list option[value="editor-model"]').waitFor({ state: "attached" });
+    assert.deepEqual(mutations, [url + "/api/llm-models"]);
+    await page.locator("#description").fill("保留未提交的问题草稿。");
+    await page.locator(`[data-job-id="${run.job.job_id}"]`).click();
+    await page.locator("#model-view").waitFor();
+    assert.deepEqual(mutations, [url + "/api/llm-models"]);
+    const refreshed = page.waitForResponse(response => response.url().endsWith("/api/llm-models"));
+    await page.locator("#new-run").click();
+    await refreshed;
+    assert.equal(await page.locator("#description").inputValue(), "保留未提交的问题草稿。");
+    assert.deepEqual(mutations, [url + "/api/llm-models", url + "/api/llm-models"]);
+    assert.deepEqual(errors, []);
     console.log(
-      "Actual requirement disclosures and mobile layout; UI fixture assumptions/warnings/missing mappings/candidate isolation/native availability/safe text: passed; read-only view after independent local fixture setup.",
+      "Model disclosures and mobile layout passed; result view sends no POST; editor entry fetches models and preserves the draft across navigation.",
     );
   } finally {
     await browser.close();

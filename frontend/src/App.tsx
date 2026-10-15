@@ -11,7 +11,7 @@ type View = "editor" | "run" | "datasets";
 
 export default function App() {
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
-  const [view, setView] = useState<View>("editor");
+  const [view, setView] = useState<View>(() => new URLSearchParams(location.search).get("job") ? "run" : "editor");
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [benchmarkInput, setBenchmarkInput] = useState<BenchmarkInput | null>(null);
   const [noticeState, setNoticeState] = useState({ text: "", error: false });
@@ -117,7 +117,7 @@ export default function App() {
         </div>
 
         <div hidden={view !== "editor"}>
-          {bootstrap ? <ProblemEditor bootstrap={bootstrap} notice={notice} benchmarkInput={benchmarkInput}
+          {bootstrap ? <ProblemEditor bootstrap={bootstrap} active={view === "editor"} notice={notice} benchmarkInput={benchmarkInput}
             onSubmitted={async (job: JobRecord) => { await refreshJobs(); await openJob(job.job_id); }} /> : <p>正在读取配置…</p>}
         </div>
         {view === "datasets" ? <Datasets datasets={datasets} refresh={refreshDatasets} notice={notice}
