@@ -1,6 +1,6 @@
 "use strict";
 // 垂直故事流验收:确定性 Provider 走 提交 → 澄清确认 → 完整求解,
-// 检查里程碑卡片(只有真实成果与实时步骤)、顶部消耗条、产物跳转与轮询稳定性。
+// 检查真实步骤、阶段产物、折叠用量、产物跳转与轮询稳定性。
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -57,6 +57,8 @@ for (const address of [url, provider])
       .locator(".timeline-step.story-card")
       .filter({ hasText: "等待补充信息" });
     await waiting.waitFor({ timeout: 10000 });
+    assert.equal(await page.locator(".process-resources").getAttribute("open"), null);
+    await page.locator(".process-resources > summary").click();
     assert.match(
       await page.locator(".story-consumption").innerText(),
       /模型请求/,
@@ -77,13 +79,13 @@ for (const address of [url, provider])
     for (let index = 0; index < count; index++)
       labels.push(await cards.nth(index).locator(".step-content strong").innerText());
     assert.ok(count >= 4, `expected >= 4 milestone cards, got ${count}: ${JSON.stringify(labels)}`);
-    for (const expected of ["等待补充信息", "数学表述已保存", "求解完成"])
+    for (const expected of ["联合生成数学表述与求解实现", "等待补充信息", "数学表述已保存", "求解完成"])
       assert.ok(
         labels.includes(expected),
         `story order missing ${expected}: ${JSON.stringify(labels)}`,
       );
-    // 里程碑化:无独立成果的方法步骤与纯事件标记不再成卡;过程消耗只在顶部汇总。
-    for (const dropped of ["读取问题与数据", "调用求解器", "联合生成数学表述与求解实现"])
+    // 保留方法真实上报的步骤；没有上报的阶段和已结束的启动标记不补造。
+    for (const dropped of ["读取问题与数据", "调用求解器"])
       assert.ok(
         !labels.includes(dropped),
         `contentless step should not be a card: ${JSON.stringify(labels)}`,
@@ -98,18 +100,28 @@ for (const address of [url, provider])
     await formulationCard.locator(".story-artifact-button").click();
     assert.equal(
       await page.locator("#artifact-choice").inputValue(),
-      "checks/001/formulation-snapshot.json",
+      "checks/001/formulation.json",
     );
     assert.ok((await page.locator("#model-view").innerText()).length > 0);
     await page.waitForTimeout(1700);
     assert.equal(
       await page.locator("#artifact-choice").inputValue(),
-      "checks/001/formulation-snapshot.json",
+      "checks/001/formulation.json",
     );
     assert.match(
       await page.locator(".story-consumption").innerText(),
       /模型请求 \d+/,
     );
+    // 独立页面 fixture：核心 code_saved 引用 ModelArtifact，跳转须读取其 Code 产物。
+    const codeEventSnapshot = await page.evaluate(() => window.snapshot);
+    codeEventSnapshot.events.push({ kind: "code_saved", sequence_no: 100,
+      artifact_ref: codeEventSnapshot.bundle.model_artifact_ref });
+    await page.route("**/api/jobs/" + codeEventSnapshot.job.job_id,
+      route => route.fulfill({ json: codeEventSnapshot }));
+    await page.reload();
+    await page.locator(".story-card").filter({ hasText: "求解实现已保存" }).locator(".story-head").click();
+    assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "code");
+    await page.locator(".code-lines").waitFor();
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(
       await page.evaluate(
@@ -119,7 +131,7 @@ for (const address of [url, provider])
     );
     assert.deepEqual(errors, []);
     console.log(
-      "Story flow: milestone-only cards, live consumption, artifact jump, polling stability and mobile passed.",
+      "Story flow: real method steps, milestones, disclosed consumption, artifact jump, polling stability and mobile passed.",
     );
   } finally {
     await browser.close();

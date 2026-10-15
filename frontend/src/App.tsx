@@ -62,8 +62,8 @@ export default function App() {
         <a className="brand" href="/">
           <span className="brand-symbol">∑</span> LLM<span>4</span>OM
         </a>
-        <p className="subtitle">用自然语言解决优化问题</p>
         <button
+          aria-current={view === "editor" ? "page" : undefined}
           id="new-run"
           className={"nav" + (view === "editor" ? " active" : "")}
           onClick={() => {
@@ -72,14 +72,28 @@ export default function App() {
             notice("");
           }}
         >
-          ＋ 新建问题
+          <span aria-hidden="true">＋</span> 新建问题
+        </button>
+        <button
+          aria-current={view === "datasets" ? "page" : undefined}
+          id="open-datasets"
+          className={"nav" + (view === "datasets" ? " active" : "")}
+          onClick={() => {
+            void selectRun(null);
+            setView("datasets");
+            refreshDatasets().catch((error) => notice((error as Error).message, true));
+          }}
+        >
+          <span aria-hidden="true">▦</span> 内置 Benchmark
         </button>
         <h2 className="small-heading">运行记录</h2>
         <div id="jobs" aria-label="运行记录">
+          {!jobs.length ? <p className="history-empty">你的建模记录会保存在这里</p> : null}
           {jobs.map((job) => (
             <button
               key={job.job_id}
               data-job-id={job.job_id}
+              aria-current={job.job_id === currentJob ? "page" : undefined}
               className={
                 "job" +
                 (job.job_id === currentJob ? " selected" : "") +
@@ -92,27 +106,16 @@ export default function App() {
             </button>
           ))}
         </div>
-        <h2 className="small-heading">参考样例</h2>
-        <button
-          id="open-datasets"
-          className={"nav" + (view === "datasets" ? " active" : "")}
-          onClick={() => {
-            void selectRun(null);
-            setView("datasets");
-            refreshDatasets().catch((error) => notice((error as Error).message, true));
-          }}
-        >
-          内置 Benchmark
-        </button>
-        <p className="sidebar-footer">自然语言 → 优化模型 → 决策</p>
+        <p className="sidebar-footer">LLM4OM · 建模工作台</p>
       </aside>
       <main>
-        <header>
+        <header className="app-header">
+          <span className="workspace-label">工作空间 <span aria-hidden="true">/</span></span>
           <h1>
-            {view === "run" ? "运行结果" : view === "datasets" ? "内置 Benchmark" : "开始建模"}
+            {view === "run" ? "建模过程与产物" : view === "datasets" ? "内置 Benchmark" : "新建问题"}
           </h1>
         </header>
-        <div id="notice" role="status" hidden={!noticeState.text}>
+        <div id="notice" className={noticeState.error ? "error" : ""} role={noticeState.error ? "alert" : "status"} hidden={!noticeState.text}>
           {noticeState.text}
         </div>
 
@@ -122,6 +125,7 @@ export default function App() {
         </div>
         {view === "datasets" ? <Datasets datasets={datasets} refresh={refreshDatasets} notice={notice}
           onTry={(input) => { setBenchmarkInput({ ...input }); setView("editor"); notice("已带入样例，可选择方法并开始建模。"); }} /> : null}
+        {view === "run" && !snapshot ? <p className="loading-state" role="status">正在读取建模记录…</p> : null}
         {view === "run" && snapshot ? <RunView key={currentJob} snapshot={snapshot} selectedRun={selectedRun}
           selectRun={selectRun} refreshRun={refreshRun} notice={notice} /> : null}
       </main>

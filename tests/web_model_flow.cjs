@@ -22,6 +22,19 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       if (request.method() === "POST") mutations.push(request.url());
     });
     const run = await completedRun(page);
+    const objective = await page.locator(".objective-card").boundingBox();
+    assert.ok(objective.y + objective.height < 1000, "数学目标应在桌面首屏完整展示");
+    const processBox = await page.locator("#process-panel").boundingBox();
+    const output = await page.locator(".artifact-panel").boundingBox();
+    assert.ok(processBox.x + processBox.width <= output.x, "建模过程与产物并排展示");
+    assert.ok(!(await page.locator(".run-heading").innerText()).includes(run.job.job_id));
+    assert.equal(await page.locator(".problem-brief").getAttribute("open"), null);
+    await page.getByRole("tab", { name: "求解结果" }).click();
+    assert.equal(await page.locator(".decision-row").count(), 2);
+    assert.equal(await page.locator(".decision-explorer").isVisible(), false);
+    await page.getByText("目标构成与交互试算", { exact: true }).click();
+    assert.equal(await page.locator(".decision-explorer").isVisible(), true);
+    await page.getByRole("tab", { name: "数学模型" }).click();
     const profit = page
       .locator(".requirement-link")
       .filter({ hasText: "R-PROFIT" })

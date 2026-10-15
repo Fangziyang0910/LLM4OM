@@ -223,35 +223,20 @@ export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmar
     };
 
     return (
-            <section id="editor" className="editor-grid">
+            <section id="editor">
+              <div className="editor-intro"><span className="eyebrow">自然语言 · 优化建模</span>
+                <h2>从问题，到可执行的模型。</h2><p>描述目标与约束，查看建模过程、数学模型和求解结果。</p>
+              </div>
+              <div className="editor-grid">
               <div className="panel problem-panel">
                 <div className="panel-title">
-                  <h2>描述问题</h2>
-                  <label className="file-button">
-                    导入问题
-                    <input
-                      id="problem-file"
-                      type="file"
-                      accept=".json"
-                      onChange={async (event) => {
-                        const file = event.target.files?.[0];
-                        if (!file) return;
-                        try {
-                          const problem = JSON.parse(await file.text());
-                          setProblemJson(pretty(problem));
-                          setDescription(problem.description);
-                          notice("问题规格已导入。请同时添加其中引用的公开数据。");
-                        } catch (error) {
-                          notice((error as Error).message, true);
-                        }
-                      }}
-                    />
-                  </label>
+                  <h2>描述你的问题</h2><span className="section-index">01</span>
+
                 </div>
                 <label htmlFor="description">用自然语言描述你的目标、决策和限制</label>
                 <textarea
                   id="description"
-                  rows={9}
+                  rows={10}
                   placeholder={
                     "例如：我想制定工厂的生产计划。在原料和工时有限的情况下，决定每种产品的生产数量，让总利润最大。"
                   }
@@ -384,7 +369,27 @@ export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmar
                   ))}
                 </div>
                 <details>
-                  <summary>高级：直接编辑问题 JSON</summary>
+                  <summary>导入或编辑结构化问题</summary>
+                  <label className="file-button">
+                    导入问题
+                    <input
+                      id="problem-file"
+                      type="file"
+                      accept=".json"
+                      onChange={async (event) => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const problem = JSON.parse(await file.text());
+                          setProblemJson(pretty(problem));
+                          setDescription(problem.description);
+                          notice("问题规格已导入。请同时添加其中引用的公开数据。");
+                        } catch (error) {
+                          notice((error as Error).message, true);
+                        }
+                      }}
+                    />
+                  </label>
                   <textarea
                     id="problem-json"
                     rows={12}
@@ -396,7 +401,7 @@ export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmar
                 </details>
               </div>
               <div className="panel settings-panel">
-                <h2>建模设置</h2>
+                <div className="panel-title"><h2>选择建模方式</h2><span className="section-index">02</span></div>
                 <div className="field-grid">
                   <label>
                     建模方法
@@ -412,6 +417,37 @@ export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmar
                       ))}
                     </select>
                   </label>
+                  <label>
+                    求解器
+                    <select
+                      id="solver"
+                      value={config.solver?.plugin_id || ""}
+                      onChange={(event) => {
+                        const next = { ...config, solver: { ...config.solver, plugin_id: event.target.value } };
+                        setConfig(next);
+                      }}
+                    >
+                      {selectOptions.solver.map((option) => (
+                        <option key={option.value} value={option.value} disabled={option.disabled}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                <div id="method-explainer" className="wide method-explainer">
+                  <p>{presets[config.method.plugin_id]?.explanation ||
+                    "按所选方法的实际流程建模，保存公开步骤和输出。"}</p>
+                  {presets[config.method.plugin_id]?.requirements ? (
+                    <p className="hint">{presets[config.method.plugin_id]?.requirements}</p>
+                  ) : null}
+                  {compatNote ? <p className="compat-note">{compatNote}</p> : null}
+                  {solverSelectionDisabled ? (
+                    <p className="compat-note warning">
+                      当前求解器与所选方法或建模后端不兼容;请选择可用求解器后再提交。
+                    </p>
+                  ) : null}
+                </div>
+
                   <label className="wide">
                     LLM 供应商
                     <select
@@ -437,10 +473,10 @@ export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmar
                     </select>
                   </label>
                   <div className="wide">
-                    <label htmlFor="model">模型名称／API ID</label>
+                    <label htmlFor="model">使用模型</label>
                     <input
                       id="model"
-                      placeholder="填写服务提供的模型 ID"
+                      placeholder="选择或填写模型 ID"
                       value={config.llm.model}
                       onChange={(event) => setConfig(prior => ({ ...prior, llm: { ...prior.llm, model: event.target.value } }))}
                     />
@@ -459,11 +495,20 @@ export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmar
                       </select>
                     ) : null}
                     <p id="model-directory-status" className="hint" aria-live="polite">
-                      {directory?.error ? directory.error + " 可继续手动填写模型 ID。" : directory?.loading ? "正在读取模型目录，不发起文本生成。"
-                        : directory ? `已获取 ${directory.models.length} 个模型${directory.has_more ? "（当前页）" : ""}，选择后自动填写 API ID。`
-                        : "已配置密钥时自动读取模型目录，也可手动填写 API ID。"}
+                      {directory?.error ? directory.error + " 可继续手动填写模型 ID。" : directory?.loading ? "正在获取可用模型…"
+                        : directory ? `已获取 ${directory.models.length} 个模型${directory.has_more ? "（当前页）" : ""}。`
+                        : "支持从列表选择，也可直接填写模型 ID。"}
                     </p>
                   </div>
+                </div>
+
+                <details id="llm-connection" className="settings-disclosure">
+                  <summary><span>模型连接</span>
+                    <output id="llm-key-status" className="hint" aria-live="polite">
+                      {apiKey ? "已填写（未保存）" : savedCredential ? "已保存（本机）" : hasDefaultKey ? "已配置（本机）" : "未配置密钥"}
+                      {keyPreview ? " · " + keyPreview : ""}
+                    </output></summary>
+                  <div className="field-grid">
                   <label className="wide">
                     API 地址（Base URL）
                     <input id="llm-base-url" type="url" value={config.llm.config.base_url || ""}
@@ -480,11 +525,8 @@ export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmar
                       value={apiKey} disabled={!config.llm.config.credential_env} maxLength={4096}
                       placeholder={savedCredential || hasDefaultKey ? "本机已有密钥；留空保留，填写可更新" : "填写该供应商的 API Key"}
                       onChange={(event) => setApiKeys(prior => ({ ...prior, [keyId]: event.target.value.trim() }))} />
-                    <output id="llm-key-status" className="hint" aria-live="polite">
-                      {apiKey ? "已填写（未保存）" : savedCredential ? "已保存（本机）" : hasDefaultKey ? "已配置（本机）" : "未配置密钥"}
-                      {keyPreview ? " · " + keyPreview : ""}
-                    </output>
-                    <span className="hint">填写后点保存，刷新或重启后自动恢复；留空会保留已有密钥。开始建模前也会自动保存。</span>
+
+                    <span className="hint">密钥保存在本机；留空保留已有密钥。</span>
                   </label>
                   <div className="wide">
                     <button id="save-llm-settings" className="secondary" disabled={savingSettings || !llmPreset || !config.llm.model.trim()}
@@ -492,8 +534,21 @@ export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmar
                         try { await saveSettings(); notice("模型配置和密钥已保存到本机。"); }
                         catch (error) { notice((error as Error).message, true); }
                       }}>{savingSettings ? "保存中…" : "保存模型配置与密钥"}</button>
-                  </div>
-                  <label className="advanced-field">
+                  </div></div>
+                </details>
+                <details className="advanced-controls">
+                  <summary>高级设置</summary>
+                <div id="budget-summary" className="budget-visual" aria-live="polite">
+                  <span className="pill">模型请求 ≤{config.budget?.max_llm_attempts ?? "—"}</span>
+                  <span className="pill">Token ≤{format(config.budget?.max_total_tokens)}</span>
+                  <span className="pill">时间 ≤{format(config.budget?.wall_time_s)} 秒</span>
+                  <span className="pill">求解 ≤{config.budget?.max_solver_calls ?? "—"}</span>
+                  {(presets[config.method.plugin_id]?.budget.max_llm_attempts || 0) > 4 ? (
+                    <p className="hint">此方法真实请求与费用显著更高。</p>
+                  ) : null}
+                </div>
+                  <div className="field-grid">
+                  <label className="wide">
                     建模后端
                     <select
                       id="backend"
@@ -513,58 +568,6 @@ export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmar
                       ))}
                     </select>
                   </label>
-                  <label>
-                    求解器
-                    <select
-                      id="solver"
-                      value={config.solver?.plugin_id || ""}
-                      onChange={(event) => {
-                        const next = { ...config, solver: { ...config.solver, plugin_id: event.target.value } };
-                        setConfig(next);
-                      }}
-                    >
-                      {selectOptions.solver.map((option) => (
-                        <option key={option.value} value={option.value} disabled={option.disabled}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="wide advanced-field">
-                    Provider URL
-                    <input
-                      id="base-url"
-                      type="url"
-                      value={config.llm.config.base_url || ""}
-                      onChange={(event) => setConfig(prior => ({ ...prior, llm: { ...prior.llm, config: { ...prior.llm.config, base_url: event.target.value } } }))}
-                    />
-                  </label>
-                </div>
-                <div id="method-explainer" className="method-explainer method-explainer-card">
-                  <p>{presets[config.method.plugin_id]?.explanation ||
-                    "按所选方法的实际流程建模，保存公开步骤和输出。"}</p>
-                  {presets[config.method.plugin_id]?.requirements ? (
-                    <p className="hint">{presets[config.method.plugin_id]?.requirements}</p>
-                  ) : null}
-                  {compatNote ? <p className="compat-note">{compatNote}</p> : null}
-                  {solverSelectionDisabled ? (
-                    <p className="compat-note warning">
-                      当前求解器与所选方法或建模后端不兼容;请选择可用求解器后再提交。
-                    </p>
-                  ) : null}
-                </div>
-                <div id="budget-summary" className="budget-visual" aria-live="polite">
-                  <span className="pill">模型请求 ≤{config.budget?.max_llm_attempts ?? "—"}</span>
-                  <span className="pill">Token ≤{format(config.budget?.max_total_tokens)}</span>
-                  <span className="pill">时间 ≤{format(config.budget?.wall_time_s)} 秒</span>
-                  <span className="pill">求解 ≤{config.budget?.max_solver_calls ?? "—"}</span>
-                  {(presets[config.method.plugin_id]?.budget.max_llm_attempts || 0) > 4 ? (
-                    <p className="hint">此方法真实请求与费用显著更高。</p>
-                  ) : null}
-                </div>
-                <details className="advanced-controls">
-                  <summary>高级设置</summary>
-                  <div className="field-grid">
                     <label>
                       模型请求次数
                       <input
@@ -634,7 +637,6 @@ export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmar
                   >
                     应用完整配置
                   </button>
-                </details>
                 <label className="connectivity-option">
                   <input
                     id="check-connectivity"
@@ -648,13 +650,17 @@ export function ProblemEditor({ bootstrap, active, notice, onSubmitted, benchmar
                   <button id="doctor" className="secondary" disabled={doctorBusy || savingSettings} onClick={runDoctor}>
                     检查配置
                   </button>
-                  <button id="submit" className="primary" disabled={submitting || savingSettings || solverSelectionDisabled} onClick={submitRun}>
-                    开始建模 →
-                  </button>
+
                 </div>
+                </details>
+
+                <div className="submit-actions">                  <button id="submit" className="primary" disabled={submitting || savingSettings || solverSelectionDisabled} onClick={submitRun}>
+                    开始建模 →
+                  </button></div>
                 <div id="doctor-result" className="doctor-result" hidden={!doctorResult}>
                   {doctorResult ? <Connectivity report={doctorResult} /> : null}
                 </div>
+              </div>
               </div>
             </section>
   );

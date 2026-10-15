@@ -24,6 +24,10 @@ for (const address of [url, provider])
       () => document.querySelector("#method")?.options.length > 0,
     );
     const explainer = page.locator("#method-explainer");
+    assert.equal(await page.locator(".advanced-controls").getAttribute("open"), null);
+    assert.equal(await page.locator("#llm-connection").getAttribute("open"), null);
+    assert.equal(await page.locator("#llm-key-status").isVisible(), true);
+    await page.getByText("高级设置", { exact: true }).click();
     await page.selectOption("#method", "llm4om.methods.optimus");
     assert.equal(await page.locator("#method option:checked").innerText(), "OptiMUS");
     assert.match(await explainer.innerText(), /依次理解目标与约束/);
@@ -38,7 +42,6 @@ for (const address of [url, provider])
     config.method.plugin_id = "llm4om.methods.coe";
     config.model_backend.plugin_id = "llm4om.model_backends.gurobipy";
     config.solver.plugin_id = "llm4om.solvers.highs";
-    await page.locator("details:has(#config-json) > summary").click();
     await page.locator("#config-json").fill(JSON.stringify(config));
     await page.click("#apply-config");
     assert.equal(await page.locator("#submit").isDisabled(), true);

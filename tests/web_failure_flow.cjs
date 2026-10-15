@@ -72,8 +72,10 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       /连接被拒绝|这次建模未完成/,
     );
     assert.match(await ending.innerText(), /检查/);
-    await ending.locator(".failure-detail summary").click();
-    assert.match(await ending.locator(".failure-detail").innerText(), /provider_connection_error/);
+    assert.equal(await ending.locator(".failure-detail").count(), 0);
+    await ending.getByRole("button", { name: "查看运行详情 →" }).click();
+    assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "diagnostics");
+    assert.match(await detail.innerText(), /provider_connection_error/);
     assert.equal(await page.locator("#resume").isVisible(), true);
     const sidebar = page.locator("#jobs .job").first();
     assert.match(await sidebar.innerText(), /未完成/);

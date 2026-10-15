@@ -23,9 +23,10 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     await page.locator("#datasets .dataset-row").filter({ hasText: "NL4Opt" }).waitFor();
     assert.equal(await page.locator("#datasets .dataset-row").count(), 9);
     assert.doesNotMatch(await page.locator("#datasets").innerText(), /已导入|冻结导入|上传数据集|已选|适配器/);
-    const titles = await page.locator('#datasets .dataset-row td:first-child').allTextContents();
+    const titles = await page.locator('#datasets .benchmark-card h3').allTextContents();
+    assert.equal(titles.length, 9);
     for (const title of titles) {
-      await page.locator('#datasets .dataset-row').filter({ has: page.getByRole('cell', { name: title, exact: true }) }).click();
+      await page.locator('#datasets .benchmark-card').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).click();
       await page.locator('#dataset-detail .dataset-row').first().click();
       assert.ok((await page.locator('#dataset-case .problem-text').innerText()).length > 0);
       await page.locator('#back-to-datasets').click();

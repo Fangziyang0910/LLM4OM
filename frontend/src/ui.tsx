@@ -218,9 +218,9 @@ export const pretty = (value: unknown): string =>
 export const phaseLabel = (phase: string | undefined): string =>
   (
     {
-      formulation: "Formulation · 数学表述",
-      code: "Code · 求解实现",
-      solve: "Solve · 求解",
+      formulation: "数学表述",
+      code: "求解实现",
+      solve: "数值求解",
       coordination: "方法协调",
     } as Record<string, string>
   )[phase || ""] || phase || "";

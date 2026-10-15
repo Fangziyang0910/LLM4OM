@@ -312,21 +312,21 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/web_start_flow.cjs` | 起点页浏览器验收 | 方法解释卡、切换提示、不兼容警示、预算 chips、体检分层 |
 | `tests/web_failure_flow.cjs` | 失败与诊断浏览器验收 | 人话诊断、建议动作、技术详情折叠、故事结束卡、侧栏辨识 |
 | `frontend/src/components/RuntimeDetails.tsx` | 资源账本、求解执行与调用记录 | 未知Token与费用不记零 |
-| `frontend/src/components/Decision.tsx` | 决策面板、失败诊断与决策探索 | 模型结果、余量试算 |
-| `frontend/src/components/StoryFlow.tsx` | 垂直故事流:过程事件卡片与输出摘要 | 角色发言、状态预览、时间窗消耗、实时消耗条、产物直达 |
-| `tests/web_story_flow.cjs` | 故事流浏览器验收 | 里程碑卡片集、实时消耗、跳转、无原始 JSON、轮询与窄屏 |
+| `frontend/src/components/Decision.tsx` | 紧凑求解摘要、失败诊断与结果详情 | 部分结果保留、变量值、按需展开目标构成与余量试算 |
+| `frontend/src/components/StoryFlow.tsx` | 建模过程时间线 | 真实方法步骤、阶段产物、检查诊断、选择依据、折叠用量、产物直达 |
+| `tests/web_story_flow.cjs` | 故事流浏览器验收 | 真实步骤与里程碑、折叠用量、跳转、无原始 JSON、轮询与窄屏 |
 | `tests/web_stage_history_flow.cjs` | 两阶段修正历史与建模过程步骤的浏览器验收 | 确定性修正运行、版本切换、无代码产物时不显示历史、公开检查与最终选择步骤 |
 | `tests/web_legacy_run_flow.cjs` | 早于 ADR-0006 的候选布局运行只读浏览验收 | 真实修正运行映射回旧布局，修正历史与公开检查步骤仍可见 |
 | `frontend/src/components/Datasets.tsx` | 内置 Benchmark 列表、题面与单问题试用 | 分页、复制、公开业务数据、带入建模、键盘与窄屏 |
 | `tests/test_web_datasets.py` | 内置 Benchmark 公共 HTTP 验收 | 九组2033条公开题面、分页、不混入工作区任务、公开输入与参考字段隔离 |
 | `tests/web_datasets_flow.cjs` | 内置 Benchmark 浏览器验收 | 九组浏览、复制、带入建模、参数携带、配置保留与窄屏 |
-| `tests/web_keyboard_flow.cjs` | 键盘可达性浏览器验收 | 焦点环可见、无焦点陷阱、Enter 核心路径(运行→标签→产物→运行详情) |
+| `tests/web_keyboard_flow.cjs` | 键盘可达性浏览器验收 | 焦点环可见、无焦点陷阱、方向键／Home／End 页签切换、Enter 产物与结果跳转 |
 | `tests/web_math_flow.cjs` | 数学排版浏览器验收 | expression_text→KaTeX(∑/≤/下标),结构化 IR 交互路径保持 |
 | `frontend/src/math.tsx` | ASCII 数学→LaTeX 有界转换与 MathTex 组件 | 语法外输入回退纯文本 |
 | `frontend/src/vendor/katex.css` | KaTeX 样式与字族裁剪(仅 Main/Math/Size) | 字体经 node_modules 相对路径引用,构建时 woff2 内联进 style.css,仓库不存二进制 |
 | `frontend/src/components/Clarification.tsx` | 澄清问答表单与修订构建 | 确认／修订语义、预览 |
 | `frontend/src/components/Revision.tsx` | 人工修订字段规格与校验 | 问题／代码／严格IR、数值语义 |
-| `frontend/src/style.css` | 工作台布局与响应式样式源 | 统一设计令牌(语义色+色板+圆角)、焦点、表格与阶段卡片 |
+| `frontend/src/style.css` | 工作台布局与响应式样式源 | 语义色与统一间距、过程与产物并排、按需展开控件、可见焦点、窄屏与减少动画偏好 |
 | `src/llm4om/web_assets/index.html` | 构建产物：工作台首页 | 由frontend构建生成，不手改 |
 | `src/llm4om/web_assets/app.js` | 构建产物：应用与渲染逻辑 | 由frontend构建生成，不手改 |
 | `src/llm4om/web_assets/style.css` | 构建产物：样式 | 由frontend构建生成，不手改 |
@@ -382,7 +382,7 @@ Spec：需求覆盖 36 FR、12 NFR、25 AC 与 DD-01～08。建模按 Formulatio
 | `tests/test_web_data_previews.py` | 有界公开数据预览的HTTP验收 | CSV逗号／多行／前导零、JSON类型表达、显示截断、来源hash和真实HiGHS |
 | `tests/replays/web_data_flow.cjs` | 输入数据页的本机Chrome验收 | 已保存产品／产能表、完整视图／来源、无原始 JSON 展示、轮询与窄屏，零POST |
 
-| `tests/web_model_flow.cjs` | 模型声明与需求来源的本机Chrome验收 | 实际来源展开／关联／来源快照、合成声明的未知状态／检查隔离／安全文本；结果页零POST、编辑器目录查询与草稿保留 |
+| `tests/web_model_flow.cjs` | 模型声明与需求来源的本机Chrome验收 | 实际来源展开／关联／来源快照、合成声明的未知状态／检查隔离／安全文本；数学目标首屏、独立求解结果、结果页零POST、编辑器目录查询与草稿保留 |
 
 | `tests/web_connection_flow.cjs` | 连接失败的本机Chrome验收 | 固定诊断解释、未知用量、旧记录和无关错误保持，零POST |
 | `tests/replays/web_decision_flow.cjs` | 当前模型的决策试算交互 | 已保存真实解、目标／约束代入、恢复、轮询保持、窄屏，零POST |

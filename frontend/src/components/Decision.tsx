@@ -202,60 +202,59 @@ function DecisionExplorer({ ir, solution }: { ir: any; solution: any }) {
   );
 }
 
+export function DecisionSummary({ solve, snapshot, onOpenDiagnostics }: {
+  solve: any; snapshot: Snapshot; onOpenDiagnostics: () => void;
+}) {
+  const hasFailure = Boolean(snapshot.job.error || snapshot.bundle?.error);
+  const failure = hasFailure ? <Failure snapshot={snapshot} onOpenDiagnostics={onOpenDiagnostics} /> : null;
+  if (!solve) {
+    if (failure) return failure;
+    if (["queued", "running", "needs_input"].includes(snapshot.job.status)) return <LiveModeling snapshot={snapshot} />;
+    return <p className="hint">本次运行尚无求解结果，可查看已生成的模型与代码。</p>;
+  }
+  return <>{failure}<div className="decision-hero">
+    <div>
+      <span className="eyebrow">{solve.has_primal_solution ? "求解完成" : "求解状态"}</span>
+      <h2>{status(solve.termination)}</h2>
+      <span className="hint">{(solve.solver_id || "").split(".").at(-1).toUpperCase()}
+        {snapshot.bundle?.assisted ? " · 人工辅助结果" : ""}</span>
+    </div>
+    <div className="objective-result"><span className="hint">目标值</span><strong>{format(solve.objective_value)}</strong></div>
+  </div></>;
+}
+
 export function Decision({
   solve,
   solution,
-  ledger,
   snapshot,
   solvedIR,
   onOpenDiagnostics,
+  showSummary = true,
 }: {
   solve: any;
   solution: any;
-  ledger: any;
   snapshot: Snapshot;
   solvedIR: any;
   onOpenDiagnostics: () => void;
+  showSummary?: boolean;
 }) {
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
-  const hasFailure = Boolean(snapshot?.job?.error || snapshot?.bundle?.error);
-  const failed = hasFailure ? <Failure snapshot={snapshot} onOpenDiagnostics={onOpenDiagnostics} /> : null;
-  if (!solve) {
-    const state = snapshot?.job?.status;
-    if (hasFailure) return <>{failed}</>;
-    if (["queued", "running", "needs_input"].includes(state)) return <LiveModeling snapshot={snapshot} />;
-    return <div className="empty-view"><div className="empty-icon">◇</div><h3>求解结果将在这里出现</h3></div>;
-  }
+  const summary = <DecisionSummary solve={solve} snapshot={snapshot} onOpenDiagnostics={onOpenDiagnostics} />;
+  if (!solve) return showSummary ? summary : <p className="hint">求解结束后，决策值会显示在这里。</p>;
   const values: [string, any][] = Object.entries(solution?.variables || {});
   const variableNames = new Map(
     (solvedIR?.variables || []).map((item: any) => [item.id, item.name || item.id]),
   );
   const maximum = Math.max(...values.map(([, value]) => Math.abs(Number(value))), 1);
   const expression = solvedIR?.objective?.expression;
+  const canInspect = solve.has_primal_solution && expression &&
+    expression.terms.every((term: any) => Number.isFinite(solution?.variables?.[term.variable_id]));
   return (
     <>
-      {failed}
-      <div className="decision-hero">
-        <div>
-          <span className="eyebrow">求解结果</span>
-          <h2>{solve.has_primal_solution ? "模型求解完成" : status(solve.termination)}</h2>
-        </div>
-        <div className="objective-result">
-          <span className="hint">目标值</span>
-          <strong>{format(solve.objective_value)}</strong>
-        </div>
-      </div>
-      <div className="result-tags">
-        {snapshot?.bundle?.assisted ? <span className="pill muted">人工辅助结果</span> : null}
-        <span className="pill success">{status(solve.termination)}</span>
-        <span className="pill muted">{(solve.solver_id || "").split(".").at(-1)}</span>
-        <span className="pill muted">Token {format(ledger?.total_tokens ?? ledger?.known_total_tokens)}</span>
-        <span className="pill muted">
-          {ledger?.cost == null ? "费用未提供" : "费用 " + format(ledger.cost)}
-        </span>
-      </div>
+      {showSummary ? summary : null}
       {values.length ? (
         <>
+          <h3 className="decision-label">决策变量</h3>
           <div className="decision-bars">
             {values.map(([name, value]) => (
               <button
@@ -282,10 +281,8 @@ export function Decision({
             ))}
           </div>
         </>
-      ) : null}
-      {solve.has_primal_solution &&
-      expression &&
-      expression.terms.every((term: any) => Number.isFinite(solution?.variables?.[term.variable_id])) ? (
+      ) : <p className="hint">本次求解没有返回可用的决策变量值。</p>}
+      {canInspect ? <details className="result-analysis"><summary>目标构成与交互试算</summary>
         <section className="model-card objective-breakdown">
           <h3>目标值如何构成</h3>
           <div className="contribution-grid">
@@ -306,17 +303,14 @@ export function Decision({
             ) : null}
           </div>
         </section>
-      ) : null}
-      {solve.has_primal_solution &&
-      solvedIR?.objective?.expression &&
-      solvedIR.variables?.length &&
+      {solvedIR.variables?.length &&
       solvedIR.variables.every((item: any) => Number.isFinite(solution?.variables?.[item.id])) ? (
         <DecisionExplorer ir={solvedIR} solution={solution} />
       ) : null}
-      <Checks evaluation={snapshot?.contents?.["evaluation.json"]} />
-      <p className="evidence-note">
-        以上是当前模型的求解结果。原问题的独立验证以已保存的检查证据为准。
-      </p>
+      </details> : null}
+      {snapshot.contents["evaluation.json"] ? <details className="result-analysis"><summary>验证记录</summary>
+        <Checks evaluation={snapshot.contents["evaluation.json"]} />
+      </details> : null}
     </>
   );
 }

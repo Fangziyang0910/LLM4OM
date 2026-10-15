@@ -56,6 +56,11 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       snapshot.bundle.error.code = "budget_exhausted";
       UI.decision(host, null, null, null, snapshot);
       result.budget = host.innerText;
+      UI.decision(host, { termination: "optimal", has_primal_solution: true, objective_value: 13,
+        solver_id: "llm4om.solvers.highs" }, { variables: { qty_A: 3 } }, null, snapshot);
+      result.partialObjective = host.querySelector(".objective-result strong")?.textContent;
+      result.partialFailure = Boolean(host.querySelector(".failure-summary"));
+      result.emptyAnalysis = host.querySelectorAll(".result-analysis").length;
       host.remove();
       return result;
     });
@@ -64,6 +69,9 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
     assert.match(result.legacy, /暂时无法连接/);
     assert.match(result.budget, /预算上限/);
     assert.ok(!result.budget.includes("证书"));
+    assert.equal(result.partialObjective, "13");
+    assert.equal(result.partialFailure, true);
+    assert.equal(result.emptyAnalysis, 0);
     assert.deepEqual(errors, []);
     assert.deepEqual(posts, []);
     console.log(

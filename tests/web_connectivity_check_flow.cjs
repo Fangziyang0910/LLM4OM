@@ -31,6 +31,7 @@ assert.ok(
     await page.locator('#model').fill('manual-model-id');
     assert.equal(await page.locator('#llm-model-list').inputValue(), '');
     await page.selectOption('#llm-model-list', 'fixture-model');
+    await page.getByText('高级设置', { exact: true }).click();
     await page.click("#doctor");
     await page.waitForSelector("#doctor-result strong");
     assert.match(
@@ -78,6 +79,7 @@ assert.ok(
     await page.locator('#fetch-models').click();
     await oldRequest;
     await page.locator('#provider').selectOption('google');
+    await page.locator('#llm-connection > summary').click();
     await page.locator('#llm-api-key').fill('synthetic-google-directory-key');
     await page.locator('#fetch-models').click();
     await page.locator('#llm-model-list option[value="new-model"]').waitFor({ state: 'attached' });

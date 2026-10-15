@@ -43,9 +43,9 @@ uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --hos
 ```
 
 浏览器打开 `http://127.0.0.1:8767` 即可：输入自然语言问题与数据 → 选择方法 → 观察真实建模步骤 →
-查看五元素表述、求解代码、决策结果与运行记录，支持数据预览、模型数值编辑、派生求解、修正历史浏览、
-决策试算、人工修订与内置 Benchmark 浏览。样例直接复用 OPT-Agent 已整理的 9 组、2033 条题面，可逐条复制或带入建模，无需上传数据集。详情见[内置样例记录](docs/development/s09-builtin-benchmarks.md)。访问令牌由服务启动时生成，页面自动获取。LLM 可选择 OpenAI、Google、Kimi、GLM、OpenRouter、阿里云百炼、DeepSeek 或 Anthropic，填写模型名和 Key；预设地址固定，只有 OpenAI 兼容选项允许自定义地址。页面显示密钥配置状态和掩码预览，密钥不写入公开配置、记录或导出。会话与恢复行为见[LLM 配置记录](docs/development/s09-llm-settings.md)。
-点击“保存模型配置与密钥”即可按供应商保存，开始建模前也会自动保存。刷新页面或重启同一工作区后自动恢复。设置位于 `<workspace>/.private/llm-settings.local.json`，文件权限为 600，已由 Git 忽略；原 `.env` 默认服务继续可用。
+查看五元素表述、求解代码、决策结果与运行记录。结果页左侧展示真实方法步骤，右侧按“数学模型／求解代码／求解结果”阅读产物；问题数据与运行详情为辅助入口。支持数据预览、模型数值编辑、修正历史浏览、决策试算与人工修订。
+内置 Benchmark 以卡片展示，点开后可并排浏览题目列表和完整问题。样例直接复用 OPT-Agent 已整理的 9 组、2033 条题面，可逐条复制或带入建模，无需上传数据集。详情见[内置样例记录](docs/development/s09-builtin-benchmarks.md)。访问令牌由服务启动时生成，页面自动获取。LLM 可选择 OpenAI、Google、Kimi、GLM、OpenRouter、阿里云百炼、DeepSeek 或 Anthropic，填写模型名和 Key；预设地址固定，只有 OpenAI 兼容选项允许自定义地址。页面显示密钥配置状态和掩码预览，密钥不写入公开配置、记录或导出。会话与恢复行为见[LLM 配置记录](docs/development/s09-llm-settings.md)。
+展开“模型连接”填写密钥并点击“保存模型配置与密钥”，开始建模前也会自动保存。预算与配置检查放在“高级设置”。刷新页面或重启同一工作区后自动恢复已保存的供应商设置。设置位于 `<workspace>/.private/llm-settings.local.json`，文件权限为 600，已由 Git 忽略；原 `.env` 默认服务继续可用。
 已有密钥时会自动读取服务的模型目录，也可点击“获取模型列表”。列表显示展示名称和 API ID，选择后填写正确的请求 ID；仍可手动填写。目录读取只查询元数据，不发起文本生成。
 百炼使用其原生目录接口，其他预设使用对应的兼容目录协议。GLM 与自定义服务是否开放目录以实际响应为准，无法读取时可继续手动填写。各供应商的接口与实测范围见[LLM 配置记录](docs/development/s09-llm-settings.md)。
 `--host 0.0.0.0` 可供局域网访问，但此时 Origin 校验是 CSRF 缓解而非认证，请勿暴露于不受信网络。

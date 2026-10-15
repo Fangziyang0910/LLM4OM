@@ -152,6 +152,8 @@ assert.ok(workspace, "A disposable fixture workspace is required.");
         assert.notEqual(after.problem.revision, problem.revision);
         assert.deepEqual(fs.readFileSync(parent), original);
       } else assert.equal(before.run, after.run);
+      await page.getByRole("tab", { name: "求解结果" }).click();
+      await page.getByText("验证记录", { exact: true }).click();
       assert.equal(await page.locator(".check-row").count(), 5);
       assert.match(
         await page

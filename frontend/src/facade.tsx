@@ -30,7 +30,7 @@ export function installUiFacade() {
       host: HTMLElement,
       solve: any,
       solution: any,
-      ledger: any,
+      _ledger: any,
       snapshot: Snapshot,
       solvedIR: any,
     ) =>
@@ -39,7 +39,6 @@ export function installUiFacade() {
         <Decision
           solve={solve}
           solution={solution}
-          ledger={ledger}
           snapshot={snapshot}
           solvedIR={solvedIR}
           onOpenDiagnostics={() => {}}

@@ -1,8 +1,7 @@
-// 垂直故事流:只有可展示的里程碑(保存的公开产物、公开检查反馈、澄清)与
-// 正在进行的步骤成为卡片;头部为实时消耗条,结束卡衔接结果区。
+// 按真实事件展示方法步骤与阶段产物，点击有产物的步骤进入对应阅读区。
 // `.timeline-step[data-artifact]` 契约保持:run_public 产物事件挂 data-artifact。
 import { useMemo, useState } from "react";
-import type { CheckResult, Snapshot } from "../types";
+import type { ArtifactRef, CheckResult, CodeArtifact, ModelArtifact, Snapshot } from "../types";
 import { artifactKey, artifactLabel, failureDiagnosis, format, phaseLabel, roleLabel, shortMethod, status } from "../ui";
 
 const eventLabels: Record<string, string> = {
@@ -69,7 +68,7 @@ function collectItems(snapshot: Snapshot): StoryItem[] {
         items.set("artifact-" + event.sequence_no, {
           id: "artifact-" + event.sequence_no,
           label: artifactLabel(name),
-          actor: "已保存的公开产物",
+          actor: "阶段产物",
           phase: step.stage || "formulation",
           status: "completed",
           artifact: name,
@@ -84,13 +83,16 @@ function collectItems(snapshot: Snapshot): StoryItem[] {
       event.kind === "solver_started" &&
       !events.some((item) => item.kind === "solver_finished") &&
       snapshot.job.status === "running";
+    const modelKey = artifactKey(snapshot, event.artifact_ref as ArtifactRef | undefined);
+    const model = snapshot.contents?.[modelKey || ""] as ModelArtifact | undefined;
+    const code = snapshot.contents?.[artifactKey(snapshot, model?.code_ref) || ""] as CodeArtifact | undefined;
     const linked =
       event.kind === "formulation_saved"
-        ? artifactKey(snapshot, (event as any).artifact_ref)
+        ? artifactKey(snapshot, model?.formulation_ref) || modelKey
         : event.kind === "solver_finished"
           ? artifactKey(snapshot, (event as any).solve_result_ref)
-          : event.kind === "code_saved"
-            ? artifactKey(snapshot, (event as any).artifact_ref)
+          : event.kind === "code_saved" || event.kind === "code_output_saved"
+            ? artifactKey(snapshot, code?.representation_ref || model?.code_ref) || modelKey
             : event.kind === "check_finished"
               ? artifactKey(snapshot, (event as any).check_ref)
               : undefined;
@@ -120,16 +122,12 @@ function collectItems(snapshot: Snapshot): StoryItem[] {
         : event.kind === "check_finished"
           ? `检查 ${(event as any).check_id}`
           : undefined,
-      artifactTab: event.kind === "solver_finished" ? "diagnostics" : "formulation",
+      artifactTab: event.kind === "solver_finished" ? "result" : event.kind.startsWith("code") ? "code" : "formulation",
     });
   }
   return [...items.values()]
     .filter((item) =>
-      // 方法步骤只在进行中成卡;完成的方法步骤没有可展示成果,
-      // 其结果由后续"已保存"里程碑卡承载,避免同义步骤反复刷屏。
-      item.id.startsWith("step-")
-        ? item.status === "running"
-        : item.milestone || item.status === "running" || Boolean(item.artifact || item.linkedArtifact),
+      item.id.startsWith("step-") || item.milestone || item.status === "running" || Boolean(item.artifact || item.linkedArtifact),
     )
     .sort((a, b) => (orderOf(a, snapshot) - orderOf(b, snapshot)) || a.id.localeCompare(b.id));
 }
@@ -158,10 +156,12 @@ export function StoryFlow({
   snapshot,
   finalObjective,
   onOpenArtifact,
+  onOpenResult,
 }: {
   snapshot: Snapshot;
   finalObjective: { value: number | null; termination: string } | null;
   onOpenArtifact: (tab: string, key: string) => void;
+  onOpenResult: () => void;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const job = snapshot.job;
@@ -190,8 +190,6 @@ export function StoryFlow({
     runError?.code,
     connection?.connection_diagnostic,
   );
-  const scrollToDecision = () =>
-    document.getElementById("decision")?.scrollIntoView({ behavior: "smooth", block: "start" });
   return (
     <>
       <div className="panel-title">
@@ -204,13 +202,6 @@ export function StoryFlow({
         {shortMethod(snapshot.contents?.["public-config.json"]?.method?.plugin_id || job.method) +
           (job.status === "running" ? " · 正在执行方法步骤" : "")}
       </p>
-      <div className="story-consumption" aria-live="polite">
-        <span className="pill">模型请求 {format(consumption.requests)}</span>
-        <span className="pill">Token {consumption.tokens == null ? "未知" : format(consumption.tokens)}</span>
-        {consumption.solves != null ? (
-          <span className="pill muted">求解 {format(consumption.solves)} 次</span>
-        ) : null}
-      </div>
       <div id="method-timeline" className={items.length ? undefined : "story-empty"}>
         {!items.length ? (
           <p className="hint">{job.status === "queued" ? "正在等待执行…" : "正在读取问题与检查配置…"}</p>
@@ -220,53 +211,30 @@ export function StoryFlow({
           const className = "timeline-step story-card " + (failedStep ? "failed" : item.status);
           const jumpKey = item.artifact || item.linkedArtifact;
           const feedback = assessmentFeedback(snapshot, item);
-          // 只有公开检查反馈是可展开的步骤输出;其余卡片要么带产物跳转,
-          // 要么是正在进行的实时卡。
           const expandable = !!feedback;
           const isOpen = expandable && expanded[item.id];
           return (
-            <article
-              key={item.id}
-              className={className}
-              role="button"
-              tabIndex={0}
-              data-artifact={item.artifact || undefined}
-              onClick={() => {
-                if (jumpKey) onOpenArtifact(item.artifactTab, jumpKey);
-                if (expandable) setExpanded((prior) => ({ ...prior, [item.id]: !isOpen }));
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                if (jumpKey) onOpenArtifact(item.artifactTab, jumpKey);
-                if (expandable) setExpanded((prior) => ({ ...prior, [item.id]: !isOpen }));
-              }}
-            >
-              <header className="story-head">
-                <span className="step-marker">
+            <article key={item.id} className={className} data-artifact={item.artifact || undefined}>
+              <button type="button" className="story-head" disabled={!jumpKey && !expandable}
+                aria-expanded={expandable ? Boolean(isOpen) : undefined}
+                onClick={() => {
+                  if (jumpKey && !expandable) onOpenArtifact(item.artifactTab, jumpKey);
+                  if (expandable) setExpanded(prior => ({ ...prior, [item.id]: !isOpen }));
+                }}>
+                <span className="step-marker" aria-hidden="true">
                   {item.status === "completed" ? "✓" : failedStep ? "!" : item.status === "needs_input" ? "?" : ""}
                 </span>
-                <div className="step-content">
+                <span className="step-content">
                   <strong>{roleLabel(item.label)}</strong>
-                  <span>
-                    {phaseLabel(item.phase)}
-                    {item.detail ? " · " + item.detail : ""}
-                    {item.status === "running" && !failedStep ? " · 进行中" : ""}
-                  </span>
-                </div>
-                {jumpKey ? (
-                  <button
-                    type="button"
-                    className="secondary story-artifact-button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onOpenArtifact(item.artifactTab, jumpKey);
-                    }}
-                  >
-                    {artifactLabel(jumpKey)}
-                  </button>
+                  <span>{phaseLabel(item.phase)}{item.status === "running" && !failedStep ? " · 进行中" : ""}</span>
+                </span>
+                {expandable ? <span aria-hidden="true">{isOpen ? "−" : "+"}</span> : jumpKey ? (
+                  <span className="story-artifact-button" title={artifactLabel(jumpKey)} aria-label={"查看" + artifactLabel(jumpKey)}>↗</span>
                 ) : null}
-              </header>
+              </button>
+              {item.detail ? <details className="step-detail"><summary>{item.label === "最终选择" ? "选择依据" : "检查记录"}</summary>
+                <p>{item.detail}</p>
+              </details> : null}
               {isOpen && feedback ? (
                 <div className="story-body" onClick={(event) => event.stopPropagation()}>
                   {feedback.stages.length ? (
@@ -306,36 +274,22 @@ export function StoryFlow({
               </div>
             </header>
             <div className="story-body">
-              {finished ? null : (
-                <details className="failure-detail">
-                  <summary>技术详情</summary>
-                  <dl className="failure-facts">
-                    <div>
-                      <dt>错误码</dt>
-                      <dd>{runError?.code || "未记录"}</dd>
-                    </div>
-                    {runError?.message ? (
-                      <div>
-                        <dt>错误信息</dt>
-                        <dd>{runError.message}</dd>
-                      </div>
-                    ) : null}
-                    {connection?.connection_diagnostic ? (
-                      <div>
-                        <dt>连接诊断</dt>
-                        <dd>{connection.connection_diagnostic}</dd>
-                      </div>
-                    ) : null}
-                  </dl>
-                </details>
-              )}
-              <button type="button" className="secondary" onClick={scrollToDecision}>
-                {finished ? "查看最终结果 ↓" : "查看诊断与恢复选项 ↓"}
+              <button type="button" className="secondary" onClick={onOpenResult}>
+                {finished ? "查看求解结果 →" : "查看运行详情 →"}
               </button>
             </div>
           </article>
         ) : null}
       </div>
+      <details className="process-resources"><summary>运行用量</summary>
+      <div className="story-consumption" aria-live="polite">
+        <span className="pill">模型请求 {format(consumption.requests)}</span>
+        <span className="pill">Token {consumption.tokens == null ? "未知" : format(consumption.tokens)}</span>
+        {consumption.solves != null ? (
+          <span className="pill muted">求解 {format(consumption.solves)} 次</span>
+        ) : null}
+      </div>
+      </details>
     </>
   );
 }

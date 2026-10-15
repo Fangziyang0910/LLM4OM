@@ -15,7 +15,6 @@ function DataValue({ value }: { value: unknown }) {
 }
 
 function DatasetCase({ value, onTry, notice }: { value: BenchmarkCase; onTry: (input: BenchmarkInput) => void; notice: Notice }) {
-  useEffect(() => { document.getElementById("dataset-case")?.scrollIntoView({ block: "nearest" }); }, [value.case_id]);
   const copy = async () => {
     try { await navigator.clipboard.writeText(value.copy_text); notice("问题已复制，可粘贴后尝试建模。"); }
     catch { notice("复制失败，请选中问题文本手动复制。", true); }
@@ -65,7 +64,7 @@ function DatasetDetail({ taskId, onBack, onTry, notice }: {
     <div className="panel-title"><h3>{header.title}</h3><span className="pill">{format(detail.total)} 个问题</span></div>
     <p className="hint">{header.description}</p>
     <button id="back-to-datasets" className="secondary" onClick={onBack}>← 返回 Benchmark 列表</button>
-      <p className="hint">点击一个问题查看全文，再复制或带入建模。</p>
+      <div className="dataset-browser"><div className="dataset-case-list">
       <table className="visual-table"><thead><tr><th>编号</th><th>问题预览</th></tr></thead><tbody>
         {detail.cases.map((item) => <tr key={item.case_id} tabIndex={0}
           className={"dataset-row" + (item.case_id === caseId ? " selected" : "")}
@@ -79,7 +78,7 @@ function DatasetDetail({ taskId, onBack, onTry, notice }: {
         <span className="hint">第 {page + 1} / {lastPage + 1} 页</span>
         <button className="secondary" disabled={page >= lastPage} onClick={() => setPage((previous) => previous + 1)}>下一页 →</button>
       </div> : null}
-      {active ? <DatasetCase value={active} onTry={onTry} notice={notice} /> : null}
+      </div><div className="dataset-reader">{active ? <DatasetCase value={active} onTry={onTry} notice={notice} /> : <div className="empty-view"><span className="empty-icon" aria-hidden="true">▤</span><h3>选择一个问题</h3><p className="hint">在左侧浏览题目，再复制或直接带入建模。</p></div>}</div></div>
     <p className="hint">来源：<a href={header.source_url} target="_blank" rel="noreferrer">{header.title}</a> · {header.license}</p>
   </section>;
 }
@@ -90,16 +89,15 @@ export function Datasets({ datasets, refresh, onTry, notice }: {
   const [openId, setOpenId] = useState<string | null>(null);
   if (openId) return <DatasetDetail key={openId} taskId={openId} onBack={() => setOpenId(null)} onTry={onTry} notice={notice} />;
   return <section id="datasets" className="panel">
-    <div className="panel-title"><h3>平台内置 Benchmark</h3>
+    <div className="panel-title"><div><span className="eyebrow">从真实问题开始</span><h2>内置 Benchmark</h2></div>
       <button className="secondary" onClick={() => refresh().catch(() => notice("列表读取失败，请重试。", true))}>刷新</button></div>
-    <p className="hint">这些样例由平台集成和维护。选择一个问题，复制或带入建模即可试用。</p>
-    <table className="visual-table"><thead><tr><th>Benchmark</th><th>内容</th><th>问题数量</th></tr></thead><tbody>
-      {datasets.map((item) => <tr key={item.task_id} className="dataset-row" tabIndex={0}
-        onClick={() => setOpenId(item.task_id)}
-        onKeyDown={(event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); setOpenId(item.task_id); } }}>
-        <td>{item.title}</td><td>{item.description}</td><td>{format(item.N_cases)}</td>
-      </tr>)}
-    </tbody></table>
+    <p className="hint">浏览已集成的问题集，选一条题目直接试试建模。</p>
+    <div className="benchmark-grid">
+      {datasets.map(item => <button key={item.task_id} className="dataset-row benchmark-card" onClick={() => setOpenId(item.task_id)}>
+        <div className="benchmark-card-top"><span className="benchmark-symbol" aria-hidden="true">▦</span><span>{format(item.N_cases)} 个问题</span></div>
+        <h3>{item.title}</h3><p>{item.description}</p><span className="benchmark-open">浏览样例 <span aria-hidden="true">↗</span></span>
+      </button>)}
+    </div>
     {!datasets.length ? <p className="hint">正在读取平台样例，请稍后刷新。</p> : null}
   </section>;
 }

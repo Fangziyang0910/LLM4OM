@@ -54,30 +54,37 @@ assert.ok(url && ["127.0.0.1", "localhost"].includes(new URL(url).hostname));
       await page.locator(".tab.active").getAttribute("data-tab"),
       "code",
     );
+    await page.keyboard.press("ArrowRight");
+    assert.equal(await page.getByRole("tab", { name: "求解结果" }).getAttribute("aria-selected"), "true");
+    assert.equal(await page.locator(".decision-row").count(), 2);
+    await page.keyboard.press("End");
+    assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "diagnostics");
+    await page.keyboard.press("Home");
+    assert.equal(await page.locator(".tab.active").getAttribute("data-tab"), "formulation");
     // 核心路径 3:Enter 在带产物按钮的故事卡上打开对应产物
     const artifactCard = page
       .locator(".timeline-step.story-card")
       .filter({ hasText: "数学表述已保存" })
       .first();
-    await artifactCard.focus();
+    await artifactCard.locator(".story-head").focus();
     await page.keyboard.press("Enter");
     await page.waitForFunction(() => {
       const tab = document.querySelector(".tab.active")?.getAttribute("data-tab");
       return tab === "formulation" && document.querySelector("#artifact-choice")?.value;
     });
-    // 核心路径 4:Enter 在求解完成卡上打开运行详情
+    // 核心路径 4:Enter 在求解完成卡上打开结果
     const solved = page
       .locator(".timeline-step.story-card")
       .filter({ hasText: "求解完成" })
       .first();
-    await solved.focus();
+    await solved.locator(".story-head").focus();
     await page.keyboard.press("Enter");
     await page.waitForFunction(
-      () => document.querySelector(".tab.active")?.getAttribute("data-tab") === "diagnostics",
+      () => document.querySelector(".tab.active")?.getAttribute("data-tab") === "result",
     );
     assert.deepEqual(errors, []);
     console.log(
-      "Keyboard: visible focus ring, no trap, Enter-only path (run → code tab → artifact card → diagnostics card): passed.",
+      "Keyboard: visible focus ring, no trap, arrow/Home/End tab navigation and Enter artifact/result navigation: passed.",
     );
   } finally {
     await browser.close();
