@@ -1,35 +1,16 @@
-# OptiMUS public production example
+# OptiMUS 公开参数示例
 
-Status: SDK/Worker 0.9.0 development example, not a benchmark score. The
-[S06-B record](../../docs/development/s06b-optimus.md) defines implemented behavior
-and outstanding acceptance; [contracts](../../docs/plugin-contracts.md#14-s06-b-native-script-resources-sdk-090)
-define the interface.
+此例展示可选公开参数输入。当前 OptiMUS 也可直接从自然语言提取参数，无需提供 params/labels。编排和适配差异见[方法说明](../../docs/development/methods.md)。
 
-`problem.json`, `params.json` and `labels.json` are hand-authored public inputs.
-The source workflow separates parameter metadata from values. The mathematical
-check is immediate: integer `0 <= x <= 4`, maximize `3x`, so `x=4`, objective12.
-No reference model or answer is sent to the method.
+problem.json、params.json 和 labels.json 是手写公开输入。问题为整数 `0 <= x <= 4`，最大化 `3x`，手算最优 x=4、目标 12。最优解不发送给方法。
 
-From the repository root, install the Gurobi/development extras and build the
-Worker as described in [CONTRIBUTING](../../CONTRIBUTING.md). Copy `run.yaml` to
-a local ignored configuration, set its actual OpenAI-compatible endpoint and
-provide `LLM4OM_LLM_API_KEY` through the project `.env` or process environment.
-Keep the public problem path absolute if the copied config moves.
+先按[贡献指南](../../CONTRIBUTING.md)安装依赖并构建 Worker。复制 run.yaml 到本地忽略文件，设置实际端点和 API ID，通过 .env 或进程环境提供密钥。
 
 ```bash
-uv run --locked llm4om doctor --config examples/optimus/run.yaml
+uv run --locked llm4om doctor --config /absolute/path/to/local-config.yaml
 uv run --locked llm4om run --problem examples/optimus/problem.json --config /absolute/path/to/local-config.yaml
 ```
 
-Doctor does not call the paid model; `run` makes multiple paid requests. The
-checked-in endpoint is a placeholder. This example selects the fixed source
-main, error correction on and RAG off, with container gurobipy/Gurobi only.
-The source may execute up to three scripts and generate a final unexecuted
-repair. The platform records every revision and reuses the selected execution.
+复制配置后检查相对路径，必要时改用绝对路径。此例选择 gurobipy/Gurobi 容器工厂；其他兼容路径可按[求解指南](../../docs/development/solvers.md)配置。
 
-Inspect `method/state_*.json`, `method/revisions.json`, `method/source-calls.json`,
-`method/source-selection.json` and `method/fidelity-report.json` in the public
-run directory. Source stdout is a debugging observation. The independent
-collector supplies the actual solution and objective. An optimal candidate
-still needs comparison with the original problem before semantic correctness
-can be claimed.
+运行会进行多次模型请求。阶段回复、生成代码、公开检查和选择保存在运行记录中。当前流程不启动固定上游 main，也不生成旧忠实度对照报告。

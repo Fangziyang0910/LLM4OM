@@ -1,31 +1,29 @@
 # LLM4OM 工作约定
 
-本仓库维护 LLM4OM 的研究设计与平台实现。当前能力见 README，切片证据见开发计划。文档完成与功能完成分别记录。
-
-- 开工前阅读 README、GLOSSARY 及相关需求和 ADR；按可演示的纵向切片交付。
-- 用户的明确指令优先于这些工程默认值；常规实现选择无需新增审批。
-- 方法、LLM、任务数据、产物、建模后端、求解器和评估器通过声明接口协作；不要增加核心插件特例。
-- 自动建模按 Formulation／Code 记录，默认五元素表述；方法内部步骤与来源保留，未提供的阶段如实标记。
-- 首批优先 OptiMUS／CoE，使用通用外部 LLM；训练类工作的流程适配与专用模型复现分别命名。
-- 明确实际支持矩阵。原生代码不能自动声称支持全部求解器。
-- 隐藏 oracle 不进入方法 Context、LLM 提示、生成代码环境或公开导出。
-- 正确性分层、失败分母和未知资源量按评测协议处理。
-- 变更契约／范围同步文档与验收；引入上游实现记录固定提交与差异。
-- 使用确定性 fixture 验证工程流程，真实 Provider／Solver 的支持声明必须有真实验收。
-- 密钥、运行数据和商业许可证不提交版本控制；当前 private 可见性不自动更改。
-
-修改文件前读 [CODING_STANDARDS.md](CODING_STANDARDS.md)；执行开发、校验或交付时读 [CONTRIBUTING.md](CONTRIBUTING.md)中的本机验收流程。
+- 开工前读 [README](README.md)、[GLOSSARY](GLOSSARY.md)及相关需求和 ADR。当前功能与使用方式由 README 说明。
+- 修改文件前读 [CODING_STANDARDS](CODING_STANDARDS.md)；开发、校验和交付时读 [CONTRIBUTING](CONTRIBUTING.md)。
+- 按可演示的用户行为交付。当前范围是本机后端与单用户 Web；用户明确指令优先，常规实现选择无需额外审批。
+- 方法、LLM、数据、阶段产物、建模后端、求解器和评估器通过声明接口协作。
+- 自动建模分别记录 Formulation 和 Code，保留实际步骤与来源；缺失阶段如实标明。
+- 研究方法保留核心编排和提示，记录固定来源与适配差异。支持范围由实际兼容路径和验证确定。
+- 隐藏参考评测材料与密钥不进入方法输入、生成代码环境或公开导出。
+- 字段、范围或评测口径变化同步契约、示例和验收。确定性测试与真实接入证据分别报告。
+- 密钥、运行数据和商业许可证不提交。保持当前仓库可见性。
 
 ## Agent skills
 
 ### Issue tracker
 
-工作项与功能规格使用 GitHub Issues。读取或发布工作项时，先读 [issue-tracker.md](docs/agents/issue-tracker.md)。
+读取或发布工作项时，先读 [issue-tracker.md](docs/agents/issue-tracker.md)。功能规格和任务使用 GitHub Issues。
 
 ### Triage labels
 
-使用五种默认 triage 状态。分类或迁移状态时，先读 [triage-labels.md](docs/agents/triage-labels.md)。
+分类或迁移 triage 状态时，先读 [triage-labels.md](docs/agents/triage-labels.md)。
 
 ### Domain docs
 
-本仓库采用 single-context。探索领域、修改术语或设计时，先读 [domain.md](docs/agents/domain.md)。
+探索领域或修改术语、架构时，先读 [domain.md](docs/agents/domain.md)。本仓库保留一个 GLOSSARY 和一组 ADR。
+
+### Task routing
+
+选择工程技能时读 [workflow.md](docs/agents/workflow.md)。各技能按任务调用。

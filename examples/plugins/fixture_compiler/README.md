@@ -1,6 +1,6 @@
 # 独立 Compiler 示例
 
-用途：演示SDK0.20.0的可信编译器注册、配置与Worker安装。规范见 [插件契约](../../../docs/plugin-contracts.md#25-s03-c3a-installed-compilers-sdk-0200)。该示例改变源码格式，复用现有LPIR数学转换；它是工程fixture。
+本例演示可信编译器注册、配置和 Worker 安装。规范见 [插件契约](../../../docs/contracts/plugins.md)。该示例改变源码格式，复用现有LPIR数学转换；它是工程fixture。
 
 在仓库根目录构建和安装：
 
@@ -24,7 +24,7 @@ compiler:
 容器运行须将同一wheel安装在可信镜像中：
 
 ```bash
-uv run --locked python scripts/build_worker_image.py --offline --tag llm4om-worker:0.20.0-with-compiler --plugin-wheel /tmp/llm4om-compiler-wheel/llm4om_fixture_compiler-0.1.0-py3-none-any.whl
+uv run --locked python scripts/build_worker_image.py --offline --tag llm4om-worker:with-compiler --plugin-wheel /tmp/llm4om-compiler-wheel/llm4om_fixture_compiler-0.1.0-py3-none-any.whl
 ```
 
 在executor.config.image中选择该镜像。doctor核对宿主与Worker的Manifest、配置、依赖及可执行包内容；缺少或不同的编译器在生成前拒绝。镜像不挂载宿主源码、不在运行时安装包。额外Python依赖须预先纳入锁定运行环境，构建工具不会隐式解析它们。

@@ -1,15 +1,14 @@
-# CoE 公开生产问题
+# CoE 公开接口示例
 
-SDK／Worker0.13.0 开发示例；不是论文 benchmark 分数。流程与差异见 [实现记录](../../docs/development/s06-coe.md)；规范由 [插件契约](../../docs/plugin-contracts.md)维护。
+此例使用生产问题和公开 CSV。public-interface.json 只提供接口、参数和变量说明，不含答案或参考模型。该文件为可选输入；当前 CoE 可直接接受自然语言。
 
-公开问题和 CSV 来自项目原始生产 fixture。`public-interface.json` 只给函数 stub、参数和变量名称，不给最优解或参考模型。方法默认执行3次动态专家协作，再由 reducer 生成原生函数。此例关闭反思；启用时生成的公开测试与原任务求解分别执行，参数和预算分别记录。
+复制 run.yaml 到本地忽略文件，设置实际 LLM 地址、API ID 和 .env 密钥。先按[贡献指南](../../CONTRIBUTING.md)构建 Worker，再执行：
 
 ```bash
-uv sync --locked --extra dev --extra solve --extra gurobi
-uv run --locked python scripts/build_worker_image.py
-uv run --locked llm4om run --problem examples/coe/problem.json --config examples/coe/run.yaml
+uv run --locked llm4om doctor --config /absolute/path/to/local-config.yaml
+uv run --locked llm4om run --problem examples/coe/problem.json --config /absolute/path/to/local-config.yaml
 ```
 
-上面 run 配置的 endpoint 是占位符。使用本地忽略的配置替换 endpoint，通过 `.env`／环境提供凭据。密钥和运行数据不提交。原生输出只声明 gurobipy／Gurobi 容器路径；Formulation 为 not_available。流程实现使用原创提示词、固定 seed 和一次原生导入，明确记录与上游源码的差异。
+此配置使用最多三次专家协作，关闭反思，再由 reducer 生成数学表述与 gurobipy 工厂。平台独立调用 Gurobi，保存阶段产物与检查结果。
 
-没有额外公开接口文件时，`public_contract_data_id: null` 使用原创默认 stub `prob_problem()`，可以直接处理自然语言和可选公开数据。该默认接口不读取 benchmark 私有参考代码。
+启用反思后，公开执行诊断参与下一轮修订。当前流程不生成额外测试实例或执行 prob_* 函数。实现使用独立编写的提示，来源和差异见[方法说明](../../docs/development/methods.md)。

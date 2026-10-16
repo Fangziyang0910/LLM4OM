@@ -313,25 +313,13 @@ def check_design_records() -> list[str]:
     return errors
 
 
-def check_audit(files: list[Path]) -> list[str]:
-    content = (ROOT / "docs/repository-audit.md").read_text()
-    rows = re.findall(r"^\| `([^`]+)` \|", content, re.MULTILINE)
-    recorded = set(rows)
-    actual = {str(path.relative_to(ROOT)) for path in files}
-    errors = [f"repository audit: missing file: {name}" for name in sorted(actual - recorded)]
-    errors.extend(f"repository audit: stale file: {name}" for name in sorted(recorded - actual))
-    if len(rows) != len(recorded):
-        errors.append("repository audit: duplicate file rows")
-    return errors
-
-
 def main() -> int:
     try:
         files = repository_files()
         errors = (
             check_text(files) + check_json(files) + check_fixture_data()
             + check_configs() + check_fixture_semantics() + check_design_records()
-            + check_stage_artifacts() + check_audit(files)
+            + check_stage_artifacts()
         )
         references = subprocess.run(
             [sys.executable, str(ROOT / "scripts/render_references.py"), "--check"],

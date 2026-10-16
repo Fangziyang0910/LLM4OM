@@ -1,37 +1,14 @@
-# LLM4OM 详细设计索引
+# 详细设计
 
-设计基线修订：0.4.0。当前实现状态与验收证据见[开发计划](implementation-plan.md)和[README](../README.md)。字段以[接口契约](plugin-contracts.md)为准，系统职责见[架构设计](architecture.md)，领域定义见[GLOSSARY](../GLOSSARY.md)。本索引组织设计内容，不另维护一份实现状态。
+本索引按运行行为组织时序和不变量。字段在[接口契约](plugin-contracts.md)维护，模块职责见[架构](architecture.md)，需求编号见[需求规格](requirements/v1.0.md)。
 
-DD 编号用于需求与验收追踪。每个页面说明时序与不变量，避免重复定义契约字段；开发前同时读取相关 FR 和 AC。
-
-## DD-01 单问题建模与求解
-
-阅读 [单问题与建模方法详细设计](design/modeling-methods.md#dd-01-单问题建模与求解)。
-
-## DD-02 方法内部生成、修正与选择
-
-阅读 [单问题与建模方法详细设计](design/modeling-methods.md#dd-02-方法内部生成修正与选择)。
-
-## DD-03 插件接入与兼容路径
-
-阅读 [插件、建模输出与求解详细设计](design/execution.md#dd-03-插件接入与兼容路径)。
-
-## DD-04 建模输出与数据绑定
-
-阅读 [插件、建模输出与求解详细设计](design/execution.md#dd-04-建模输出与数据绑定)。
-
-## DD-05 编译、执行与求解结果
-
-阅读 [插件、建模输出与求解详细设计](design/execution.md#dd-05-编译执行与求解结果)。
-
-## DD-06 Benchmark 与实验展开
-
-阅读 [实验、恢复与入口详细设计](design/experiments-and-interfaces.md#dd-06-benchmark-与实验展开)。
-
-## DD-07 持久化、恢复与报告
-
-阅读 [实验、恢复与入口详细设计](design/experiments-and-interfaces.md#dd-07-持久化恢复与报告)。
-
-## DD-08 CLI 与 Web 共用应用接口
-
-阅读 [实验、恢复与入口详细设计](design/experiments-and-interfaces.md#dd-08-cli-与-web-共用应用接口)。
+| 编号 | 行为 | 文档 |
+|---|---|---|
+| DD-01 | 单问题建模与求解 | [建模流程](design/modeling-methods.md#dd-01-单问题建模与求解) |
+| DD-02 | 生成、修正与选择 | [方法编排](design/modeling-methods.md#dd-02-方法内部生成修正与选择) |
+| DD-03 | 插件与能力匹配 | [执行流程](design/execution.md#dd-03-插件接入与兼容路径) |
+| DD-04 | 阶段产物与数据绑定 | [产物来源](design/execution.md#dd-04-建模输出与数据绑定) |
+| DD-05 | 构建、执行与求解 | [可信求解](design/execution.md#dd-05-编译执行与求解结果) |
+| DD-06 | 评测数据与实验展开 | [实验](design/experiments-and-interfaces.md#dd-06-benchmark-与实验展开) |
+| DD-07 | 保存、恢复与报告 | [持久化](design/experiments-and-interfaces.md#dd-07-持久化恢复与报告) |
+| DD-08 | CLI 与 Web | [应用入口](design/experiments-and-interfaces.md#dd-08-cli-与-web-共用应用接口) |

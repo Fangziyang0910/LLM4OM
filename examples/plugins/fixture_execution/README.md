@@ -1,6 +1,6 @@
 # 独立 Backend／Solver 示例
 
-用途：演示SDK0.21.0开发版的共同Registry与真实Worker执行。grounded、参数化工厂和原生收集流程已接入，完整切片状态见 [实现记录](../../../docs/development/s03-solver-registry.md)。这是工程fixture，不是新的求解算法。
+本例演示共同注册接口和真实 Worker 执行。接口见[插件契约](../../../docs/contracts/plugins.md)。这是工程fixture，不是新的求解算法。
 
 在仓库根目录构建和安装：
 
@@ -28,7 +28,7 @@ Backend实际重命名Pyomo变量组件，保持显式业务决策映射。Solve
 容器运行需要安装同一wheel的可信镜像：
 
 ```bash
-uv run --locked python scripts/build_worker_image.py --offline --tag llm4om-worker:0.21.0-with-execution --plugin-wheel /tmp/llm4om-execution-wheel/llm4om_fixture_execution-0.1.0-py3-none-any.whl
+uv run --locked python scripts/build_worker_image.py --offline --tag llm4om-worker:with-execution --plugin-wheel /tmp/llm4om-execution-wheel/llm4om_fixture_execution-0.1.0-py3-none-any.whl
 ```
 
 将executor.config.image设为该镜像。宿主只配置插件，实际模型构建与求解在Worker内进行。ModelHandle不跨进程传输；额外SDK依赖在Worker预检并冻结版本。插件是可信代码，不读取隐藏评分材料，不在构造期间调用付费服务。

@@ -1,6 +1,6 @@
 "use strict";
 const { editorDialog, closeDialog } = require("./helpers/browser_fixture.cjs");
-// Run against the local deterministic responder documented in s09-user-experience.md.
+// Run against the local deterministic responder documented in docs/development/testing.md.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");

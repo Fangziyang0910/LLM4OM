@@ -1,86 +1,56 @@
-# 贡献与开发流程
+# 贡献指南
 
-本仓库维护LLM4OM的研究设计与平台实现。当前可用功能和支持范围见[README](README.md)，切片状态与证据见[开发计划](docs/implementation-plan.md)。完整1.0尚未发布。
+本文说明如何修改和验证 LLM4OM。产品功能与使用方式见 [README](README.md)。当前开发范围是本机后端与单用户 Web，支持继续开发。
 
-规范见[CODING_STANDARDS](CODING_STANDARDS.md)，领域词见[GLOSSARY](GLOSSARY.md)。按[文档导航](docs/README.md)读取当前任务涉及的FR/NFR、契约、详细设计与验收。方法或benchmark接入另读[资料库](docs/references/README.md)及[源码考察](docs/references/source-inspection.md)。历史版本与验收数量保留在对应切片记录，不在开发流程中重复维护。
+## 开始修改
 
-## 1. 从需求到工作项
+先读 [GLOSSARY](GLOSSARY.md) 和 [CODING_STANDARDS](CODING_STANDARDS.md)。再按[文档导航](docs/README.md)读取相关需求、ADR、接口和验收场景。
 
-新功能先明确问题、目标行为、用户故事、实现取舍、公共测试入口与范围。功能规格和工作项使用 [GitHub Issues 约定](docs/agents/issue-tracker.md)，引用仓库基线。已明确的文档修复和小范围维护可以直接执行。
+功能规格和工作项使用 [GitHub Issues](docs/agents/issue-tracker.md)。已明确的小范围维护可以直接执行。较大的功能按用户可观察结果拆分；每个任务贯通所需的输入、处理和输出，并有独立验收条件。
 
-规格按用户可观察结果拆成 tracer-bullet 切片。每个切片贯通需要的输入、处理和输出，独立验收；其阻塞项只列实际无法绕开的前置行为。选择依赖已完成、尚未领取的切片。父规格、子任务与验收证据相互关联。
+方法、LLM、建模后端、求解器和评估器通过共同接口协作。复用已有模块，只为实际变化增加适配器。修改字段、状态或指标时，同步契约、调用方、示例和测试。
 
-远程创建、评论与状态迁移按当前用户请求或显式调用的技能进行。本地规划不等于已发布 issue；认证失败保留本地结果并说明失败操作。
+研究方法接入保留核心编排和提示，记录固定上游提交及适配差异。第三方代码和数据保留来源与许可。新增领域词更新 GLOSSARY；难以逆转且有真实取舍的决定记录为 ADR。
 
-## 2. 实现与研究接入
+## 开发环境
 
-在编码前确定公共 Interface／Seam 和测试预期。新行为采用一个测试 red → 最小实现 green → 必要重构的小循环。测试从用户入口或真实公共契约观察结果；确定性 fixture 验证工程流程，真实 Provider／Solver 支持仍需真实验收。
-
-按用户2026-10-14的明确指令，当前交付目标是本机后端与Web能启动、展示并支持继续开发。复用已有模块，不新增公网多人部署或多平台适配；修改只检查受影响路径，较大交付节点再集中回归。保留必要信任边界校验、避免数据丢失的错误处理与可访问性。用户明确的开发范围和顺序优先于默认的发布验收流程。
-
-实现复用已有模块，新增 Adapter 对应真实变化维度。Formulation／Code 的公共输入输出和真实来源分别检查；修改阶段语义时读 ADR-0004 和契约。改变领域词时更新 glossary；发生需要留存的架构取舍时写简短 ADR。字段、状态、版本或指标变化同步其事实来源、使用方、fixture 与验收项。
-
-研究方法接入固定上游提交，记录提示、流程、预算和依赖差异。改变算法行为使用方法变体；忠实适配保留其实际输出和支持矩阵。第三方代码与数据记录来源和许可。论文元数据、未知状态和阅读范围在 catalog 中维护。
-
-## 3. 开发与校验
-
-当前平台使用 Python 3.11／3.12。依赖声明由 pyproject.toml 维护，完整解析由 uv.lock 固定；维护工具复用其中的 PyYAML／jsonschema。推荐执行：
-
-更新 Python 后端代码后，按原工作区和启动参数重启长驻 Web 服务，并刷新页面。服务在启动时加载方法模板和配置校验；重启使它们与新启动的执行程序保持一致。`web_methods_flow` 从页面选择生成配置，再向真实预检接口验证七种方法与三种求解器的全部组合。
+在仓库根目录执行，使用 Python 3.11 或 3.12：
 
 ```bash
-uv sync --locked --extra dev --extra solve --extra gurobi --extra ortools --extra search
-uv run --locked --all-extras mypy
-uv run --locked python scripts/build_worker_image.py
-uv build examples/plugins/fixture_execution --wheel --out-dir dist/fixtures
-EXECUTION_TEST_IMAGE="$(uv run --locked python -c 'from llm4om.executors import DEFAULT_IMAGE; print(DEFAULT_IMAGE + "-with-execution")')"
-uv run --locked python scripts/build_worker_image.py --tag "$EXECUTION_TEST_IMAGE" --plugin-wheel dist/fixtures/llm4om_fixture_execution-0.1.0-py3-none-any.whl
-uv run --locked --all-extras python scripts/render_references.py --check
-uv run --locked --all-extras python scripts/check_repository.py
-uv run --locked --all-extras python -m unittest discover -s tests -v
-uv build
+uv sync --locked --all-extras
+uv run --locked --all-extras python scripts/build_worker_image.py
 ```
 
-修改 `docs/references/catalog.json` 后先运行 `uv run --locked --all-extras python scripts/render_references.py` 生成资料页与 BibTeX，再执行检查。JSON 使用两空格布局；CSV 和授权原文保持字节稳定。所有纳入仓库的文件都在 [逐文件整理记录](docs/repository-audit.md)中说明职责与校验方式，新增文件同步记录。
+依赖由 `pyproject.toml` 声明，`uv.lock` 锁定。当前完整隔离验证环境是 Linux Docker。Worker 构建参数及测试插件镜像见[测试指南](docs/development/testing.md)。
 
-仓库检查覆盖文本格式、本地链接、JSON、示例配置、阶段引用、数据绑定、独立数学核验、参考资料导出与编号追踪。容器测试要求可访问的 Docker daemon 和已构建的 Worker 镜像；真实测试不自动跳过。Linux 为当前完整隔离验证环境，macOS／Windows 尚未验收。平台测试从 CLI／SDK 与编译／Solver 公共接口验证离线、真实求解、独立方法安装及预检；维护检查不替代真实隔离测试、完整预算执行、恢复或 benchmark 验收。基础安装可省略 solve extra，完整测试须安装 solve 与 gurobi extras；Gurobi 实测仅证明当前 size-limited 微型环境。
-
-插件测试夹具沿用已安装SDK所需的构建依赖，使用`uv build --offline`；完成上述`uv sync`后不为夹具构建访问PyPI。Executor、ArtifactStore和Reporter用例自行构建并安装到临时目录，不依赖本机预装测试插件。
-
-### 前端构建与浏览器流程测试
-
-Workbench 前端源在 `frontend/`（React + Vite + TypeScript），构建产物以固定文件名输出到 `src/llm4om/web_assets/` 随包分发。修改前端后必须重新构建，流程测试跑在构建产物上：
+修改前端时执行：
 
 ```bash
 npm --prefix frontend install
-npm --prefix frontend run build   # tsc --noEmit + vite build → web_assets/{index.html,app.js,style.css}
+npm --prefix frontend run build
 ```
 
-浏览器流程测试（Playwright `.cjs`）使用本机确定性 guidance 服务器（真实 `serve_web` + 工程 Provider）。工作区必须为**空的一次性目录**，重启需换新目录；每个测试族从全新工作区开始：
+前端源码在 `frontend/`。构建输出到 `src/llm4om/web_assets/`，随 Python 包分发。浏览器测试使用这些构建文件。
+
+更新 Python 后端后，按原工作区和启动参数重启 Web 服务，再刷新页面。长驻进程在启动时加载配置模板和校验代码；重启后才能与新执行程序保持一致。
+
+## 验证修改
+
+选择能验证本次行为的公共入口。非平凡行为先建立失败用例，再实现和验证。文档改动使用链接、示例和资料导出检查；无需重复执行完整求解回归。
 
 ```bash
-# 终端1：启动 fixture（默认 8774=web、8775=Provider）
-uv run --locked --extra solve python tests/helpers/web_guidance_server.py --workspace /tmp/llm4om-web-fixture
-
-# 终端2：运行流程测试（以 story 为例）
-LLM4OM_WEB_TEST_URL=http://127.0.0.1:8774 \
-LLM4OM_WEB_TEST_PROVIDER_URL=http://127.0.0.1:8775 \
-LLM4OM_WEB_TEST_WORKSPACE=/tmp/llm4om-web-fixture/jobs \
-LLM4OM_BROWSER_MODULE="$PWD/frontend/node_modules/playwright" \
-LLM4OM_BROWSER_EXECUTABLE=/absolute/path/to/chrome \
-node tests/web_story_flow.cjs
+uv run --locked --all-extras python scripts/check_repository.py
+uv run --locked --all-extras python -m unittest discover -s tests -p test_repository_checks.py -v
 ```
 
-- 直接读运行目录的用例（`web_edit_flow`／`web_model_edit_flow`／`web_clarification_flow`）要求 `LLM4OM_WEB_TEST_WORKSPACE` 指向 `<workspace>/jobs`（其下即 `<job_id>/`）；其余用例只需该变量存在。
-- 核心流程没有执行顺序要求。模型、代码、数学排版、键盘与编辑用例通过 `tests/helpers/browser_fixture.cjs` 的公共HTTP接口各自创建完整运行，再检查自己的结果；严格IR变量为 `qty_A/qty_B`，派生目标为3。story／clarification／start／failure等各自建立所需场景。`web_state_flow` 使用确定性HTTP响应检查配置输入保留、迟到响应、轮询和历史链接，不提交运行。`web_datasets_flow` 直接浏览随包提供的内置题面，另以独立 fixture 验证业务参数携带与参考答案隔离，无需导入数据集。
-- 连通性测试单独使用 `uv run --locked --extra solve python tests/helpers/connectivity_server.py --workspace /tmp/llm4om-connectivity-fixture`，再以 `LLM4OM_WEB_TEST_URL=http://127.0.0.1:8796`、`LLM4OM_WEB_TEST_PROVIDER_URL=http://127.0.0.1:8797` 运行 `web_connectivity_check_flow.cjs`；guidance Provider不提供模型目录GET。
-- `tests/replays/` 保存特定历史运行的手工复查脚本，需要匹配样本、变量名、版本与调用记录。当前核心流程使用`tests/web_*flow.cjs`及公共HTTP测试验收；历史脚本来源见 [#87](https://github.com/Fangziyang0910/LLM4OM/issues/87)。
-- Chrome 路径按本机 Playwright 安装调整；`LLM4OM_BROWSER_MODULE` 指向 `frontend/node_modules/playwright`（devDependency）。
+Python、容器、浏览器和完整交付检查见[测试指南](docs/development/testing.md)。确定性测试验证工程流程；真实 LLM 和求解器支持由实际请求和求解记录证明。
 
-## 4. Review 与交付
+修改 `docs/references/catalog.json` 后，运行 `uv run --locked python scripts/render_references.py`，再检查生成结果。固定上游字节、许可原文和数据哈希保持不变。
 
-Review 分开回答两个问题：Standards 是否符合开发规范和相关契约；Spec 是否完成用户要求或 issue。显式调用 code-review 时按技能执行独立审阅；若当前环境无法运行独立审阅者，说明实际采用的自查范围。
+## 审阅与交付
 
-交付先完成对应检查，再报告变化、证据和剩余条件。PR 使用 [仓库模板](.github/PULL_REQUEST_TEMPLATE.md)说明 Summary、Evidence 与 Merge Danger。用户请求提交或 PR 时保存完整改动并关联工作项。日常验收以本机测试和真实 Provider／Solver 运行为依据。开发中验证新增行为及受影响路径；相关小切片集中到可使用的交付节点，再执行一次必要完整回归、类型／仓库检查和包构建。同一实现快照不重复源码、wheel或镜像验收；源码或执行身份发生变化、出现实际失败时，只重验受影响范围。每个交付节点先展示可使用的功能和实际运行结果。GitHub Actions 仅手动触发，供必要的环境交叉验证；push／PR 不自动重跑完整矩阵，也不将远程 CI 作为每次开发推进的门槛。发布标签与公开包发布依据真实验收和用户授权进行。
+审阅分别检查开发规范和任务要求。报告改动、实际检查、未验证条件和影响范围。相关任务完成后再更新工作项；完整发布按[验收清单](docs/acceptance.md)核对。
 
-技能选择与触发条件见 [任务工作流](docs/agents/workflow.md)。常规实现选择无需额外审批；用户明确指令优先于工程默认值。
+密钥、运行数据和商业许可证保留在 Git 忽略的本地位置。当前开发不要求公网多人部署或多平台适配。GitHub Actions 仅在需要时手动触发；正式发布和仓库可见性由对应任务决定。
+
+按需使用[技能路由](docs/agents/workflow.md)。用户明确指令优先于工程默认值，常规实现选择无需增加审批。

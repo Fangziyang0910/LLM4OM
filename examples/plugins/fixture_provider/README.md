@@ -1,6 +1,6 @@
 # 独立文本 Provider 示例
 
-用途：验证可信 Provider 包通过共同 entry point 接入；这是工程 Adapter，不是建模方法或新模型。适用于 SDK0.18.0。字段与恢复规则见 [插件契约](../../../docs/plugin-contracts.md#23-s03-c1-installed-text-providers-sdk-0180)。
+本例验证可信 Provider 包通过共同 entry point 接入。它是文本协议工程适配器。字段与恢复规则见 [插件契约](../../../docs/contracts/llm.md)。
 
 在仓库根目录构建并安装到当前环境：
 

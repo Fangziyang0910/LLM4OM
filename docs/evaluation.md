@@ -1,167 +1,112 @@
-# 评测协议与正确性证据
+# 评测协议
 
-协议：`llm4om.eval.public-v0.1`、`llm4om.eval.objective-v0.1` 与 `llm4om.eval.checker-v0.1`；文档修订：0.12.0。本文维护评测规则；实际接入和验收范围分别见各切片记录。单问题用户运行可以没有 oracle；benchmark 评测在同一运行流程上增加独立参考材料和汇总。
+本页维护正确性、指标、分母和比较规则。任务字段见[任务契约](contracts/tasks.md)，实际验证见[支持验证](development/validation.md)。单问题可以没有参考评测材料。
 
-## 1. 必须分开的判断
+## 正确性层次
 
-| 层次 | 检查内容 | 能说明什么 | 不能说明什么 |
-|---|---|---|---|
-| 表述合法性 | 五元素信息、引用或严格 IR 类型／域是否有效 | 可进入下一阶段 | 业务逻辑正确 |
-| 实现合法性 | Code 是否关联实际表述、数据与受支持后端 | 可构建或运行 | 忠实实现数学含义 |
-| 执行成功 | 编译／构建／脚本能运行 | 代码路径可执行 | 模型可行或正确 |
-| 模型求解状态 | solver 的原始与归一化终止状态 | 当前模型被求解到何种程度 | 模型表达了原问题 |
-| 模型内可行性 | 解满足模型自己的约束与变量域 | 解对该模型可行 | 没有遗漏业务约束 |
-| 独立可行性 | 解满足独立 oracle 检查的原问题规则 | 检查器覆盖范围内符合原问题 | 未检查约束或所有实例均正确 |
-| 目标值匹配 | 按协议与参考目标比较 | 本实例数值与参考匹配 | 模型等价或语义正确 |
-| 语义证据 | 需求审阅、性质、等价检查等 | 在注明范围内支持语义判断 | 任意自然语言的自动完整证明 |
+| 层次 | 检查内容 | 证据范围 |
+|---|---|---|
+| 表述合法性 | 五元素、引用、严格 IR 的类型与域 | 是否符合输入契约 |
+| 实现合法性 | Code 的来源、数据与后端 | 是否能按声明构建 |
+| 执行 | 编译、构建和脚本状态 | 实际代码路径是否执行 |
+| 模型求解 | 原始状态、终止、解、目标与界 | 当前模型的求解结果 |
+| 模型内可行性 | 模型自身的约束与域 | 解是否满足该模型 |
+| 独立可行性 | 原问题业务规则与公开数据 | 检查器覆盖的规则是否满足 |
+| 目标匹配 | 被评测目标与参考比较 | 本实例的数值是否匹配 |
+| 语义证据 | 需求审阅、性质或等价检查 | 所声明范围内的模型含义 |
 
-报告保留各层独立状态。LLM-as-judge 可以作为可插拔辅助检查器，但结果标签为 `llm_judged`，必须记录模型／提示和成本，不替代独立 solver 或形式证明。
+各层保留独立状态。代码可运行、模型最优、目标匹配和原问题正确是不同判断。缺证据为 `unknown/not_available`，检查器异常为 `error`。
 
-## 2. 两种主协议
+Formulation 错误与 Code 错误分别观察。两个求解器得到相同数值不证明建模正确；同一正确 IR 在不同后端不一致时，需要调查转换、数值和终止条件。
 
-单问题的默认公开检查协议为 `llm4om.eval.public-v0.1`，由 structural 评估器汇总产物合法性、执行和可获得的模型内检查。无 oracle 时，独立可行性、参考目标匹配与模型等价检查为 not_available；没有 benchmark 分母和准确率。该协议与下面两种 benchmark 主协议分别标识。
+## 公开单问题协议
 
-### 2.1 Objective 协议
+默认 `llm4om.eval.public-v0.1` 汇总公开结构、执行和模型内证据。无参考材料时，独立可行性、参考匹配和模型等价不可用，不产生 Benchmark 准确率。
 
-适用于具有已核验、有限参考目标值的 LP／MILP 实例。主指标命名为 **objective_match_rate**。记录模型求解状态，不能因目标匹配就将 time_limit 改写为 optimal。
+需求溯源和方法评论用于理解模型，不作为语义分数。若后续接入 LLM 评议，标为 `llm_judged`，保存模型、提示和成本，不能代替独立数学检查。
 
-参考材料区分已证明最优、best-known 和仅可行参考。字段名叫 optimal_value 不证明数值最优。best-known 参考可用于预声明的质量阈值比较，不能直接当作最优正确性证据；模型取得更好的独立可行解时记录改进并检查参考状态，不强行将其归为目标错误。
+## 目标匹配
 
-若 oracle 提供原问题目标计算器，优先由原决策映射独立计算目标；否则只能比较提取到的模型 reported objective，并将证据标为 `reported_objective_match`。参考材料只有数值时，对语义或原问题可行性保持 unknown／not_available。
-
-### 2.2 Independent Checker 协议
-
-适用于具有受信任原问题检查器的实例。主指标命名为 **verified_solution_rate**：检查器成功确认原问题可行性，且原问题目标满足预先规定的准确／质量阈值。
-
-只有可行检查器而无参考最优值时，可报告 independent_feasibility_rate，不能称 optimal accuracy。没有完整决策映射时为 unknown，而不是猜测变量名并认为检查通过。
-
-S07-D 的 [独立检查实现](development/s07-checkers.md)分别保存模型自报目标匹配、原问题目标、原问题目标质量、独立可行性和 verified solution。模型目标存在单位差异时，只应用运行前明确的正比例／偏移映射；不根据结果拟合比例。verified solution 表示当前解满足原问题及参考质量要求，不表示整个模型等价。有限性质探测独立报告反例；恒零目标下的一个正确解仍可来自错误可行域。
-
-该实现分别冻结 `N_independent_eligible` 和 `N_verified_eligible`。后者还要求已声明的参考质量／阈值。评测错误、无 primal 和事后材料丢失保留对应分母。未提供或事先不可用的检查器、缺决策映射及无参考质量分别报告，零分母的率为 null。
-
-性质探测当前检查与 Code 有确定性来源关联的 grounded LPIR。原始点和数据替换规则在运行前冻结于私有 policy。数据扰动作用于原问题数据，模型保持固定；它不证明方法已支持重新绑定或重新建模。报告只导出探测数量、覆盖和反例索引，不导出私有点坐标／替换内容。有限点集不构成完整语义证明。
-
-## 3. 样本与分母
-
-1. 在运行任何方法前生成 EvaluationManifest，锁定 dataset/version/split、原始 ID、清洗规则、问题类型过滤、oracle 适用范围和样本哈希。
-2. Manifest 中定义 `N_selected`（共同任务范围）与 `N_eligible`（某协议参考条件事先成立的样本）。公开报告两个数和事前排除原因；方法只得到公开问题。
-3. 三种方法比较采用相同 eligible 样本，不根据运行后的错误删样本。不支持整个配置组合时该 cell 预检失败，不产生虚构的 0% 或成功率。
-4. 纳入后产生建模失败、运行错误、超时无解、预算耗尽、未解决澄清或评估异常的样本保留在分母。它们不计为 pass，但保存具体状态，不将未知语义误标为语义错误。
-5. `objective_match_rate = N_objective_pass / N_eligible`；`verified_solution_rate = N_checker_pass / N_eligible`；`assessment_coverage = N_assessed / N_eligible`。同时报告 evaluator error 与 unknown 数量，避免基础设施失败被解释为方法语义能力。
-6. N_eligible=0 时率为 null／not_available，不写为 0 或 100%。预期 oracle 导入失败不得运行后悄悄缩小 eligible 集合；修复 oracle 后须更新 manifest 和实验版本。
-
-批量表至少包含 selected、eligible、pass、fail、unknown、not_available、error、cancelled、unresolved 和事前 excluded 计数。应能用逐样本明细重建汇总结果。
-
-## 4. 目标值、域与求解状态处理
-
-有限数值比较采用：
+`llm4om.eval.objective-v0.1` 定义数值比较口径。任务适配器使用各自固定协议，明确公开输入、参考质量、容差和舍入。主指标为 `objective_match_rate`。
 
 ```text
 abs(predicted - reference) <= abs_tol + rel_tol * abs(reference)
 ```
 
-默认建议 abs_tol=1e-6、rel_tol=1e-5；数据源精度、单位与舍入情况可以要求不同阈值，必须在预运行 manifest 固定。整数目标不依靠宽容差掩盖单位错误。NaN、Infinity、无数值或错误提取均不匹配。
+默认建议 abs_tol=1e-6、rel_tol=1e-5。实际阈值在运行前冻结。非有限值、无目标或错误提取不能匹配。
 
-对于 infeasible／unbounded 参考实例，使用单独的 **status_match** 协议与 denominator，不能放入有限目标值协议。无法区分 infeasible_or_unbounded 时维持不确定状态。1.0 首批基准导入以明确有限参考最优值样本为主要协议范围，保留其他样本及分类。
+参考区分已证明最优、best-known、可行参考和未知。字段叫 optimal_value 不足以证明最优。若有原问题目标计算器，优先从显式决策映射重算；否则标为 `reported_objective_match`。
 
-不同等价建模可能有辅助变量、目标缩放或取负号。允许预声明的 objective／decision 映射，但记录其来源，不从隐藏答案自动拟合转换。多解问题不要求与参考解逐变量相等；检查原问题域、可行性及目标。best_bound 和 solver gap 只证明模型的解质量，不证明原业务模型正确。
+模型求得更好的独立可行解时，检查参考质量，不强行判成模型错误。目标匹配不将 time_limit 改为 optimal。
 
-## 5. 语义与编译验证
+不可行/无界参考采用独立状态比较口径与分母。无法区分 infeasible_or_unbounded 时保留未知，不混入有限目标协议。
 
-**Formulation 正确性与 Code 语义保持分别观察。** 代码正确运行可能实现了错误表述；正确表述也可能被代码错译。阶段结构检查、独立数学检查和端到端解质量分别记录，不能从后一项倒推前两项。 同一错误模型在两个求解器中得到相同数值，不能证明建模正确；同一正确 IR 在两个后端不一致，则需要调查编译、数值容差或求解终止条件。
+## 独立解检查
 
-1.0 提供：独立微型 fixture 检查器；需求条目到变量／目标／约束的溯源展示；可插拔独立解检查；限定性质与数据扰动测试接口；可选人工审阅标签。没有能力覆盖完整约束时写出覆盖范围。
+`llm4om.eval.checker-v0.1` 依据原问题数据与明确决策映射检查。分别记录自报目标匹配、原目标、目标质量、目标一致性、独立可行性和 `verified_solution`。
 
-必须包含“漏约束但代码可运行”和“目标值偶然相同但模型错误”的反例，验证报告不会将其标为 semantic_verified。需求覆盖率和 LLM 评论只能作辅助诊断。
+`verified_solution_rate` 要求原问题可行且原目标满足预定质量阈值。只有可行性检查器时，可报告 `independent_feasibility_rate`。缺完整决策映射为未知，不猜测变量名。
 
-## 6. 方法公平比较
+独立可行性与已验证解分别冻结 `N_independent_eligible/N_verified_eligible`。后者还需要参考质量和阈值。检查器异常、无 primal 和事后材料丢失保留相应分母。
 
-实验必须固定或公开：样本、方法 variant、上游提交、LLM endpoint 类型／model ID、角色模型、提示／工具版本、温度／seed、最大调用／token／公开检查／求解次数／墙钟预算、求解器版本／参数、执行资源、数据视图与评估协议。
+目标单位映射只使用事前声明的正比例与偏移。多解问题检查域、约束和目标，不要求等于某个参考向量。
 
-至少提供两种比较设置：
+## 样本与分母
 
-- **固定底座与资源**：首批 direct／OptiMUS／CoE 使用同一通用外部 LLM 与预算，比较方法流程；角色覆盖公开记录。
-- **完整系统设置（后续）**：具备原推荐模型时另作对照。当前训练权重不在接入范围，借用其提示／流程的变体不列为原专用模型系统成绩。
+1. 在建模前冻结数据来源、版本、split、原始 ID、清洗规则、问题类型、协议与哈希。
+2. 保存 `N_selected` 和各指标的 `N_eligible`，记录事前不纳入原因。
+3. 方法比较使用共同资格范围。不支持配置先拒绝或明确排除，不构造虚假成功率。
+4. 纳入后发生生成、执行、预算、取消、澄清或评测失败，保留分母与具体状态。
+5. 用逐样本分子/分母重建汇总，同时报告未知和评测器错误。
 
-记录真实尝试与缓存命中。HTTP 重试属于 LLM attempts，语义修正属于 repair，二者不可混用。Pass@k 只在同一问题实例的 k 次独立运行（实验 repeats）之间统计：任一次运行的建模输出成功，该实例计一次成功，分母为符合条件的实例数。运行内的修正产物不是样本。Pass@k 与方法实际选择的 final outcome 分开呈现；由 oracle 挑选的结果只作独立诊断。
+`N_eligible=0` 时率为 `null`。参考导入失败不能在看到结果后缩小分母。修复参考材料需要新的快照和实验身份。
 
-公开同等预算下成功率与 token／调用／时间开销；以“同 token”比较时声明 tokenizer／reasoning token 可用性。供应方统计不足时不要声称实现精确成本公平。
+报告至少保留 selected、eligible、pass、fail、unknown、not_available、error、cancelled、unresolved 和事前 excluded。基础设施失败不能被解释为已证实的语义错误。
 
-## 7. 汇总与重复实验
+## NL4Opt 原始标注协议
 
-每个问题／方法／配置／重复产生独立 run_id。先报告每个 dataset 的 numerator／denominator 和微观汇总；宏观均值说明参与 dataset 及权重，不直接平均不可比百分数。延迟、token 与费用分别给所有运行和成功运行的分布，避免只看成功样本。
+`llm4om.eval.nl4opt-raw-v0.1` 只投影原始描述。官方标注为不完整声明，缺少独立变量域、检查器、参考解和最优值。
 
-少量随机重复时报告原始结果与波动，不编造显著性。需要置信区间时使用以 problem 为采样单位的配对 bootstrap，固定种子及统计脚本版本；多次 run 不能被当作互相独立的新问题扩大样本量。
+因此原始快照的数值资格为 false，原因是 `no_reference_objective_or_variable_domains`。`N_eligible=0`，目标匹配率为 null，即使 HiGHS 返回 optimal 也不改变资格。
 
-真实模型别名可能更新，平台记录请求 model ID、响应实际 ID、时间与 provider request ID；无法获得固定快照时在复现报告注明。离线 Mock 指标只验证工程流程，不与真实模型进入同一能力排名。
+结构、Code、执行和 `solver_reported_candidate_feasibility` 分开保留。单例 `N_evaluated=1` 不表示整份 split 已评完。派生数值参考需要独立来源，不能用原标注伪造。
 
-## 8. 数据污染与公开反馈
+## 编译与有限语义检查
 
-训练／调参／提示示例与测试 split 分开；近重复 detection 是诊断工具，不单独证明无污染。记录模型已知训练来源，但无法审计供应方训练语料时写 unknown。
+确定性编译使用独立微型 fixture 检查目标方向、常数、域、映射和绑定。工厂代码按 `factory_contract` 验证，不能称为提供的 Python 被确定性编译。
 
-不得把 EvaluationOracle 作为方法输入、few-shot 示例、错误修正提示、数据浏览工具内容或最终选择分数。公开校验器可以反馈格式／域／输入错误，但会泄露参考业务规则的检查必须被协议明确授权并与隐藏评测分离。
+`factory_exported_instance/native_exported_instance` 保留提取来源。求解证据针对实际导出模型，不能证明该模型忠实表达了原表述和原问题。
 
-人工在看到隐藏答案后修改模型的 run 标为 assisted；不计入 unassisted 方法结果。基准清洗依据及理由应在方法运行前冻结；结果不好不是删样本理由。
+有限探测只读取与实际确定性 Code 关联的严格 IR。私有点和数据替换策略事前冻结，报告显示数量、覆盖和反例索引。有限点集不证明完整等价，也不证明方法重新绑定能力。
 
-## 9. 成本与报告字段
+必要反例包括漏约束、遗漏整数域、错误利润绑定和目标偶合。手算依据见[示例](../examples/README.md#数学问题)。
 
-至少记录 attempts、completed calls、outcome_unknown calls、input／output／cached／reasoning tokens 的可用项、pricing_version、estimated_cost、cost_status、wall time、modeling time、formulation time、code time、compile time、queue time、solve time、evaluation time、max resource。
+## 方法比较与 Pass@k
 
-联合生成的调用分别关联阶段，但账本只按真实 attempt 入账；无法分离阶段时间／token 时标 jointly_measured，不将整次调用在两阶段重复相加。成本未知使用 null，status 为 unknown；Mock 费用可为 0 但注明 mock；用户未提供定价时保留 token 和调用数。wall time 包含失败与等待，不能把批量吞吐耗时当单问题响应耗时。
+固定或公开样本、方法变体、来源提交、Provider/模型、角色、提示、随机条件、预算、数据视图、求解器、执行资源和协议。不同条件分别分组。
 
-最少错误标签：description_ambiguous、data_missing、domain_error、constraint_omission、objective_error、code_error、compile_error、solver_limit、budget_limit、provider_error、checker_error、unknown_semantics。细粒度语义标签需有证据，不通过异常文本自动确定全部根因。
+固定底座比较方法编排；带专用训练模型的完整系统另作比较。未接入权重的提示变体不能列为原训练系统成绩。
 
-有相应证据时另记录 data_binding_error、index_binding_error 与 unit_error，区分参数来源、索引绑定和单位问题。数据文件 hash 正确不证明使用了正确的列或键；模型结构正确也不证明数值绑定正确。
+HTTP 重试计实际 LLM attempt，语义修正计 repair。联合阶段调用按真实 attempt 计一次用量。回放和缓存命中与新生成分别记录。
 
-## 10. 必须交付的首份实验报告
+Pass@k 使用同一问题的 k 次独立运行，即实验 repeats。任一次成功，该问题计一次成功，分母为符合条件的问题数。一次运行内的修正和检查不作为独立样本。
 
-发布前提交 NL4Opt、NLP4LP、MAMO LP/MILP 的三个冻结 manifest、direct／OptiMUS／CoE 的共同兼容设置、至少一个真实模型的逐样本记录、目标／独立验证证据覆盖率、资源统计、上游适配差异及失败分析。运行规模由可用预算明确指定，不因预算限制伪造完整基准成绩；小样本报告标作 smoke／pilot。全量基准完成不是实现发布的硬前提，但全部声明能力的真实验收不能缺失。
+实际最终选择的结果与 oracle-best 诊断分开。隐藏参考答案不能参与方法选择。报告成功率及对应调用、token、时间和资源；统计不足时不声称精确成本公平。
 
-## 11. 支持科研分析的比较维度
+## 汇总、污染与来源
 
-研究报告从方法实际最终输出开始，按需要展开解释：生成错误来自需求理解、数学结构、数据绑定、计算实现还是求解终止；修正链中是否出现过更好表述但最终选择失败；修正是否改进可执行性却改变了业务含义。
+每个问题/配置/repeat 有独立运行 ID。来源、协议和配置分别统计，宏观平均注明权重。延迟和资源分别报告全部与成功运行，避免只展示成功样本。
 
-| 研究维度 | 固定条件 | 记录的结果 |
-|---|---|---|
-| Formulation 策略 | 固定公开输入、通用 LLM 与预算 | 五元素、数学错误证据、数据绑定与来源 |
-| Code 策略 | 冻结同一表述与数据、声明后端 | 生成／编译失败、实现偏差与求解记录 |
-| 方法策略 | 共同样本、同一 LLM、可比执行路径和预算 | final outcome、建模步骤与修正链、实际资源消耗 |
-| 模型能力 | 固定方法、提示、任务版本与输出模式 | 逐样本结果、错误类别与证据覆盖 |
-| 表示与数据访问 | 信息内容相同，表示／数据视图变化明确 | 结构、绑定、执行错误分别计量 |
-| 反馈修正 | 初始阶段产物来源与预算一致，反馈类型明确 | 每轮结果、约束变更、最终选择 |
-| 求解效率 | 原问题质量阈值、数据、求解器与硬件固定 | 解质量、界/gap、模型规模和 solve time |
-| 输入规模 | 任务结构与数据生成规则明确 | 描述长度、文件大小、变量／约束数量和阶段时间 |
+费用、token、CPU 或内存缺失保留 null，不填写零。报告区分已知用量和未知预留，缓存复用单独计数。
 
-Code 隔离实验的固定表述可来自人工参考，但该实验明确标 assisted，不计入无辅助端到端方法成功率。
+训练、调参、检索与测试 split 分开管理。公开样例和历史结果不能进入同一测试问题的隐藏提示。无法核验预训练污染时如实保留未知，不推断完全无污染。
 
-这些维度是平台支持的实验口径，不是 1.0 必须新增的所有研究实验。只有质量满足预定标准的有效表述才进入求解效率比较；失败运行仍保留并另列成功覆盖率，避免比较产生选择偏差。
+数据集名称不是身份。原始/清洗/翻译/派生版本分别记录来源、许可和哈希。正式研究报告固定样本、分母和预算，小样本标为 smoke/pilot，不推广为全量成绩。
 
-有限实例的数据扰动可以检验具体性质，不能升级为所有参数下的模型等价证明。模型级评估器必须说明等价关系、变量映射与覆盖范围。可参考 [图编辑距离评测](https://aclanthology.org/2024.lrec-main.1438/)与 [EquivaMap](https://arxiv.org/abs/2502.14760)，接入前分别验收。
+## 研究分析
 
-单问题没有独立参考时，报告可以展示模型求解状态和假设、需求／数据来源，但不会给出未知的原问题正确率。相关研究分类见 [研究综述](research-landscape.md)，完整流程见 DD-06。
+从最终建模输出追查需求理解、数学结构、数据绑定、计算实现和求解终止。修正可改善可执行性，也可能改变业务含义，两者分别检查。
 
-## 12. Implemented S07-A raw NL4Opt protocol
+分阶段实验固定输入。Code 实验使用人工参考表述时标为 assisted，不计入无辅助端到端成功率。求解效率比较使用达到预定质量的表述，同时报告失败和覆盖率。
 
-`llm4om.eval.nl4opt-raw-v0.1` freezes original-description projection before runs.
-Raw official annotations are `incomplete_declarations`: no variable domains, independent
-checker, reference solution or solved reference optimum. Every selected case has
-`eligible=false`, reason `no_reference_objective_or_variable_domains`. `N_eligible=0` and
-`objective_match_rate=null`; objective match, independent feasibility and semantic evidence
-are `not_available`, including when candidate HiGHS termination is optimal.
-
-The evaluator retains failed runs and checker errors. Formulation/Code structural evidence,
-execution status and `solver_reported_candidate_feasibility` are separate observations.
-Candidate reported objective is retained without comparing it to declaration coefficients.
-No upstream declaration scorer/parser is used. `N_selected` is the frozen split count;
-`N_evaluated=1` describes this single-case result, not completion of the whole split.
-Derived reference models remain unimplemented; original-fixture independent solution checks are implemented in S07-D. Local HTTP
-fixtures exercise engineering behavior only; they do not establish external-model accuracy.
-
-### S02-B Code 来源证据
-
-SDK 0.5.0 的参数化工厂 Code 标记为 `method_generated`，公开 Code 检查等级为
-`factory_contract`。它证明已验证 Code proposal 的契约、源 hash、Formulation 关联与数据绑定，
-不声称提供的 Python 已经确定性编译，也不证明语义正确。运行成功后附加
-`factory_exported_instance` 具体实例视图与稳定决策映射；HiGHS 只证明这个校验后实例的求解结果。
-NL4Opt 后置评测依据真实 CodeArtifact 来源区分该等级和已有 `deterministic_compilation`。
-失败、未知资源和 `not_available` 的分母规则不变。细节见 [契约](plugin-contracts.md#10-s02-b-parameterized-factory-interface-sdk-050)。
+模型级比较需声明变量映射、等价关系和范围。相关机制见[图编辑距离评测](https://aclanthology.org/2024.lrec-main.1438/)与 [EquivaMap](https://arxiv.org/abs/2502.14760)。这些研究资料不等于已接入平台的检查器。

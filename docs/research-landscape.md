@@ -1,6 +1,6 @@
 # 自动优化建模研究综述与平台设计依据
 
-调研日期：2026-10-08；文档修订：0.4.0。本文面向 LLM4OM 的需求与设计，依据一手论文、作者仓库和选择性源码考察。完整书目、链接和阅读范围见 [参考资料库](references/README.md)，检索过程见 [检索记录](references/search-log.md)。当前没有本平台实验结果。
+资料基于 2026-10-08 的代表性调研。本文面向 LLM4OM 的需求与设计，依据一手论文、作者仓库和选择性源码考察。完整书目、链接和阅读范围见 [参考资料库](references/README.md)，来源范围见[资料核验说明](references/search-log.md)。平台接入与验证单独见[方法说明](development/methods.md)和[支持验证](development/validation.md)。
 
 ## 1. 调研结论与项目目标
 
@@ -34,8 +34,8 @@ ORLM、SIRL、OptiMind 等工作可包含数据构造、训练所得模型与测
 
 | 路线 | 代表工作 | 实际变化的对象 | 在 LLM4OM 中的接入位置 |
 |---|---|---|---|
-| 直接生成与公开反馈修正 | 平台 direct／可选 feedback_repair；首批 OptiMUS [R05/R06](references/README.md#r06) | 提示流程、状态与修正策略 | ModelingMethod |
-| 多专家协作 | 首批 CoE [R04](references/README.md#r04) | 角色、路由、协作和反思 | 方法内部实现，角色模型由配置指定 |
+| 直接生成与公开反馈修正 | 平台 direct／feedback_repair；OptiMUS [R05/R06](references/README.md#r06) | 提示流程、状态与修正策略 | ModelingMethod |
+| 多专家协作 | CoE [R04](references/README.md#r04) | 角色、路由、协作和反思 | 方法内部实现，角色模型由配置指定 |
 | 表述空间搜索 | Autoformulation [R09](references/README.md#r09) | 阶段产物扩展、价值估计与剪枝 | ModelingMethod，保留搜索轨迹与最终选择 |
 | 专用模型与训练 | ORLM、LLMOPT、SIRL、OptiMind、Step-Opt [R07](references/README.md#r07) | 模型权重、训练数据和推理包装 | 本版只考虑流程／提示变体；专用权重留待后续 |
 | 结构化输出与确定性编译 | IR2Solve [R20](references/README.md#r20) | 生成接口、表示检查和编译 | 方法输出＋IR/Compiler |
@@ -59,16 +59,16 @@ BIND 的实验重点是数据规模增长时的数值与索引绑定问题。这
 
 ## 4. Benchmark 调研与接入策略
 
-| 数据／任务 | 原始问题特点 | 参考材料与版本问题 | 1.0 或后续行动 |
+| 数据／任务 | 原始问题特点 | 参考材料与版本问题 | 平台使用时需保留的信息 |
 |---|---|---|---|
-| NL4Opt [R03](references/README.md#r03) | LP 文字题、实体与结构标注 | 原竞赛结构任务与后续求解版不同 | 首批接入，保留源 ID 和派生标注 |
-| IndustryOR [R07](references/README.md#r07) | 多领域问题，可含表格 | 存在原始、清洗与修正版；非线性实例不能改标为 MILP | 后续候选；导入时冻结 LP/MILP 范围 |
-| MAMO [R10](references/README.md#r10) | EasyLP、ComplexLP 和 ODE 等子任务 | 子集语义与可用决策信息不同 | 首批 EasyLP／ComplexLP 的 LP/MILP 子集；ODE 排除 |
+| NL4Opt [R03](references/README.md#r03) | LP 文字题、实体与结构标注 | 原竞赛结构任务与后续求解版不同 | 保留原始与整理版本的 ID 和派生标注 |
+| IndustryOR [R07](references/README.md#r07) | 多领域问题，可含表格 | 存在原始、清洗与修正版；非线性实例不能改标为 MILP | 题库已含整理题面；评测需另冻结 LP/MILP 范围 |
+| MAMO [R10](references/README.md#r10) | EasyLP、ComplexLP 和 ODE 等子任务 | 子集语义与可用决策信息不同 | 按公开评阅确定 LP/MILP 子集；ODE 排除 |
 | ComplexOR [R04](references/README.md#r04) | 模型结构与数值参数分开 | 论文与公开实现的数据范围需核对 | 后续参数化任务与多 Agent 比较 |
-| NLP4LP [R06](references/README.md#r06) | 结构／数据分离的 LP/MILP 与案例 | OptiMUS 论文版本和数据 release 持续变化 | 首批；锁 release、公开参数与隐藏参考、许可，不固定论文样本数 |
+| NLP4LP [R06](references/README.md#r06) | 结构／数据分离的 LP/MILP 与案例 | OptiMUS 论文版本和数据 release 持续变化 | 锁 release、公开参数、隐藏参考和许可 |
 | OptiBench/ReSocratic [R11](references/README.md#r11) | 端到端任务与数据合成 | 包含不同问题类型；与另一个 OptiBench 同名 | 使用明确来源 ID，按类型导入 |
 | OptiBench/Equivalence [R12](references/README.md#r12) | 参数化 LP/MILP 与模型级评测 | 匿名投稿记录、决定与数据入口仍需核验 | 不冒充已完整核验的可接入数据集 |
-| OptMATH [R14](references/README.md#r14) | 双向合成及困难测试样本 | 训练与测试的构造、筛选来源不同 | 后续记录构造过程与 split |
+| OptMATH [R14](references/README.md#r14) | 双向合成及困难测试样本 | 训练与测试的构造、筛选来源不同 | 题库已含整理题面；保留构造过程和 split |
 | Text2Opt-Bench [R18](references/README.md#r18) | 可调整数据规模和任务类型 | 数据外置与内嵌形式影响评测条件 | 后续绑定与输入规模研究 |
 | MIPLIB-NL [R19](references/README.md#r19) | 工业规模 MILP，描述、表述、代码和数据配对 | instance.json 包含参考目标，导入须剥离 | 后续规模实验，避免参考模型进入方法侧 |
 

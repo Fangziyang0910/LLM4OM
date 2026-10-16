@@ -1,4 +1,4 @@
-# Independent DataLoader fixture
+# 独立数据加载器示例
 
 Purpose: verify installed public-data loading through the CLI/SDK. This engineering
 adapter reverses the actual CSV view's columns. Original input bytes and Solver data
@@ -10,5 +10,4 @@ directory. Configure `data_loader.plugin_id: llm4om.examples.reversed_columns` a
 limits and validates the resulting exposure. The factory receives admitted public
 bytes and schema, without filesystem paths or evaluation materials.
 
-Contract: [DataLoader](../../../docs/plugin-contracts.md). Acceptance evidence is
-recorded with the corresponding SDK slice; installation alone is not acceptance.
+接口见[DataLoader 契约](../../../docs/contracts/plugins.md#dataloader-与-dataview)。安装后仍需验证实际视图。

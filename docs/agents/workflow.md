@@ -1,33 +1,24 @@
-# 按任务选择技能
+# 技能路由
 
-这是任务路由。规范与完成条件由 [CONTRIBUTING](../../CONTRIBUTING.md)和 [CODING_STANDARDS](../../CODING_STANDARDS.md)维护；按任务读取相关技能的完整指令。
+按当前任务读取对应技能。开发规则由 [CONTRIBUTING](../../CONTRIBUTING.md)和 [CODING_STANDARDS](../../CODING_STANDARDS.md)维护。
 
-## 任务入口
-
-| 当前工作 | 使用技能 | 需要留下的结果 |
+| 任务 | 技能 | 结果 |
 |---|---|---|
-| 理解文献、API 或上游实现 | research | 来源、读取范围、固定版本及可迁移认识 |
-| 确定领域词或架构决定 | domain-modeling | glossary 的规范定义或简短 ADR |
-| 设计模块接口、寻找接缝 | codebase-design | 小 Interface、完整职责、真实变化维度 |
-| 尚不确定交互或状态模型 | prototype | 回答具体设计问题的可丢弃原型 |
-| 将已讨论想法变为功能规格 | to-spec | 用户行为、取舍、测试入口、范围 |
-| 将规格拆为可执行工作项 | to-tickets | 纵向切片、验收与真正的阻塞关系 |
-| 领取／实施已明确的工作 | implement、implement-spec | 从可执行前沿选择任务，交付可观察行为 |
-| 分类或澄清 GitHub 请求 | triage | 一个类别、一个状态、技能要求的 AI 声明 |
-| 新非平凡行为或修复 | tdd | 公共入口上的逐步 red → green |
-| 难复现错误或性能退化 | diagnosing-bugs | 复现、可区分解释、根因修复及回归证据 |
-| 寻找模块变深的机会 | improve-codebase-architecture | 当前复杂性与实际接口改进，不预建空层 |
-| 修改代理常读文件 | writing-for-agents | 常驻约束精简、触发清楚、按需读取 |
-| 用户请求审阅变更 | code-review | Standards 与 Spec 两路结果 |
-| 用户请求 PR 或工作交接 | pr、handoff | 变更证据、剩余工作与可恢复上下文 |
+| 理解论文、API 或源码 | research | 来源、读取范围与可迁移认识 |
+| 统一领域词或记录取舍 | domain-modeling | GLOSSARY 或 ADR |
+| 改善模块接口 | codebase-design | 职责、输入输出和真实变化边界 |
+| 验证交互或状态模型 | prototype | 回答具体设计问题的原型 |
+| 整理已讨论的需求 | to-spec | 用户行为、取舍、验收和范围 |
+| 拆分工作项 | to-tickets | 纵向任务和实际阻塞关系 |
+| 实施明确功能 | implement / implement-spec | 可观察行为与检查 |
+| 分类 GitHub 请求 | triage | 类别与状态 |
+| 验证非平凡行为 | tdd | 公共入口上的失败/通过循环 |
+| 排查难复现故障 | diagnosing-bugs | 复现、根因和回归证据 |
+| 整理模块边界 | improve-codebase-architecture | 已存在复杂性的改进 |
+| 修改代理读取的文档 | writing-for-agents | 清晰触发、单一来源和按需引用 |
+| 审阅变更 | code-review | 规范与任务要求两路结论 |
+| 编写 PR 或交接 | pr / handoff | 变化、证据和剩余条件 |
 
-这些技能按任务调用，不要求每次修改经过所有阶段。未提供某个技能时使用现有规范完成已授权工作，并说明受影响的步骤。显式调用的技能要求展示草案或审批时，遵循其具体要求与当前会话授权。
+这些技能按任务调用。仓库已有 Matt 技能配置，无需重复初始化。当前工作不经过所有技能，也不为常规选择添加审批。
 
-## 阅读分支
-
-- 用户问题与方法：glossary → 相关 FR → DD-01/02 → 两阶段契约与验收；阶段取舍见 ADR-0004。
-- 插件、建模表示与求解：相关 ADR → DD-03/04/05 → 能力、错误和状态契约。
-- 实验、恢复与入口：评测协议 → DD-06/07/08 → 相应 AC 与切片依赖。
-- GitHub 操作：先读 [issue tracker](issue-tracker.md)；triage 再读 [label mapping](triage-labels.md)。
-
-当前切片和支持范围见 [开发计划](../implementation-plan.md)及其交付记录。研究、fixture、维护工具和真实 Provider／Solver 验收分别报告。
+修改领域或架构时先读[领域约定](domain.md)。GitHub 操作先读[工作项约定](issue-tracker.md)，分类状态时再读[标签映射](triage-labels.md)。具体设计和验证按[文档导航](../README.md)读取。

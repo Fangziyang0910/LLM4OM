@@ -98,11 +98,15 @@ class RepositoryChecksTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("fixture invariant failed: objective data binding", result.stdout)
 
-    def test_reports_file_missing_from_audit(self) -> None:
-        (self.repo / "unrecorded.md").write_text("# Unrecorded file\n")
+    def test_checks_new_documents_without_a_manual_inventory(self) -> None:
+        document = self.repo / "new-guide.md"
+        document.write_text("# New guide\n\n[Project](README.md)\n")
+        result = self.check_repository()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        document.write_text(document.read_text() + "\n[Missing](missing.md)\n")
         result = self.check_repository()
         self.assertEqual(result.returncode, 1)
-        self.assertIn("repository audit: missing file: unrecorded.md", result.stdout)
+        self.assertIn("new-guide.md: missing local link: missing.md", result.stdout)
 
     def test_rejects_zero_concurrency(self) -> None:
         path = self.repo / "examples/specs/run.yaml"

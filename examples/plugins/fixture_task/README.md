@@ -1,6 +1,6 @@
 # 独立 Task／Evaluator 示例
 
-用途：演示可信benchmark插件通过共同Registry接入。适用于SDK0.19.0；字段见 [契约](../../../docs/plugin-contracts.md#24-s03-c2-installed-task-and-evaluator-sdk-0190)。这是工程fixture，数值比较不证明模型符合所有业务规则。
+本例演示可信任务与评估器通过共同注册接口接入。字段见 [契约](../../../docs/contracts/tasks.md)。这是工程fixture，数值比较不证明模型符合所有业务规则。
 
 在仓库根目录构建并安装：
 
