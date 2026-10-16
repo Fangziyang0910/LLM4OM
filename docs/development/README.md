@@ -14,3 +14,15 @@
 | [支持验证](validation.md) | 保留的真实接入证据及其适用范围 |
 
 字段定义见[接口契约](../plugin-contracts.md)，系统职责见[架构](../architecture.md)，指标定义见[评测协议](../evaluation.md)。工作项在 GitHub Issues 中跟踪。
+
+## 30 天轮换开发任务
+
+三位同学依次接手，每人 10 天。每阶段验收后集成到 `main`，下一位从该版本继续。
+
+| 执行人 | 周期 | 任务书 |
+|---|---|---|
+| 同学 A | 第 1—10 天 | [前端重构与用户流程完善](assignments/01-frontend.md) |
+| 同学 B | 第 11—20 天 | [核心抽象复核与两种建模方法接入](assignments/02-abstractions-methods.md) |
+| 同学 C | 第 21—30 天 | [两个求解器接入与全平台验收](assignments/03-solvers-acceptance.md) |
+
+新增方法中只固定 LLMOPT，另一种方法及两个求解器由执行人选型。任务书用于分发和交接，具体规格、bug 和完成状态仍在 GitHub Issues 跟踪。
