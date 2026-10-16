@@ -5,9 +5,9 @@
 在仓库根目录构建并安装：
 
 ```bash
-uv build --offline --wheel examples/plugins/fixture_task --out-dir /tmp/llm4om-task-wheel
-uv pip install --no-deps /tmp/llm4om-task-wheel/llm4om_fixture_task-0.1.0-py3-none-any.whl
-llm4om plugins list
+uv build --wheel examples/plugins/fixture_task --out-dir /tmp/llm4om-task-wheel
+uv pip install --python .venv/bin/python --no-deps /tmp/llm4om-task-wheel/llm4om_fixture_task-0.1.0-py3-none-any.whl
+uv run --locked llm4om plugins list
 ```
 
 导入配置位于原始问题和参考文件目录，例如：
@@ -28,8 +28,8 @@ llm4om plugins list
 problem.json采用现有公开ProblemSpec；CSV文件按data_refs放置，原始hash保留。reference.json是私有数值材料，包含有限数值value，可附私有研究注释。将占位hash替换为实际文件SHA-256再执行。
 
 ```bash
-llm4om doctor --task-config /path/to/import.json
-llm4om import --config /path/to/import.json --output /path/to/snapshot
+uv run --locked llm4om doctor --task-config /path/to/import.json
+uv run --locked llm4om import --config /path/to/import.json --output /path/to/snapshot
 ```
 
 Task接收source配置及指定staging路径，发布manifest.json和public／private目录。FrozenTaskAdapter复用冻结案例读取；evaluate_outcome复用原问题与实际RunBundle核验，再调用Evaluator自身的参考比较。config_schema分别校验Adapter和Evaluator的参数；protocol_ids声明匹配范围。

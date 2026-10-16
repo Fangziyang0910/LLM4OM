@@ -6,7 +6,7 @@
 
 必需字段为 `artifact_id`、`media_type`、`sha256`、`size_bytes`、`namespace`、`relative_path` 和 `schema_version`。非结构化文件的版本可以为 `null`。
 
-路径限定在授权根目录。拒绝目录穿越、符号链接越界和未经声明的远程下载。哈希按原始字节计算；规范化 JSON 的哈希另记规范化版本。自然语言和浮点表示不被隐式改写以合并样本。
+路径限定在授权根目录。`run_public` 引用的 `relative_path` 相对于该运行目录，即 CLI 返回的 `bundle_path`。引用可能指向 `history/` 中的不可变文件，不应按固定文件名猜测路径。拒绝目录穿越、符号链接越界和未经声明的远程下载。哈希按原始字节计算；规范化 JSON 的哈希另记规范化版本。自然语言和浮点表示不被隐式改写以合并样本。
 
 ## ProblemSpec 与 PublicProblem
 
@@ -16,17 +16,17 @@
 | `problem_id/revision` | 稳定问题 ID 与输入修订 |
 | `description/language` | 原始描述和语言标识 |
 | `problem_type_hint` | `lp/milp/unknown` |
-| `requirements` | 可空；条目含 `id/text/category/source_span` |
-| `data_refs` | 可空；条目含 `data_id/path/format/schema/sha256` |
-| `assumptions` | 可空；条目含 `id/text/origin/status` |
+| `requirements` | 可为空数组；条目含 `id/text/category/source_span` |
+| `data_refs` | 可为空数组；条目含 `data_id/path/format/schema/sha256` |
+| `assumptions` | 可为空数组；条目含 `id/text/origin/status` |
 | `source` | 用户输入或数据集身份与来源 |
-| `metadata` | 声明的公开元数据，排除秘密和参考答案 |
+| `metadata` | 可选 `purpose` 和固定为 `false` 的 `contains_oracle`；不接受其他字段 |
 
 需求类别为 `objective/domain/constraint/data/other`。`source_span` 指向原文字符范围或表格定位。假设状态为 `explicit/proposed/confirmed`。
 
 PublicProblem 是路径、哈希和权限校验后的公开投影，不增加参考目标或参考代码。自然语言输入无需人工拆分需求。方法推断的规则保留方法来源，不能变成原始确认事实。
 
-CSV 数据声明表头、类型、空值和唯一键。JSON 数据使用公开对象及 `schema.type=object`。单文件最多 8 MiB。拒绝重复键、非有限值和隐藏参考字段。保留原始字节，格式不被自动互换。
+CSV 数据声明表头、类型、空值和唯一键。JSON 数据使用公开对象及 `schema.type=object`，需要 ProblemSpec `0.3.0`；`0.2.0` 只支持 CSV。单文件最多 8 MiB。拒绝重复键、非有限值和隐藏参考字段。保留原始字节，格式不被自动互换。
 
 ## 阶段产物与 ModelArtifact
 
@@ -46,7 +46,7 @@ ModelArtifact 封装一组数学表述和求解代码。最终选择确定建模
 
 ### FormulationArtifact
 
-必需字段为 `schema_version/formulation_id/problem_id/problem_revision/representation_kind/representation/data_bindings/provenance`。
+必需字段为 `schema_version/formulation_id/problem_id/problem_revision/representation_kind/representation/structured_ir_ref/data_bindings/provenance`。`structured_ir_ref` 可以为 `null`。
 
 默认 `five_element` 表述包含 `sets/parameters/variables/objective/constraints`。集合记录索引和元素或公开数据来源；参数记录值或来源映射；变量记录域和界；目标与约束记录表达和需求映射。
 
@@ -107,13 +107,13 @@ EvaluationResult 保留协议、最终检查、各层状态、证据、分母和
 
 ## RunConfig
 
-必需字段为 `schema_version/method/llm/model_backend/solver/executor/budget/store`。严格 IR 路径需要 `compiler`。`reporters/roles/evaluation/allowed_problem_types` 等选项使用声明的默认值。
+`schema_version` 为 `0.2.0`。必需字段为 `schema_version/method/llm/model_backend/solver/executor/budget/store`。严格 IR 路径需要 `compiler`。可选顶层字段为 `compiler/data_loader/data_view/reporters/evaluation/allowed_problem_types`。角色覆盖写在 `llm.role_models`，不存在顶层 `roles`。
 
-普通插件选择为 `{plugin_id, config}`，LLM 为 `{provider_plugin_id, model, config}`，求解器为 `{plugin_id, options}`。配置字段经 schema 校验。未知键拒绝，模型和求解器不能隐式替换。
+方法、执行器和存储选择必须含 `{plugin_id, config}`。编译器、数据加载器、建模后端和报告器只要求 `plugin_id`，可另给 `config`。LLM 为 `{provider_plugin_id, model, config}`，另可配置 `role_models`。求解器只要求 `plugin_id`，可另给插件 `config` 和求解 `options`。配置字段经 schema 校验。未知键拒绝，模型和求解器不能隐式替换。
 
 问题通过应用参数或 `--problem` 传入，不在单问题配置中要求任务清单、实验 ID 或 oracle 路径。缺省公开评测使用 `llm4om.eval.public-v0.1` 和 structural 评估器。无参考材料仍可运行。
 
-预算计数为非负整数，总时间为正数，并发至少为 1。允许 `max_repairs=0`。预算使用 `max_checks`，不再接受旧 `max_candidates`。
+预算必须提供 `max_llm_attempts/max_total_tokens/max_checks/max_repairs/max_solver_calls/wall_time_s/max_concurrency`。计数为非负整数，其中 `max_llm_attempts` 和 `max_checks` 至少为 1。总时间为正数，并发至少为 1。允许 `max_repairs=0`。不接受旧字段 `max_candidates`。
 
 ## ExperimentSpec
 

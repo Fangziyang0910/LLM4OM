@@ -39,7 +39,7 @@ Manifest 保留来源、原始 ID、split、行/记录哈希、公开/私有引�
 
 ## MAMO
 
-导入配置 `0.2.0` 选择 `llm4om.tasks.mamo`，包含 dataset_id、source_kind/version、files、license_file、reviews、selected 和 tolerance。files 明确列出 easy_lp、complex_lp、ode 的本地路径及哈希。
+导入配置 `0.2.0` 的 `adapter_id` 为 `llm4om.tasks.mamo`，包含 `dataset_id/source_kind/source_version/files/license_file/reviews/selected/tolerance`。files 明确列出 easy_lp、complex_lp、ode 的本地路径及哈希。
 
 官方身份匹配固定来源、数量和 CC BY-SA 4.0 许可。快照保留全部优化案例及原始记录；公开只投影 Question，Answer 和原数据材料私有保存。ODE 不进入优化范围。
 
@@ -51,7 +51,7 @@ selected=null 选择全部优化题，显式选择使用 `easy_lp:<id>/complex_l
 
 ## NLP4LP
 
-导入配置 `0.2.0` 选择 `llm4om.tasks.nlp4lp`，包含 dataset_id、source_kind/version、release_root、sha256、reviews、selected 和 tolerance。固定来源清单见 [nlp4lp_source.json](../../src/llm4om/nlp4lp_source.json)。
+导入配置 `0.2.0` 的 `adapter_id` 为 `llm4om.tasks.nlp4lp`，包含 `dataset_id/source_kind/source_version/release_root/sha256/reviews/selected/tolerance`。固定来源清单见 [nlp4lp_source.json](../../src/llm4om/nlp4lp_source.json)。
 
 本地发布包含 train.jsonl、来源 README 和逐实例数据。官方身份锁定提交、聚合哈希及全部 2127 个文件。保留全部 361 个原始案例，参考可用性 322/37/2 分别记录，坏参考不删除公开问题。
 
@@ -67,7 +67,7 @@ selected=null 选择全部优化题，显式选择使用 `easy_lp:<id>/complex_l
 
 结果含有限的原目标、方向和独立可行性状态、违反规则及覆盖。通过要求无违反项。输入不包含模型自报目标、候选约束或私有参考目标。检查器包/源码身份在冻结时绑定。
 
-checker_fixture 配置 `0.2.0` 包含 adapter、dataset/version、cases 和 selected。每例绑定公开问题/数据及私有 evaluation policy。缺 policy 如实保存。
+checker_fixture 配置 `0.2.0` 的 `adapter_id` 为 `llm4om.tasks.checker_fixture`，其余字段为 `dataset_id/source_version/cases/selected`。每例绑定公开问题/数据及私有 evaluation policy。缺 policy 如实保存。
 
 私有 policy 包含 checker、decision_mapping、reported_objective_mapping、reference_objective、probe_points 和 data_perturbations。目标映射只接受预声明正比例和偏移。参考声明值、方向、质量、来源和容差。
 

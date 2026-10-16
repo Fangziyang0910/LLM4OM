@@ -4,7 +4,7 @@
 
 ## 启动配置与凭据
 
-`GET /api/bootstrap` 返回方法模板、LLM 预设、有效配置和默认密钥状态。`llm_presets` 项含 id、label、provider_plugin_id 和 base_url。默认凭据仅显示 configured 和 masked preview。
+`GET /api/bootstrap` 返回方法模板、LLM 预设、有效配置和默认密钥状态。`llm_presets` 项含 id、label、provider_plugin_id 和 base_url。`default_credential` 含 `provider_plugin_id/base_url/configured/preview`，其中 `preview` 是密钥掩码。
 
 `llm_profiles` 保存预设到公开 LLM 选择的映射，`selected_llm_preset` 表示最近选择。`llm_credentials` 以端点身份映射密钥掩码。身份为 Provider ID 与去除尾斜杠的 Base URL。
 
@@ -14,7 +14,7 @@
 
 保存文件为 `<workspace>/.private/llm-settings.local.json`，权限 `600`，Git 忽略。密钥查询只返回状态/掩码。超过 12 字符时显示前后各 4 字符，短密钥全部遮挡。
 
-公开 JSON 拒绝 credential 字段。后端按显式临时密钥、已保存端点密钥、匹配的 .env 默认服务解析。密钥只注入拥有的应用进程，不修改全局环境。与同一凭据引用关联的角色使用对应私有覆盖。
+公开 JSON 拒绝完整密钥字段；`credential_env` 仅保存环境变量名。后端按显式临时密钥、已保存端点密钥、匹配的 .env 默认服务解析。密钥只注入拥有的应用进程，不修改全局环境。与同一凭据引用关联的角色使用对应私有覆盖。
 
 恢复和编辑按运行保存的端点查找密钥。默认 .env 密钥不能转发到不同端点。临时覆盖不改写供应商设置和父记录。
 

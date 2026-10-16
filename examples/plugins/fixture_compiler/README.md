@@ -5,9 +5,9 @@
 在仓库根目录构建和安装：
 
 ```bash
-uv build --offline --wheel examples/plugins/fixture_compiler --out-dir /tmp/llm4om-compiler-wheel
-uv pip install --no-deps /tmp/llm4om-compiler-wheel/llm4om_fixture_compiler-0.1.0-py3-none-any.whl
-llm4om plugins list
+uv build --wheel examples/plugins/fixture_compiler --out-dir /tmp/llm4om-compiler-wheel
+uv pip install --python .venv/bin/python --no-deps /tmp/llm4om-compiler-wheel/llm4om_fixture_compiler-0.1.0-py3-none-any.whl
+uv run --locked llm4om plugins list
 ```
 
 复制examples/specs/solve.yaml，在相同公开输入目录中修改compiler选择：
@@ -24,7 +24,7 @@ compiler:
 容器运行须将同一wheel安装在可信镜像中：
 
 ```bash
-uv run --locked python scripts/build_worker_image.py --offline --tag llm4om-worker:with-compiler --plugin-wheel /tmp/llm4om-compiler-wheel/llm4om_fixture_compiler-0.1.0-py3-none-any.whl
+uv run --locked python scripts/build_worker_image.py --tag llm4om-worker:with-compiler --plugin-wheel /tmp/llm4om-compiler-wheel/llm4om_fixture_compiler-0.1.0-py3-none-any.whl
 ```
 
 在executor.config.image中选择该镜像。doctor核对宿主与Worker的Manifest、配置、依赖及可执行包内容；缺少或不同的编译器在生成前拒绝。镜像不挂载宿主源码、不在运行时安装包。额外Python依赖须预先纳入锁定运行环境，构建工具不会隐式解析它们。

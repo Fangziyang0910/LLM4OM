@@ -47,8 +47,8 @@ RunConfig 的 `llm` 选择默认 Provider、模型和公开配置。`llm.role_mo
 凭据先读取配置目录的 `.env`；不存在时读取当前工作目录的 `.env`。进程环境覆盖文件值。只解析字面 `KEY=value`，不执行插值或命令。已保存响应的恢复不要求再次提供密钥。
 
 ```bash
-llm4om doctor --config /path/to/run.yaml
-llm4om doctor --config /path/to/run.yaml --check-connectivity
+uv run --locked llm4om doctor --config /path/to/run.yaml
+uv run --locked llm4om doctor --config /path/to/run.yaml --check-connectivity
 ```
 
 默认预检不联系模型端点。显式连通性检查读取目录，不生成文本。工程 Mock 不读取真实凭据。

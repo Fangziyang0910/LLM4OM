@@ -27,13 +27,13 @@ Formulation 错误与 Code 错误分别观察。两个求解器得到相同数�
 
 ## 目标匹配
 
-`llm4om.eval.objective-v0.1` 定义数值比较口径。任务适配器使用各自固定协议，明确公开输入、参考质量、容差和舍入。主指标为 `objective_match_rate`。
+目标比较由任务协议实现：MAMO 使用 `llm4om.eval.mamo-numeric-v0.1`，NLP4LP 使用 `llm4om.eval.nlp4lp-supplied-v0.1`。二者明确公开输入、参考质量、容差和舍入，报告 `objective_match_rate`。平台没有注册通用的 objective 协议。
 
 ```text
 abs(predicted - reference) <= abs_tol + rel_tol * abs(reference)
 ```
 
-默认建议 abs_tol=1e-6、rel_tol=1e-5。实际阈值在运行前冻结。非有限值、无目标或错误提取不能匹配。
+例如可配置 abs_tol=1e-6、rel_tol=1e-5；导入配置必须显式提供容差，不存在统一的隐式默认值。实际阈值在运行前冻结。非有限值、无目标或错误提取不能匹配。
 
 参考区分已证明最优、best-known、可行参考和未知。字段叫 optimal_value 不足以证明最优。若有原问题目标计算器，优先从显式决策映射重算；否则标为 `reported_objective_match`。
 

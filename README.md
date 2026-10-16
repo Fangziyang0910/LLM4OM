@@ -42,7 +42,7 @@ uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --hos
 
 1. 在“问题描述”中写出目标、约束和数据。需要时添加业务数据文件。
 2. 点击输入区底部的模型按钮，选择供应商，填写密钥和模型名，再保存。
-3. 选择 HiGHS、Gurobi 或 OR-Tools。需要更换方法时，打开“建模选项”。
+3. 需要更换方法时，先打开“建模选项”。再选择 HiGHS、Gurobi 或 OR-Tools。切换方法会应用该方法的默认配置，请重新确认求解器。
 4. 点击“开始求解”。运行时可以查看建模步骤和执行诊断。
 5. 完成后查看目标值和决策结果，再切换到数学模型或求解代码。
 
@@ -54,7 +54,9 @@ uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --hos
 
 运行后的工作区默认显示结果。建模过程中，过程面板自动展开；完成后收起，也可以手动打开。数学模型和代码页面保留各自的修正历史。顶部“历史记录”用于打开已有任务。
 
-有严格线性模型时，页面还支持目标贡献、约束余量和决策试算。试算只更新页面中的代入计算；提交模型修改才会创建新版本并再次求解。
+使用确定性编译的严格 IR，且已返回完整决策值时，页面还支持目标贡献、约束余量和决策试算。试算只更新页面中的代入计算；提交模型修改才会创建新版本并再次求解。
+
+修改问题会再次调用 LLM。修改数学模型或代码则复用已有产物，再次求解。严格 IR 支持表单编辑；其他表述使用高级编辑。当前修改保留原始业务数据，更换数据时请新建问题。
 
 ## 建模方法
 
@@ -70,6 +72,8 @@ uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --hos
 
 这些研究方法集成了原工作的核心编排和提示思路，使用你配置的通用 LLM。当前目标是方法可组合使用。具体适配差异和固定来源见[建模方法](docs/development/methods.md)。OptiMUS 可以直接读取自然语言描述，无需额外提供 `params/labels` 文件。
 
+Web 预设中的 Direct、Feedback Repair 和 AutoFormulation 生成严格 IR，再由平台编译为 Pyomo 代码。OptiMUS、CoE、OptiTree 和 OR-LLM-Agent 直接生成模型工厂代码。两条路径都保留数学表述和代码产物。
+
 ## 求解器
 
 七种方法都可以通过默认 Pyomo 路径选择以下求解器：
@@ -80,7 +84,7 @@ uv run --locked --all-extras llm4om serve --workspace runs/web --port 8767 --hos
 | Gurobi | LP/MILP | 需要可用的 Gurobi 运行环境；已验证环境为有限规模许可证 |
 | OR-Tools | 通过 MPSolver/SCIP 求解 LP/MILP | 随 Worker 依赖安装 |
 
-OptiMUS、CoE、OptiTree 和 OR-LLM-Agent 还支持 gurobipy 原生工厂，此路径使用 Gurobi。当前没有接入 OR-Tools 的 CP-SAT、路径规划求解或非线性优化。更多组合和数值限制见[执行与求解](docs/development/solvers.md)。
+除 AutoFormulation 外，其余六种方法还支持 gurobipy 原生工厂，此路径使用 Gurobi。Direct 和 Feedback Repair 需设置 `output_mode: native_gurobipy`；四种研究提示流程按建模后端选择代码目标。原生工厂均在容器中执行。当前没有接入 OR-Tools 的 CP-SAT、路径规划求解或非线性优化。配置组合和数值限制见[执行与求解](docs/development/solvers.md)。
 
 ## 模型与密钥
 
@@ -117,7 +121,7 @@ uv run --locked --all-extras llm4om doctor --config examples/specs/run.yaml
 uv run --locked --all-extras llm4om run --problem examples/specs/problem.json --config examples/specs/run.yaml
 ```
 
-命令返回 `run_id`、`bundle_path` 和 `status`。运行目录包含 `bundle.json`、阶段产物、求解记录和已配置的报告。
+命令返回 `run_id`、`bundle_path` 和 `status`。`bundle_path` 是运行目录，入口文件是该目录下的 `bundle.json`。目录还包含阶段产物、求解记录和已配置的报告。
 
 Python 使用同一个应用入口：
 

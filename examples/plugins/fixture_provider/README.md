@@ -5,8 +5,8 @@
 在仓库根目录构建并安装到当前环境：
 
 ```bash
-uv build --offline --wheel examples/plugins/fixture_provider --out-dir /tmp/llm4om-provider-wheel
-uv pip install --no-deps /tmp/llm4om-provider-wheel/llm4om_fixture_provider-0.1.0-py3-none-any.whl
+uv build --wheel examples/plugins/fixture_provider --out-dir /tmp/llm4om-provider-wheel
+uv pip install --python .venv/bin/python --no-deps /tmp/llm4om-provider-wheel/llm4om_fixture_provider-0.1.0-py3-none-any.whl
 uv run --locked llm4om plugins list
 ```
 

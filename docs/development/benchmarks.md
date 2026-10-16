@@ -34,10 +34,10 @@ CLI Task/Evaluation 接口支持 NL4Opt、NLP4LP、MAMO 和检查器 fixture。�
 官方来源身份、哈希和许可由相应适配器与来源清单校验。固定来源见[源码与数据考察](../references/source-inspection.md)。导入配置字段见[任务契约](../contracts/tasks.md)。
 
 ```bash
-llm4om doctor --task-config /path/to/import-config.json
-llm4om import --config /path/to/import-config.json --output runs/task-snapshot
-llm4om run --problem runs/task-snapshot/public/CASE.json --config /path/to/run.yaml
-llm4om evaluate --manifest runs/task-snapshot/manifest.json --case-id CASE_ID --run runs/RUN_ID --output evaluation.json
+uv run --locked llm4om doctor --task-config /path/to/import-config.json
+uv run --locked llm4om import --config /path/to/import-config.json --output runs/task-snapshot
+uv run --locked llm4om run --problem runs/task-snapshot/public/CASE.json --config /path/to/run.yaml
+uv run --locked llm4om evaluate --manifest runs/task-snapshot/manifest.json --case-id CASE_ID --run runs/RUN_ID --output evaluation.json
 ```
 
 NL4Opt 配置模板见 [nl4opt-import.yaml](../../examples/tasks/nl4opt-import.yaml)。其他适配器配置按任务契约准备；路径相对于各自配置文件。
@@ -47,10 +47,10 @@ NL4Opt 配置模板见 [nl4opt-import.yaml](../../examples/tasks/nl4opt-import.y
 ## 批量实验
 
 ```bash
-llm4om import --config examples/specs/import-checker.json --output runs/production-task
-llm4om benchmark --config examples/specs/experiment.yaml --output runs/production-batch
-llm4om benchmark --config examples/specs/experiment.yaml --output runs/production-batch --resume
-llm4om report --experiment runs/production-batch
+uv run --locked llm4om import --config examples/specs/import-checker.json --output runs/production-task
+uv run --locked llm4om benchmark --config examples/specs/experiment.yaml --output runs/production-batch
+uv run --locked llm4om benchmark --config examples/specs/experiment.yaml --output runs/production-batch --resume
+uv run --locked llm4om report --experiment runs/production-batch
 ```
 
 示例批次使用外部 LLM；运行前需配置实际服务和本机密钥。ExperimentSpec 按任务、配置和重复次数展开矩阵，所有未排除组合在首次生成前预检。不支持的组合要明确排除并给出原因。

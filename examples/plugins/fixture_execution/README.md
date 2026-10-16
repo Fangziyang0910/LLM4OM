@@ -5,9 +5,9 @@
 在仓库根目录构建和安装：
 
 ```bash
-uv build --offline --wheel examples/plugins/fixture_execution --out-dir /tmp/llm4om-execution-wheel
-uv pip install --no-deps /tmp/llm4om-execution-wheel/llm4om_fixture_execution-0.1.0-py3-none-any.whl
-llm4om plugins list
+uv build --wheel examples/plugins/fixture_execution --out-dir /tmp/llm4om-execution-wheel
+uv pip install --python .venv/bin/python --no-deps /tmp/llm4om-execution-wheel/llm4om_fixture_execution-0.1.0-py3-none-any.whl
+uv run --locked llm4om plugins list
 ```
 
 在公开输入目录复制solve.yaml，再选择两个插件：
@@ -28,7 +28,7 @@ Backend实际重命名Pyomo变量组件，保持显式业务决策映射。Solve
 容器运行需要安装同一wheel的可信镜像：
 
 ```bash
-uv run --locked python scripts/build_worker_image.py --offline --tag llm4om-worker:with-execution --plugin-wheel /tmp/llm4om-execution-wheel/llm4om_fixture_execution-0.1.0-py3-none-any.whl
+uv run --locked python scripts/build_worker_image.py --tag llm4om-worker:with-execution --plugin-wheel /tmp/llm4om-execution-wheel/llm4om_fixture_execution-0.1.0-py3-none-any.whl
 ```
 
 将executor.config.image设为该镜像。宿主只配置插件，实际模型构建与求解在Worker内进行。ModelHandle不跨进程传输；额外SDK依赖在Worker预检并冻结版本。插件是可信代码，不读取隐藏评分材料，不在构造期间调用付费服务。

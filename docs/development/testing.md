@@ -37,10 +37,14 @@ uv run --locked python scripts/build_worker_image.py --tag "$EXECUTION_TEST_IMAG
 ## 方法与求解器矩阵
 
 ```bash
-PYTHONPATH=tests uv run --locked --all-extras python -m unittest test_research_method_runs.ResearchMethodRunTests.test_all_seven_methods_with_all_three_real_solvers -v
+PYTHONPATH=tests uv run --locked --all-extras python -m unittest \
+  test_research_method_runs.ResearchMethodRunTests.test_all_seven_methods_with_all_three_real_solvers \
+  test_research_method_runs.ResearchMethodRunTests.test_native_backend_changes_target_for_each_prompt_workflow \
+  test_gurobi_run.GurobiRunTests.test_native_gurobi_retains_source_and_uses_independent_sdk \
+  test_feedback_repair.FeedbackRepairTests.test_native_gurobi_code_repair_uses_real_isolated_solver_and_source_formulation -v
 ```
 
-该测试使用确定性 HTTP 回复和真实容器求解，覆盖七种方法与三个求解器的 21 个组合。它验证流程与兼容性，不测量真实 LLM 建模准确率。
+这些测试使用确定性 HTTP 回复和真实容器求解，覆盖默认 Pyomo 路径的 21 个组合，以及六种方法的原生 Gurobi 路径。它们验证流程与兼容性，不测量真实 LLM 建模准确率。
 
 ## 浏览器流程
 
@@ -68,7 +72,7 @@ LLM4OM_BROWSER_EXECUTABLE=/absolute/path/to/chrome \
 node tests/web_story_flow.cjs
 ```
 
-浏览器路径使用本机 Chrome。核心测试位于 `tests/web_*flow.cjs`，通过公共 HTTP 接口建立独立场景。`LLM4OM_WEB_TEST_WORKSPACE` 指向 `<workspace>/jobs`。`web_methods_flow.cjs` 验证页面生成的 21 个方法/求解器配置均通过真实预检。
+浏览器路径使用本机 Chrome。核心测试位于 `tests/web_*flow.cjs`，通过公共 HTTP 接口建立独立场景。guidance fixture 在传入目录下创建 `jobs` 作为 Web 根目录，因此这里的 `LLM4OM_WEB_TEST_WORKSPACE` 指向 `<fixture-workspace>/jobs`。普通 `llm4om serve --workspace PATH` 则直接以 `PATH` 为 Web 根目录。`web_methods_flow.cjs` 验证页面生成的 21 个方法/求解器配置均通过真实预检。
 
 连通性测试使用 `tests/helpers/connectivity_server.py` 的独立工作区，Web/Provider 端口为 `8796/8797`。延迟步骤观察可为 guidance fixture 设置 `--response-delay 4`，并为澄清测试设置 `LLM4OM_WEB_TEST_LIVE_PROGRESS=1`。
 

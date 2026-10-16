@@ -67,5 +67,6 @@ s.t. 2A + B <= 8
 | [fixture_data_loader](plugins/fixture_data_loader/README.md) | 有限数据视图 |
 | [fixture_executor](plugins/fixture_executor/README.md) | 容器与拥有进程执行器 |
 | [fixture_store](plugins/fixture_store/README.md) | 运行存储打开器 |
+| [fixture_reporter](plugins/fixture_reporter/src/llm4om_fixture_reporter/__init__.py) | 公开报告渲染、结果副本隔离和失败处理 |
 
 示例属于可信平台插件，公共接口见[插件契约](../docs/contracts/plugins.md)。插件安装本身不证明已执行或具有数学正确性。

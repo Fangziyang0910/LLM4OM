@@ -48,7 +48,7 @@ admission 冻结 Manifest、配置、依赖和安装来源。安装来源包括 
 
 ## Compiler
 
-接口为 `compile(ir, target_backend) -> CompiledCode`。当前 profile 为 `grounded_lpir_pyomo/0.1.0`，接受 `grounded_lpir/0.1.0`，输出 Pyomo 工厂，声明 `deterministic=true`。
+接口为 `compile(ir, target_backend) -> CompiledCode`。当前 profile 为 `grounded_lpir_pyomo/0.1.0`，接受 `ir_kind=grounded_lp`、`schema_version=0.1.0` 的 IR，输出 Pyomo 工厂，声明 `deterministic=true`。Manifest 的输入能力名为 `grounded_lpir`。
 
 输入是公开 IR 副本。输出源码非空，最多 8 MiB；平台检查语法、变量/约束 ID、索引排列和常数锚点。Code 保存实际编译器、源 IR、symbol map 和编译身份，Build 保存目标后端与配置哈希。
 

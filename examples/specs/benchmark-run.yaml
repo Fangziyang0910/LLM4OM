@@ -1,4 +1,4 @@
-# Actual external LLM plus container HiGHS; credentials remain in .env.
+# External LLM template. Set base_url/model; credentials remain in .env.
 schema_version: 0.2.0
 method:
   plugin_id: llm4om.methods.direct
@@ -7,9 +7,9 @@ method:
     output_mode: lp_ir
 llm:
   provider_plugin_id: llm4om.providers.openai_compatible
-  model: deepseek-v4-pro-0813
+  model: your-model-id
   config:
-    base_url: https://api.x5m5x.com/v1
+    base_url: https://api.example.com/v1
     credential_env: LLM4OM_LLM_API_KEY
     max_output_tokens: 8192
     max_retries: 0

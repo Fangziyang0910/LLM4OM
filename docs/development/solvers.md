@@ -10,7 +10,9 @@
 | Pyomo 工厂 | 方法生成 `build_model(data)`，导出受支持的线性实例 | HiGHS、Gurobi、OR-Tools/SCIP |
 | gurobipy 工厂或声明的原生脚本 | 导出 MPS 和决策映射，由新 SDK 对象读取 | Gurobi |
 
-方法只构建模型。可信收集器独立调用求解器并获取解、目标和终止状态。代码打印的目标、退出码或自报状态不能代替求解证据。
+模型工厂只构建模型。声明的原生脚本可以包含求解调用；平台仍由可信收集器读取导出实例，独立求解并获取解、目标和终止状态。代码打印的目标、退出码或自报状态不能代替求解证据。
+
+默认 Pyomo 路径覆盖全部七种方法。Direct 和 Feedback Repair 选择 `output_mode: native_gurobipy` 时，必须同时选择 `llm4om.model_backends.gurobipy`、`llm4om.solvers.gurobi` 和容器执行器。OptiMUS、CoE、OptiTree、OR-LLM-Agent 根据所选后端生成 Pyomo 或 gurobipy 工厂。AutoFormulation 只输出严格 IR，使用 Pyomo 后端。
 
 自由文本和 LaTeX 不直接进入编译器。五元素表述需要伴随严格 IR，或由方法生成代码。工厂导出视图保留提取来源，不能据此推断源代码或原问题的语义等价。
 
