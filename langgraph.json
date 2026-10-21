@@ -1,0 +1,25 @@
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "direct": "llm4om.server.graphs:direct",
+    "feedback_repair": "llm4om.server.graphs:feedback_repair",
+    "trival": "llm4om.server.graphs:trival",
+    "optimus": "llm4om.server.graphs:optimus",
+    "coe": "llm4om.server.graphs:coe",
+    "optitree": "llm4om.server.graphs:optitree",
+    "or_llm_agent": "llm4om.server.graphs:or_llm_agent",
+    "autoformulation": "llm4om.server.graphs:autoformulation"
+  },
+  "http": {
+    "app": "llm4om.server.app:app",
+    "cors": {
+      "allow_origins": [
+        "https://smith.langchain.com"
+      ]
+    }
+  },
+  "env": ".env"
+}

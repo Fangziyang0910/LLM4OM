@@ -1,188 +1,129 @@
-"""A thin CLI over the single-problem application use case."""
+"""Command line: serve the Web workbench, run one problem, or build the solver sandbox image."""
 
 import argparse
+import asyncio
 import json
+import os
+import subprocess
 import sys
-import signal
+import tempfile
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
-from llm4om.application import run_problem, resume_run, report_run
-from llm4om.storage import cancel_run
-from llm4om.control import CancellationToken
-from llm4om.tasks import import_dataset
-from llm4om.evaluation import evaluate_case
-from llm4om.plugins import discover_plugins
-from llm4om.contracts import RunError, read_config
-from llm4om.preflight import prepare_run, check_model_connectivity
-from llm4om.task_plugins import prepare_task
-from llm4om.experiments import run_experiment, report_experiment
-from llm4om.assisted import edit_run, export_edit
+from llm4om.sandbox import WORKER_IMAGE
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(prog="llm4om")
-    commands = parser.add_subparsers(dest="command", required=True)
-    web = commands.add_parser("serve", help="Open the local single-user optimization workbench")
-    web.add_argument("--workspace", type=Path, default=Path("runs/web"))
-    web.add_argument("--port", type=int, default=8765)
-    web.add_argument("--host", default="127.0.0.1", help="Bind address; use 0.0.0.0 for remote access")
-    benchmark = commands.add_parser("benchmark", help="Run an explicit frozen task/configuration matrix")
-    benchmark.add_argument("--config", type=Path, required=True)
-    benchmark.add_argument("--output", type=Path, required=True)
-    benchmark.add_argument("--offline", action="store_true")
-    benchmark.add_argument("--resume", action="store_true", help="Keep saved completed cases and continue unfinished work")
-    report_command = commands.add_parser("report", help="Export public per-case and grouped experiment reports")
-    report_source = report_command.add_mutually_exclusive_group(required=True)
-    report_source.add_argument("--experiment", type=Path)
-    report_source.add_argument("--run", type=Path, help="Render the saved run without LLM/Solver calls")
-    edit = commands.add_parser("edit", help="Export or execute an explicit assisted revision")
-    edit.add_argument("--run-id", required=True)
-    edit.add_argument("--output", type=Path, default=Path("runs"))
-    edit.add_argument("--operation", choices=("problem", "formulation", "code"), default="code")
-    edit.add_argument("--edits", type=Path, help="Execute the edited JSON document; omission exports its template")
-    run = commands.add_parser("run", help="Generate Formulation and Code; solve supported LP/MILP")
-    run.add_argument("--problem", type=Path, required=True)
-    run.add_argument("--config", type=Path, required=True)
-    run.add_argument("--output", type=Path, help="Override the configured filesystem store root")
-    run.add_argument("--offline", action="store_true", help="Only replay Mock artifacts; skip Code and Solve")
-    run.add_argument("--interactive", action="store_true", help="Persist needs_input for public clarification instead of unresolved")
-    for name in ("cancel", "resume"):
-        control = commands.add_parser(name, help=f"{name.capitalize()} a persisted run")
-        if name == "resume":
-            control.add_argument("--answers", type=Path, help="Versioned response to the saved public clarification")
-            control.add_argument("--revised-problem", type=Path, help="Explicit new ProblemSpec revision for newly supplied rules/data")
-            control.add_argument("--strategy", choices=("continue", "rerun"), default="continue",
-                                 help="Continue saved work, or explicitly rerun with parent usage still counted")
-        control.add_argument("--run-id", required=True)
-        control.add_argument("--output", type=Path, default=Path("runs"), help="Filesystem store root")
-    importer = commands.add_parser("import", help="Freeze a declared local task source")
-    importer.add_argument("--config", type=Path, required=True)
-    importer.add_argument("--output", type=Path, required=True)
-    evaluator = commands.add_parser("evaluate", help="Evaluate one frozen case after modeling")
-    evaluator.add_argument("--manifest", type=Path, required=True)
-    evaluator.add_argument("--case-id", required=True)
-    evaluator.add_argument("--run", type=Path, required=True)
-    evaluator.add_argument("--output", type=Path, required=True)
-    plugins = commands.add_parser("plugins", help="Inspect supported installed plugins")
-    plugins.add_subparsers(dest="plugin_command", required=True).add_parser("list")
-    doctor = commands.add_parser("doctor", help="Check compatibility, installed dependencies and admission without a model request")
-    doctor_config = doctor.add_mutually_exclusive_group(required=True)
-    doctor_config.add_argument("--config", type=Path)
-    doctor_config.add_argument("--task-config", type=Path, help="Preflight Task/Evaluator selections without importing source")
-    doctor.add_argument("--offline", action="store_true")
-    doctor.add_argument("--check-connectivity", action="store_true", help="Explicitly GET the model directory without generating text")
-    args = parser.parse_args()
-    if args.command == "edit":
-        cancellation = CancellationToken()
-        previous = signal.signal(signal.SIGINT, lambda signum, frame: cancellation.cancel())
+def _parse_options(values: list[str]) -> dict[str, object]:
+    options: dict[str, object] = {}
+    for item in values:
+        key, _, raw = item.partition("=")
         try:
-            if len(args.run_id) != 32 or any(char not in "0123456789abcdef" for char in args.run_id):
-                raise RunError("control_incompatible", "control", "Run ID must be a platform UUID.")
-            path = args.output / args.run_id
-            if args.edits is None:
-                print(json.dumps(export_edit(path, operation=args.operation), ensure_ascii=False, indent=2))
-                return 0
-            edited = edit_run(path, args.edits, cancellation=cancellation)
-            print(json.dumps({"run_id": edited.run_id, "bundle_path": str(edited.bundle_path), "status": edited.status, "assisted": True}))
-            return 0 if edited.status == "completed" else 1
-        except (RunError, OSError, KeyError, TypeError, ValueError) as error:
-            print(json.dumps({"error": {"code": error.code if isinstance(error, RunError) else "invalid_edit",
-                "message": str(error) if isinstance(error, RunError) else "Cannot create this assisted revision."}}))
-            return 1
-        finally:
-            signal.signal(signal.SIGINT, previous)
-    if args.command in ("benchmark", "report"):
-        cancellation = CancellationToken()
-        previous = signal.signal(signal.SIGINT, lambda signum, frame: cancellation.cancel())
-        try:
-            experiment_result = ((report_run(args.run) if args.run else report_experiment(args.experiment))
-                      if args.command == "report" else run_experiment(args.config, args.output, offline=args.offline, resume=args.resume,
-                                     cancellation=cancellation))
-            print(json.dumps(experiment_result, ensure_ascii=False))
-            return 0
-        except (RunError, OSError, KeyError, TypeError, ValueError) as error:
-            print(json.dumps({"error": {"code": error.code if isinstance(error, RunError) else "experiment_error",
-                "message": str(error) if isinstance(error, RunError) else "Cannot read or persist this experiment.",
-                "details": error.details if isinstance(error, RunError) else None}}))
-            return 1
-        finally:
-            signal.signal(signal.SIGINT, previous)
-    if args.command == "serve":
-        from llm4om.web import serve_web
-        serve_web(args.workspace, port=args.port, host=args.host)
-        return 0
-    if args.command == "import":
-        try:
-            manifest = import_dataset(args.config, args.output)
-            print(json.dumps({"manifest_path": str(manifest)}))
-            return 0
-        except (RunError, OSError, ValueError) as error:
-            print(json.dumps({"error": {"code": error.code if isinstance(error, RunError) else "import_error",
-                                       "message": str(error) if isinstance(error, RunError) else "Cannot import local snapshot."}}))
-            return 1
-    if args.command == "evaluate":
-        try:
-            evaluation_result = evaluate_case(args.manifest, args.case_id, args.run, args.output)
-            print(json.dumps(evaluation_result))
-            return 1 if evaluation_result["checker_error"] else 0
-        except (RunError, OSError, ValueError, KeyError, TypeError) as error:
-            print(json.dumps({"error": {"code": error.code if isinstance(error, RunError) else "evaluation_error",
-                                       "message": str(error) if isinstance(error, RunError) else "Cannot evaluate frozen case."}}))
-            return 1
-    if args.command == "plugins":
-        try:
-            inventory = discover_plugins()
-        except RunError as error:
-            print(json.dumps({"schema_version": "0.2.0", "plugins": [], "error": {
-                "code": error.code, "stage": error.stage, "message": str(error), "details": error.details}}))
-            return 1
-        print(json.dumps({"schema_version": "0.2.0", "plugins": [
-            {"manifest": plugin.manifest, "origin": plugin.origin} for plugin in inventory.values()]}))
-        return 0
-    if args.command == "doctor":
-        report: dict[str, Any] = {"schema_version": "0.2.0", "connectivity_checks": {"status": "not_requested"}}
-        try:
-            if args.task_config:
-                snapshot = prepare_task(args.task_config)
-                if args.check_connectivity:
-                    report["connectivity_checks"] = {"status": "not_applicable", "checks": [], "generation_requests": 0}
-            else:
-                plan = prepare_run(read_config(args.config), offline=args.offline, config_dir=args.config.parent)
-                snapshot = plan.snapshot
-                if args.check_connectivity:
-                    report["connectivity_checks"] = check_model_connectivity(plan)
-            report.update(preflight_ok=True, execution_plan=snapshot, error=None)
-        except (RunError, OSError) as error:
-            report.update(preflight_ok=False, execution_plan=None, error={
-                "code": error.code if isinstance(error, RunError) else "config_unavailable",
-                "stage": "admission", "message": str(error) if isinstance(error, RunError) else "Cannot read RunConfig.",
-                "details": error.details if isinstance(error, RunError) else None})
-        print(json.dumps(report))
-        return 0 if report["preflight_ok"] and report["connectivity_checks"]["status"] in {"not_requested", "passed", "not_applicable"} else 1
-    cancellation = CancellationToken()
-    previous = signal.signal(signal.SIGINT, lambda signum, frame: cancellation.cancel())
-    try:
-        if args.command in ("cancel", "resume"):
-            if len(args.run_id) != 32 or any(char not in "0123456789abcdef" for char in args.run_id):
-                raise RunError("control_incompatible", "control", "Run ID must be a platform UUID.")
-            path = args.output / args.run_id
-            if args.command == "cancel":
-                print(json.dumps({"run_id": args.run_id, "status": cancel_run(path)}))
-                return 0
-            result = resume_run(path, cancellation=cancellation, strategy=args.strategy, answers=args.answers,
-                                revised_problem=args.revised_problem)
-        else:
-            result = run_problem(args.problem, args.config, offline=args.offline,
-                                 output_root=args.output, cancellation=cancellation, interactive=args.interactive)
-    except RunError as error:
-        print(json.dumps({"error": {"code": error.code, "stage": error.stage, "message": str(error)}}))
+            options[key] = json.loads(raw)
+        except ValueError:
+            options[key] = raw
+    return options
+
+
+def _print_step(step: dict[str, Any]) -> None:
+    if step.get("running"):
+        return
+    extra = f" · {step['status']}" if step.get("status") else ""
+    print(f"  [{step['type']}] {step['title']}{extra}", file=sys.stderr)
+
+
+async def _run(args: argparse.Namespace) -> int:
+    from llm4om.graph import Resources, run
+    from llm4om.llm import SettingsStore
+    from llm4om.sandbox import Sandbox, SolveResult
+
+    problem = args.problem if args.problem is not None else Path(args.file).read_text(encoding="utf-8")
+    data = {Path(item).name: Path(item).read_text(encoding="utf-8") for item in args.data}
+    resources = Resources(SettingsStore(Path(args.workspace)), Sandbox(args.sandbox))
+    state = await run(problem, method=args.method, language=args.language, data=data, options=_parse_options(args.option),
+                      provider=args.provider, model=args.model, resources=resources, on_step=_print_step)
+    if args.output:
+        Path(args.output).write_text(json.dumps(state, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+    if state.get("failure"):
+        print(f"Failed: {state['failure']}")
         return 1
-    except OSError:
-        print(json.dumps({"error": {"code": "store_unavailable", "stage": "storage",
-                                   "message": "Cannot persist run evidence to the selected store."}}), file=sys.stderr)
-        return 2
-    finally:
-        signal.signal(signal.SIGINT, previous)
-    print(json.dumps({"run_id": result.run_id, "bundle_path": str(result.bundle_path), "status": result.status}))
-    return 0 if result.status in {"artifact_ready", "completed", "needs_input"} else 1
+    solve = SolveResult(**state["solve"]) if state.get("solve") else None
+    print("\n=== Mathematical formulation ===\n" + (state.get("formulation") or "(none)"))
+    print("\n=== Code ===\n" + (state.get("code") or "(none)"))
+    print("\n=== Solve result ===\n" + (solve.feedback() if solve else "(not solved)"))
+    return 0 if solve is not None and solve.executed else 1
+
+
+def _serve(args: argparse.Namespace) -> int:
+    from dotenv import load_dotenv
+    from langgraph_api.cli import run_server
+
+    from llm4om.methods import methods
+
+    load_dotenv()  # read .env from where the command starts, before moving into the workspace
+    workspace = Path(args.workspace).resolve()
+    workspace.mkdir(parents=True, exist_ok=True)
+    os.environ["LLM4OM_WORKSPACE"] = str(workspace)
+    os.environ["LLM4OM_SANDBOX"] = args.sandbox
+    # The LangGraph server keeps threads, runs and checkpoints in .langgraph_api under the working directory.
+    os.chdir(workspace)
+    graphs = {method.id: {"path": f"llm4om.server.graphs:{method.id}", "description": method.description}
+              for method in methods().values()}
+    print(f"LLM4OM: http://{args.host}:{args.port}  (runs are kept in {workspace})", file=sys.stderr)
+    run_server(host=args.host, port=args.port, graphs=graphs, n_jobs_per_worker=args.jobs, open_browser=False,
+               http={"app": "llm4om.server.app:app", "cors": {"allow_origins": []}}, allow_blocking=True,
+               server_level="WARNING")
+    return 0
+
+
+def _build_worker(args: argparse.Namespace) -> int:
+    with tempfile.TemporaryDirectory() as directory:
+        dockerfile = Path(directory) / "Dockerfile"
+        dockerfile.write_text(files("llm4om.sandbox").joinpath("worker.Dockerfile").read_text("utf-8"), encoding="utf-8")
+        return subprocess.run(["docker", "build", "-t", args.tag, directory]).returncode
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="llm4om", description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    serve = commands.add_parser("serve", help="Start the Web workbench on the LangGraph server.")
+    serve.add_argument("--workspace", default="runs/web", help="Directory for settings and run history.")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8767)
+    serve.add_argument("--jobs", type=int, default=4, help="Runs that may execute at the same time.")
+    serve.add_argument("--sandbox", choices=("docker", "local"), default="docker",
+                       help="Where generated code runs; 'local' skips isolation and is for development only.")
+
+    run = commands.add_parser("run", help="Model and solve one problem.")
+    source = run.add_mutually_exclusive_group(required=True)
+    source.add_argument("--problem", help="Problem description text.")
+    source.add_argument("--file", help="UTF-8 file with the problem description.")
+    run.add_argument("--data", action="append", default=[], help="Attach a CSV or JSON data file; repeatable.")
+    run.add_argument("--method", default="direct")
+    run.add_argument("--language", default="pyomo",
+                     help="Code language, which decides the solver: pyomo (HiGHS), gurobipy (Gurobi), pywraplp (SCIP) or cpmpy (CP-SAT).")
+    run.add_argument("--provider", help="Saved LLM provider; default: the selected one.")
+    run.add_argument("--model", help="Model ID; default: the provider's saved model.")
+    run.add_argument("--option", action="append", default=[], help="Method option key=value (JSON value); repeatable.")
+    run.add_argument("--workspace", default="runs/web", help="Directory with the saved LLM settings.")
+    run.add_argument("--sandbox", choices=("docker", "local"), default="docker")
+    run.add_argument("--output", help="Write the final state (steps included) to this JSON file.")
+
+    build = commands.add_parser("build-worker", help="Build the Docker image that runs generated code and solvers.")
+    build.add_argument("--tag", default=WORKER_IMAGE)
+
+    args = parser.parse_args(argv)
+    if args.command == "serve":
+        return _serve(args)
+    if args.command == "run":
+        try:
+            return asyncio.run(_run(args))
+        except ValueError as error:
+            print(f"Error: {error}", file=sys.stderr)
+            return 2
+    return _build_worker(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

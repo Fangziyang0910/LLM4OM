@@ -1,0 +1,169 @@
+"""Code languages: how generated code expresses the model, and the solver that runs it.
+
+The user chooses a language; each language has one solver: Pyomo runs on HiGHS, gurobipy on Gurobi, OR-Tools
+pywraplp on SCIP and CPMpy on OR-Tools CP-SAT. Generated code defines `build_model(data)` and returns the model; the
+worker solves it through that language's own interface. Methods add `CodeTarget.prompt` to their code-generation
+prompts; methods whose original prompts name one library keep a dialect per language, chosen by `CodeTarget.language`.
+"""
+
+from dataclasses import dataclass
+
+CONTRACT = """\
+## Code contract
+- Write Python code that defines `build_model(data)` and returns the {model_type}.
+- `data` maps each attached data file name to its text content (CSV or JSON). Parse it yourself. \
+When no file is attached, `data` is empty; take the numbers from the problem description.
+- Do not solve the model and do not print the solution. The platform solves it with {solver} and reports the result.
+- Do not read files, environment variables or the network.
+- {objective} Python control flow must not depend on variable values.
+- Give variables readable names that include their indices, because results are reported by variable name."""
+
+PYOMO = """\
+## Pyomo reference (solved with HiGHS)
+```python
+import pyomo.environ as pyo
+
+def build_model(data):
+    products = ["A", "B"]
+    profit = {"A": 3, "B": 2}
+    m = pyo.ConcreteModel()
+    m.P = pyo.Set(initialize=products)
+    m.x = pyo.Var(m.P, domain=pyo.NonNegativeIntegers)   # NonNegativeReals, Binary, Reals, bounds=(lo, hi)
+    m.profit = pyo.Objective(expr=sum(profit[p] * m.x[p] for p in m.P), sense=pyo.maximize)
+    m.cutting = pyo.Constraint(expr=2 * m.x["A"] + m.x["B"] <= 8)
+    m.demand = pyo.Constraint(m.P, rule=lambda m, p: m.x[p] >= 0)  # indexed constraint
+    return m
+```
+- Use `pyo.Constraint.Skip` inside a rule to omit an index.
+- Use `pyo.quicksum` or `sum` for sums. Do not use `pyo.value()` on variables while building."""
+
+GUROBIPY = """\
+## gurobipy reference
+```python
+import gurobipy as gp
+from gurobipy import GRB
+
+def build_model(data):
+    products = ["A", "B"]
+    profit = {"A": 3, "B": 2}
+    m = gp.Model("production")
+    x = m.addVars(products, vtype=GRB.INTEGER, lb=0, name="x")   # GRB.CONTINUOUS, GRB.BINARY
+    m.setObjective(gp.quicksum(profit[p] * x[p] for p in products), GRB.MAXIMIZE)
+    m.addConstr(2 * x["A"] + x["B"] <= 8, name="cutting")
+    m.addConstrs((x[p] >= 0 for p in products), name="demand")
+    return m
+```
+- Do not call `m.optimize()`; the platform solves the model."""
+
+ORTOOLS = """\
+## OR-Tools pywraplp reference (solved with SCIP)
+```python
+from ortools.linear_solver import pywraplp
+
+def build_model(data):
+    products = ["A", "B"]
+    profit = {"A": 3, "B": 2}
+    solver = pywraplp.Solver.CreateSolver("SCIP")
+    x = {p: solver.IntVar(0, solver.infinity(), f"x[{p}]") for p in products}   # NumVar, BoolVar(name)
+    solver.Maximize(sum(profit[p] * x[p] for p in products))                      # solver.Minimize(...)
+    solver.Add(2 * x["A"] + x["B"] <= 8, "cutting")
+    for p in products:
+        solver.Add(x[p] >= 0, f"demand[{p}]")
+    return solver
+```
+- Return the `pywraplp.Solver`. Do not call `solver.Solve()`; the platform solves the model.
+- Build sums with `sum(...)` or `solver.Sum(...)`. Variables are linear: no products of variables."""
+
+
+CPMPY = """\
+## CPMpy reference (solved with OR-Tools CP-SAT)
+```python
+import cpmpy as cp
+
+def build_model(data):
+    products = ["A", "B"]
+    profit = [3, 2]
+    x = cp.intvar(0, 100, shape=len(products), name="x")   # cp.boolvar(shape=..., name=...); every intvar needs bounds
+    m = cp.Model()
+    m += 2 * x[0] + x[1] <= 8
+    m += x[0] + 2 * x[1] <= 8
+    m += cp.AllDifferent(x)                                  # global constraints: AllDifferent, Element, Table, Cumulative, ...
+    m.maximize(cp.sum(profit[i] * x[i] for i in range(len(products))))
+    return m
+```
+- Return the `cp.Model`. Do not call `m.solve()`; the platform solves the model.
+- Variables are integers or Booleans with finite bounds; there are no continuous variables. Scale fractional data to \
+integers. Use `a.implies(b)`, `&`, `|`, `~` for logic and index arrays of variables with variables for Element."""
+
+
+STARTER = '''{imports}
+
+def build_model(data):
+    """
+    Args:
+        data: dict, maps each attached data file name to its text content (CSV or JSON); empty when no file is attached
+    Returns:
+        model: {model_type}. Do not solve it; the platform solves it with {solver}.
+    """
+    model = {constructor}
+    # To be implemented
+    return model
+'''
+
+
+ONE_OBJECTIVE = "The model has exactly one objective."
+CP_OBJECTIVE = "The model has at most one objective; without one it is a satisfaction problem."
+
+
+@dataclass(frozen=True)
+class Language:
+    id: str
+    name: str  # the library as users know it
+    solver: str  # the solver that runs this language
+    library: str  # the name prompts use for the code, e.g. "Gurobi" in "write Gurobi code"
+    reference: str
+    imports: str  # the rest feeds the starter code
+    model_type: str
+    constructor: str
+    objective: str = ONE_OBJECTIVE
+
+
+LANGUAGES = {
+    "pyomo": Language("pyomo", "Pyomo", "HiGHS", "Pyomo", PYOMO, "import pyomo.environ as pyo",
+                      "pyo.ConcreteModel", "pyo.ConcreteModel()"),
+    "gurobipy": Language("gurobipy", "gurobipy", "Gurobi", "Gurobi", GUROBIPY,
+                         "import gurobipy as gp\nfrom gurobipy import GRB", "gp.Model", 'gp.Model("model")'),
+    "pywraplp": Language("pywraplp", "OR-Tools pywraplp", "SCIP", "OR-Tools", ORTOOLS,
+                         "from ortools.linear_solver import pywraplp", "pywraplp.Solver",
+                         'pywraplp.Solver.CreateSolver("SCIP")'),
+    "cpmpy": Language("cpmpy", "CPMpy", "OR-Tools CP-SAT", "CPMpy", CPMPY, "import cpmpy as cp",
+                      "cp.Model", "cp.Model()", CP_OBJECTIVE),
+}
+MILP_LANGUAGES = frozenset({"pyomo", "gurobipy", "pywraplp"})  # for methods whose original prompts ask for (MI)LP
+
+
+@dataclass(frozen=True)
+class CodeTarget:
+    language: str
+
+    def __post_init__(self) -> None:
+        if self.language not in LANGUAGES:
+            raise ValueError(f"Unknown code language {self.language!r}; choose one of {sorted(LANGUAGES)}.")
+
+    @property
+    def prompt(self) -> str:
+        """Instructions that make generated code fit this language and its solver."""
+        language = LANGUAGES[self.language]
+        return CONTRACT.format(model_type=language.model_type, solver=language.solver,
+                               objective=language.objective) + "\n\n" + language.reference
+
+    @property
+    def library(self) -> str:
+        return LANGUAGES[self.language].library
+
+    @property
+    def starter(self) -> str:
+        """An empty `build_model` stating its interface, for methods whose prompts take a starter code."""
+        language = LANGUAGES[self.language]
+        return STARTER.format(imports=language.imports, model_type="a " + language.model_type, solver=language.solver,
+                              constructor=language.constructor)

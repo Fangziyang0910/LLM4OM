@@ -1,31 +1,40 @@
 LLM4OM
 Copyright 2026 Ziyang Fang
 
-This repository contains original requirements, design documents, fixtures,
-and an implementation of an automated optimization modeling platform.
-
-OptiMUS source files and prompt templates are bundled under their original
-MIT license in src/llm4om/optimus_source/.
-Copyright (c) 2023 Ali Teshnizi.
-Upstream: https://github.com/teshnizi/OptiMUS
-Fixed commit: e182e9ef5841605c2a7e87467021fd83522b6484
-The original license is retained in optimus_source/LICENSE.txt; manifest.json
-records the original file URLs and byte hashes. Platform bridges are separate
-from those unchanged files. No retrieval corpus is bundled by this integration.
+This repository contains an implementation of an automated optimization
+modeling platform and its documentation.
 
 OptiTree's fixed public modeling-thought library and tree mapping are bundled
-under their original MIT license in src/llm4om/optitree_source/.
+under their original MIT license in src/llm4om/methods/optitree/source/.
 Copyright (c) 2025 MIRA Lab.
 Upstream: https://github.com/MIRALab-USTC/OptiTree
 Fixed commit: 2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9
-The original license is retained in optitree_source/LICENSE.txt; manifest.json
-records original paths and byte hashes. Inference prompts use type descriptions
-and modeling thoughts, excluding the example_application solved instances.
-OR-LLM-Agent and AutoFormulation adapters are independently implemented;
-no code or prompt text from those upstream repositories is redistributed.
+The original license is retained in optitree/source/LICENSE.txt; manifest.json
+records original paths and byte hashes. The OptiTree prompt text in
+src/llm4om/methods/optitree/prompts.py is extracted verbatim from the same
+commit.
+OptiMUS prompt text in src/llm4om/methods/optimus/prompts.py is extracted
+verbatim from https://github.com/teshnizi/OptiMUS (commit e182e9e), MIT
+license; the original license is retained in optimus/LICENSE.txt.
+
+The Chain-of-Experts (https://github.com/xzymustbexzy/Chain-of-Experts,
+commit afb89bf) and OR-LLM-Agent (https://github.com/bwz96sco/or_llm_agent,
+commit 5dccdaa) adapters reproduce upstream prompt text. The AutoFormulation
+adapter includes upstream source files from
+https://github.com/jumpynitro/AutoFormulator (commit 5214801) in
+src/llm4om/methods/autoformulation/upstream/, and ports further upstream
+functions in autoformulation/search.py and autoformulation/codegen.py. These repositories state no
+license at the fixed commits; their text is included for research
+reproduction only and must not be redistributed without the authors'
+permission.
+
+The TriVAL graph, nodes and prompts in src/llm4om/methods/trival/ are
+ported from https://github.com/SCUT-EIPI/TriVAL (commit 380a529),
+MIT license, Copyright (c) 2026 Ziyang Fang. Adaptations are listed in
+src/llm4om/methods/trival/README.md.
 
 Public benchmark question projections are bundled in
-src/llm4om/benchmark_sources/ from the user's prepared OPT-Agent data.
+src/llm4om/server/examples_data/ from the user's prepared OPT-Agent data.
 Source: https://github.com/Fangziyang0910/OPT-Agent
 Fixed commit: ad1c15bed95af0efc7de7d28c38baf2ad2f12351
 catalog.json records the source paths, byte hashes and question counts.
@@ -33,6 +42,6 @@ Only existing managers' get_input() outputs and sample IDs are retained;
 answers, reference solutions and solver code are excluded.
 These data retain their source terms, separate from the platform code license.
 NL4Opt's MIT notice and MAMO's CC-BY-SA-4.0 license are retained as
-benchmark_sources/NL4Opt-LICENSE.txt and benchmark_sources/MAMO-LICENSE.txt.
+server/examples_data/NL4Opt-LICENSE.txt and server/examples_data/MAMO-LICENSE.txt.
 The OPT-Agent snapshot does not specify individual licenses for its other
 prepared datasets; the catalog records that absence without assigning one.

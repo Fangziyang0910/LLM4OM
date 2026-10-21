@@ -1,0 +1,390 @@
+"""Every method runs end to end with scripted LLM replies and real local solving."""
+
+import json
+from typing import Any
+
+import pytest
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+
+from llm4om.runtime import Limits
+from tests.conftest import FORMULATION, PRODUCTION_CODE, TWO_PART_REPLY, tool_call
+
+BROKEN_CODE = PRODUCTION_CODE.replace("return m", "return m.missing")
+CODE_BLOCK = f"```python\n{PRODUCTION_CODE}```"
+
+
+def assert_solved(record: dict[str, Any]) -> None:
+    assert not record.get("failure"), record.get("failure")
+    assert record["solve"]["objective"] == 13
+    assert record["code"].strip() == PRODUCTION_CODE.strip()
+    assert {"llm", "artifact", "solve"} <= {event["type"] for event in record["steps"]}
+
+
+def by_role(replies: dict[str, Any]) -> Any:
+    """Reply by role; a list is consumed one item per call."""
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> Any:
+        reply = replies[role]
+        return reply.pop(0) if isinstance(reply, list) else reply
+    return script
+
+
+def test_direct_generates_and_solves(run_method: Any) -> None:
+    record = run_method("direct", by_role({"generate": TWO_PART_REPLY}))
+    assert_solved(record)
+    assert FORMULATION in record["formulation"]
+    llm_event = next(event for event in record["steps"] if event["type"] == "llm")
+    assert (llm_event["title"], llm_event["output_tokens"]) == ("generate", 5)
+
+
+def test_feedback_repair_uses_the_solver_error(run_method: Any) -> None:
+    seen: list[str] = []
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        seen.append(messages[-1].text)
+        return TWO_PART_REPLY.replace(PRODUCTION_CODE, BROKEN_CODE) if role == "generate" else TWO_PART_REPLY
+
+    record = run_method("feedback_repair", script)
+    assert_solved(record)
+    assert "missing" in seen[1]  # the repair prompt carries the execution error
+    assert [event["status"] for event in record["steps"] if event["type"] == "solve"] == ["error", "optimal"]
+
+
+CPMPY_REPLY = """### Formulation
+$$\\max 3x_A + 2x_B$$
+
+```python
+import cpmpy as cp
+
+def build_model(data):
+    x = cp.intvar(0, 10, shape=2, name="x")
+    m = cp.Model(2 * x[0] + x[1] <= 8, x[0] + 2 * x[1] <= 8)
+    m.maximize(3 * x[0] + 2 * x[1])
+    return m
+```"""
+
+
+def test_direct_writes_cpmpy_for_cp_sat(run_method: Any) -> None:
+    prompts: list[str] = []
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        prompts.append(messages[0].text)
+        return CPMPY_REPLY
+
+    record = run_method("direct", script, language="cpmpy")
+    assert not record.get("failure"), record.get("failure")
+    assert record["solve"]["objective"] == 13
+    assert "CPMpy reference" in prompts[0] and "CP-SAT" in prompts[0]
+
+
+def test_milp_methods_reject_cpmpy(run_method: Any) -> None:
+    for method in ("optimus", "coe", "optitree", "or_llm_agent", "autoformulation"):
+        record = run_method(method, by_role({}), language="cpmpy")
+        assert "does not support the code language 'cpmpy'" in record["failure"] and not record.get("steps")
+
+
+def test_or_llm_agent_fixes_code_in_the_conversation(run_method: Any) -> None:
+    seen: list[list[BaseMessage]] = []
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        seen.append(messages)
+        return {"math_model": FORMULATION, "code": f"```python\n{BROKEN_CODE}```", "debug": CODE_BLOCK}[role]
+
+    record = run_method("or_llm_agent", script)
+    assert_solved(record)
+    assert "missing" in seen[-1][-1].text  # the fix request carries the execution error
+    assert "Gurobi" not in seen[1][-1].text and "build_model" in seen[1][-1].text  # the code request names the contract
+
+
+def test_or_llm_agent_rechecks_infeasible_models(run_method: Any) -> None:
+    infeasible = PRODUCTION_CODE.replace("<= 8)", "<= -8)", 1)
+    record = run_method("or_llm_agent", by_role(
+        {"math_model": FORMULATION, "code": [f"```python\n{infeasible}```", CODE_BLOCK]}))
+    assert_solved(record)
+    assert [e["status"] for e in record["steps"] if e["type"] == "solve"] == ["infeasible", "optimal"]
+
+
+GUROBIPY_PARAMS = {"Profit": {"shape": "[2]", "definition": "profit per unit", "type": "float", "value": [3, 2]},
+                   "Capacity": {"shape": "[]", "definition": "units of each resource", "type": "float", "value": 8}}
+OPTIMUS_CODE = {
+    "gurobipy": {"constraints": ["model.addConstr(2 * x[0] + x[1] <= Capacity)", "model.addConstr(x[0] + 2 * x[1] <= Capacity)"],
+               "objective": "model.setObjective(quicksum(Profit[i] * x[i] for i in range(2)), GRB.MAXIMIZE)"},
+    "pyomo": {"constraints": ["model.constraints.add(2 * x[0] + x[1] <= Capacity)",
+                              "model.constraints.add(x[0] + 2 * x[1] <= Capacity)"],
+              "objective": "model.objective = Objective(expr=quicksum(Profit[i] * x[i] for i in range(2)), sense=maximize)"},
+    "pywraplp": {"constraints": ["model.Add(2 * x[0] + x[1] <= Capacity)", "model.Add(x[0] + 2 * x[1] <= Capacity)"],
+                "objective": "model.Maximize(sum(Profit[i] * x[i] for i in range(2)))"},
+}
+GUROBIPY_CODE = """from gurobipy import Model, GRB, quicksum
+
+def build_model(data):
+    model = Model("fixed")
+    x = model.addVars(2, vtype=GRB.INTEGER, name="x")
+    model.addConstr(2 * x[0] + x[1] <= 8)
+    model.addConstr(x[0] + 2 * x[1] <= 8)
+    model.setObjective(3 * x[0] + 2 * x[1], GRB.MAXIMIZE)
+    return model"""
+
+
+def optimus_script(language: str, constraint_codes: list[str] | None = None, prompts: dict[str, str] | None = None) -> Any:
+    codes = list(constraint_codes or OPTIMUS_CODE[language]["constraints"])
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        if prompts is not None:
+            prompts[role] = messages[-1].text
+        if role == "constraint_model":
+            new = '{"x": {"shape": "[2]", "type": "integer", "definition": "units"}}' if '"x"' not in messages[-1].text else "{}"
+            return f'{{\n    "FORMULATION": "$a x[0] + b x[1] \\\\leq 8$",\n    "NEW VARIABLES": {new},\n    "AUXILIARY CONSTRAINTS": []\n}}'
+        if role == "constraint_code":
+            return f"CODE\n=====\n{codes.pop(0)}\n====="
+        return {
+            "parameters": json.dumps(GUROBIPY_PARAMS),
+            "objective": "=====\nOBJECTIVE: Maximize the total profit\n=====",
+            "constraints": '["cutting capacity", "machining capacity"]',
+            "constraints_redundancy": 'No redundancy.\n["cutting capacity", "machining capacity"]',
+            "constraint_check": "It is a constraint. 5 OUT OF 5",
+            "objective_model": "=====\n$\\max 3 x[0] + 2 x[1]$\n=====",
+            "objective_code": f"CODE\n=====\n{OPTIMUS_CODE[language]['objective']}\n=====",
+            "debug": "=====\n" + GUROBIPY_CODE + "\n=====",
+        }[role]
+    return script
+
+
+@pytest.mark.parametrize("language,library,add", [("pyomo", "Pyomo", "constraints.add"),
+    ("gurobipy", "gurobipy", "addConstr"), ("pywraplp", "OR-Tools", "model.Add(")])
+def test_optimus_assembles_clause_code_for_each_language(run_method: Any, language: str, library: str, add: str) -> None:
+    if language == "gurobipy":
+        pytest.importorskip("gurobipy")
+    prompts: dict[str, str] = {}
+    record = run_method("optimus", optimus_script(language, prompts=prompts), language=language)
+    assert not record.get("failure"), (language, record.get("failure"))
+    assert record["solve"]["objective"] == 13
+    assert "def build_model(files)" in record["code"] and "'Profit': [3, 2]" in record["code"]
+    assert "cutting capacity" in record["formulation"]
+    assert library in prompts["constraint_code"] and library in prompts["objective_code"]
+    assert add in prompts["constraint_code"]
+
+
+def test_optimus_debugs_non_optimal_results(run_method: Any) -> None:
+    pytest.importorskip("gurobipy")
+    record = run_method("optimus", optimus_script("gurobipy", ["model.addConstr(2 * x[0] + x[1] <= -Capacity)",
+                                                       "model.addConstr(x[0] + 2 * x[1] <= Capacity)"]), language="gurobipy")
+    statuses = [e["status"] for e in record["steps"] if e["type"] == "solve"]
+    assert statuses[0].startswith("infeasible") and statuses[1:] == ["optimal"]
+    assert record["code"].strip() == GUROBIPY_CODE.strip()
+
+
+def test_optimus_reads_long_fences() -> None:
+    from llm4om.methods.optimus.parsing import extract_code_from_end
+    reply = "Final code:\n\n=======\nmodel.setObjective(a * x, GRB.MAXIMIZE)\n=======\n"  # seen from DeepSeek
+    assert extract_code_from_end(reply) == "model.setObjective(a * x, GRB.MAXIMIZE)"
+
+
+COE_REPLIES = {"conductor": ["Modeling Expert", "Programming Expert", "Code Reviewer"],
+               "Modeling Expert": FORMULATION, "Programming Expert": CODE_BLOCK, "Code Reviewer": "Looks fine."}
+
+
+def test_coe_reduces_expert_comments(run_method: Any) -> None:
+    prompts: dict[str, str] = {}
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        prompts[role] = messages[-1].text
+        return CODE_BLOCK if role == "reducer" else by_role(COE_REPLIES)(role, messages, tools)
+
+    record = run_method("coe", script)
+    assert_solved(record)
+    assert "def build_model(data):" in prompts["Programming Expert"]  # the starter code
+    assert "Modeling Expert: ```" in prompts["reducer"]
+    assert not any(role.endswith("(backward)") for role in prompts)  # reflection is off by default
+
+
+def test_coe_reflection_asks_experts_backwards(run_method: Any) -> None:
+    roles: list[str] = []
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        roles.append(role)
+        if role == "reducer":
+            return f"```python\n{BROKEN_CODE}```" if roles.count("reducer") == 1 else CODE_BLOCK
+        if role.endswith("(backward)"):
+            caused = role.startswith("Programming Expert")
+            return json.dumps({"is_caused_by_you": caused, "reason": "" if caused else "not me", "refined_result": CODE_BLOCK})
+        replies = dict(COE_REPLIES, conductor=["Modeling Expert", "Programming Expert", "Code Reviewer"])
+        return replies[role] if role != "conductor" else replies["conductor"][roles.count("conductor") % 3 - 1]
+
+    record = run_method("coe", script, enable_reflection=True)
+    assert_solved(record)
+    assert [r for r in roles if r.endswith("(backward)")] == ["Code Reviewer (backward)", "Programming Expert (backward)"]
+    assert roles.count("reducer") == 2
+
+
+def test_optitree_stops_at_the_root_type(run_method: Any) -> None:
+    record = run_method("optitree", by_role({
+        "interpreter": json.dumps({"matching_problem_type": "", "belongs_to_problem_types": False}),
+        "reasoner": TWO_PART_REPLY}))
+    assert_solved(record)
+
+
+def test_optitree_follows_the_tree_and_inspects_failing_code(run_method: Any) -> None:
+    prompts: dict[str, list[str]] = {}
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        prompts.setdefault(role, []).append(messages[-1].text)
+        if role == "interpreter":  # root -> Transportation Problem, which then matches none of its subtypes
+            return json.dumps({"matching_problem_type": "Transportation Problem", "belongs_to_problem_types": True}) \
+                if len(prompts[role]) == 1 else json.dumps({"belongs_to_subtypes": False, "matching_subtype": ""})
+        return {"reasoner": f"```python\n{BROKEN_CODE}```", "inspector": CODE_BLOCK}[role]
+
+    record = run_method("optitree", script)
+    assert_solved(record)
+    assert len(prompts["interpreter"]) == 2 and "Transportation Problem" in prompts["interpreter"][1]
+    assert "'problem_type': 'Transportation Problem'" in prompts["reasoner"][0]
+    assert "pyomo code" in prompts["reasoner"][0] and "build_model" in prompts["reasoner"][0]
+    assert "missing" in prompts["inspector"][0]
+    assert [e["status"] for e in record["steps"] if e["type"] == "solve"] == ["error", "optimal"]
+
+
+AF_PARAMETERS = "formalization_dict['parameters'] = {\n    # profit per unit\n    'profit': [3, 2],\n    'cut': [2, 1],\n" \
+                "    'mach': [1, 2],\n    # capacity of each resource\n    'cap': 8\n}"
+AF_OBJECTIVES = ["formalization_dict['objective'] = {'max': 'sum(profit[i] * x[i] for i in range(2))'}",
+                 "formalization_dict['objective'] = {'max': 'profit[0] * x[0] + profit[1] * x[1]'}"]
+AF_INEQUALITIES = ["formalization_dict['inequality_constraints'] = {'cutting': 'sum(cut[i] * x[i] for i in range(2)) <= cap', "
+                   "'machining': 'sum(mach[i] * x[i] for i in range(2)) <= cap'}",
+                   "formalization_dict['inequality_constraints'] = {'cutting': 'sum(cut[i] * x[i] for i in range(2)) <= cap'}"]
+
+
+def autoformulation_script(vtype: str, calls: list[tuple[str, str]]) -> Any:
+    """Two samples per step: equal parameters, equal variables, equivalent objectives, two different constraint sets."""
+    counters: dict[str, int] = {}
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        prompt = messages[-1].text
+        calls.append((role, prompt))
+        count = counters[role] = counters.get(role, 0) + 1
+        if role == "generate.parameters":
+            return AF_PARAMETERS
+        if role == "generate.decision_variables":
+            return ("formalization_dict['decision_variables'] = {'x': {'description': 'units of each product', "
+                    f"'type': '{vtype}', 'iteration_space': '[i for i in range(2)]'}}}}")
+        if role == "generate.objective":
+            return AF_OBJECTIVES[count % 2]
+        if role == "generate.equality_constraints":
+            return "formalization_dict['equality_constraints'] = {None: None}"
+        if role == "generate.inequality_constraints":
+            return AF_INEQUALITIES[count % 2]
+        if role == "group_decision_variables":
+            return "groups = {1: ['decision_variables_0', 'decision_variables_1']}"
+        if role == "rank.inequality_constraints":  # the candidate with both constraints first
+            first = "inequality_constraints_0" if "machining" in prompt.split("inequality_constraints_1")[0] else "inequality_constraints_1"
+            other = "inequality_constraints_1" if first.endswith("0") else "inequality_constraints_0"
+            return f"rank = {{1: '{first}', 2: '{other}'}}"
+        if role == "compare":  # prefer the formulation with both constraints
+            solution_a = prompt.split("solution_A =")[1].split("solution_B =")[0]
+            return "best_solution = {1: 'solution_A'}" if "machining" in solution_a else "best_solution = {1: 'solution_B'}"
+        raise AssertionError(f"unexpected role {role}")
+    return script
+
+
+def test_autoformulation_searches_the_tree_and_ranks_leaves(run_method: Any) -> None:
+    calls: list[tuple[str, str]] = []
+    record = run_method("autoformulation", autoformulation_script("pyo.NonNegativeIntegers", calls),
+                 n_used_gpt=2, n_top=2, n_reward=1, total_rollouts=2)
+    assert not record.get("failure"), record.get("failure")
+    assert record["solve"]["objective"] == 13  # the preferred leaf, not the looser one (objective 16)
+    assert "def build_model(data):" in record["code"] and "pyo.Var(pyo.Any" in record["code"]
+    roles = [role for role, _ in calls]
+    assert roles.count("group_decision_variables") == 8 and roles.count("rank.objective") == 0  # equivalent objectives
+    assert roles.count("compare") == 2 * 5  # the second leaf against the first, in both orders
+    generate_dv = next(prompt for role, prompt in calls if role == "generate.decision_variables")
+    assert "Pyomo variable domain" in generate_dv and "GRB.INTEGER" not in generate_dv
+    assert "using Pyomo" in next(prompt for role, prompt in calls if role == "compare")
+    objectives = sorted(e["objective"] for e in record["steps"] if e["type"] == "solve")
+    assert objectives == [13, 16]
+    steps = [e["title"] for e in record["steps"] if e["type"] == "artifact"]
+    assert steps.count("扩展建模树") == 5 and steps.count("MCTS rollout") == 2 and "选中的数学模型" in steps
+
+
+@pytest.mark.parametrize("language,vtype,expected", [("gurobipy", "GRB.INTEGER", "gpy_model.addVar(vtype=GRB.INTEGER"),
+    ("pywraplp", "integer", "_new_var('integer'")])
+def test_autoformulation_writes_each_languages_code(run_method: Any, language: str, vtype: str, expected: str) -> None:
+    if language == "gurobipy":
+        pytest.importorskip("gurobipy")
+    calls: list[tuple[str, str]] = []
+    record = run_method("autoformulation", autoformulation_script(vtype, calls), language=language, n_used_gpt=1, n_top=1, n_reward=1, total_rollouts=1)
+    assert not record.get("failure"), (language, record.get("failure"))
+    assert expected in record["code"]
+    assert record["solve"]["objective"] in (13, 16)
+    prompt = next(prompt for role, prompt in calls if role == "generate.decision_variables")
+    assert ("GRB.INTEGER" in prompt) == (language == "gurobipy") and ("IntVar" in prompt) == (language == "pywraplp")
+
+
+def trival_script(code_reviews: list[dict[str, Any]], formulation_reviews: list[dict[str, Any]]) -> Any:
+    """Scripted TriVAL nodes; validators consume the given review lists in order."""
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> Any:
+        node = role.removeprefix("trival.")
+        if isinstance(messages[-1], ToolMessage):
+            return "Done."
+        if node == "semantic_fact_extractor":
+            return tool_call("write_semantic_facts", semantic_facts="- Two products, two resources.") if isinstance(
+                messages[-1], HumanMessage) else "Done."
+        if node == "semantic_validator":
+            return tool_call("SemanticValidationOutput", facts_faithful=True, ambiguities_relevant=True,
+                             resolutions_consistent=True)
+        if node.endswith("_expert"):
+            return f"{FORMULATION} ({node})"
+        if node == "formulation_selector":
+            return tool_call("select_formulation", expert_name="constraint_expert")
+        if node == "formulation_validator":
+            return tool_call("FormulationValidationOutput", **formulation_reviews.pop(0))
+        if node == "revise_formulation":
+            return tool_call("write_formulation", formulation=FORMULATION + " (revised)")
+        if node == "code_agent":
+            return tool_call("write_code", code=PRODUCTION_CODE)
+        if node == "code_validator":
+            return tool_call("CodeValidationOutput", **code_reviews.pop(0))
+        raise AssertionError(f"unexpected role {role}")
+    return script
+
+
+PASS_FORMULATION = {"formulation_validation_feedback": "ok", "formulation_validation_passed": True}
+
+
+def test_trival_runs_all_three_validation_stages(run_method: Any) -> None:
+    script = trival_script([{"code_validation_passed": True, "code_validation_feedback": "faithful"}], [PASS_FORMULATION])
+    record = run_method("trival", script)
+    assert_solved(record)
+    assert record["formulation"] == f"{FORMULATION} (constraint_expert)"
+    titles = [event["title"] for event in record["steps"] if event["type"] == "artifact"]
+    for title in ("语义事实与歧义", "语义验证", "候选模型：约束专家", "选择候选模型", "数学模型验证", "代码验证"):
+        assert title in titles
+
+
+def test_trival_routes_formulation_defects_back(run_method: Any) -> None:
+    script = trival_script(
+        [{"code_validation_passed": False, "code_validation_feedback": "missing logic", "error_attribution": "formulation"},
+         {"code_validation_passed": True, "code_validation_feedback": "faithful"}],
+        [PASS_FORMULATION, PASS_FORMULATION])
+    record = run_method("trival", script)
+    assert_solved(record)
+    assert record["formulation"].endswith("(revised)")
+    roles = [event["title"] for event in record["steps"] if event["type"] == "llm"]
+    assert "trival.revise_formulation" in roles
+
+
+def test_trival_applies_multiple_code_edits_in_order(run_method: Any) -> None:
+    base = trival_script([{"code_validation_passed": True, "code_validation_feedback": "ok"}], [PASS_FORMULATION])
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> Any:
+        if role == "trival.code_agent" and not isinstance(messages[-1], ToolMessage):
+            return AIMessage("", tool_calls=[
+                {"name": "write_code", "args": {"code": BROKEN_CODE}, "id": "write"},
+                {"name": "edit_code", "args": {"search": "return m.missing", "replace": "return m"}, "id": "edit"},
+            ])
+        return base(role, messages, tools)
+
+    assert_solved(run_method("trival", script))
+
+
+def test_llm_call_limit_stops_the_run(run_method: Any) -> None:
+    broken = TWO_PART_REPLY.replace(PRODUCTION_CODE, BROKEN_CODE)
+    record = run_method("feedback_repair", by_role({"generate": broken, "repair": broken}), limits=Limits(max_llm_calls=2))
+    assert "limit of 2 LLM calls" in record["failure"]
+    assert record.get("code") is None and record["steps"][-1]["type"] == "error"

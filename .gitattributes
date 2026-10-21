@@ -1,5 +1,4 @@
 * text=auto eol=lf
-src/llm4om/optimus_source/*.txt whitespace=-blank-at-eol
 *.md text
 *.json text
 *.yaml text
@@ -8,3 +7,6 @@ src/llm4om/optimus_source/*.txt whitespace=-blank-at-eol
 *.py text
 *.bib text
 *.txt text
+
+# Keep the published prompt text, including trailing spaces inside string literals.
+src/llm4om/methods/autoformulation/upstream/prompts.py whitespace=-blank-at-eol

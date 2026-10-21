@@ -1,7 +1,6 @@
 # Secrets and environment
 .env
-.llm4om-web-doctor-*.json
-llm-settings.local.json*
+.private/
 .env.*
 !.env.example
 *.key
@@ -15,6 +14,7 @@ __pycache__/
 
 # Runtime output and downloaded datasets; hand-authored source fixtures stay tracked
 /runs/
+.langgraph_api/
 /artifacts/
 /datasets/
 /data/
@@ -30,5 +30,5 @@ build/
 dist/
 *.egg-info/
 
-# Frontend build source; built assets ship inside src/llm4om/web_assets
+# Frontend build source; built assets ship inside src/llm4om/server/web_assets
 /frontend/node_modules/

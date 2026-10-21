@@ -1,8 +1,0 @@
-# Copy beside your locally downloaded competition snapshot; no automatic fetch.
-schema_version: "0.1.0"
-dataset_id: "nl4opt"
-source_kind: "official"
-source_version: "49f1e0d66b7fdcd33305a7f281c2a7c13f5620ea"
-split: "dev"
-path: "generation_data/dev.jsonl"
-sha256: "6538ce1fe76861f89879672a6c9a02c8f41156952256f3cfde82c2808ba320ee"

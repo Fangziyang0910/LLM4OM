@@ -1,42 +1,21 @@
-"""LLM4OM public application, task and evaluation interfaces."""
+"""LLM4OM: automated optimization modeling with pluggable methods, LLMs and code languages."""
 
-from llm4om.storage import cancel_run
-from llm4om.reporters import Reporter, ReportContext, ReportDestination, resolve_reporters
-from llm4om.control import CancellationToken
-from llm4om.backends import ModelHandle, ModelBackend, NativeModelBackend, PyomoBackendFactory, GurobiBackendFactory
-from llm4om.solvers import SolverBackend, HighsSolverFactory, GurobiSolverFactory
-from llm4om.execution_plugins import ExecutionResources, resolve_execution_resources
-from llm4om.executor_registry import ResolvedExecutor, ContainerExecutorFactory, TrustedLocalExecutorFactory, resolve_executor
-from llm4om.compilers import Compiler, LPIRPyomoFactory, LPIRPyomoCompiler, resolve_compiler
-from llm4om.data_loaders import DataLoader, DataView, DataContext, PublicDataFactory, resolve_data_loader
-from llm4om.linear import CompiledCode
-from llm4om.methods import FactoryCodeProposal, ScriptCodeProposal, GenerationFailure, MethodContext, MethodResources, MethodOutcome, ModelProposal
-from llm4om.application import RunResult, run_problem, resume_run, report_run
-from llm4om.tasks import EvaluationCase, TaskAdapter, Evaluator, FrozenTaskAdapter, NL4OptAdapter, import_dataset
-from llm4om.evaluation import NL4OptEvaluator, evaluate_case, evaluate_outcome
-from llm4om.mamo import MAMOAdapter, MAMOEvaluator
-from llm4om.nlp4lp import NLP4LPAdapter, NLP4LPEvaluator
-from llm4om.checkers import SolutionChecker, ProductionChecker, UnitCapChecker
-from llm4om.checker_tasks import CheckerFixtureAdapter, IndependentCheckerEvaluator
-from llm4om.plugins import discover_plugins, discover_methods
-from llm4om.task_plugins import prepare_task
-from llm4om.experiments import run_experiment, report_experiment, cancel_experiment
-from llm4om.assisted import edit_run, export_edit
+import asyncio
+from pathlib import Path
+from typing import Any
 
-__all__ = [
-    "ResolvedExecutor", "ContainerExecutorFactory", "TrustedLocalExecutorFactory", "resolve_executor",
-    "Reporter", "ReportContext", "ReportDestination", "resolve_reporters",
-    "report_run", "run_experiment", "report_experiment", "cancel_experiment",
-    "edit_run", "export_edit",
-    "ModelHandle", "FactoryCodeProposal", "ScriptCodeProposal", "GenerationFailure", "MethodContext", "MethodResources", "MethodOutcome", "ModelProposal",
-    "CancellationToken", "RunResult", "run_problem", "resume_run", "cancel_run", "EvaluationCase", "TaskAdapter", "Evaluator",
-    "NL4OptAdapter", "MAMOAdapter", "NLP4LPAdapter", "CheckerFixtureAdapter", "import_dataset",
-    "NL4OptEvaluator", "MAMOEvaluator", "NLP4LPEvaluator", "IndependentCheckerEvaluator", "evaluate_case",
-    "SolutionChecker", "ProductionChecker", "UnitCapChecker",
-    "discover_plugins", "discover_methods",
-    "FrozenTaskAdapter", "evaluate_outcome", "prepare_task",
-    "Compiler", "CompiledCode", "LPIRPyomoFactory", "LPIRPyomoCompiler", "resolve_compiler",
-    "ModelBackend", "NativeModelBackend", "SolverBackend", "PyomoBackendFactory", "GurobiBackendFactory",
-    "HighsSolverFactory", "GurobiSolverFactory", "ExecutionResources", "resolve_execution_resources",
-    "DataLoader", "DataView", "DataContext", "PublicDataFactory", "resolve_data_loader",
-]
+from llm4om.graph import Resources, RunContext, platform_graph, run
+from llm4om.llm import LLMSettings, SettingsStore
+from llm4om.runtime import Context, Limits
+from llm4om.sandbox import Sandbox, SolveResult
+
+__all__ = ["Context", "LLMSettings", "Limits", "Resources", "RunContext", "Sandbox", "SolveResult", "platform_graph",
+           "run", "run_problem"]
+
+
+def run_problem(problem: str, *, method: str = "direct", language: str = "pyomo",
+                data: dict[str, str] | None = None, options: dict[str, Any] | None = None,
+                llm: LLMSettings | None = None, workspace: str | Path = "runs/web", sandbox: str = "docker") -> dict[str, Any]:
+    """Model and solve one problem; returns the final state with its formulation, code, solve result and steps."""
+    resources = Resources(SettingsStore(Path(workspace)), Sandbox(sandbox), llm=llm)
+    return asyncio.run(run(problem, method=method, language=language, data=data, options=options, resources=resources))
