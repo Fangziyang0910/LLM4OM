@@ -1,135 +1,116 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { api, setApiToken } from "./api";
-import { useRunSnapshot } from "./useRunSnapshot";
-import { shortMethod, status } from "./ui";
-import { Datasets } from "./components/Datasets";
-import { ProblemEditor } from "./components/ProblemEditor";
-import { RunView } from "./components/RunView";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
+import { Menu, Plus, TriangleAlert } from "lucide-react";
+import { toast } from "sonner";
+import { api, client, errorText, history, startRun } from "./api";
+import { Composer, initialDraft } from "./components/Composer";
 import { Dialog } from "./components/Dialog";
-import { Icon } from "./components/Icon";
-import type { BenchmarkInput, Bootstrap, DatasetSummary, JobRecord } from "./types";
+import { Examples } from "./components/Examples";
+import { RunView } from "./components/RunView";
+import { SettingsDialog } from "./components/SettingsDialog";
+import { Sidebar } from "./components/Sidebar";
+import type { Draft, Entry, Options, Settings } from "./types";
 
-type View = "editor" | "run" | "datasets";
+type Route = { name: "new" } | { name: "run"; id: string };
+type Confirm = { title: string; text: string; action: string; run: () => Promise<void> };
+
+const routeFromUrl = (): Route => {
+  const match = location.pathname.match(/^\/run\/([\w-]+)/);
+  return match ? { name: "run", id: match[1] } : { name: "new" };
+};
+const NO_SETTINGS: Settings = { selected: null, profiles: {} };
 
 export default function App() {
-  const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
-  const [view, setView] = useState<View>(() => new URLSearchParams(location.search).get("job") ? "run" : "editor");
-  const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [benchmarkInput, setBenchmarkInput] = useState<BenchmarkInput | null>(null);
-  const [noticeState, setNoticeState] = useState({ text: "", error: false });
-  const notice = useCallback((text: string, error = false) => setNoticeState({ text, error }), []);
-  const { jobs, currentJob, selectedRun, snapshot, selectRun, refreshRun, refreshJobs } = useRunSnapshot(notice);
-  const started = useRef(false);
-  const initialized = useRef(false);
-  const openJob = async (id: string, run: string | null = null, preserveLink = false) => {
-    if (!preserveLink) {
-      const address = new URL("/", location.origin);
-      address.searchParams.set("job", id);
-      if (run) address.searchParams.set("run", run);
-      history.replaceState(null, "", address.pathname + address.search);
-    }
-    setView("run");
-    setHistoryOpen(false);
-    notice("");
-    await selectRun(id, run);
-  };
-  const refreshDatasets = async () => {
-    const result = await api<{ datasets: DatasetSummary[] }>("/api/datasets");
-    setDatasets(result.datasets);
-  };
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    const params = new URLSearchParams(location.search);
-    (async () => {
-      try {
-        const result = await api<Bootstrap>("/api/bootstrap");
-        setApiToken(result.token);
-        setBootstrap(result);
-        await refreshJobs();
-        const job = params.get("job"), run = params.get("run");
-        if (job) {
-          if (!/^[a-f0-9]{32}$/.test(job) || (run && !/^[a-f0-9]{32}$/.test(run)))
-            throw new Error("运行链接中的标识无效。");
-          await openJob(job, run, true);
-        }
-      } catch (error) { notice((error as Error).message, true); }
-      finally { initialized.current = true; }
-    })();
-  }, []);
-  useEffect(() => {
-    if (initialized.current && view !== "run") history.replaceState(null, "", "/");
-  }, [view]);
-  return (
-    <>
-      <header className="app-bar">
-        <a className="brand" href="/">
-          <span className="brand-symbol"><Icon name="brand" size={26} /></span> LLM<span>4</span>OM
-        </a>
-        <nav aria-label="工作台导航"><button
-          aria-current={view === "editor" ? "page" : undefined}
-          id="new-run"
-          className={"nav-link" + (view === "editor" ? " active" : "")}
-          onClick={() => {
-            void selectRun(null);
-            setView("editor");
-            notice("");
-          }}
-        >
-          <Icon name="plus" size={16} /> 新建问题
-        </button>
-          <button
-            aria-current={view === "datasets" ? "page" : undefined}
-            id="open-datasets"
-            className={"nav-link" + (view === "datasets" ? " active" : "")}
-            onClick={() => {
-              void selectRun(null);
-              setView("datasets");
-              refreshDatasets().catch((error) => notice((error as Error).message, true));
-            }}
-          >
-            <Icon name="book" size={16} /> 示例题库
-          </button>
-          <button id="open-history" className="nav-link" onClick={() => setHistoryOpen(true)}><Icon name="history" size={16} />历史记录</button>
-        </nav>
-      </header>
-      <Dialog open={historyOpen} title="历史记录" onClose={() => setHistoryOpen(false)}>
-        <div id="jobs" aria-label="运行记录">
-          {!jobs.length ? <p className="history-empty">你的建模记录会保存在这里</p> : null}
-          {jobs.map((job) => (
-            <button
-              key={job.job_id}
-              data-job-id={job.job_id}
-              aria-current={job.job_id === currentJob ? "page" : undefined}
-              className={
-                "job" +
-                (job.job_id === currentJob ? " selected" : "") +
-                (["failed", "cancelled"].includes(job.status) ? " failed" : "")
-              }
-              onClick={() => openJob(job.job_id).catch(error => notice(error.message, true))}
-            >
-              <strong>{job.description}</strong>
-              <span>{`${status(job.status)} · ${shortMethod(job.method)}`}</span>
-            </button>
-          ))}
-        </div>
-      </Dialog>
-      <main className={view === "run" ? "workspace" : "landing"}>
-        <div id="notice" className={noticeState.error ? "error" : ""} role={noticeState.error ? "alert" : "status"} hidden={!noticeState.text}>
-          {noticeState.text}
-        </div>
+  const queryClient = useQueryClient();
+  const optionsQuery = useQuery({ queryKey: ["options"], queryFn: () => api<Options>("/api/options"), staleTime: Infinity });
+  const settings = useQuery({ queryKey: ["settings"], queryFn: () => api<Settings>("/api/settings") }).data ?? NO_SETTINGS;
+  // Runs started elsewhere (another tab, the CLI against the server) finish without telling this page.
+  const entries = useQuery({ queryKey: ["history"], queryFn: history,
+    refetchInterval: query => query.state.data?.some(entry => entry.state === "running") ? 4000 : false }).data ?? [];
+  const options = optionsQuery.data ?? null;
+  const [route, setRoute] = useState<Route>(routeFromUrl);
+  const [draft, setDraft] = useState<Draft>(initialDraft);
+  const [examplesOpen, setExamplesOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
 
-        <div className="editor-page" hidden={view !== "editor"}>
-          {bootstrap ? <ProblemEditor bootstrap={bootstrap} active={view === "editor"} notice={notice} benchmarkInput={benchmarkInput}
-            onSubmitted={async (job: JobRecord) => { await refreshJobs(); await openJob(job.job_id); }} /> : <p>正在读取配置…</p>}
-        </div>
-        {view === "datasets" ? <Datasets datasets={datasets} refresh={refreshDatasets} notice={notice}
-          onTry={(input) => { setBenchmarkInput({ ...input }); setView("editor"); notice("已带入样例，可选择方法并开始建模。"); }} /> : null}
-        {view === "run" && !snapshot ? <p className="loading-state" role="status">正在读取建模记录…</p> : null}
-        {view === "run" && snapshot ? <RunView key={currentJob} snapshot={snapshot} selectedRun={selectedRun}
-          selectRun={selectRun} refreshRun={refreshRun} notice={notice} /> : null}
+  const go = useCallback((next: Route) => {
+    const path = next.name === "run" ? `/run/${next.id}` : "/";
+    if (location.pathname !== path) window.history.pushState(null, "", path);
+    setRoute(next);
+    setMenuOpen(false);
+  }, []);
+  const refresh = useCallback(() => queryClient.invalidateQueries({ queryKey: ["history"] }), [queryClient]);
+
+  useEffect(() => {
+    const onPop = () => setRoute(routeFromUrl());
+    addEventListener("popstate", onPop);
+    return () => removeEventListener("popstate", onPop);
+  }, []);
+
+  const start = async (request: Draft) => {
+    const id = await startRun(request);
+    void refresh();
+    go({ name: "run", id });
+  };
+  const remove = (entry: Entry) => setConfirm({
+    title: "删除运行", action: "删除",
+    text: `“${entry.meta.title}”的问题、数学模型、代码和过程都会被删除，无法恢复。`,
+    run: async () => {
+      await client.threads.delete(entry.id);
+      if (route.name === "run" && route.id === entry.id) go({ name: "new" });
+      await refresh();
+      toast.success("已删除。");
+    },
+  });
+
+  const current = route.name === "run" ? route.id : null;
+  const currentEntry = entries.find(entry => entry.id === current);
+  return <div className={"shell" + (menuOpen ? " menu-open" : "")}>
+    <Sidebar entries={entries} current={current} options={options} settings={settings} onNew={() => go({ name: "new" })}
+      onOpen={id => go({ name: "run", id })} onDelete={remove}
+      onExamples={() => { setExamplesOpen(true); setMenuOpen(false); }} onSettings={() => { setSettingsOpen(true); setMenuOpen(false); }} />
+    <button className="scrim" aria-label="关闭菜单" tabIndex={-1} onClick={() => setMenuOpen(false)} />
+
+    <div className="main">
+      <header className="topbar">
+        <button className="icon-button" aria-label="打开菜单" onClick={() => setMenuOpen(true)}><Menu /></button>
+        <span className="topbar-title">{route.name === "new" ? "新建建模" : currentEntry?.meta.title ?? "运行"}</span>
+        {route.name === "run" ? <button className="icon-button" aria-label="新建建模" onClick={() => go({ name: "new" })}><Plus /></button> : null}
+      </header>
+      <main>
+        {optionsQuery.error ? <div className="page-error"><TriangleAlert size={22} /><p>无法连接服务器：{errorText(optionsQuery.error)}</p>
+          <button className="button" onClick={() => void optionsQuery.refetch()}>重试</button></div>
+          : !options ? <div className="page-loading"><span className="spinner" />正在加载……</div>
+          : route.name === "new"
+            ? <Composer options={options} settings={settings} draft={draft} setDraft={setDraft} onStart={start}
+              openSettings={() => setSettingsOpen(true)} openExamples={() => setExamplesOpen(true)} />
+            : <RunView key={route.id} threadId={route.id} options={options} onFinished={() => void refresh()}
+              onEdit={next => { setDraft(next); go({ name: "new" }); }} onRerun={start}
+              onDelete={() => currentEntry ? remove(currentEntry) : undefined} />}
       </main>
-    </>
-  );
+    </div>
+
+    {options ? <>
+      <Examples open={examplesOpen} onClose={() => setExamplesOpen(false)} datasets={options.datasets}
+        onUse={description => { setDraft({ ...draft, description, data: {} }); setExamplesOpen(false); go({ name: "new" }); }} />
+      {settingsOpen ? <SettingsDialog onClose={() => setSettingsOpen(false)} settings={settings} providers={options.providers}
+        onChange={(value, message) => { queryClient.setQueryData(["settings"], value); toast.success(message); }} /> : null}
+    </> : null}
+    <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
+  </div>;
+}
+
+function ConfirmDialog({ confirm, onClose }: { confirm: Confirm | null; onClose: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return <Dialog open={!!confirm} title={confirm?.title ?? ""} onClose={onClose} footer={<>
+    <button className="button" onClick={onClose}>取消</button>
+    <button className="button danger" disabled={busy} onClick={async () => {
+      setBusy(true);
+      try { await confirm?.run(); onClose(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
+    }}>{confirm?.action}</button>
+  </>}>
+    <p>{confirm?.text}</p>
+  </Dialog>;
 }

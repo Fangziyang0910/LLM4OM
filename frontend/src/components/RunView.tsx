@@ -1,304 +1,148 @@
-import { useEffect, useMemo, useState } from "react";
-import { api } from "../api";
-import { artifactKey, artifactLabel, activeStep, shortMethod, status } from "../ui";
-import { StageHistory } from "./StageHistory";
-import { Clarification, type ClarificationRequest } from "./Clarification";
-import { Decision } from "./Decision";
-import { Records } from "./Records";
-import { RuntimeDetails } from "./RuntimeDetails";
-import { StoryFlow } from "./StoryFlow";
-import { Dialog } from "./Dialog";
-import { Icon } from "./Icon";
-import { RevisionEditor } from "./RevisionEditor";
-import type { ArtifactRef, CodeArtifact, ModelArtifact, Notice, Snapshot, SolveResult } from "../types";
+import { useEffect, useState } from "react";
+import { ArrowRight, Check, Clock, CodeXml, Cpu, Layers, Pencil, RefreshCw, Square, Trash2, TriangleAlert } from "lucide-react";
+import { toast } from "sonner";
+import { STATUS, client, duration, errorText, formatNumber, formatTokens, outcome, tone } from "../api";
+import { phases, working } from "../steps";
+import type { Draft, Options, RunValues, Step } from "../types";
+import { useRun } from "../useRun";
+import { Outputs, type Tab } from "./Outputs";
+import { Timeline } from "./Timeline";
 
-const tabPatterns: Record<string, RegExp | null> = {
-  result: null,
-  formulation: /formulation|model-ir|structured-ir|method\/state_/,
-  code: /code|build|symbol-map|model\.py|factory\.py|native.*\.py/,
-  diagnostics: /diagnostic|execution|budget|report|trace/,
-  data: /public-problem|data-views|dataset-manifest|data-bind/,
-};
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [active]);
+  return now;
+}
 
-const tabHeadings: Record<string, string> = {
-  result: "求解结果",
-  formulation: "数学模型",
-  code: "求解实现",
-  diagnostics: "实际运行记录",
-  data: "问题与数据",
-};
-
-export function RunView({ snapshot, selectedRun, selectRun, refreshRun, notice }: {
-  snapshot: Snapshot; selectedRun: string | null;
-  selectRun: (job: string | null, run?: string | null) => Promise<Snapshot | null>;
-  refreshRun: () => Promise<Snapshot | null>; notice: Notice;
+export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDelete }: {
+  threadId: string; options: Options; onFinished: () => void;
+  onEdit: (draft: Draft) => void; onRerun: (draft: Draft) => Promise<void>; onDelete: () => void;
 }) {
-  const currentJob = snapshot.job.job_id;
-  const [activeTab, setActiveTab] = useState(() => {
-    const tab = new URLSearchParams(location.search).get("tab");
-    return tab && Object.hasOwn(tabPatterns, tab) ? tab : "result";
-  });
-  const [artifactChoice, setArtifactChoice] = useState(new URLSearchParams(location.search).get("artifact") || "");
-  const [artifactSelectedByUser, setArtifactSelectedByUser] = useState(Boolean(artifactChoice));
-  const [editOpen, setEditOpen] = useState(false);
-  const [processPreference, setProcessPreference] = useState<boolean | null>(null);
-  const [editNotice, setEditNotice] = useState({ text: "", error: false });
-  const [apiKey, setApiKey] = useState("");
-  const contents = snapshot.contents || {};
-  const publicValue = (ref: ArtifactRef | null | undefined) => artifactKey(snapshot, ref);
-  const solve = contents[publicValue(snapshot.bundle?.solve_result_ref) || ""] as SolveResult | undefined;
-  const solution = contents[publicValue(solve?.solution_ref) || ""];
-  const model = contents[publicValue(snapshot.bundle?.model_artifact_ref) || ""] as ModelArtifact | undefined;
-  const code = contents[publicValue(model?.code_ref) || ""] as CodeArtifact | undefined;
-  const solvedIR =
-    code?.provenance?.origin === "deterministic_compilation"
-      ? contents[publicValue(code.provenance.source_ir_ref) || ""]
-      : null;
+  const { meta, values, steps, live, run, streaming, error } = useRun(threadId, onFinished);
+  const [chosen, setTab] = useState<Tab | null>(null);  // null follows the run
+  const [picked, setPicked] = useState<Partial<Record<"formulation" | "code", string>>>({});
+  const [view, setView] = useState<"outputs" | "process">("outputs");  // narrow screens show one pane at a time
+  const [stopping, setStopping] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const active = streaming || run?.status === "pending" || run?.status === "running";
+  const now = useNow(active);
 
-  const artifactEntries = useMemo(() => {
-    const entries = Object.entries(snapshot.contents || {}).filter(([key]) =>
-      tabPatterns[activeTab]?.test(key),
-    );
-    if (activeTab === "diagnostics") entries.unshift(["运行事件", snapshot.events || []]);
-    const selectedCheck = snapshot.bundle?.selected_check_id || "001";
-    const score = ([name, value]: [string, unknown]) =>
-      activeTab === "code"
-        ? name === `checks/${selectedCheck}/model.py`
-          ? 2
-          : Number(name.endsWith(".py"))
-        : value && typeof value === "object" && "representation" in value && value.representation
-          ? 100 + Number(name.startsWith(`checks/${selectedCheck}/`))
-          : Number(name.match(/method\/state_(\d+)/)?.[1] || 0);
-    entries.sort((a, b) => score(b) - score(a));
-    return entries;
-  }, [snapshot, activeTab]);
+  if (!meta) return error ? <div className="page-error"><TriangleAlert size={22} /><p>{error}</p></div>
+    : <div className="page-loading"><span className="spinner" />正在读取运行……</div>;
 
-  useEffect(() => {
-    if (!snapshot) return;
-    const previous = artifactChoice;
-    const values = artifactEntries.map(([name]) => name);
-    if (artifactSelectedByUser && values.includes(previous)) setArtifactChoice(previous);
-    else setArtifactChoice(values[0] || "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [artifactEntries, artifactSelectedByUser]);
+  const method = options.methods.find(item => item.id === meta.method);
+  const language = options.languages.find(item => item.id === meta.language);
+  const provider = options.providers.find(item => item.id === meta.provider);
+  const solve = values.solve ?? null;
+  const state = outcome(active, run?.status, values.failure, solve?.status);
+  const finished = !active && run?.status === "success";
+  const hasFormulation = !!values.formulation || steps.some(step => step.formulation);
+  const hasCode = !!values.code || steps.some(step => step.code);
+  const tab: Tab = chosen ?? (active ? (hasCode ? "code" : hasFormulation ? "formulation" : "problem")
+    : solve ? "solution" : hasFormulation ? "formulation" : hasCode ? "code" : "problem");
+  const started = run ? Date.parse(run.created_at) : now;
+  const elapsed = ((active ? now : run ? Date.parse(run.updated_at) : now) - started) / 1000;
+  const usage = values.usage;
+  const calls = usage?.llm_calls ?? steps.filter(step => step.type === "llm").length;
+  const tokens = usage ? usage.input_tokens + usage.output_tokens : null;
 
-  const address = (runId: string | null | undefined) => {
-    const url = new URL("/", location.origin);
-    if (currentJob) {
-      url.searchParams.set("job", currentJob);
-      if (runId) url.searchParams.set("run", runId);
-      if (activeTab !== "result") url.searchParams.set("tab", activeTab);
-      if (artifactSelectedByUser && artifactChoice) url.searchParams.set("artifact", artifactChoice);
-    }
-    return url;
+  const draft = (): Draft => ({ description: values.description ?? "", data: values.data ?? {}, method: meta.method,
+    language: meta.language, provider: meta.provider, model: meta.model ?? "" });
+  const stop = async () => {
+    if (!run) return;
+    setStopping(true);
+    await client.runs.cancel(threadId, run.run_id).catch(reason => { toast.error(errorText(reason)); setStopping(false); });
   };
-  const runLinkAddress = address(snapshot?.job?.run_id);
-  const runLink = {
-    hidden: !currentJob || !snapshot?.job?.run_id,
-    href: runLinkAddress.href,
+  const rerun = async () => {
+    setBusy(true);
+    try { await onRerun(draft()); } catch (reason) { toast.error(errorText(reason)); setBusy(false); }
   };
-  useEffect(() => {
-    const current = address(selectedRun);
-    history.replaceState(null, "", current.pathname + current.search);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentJob, selectedRun, activeTab, artifactSelectedByUser, artifactChoice, snapshot?.job?.run_id]);
-
-  const selectedArtifact = artifactEntries.find(([name]) => name === artifactChoice)?.[1];
-  const selectedName = artifactChoice;
-  const checkPrefix = selectedName.startsWith("checks/")
-    ? selectedName.split("/")[1]
-    : null;
-  const isolatedContents = checkPrefix
-    ? Object.fromEntries(
-      Object.entries(contents).filter(
-        ([key]) => !key.startsWith("checks/") || key.startsWith(`checks/${checkPrefix}/`),
-      ),
-    )
-    : contents;
-  const recordView =
-    activeTab === "formulation" && selectedName.startsWith("method/state_")
-      ? { representation: { state: selectedArtifact } }
-      : selectedArtifact;
-
-  const clarificationRequest = contents[publicValue(snapshot.bundle?.clarification_request_ref) || ""] as ClarificationRequest | undefined;
-
-  const openArtifact = (tab: string, key?: string) => {
-    setActiveTab(tab);
-    setProcessPreference(false);
-    if (key) {
-      setArtifactChoice(key);
-      setArtifactSelectedByUser(true);
-    }
+  const show = (key: "formulation" | "code", id: string) => {
+    setPicked(current => ({ ...current, [key]: id }));
+    setTab(key);
+    setView("outputs");
   };
 
-  const finished = ["completed", "artifact_ready"].includes(snapshot.job.status);
-  const processOpen = processPreference ?? !finished;
-  useEffect(() => { setProcessPreference(null); }, [snapshot.job.run_id]);
-  useEffect(() => {
-    if (snapshot.job.status === "needs_input") setProcessPreference(null);
-  }, [snapshot.job.status]);
-  const runBusy = ["running", "queued"].includes(snapshot.job.status);
-  const runningStep = runBusy ? activeStep(snapshot) : null;
-  const method = shortMethod(contents["public-config.json"]?.method?.plugin_id || snapshot.job.method);
-  const title = snapshot.job.description.split(/[。\n]/)[0];
-  const stageState = (tab: string) => {
-    const stage = tab === "result" ? "solve" : tab;
-    if (!["formulation", "code", "solve"].includes(stage)) return null;
-    if (runningStep?.phase === stage) return "running";
-    const saved = snapshot.bundle?.stages?.[stage]?.status;
-    return runBusy && (!saved || saved === "not_available") ? "pending" : saved || "pending";
-  };
-  return (
-    <section id="result">
-      <header className="run-heading">
-        <div className="run-intro">
-          <div className="run-meta" id="run-meta"><span className={"run-status " + snapshot.job.status}>{status(snapshot.job.status)}</span>
-            <span>{method}</span>{snapshot.historical ? <span>历史版本</span> : null}</div>
-          <h1 id="run-title">{title.length > 64 ? title.slice(0, 64) + "…" : title}</h1>
-          <details className="problem-brief"><summary>查看问题</summary>
-            <p className="problem-text">{contents["public-problem.json"]?.description || snapshot.job.description}</p>
-          </details>
+  return <section className={`run view-${view}`}>
+    <header className="run-header">
+      <div className="run-heading">
+        <h1 title={values.description}>{meta.title}</h1>
+        <div className="facts">
+          <span className="fact"><Layers size={14} />{method?.name ?? meta.method}</span>
+          <span className="fact"><CodeXml size={14} />{language ? <>{language.name}<span className="muted"> → {language.solver}</span></> : meta.language}</span>
+          <span className="fact" title={provider?.label}><Cpu size={14} />{meta.model ?? provider?.label ?? "默认模型"}</span>
+          <span className="fact"><Clock size={14} />{duration(Math.max(0, elapsed))}</span>
+          {calls ? <span className="fact">{calls} 次 LLM 调用{tokens ? ` · ${formatTokens(tokens)} token` : ""}</span> : null}
         </div>
-        <div className="run-actions">
-          <label className="version-selector" hidden={(snapshot.versions || []).length < 2}>
-            运行版本
-            <select id="run-version" aria-label="选择运行版本" value={selectedRun || ""}
-              onChange={async event => {
-                setEditOpen(false); setArtifactChoice(""); setArtifactSelectedByUser(false);
-                try { await selectRun(currentJob, event.target.value || null); }
-                catch (error) { notice((error as Error).message, true); }
-              }}>
-              <option value="">最新版本</option>
-              {(snapshot.versions || []).map((version) => <option key={version.run_id} value={version.run_id}>
-                {`${version.assisted ? "人工修订" : "运行"} · ${status(version.status)} · ${version.run_id.slice(0, 8)}`}
-              </option>)}
-            </select>
-          </label>
-          <button id="cancel" className="secondary" hidden={snapshot.historical || !runBusy}
-            onClick={async () => {
-              try { await api(`/api/jobs/${currentJob}/cancel`, {}); notice("操作已提交。"); await refreshRun(); }
-              catch (error) { notice((error as Error).message, true); }
-            }}>停止运行</button>
-          <button id="resume" className="primary" hidden={snapshot.historical || !["failed", "cancelled"].includes(snapshot.job.status)}
-            onClick={async () => {
-              try { await api(`/api/jobs/${currentJob}/resume`, {}, apiKey || undefined); notice("操作已提交。"); await refreshRun(); }
-              catch (error) { notice((error as Error).message, true); }
-            }}>继续恢复</button>
-          <a id="export" className="secondary" href={`/api/jobs/${currentJob}/export${selectedRun ? "?run_id=" + selectedRun : ""}`}
-            hidden={!snapshot.bundle}><Icon name="download" size={16} />导出产物</a>
-          <details className="run-tools"><summary className="secondary" aria-label="更多运行操作"><Icon name="more" /></summary>
-            <div className="run-tools-menu" onClick={event => {
-              const menu = event.currentTarget.closest("details")!;
-              menu.open = false;
-              menu.querySelector("summary")?.focus();
-            }}>
-              <button id="edit-run" disabled={runBusy} onClick={() => { setEditNotice({ text: "", error: false }); setEditOpen(true); }}>编辑新版本</button>
-              {["data", "diagnostics"].map(tab => <button key={tab} id={`tab-${tab}`} data-tab={tab}
-                className={"tab auxiliary-tab" + (activeTab === tab ? " active" : "")}
-                onClick={() => {
-                  setActiveTab(tab); setArtifactSelectedByUser(false); setProcessPreference(false);
-                }}>
-                {tab === "data" ? "问题数据" : "运行详情"}</button>)}
-              <a id="run-link" href={runLink.href} hidden={runLink.hidden}>此版本链接 <Icon name="external" size={14} /></a>
-              <button id="rerun" hidden={Boolean(snapshot.historical)} disabled={runBusy}
-                onClick={async () => {
-                  try {
-                    if (!confirm("创建派生运行并继承预算记录。真实 LLM 可能产生新的请求费用，是否继续？")) return;
-                    await api(`/api/jobs/${currentJob}/resume`, { strategy: "rerun" }, apiKey || undefined);
-                    notice("操作已提交。"); await refreshRun();
-                  } catch (error) { notice((error as Error).message, true); }
-                }}>派生重跑</button>
-            </div>
-          </details>
-        </div>
-      </header>
-      <div className="workspace-toolbar">
-        <div className="tabs" role="tablist" aria-label="建模产物">
-          {[["result", "求解结果"], ["formulation", "数学模型"], ["code", "求解代码"]].map(([tab, label], index) => {
-            const state = stageState(tab);
-            return <button key={tab} id={`tab-${tab}`} role="tab" aria-selected={activeTab === tab}
-              aria-controls="artifact-reader" tabIndex={activeTab === tab || !["result", "formulation", "code"].includes(activeTab) && index === 0 ? 0 : -1}
-              className={"tab" + (activeTab === tab ? " active" : "")} data-tab={tab}
-              onClick={() => { setActiveTab(tab); setArtifactSelectedByUser(false); setProcessPreference(false); }}
-              onKeyDown={event => {
-                const tabs = Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-                const target = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft"
-                  ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
-                if (target !== null) { event.preventDefault(); tabs[target].focus(); tabs[target].click(); }
-              }}>
-              <Icon name={tab === "result" ? "chart" : tab === "code" ? "code" : "model"} size={17} />{label}
-              <span className={"stage-dot " + state} title={status(state || "pending")} aria-hidden="true" />
-            </button>;
-          })}
-        </div>
-        <button id="toggle-process" className={"process-toggle" + (processOpen ? " active" : "")} aria-expanded={processOpen}
-          aria-controls="process-panel" onClick={() => setProcessPreference(!processOpen)}>
-          <span className={"stage-dot " + (runBusy ? "running" : finished ? "available" : "pending")} aria-hidden="true" />
-          {runBusy ? "正在建模" : "建模过程"}<Icon name={processOpen ? "close" : "history"} size={16} />
-        </button>
       </div>
-      <div className="run-workspace" data-process-open={processOpen}>
-        <section className="artifact-panel" aria-label="建模产物">
-          <div id="artifact-reader" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
-            <div className="artifact-toolbar">
-              <h2 id="output-heading">{tabHeadings[activeTab]}</h2>
-              <select id="artifact-choice" aria-label="选择阶段记录" hidden={artifactEntries.length < 2} value={artifactChoice}
-                onChange={event => { setArtifactChoice(event.target.value); setArtifactSelectedByUser(true); }}>
-                {artifactEntries.map(([name]) => <option key={name} value={name}>
-                  {(name.startsWith("checks/") ? "检查 " + name.split("/")[1] + " · " : "") +
-                    (name === "运行事件" ? "运行事件" : artifactLabel(name))}
-                </option>)}
-              </select>
-
-            </div>
-            <div id="model-view" className="model-grid">
-              {activeTab === "formulation" || activeTab === "code" ? <StageHistory snapshot={snapshot} stage={activeTab}
-                current={artifactChoice} onOpen={key => openArtifact(activeTab, key)} /> : null}
-              {activeTab === "diagnostics" ? <RuntimeDetails snapshot={snapshot} /> : activeTab === "result" ? (
-                <div id="decision"><Decision solve={solve} solution={solution} snapshot={snapshot}
-                  solvedIR={solvedIR} onOpenDiagnostics={() => { setActiveTab("diagnostics"); setProcessPreference(false); }} /></div>
-              ) : selectedArtifact === undefined && ["running", "queued", "needs_input"].includes(snapshot.job.status) ? (
-                <div className="empty-view"><div className="empty-icon"><Icon name={activeTab === "code" ? "code" : "model"} size={27} /></div>
-                  <h3>{snapshot.job.status === "needs_input" ? "补充信息后继续建模" : activeTab === "code" ? "正在生成求解代码" : "正在构建数学模型"}</h3>
-                  <p className="hint">生成的产物会自动显示在这里。</p>
-                </div>
-              ) : <Records value={recordView} tab={activeTab} contents={isolatedContents} dataPreviews={snapshot.data_previews} />}
-            </div>
-          </div>
-        </section>
-        <aside id="process-panel" className="process-panel" aria-label="建模过程" hidden={!processOpen}>
-          <div className="process-heading"><h2><Icon name="history" />建模过程</h2><button className="icon-button" aria-label="收起建模过程"
-            onClick={() => setProcessPreference(false)}><Icon name="close" size={17} /></button></div>
-          {snapshot.job.status === "needs_input" && clarificationRequest ? (
-            <Clarification key={clarificationRequest.request_id} request={clarificationRequest}
-              problem={contents["public-problem.json"]}
-              onSubmit={async payload => {
-                await api(`/api/jobs/${currentJob}/resume`, payload, apiKey || undefined);
-                notice("回答已提交，正在恢复。"); await refreshRun();
-              }} onError={message => notice(message, true)} />
-          ) : <div id="clarification" hidden />}
-
-          <StoryFlow snapshot={snapshot}
-            finalObjective={solve ? { value: solve.objective_value ?? null, termination: solve.termination } : null}
-            onOpenArtifact={openArtifact} onOpenResult={() => { setActiveTab(solve ? "result" : "diagnostics"); setProcessPreference(false); }} />
-          {contents['requested-config.json']?.llm?.config?.credential_env === 'LLM4OM_WEB_API_KEY' ? (
-            <details className="run-key-settings">
-              <summary>运行密钥</summary>
-              <label>API Key<input id="run-api-key" type="password" autoComplete="off" spellCheck={false} maxLength={4096}
-                value={apiKey} onChange={event => setApiKey(event.target.value.trim())} /></label>
-              <p className="hint">默认使用已保存的密钥。这里填写的密钥只用于本次恢复或修订。</p>
-            </details>
-          ) : null}
-
-        </aside>
+      <div className="run-actions">
+        {active ? <button className="button" disabled={stopping} onClick={() => void stop()}>
+          {stopping ? <span className="spinner" /> : <Square size={14} />}{stopping ? "正在停止" : "停止"}</button> : <>
+          <button className="button" disabled={busy || !values.description} onClick={() => void rerun()} title="用同样的问题和设置再运行一次">
+            <RefreshCw size={15} />再运行一次</button>
+          <button className="button" disabled={!values.description} onClick={() => onEdit(draft())} title="把问题和设置带回编辑页">
+            <Pencil size={15} />修改后运行</button>
+        </>}
+        <button className="icon-button" aria-label="删除这次运行" title="删除" onClick={onDelete}><Trash2 size={16} /></button>
       </div>
-      <Dialog open={editOpen} title="编辑新版本" onClose={() => setEditOpen(false)} wide>
-        {editNotice.text ? <p className={"dialog-notice" + (editNotice.error ? " error" : "")}
-          role={editNotice.error ? "alert" : "status"}>{editNotice.text}</p> : null}
-        {editOpen ? <RevisionEditor key={snapshot.job.run_id} snapshot={snapshot}
-          notice={(message, error = false) => { setEditNotice({ text: message, error }); notice(message, error); }} apiKey={apiKey}
-          onClose={() => setEditOpen(false)} onSubmitted={async () => { await selectRun(currentJob, null); setEditOpen(false); }} /> : null}
-      </Dialog>
-    </section>
-  );
+    </header>
+
+    <Verdict state={state} values={values} steps={steps} error={error} active={active} onSolution={() => { setTab("solution"); setView("outputs"); }} />
+
+    <div className="segmented" role="tablist" aria-label="视图">
+      <button role="tab" aria-selected={view === "outputs"} className={view === "outputs" ? "active" : ""} onClick={() => setView("outputs")}>结果</button>
+      <button role="tab" aria-selected={view === "process"} className={view === "process" ? "active" : ""} onClick={() => setView("process")}>
+        过程{active ? <span className="live-dot" /> : null}</button>
+    </div>
+
+    <div className="run-panes">
+      <section className="pane process-pane pane-scroll" aria-label="建模过程">
+        <Timeline steps={steps} live={live} active={active} onShow={show} />
+      </section>
+      <section className="pane outputs-pane" aria-label="运行产物">
+        <Outputs values={values} steps={steps} active={active} tab={tab} setTab={setTab} picked={picked} language={language}
+          finished={finished} setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))} />
+      </section>
+    </div>
+  </section>;
+}
+
+/** The answer to "what came of this run?", in one line, with the next thing to look at. */
+function Verdict({ state, values, steps, error, active, onSolution }: {
+  state: string; values: RunValues; steps: Step[]; error: string | null; active: boolean; onSolution: () => void;
+}) {
+  if (error) return <div className="verdict bad"><TriangleAlert size={20} /><div><strong>无法读取运行</strong><p>{error}</p>
+    <button className="button" onClick={() => location.reload()}>重新连接</button></div></div>;
+  if (active) {
+    const current = phases(steps).at(-1);
+    const calls = current ? working(current.calls) : null;
+    const doing = calls ? `LLM 正在处理：${calls}`
+      : current?.step?.running ? "正在沙箱中求解代码" : current?.step ? `刚完成：${current.step.title}` : "正在准备";
+    return <div className="verdict live"><span className="spinner large" /><div><strong>正在建模</strong><p>{doing}</p></div></div>;
+  }
+  const solve = values.solve;
+  if (state === "interrupted") return <div className="verdict warn"><Square size={20} /><div><strong>运行已停止</strong>
+    <p>{steps.length ? "停止前的过程仍可查看。停止的运行不保存结果；服务器重启后，这些过程也不再保留。" : "停止前的过程没有保存。"}</p></div></div>;
+  if (state === "failed") return <div className="verdict bad"><TriangleAlert size={20} /><div><strong>没有得到可求解的代码</strong>
+    <p>{values.failure}</p></div></div>;
+  if (!solve) return <div className={`verdict ${tone(state)}`}><TriangleAlert size={20} /><div><strong>{STATUS[state] ?? state}</strong>
+    <p>运行没有正常结束。</p></div></div>;
+  if (solve.error) return <div className="verdict bad"><TriangleAlert size={20} /><div><strong>代码执行出错</strong>
+    <p>{solve.error.trim().split("\n").pop()}</p></div><button className="link" onClick={onSolution}>查看详情</button></div>;
+  const good = tone(solve.status) === "good";
+  return <div className={`verdict ${tone(solve.status)}`}>
+    {good ? <Check size={20} /> : <TriangleAlert size={20} />}
+    <div>
+      <strong>{solve.objective != null ? <>目标值 <span className="number">{formatNumber(solve.objective)}</span></> : STATUS[solve.status] ?? solve.status}</strong>
+      <p>{good ? `${solve.status === "optimal" ? "最优解" : STATUS[solve.status]} · ${Object.values(solve.variables).filter(value => value !== 0).length} 个非零变量`
+        : solve.status === "infeasible" ? "求解器判定模型不可行：约束之间互相矛盾。请检查数学模型的约束与数据。"
+        : solve.status === "unbounded" ? "求解器判定模型无界：目标可以无限改进，通常是缺少约束。"
+        : STATUS[solve.status] ?? solve.status}</p>
+    </div>
+    <button className="link" onClick={onSolution}>查看解<ArrowRight size={14} /></button>
+  </div>;
 }
