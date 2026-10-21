@@ -1,6 +1,6 @@
 # CoE 固定源码观察
 
-本文描述 [Chain-of-Experts 固定提交 afb89bf](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43)。当前平台使用独立提示和可配置模型工厂，差异见[方法说明](../development/methods.md)。
+本文描述 [Chain-of-Experts 固定提交 afb89bf](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43)。当前平台使用独立提示和可配置模型工厂，差异见[方法说明](../methods.md)。
 
 ## 路由与协作
 
@@ -36,6 +36,6 @@ conductor 接收问题、专家描述、已参与/剩余角色和次数，不接
 
 ## 来源与许可
 
-考察的固定树未提供可确认的顶层许可；相关依赖许可不能授予上游代码或提示的复制权。平台采用算法层面的独立实现和独立提示，没有复制上游实现。
+考察的固定树未提供可确认的顶层许可；相关依赖许可不能授予上游代码或提示的复制权。平台的 CoE 移植现在逐字使用上游提示，只用于研究复现；对外分发前需取得作者许可（见 [NOTICE](../../NOTICE)）。
 
 固定提交晚于论文实验，源码观察不能直接归为论文实验条件。代码入口、提示来源、公开输入和实际运行配置分别记录。

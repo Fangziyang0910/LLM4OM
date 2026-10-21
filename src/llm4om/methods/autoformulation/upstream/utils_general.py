@@ -119,7 +119,7 @@ def separate_constraint_from_for(input_string):
 
 def extract_loop_variables(loop_string):
     # Remove any content after an "if" statement (for filtering conditions)
-    loop_string = loop_string.split(' if ')[0]    
+    loop_string = loop_string.split(' if ')[0]
     # Find all variables that appear right after the 'for' keyword and before 'in'
     variables = re.findall(r'for\s+([a-zA-Z_]\w*)|for\s+\((.*?)\)\s+in', loop_string)
     # Extract the first group of results from tuples in the findall result

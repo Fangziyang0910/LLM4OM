@@ -259,7 +259,7 @@ def check_equivalence_smt(system1, system2, variables):
 
     eq_flag = True
     s = Solver()
-    
+
     s.push()
     # check that solution to both equations in system 1 is not a solution to either equation in system 2
     s.add(And(*[eq for eq in system1]))

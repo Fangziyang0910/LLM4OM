@@ -2,7 +2,7 @@
 
 探索领域前读根目录 [GLOSSARY](../../GLOSSARY.md)。设计涉及既有取舍时，再读 [ADR 索引](../adr/README.md)中的相关决定。
 
-本仓库采用 single-context：一个根目录 GLOSSARY 和一组 `docs/adr/`。术语在 GLOSSARY 维护，接口字段在[契约](../plugin-contracts.md)维护。
+本仓库采用 single-context：一个根目录 GLOSSARY 和一组 `docs/adr/`。术语在 GLOSSARY 维护，模块与接口在[架构](../architecture.md)维护。
 
 确定领域词后，按 domain-modeling 写一至两句定义，必要时标明混用词。配置、实现步骤和待办归入对应文档。
 

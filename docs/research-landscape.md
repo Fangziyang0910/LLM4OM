@@ -1,6 +1,6 @@
 # 自动优化建模研究综述与平台设计依据
 
-资料基于 2026-10-08 的代表性调研。本文面向 LLM4OM 的需求与设计，依据一手论文、作者仓库和选择性源码考察。完整书目、链接和阅读范围见 [参考资料库](references/README.md)，来源范围见[资料核验说明](references/search-log.md)。平台接入与验证单独见[方法说明](development/methods.md)和[支持验证](development/validation.md)。
+资料基于 2026-10-08 的代表性调研。本文面向 LLM4OM 的需求与设计，依据一手论文、作者仓库和选择性源码考察。完整书目、链接和阅读范围见 [参考资料库](references/README.md)，来源范围见[资料核验说明](references/search-log.md)。平台接入与适配差异单独见[建模方法](methods.md)。
 
 ## 1. 调研结论与项目目标
 

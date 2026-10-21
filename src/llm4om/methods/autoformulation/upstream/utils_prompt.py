@@ -98,10 +98,10 @@ def is_inequality_ge_zero(expression_str):
     - expression >= 0
     - 0 <= expression
     Accounts for spaces within operators and different zero representations.
-    
+
     Parameters:
         expression_str (str): The inequality expression as a string.
-        
+
     Returns:
         bool: True if the inequality is expression >= 0 or 0 <= expression, else False.
     """
