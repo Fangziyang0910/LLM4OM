@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/Fangziyang0910/LLM4OM/actions/workflows/checks.yml"><img src="https://github.com/Fangziyang0910/LLM4OM/actions/workflows/checks.yml/badge.svg" alt="Checks"></a>
-  <img src="https://img.shields.io/badge/version-0.41.0-4f39f6" alt="版本 0.41.0">
+  <img src="https://img.shields.io/badge/version-0.41.1-4f39f6" alt="版本 0.41.1">
   <img src="https://img.shields.io/badge/python-3.11%E2%80%933.13-3776ab?logo=python&logoColor=white" alt="Python 3.11–3.13">
   <img src="https://img.shields.io/badge/LangGraph-server-1c3c3c?logo=langchain&logoColor=white" alt="LangGraph">
   <img src="https://img.shields.io/badge/deploy-Docker%20Compose-2496ed?logo=docker&logoColor=white" alt="Docker Compose">
@@ -148,16 +148,10 @@ print(state["failure"] or state["solve"]["objective"])
 
 ## 架构
 
-```mermaid
-flowchart LR
-  U["浏览器<br/>React 工作台"] -- "运行 · 实时流 · 历史" --> S["LangGraph 服务器<br/>+ /api 路由"]
-  CLI["命令行 / Python"] --> G
-  S --> G["平台图<br/>prepare → model → solve"]
-  G --> M["建模方法<br/>（10 张 LangGraph 图）"]
-  M -- "llm(role)" --> L["LangChain 聊天模型<br/>预设模型"]
-  M -- "solve(code)" --> X["沙箱容器<br/>build_model → 求解器"]
-  G -- "最终代码" --> X
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-zh-dark.svg">
+  <img src="docs/assets/architecture-zh-light.svg" alt="LLM4OM 架构：浏览器和命令行经 LangGraph 服务器进入平台图，方法调用 LLM 预设，代码在沙箱容器中求解" width="100%">
+</picture>
 
 平台本身很薄。LLM 调用交给 LangChain，图编排、运行、流式推送和历史交给 LangGraph 服务器（内存运行时，无需许可证）。平台只提供代码契约、求解沙箱、步骤记录和工作台。详见[架构](docs/architecture.md)。
 
@@ -186,7 +180,7 @@ flowchart LR
   author  = {Fang, Ziyang},
   title   = {{LLM4OM}: A Platform for Automated Optimization Modeling with Large Language Models},
   year    = {2026},
-  version = {0.41.0},
+  version = {0.41.1},
   url     = {https://github.com/Fangziyang0910/LLM4OM}
 }
 ```

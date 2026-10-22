@@ -2,7 +2,7 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。1.0 之前，次版本号变化可能包含不兼容的改动。
 
-## [未发布]
+## [0.41.1] - 2026-10-22
 
 ### 修复
 
@@ -12,6 +12,8 @@
 
 - 新的 README（中英文）、[使用指南](docs/user-guide.md)、[部署指南](docs/deployment.md)、开发指南、演示动图和截图。
 - 增加 CHANGELOG、SECURITY 和 CITATION.cff。
+- 架构图改为静态 SVG：GitHub 的 Mermaid 渲染在部分网络下无法加载。
+- 修正架构和方法文档中过时的写法数量。
 
 ## [0.41.0] - 2026-10-22
 
@@ -59,7 +61,7 @@
 - 工作台用 Tailwind v4 和 shadcn/ui 重新设计：结论卡片、建模过程、解的矩阵视图、版本对比。
 - 全部方法参数集中在 `methods/presets.py`。
 
-[未发布]: https://github.com/Fangziyang0910/LLM4OM/compare/5795d5d...HEAD
-[0.41.0]: https://github.com/Fangziyang0910/LLM4OM/compare/bd07e9c...5795d5d
-[0.40.0]: https://github.com/Fangziyang0910/LLM4OM/compare/272405d...bd07e9c
+[0.41.1]: https://github.com/Fangziyang0910/LLM4OM/compare/v0.41.0...v0.41.1
+[0.41.0]: https://github.com/Fangziyang0910/LLM4OM/compare/v0.40.0...v0.41.0
+[0.40.0]: https://github.com/Fangziyang0910/LLM4OM/compare/272405d...v0.40.0
 [0.38.0]: https://github.com/Fangziyang0910/LLM4OM/commit/dc25f67

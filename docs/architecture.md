@@ -49,7 +49,7 @@ src/llm4om/
 languages · llm · sandbox  →  runtime  →  methods  →  graph  →  server · cli
 ```
 
-`languages`、`llm`、`sandbox` 互不依赖。方法只依赖 `runtime`、`languages`、`sandbox` 和 `methods` 本身，不依赖平台图或服务器。`sandbox/worker.py` 在沙箱中独立运行，因此不导入任何平台模块；它与 `languages.py` 各自列出四种写法，是隔离的代价。
+`languages`、`llm`、`sandbox` 互不依赖。方法只依赖 `runtime`、`languages`、`sandbox` 和 `methods` 本身，不依赖平台图或服务器。`sandbox/worker.py` 在沙箱中独立运行，因此不导入任何平台模块；它与 `languages.py` 各自列出六种写法，是隔离的代价。
 
 ## 平台图
 

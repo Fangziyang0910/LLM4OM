@@ -169,7 +169,7 @@ LLMOPT 的主要贡献是微调模型（多指令 SFT 加 KTO 对齐），发布
 
 异常路径回归分布在对应模块的测试中（`tests/test_graph.py`、`test_llm.py`、`test_cli.py`、`test_methods.py`，前端 `src/useRun.test.ts`）：JSON 中的 URL、转义和嵌套结构；TriVAL 超时与多工具顺序编辑；AutoFormulation 并发取消；建模与最终求解共享截止时间；求解超限记录；Anthropic 额外参数；OpenRouter 流式工具对话保留推理字段；断线后重新读取运行状态；节点产物步骤先于下一节点的调用记录。沙箱测试另检查环境变量隔离和取消后的子进程回收。这些测试使用脚本模型或本地假 HTTP 响应。
 
-确定性测试（`tests/test_methods.py`、`tests/test_sandbox.py`、`tests/test_server.py`）用脚本化的聊天模型跑通全部 10 张图，覆盖：四种代码写法各自由对应求解器求到最优；CPMpy 可满足性问题；代码与写法不符时的报错；MILP 方法拒绝 CPMpy；Direct 生成 CPMpy 代码；OR-LLM-Agent 的修复与不可行复查；OptiMUS 在三种写法方言下的组装、调试、长分隔符与多代码块解析；CoE 的反向反思；OptiTree 沿类型树匹配并检查失败代码；AutoFormulation 的参数众数、变量分组、SymPy 等价剪枝、排名、双向比较和两模型排名；TriVAL 回溯到数学模型的路径；ORThought 的错误调试；LLMOPT 按自我校正结果回到五要素或代码步骤，以及 12 次重解上限；LLM 调用上限。
+确定性测试（`tests/test_methods.py`、`tests/test_sandbox.py`、`tests/test_server.py`）用脚本化的聊天模型跑通全部 10 张图，覆盖：Pyomo、gurobipy、`pywraplp`、PuLP 和 CPMpy 各自由对应求解器求到最优，CVXPY 由 Clarabel 求解凸二次规划；不可行模型的冲突约束（Gurobi IIS、CPMpy MUS）；CPMpy 可满足性问题；代码与写法不符时的报错；MILP 方法拒绝 CPMpy；Direct 生成 CPMpy 代码；OR-LLM-Agent 的修复与不可行复查；OptiMUS 在四种写法方言下的组装、调试、长分隔符与多代码块解析；CoE 的反向反思；OptiTree 沿类型树匹配并检查失败代码；AutoFormulation 的参数众数、变量分组、SymPy 等价剪枝、排名、双向比较和两模型排名；TriVAL 回溯到数学模型的路径；ORThought 的错误调试；LLMOPT 按自我校正结果回到五要素或代码步骤，以及 12 次重解上限；LLM 调用上限。
 
 2026-10-21 用 DeepSeek（关闭思考模式）在 Docker 沙箱中做了真实运行：
 

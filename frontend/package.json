@@ -1,7 +1,7 @@
 {
   "name": "llm4om-workbench",
   "private": true,
-  "version": "0.41.0",
+  "version": "0.41.1",
   "type": "module",
   "scripts": {
     "test": "vitest run",

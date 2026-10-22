@@ -163,6 +163,7 @@ MY_METHOD = Method("my_method", "我的方法", "一句话说明。", my_graph, 
 - 每个版本在 [CHANGELOG](CHANGELOG.md) 中记录。
 - 架构取舍写成 ADR（[索引](docs/adr/README.md)），术语写入 [GLOSSARY](GLOSSARY.md)。
 - 修改 `docs/references/catalog.json` 后，运行 `python3 scripts/render_references.py`。
+- 横幅和架构图由 `python3 scripts/render_assets.py` 生成，修改文字或配色时改这个脚本，不要直接改 SVG。
 - 界面有明显变化时，更新 `docs/assets/` 中的截图和 `demo.gif`。截图使用 1440×900 视口、2 倍像素密度；`demo.gif` 是一次真实运行的录屏，宽 960 像素。
 
 ## 发布

@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/Fangziyang0910/LLM4OM/actions/workflows/checks.yml"><img src="https://github.com/Fangziyang0910/LLM4OM/actions/workflows/checks.yml/badge.svg" alt="Checks"></a>
-  <img src="https://img.shields.io/badge/version-0.41.0-4f39f6" alt="Version 0.41.0">
+  <img src="https://img.shields.io/badge/version-0.41.1-4f39f6" alt="Version 0.41.1">
   <img src="https://img.shields.io/badge/python-3.11%E2%80%933.13-3776ab?logo=python&logoColor=white" alt="Python 3.11–3.13">
   <img src="https://img.shields.io/badge/LangGraph-server-1c3c3c?logo=langchain&logoColor=white" alt="LangGraph">
   <img src="https://img.shields.io/badge/deploy-Docker%20Compose-2496ed?logo=docker&logoColor=white" alt="Docker Compose">
@@ -146,16 +146,10 @@ You choose the code language; the language decides the solver. Generated code de
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  U["Browser<br/>React workbench"] -- "runs · live stream · history" --> S["LangGraph server<br/>+ /api routes"]
-  CLI["CLI / Python"] --> G
-  S --> G["Platform graph<br/>prepare → model → solve"]
-  G --> M["Modeling methods<br/>(10 LangGraph graphs)"]
-  M -- "llm(role)" --> L["LangChain chat model<br/>LLM preset"]
-  M -- "solve(code)" --> X["Sandbox container<br/>build_model → solver"]
-  G -- "final code" --> X
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-en-dark.svg">
+  <img src="docs/assets/architecture-en-light.svg" alt="LLM4OM architecture: the browser and the CLI reach the platform graph through the LangGraph server; methods call LLM presets; code is solved in a sandbox container" width="100%">
+</picture>
 
 The platform is thin. LangChain makes the LLM calls. The LangGraph server (in-memory runtime, no license needed) runs, streams and stores the runs. The platform adds only the code contract, the solver sandbox, step records and the workbench. See [architecture](docs/architecture.md) (in Chinese).
 
@@ -184,7 +178,7 @@ If you use LLM4OM in research, please cite this repository (see [CITATION.cff](C
   author  = {Fang, Ziyang},
   title   = {{LLM4OM}: A Platform for Automated Optimization Modeling with Large Language Models},
   year    = {2026},
-  version = {0.41.0},
+  version = {0.41.1},
   url     = {https://github.com/Fangziyang0910/LLM4OM}
 }
 ```
