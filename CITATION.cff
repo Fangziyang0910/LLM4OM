@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use LLM4OM in your research, please cite it as below."
+title: "LLM4OM: A Platform for Automated Optimization Modeling with Large Language Models"
+type: software
+authors:
+  - family-names: Fang
+    given-names: Ziyang
+version: 0.41.0
+date-released: 2026-10-22
+license: Apache-2.0
+repository-code: "https://github.com/Fangziyang0910/LLM4OM"
+keywords:
+  - optimization modeling
+  - large language models
+  - operations research
+  - mixed-integer programming
+  - LangGraph

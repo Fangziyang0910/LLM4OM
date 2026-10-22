@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="372" viewBox="0 0 1280 372" role="img" aria-label="LLM4OM: natural-language problem to formulation, code and solution">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f1efff"/></linearGradient>
+  <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4f39f6"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+  <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.2" fill="#d9d5fb"/></pattern>
+  <radialGradient id="glow" cx="0.78" cy="0.5" r="0.5"><stop offset="0" stop-color="#4f39f6" stop-opacity="0.16"/><stop offset="1" stop-color="#4f39f6" stop-opacity="0"/></radialGradient>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#4f39f6" flood-opacity="0.12"/></filter>
+  <marker id="head" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1l7 4-7 4" fill="none" stroke="#a5a0d8" stroke-width="1.6" stroke-linecap="round"/></marker>
+</defs>
+<rect width="1280" height="372" rx="24" fill="url(#bg)"/>
+<rect width="1280" height="372" rx="24" fill="url(#dots)" opacity="0.7"/>
+<rect width="1280" height="372" rx="24" fill="url(#glow)"/>
+<g transform="translate(64,92)">
+  <rect width="76" height="76" rx="20" fill="url(#brand)"/>
+  <g transform="translate(14,14) scale(2)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16c.5-2 1.5-7 4-7 2 0 2 3 4 3 2.5 0 4.5-5 5-7"/>
+  </g>
+  <text x="100" y="58" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="64" font-weight="800" fill="#14112b" letter-spacing="-1.5">LLM4OM</text>
+</g>
+<text x="64" y="218" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="20" font-weight="500" fill="#5b5876">Large Language Models for Optimization Modeling</text>
+<text x="64" y="262" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="24" font-weight="600" fill="#14112b">用自然语言描述优化问题，</text>
+<text x="64" y="296" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="24" font-weight="600" fill="url(#brand)">得到可核对的数学模型、代码与最优解。</text>
+<path d="M950 102 H982" stroke="#a5a0d8" stroke-width="2" fill="none" stroke-linecap="round" marker-end="url(#head)"/>
+<path d="M1115 158 C1115 186 825 186 825 206" stroke="#a5a0d8" stroke-width="2" fill="none" stroke-linecap="round" marker-end="url(#head)"/>
+<path d="M950 270 H982" stroke="#a5a0d8" stroke-width="2" fill="none" stroke-linecap="round" marker-end="url(#head)"/>
+<g transform="translate(700,46)">
+  <rect width="250" height="112" rx="14" fill="#ffffff" stroke="#e3e0f5" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="18" y="28" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="13" font-weight="600" fill="#4f39f6" letter-spacing="1">问题 PROBLEM</text>
+  <text x="18" y="58" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="14" fill="#14112b">工厂生产 A、B 两种产品，</text><text x="18" y="80" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="14" fill="#14112b">两种资源各有 8 单位……</text><text x="18" y="100" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#5b5876">+ data.csv</text>
+</g>
+<g transform="translate(990,46)">
+  <rect width="250" height="112" rx="14" fill="#ffffff" stroke="#e3e0f5" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="18" y="28" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="13" font-weight="600" fill="#4f39f6" letter-spacing="1">数学模型 FORMULATION</text>
+  <text x="18" y="60" xml:space="preserve" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace" font-size="14" fill="#312e81">max  3x_A + 2x_B</text><text x="18" y="82" xml:space="preserve" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace" font-size="14" fill="#312e81">s.t. 2x_A +  x_B ≤ 8</text><text x="18" y="102" xml:space="preserve" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace" font-size="14" fill="#312e81">      x_A + 2x_B ≤ 8</text>
+</g>
+<g transform="translate(700,214)">
+  <rect width="250" height="112" rx="14" fill="#ffffff" stroke="#e3e0f5" stroke-width="1.2" filter="url(#shadow)"/>
+  <text x="18" y="28" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="13" font-weight="600" fill="#4f39f6" letter-spacing="1">求解代码 CODE</text>
+  <text x="18" y="60" xml:space="preserve" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace" font-size="14" fill="#312e81">def build_model(data):</text><text x="18" y="82" xml:space="preserve" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace" font-size="14" fill="#312e81">  m = pyo.ConcreteModel()</text><text x="18" y="102" xml:space="preserve" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace" font-size="14" fill="#312e81">  …; return m</text>
+</g>
+<g transform="translate(990,214)">
+  <rect width="250" height="112" rx="14" fill="#ffffff" stroke="#4f39f6" stroke-width="1.6" filter="url(#shadow)"/>
+  <text x="18" y="28" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="13" font-weight="600" fill="#4f39f6" letter-spacing="1">求解 SOLVE</text>
+  
+  <circle cx="34" cy="74" r="16" fill="#dcfce7"/>
+  <path d="M26 74l6 6 10-12" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="62" y="66" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="13" fill="#5b5876">目标值 · 最优</text>
+  <text x="62" y="100" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="30" font-weight="700" fill="#14112b">13</text>
+  <text x="104" y="100" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace" font-size="13" fill="#5b5876">A=3  B=2</text>
+</g>
+</svg>

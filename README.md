@@ -1,122 +1,111 @@
-# LLM4OM
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
+    <img src="docs/assets/banner-light.svg" alt="LLM4OM：用自然语言描述优化问题，得到可核对的数学模型、代码与最优解" width="100%">
+  </picture>
+</p>
 
-**用自然语言描述优化问题，查看数学模型、求解代码和求解结果。**
+<p align="center">
+  <a href="https://github.com/Fangziyang0910/LLM4OM/actions/workflows/checks.yml"><img src="https://github.com/Fangziyang0910/LLM4OM/actions/workflows/checks.yml/badge.svg" alt="Checks"></a>
+  <img src="https://img.shields.io/badge/version-0.41.0-4f39f6" alt="版本 0.41.0">
+  <img src="https://img.shields.io/badge/python-3.11%E2%80%933.13-3776ab?logo=python&logoColor=white" alt="Python 3.11–3.13">
+  <img src="https://img.shields.io/badge/LangGraph-server-1c3c3c?logo=langchain&logoColor=white" alt="LangGraph">
+  <img src="https://img.shields.io/badge/deploy-Docker%20Compose-2496ed?logo=docker&logoColor=white" alt="Docker Compose">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="Apache-2.0"></a>
+</p>
 
-LLM4OM（Large Language Models for Optimization Modeling）是一个自动优化建模平台。你描述问题，选择建模方法和代码写法；平台调用 LLM 先建立数学模型，再写成代码，在隔离的容器中求解，并展示每一步的中间产物。
+<p align="center">
+  <b>中文</b> · <a href="README.en.md">English</a>
+  <br>
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#建模方法">建模方法</a> ·
+  <a href="docs/user-guide.md">使用指南</a> ·
+  <a href="docs/deployment.md">部署指南</a> ·
+  <a href="CONTRIBUTING.md">开发指南</a> ·
+  <a href="CHANGELOG.md">更新日志</a>
+</p>
 
-```text
-问题描述 + 可选数据文件 → 建模方法（LLM） → 数学模型 + 求解代码 → 沙箱求解 → 结果
+---
+
+**LLM4OM**（Large Language Models for Optimization Modeling）是一个自动优化建模平台。你用自然语言描述问题，选择建模方法和代码写法。平台调用 LLM 写出数学模型和求解代码，在隔离的容器中求解，并展示每一步的中间产物。
+
+它把 **10 种已发表的 LLM 建模方法**放在同一个平台上，使用同一套模型、代码契约和求解沙箱。研究者可以在同一个问题上并排比较它们，也可以接入自己的方法。
+
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="演示：选择运输问题和 ORThought，开始建模，查看解、数学模型和代码" width="100%">
+  <br><sub>真实运行录屏：运输问题 · ORThought · Pyomo/HiGHS · DeepSeek。建模阶段已加速 2 倍。</sub>
+</p>
+
+## 亮点
+
+| 能力 | 说明 |
+|---|---|
+| 🧠 **10 种建模方法** | Direct、TriVAL、OptiMUS、Chain-of-Experts、OptiTree、OR-LLM-Agent、ORThought、LLMOPT、AutoFormulation 等，保留原工作的提示和流程 |
+| 🧩 **6 种写法 × 6 个求解器** | Pyomo/HiGHS、gurobipy/Gurobi、OR-Tools/SCIP、PuLP/CBC、CPMpy/CP-SAT、CVXPY/Clarabel，覆盖 LP、MILP、约束规划和凸优化 |
+| 🔍 **全过程可见** | 每次 LLM 调用实时流式显示；数学模型和代码的每一版都能查看和对比 |
+| ⚖️ **多方法对比** | 同一问题一次运行最多 12 个方法或模型，并排比较目标值、用时和 token |
+| 🧯 **不可行诊断** | 模型不可行时，列出一组不能同时满足的约束（Gurobi IIS / CPMpy MUS） |
+| 🔒 **隔离沙箱** | 生成代码在无网络、只读、非 root 的容器中运行，用完即删 |
+| 👥 **团队部署** | 一条 `docker compose up` 启动；预设模型的密钥不出服务器；可选 HTTPS 和用量上限 |
+| 🌗 **好用的工作台** | 备注与标签、Markdown 报告、Excel 导入、2033 道公开题、中英文界面、深色模式 |
+
+## 截图
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/home.png" alt="新建页面"><p align="center"><sub>写问题，选择方法、写法和模型</sub></p></td>
+    <td width="50%"><img src="docs/assets/run.png" alt="运行结果"><p align="center"><sub>结论先行：目标值、建模过程和解的矩阵</sub></p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/formulation.png" alt="数学模型"><p align="center"><sub>数学模型用 LaTeX 渲染，每一版都能对比</sub></p></td>
+    <td><img src="docs/assets/compare.png" alt="方法对比"><p align="center"><sub>5 种方法同题对比</sub></p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/conflict.png" alt="不可行诊断"><p align="center"><sub>不可行模型：Gurobi IIS 找到 3 条冲突约束</sub></p></td>
+    <td><img src="docs/assets/dark-en.png" alt="深色英文界面"><p align="center"><sub>深色模式和英文界面</sub></p></td>
+  </tr>
+</table>
+
+## 快速开始
+
+### 方式一：Docker（推荐）
+
+只需要 Docker（含 Compose v2.24 或更新版本）：
+
+```bash
+git clone https://github.com/Fangziyang0910/LLM4OM.git && cd LLM4OM
+cp .env.example .env && chmod 600 .env    # 填写 LLM 服务商、地址、模型和密钥
+docker compose up -d --build
 ```
 
-平台本身很薄：LLM 调用由 LangChain 完成，每个方法是一张 LangGraph 图，运行、流式推送和历史由 LangGraph 服务器（内存运行时，无需许可证）承担。平台只提供代码契约、求解沙箱和工作台页面。当前支持线性规划（LP）、混合整数线性规划（MILP）、约束规划（CP）和连续凸优化。版本 `0.41.0`。
+打开 <http://localhost:8767>。同一网络中的其他人用 `http://<本机 IP>:8767` 访问。HTTPS、备份、用量上限和 Gurobi 许可证见[部署指南](docs/deployment.md)。
 
-## 启动工作台
+### 方式二：本地运行
 
-需要 Python 3.11–3.13、[uv](https://docs.astral.sh/uv/) 和 Docker。在服务器上只装 Docker 时，见[用 Docker 部署](#用-docker-部署)。在仓库根目录执行：
+需要 Python 3.11–3.13、[uv](https://docs.astral.sh/uv/) 和 Docker：
 
 ```bash
 uv sync --all-extras
-uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:6；镜像版本变化后需重新构建
+uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:7
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
-打开 <http://127.0.0.1:8767>。服务默认监听 `0.0.0.0`，同一网络中的其他机器用本机地址访问；只给自己用时加 `--host 127.0.0.1`。仓库已包含前端构建文件，无需 Node.js。
+仓库已包含前端构建文件，不需要 Node.js。
 
-1. 点击左下角“预设模型”，添加一个预设：选择服务商，填写密钥和模型 ID。已设置 `LLM4OM_LLM_*` 环境变量时，这一步可以跳过。
-2. 写出问题的决策、目标和约束；需要时拖入或添加 CSV、JSON 文件。Excel 工作簿（`.xlsx`）的每个工作表转换为一个 CSV 文件。也可以从首页的例子或“示例题库”开始。
-3. 在右侧“运行设置”中选择建模方法、代码写法（写法决定求解器）和预设模型，点击“开始建模”或按 Ctrl+Enter。
-4. 运行页顶部先给出结论：目标值与求解状态，或失败原因；“核对数学模型”和“查看解”直接跳到对应页签。下方左栏是“建模过程”，把 LLM 调用归入它们产出的阶段，正在进行的调用实时显示文字。右栏的“解”“数学模型”“求解代码”“问题与数据”四个页签给出产物：
-   - 解可以按变量分组或列表查看，二维变量显示为矩阵，并可导出 CSV。
-   - 方法改写过的数学模型和代码可以逐版查看，并与上一版对比。
-   - 模型不可行时，“解”页签列出一组不能同时满足的约束（Gurobi IIS 或 CPMpy MUS），帮助检查模型。这些信息只给人看，不交给建模方法。
+### 试一个问题
 
-运行在服务器上进行。关闭页面不会中断运行；重新打开时，页面从第一步重放到当前进度。
+1. 没有在 `.env` 中设置模型时，点击左下角“预设模型”，添加服务商、密钥和模型 ID。
+2. 点击首页的“生产计划”例子，或输入：
 
-可以先试这个问题：
+   > 工厂生产 A、B 两种产品，数量必须是非负整数。每件 A 利润为 3，每件 B 利润为 2。A 消耗 2 单位切割资源和 1 单位加工资源，B 消耗 1 单位切割资源和 2 单位加工资源。两种资源各有 8 单位。请确定生产数量，使总利润最大。
 
-> 工厂生产 A、B 两种产品，数量必须是非负整数。每件 A 利润为 3，每件 B 利润为 2。A 消耗 2 单位切割资源和 1 单位加工资源，B 消耗 1 单位切割资源和 2 单位加工资源。两种资源各有 8 单位。请确定生产数量，使总利润最大。
+3. 点击“开始建模”。几秒后，页面给出最优解 A=3、B=2，总利润 13。
 
-最优解是 A=3、B=2，总利润 13。
-
-左侧“运行记录”按日期列出同一工作区中的全部运行和各自的结果。运行页可以“再运行一次”（同样的问题和设置），或“修改后运行”（带回编辑页）。使用同一个 `--workspace` 即可保留设置和历史。左下角可切换浅色、深色或跟随系统，以及中文或英文界面。
-
-- **对比**：打开“运行设置”中的“对比”，勾选多个方法或预设模型，一次发起多个运行（最多 12 个）。对比页并排列出每个运行的结果、目标值、用时、调用数和 token，并提示目标值是否一致。目标值相同不代表模型都对。
-- **备注与标签**：运行页“更多操作 → 备注与标签”记录结论；在左侧搜索框输入 `#标签` 筛选运行。能打开工作台的人都能看到和修改。
-- **报告**：“更多操作 → 导出报告（Markdown）”下载问题、设置、结果、数学模型、代码和备注。
-
-## 建模方法
-
-| 方法 | 流程 |
-|---|---|
-| Direct | 一次调用，同时给出数学模型和代码 |
-| Feedback Repair | Direct，然后根据求解反馈修正 |
-| TriVAL | 语义、数学模型、代码三阶段验证；每阶段构建、验证、修订 |
-| OptiMUS | 提取参数、目标和约束，逐条建模和写代码，组装后调试 |
-| Chain-of-Experts | 协调者逐个选择专家，汇总器写代码；可选反向反思 |
-| OptiTree | 在固定问题类型树中匹配建模思路，再生成模型和代码 |
-| OR-LLM-Agent | 先数学建模，再生成代码，根据执行错误调试，最后检查不可行或复查模型 |
-| ORThought | 按专家建模思路一次写出求解思路、数学模型和代码，代码出错时带上模型和错误调试 |
-| LLMOPT | 先写五要素模型（集合、参数、变量、目标、约束），再写代码；LLM 判断模型和代码对错，回到错的一步重写 |
-| AutoFormulation | 运行上游搜索代码：逐层采样并剪枝建树，再用 MCTS 和两两比较排名（调用量很大） |
-
-OptiMUS、CoE、OptiTree、OR-LLM-Agent、ORThought、LLMOPT 和 AutoFormulation 使用原工作的提示和流程。原提示针对某个库（如 gurobipy）时，平台按所选写法改写其中与库相关的部分。OptiMUS、CoE、OptiTree、OR-LLM-Agent 和 AutoFormulation 的原提示要求 LP/MILP，因此只提供四种 MILP 写法。LLMOPT 的论文模型是微调过的 Qwen；平台用你选择的预设运行它的流程，需要时可把发布的模型部署为 OpenAI 兼容服务再添加为预设。
-
-研究方法的固定来源和适配差异见[建模方法](docs/methods.md)。
-
-## 代码写法与求解器
-
-用户选择代码写法，写法决定求解器：
-
-| 代码写法 | 求解器 | 适用 |
-|---|---|---|
-| Pyomo | HiGHS | LP、MILP |
-| gurobipy | Gurobi（需要许可证；无许可证时只能求解小规模模型） | LP、MILP |
-| OR-Tools `pywraplp` | SCIP | LP、MILP |
-| PuLP | CBC | LP、MILP |
-| CPMpy | OR-Tools CP-SAT | 约束规划：整数与布尔变量、全局约束、可满足性问题 |
-| CVXPY | Clarabel | 连续凸优化：LP、凸二次规划、二阶锥等；不支持整数变量 |
-
-生成的代码定义 `build_model(data)` 并返回模型，不调用求解。沙箱用该写法自己的接口求解并读出结果。
-
-沙箱容器无网络、根文件系统只读、以非 root 用户运行。设置环境变量 `GRB_LICENSE_FILE` 后，许可证以只读方式挂载进容器。
-
-## 模型与密钥
-
-预设服务商：OpenAI、Google Gemini、Kimi、GLM、OpenRouter、阿里云百炼、DeepSeek、Anthropic。其他服务选择“OpenAI 兼容”并填写地址。
-
-运行只能选择**预设模型**。每个预设固定服务商、接口地址、密钥、模型 ID 和请求参数：
-
-- 预设只能添加和删除，不能修改。要换参数，删掉后重新添加。
-- 密钥只保存在服务器上（`<workspace>/.private/llm-presets.json`，文件权限 `600`），任何接口和运行记录都不返回密钥，也不显示掩码。密钥只发给与它一起保存的接口地址。
-- 服务器 `.env` 中的 `LLM4OM_LLM_*` 变量给出一个预设（id 为 `env`），排在第一位，是默认预设。页面上不能删除它，只能在服务器上修改。变量见 [.env.example](.env.example)。
-- v0.38 保存的 `llm-settings.json` 在首次读取时转换为预设。
-
-**DeepSeek 与 TriVAL**：DeepSeek 的思考模式不支持强制 `tool_choice`，TriVAL 的结构化输出需要它。在“高级参数 → 额外请求参数”中填写 `{"thinking": {"type": "disabled"}}`，或设置 `LLM4OM_LLM_EXTRA_BODY`。
-
-Anthropic 的额外参数支持 `thinking`。OpenRouter 使用专用集成保留工具对话中的推理信息，推理强度可设置为 `{"reasoning": {"effort": "high"}}`；当前集成不支持的推理字段会报错。
-
-## 内置题库
-
-“示例题库”包含 9 组、2033 条公开题面，可以逐条阅读并带入输入区：
-
-| Benchmark | 题数 | Benchmark | 题数 |
-|---|---:|---|---:|
-| NL4Opt | 205 | IndustryOR | 99 |
-| NL4LP | 178 | ComplexOR | 18 |
-| MAMO Easy | 642 | OptiBench | 403 |
-| MAMO Complex | 210 | OptMATH | 128 |
-| NL4COP | 150 | | |
-
-题面来自 [OPT-Agent](https://github.com/Fangziyang0910/OPT-Agent) 的整理版本，不含答案。部分题目超出 LP/MILP 范围。
-
-## 命令行与 Python
+也可以在命令行或 Python 中运行：
 
 ```bash
-uv run llm4om run --problem "……" --method trival --language pyomo
-uv run llm4om run --file problem.txt --data demand.csv --method coe
+uv run llm4om run --problem "……" --method orthought --language pyomo
 ```
-
-命令在本进程中运行同一张图，逐步打印过程，最后输出数学模型、代码和求解结果。`--output state.json` 保存最终状态（含全部步骤）。`--preset` 按 id 选择工作区中的预设模型，默认使用第一个预设。
 
 ```python
 from llm4om import run_problem
@@ -125,140 +114,89 @@ state = run_problem("……", method="optimus", language="gurobipy")
 print(state["failure"] or state["solve"]["objective"])
 ```
 
-Python 接口用 `preset=` 选择预设，或用 `llm=LLMSettings(...)` 直接传入设置。`--sandbox local` 在本机子进程中执行生成代码，不做隔离，只用于开发。
+完整用法见[使用指南](docs/user-guide.md)。
 
-## 用 Docker 部署
+## 建模方法
 
-服务器上只需要 Docker（含 Compose v2.24 或更新版本），不需要 Python、uv 或 Node.js：
+| 方法 | 流程 | 来源 |
+|---|---|---|
+| Direct | 一次调用，同时给出数学模型和代码 | 基线 |
+| Feedback Repair | Direct，然后根据求解反馈修正 | 基线 |
+| TriVAL | 语义、数学模型、代码三阶段验证；每阶段构建、验证、修订 | [代码](https://github.com/SCUT-EIPI/TriVAL/tree/380a529) |
+| OptiMUS | 提取参数、目标和约束，逐条建模和写代码，组装后调试 | [ICML 2024](https://arxiv.org/abs/2402.10172) · [代码](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) |
+| Chain-of-Experts | 协调者逐个选择专家，汇总器写代码；可选反向反思 | [ICLR 2024](https://openreview.net/forum?id=HobyL1B9CZ) · [代码](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) |
+| OptiTree | 在问题类型树中匹配建模思路，再生成模型和代码 | [NeurIPS 2025](https://arxiv.org/abs/2510.22192) · [代码](https://github.com/MIRALab-USTC/OptiTree/tree/2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9) |
+| OR-LLM-Agent | 先数学建模，再生成代码，按执行错误调试，最后检查不可行 | [arXiv](https://arxiv.org/abs/2503.10009) · [代码](https://github.com/bwz96sco/or_llm_agent/tree/5dccdaab89ab91c3cb28066fe849423dc124d287) |
+| ORThought | 按专家建模思路写出求解思路、数学模型和代码；出错时带上模型和错误调试 | [arXiv](https://arxiv.org/abs/2508.14410) · [代码](https://github.com/BeinuoYang/ORThought/tree/5293e24861a65d1e4a2f61f4fad0a81de901ee38) |
+| LLMOPT | 先写五要素模型，再写代码；LLM 判断对错，回到错的一步重写 | [ICLR 2025](https://arxiv.org/abs/2410.13213) · [代码](https://github.com/antgroup/LLMOPT/tree/1492dd33e39ea13f1afe32a0adc13d4217334195) |
+| AutoFormulation | 逐层采样并剪枝建树，再用 MCTS 和两两比较排名（调用量很大） | [ICML 2025](https://arxiv.org/abs/2411.01679) · [代码](https://github.com/jumpynitro/AutoFormulator/tree/52148018d04de23dc2d36d4281eb6244c2a42ffc) |
 
-```bash
-git clone https://github.com/Fangziyang0910/LLM4OM.git && cd LLM4OM
-cp .env.example .env && chmod 600 .env    # 填写默认预设的服务商、地址、模型和密钥
-docker compose up -d --build
+研究方法固定在上游的某个提交，保留原工作的提示、编排和停止条件。平台只做接入所需的适配和避错，每条改动都有记录。原提示要求 LP/MILP 的方法只提供四种 MILP 写法。详见[建模方法](docs/methods.md)。
+
+## 代码写法与求解器
+
+用户选择代码写法，写法决定求解器。生成的代码定义 `build_model(data)` 并返回模型，由沙箱用该写法自己的接口求解。
+
+| 代码写法 | 求解器 | 适用问题 |
+|---|---|---|
+| Pyomo | HiGHS | LP、MILP |
+| gurobipy | Gurobi | LP、MILP（无完整许可证时只能求解小规模模型） |
+| OR-Tools `pywraplp` | SCIP | LP、MILP |
+| PuLP | CBC | LP、MILP |
+| CPMpy | OR-Tools CP-SAT | 约束规划：整数与布尔变量、全局约束、可满足性问题 |
+| CVXPY | Clarabel | 连续凸优化：LP、凸二次规划、二阶锥等 |
+
+## 架构
+
+```mermaid
+flowchart LR
+  U["浏览器<br/>React 工作台"] -- "运行 · 实时流 · 历史" --> S["LangGraph 服务器<br/>+ /api 路由"]
+  CLI["命令行 / Python"] --> G
+  S --> G["平台图<br/>prepare → model → solve"]
+  G --> M["建模方法<br/>（10 张 LangGraph 图）"]
+  M -- "llm(role)" --> L["LangChain 聊天模型<br/>预设模型"]
+  M -- "solve(code)" --> X["沙箱容器<br/>build_model → 求解器"]
+  G -- "最终代码" --> X
 ```
 
-在防火墙或云服务器安全组中放行端口 8767，其他人用 `http://<服务器 IP>:8767` 访问。换端口时在 `.env` 中设置 `LLM4OM_PORT`；使用 rootless Docker 时设置 `DOCKER_SOCKET` 为它的 socket 路径。
+平台本身很薄。LLM 调用交给 LangChain，图编排、运行、流式推送和历史交给 LangGraph 服务器（内存运行时，无需许可证）。平台只提供代码契约、求解沙箱、步骤记录和工作台。详见[架构](docs/architecture.md)。
 
-| 组成 | 说明 |
+## 文档
+
+| 文档 | 内容 |
 |---|---|
-| `app` 容器（镜像 `llm4om`） | 工作台和 LangGraph 服务器。启动脚本读取 Docker socket 的用户组、整理 `/data` 的属主后，以用户 `llm4om`（uid 10001）运行服务，不保留任何 capability；根文件系统只读，日志自动轮转，崩溃或重启服务器后自动恢复 |
-| 沙箱镜像 `llm4om-worker:6` | 由 `worker` 服务构建。每次求解，`app` 通过宿主机的 Docker 启动一个无网络、只读、非 root 的容器 |
-| 数据卷 `llm4om-data` | 预设模型（含密钥）和全部运行记录；`docker compose down` 不会删除它 |
+| [使用指南](docs/user-guide.md) | 工作台、对比、诊断、预设模型、题库、命令行、Python 接口、常见问题 |
+| [部署指南](docs/deployment.md) | Docker Compose、HTTPS、多人使用、用量上限、Gurobi、备份、故障排查 |
+| [开发指南](CONTRIBUTING.md) | 环境、项目结构、测试、接入新方法、增加代码写法、发布 |
+| [架构](docs/architecture.md) | 模块、平台图、方法接口、沙箱和运行记录 |
+| [建模方法](docs/methods.md) | 各方法的流程、固定来源、适配差异和真实运行验证 |
+| [架构决策](docs/adr/README.md) · [术语](GLOSSARY.md) | 重要取舍和领域术语 |
+| [参考资料](docs/references/README.md) | 相关论文、代码和 Benchmark |
 
-`app` 容器挂载了宿主机的 `/var/run/docker.sock`，相当于拥有宿主机的 root 权限。生成代码只在沙箱容器中运行，不在 `app` 中运行；不要把这台服务器放在需要保护的内网中。
+## 参与贡献
 
-更新：`git pull && docker compose up -d --build`。查看日志：`docker compose logs -f app`。
+欢迎提交 Issue 和 Pull Request。开始前请读[开发指南](CONTRIBUTING.md)和[开发规范](CODING_STANDARDS.md)。安全问题请按 [SECURITY](SECURITY.md) 私下报告。
 
-从直接运行的 `llm4om serve` 迁移时，把原工作区复制进数据卷（先停止服务，避免它退出时覆盖导入的记录）：
+## 引用
 
-```bash
-docker compose stop app && docker compose cp runs/web/. app:/data/ && docker compose start app
+在研究中使用 LLM4OM 时，可以引用本仓库（见 [CITATION.cff](CITATION.cff)）：
+
+```bibtex
+@software{llm4om,
+  author  = {Fang, Ziyang},
+  title   = {{LLM4OM}: A Platform for Automated Optimization Modeling with Large Language Models},
+  year    = {2026},
+  version = {0.41.0},
+  url     = {https://github.com/Fangziyang0910/LLM4OM}
+}
 ```
 
-使用 Gurobi 完整许可证时，把许可证挂载进 `app` 容器，**容器内外路径相同**（沙箱容器由宿主机的 Docker 启动，按宿主机路径挂载），并在 `.env` 中设置 `GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic`：
+使用其中的某个研究方法时，也请引用原论文。
 
-```yaml
-# compose.override.yaml
-services:
-  app:
-    volumes:
-      - /opt/gurobi/gurobi.lic:/opt/gurobi/gurobi.lic:ro
-```
+## 许可
 
-不用 Docker 部署时，按“启动工作台”的步骤直接运行 `llm4om serve`，同样默认监听 `0.0.0.0`。
+代码采用 [Apache-2.0](LICENSE)。随包分发的第三方提示、代码和数据保留原许可，见 [NOTICE](NOTICE)。LLMOPT 和 ORThought 的上游仓库在固定提交上没有声明许可证，其提示收录在本仓库中仅用于研究。
 
-### HTTPS
+## 致谢
 
-服务器有域名时，`compose.yaml` 中的 `https` 服务（Caddy）自动申请证书，并把 HTTPS 请求（包括运行的实时流）转给 `app`。在 `.env` 中设置：
-
-```bash
-LLM4OM_DOMAIN=llm4om.example.edu    # 域名需解析到这台服务器，并放行 80 和 443 端口
-LLM4OM_PORT=127.0.0.1:8767          # app 只在本机监听，外部只能经 HTTPS 访问
-LLM4OM_TRUST_PROXY=1                # 按代理转发的客户端地址计算运行频率上限
-```
-
-然后 `docker compose --profile https up -d --build`。证书保存在 `caddy-data` 卷中。
-
-### 备份与恢复
-
-数据卷 `llm4om-data` 保存全部运行记录和预设模型（含密钥）。服务每 10 秒和正常停止时把内存中的记录写入磁盘，写入先写临时文件再改名；进程被强制结束时，最多丢失最近约 10 秒的变化。备份前先停止服务，保证记录完整：
-
-```bash
-docker compose stop app && docker compose cp app:/data ./llm4om-backup && docker compose start app
-chmod -R go-rwx ./llm4om-backup    # 备份中有密钥
-```
-
-恢复：`docker compose stop app && docker compose cp ./llm4om-backup/. app:/data/ && docker compose start app`。
-
-### 运行追踪（可选）
-
-需要在 LangSmith 中查看每次 LLM 调用时，在 `.env` 中设置 `LANGSMITH_TRACING=true`、`LANGSMITH_API_KEY` 和 `LANGSMITH_PROJECT`，然后重启。开启后，问题、数据和模型回答会发送到 LangSmith，只在允许数据离开服务器时使用。
-
-## 部署给课题组使用
-
-服务器 `.env` 中的模型就是大家共用的默认预设。
-
-工作台没有登录和权限控制，适合信任范围内的小组使用。能访问端口的人可以：
-
-- 用任一预设发起运行，消耗该预设的额度；
-- 添加和删除页面上添加的预设（服务器 `.env` 的预设不能删除）；
-- 查看和删除全部运行记录。
-
-访客读不到任何密钥。需要限制访问时，只放行课题组的 IP，或在前面加带登录的反向代理。
-
-防止额度被用光，可在 `.env` 中设置两个上限（0 或不设表示不限）：
-
-| 变量 | 作用 |
-|---|---|
-| `LLM4OM_DAILY_TOKENS` | 每个预设模型每天最多使用的 token（输入加输出）。用完后，使用该预设的运行在下一次 LLM 调用前停止，页面提示换预设或次日再试。“预设模型”对话框显示各预设当天的用量。一天按服务器时区计算；Docker 容器默认是 UTC，可在 `.env` 中设置 `TZ`，例如 `TZ=Asia/Shanghai` |
-| `LLM4OM_RUNS_PER_HOUR` | 每个客户端地址每小时最多发起的运行数。服务在反向代理之后时，同时设置 `LLM4OM_TRUST_PROXY=1` |
-
-同时执行的运行数由 `llm4om serve --jobs` 控制（默认 4），其余运行排队。Docker 部署中在 `compose.override.yaml` 里改 `app` 的 `command`，例如 `["llm4om", "serve", "--workspace", "/data", "--port", "8767", "--jobs", "8"]`。Gurobi 学术许可证一般只限本人使用，供他人使用前请确认许可范围。
-
-## 运行记录
-
-每次运行是 LangGraph 服务器上的一个线程（thread）。线程状态保存问题、数据文件、数学模型、代码、求解结果、全部步骤和调用统计；线程元数据保存标题、方法、代码写法和模型名（无密钥）。服务器把它们保存在 `<workspace>/.langgraph_api/`，重启后仍在。
-
-“最优”只说明求解器找到了当前模型的最优解。请对照问题检查数学模型是否完整。
-
-## 接入新方法
-
-方法是一张 LangGraph 图。状态继承 `ModelingState`：读 `problem`，写 `formulation` 和 `code`。节点通过 `runtime.context` 调用 LLM（`llm(role)`）和求解器（`solve(code)`）。代码提示中拼接 `context.target.prompt` 即可适配所选代码写法。只支持部分写法时，在 `Method` 中设置 `languages`。
-
-```python
-from langgraph.graph import END, START, StateGraph
-from langgraph.runtime import Runtime
-
-from llm4om.methods import Method
-from llm4om.methods.common import TWO_PARTS, ask, split_formulation_and_code
-from llm4om.runtime import Context, ModelingState
-
-
-async def generate(state: ModelingState, runtime: Runtime[Context]) -> dict:
-    context = runtime.context
-    reply = await ask(context, "model", "Model the problem. " + TWO_PARTS + "\n\n" + context.target.prompt, state["problem"])
-    formulation, code = split_formulation_and_code(reply)
-    return {"formulation": formulation, "code": code}  # 平台会求解未求解过的最终代码
-
-
-def my_graph():
-    graph = StateGraph(ModelingState, context_schema=Context)
-    graph.add_node("generate", generate)
-    graph.add_edge(START, "generate")
-    graph.add_edge("generate", END)
-    return graph.compile()
-
-
-MY_METHOD = Method("my_method", "我的方法", "一句话说明。", my_graph, titles={"generate": "数学模型与代码"})
-```
-
-`titles` 中的节点在运行过程中显示为步骤。把方法加入 `llm4om.methods.methods()`，或在你的包中注册 `llm4om.methods` 入口点。详见[架构](docs/architecture.md#方法接口)。
-
-## 更多文档
-
-- [文档导航](docs/README.md)
-- [架构](docs/architecture.md)：模块、平台图、方法接口、沙箱和运行记录。
-- [建模方法](docs/methods.md)：各方法流程、固定来源、适配差异和验证。
-- [贡献指南](CONTRIBUTING.md)：开发环境和测试。
-
-代码采用 [Apache-2.0](LICENSE)。第三方代码与数据的来源见 [NOTICE](NOTICE)。
+感谢各研究方法的作者公开代码和提示，感谢 [LangChain](https://github.com/langchain-ai/langchain)、[LangGraph](https://github.com/langchain-ai/langgraph)、[HiGHS](https://highs.dev)、[OR-Tools](https://developers.google.com/optimization)、[CPMpy](https://github.com/CPMpy/cpmpy)、[CVXPY](https://www.cvxpy.org) 等开源项目。
