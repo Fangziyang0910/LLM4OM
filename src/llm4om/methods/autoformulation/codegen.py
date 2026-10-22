@@ -2,8 +2,8 @@
 
 Upstream writes one gurobipy script per tree node and runs it with `python3`: parameters, variables, then the
 objective expression (objective step), the equality constraints (equality step), or the whole model and
-`gpy_model.optimize()` (inequality step). The gurobipy output here is that text; the Pyomo and OR-Tools pywraplp
-outputs are its equivalents. Partial steps become check scripts; the complete model becomes
+`gpy_model.optimize()` (inequality step). The gurobipy output here is that text; the Pyomo, OR-Tools pywraplp and
+PuLP outputs are its equivalents. Partial steps become check scripts; the complete model becomes
 `build_model(data)` for the solver. The model keeps upstream's name `gpy_model` in every dialect.
 """
 
@@ -34,6 +34,12 @@ HEADERS = {
                 '    if "int" in vtype:\n'
                 '        return gpy_model.IntVar(0, gpy_model.infinity(), name)\n'
                 '    return gpy_model.NumVar(0, gpy_model.infinity(), name)\n'),
+    "pulp": ('import pulp\n\n# Initialize the model\n'
+             'gpy_model = pulp.LpProblem("Production Planning", pulp.LpMinimize)\n\n'
+             'def _new_var(vtype, name):\n'
+             '    vtype = str(vtype).lower()\n'
+             '    category = "Binary" if "bin" in vtype or "bool" in vtype else "Integer" if "int" in vtype else "Continuous"\n'
+             '    return pulp.LpVariable(name, lowBound=0, cat=category)\n'),
 }
 
 
@@ -41,7 +47,7 @@ def _new_var(language: str, var_name: str, vtype: str, index: str | None, name: 
     """One new variable; Pyomo variables come from a sparse indexed Var so border constraints can add indices."""
     if language == "gurobipy":
         return f"gpy_model.addVar(vtype={vtype}, name={name})"
-    if language == "pywraplp":
+    if language in ("pywraplp", "pulp"):
         return f"_new_var({vtype!r}, {name})"
     return f"_{var_name}_var[{index}]" if index is not None else f"_{var_name}_var"
 
@@ -88,6 +94,8 @@ def objective_code(language: str, form: dict, set_objective: bool = True) -> str
             code += f"gpy_model.setObjective(objective, GRB.{'MINIMIZE' if sense == 'min' else 'MAXIMIZE'})\n"
         elif language == "pywraplp":
             code += f"gpy_model.{'Minimize' if sense == 'min' else 'Maximize'}(objective)\n"
+        elif language == "pulp":
+            code += f"gpy_model.sense = pulp.{'LpMinimize' if sense == 'min' else 'LpMaximize'}\ngpy_model.setObjective(objective)\n"
         else:
             code += f"gpy_model.objective = pyo.Objective(expr=objective, sense=pyo.{'minimize' if sense == 'min' else 'maximize'})\n"
     return code
@@ -119,8 +127,8 @@ def _all_constraints(language: str, const_dict: dict) -> str:
     code = ""
     for const_name, const_str in const_dict.items():
         main, for_loop = separate_constraint_from_for(const_str)
-        if language in ("gurobipy", "pywraplp"):
-            add = "addConstr" if language == "gurobipy" else "Add"
+        if language in ("gurobipy", "pywraplp", "pulp"):
+            add = {"gurobipy": "addConstr", "pywraplp": "Add", "pulp": "addConstraint"}[language]
             name = "name = " if language == "gurobipy" else ""
             if for_loop == "":
                 code += f"all_const += [gpy_model.{add}({main}, {name}'{const_name}')] \n"

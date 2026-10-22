@@ -47,6 +47,17 @@ class ORLLMAgent:
 
 
 @dataclass(frozen=True)
+class ORThought:
+    temperature: float = 0.0  # upstream main.sh
+    debug_max_try: int = 3  # upstream main.sh
+
+
+@dataclass(frozen=True)
+class LLMOpt:
+    max_resolves: int = 12  # self-correction re-solves after the first; the paper's Section 4.1
+
+
+@dataclass(frozen=True)
 class AutoFormulation:
     temperature: float = 1.0  # upstream samples n completions at the API default
     n_used_gpt: int = 8  # completions sampled per tree node
@@ -71,3 +82,5 @@ COE = ChainOfExperts()
 OPTITREE = OptiTree()
 OR_LLM_AGENT = ORLLMAgent()
 AUTOFORMULATION = AutoFormulation()
+ORTHOUGHT = ORThought()
+LLMOPT = LLMOpt()

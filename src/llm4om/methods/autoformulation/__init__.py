@@ -76,6 +76,8 @@ DV_TYPE_RULES = {
              "this will be used to create the variable via Pyomo's Var component.",
     "pywraplp": "Replace <type> with a string representing the OR-Tools variable type ('integer', 'continuous' or "
                "'binary'), as this will be used to create the variable via OR-Tools' IntVar, NumVar or BoolVar.",
+    "pulp": "Replace <type> with a string representing the PuLP variable category ('Integer', 'Continuous' or "
+            "'Binary'), as this will be used to create the variable via PuLP's LpVariable.",
 }
 
 

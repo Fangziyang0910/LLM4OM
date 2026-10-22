@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ from fastapi.testclient import TestClient
 from llm4om.graph import run
 from llm4om.llm import LLMPresetStore
 from llm4om.methods import methods
+from llm4om.runtime import TokenBudget
 from llm4om.server.app import create_app
 from tests.conftest import LLM, PRODUCTION_PROBLEM, TWO_PART_REPLY
 
@@ -32,9 +34,9 @@ def test_options_list_methods_languages_and_providers(tmp_path: Path) -> None:
     with client(tmp_path) as api:
         options = api.get("/api/options").json()
     assert {"direct", "trival", "optimus", "coe", "optitree", "or_llm_agent", "autoformulation"} <= {m["id"] for m in options["methods"]}
-    assert {item["id"] for item in options["languages"]} == {"pyomo", "gurobipy", "pywraplp", "cpmpy"}
+    assert {item["id"] for item in options["languages"]} == {"pyomo", "gurobipy", "pywraplp", "cpmpy", "pulp", "cvxpy"}
     optimus = next(m for m in options["methods"] if m["id"] == "optimus")
-    assert optimus["languages"] == ["gurobipy", "pyomo", "pywraplp"]
+    assert optimus["languages"] == ["gurobipy", "pulp", "pyomo", "pywraplp"]
 
 
 def test_presets_never_return_their_keys_and_cannot_be_changed(tmp_path: Path) -> None:
@@ -145,3 +147,35 @@ def test_a_request_config_cannot_replace_the_server_resources(monkeypatch: Any) 
     monkeypatch.setattr(graph, "default_resources", lambda: seen.append("default") or graph.Resources(None, None))  # type: ignore[arg-type]
     monkeypatch.setattr(graph, "get_config", lambda: {"configurable": {"llm4om_resources": {"sandbox": "local"}}})
     assert isinstance(graph._resources(), graph.Resources) and seen == ["default"]
+
+
+def test_a_preset_stops_once_its_daily_token_budget_is_spent(make_resources: Any, tmp_path: Path) -> None:
+    broken = "### Formulation\nx\n\n```python\ndef build_model(data):\n    raise ValueError('broken')\n```"
+    resources = replace(make_resources(lambda *_: broken, llm=None), budget=TokenBudget(tmp_path, daily_limit=20))
+    resources.presets.add(LLM)
+    # Each call uses 15 tokens: the second call starts at 15, the third finds the budget spent and stops the run.
+    stopped = asyncio.run(run(PRODUCTION_PROBLEM, method="feedback_repair", resources=resources))
+    refused = asyncio.run(run(PRODUCTION_PROBLEM, resources=resources))
+    assert stopped["usage"]["llm_calls"] == 2 and "daily budget of 20 tokens" in stopped["failure"]
+    assert "daily budget" in refused["failure"] and not refused.get("steps")
+    assert resources.budget is not None and resources.budget.used() == {"scripted": 30}
+    resources.budget.flush()
+    assert TokenBudget(tmp_path, daily_limit=20).used() == {"scripted": 30}  # the counts survive a restart
+    with TestClient(create_app(resources.presets, resources.budget)) as api:
+        listed = api.get("/api/presets").json()
+    assert listed["daily_tokens"] == 20 and listed["presets"][0]["tokens_today"] == 30
+
+
+def test_each_address_may_start_a_limited_number_of_runs_per_hour(tmp_path: Path) -> None:
+    def starts(api: TestClient, **headers: str) -> list[int]:
+        return [api.post(path, json={}, headers=headers).status_code
+                for path in ("/threads/t1/runs", "/threads/t1/runs/stream", "/runs/wait")]
+
+    with TestClient(create_app(LLMPresetStore(tmp_path), runs_per_hour=2)) as api:
+        direct = starts(api)
+        other = api.post("/threads", json={}).status_code  # creating a thread is not a run
+    with TestClient(create_app(LLMPresetStore(tmp_path), runs_per_hour=2, trust_proxy=True)) as api:
+        proxied = starts(api, **{"x-forwarded-for": "10.0.0.9, 203.0.113.5"})
+        second = starts(api, **{"x-forwarded-for": "203.0.113.6"})
+    assert direct[2] == proxied[2] == second[2] == 429 and 429 not in direct[:2] + proxied[:2] + second[:2]
+    assert other != 429

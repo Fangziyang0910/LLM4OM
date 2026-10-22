@@ -31,7 +31,7 @@ NL4Opt 固定树提供 MIT 许可。NLP4LP 数据卡声明 CC BY-NC 4.0 及研�
 
 ## 数据结构与参考
 
-NL4Opt 的 document 提供公开题面。结构标注缺少独立最优值、变量域和求解证明，不能直接构成数值参考。官方 split 哈希原记录在 v0.37 的 `examples/tasks/nl4opt-import.yaml`，该文件随批量评测一起移除，可从 Git 历史读取。
+NL4Opt 的 document 提供公开题面。结构标注缺少独立最优值、变量域和求解证明，不能直接构成数值参考。
 
 NLP4LP 的 train.jsonl 包含 361 条，并非完整 train/dev/test 三分。部分 parameters、problem_info 和 solution 是外层字符串内的 JSON。参数可以为标量、列表、字典和字符串，不能统一转成浮点数。
 
@@ -41,4 +41,4 @@ MAMO 原始 EasyLP/ComplexLP/ODE 分别有 652/211/346 条。ID 在各子集中�
 
 题面包含整数、连续与舍入要求，不能根据 EasyLP 名称或参考小数位推断变量域。公开数学评阅在运行前确定类型、舍入和资格。
 
-原 MAMO 评分脚本通过 COPT 读取 LP 并比较目标，分母是已生成文件数。该口径不自动成为本项目协议。本平台当前不做批量评测。
+原 MAMO 评分脚本通过 COPT 读取 LP 并比较目标，分母是已生成文件数。

@@ -20,8 +20,8 @@ export function StatusBadge({ status, className }: { status: string; className?:
 }
 
 export function StatusIcon({ status, className }: { status: string; className?: string }) {
-  const t = tone(status);
-  const Icon = t === "good" ? CircleCheck : t === "bad" ? CircleX : t === "warn" ? (status === "interrupted" ? CircleSlash : TriangleAlert) : CircleDashed;
-  if (t === "live") return <Spinner className={cn("size-4 text-primary", className)} />;
-  return <Icon className={cn("size-4", TONE[t].text, className)} />;
+  const kind = tone(status);
+  const Icon = kind === "good" ? CircleCheck : kind === "bad" ? CircleX : kind === "warn" ? (status === "interrupted" ? CircleSlash : TriangleAlert) : CircleDashed;
+  if (kind === "live") return <Spinner className={cn("size-4 text-primary", className)} />;
+  return <Icon className={cn("size-4", TONE[kind].text, className)} />;
 }

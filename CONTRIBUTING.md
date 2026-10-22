@@ -17,9 +17,11 @@ uv run llm4om build-worker
 npm --prefix frontend ci
 npm --prefix frontend run dev      # 开发服务器，/api、/threads、/assistants 代理到 8767
 npm --prefix frontend run lint     # ESLint（含 React Hooks 规则）
-npm --prefix frontend test         # Vitest：步骤分组、断流回归、公式渲染、解的分组与表格解析
+npm --prefix frontend test         # Vitest：步骤分组、断流回归、公式渲染、解的分组与表格解析、译文完整
 npm --prefix frontend run build    # 输出到 src/llm4om/server/web_assets/
 ```
+
+界面文字写成 `t("中文原文")`，并在 `frontend/src/locales/en.ts` 中加英文；`i18n.test.ts` 会检查遗漏。服务器给出的方法说明和步骤标题也要加英文。
 
 界面组件优先用 `frontend/src/components/ui/` 中的 shadcn/ui 组件。需要新组件时，在 `frontend/` 下运行 `npx shadcn@latest add <组件>`，再检查生成文件的导入路径是否为 `@/lib/utils`。颜色使用 `index.css` 中的变量（如 `bg-muted`、`text-destructive`），不要写死色值。
 
@@ -35,6 +37,14 @@ uv run pytest
 ```
 
 测试不调用真实 LLM，也不需要 Docker：方法使用脚本化聊天模型，求解使用本机 Worker（需要 `solve` 可选依赖）。AutoFormulation 的等价判断测试需要 `autoformulation` 可选依赖（Z3、SymPy）。
+
+浏览器测试在真实页面上检查运行、对比、不可行诊断、备注与标签、报告、Excel 导入和英文界面。它们测试构建好的页面，先构建；第一次运行前安装浏览器：
+
+```bash
+npm --prefix frontend run build
+(cd frontend && npx playwright install chromium)
+npm --prefix frontend run e2e      # 启动脚本化 LLM（8796）和本机沙箱的服务（8797）
+```
 
 真实运行使用 `.env` 中的模型：
 

@@ -23,7 +23,11 @@ commit 5dccdaa) adapters reproduce upstream prompt text. The AutoFormulation
 adapter includes upstream source files from
 https://github.com/jumpynitro/AutoFormulator (commit 5214801) in
 src/llm4om/methods/autoformulation/upstream/, and ports further upstream
-functions in autoformulation/search.py and autoformulation/codegen.py. These repositories state no
+functions in autoformulation/search.py and autoformulation/codegen.py. The
+LLMOPT prompt text in src/llm4om/methods/llmopt/prompts.py is copied verbatim
+from https://github.com/antgroup/LLMOPT (commit 1492dd3), and the ORThought
+prompt text in src/llm4om/methods/orthought/prompts.py from
+https://github.com/BeinuoYang/ORThought (commit 5293e24). These repositories state no
 license at the fixed commits; their text is included for research
 reproduction only and must not be redistributed without the authors'
 permission.

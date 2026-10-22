@@ -1,7 +1,7 @@
 """The modeling-library parts of OptiMUS, one dialect per code language.
 
 Upstream passes `solver="gurobipy"` and gurobipy directions to its code prompts and implements `get_var_code` only for
-gurobipy. The gurobipy dialect is that text unchanged. The Pyomo and OR-Tools pywraplp dialects replace each
+gurobipy. The gurobipy dialect is that text unchanged. The Pyomo, OR-Tools pywraplp and PuLP dialects replace each
 gurobipy-specific piece: the directions, the two code examples, the a <= x <= b note, the imports, the model set-up
 and the variable code.
 """
@@ -16,6 +16,7 @@ GUROBIPY_OBJECTIVE_EXAMPLE = "model.setObjective(quicksum(price[i] * x[i] for i 
 GUROBIPY_RANGE_NOTE = "Gurobi does not support a <= x <= b syntax"
 PYOMO_DOMAINS = {"CONTINUOUS": "NonNegativeReals", "INTEGER": "NonNegativeIntegers", "BINARY": "Binary"}
 ORTOOLS_VARS = {"CONTINUOUS": "NumVar", "INTEGER": "IntVar", "BINARY": "BoolVar"}
+PULP_CATEGORIES = {"CONTINUOUS": "Continuous", "INTEGER": "Integer", "BINARY": "Binary"}
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,18 @@ def ortools_var(symbol: str, shape: list, type: str) -> str:
             f"for idx in itertools.product({ranges})}}\n")
 
 
+def pulp_var(symbol: str, shape: list, type: str) -> str:
+    """Like Gurobi variables, variables have a lower bound of 0; indexed ones are dicts. PuLP names cannot hold [ ]."""
+    category = PULP_CATEGORIES.get(type.upper(), "Continuous")
+    if shape == []:
+        return f'{symbol} = pulp.LpVariable("{symbol}", lowBound=0, cat="{category}")\n'
+    if len(shape) == 1:
+        return f'{symbol} = {{i: pulp.LpVariable(f"{symbol}_{{i}}", lowBound=0, cat="{category}") for i in range({shape[0]})}}\n'
+    ranges = ", ".join(f"range({i})" for i in shape)
+    return (f'{symbol} = {{idx: pulp.LpVariable("{symbol}_" + "_".join(map(str, idx)), lowBound=0, cat="{category}") '
+            f"for idx in itertools.product({ranges})}}\n")
+
+
 GUROBIPY = Dialect(
     solver="gurobipy",
     directions=P.TARGET_CODE__DIRECTIONS,
@@ -107,4 +120,19 @@ ORTOOLS = Dialect(
     var_code=ortools_var,
 )
 
-DIALECTS = {"gurobipy": GUROBIPY, "pyomo": PYOMO, "pywraplp": ORTOOLS}
+PULP = Dialect(
+    solver="PuLP",
+    directions=P.TARGET_CODE__DIRECTIONS
+    .replace("from gurobipy import Model, GRB", "import pulp")
+    .replace('model = Model("OptimizationProblem")', 'model = pulp.LpProblem("OptimizationProblem", pulp.LpMinimize)')
+    .replace("Use model.addConstr() to add the constraint to the model.",
+             "Use model += constraint to add the constraint to the model."),
+    constraint_example="    model += SalesVolumes[i] <= MaxProductionVolumes[i]",
+    objective_example="model.sense = pulp.LpMaximize\nmodel.setObjective(pulp.lpSum(price[i] * x[i] for i in range(N)))",
+    range_note="PuLP does not support a <= x <= b syntax",
+    imports="import itertools\nimport pulp",
+    setup='model = pulp.LpProblem("OptimizationProblem", pulp.LpMinimize)',
+    var_code=pulp_var,
+)
+
+DIALECTS = {"gurobipy": GUROBIPY, "pyomo": PYOMO, "pywraplp": ORTOOLS, "pulp": PULP}

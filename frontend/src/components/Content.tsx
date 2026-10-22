@@ -10,6 +10,7 @@ import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { Button } from "@/components/ui/button";
+import { t } from "@/i18n";
 import { cn } from "@/lib/utils";
 
 hljs.registerLanguage("python", python);
@@ -19,7 +20,17 @@ hljs.registerLanguage("json", json);
 const normalizeMath = (text: string) =>
   text.replace(/\\\[([\s\S]*?)\\\]/g, (_, body) => `$$${body}$$`).replace(/\\\(([\s\S]*?)\\\)/g, (_, body) => `$${body}$`);
 
-export const copyText = (text: string) => navigator.clipboard?.writeText(text).catch(() => undefined);
+/** Copies text; over plain HTTP the Clipboard API is missing, so a hidden text area is copied instead. */
+export async function copyText(text: string): Promise<void> {
+  if (navigator.clipboard) return navigator.clipboard.writeText(text);
+  const area = Object.assign(document.createElement("textarea"), { value: text, readOnly: true });
+  area.style.cssText = "position:fixed;opacity:0";
+  document.body.append(area);
+  area.select();
+  const copied = document.execCommand("copy");
+  area.remove();
+  if (!copied) throw new Error("copy failed");
+}
 
 export function download(name: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
@@ -28,10 +39,10 @@ export function download(name: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function CopyButton({ text, label = "复制", className }: { text: string; label?: string; className?: string }) {
+export function CopyButton({ text, label = t("复制"), className }: { text: string; label?: string; className?: string }) {
   const [copied, setCopied] = useState(false);
   return <Button type="button" variant="ghost" size="icon-sm" aria-label={label} title={label} className={className}
-    onClick={() => copyText(text)?.then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); })}>
+    onClick={() => copyText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }, () => undefined)}>
     {copied ? <Check className="text-success" /> : <Copy />}
   </Button>;
 }
@@ -56,7 +67,7 @@ export const Code = memo(function Code({ text, language = "python", className }:
 }) {
   const html = useMemo(() => hljs.highlight(text, { language }).value, [text, language]);
   return <div className={cn("group relative rounded-lg border bg-muted/40", className)}>
-    <CopyButton text={text} label="复制代码" className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" />
+    <CopyButton text={text} label={t("复制代码")} className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" />
     <pre className="overflow-x-auto p-4 font-mono text-[12.5px] leading-relaxed"><code className="hljs" dangerouslySetInnerHTML={{ __html: html }} /></pre>
   </div>;
 });
@@ -74,7 +85,7 @@ export function Diff({ before, after }: { before: string; after: string }) {
   const removed = parts.filter(part => part.removed).reduce((total, part) => total + (part.count ?? 0), 0);
   return <div className="overflow-hidden rounded-lg border">
     <div className="flex gap-3 border-b bg-muted/40 px-3 py-1.5 text-xs">
-      <span className="text-success">+{added} 行</span><span className="text-destructive">−{removed} 行</span>
+      <span className="text-success">+{t("{count} 行", { count: added })}</span><span className="text-destructive">−{t("{count} 行", { count: removed })}</span>
     </div>
     <pre className="overflow-x-auto py-2 font-mono text-[12.5px] leading-relaxed">
       {parts.flatMap((part, index) => part.value.replace(/\n$/, "").split("\n").map((line, number) =>

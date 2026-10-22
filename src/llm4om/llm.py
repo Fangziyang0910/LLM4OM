@@ -156,17 +156,21 @@ class LLMPresetStore:
         environment = settings_from_env()
         return ([LLMPreset(ENV_PRESET, environment, "env")] if environment else []) + saved
 
-    def get(self, preset: str | None = None) -> LLMSettings:
-        """The settings of `preset`, or of the default preset."""
+    def find(self, preset: str | None = None) -> LLMPreset:
+        """The preset `preset`, or the default preset."""
         presets = self.presets()
         if not presets:
             raise ValueError("Add an LLM preset first (Web workbench, or LLM4OM_LLM_* environment variables).")
         if preset is None:
-            return presets[0].settings
+            return presets[0]
         for item in presets:
             if item.id == preset:
-                return item.settings
+                return item
         raise ValueError(f"No LLM preset {preset!r}; choose one of {[item.id for item in presets]}.")
+
+    def get(self, preset: str | None = None) -> LLMSettings:
+        """The settings of `preset`, or of the default preset."""
+        return self.find(preset).settings
 
     def add(self, settings: LLMSettings) -> LLMPreset:
         """Save `settings` as a new preset; its id comes from the model name."""

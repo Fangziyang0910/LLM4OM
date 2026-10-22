@@ -109,6 +109,65 @@ def test_or_llm_agent_rechecks_infeasible_models(run_method: Any) -> None:
     assert [e["status"] for e in record["steps"] if e["type"] == "solve"] == ["infeasible", "optimal"]
 
 
+FIVE_ELEMENT = "```text\n## Sets:\nP = {A, B}\n\n## Variables:\nx_p integer\n```"
+JUDGED = "```\nThe five-element is {five}.\n\nThe code is {code}.\n\nAnalysis:\n-\n```"
+
+
+def test_llmopt_returns_to_the_step_its_self_correction_rejects(run_method: Any) -> None:
+    seen: dict[str, list[str]] = {}
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        seen.setdefault(role, []).append(messages[-1].text)
+        replies = {"five_element": [FIVE_ELEMENT] * 2, "code": [f"```python\n{BROKEN_CODE}```", CODE_BLOCK, CODE_BLOCK],
+                   "self_correction": [JUDGED.format(five="True", code="False"), JUDGED.format(five="False", code="True"),
+                                       JUDGED.format(five="True", code="True")]}
+        return replies[role][len(seen[role]) - 1]
+
+    record = run_method("llmopt", script)
+    assert_solved(record)
+    assert record["formulation"].startswith("## Sets:")
+    assert [len(seen[role]) for role in ("five_element", "code", "self_correction")] == [2, 3, 3]
+    assert "five-element" in seen["five_element"][0] and FIVE_ELEMENT[8:30] in seen["code"][0]
+    assert "build_model" in seen["code"][0] and "main function" not in seen["code"][0]  # the contract replaces upstream's suffix
+    assert "missing" in seen["self_correction"][0]  # the judge reads the execution error
+    assert "returns the model without solving it" in seen["self_correction"][0]
+
+
+def test_llmopt_reads_a_five_element_split_over_several_blocks() -> None:
+    from llm4om.methods.llmopt import _five_element
+
+    split = "## Sets:\n```text\nP = {A, B}\n```\n## Parameters:\n```\np = 3\n```\n## Variables:\nx\n## Objective:\nmax\n## Constraints:\nc"
+    assert _five_element(split).startswith("## Sets:\nP = {A, B}\n## Parameters:") and "```" not in _five_element(split)
+    whole = "## Sets:\nP\n## Parameters:\np\n## Variables:\nx\n## Objective:\nmax\n## Constraints:\nc"
+    assert _five_element(f"Model:\n```text\n{whole}\n```\nDone.") == whole  # one block with every section: upstream's case
+
+
+def test_llmopt_stops_after_twelve_re_solves(run_method: Any) -> None:
+    record = run_method("llmopt", by_role({"five_element": FIVE_ELEMENT, "code": CODE_BLOCK,
+                                           "self_correction": JUDGED.format(five="True", code="False")}))
+    assert [e["status"] for e in record["steps"] if e["type"] == "solve"] == ["optimal"] * 13
+    assert record["usage"]["llm_calls"] == 1 + 13 + 12
+
+
+ORTHOUGHT_REPLY = ("## 1. Solution Path\n<solution_path>\nMaximize profit.\n</solution_path>\n\n## 2. Summary\n"
+                   f"```model\n{FORMULATION}\n```\n\n## 3. Code\n```python\n{BROKEN_CODE}```")
+
+
+def test_orthought_debugs_code_that_does_not_run(run_method: Any) -> None:
+    seen: list[str] = []
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        seen.append(messages[-1].text)
+        return ORTHOUGHT_REPLY if role == "model" else f"Fixed the attribute.\n<code>\n{PRODUCTION_CODE}</code>"
+
+    record = run_method("orthought", script)
+    assert not record.get("failure") and record["formulation"] == FORMULATION
+    assert any("Maximize profit." in step["content"] for step in record["steps"] if step["type"] == "artifact")
+    assert "Pyomo" in seen[0] and "Gurobipy" not in seen[0] and "build_model" in seen[0]
+    assert "missing" in seen[1] and FORMULATION in seen[1]  # the debug prompt carries the model and the error
+    assert [e["status"] for e in record["steps"] if e["type"] == "solve"] == ["error", "optimal"]
+
+
 GUROBIPY_PARAMS = {"Profit": {"shape": "[2]", "definition": "profit per unit", "type": "float", "value": [3, 2]},
                    "Capacity": {"shape": "[]", "definition": "units of each resource", "type": "float", "value": 8}}
 OPTIMUS_CODE = {
@@ -119,6 +178,8 @@ OPTIMUS_CODE = {
               "objective": "model.objective = Objective(expr=quicksum(Profit[i] * x[i] for i in range(2)), sense=maximize)"},
     "pywraplp": {"constraints": ["model.Add(2 * x[0] + x[1] <= Capacity)", "model.Add(x[0] + 2 * x[1] <= Capacity)"],
                 "objective": "model.Maximize(sum(Profit[i] * x[i] for i in range(2)))"},
+    "pulp": {"constraints": ["model += 2 * x[0] + x[1] <= Capacity", "model += x[0] + 2 * x[1] <= Capacity"],
+             "objective": "model.sense = pulp.LpMaximize\nmodel.setObjective(pulp.lpSum(Profit[i] * x[i] for i in range(2)))"},
 }
 GUROBIPY_CODE = """from gurobipy import Model, GRB, quicksum
 
@@ -156,7 +217,7 @@ def optimus_script(language: str, constraint_codes: list[str] | None = None, pro
 
 
 @pytest.mark.parametrize("language,library,add", [("pyomo", "Pyomo", "constraints.add"),
-    ("gurobipy", "gurobipy", "addConstr"), ("pywraplp", "OR-Tools", "model.Add(")])
+    ("gurobipy", "gurobipy", "addConstr"), ("pywraplp", "OR-Tools", "model.Add("), ("pulp", "PuLP", "model +=")])
 def test_optimus_assembles_clause_code_for_each_language(run_method: Any, language: str, library: str, add: str) -> None:
     if language == "gurobipy":
         pytest.importorskip("gurobipy")
@@ -317,7 +378,7 @@ def test_autoformulation_searches_the_tree_and_ranks_leaves(run_method: Any, pre
 
 
 @pytest.mark.parametrize("language,vtype,expected", [("gurobipy", "GRB.INTEGER", "gpy_model.addVar(vtype=GRB.INTEGER"),
-    ("pywraplp", "integer", "_new_var('integer'")])
+    ("pywraplp", "integer", "_new_var('integer'"), ("pulp", "Integer", "_new_var('Integer'")])
 def test_autoformulation_writes_each_languages_code(run_method: Any, preset: Any, language: str, vtype: str,
                                                    expected: str) -> None:
     if language == "gurobipy":

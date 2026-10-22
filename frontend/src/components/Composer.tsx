@@ -1,23 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, BookOpen, Database, FileText, Paperclip, Play, Settings2, Trash2, Upload, X } from "lucide-react";
+import { ArrowRight, BookOpen, Columns3, Database, FileText, Paperclip, Play, Settings2, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { errorText } from "@/format";
-import type { Draft, Options, Preset } from "@/types";
+import { t } from "@/i18n";
+import { excelToCsv } from "@/spreadsheet";
+import type { Draft, Method, Options, Preset } from "@/types";
 
 const DRAFT_KEY = "llm4om-draft";
-const MILP_ONLY = "原方法的提示只覆盖 LP/MILP，不支持 CPMpy";
+export const MAX_COMPARED = 12;  // runs one comparison may start
 
 const STARTERS: { title: string; tag: string; description: string; data?: Record<string, string> }[] = [
   {
@@ -44,11 +48,16 @@ export function initialDraft(): Draft {
   let saved: Partial<Draft> = {};
   try { saved = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "{}"); } catch { /* storage may be unavailable */ }
   return { description: saved.description ?? "", data: saved.data ?? {}, method: saved.method ?? "direct",
-    language: saved.language ?? "pyomo", preset: saved.preset ?? null };
+    language: saved.language ?? "pyomo", preset: saved.preset ?? null,
+    comparing: saved.comparing ?? false, methods: saved.methods ?? [], presets: saved.presets ?? [] };
 }
 
-export function Composer({ options, presets, draft, setDraft, onStart, openPresets, openExamples }: {
+/** Why a method cannot use a language: its original prompts cover LP/MILP only. */
+const unsupported = (method: Method, language: string) => !!method.languages && !method.languages.includes(language);
+
+export function Composer({ options, presets, draft, setDraft, onStart, onCompare, openPresets, openExamples }: {
   options: Options; presets: Preset[]; draft: Draft; setDraft: (draft: Draft) => void; onStart: (draft: Draft) => Promise<void>;
+  onCompare: (draft: Draft, runs: { method: string; preset: Preset }[]) => Promise<void>;
   openPresets: () => void; openExamples: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -56,13 +65,19 @@ export function Composer({ options, presets, draft, setDraft, onStart, openPrese
   const input = useRef<HTMLTextAreaElement>(null);
   const set = (change: Partial<Draft>) => setDraft({ ...draft, ...change });
 
+  const comparing = !!draft.comparing;
   const preset = presets.find(item => item.id === draft.preset) ?? presets[0];
   const providerLabel = (id: string) => options.providers.find(item => item.id === id)?.label ?? id;
   const method = options.methods.find(item => item.id === draft.method) ?? options.methods[0];
-  const supports = (language: string) => !method.languages || method.languages.includes(language);
+  const supports = (language: string) => comparing || !unsupported(method, language);
   const language = options.languages.find(item => item.id === draft.language && supports(item.id))
     ?? options.languages.find(item => supports(item.id))!;
   const files = Object.entries(draft.data);
+  // A comparison runs each chosen method that supports the language with each chosen preset.
+  const compared = options.methods.filter(item => draft.methods?.includes(item.id) && !unsupported(item, language.id));
+  const comparedPresets = presets.filter(item => draft.presets?.includes(item.id));
+  const runs = compared.flatMap(item => (comparedPresets.length ? comparedPresets : preset ? [preset] : [])
+    .map(chosen => ({ method: item.id, preset: chosen })));
 
   useEffect(() => {
     if (method.id !== draft.method || language.id !== draft.language) set({ method: method.id, language: language.id });
@@ -75,18 +90,28 @@ export function Composer({ options, presets, draft, setDraft, onStart, openPrese
   const attach = async (list: FileList | null) => {
     const data = { ...draft.data };
     for (const file of Array.from(list ?? [])) {
-      if (file.size > 2_000_000) { toast.error(`${file.name} 超过 2 MB，没有添加。`); continue; }
+      if (file.size > 2_000_000) { toast.error(t("{name} 超过 2 MB，没有添加。", { name: file.name })); continue; }
+      if (/\.xlsx$/i.test(file.name)) {
+        try {
+          const sheets = await excelToCsv(file);
+          Object.assign(data, sheets);
+          toast.success(t("{name} 已转换为 {count} 个 CSV 文件。", { name: file.name, count: Object.keys(sheets).length }));
+        } catch (error) { toast.error(t("无法读取 {name}：{error}", { name: file.name, error: errorText(error) })); }
+        continue;
+      }
       data[file.name] = await file.text();
     }
     set({ data });
   };
-  const ready = draft.description.trim().length > 0;
+  const ready = draft.description.trim().length > 0 && (!comparing || (runs.length > 0 && runs.length <= MAX_COMPARED));
   const start = async () => {
     if (!ready || busy) return;
-    if (!preset) { toast.error("先添加一个预设模型。"); openPresets(); return; }
+    if (!preset) { toast.error(t("先添加一个预设模型。")); openPresets(); return; }
     setBusy(true);
-    try { await onStart({ ...draft, method: method.id, language: language.id, preset: preset.id }); }
-    catch (error) { toast.error(errorText(error)); setBusy(false); }
+    try {
+      const request = { ...draft, method: method.id, language: language.id, preset: preset.id };
+      await (comparing ? onCompare(request, runs) : onStart(request));
+    } catch (error) { toast.error(errorText(error)); setBusy(false); }
   };
   const startRef = useRef(start);
   useEffect(() => { startRef.current = start; });
@@ -99,13 +124,16 @@ export function Composer({ options, presets, draft, setDraft, onStart, openPrese
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
   }, []);
+  const toggle = (key: "methods" | "presets", id: string, on: boolean) =>
+    set({ [key]: on ? [...(draft[key] ?? []).filter(item => item !== id), id] : (draft[key] ?? []).filter(item => item !== id) });
+  const label = busy ? t("正在启动") : comparing ? t("开始对比（{count} 个运行）", { count: runs.length }) : t("开始建模");
 
   return <div className="h-full overflow-y-auto">
     <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-6 px-4 py-6 md:px-8 md:py-10 lg:grid-cols-[minmax(0,1fr)_360px]">
       <section className="flex min-w-0 flex-col gap-6">
         <header className="flex flex-col gap-1.5">
-          <h1 className="text-2xl font-semibold tracking-tight">描述一个优化问题</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">写出要做的决策、目标和约束，附上数据。建模方法先给出数学模型，再写成求解代码，并在隔离沙箱中求解。</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("描述一个优化问题")}</h1>
+          <p className="max-w-2xl text-sm text-muted-foreground">{t("写出要做的决策、目标和约束，附上数据。建模方法先给出数学模型，再写成求解代码，并在隔离沙箱中求解。")}</p>
         </header>
 
         <Card className={cn("gap-0 overflow-hidden py-0 transition-shadow focus-within:border-ring/60 focus-within:ring-[3px] focus-within:ring-ring/15",
@@ -113,55 +141,55 @@ export function Composer({ options, presets, draft, setDraft, onStart, openPrese
           onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
           onDrop={event => { event.preventDefault(); setDragging(false); void attach(event.dataTransfer.files); }}>
           <div className="relative">
-            <Textarea ref={input} aria-label="问题描述" value={draft.description}
-              placeholder="例如：工厂生产 A、B 两种产品……请确定生产数量，使总利润最大。"
+            <Textarea ref={input} aria-label={t("问题描述")} value={draft.description}
+              placeholder={t("例如：工厂生产 A、B 两种产品……请确定生产数量，使总利润最大。")}
               onChange={event => set({ description: event.target.value })}
               className="max-h-[55vh] min-h-56 resize-none rounded-none border-0 bg-transparent px-5 py-4 text-[15px] leading-relaxed shadow-none focus-visible:ring-0 dark:bg-transparent" />
             {dragging ? <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-primary/5 text-sm font-medium text-primary">
-              <Upload className="size-4" />松开以添加数据文件</div> : null}
+              <Upload className="size-4" />{t("松开以添加数据文件")}</div> : null}
           </div>
-          {files.length ? <ul aria-label="数据文件" className="flex flex-wrap gap-2 px-5 pb-3">
-            {files.map(([name, content]) => <li key={name} title={`${content.length.toLocaleString()} 字符`}
+          {files.length ? <ul aria-label={t("数据文件")} className="flex flex-wrap gap-2 px-5 pb-3">
+            {files.map(([name, content]) => <li key={name} title={t("{count} 字符", { count: content.length.toLocaleString() })}
               className="flex items-center gap-1.5 rounded-md border bg-muted/50 py-1 pr-1 pl-2 text-xs">
               <FileText className="size-3.5 text-muted-foreground" /><span className="font-medium">{name}</span>
-              <span className="text-muted-foreground">{content.split("\n").filter(Boolean).length} 行</span>
-              <Button variant="ghost" size="icon-xs" aria-label={`移除 ${name}`} onClick={() => {
+              <span className="text-muted-foreground">{t("{count} 行", { count: content.split("\n").filter(Boolean).length })}</span>
+              <Button variant="ghost" size="icon-xs" aria-label={t("移除 {name}", { name })} onClick={() => {
                 const data = { ...draft.data }; delete data[name]; set({ data });
               }}><X /></Button>
             </li>)}
           </ul> : null}
           <div className="flex flex-wrap items-center gap-1 border-t bg-muted/30 px-3 py-2">
             <Button variant="ghost" size="sm" asChild>
-              <label title="CSV、JSON 或文本；代码中以 data[文件名] 读取" className="cursor-pointer">
-                <Paperclip />数据文件
-                <input type="file" multiple accept=".csv,.json,.txt,.tsv" className="sr-only"
+              <label title={t("CSV、JSON、文本或 Excel（转换为 CSV）；代码中以 data[文件名] 读取")} className="cursor-pointer">
+                <Paperclip />{t("数据文件")}
+                <input type="file" multiple accept=".csv,.json,.txt,.tsv,.xlsx" className="sr-only"
                   onChange={event => { void attach(event.target.files); event.target.value = ""; }} />
               </label>
             </Button>
-            <Button variant="ghost" size="sm" onClick={openExamples}><BookOpen />从题库选题</Button>
+            <Button variant="ghost" size="sm" onClick={openExamples}><BookOpen />{t("从题库选题")}</Button>
             {draft.description || files.length
-              ? <Button variant="ghost" size="sm" onClick={() => set({ description: "", data: {} })}><Trash2 />清空</Button> : null}
-            <span className="ml-auto px-2 text-xs text-muted-foreground tabular">{draft.description.length ? `${draft.description.length} 字` : ""}</span>
+              ? <Button variant="ghost" size="sm" onClick={() => set({ description: "", data: {} })}><Trash2 />{t("清空")}</Button> : null}
+            <span className="ml-auto px-2 text-xs text-muted-foreground tabular">{draft.description.length ? t("{count} 字", { count: draft.description.length }) : ""}</span>
           </div>
         </Card>
 
         {!draft.description ? <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium text-muted-foreground">从一个例子开始</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">{t("从一个例子开始")}</h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            {STARTERS.map(item => <button key={item.title} onClick={() => set({ description: item.description, data: item.data ?? {} })}
+            {STARTERS.map(item => <button key={item.title} onClick={() => set({ description: t(item.description), data: item.data ?? {} })}
               className="group flex flex-col gap-2 rounded-xl border bg-card p-4 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
               <span className="flex items-center gap-2">
-                <span className="font-medium">{item.title}</span>
-                <Badge variant="secondary" className="font-normal">{item.tag}</Badge>
+                <span className="font-medium">{t(item.title)}</span>
+                <Badge variant="secondary" className="font-normal">{t(item.tag)}</Badge>
                 <ArrowRight className="ml-auto size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               </span>
-              <span className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{item.description}</span>
+              <span className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{t(item.description)}</span>
             </button>)}
             <button onClick={openExamples}
               className="group flex flex-col gap-2 rounded-xl border border-dashed p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/40">
-              <span className="flex items-center gap-2 font-medium"><Database className="size-4 text-primary" />公开题库
+              <span className="flex items-center gap-2 font-medium"><Database className="size-4 text-primary" />{t("公开题库")}
                 <ArrowRight className="ml-auto size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" /></span>
-              <span className="text-[13px] leading-relaxed text-muted-foreground">NL4Opt、MAMO、IndustryOR 等 Benchmark 的题面，可直接取用。</span>
+              <span className="text-[13px] leading-relaxed text-muted-foreground">{t("NL4Opt、MAMO、IndustryOR 等 Benchmark 的题面，可直接取用。")}</span>
             </button>
           </div>
         </section> : null}
@@ -169,11 +197,30 @@ export function Composer({ options, presets, draft, setDraft, onStart, openPrese
 
       <aside className="lg:sticky lg:top-10 lg:self-start">
         <Card className="gap-5">
-          <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Settings2 className="size-4 text-muted-foreground" />运行设置</CardTitle></CardHeader>
+          <CardHeader className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base"><Settings2 className="size-4 text-muted-foreground" />{t("运行设置")}</CardTitle>
+            <Label className="ml-auto gap-2 text-xs font-normal text-muted-foreground" title={t("同一问题同时用多个方法或预设运行，并排比较结果")}>
+              <Columns3 className="size-3.5" />{t("对比")}
+              <Switch size="sm" checked={comparing} aria-label={t("对比多个方法")} onCheckedChange={on => set({ comparing: on,
+                methods: on && !draft.methods?.length ? [method.id] : draft.methods })} />
+            </Label>
+          </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <fieldset className="flex min-w-0 flex-col gap-2">
-              <legend className="mb-2 text-xs font-medium text-muted-foreground">建模方法</legend>
-              <RadioGroup value={method.id} onValueChange={value => set({ method: value })} aria-label="建模方法"
+              <legend className="mb-2 text-xs font-medium text-muted-foreground">{comparing ? t("建模方法（可多选）") : t("建模方法")}</legend>
+              {comparing ? <div role="group" aria-label={t("建模方法")} className="flex max-h-[340px] flex-col gap-1.5 overflow-y-auto pr-1">
+                {options.methods.map(item => {
+                  const blocked = unsupported(item, language.id);
+                  const selected = !blocked && !!draft.methods?.includes(item.id);
+                  return <Label key={item.id} htmlFor={`compare-${item.id}`} title={blocked ? t("{method}：原方法的提示只覆盖 LP/MILP，不支持这种写法", { method: item.name }) : undefined}
+                    className={cn("flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 font-normal transition-colors hover:bg-accent/50",
+                      selected && "border-primary/50 bg-primary/5 hover:bg-primary/5", blocked && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
+                    <Checkbox id={`compare-${item.id}`} checked={selected} disabled={blocked} onCheckedChange={on => toggle("methods", item.id, on === true)} />
+                    <span className="text-sm font-medium">{item.name}</span>
+                    {item.languages ? <Badge variant="outline" className="ml-auto h-4.5 px-1.5 text-[10px] font-normal text-muted-foreground">LP / MILP</Badge> : null}
+                  </Label>;
+                })}
+              </div> : <RadioGroup value={method.id} onValueChange={value => set({ method: value })} aria-label={t("建模方法")}
                 className="max-h-[340px] gap-1.5 overflow-y-auto pr-1">
                 {options.methods.map(item => {
                   const selected = item.id === method.id;
@@ -184,16 +231,16 @@ export function Composer({ options, presets, draft, setDraft, onStart, openPrese
                     <span className="flex min-w-0 flex-col gap-1">
                       <span className="flex items-center gap-2 text-sm font-medium">{item.name}
                         {item.languages ? <Badge variant="outline" className="h-4.5 px-1.5 text-[10px] font-normal text-muted-foreground">LP / MILP</Badge> : null}</span>
-                      <span className={cn("text-xs leading-relaxed text-muted-foreground", !selected && "line-clamp-1")}>{item.description}</span>
+                      <span className={cn("text-xs leading-relaxed text-muted-foreground", !selected && "line-clamp-1")}>{t(item.description)}</span>
                     </span>
                   </Label>;
                 })}
-              </RadioGroup>
+              </RadioGroup>}
             </fieldset>
 
             <fieldset className="flex min-w-0 flex-col">
-              <legend className="mb-2 text-xs font-medium text-muted-foreground">代码写法与求解器</legend>
-              <RadioGroup value={language.id} onValueChange={value => set({ language: value })} aria-label="代码写法" className="grid grid-cols-2 gap-1.5">
+              <legend className="mb-2 text-xs font-medium text-muted-foreground">{t("代码写法与求解器")}</legend>
+              <RadioGroup value={language.id} onValueChange={value => set({ language: value })} aria-label={t("代码写法")} className="grid grid-cols-2 gap-1.5">
                 {options.languages.map(item => {
                   const allowed = supports(item.id);
                   const tile = <Label htmlFor={`language-${item.id}`}
@@ -201,32 +248,43 @@ export function Composer({ options, presets, draft, setDraft, onStart, openPrese
                       item.id === language.id && "border-primary/50 bg-primary/5 hover:bg-primary/5", !allowed && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
                     <RadioGroupItem id={`language-${item.id}`} value={item.id} disabled={!allowed} className="sr-only" />
                     <span className="text-sm font-medium">{item.name}</span>
-                    <span className="text-[11px] text-muted-foreground">{item.solver} 求解</span>
+                    <span className="text-[11px] text-muted-foreground">{t("{solver} 求解", { solver: item.solver })}</span>
                   </Label>;
                   return allowed ? <div key={item.id} className="h-full">{tile}</div> : <Tooltip key={item.id}>
                     <TooltipTrigger asChild><div className="h-full">{tile}</div></TooltipTrigger>
-                    <TooltipContent>{method.name}：{MILP_ONLY}</TooltipContent>
+                    <TooltipContent>{t("{method}：原方法的提示只覆盖 LP/MILP，不支持这种写法", { method: method.name })}</TooltipContent>
                   </Tooltip>;
                 })}
               </RadioGroup>
             </fieldset>
 
             <fieldset className="flex min-w-0 flex-col gap-2">
-              <legend className="mb-2 flex w-full items-center text-xs font-medium text-muted-foreground">预设模型
-                <Button variant="link" size="sm" className="ml-auto h-auto p-0 text-xs" onClick={openPresets}>管理</Button></legend>
-              {preset ? <Select value={preset.id} onValueChange={value => set({ preset: value })}>
-                <SelectTrigger aria-label="预设模型" className="w-full min-w-0"><SelectValue /></SelectTrigger>
+              <legend className="mb-2 flex w-full items-center text-xs font-medium text-muted-foreground">{comparing ? t("预设模型（可多选）") : t("预设模型")}
+                <Button variant="link" size="sm" className="ml-auto h-auto p-0 text-xs" onClick={openPresets}>{t("管理")}</Button></legend>
+              {!preset ? <Alert>
+                <AlertDescription className="flex flex-col items-start gap-2">{t("还没有预设模型。")}
+                  <Button size="sm" onClick={openPresets}>{t("添加预设模型")}</Button></AlertDescription>
+              </Alert> : comparing ? <div role="group" aria-label={t("预设模型")} className="flex flex-col gap-1.5">
+                {presets.map(item => <Label key={item.id} htmlFor={`compare-preset-${item.id}`}
+                  className="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 font-normal hover:bg-accent/50">
+                  <Checkbox id={`compare-preset-${item.id}`} checked={!!draft.presets?.includes(item.id)}
+                    onCheckedChange={on => toggle("presets", item.id, on === true)} />
+                  <span className="min-w-0 truncate text-sm font-medium">{item.model}</span>
+                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">{providerLabel(item.provider)}</span>
+                </Label>)}
+                {!comparedPresets.length ? <p className="text-xs text-muted-foreground">{t("未选择时使用默认预设 {model}。", { model: preset.model })}</p> : null}
+              </div> : <Select value={preset.id} onValueChange={value => set({ preset: value })}>
+                <SelectTrigger aria-label={t("预设模型")} className="w-full min-w-0"><SelectValue /></SelectTrigger>
                 <SelectContent>{presets.map(item => <SelectItem key={item.id} value={item.id}>
                   <span className="font-medium">{item.model}</span><span className="text-muted-foreground">{providerLabel(item.provider)}</span>
                 </SelectItem>)}</SelectContent>
-              </Select> : <Alert>
-                <AlertDescription className="flex flex-col items-start gap-2">还没有预设模型。
-                  <Button size="sm" onClick={openPresets}>添加预设模型</Button></AlertDescription>
-              </Alert>}
+              </Select>}
             </fieldset>
 
+            {comparing && runs.length > MAX_COMPARED ? <p className="text-xs text-destructive">
+              {t("一次最多对比 {max} 个运行，当前为 {count} 个。", { max: MAX_COMPARED, count: runs.length })}</p> : null}
             <Button size="lg" className="w-full" disabled={!ready || busy} onClick={() => void start()}>
-              {busy ? <Spinner /> : <Play />}{busy ? "正在启动" : "开始建模"}
+              {busy ? <Spinner /> : comparing ? <Columns3 /> : <Play />}{label}
               {!busy ? <KbdGroup className="ml-1 hidden opacity-70 sm:inline-flex"><Kbd className="bg-primary-foreground/15 text-primary-foreground">Ctrl</Kbd>
                 <Kbd className="bg-primary-foreground/15 text-primary-foreground">↵</Kbd></KbdGroup> : null}
             </Button>

@@ -3,6 +3,10 @@
 Runs, threads and streaming come from the LangGraph server itself (`/threads`, `/runs`, `/assistants`).
 """
 
+import os
+import re
+import time
+from collections import defaultdict, deque
 from dataclasses import asdict
 from importlib.resources import files
 from pathlib import Path
@@ -18,10 +22,11 @@ from llm4om.graph import default_resources
 from llm4om.languages import LANGUAGES
 from llm4om.llm import PROVIDERS, LLMPresetStore, LLMSettings, list_models
 from llm4om.methods import methods
+from llm4om.runtime import TokenBudget
 from llm4om.server import examples
 
 ASSETS = Path(str(files("llm4om.server").joinpath("web_assets")))
-PAGES = ("/", "/run/{thread_id}")  # the single-page app; no catch-all or /runs path, which would shadow the LangGraph API
+PAGES = ("/", "/run/{thread_id}", "/compare/{group}")  # the single-page app; no catch-all or /runs path, which would shadow the LangGraph API
 
 
 class PresetBody(BaseModel):
@@ -55,10 +60,55 @@ class JsonOnlyWrites:
         await self.app(scope, receive, send)
 
 
-def create_app(presets: LLMPresetStore | None = None) -> FastAPI:
+RUN_STARTS = re.compile(r"/(threads/[^/]+/)?runs(/stream|/wait|/batch)?/?")
+
+
+class RunRateLimit:
+    """Limits the runs one client address may start per hour; 0 means no limit.
+
+    The address is the connecting peer's, or with `trust_proxy` the last X-Forwarded-For entry, which a reverse
+    proxy such as Caddy sets to the address it saw. Trust it only when clients reach the server through the proxy
+    alone; otherwise a client can send any address.
+    """
+
+    def __init__(self, app: ASGIApp, per_hour: int = 0, trust_proxy: bool = False) -> None:
+        self.app, self.per_hour, self.trust_proxy = app, per_hour, trust_proxy
+        self.starts: dict[str, deque[float]] = defaultdict(deque)
+
+    def client(self, scope: Scope) -> str:
+        forwarded = dict(scope["headers"]).get(b"x-forwarded-for", b"").decode().split(",")[-1].strip()
+        if self.trust_proxy and forwarded:
+            return forwarded
+        return scope["client"][0] if scope.get("client") else "unknown"
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if (self.per_hour and scope["type"] == "http" and scope["method"] == "POST"
+                and RUN_STARTS.fullmatch(scope["path"])):
+            now, client = time.monotonic(), self.client(scope)
+            starts = self.starts[client]
+            while starts and starts[0] <= now - 3600:
+                starts.popleft()
+            if len(starts) >= self.per_hour:
+                wait = max(1, round((starts[0] + 3600 - now) / 60))
+                detail = f"This address started {self.per_hour} runs in the last hour. Try again in {wait} min."
+                await JSONResponse({"detail": detail}, status_code=429)(scope, receive, send)
+                return
+            starts.append(now)
+        await self.app(scope, receive, send)
+
+
+def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None = None, runs_per_hour: int | None = None,
+               trust_proxy: bool | None = None) -> FastAPI:
+    """The platform routes. Settings left out come from the service resources and LLM4OM_RUNS_PER_HOUR and
+    LLM4OM_TRUST_PROXY."""
     app = FastAPI(title="LLM4OM")
     app.add_middleware(JsonOnlyWrites)
+    app.add_middleware(RunRateLimit, per_hour=int(os.environ.get("LLM4OM_RUNS_PER_HOUR") or 0)
+                       if runs_per_hour is None else runs_per_hour,
+                       trust_proxy=os.environ.get("LLM4OM_TRUST_PROXY", "") not in ("", "0", "false")
+                       if trust_proxy is None else trust_proxy)
     store = presets or default_resources().presets
+    budget = budget or (default_resources().budget if presets is None else None)
 
     @app.exception_handler(ValueError)
     async def bad_input(_: Request, error: ValueError) -> JSONResponse:
@@ -75,20 +125,26 @@ def create_app(presets: LLMPresetStore | None = None) -> FastAPI:
             "datasets": examples.datasets(),
         }
 
+    def public() -> dict[str, Any]:
+        """The presets without keys, with the tokens each used today and the daily budget (0: none)."""
+        used = budget.used() if budget else {}
+        return {"presets": [{**preset, "tokens_today": used.get(preset["id"], 0)} for preset in store.public()["presets"]],
+                "daily_tokens": budget.daily_limit if budget else 0}
+
     # Presets are added and deleted, never changed or read back with their keys.
     @app.get("/api/presets")
     def get_presets() -> dict[str, Any]:
-        return store.public()
+        return public()
 
     @app.post("/api/presets")
     def add_preset(body: PresetBody) -> dict[str, Any]:
         store.add(LLMSettings(**body.model_dump()))
-        return store.public()
+        return public()
 
     @app.delete("/api/presets/{preset}")
     def delete_preset(preset: str) -> dict[str, Any]:
         store.delete(preset)
-        return store.public()
+        return public()
 
     @app.post("/api/models")
     async def models(body: PresetBody) -> dict[str, Any]:

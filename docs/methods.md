@@ -2,7 +2,7 @@
 
 方法负责建模流程：调用 LLM、输出中间产物、请求求解、根据反馈修正。平台提供 LLM、代码契约和求解沙箱。接口见[架构](architecture.md#方法接口)。
 
-每个方法都是一张 LangGraph 图，即使只有一个节点。生成代码的提示按所选代码写法动态组装（见[可插拔的代码提示](architecture.md#可插拔的代码提示)）。原提示要求 LP/MILP 的方法只支持 Pyomo、gurobipy 和 `pywraplp` 三种写法；Direct、Feedback Repair 和 TriVAL 另外支持 CPMpy（约束规划）。
+每个方法都是一张 LangGraph 图，即使只有一个节点。生成代码的提示按所选代码写法动态组装（见[可插拔的代码提示](architecture.md#可插拔的代码提示)）。原提示要求 LP/MILP 的方法只支持 Pyomo、gurobipy、`pywraplp` 和 PuLP 四种 MILP 写法；Direct、Feedback Repair、TriVAL、ORThought 和 LLMOPT 另外支持 CPMpy（约束规划）和 CVXPY（连续凸优化）。
 
 ## 方法一览
 
@@ -15,6 +15,8 @@
 | `coe` | Chain-of-Experts | `start_trial → conductor ⇄ expert → reducer →（evaluate → backward）→ finish`；协调者逐个选专家，专家依次评论，汇总器写代码；开启反思时，代码出错则从最后一位专家向前询问责任 | `temperature`=0、`max_collaborate_nums`=3、`enable_reflection`=false、`max_trials`=3 |
 | `optitree` | OptiTree | `classify*（逐层匹配问题类型）→ retrieve → reason → execute →（inspect → execute）*`，最多检查 4 次 | `temperature`=0、`max_inspections`=4 |
 | `or_llm_agent` | OR-LLM-Agent | `math_model → write_code → execute →（fix → execute）* → end_round`，再按结果做一轮不可行检查或模型复查 | `temperature`=0.2；主轮 3 次、不可行检查 1 次、复查 2 次（`attempts`） |
+| `orthought` | ORThought | `model → execute →（debug → execute）*`；一次写出求解思路、数学模型和代码，代码无法运行时带上模型和错误调试 | `temperature`=0、`debug_max_try`=3 |
+| `llmopt` | LLMOPT | `define → write_code → execute →（self_correct →（define 或 write_code）→ execute）*`；五要素模型 → 代码 → 执行，LLM 分别判断模型和代码对错，回到错的一步重写 | `max_resolves`=12 |
 | `autoformulation` | AutoFormulation | `start → expand*（深度优先建树）→ rollout*（MCTS）→ select` | `n_used_gpt`=8、`n_top`=3、`n_reward`=5、`total_rollouts`=16；其余搜索常数和运行上限见预设文件 |
 
 参数全部集中在 [`src/llm4om/methods/presets.py`](../src/llm4om/methods/presets.py)，每个方法一个不可变的 dataclass。移植方法的取值是上游在固定提交上的默认值。运行时不能改参数：命令行、Python 接口和页面都不接受方法参数；要换参数，改这个文件。
@@ -36,9 +38,11 @@
 | CoE | [xzymustbexzy/Chain-of-Experts@afb89bf](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) | `main.py` 的 `chain_of_experts` 改写为图；七位专家、协调者和汇总器的提示逐字保留 |
 | OptiTree | [MIRALab-USTC/OptiTree@2e70ecf](https://github.com/MIRALab-USTC/OptiTree/tree/2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9) | `Reasoner.reason_run` 改写为图；分类、推理、检查三组提示逐字提取（`optitree/prompts.py`）；随包分发原问题类型树和思路模板（`optitree/source/`，MIT） |
 | OR-LLM-Agent | [bwz96sco/or_llm_agent@5dccdaa](https://github.com/bwz96sco/or_llm_agent/tree/5dccdaab89ab91c3cb28066fe849423dc124d287) | `or_llm_eval.py` 的 `or_llm_agent` 改写为图；提示逐字保留，代码请求改为平台契约 |
+| ORThought | [BeinuoYang/ORThought@5293e24](https://github.com/BeinuoYang/ORThought/tree/5293e24861a65d1e4a2f61f4fad0a81de901ee38) | `workflow.py` 的 `ORThoughtModelAgent`（`formalized` 模式）与 `ORThoughtSolveAgent` 改写为图；`prompt.py` 逐字收录（`orthought/prompts.py`）。论文见 [arXiv 2508.14410](https://arxiv.org/abs/2508.14410) |
+| LLMOPT | [antgroup/LLMOPT@1492dd3](https://github.com/antgroup/LLMOPT/tree/1492dd33e39ea13f1afe32a0adc13d4217334195) | `inference/inference_q2f2c.py` 的 Q2F → F2C → 执行改写为图，加上论文的自我校正循环；`prompts/generate_prompt.py` 与 `prompts/self_correction_prompt.py` 逐字收录（`llmopt/prompts.py`）。论文见 [ICLR 2025](https://arxiv.org/abs/2410.13213) |
 | AutoFormulation | [jumpynitro/AutoFormulator@5214801](https://github.com/jumpynitro/AutoFormulator/tree/52148018d04de23dc2d36d4281eb6244c2a42ffc) | `MCTS_used.py` 的建树与 `many_rollouts` 改写为图；`prompts.py` 和 `utils_*` 的解析与等价判断放在 `autoformulation/upstream/`；代码生成按写法组装（`autoformulation/codegen.py`）。论文见 [ICML 2025](https://proceedings.mlr.press/v267/astorga25a.html) |
 
-这些实现使用你配置的通用 LLM，没有复现论文的模型、数据或运行条件。采样温度沿用上游：OR-LLM-Agent 0.2；CoE 0（协调者 `max_tokens=10`）；OptiTree 0；OptiMUS 和 AutoFormulation 上游不设温度，这里用 OpenAI 默认值 1.0。上游源码的早期观察见 [OptiMUS](references/optimus-source.md) 和 [CoE](references/coe-source.md)。
+这些实现使用你配置的通用 LLM，没有复现论文的模型、数据或运行条件。采样温度沿用上游：OR-LLM-Agent 0.2；ORThought 0；CoE 0（协调者 `max_tokens=10`）；OptiTree 0；OptiMUS 和 AutoFormulation 上游不设温度，这里用 OpenAI 默认值 1.0。
 
 ### TriVAL
 
@@ -102,6 +106,35 @@ DeepSeek 的思考模式不支持强制 `tool_choice`，而 TriVAL 的结构化�
 
 修复对话只保留在副本中，只有最后一次代码进入主对话，与上游 `generate_or_code_solver` 一致。上游在最后一次修复后不再执行；平台把这段未执行代码作为中间产物输出，最终结果取最后一次实际执行的代码。
 
+### ORThought
+
+上游流程：`formalized_solution_path_prompt` 让 LLM 按专家建模的顺序写出求解思路（理解问题：目标、决策变量、约束；再逐步建立变量、目标和约束），然后汇总数学模型并写出代码，三部分分别放在 `<solution_path>`、```` ```model ```` 和 ```` ```python ```` 中。代码执行出错时，`debug_prompt` 读问题、数学模型、代码和错误信息，返回改正的代码，最多 `debug_max_try` 次（上游 `main.sh` 为 3）。代码能运行但无可行解时不调试。论文报告的多智能体对照和 LogiOR 数据集不在平台中。
+
+| 改动 | 类型 | 原因 |
+|---|---|---|
+| 两条代码要求（“带默认参数的可调用函数，返回最优目标值或 `None`”）改为平台代码契约；“Gurobipy”换成所选写法的库名 | 适配 | 代码写法由用户选择；平台读取模型而不是函数返回值 |
+| “执行出错”定义为沙箱没有得到求解状态；错误信息是沙箱反馈。上游判断返回值是否为含 “Error” 的字符串 | 适配 | 代码在平台沙箱中执行 |
+| 代码块取最长的 ```` ```python ```` 块，不再要求超过 400 个字符 | 避错 | 上游的长度门槛针对带默认参数和数据的函数；`build_model(data)` 常常更短，按原门槛会被当成“没有代码” |
+
+求解思路作为 `solution_path` 产物显示在过程中。仓库没有声明许可证，提示仅用于研究复现（见 NOTICE）。
+
+### LLMOPT
+
+上游流程：`Q2F` 让 LLM 按模板写出五要素模型（Sets、Parameters、Variables、Objective、Constraints），`F2C` 只根据五要素模型写代码，然后执行。论文第 3.4 节在测试时加入自我校正：`self_correction` 提示把问题、五要素模型、代码和运行信息交给 LLM，分别判断五要素模型和代码是否正确；第 4.1 节规定最多重解 12 次。
+
+LLMOPT 的主要贡献是微调模型（多指令 SFT 加 KTO 对齐），发布为 [LLMOPT-Qwen2.5-14B](https://huggingface.co/ant-opt/LLMOPT-Qwen2.5-14B)。平台只复现测试时流程，使用所选预设。要复现论文条件，用 vLLM 等服务以 OpenAI 兼容接口部署该模型，并添加一个 `openai_compatible` 预设。
+
+| 改动 | 类型 | 原因 |
+|---|---|---|
+| 代码请求的结尾（“写 Pyomo 代码，以 `from pyomo.environ import *` 开头，打印最优解，写成类并加 main 函数”）改为平台代码契约；其余提示中的 “Pyomo”/“pyomo” 换成所选写法的库名 | 适配 | 代码写法由用户选择；平台读取模型而不是打印输出 |
+| 自我校正提示的运行信息是沙箱反馈（状态、错误、目标值和非零变量），不是代码的打印输出 | 适配 | 生成代码不再打印结果 |
+| 自我校正提示中“生成并执行 pyomo 代码”一句改为说明平台契约：代码定义 `build_model(data)` 并返回模型，由平台求解 | 适配 | 不说明时，判断者把“代码没有调用求解、没有打印”判为错误，每轮都要求重写正确的代码（DeepSeek 实测） |
+| 五要素取第一个代码块；该块不含全部五个小节（Sets、Parameters、Variables、Objective、Constraints）时，改用整段回答去掉代码块标记的文本 | 避错 | 上游假设回答只有一个代码块。通用 LLM 常把每个小节分别放进代码块，或不用代码块，按原规则只取到 Sets，代码因缺少参数而建错；不用代码块时上游直接中断 |
+| 上游没有发布循环代码。五要素判为错时回到 `define`（随后重写代码），否则代码判为错时回到 `write_code`，两者都对时结束；回答中缺少某个判断时按“正确”处理 | 适配 | 按论文的文字描述实现；论文未说明两个判断如何对应到返回哪一步 |
+| 结果取最后一次执行 | 适配 | 论文未说明；与“判对即停”一致 |
+
+提示与 `inference_q2f2c.py` 一致，作为单条用户消息发送，不加系统消息，不设温度。代码回答中没有 ```` ```python ```` 块时，上游因 `IndexError` 中断；这里同样让运行失败，并给出原因。仓库没有声明许可证，提示仅用于研究复现（见 NOTICE）。
+
 ### AutoFormulation
 
 上游流程：`MCTS.dfs_from_scratch` 深度优先建树。每个节点为下一个组件（参数、决策变量、目标、等式约束、不等式约束）采样 `n_used_gpt` 个回答；去掉空回答；对可执行的组件运行检查脚本；去除等价候选（参数取众数，决策变量由 LLM 分组 8 次取多数，其余用 SymPy/Z3 脚本判断）；LLM 排名打分，保留前 `n_top` 个。然后 `MCTS.many_rollouts(global_scoring="ranking")`：UCT（`w_exp=1`、`λ=0.5`）选出完整模型；前 3 个有解的完整模型作为基线（奖励 0.5）；之后的完整模型与每个基线双向比较（每次 5 个判断），胜率作为奖励回传；Bradley-Terry 给出全局排名。
@@ -136,7 +169,7 @@ DeepSeek 的思考模式不支持强制 `tool_choice`，而 TriVAL 的结构化�
 
 异常路径回归分布在对应模块的测试中（`tests/test_graph.py`、`test_llm.py`、`test_cli.py`、`test_methods.py`，前端 `src/useRun.test.ts`）：JSON 中的 URL、转义和嵌套结构；TriVAL 超时与多工具顺序编辑；AutoFormulation 并发取消；建模与最终求解共享截止时间；求解超限记录；Anthropic 额外参数；OpenRouter 流式工具对话保留推理字段；断线后重新读取运行状态；节点产物步骤先于下一节点的调用记录。沙箱测试另检查环境变量隔离和取消后的子进程回收。这些测试使用脚本模型或本地假 HTTP 响应。
 
-确定性测试（`tests/test_methods.py`、`tests/test_sandbox.py`、`tests/test_server.py`）用脚本化的聊天模型跑通全部 8 张图，覆盖：四种代码写法各自由对应求解器求到最优；CPMpy 可满足性问题；代码与写法不符时的报错；MILP 方法拒绝 CPMpy；Direct 生成 CPMpy 代码；OR-LLM-Agent 的修复与不可行复查；OptiMUS 在三种写法方言下的组装、调试、长分隔符与多代码块解析；CoE 的反向反思；OptiTree 沿类型树匹配并检查失败代码；AutoFormulation 的参数众数、变量分组、SymPy 等价剪枝、排名、双向比较和两模型排名；TriVAL 回溯到数学模型的路径；LLM 调用上限。
+确定性测试（`tests/test_methods.py`、`tests/test_sandbox.py`、`tests/test_server.py`）用脚本化的聊天模型跑通全部 10 张图，覆盖：四种代码写法各自由对应求解器求到最优；CPMpy 可满足性问题；代码与写法不符时的报错；MILP 方法拒绝 CPMpy；Direct 生成 CPMpy 代码；OR-LLM-Agent 的修复与不可行复查；OptiMUS 在三种写法方言下的组装、调试、长分隔符与多代码块解析；CoE 的反向反思；OptiTree 沿类型树匹配并检查失败代码；AutoFormulation 的参数众数、变量分组、SymPy 等价剪枝、排名、双向比较和两模型排名；TriVAL 回溯到数学模型的路径；ORThought 的错误调试；LLMOPT 按自我校正结果回到五要素或代码步骤，以及 12 次重解上限；LLM 调用上限。
 
 2026-10-21 用 DeepSeek（关闭思考模式）在 Docker 沙箱中做了真实运行：
 
@@ -166,3 +199,23 @@ DeepSeek 的思考模式不支持强制 `tool_choice`，而 TriVAL 的结构化�
 8 个运行同时进行，全部成功；流式输出下 token 统计仍然完整。页面上的运行、停止和重新打开也做了浏览器检查。
 
 生产计划示例上，OptiMUS 曾因长分隔符丢失目标函数代码，以目标值 0“最优”结束；修正解析后重跑为 13。这些运行只证明流程能端到端工作，不代表方法在 Benchmark 上的准确率。
+
+### v0.41
+
+确定性检查：Python 86 项测试、前端 16 项 Vitest 测试和 5 项 Playwright 浏览器测试通过，Ruff、ESLint、类型检查和构建通过。新增测试覆盖 PuLP 与 CVXPY 的求解、CVXPY 拒绝整数变量、各写法不可行模型的冲突约束（且不进入 `feedback()`）、OptiMUS 与 AutoFormulation 的 PuLP 方言、ORThought 的错误调试、LLMOPT 的回退路径与 12 次重解上限、每日 token 预算和运行频率上限。浏览器测试发现并修复了两个只在构建后的页面出现的错误：手动拆分的 SDK 代码块让发起运行报错 `r is not a function`；历史查询把 TanStack Query 的上下文当成元数据过滤条件，运行记录为空。
+
+2026-10-22 用 DeepSeek（关闭思考模式）在 Docker 沙箱中真实运行。问题：README 中的生产计划（13）、3×4 运输问题（独立求得 1360）、凸二次规划 $\min (x-1)^2+(y-2)^2,\ x+y\le 2,\ x,y\ge 0$（0.5，解 $(0.5,1.5)$），以及合同下限与切割产能矛盾的生产问题（不可行）。
+
+| 方法 | 代码写法（求解器） | 问题 | 结果 |
+|---|---|---|---|
+| Direct、OR-LLM-Agent | PuLP（CBC） | 生产计划 | 最优，13 |
+| OptiMUS | PuLP（CBC） | 运输问题 | 最优，1360；19 次 LLM 调用 |
+| Direct、Feedback Repair | CVXPY（Clarabel） | 凸二次规划 | 最优，0.5，解 (0.5, 1.5) |
+| Direct | Pyomo、PuLP、CPMpy | 不可行生产问题 | `infeasible`；Pyomo 与 PuLP 由 Gurobi IIS 给出 3 条冲突约束，CPMpy 由 MUS 给出 2 条（$A\ge 5$ 与 $2A+B\le 8$） |
+| ORThought | Pyomo、gurobipy、PuLP、CVXPY、CPMpy | 生产计划、运输问题、凸二次规划 | 5 次运行全部最优，目标值分别为 13、1360、1360、0.5、13；每次 1 次 LLM 调用 |
+| LLMOPT | Pyomo、gurobipy、PuLP、CVXPY、CPMpy | 同上 | 5 次运行全部最优，目标值同上；每次 3 次 LLM 调用（五要素、代码、自我校正判对） |
+
+LLMOPT 第一次真实运行暴露了两个适配问题（见上文 LLMOPT 改动表）：DeepSeek 把每个小节分别放进代码块，按上游规则只取到 Sets，运输问题得到目标值 0 和 4 的错误模型，并用满 12 次重解；判断者不知道平台契约，把“代码没有调用求解”判为错误。修正后 5 次运行都在第一轮判对。
+
+同日在 Docker 部署上检查：经 Caddy 的 HTTPS 访问和流式输出正常；设置预算后，用完预算的预设在第一次 LLM 调用前停止；同一地址第 3 次发起运行得到 429；正常重启后运行记录数量不变（61 条）；`docker compose cp` 备份得到完整的 `.langgraph_api/` 与 `.private/`。恢复命令与迁移命令相同，本次没有在生产数据上执行。LangSmith 追踪没有实际接入验证。
+

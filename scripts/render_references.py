@@ -19,7 +19,7 @@ def render(catalog: dict) -> dict[str, str]:
         f"调研日期：{date}。本目录整理 {len(records)} 项代表性论文／投稿记录。",
         "资料字段与逐项注释统一维护于 [catalog.json](catalog.json)；本页与 [BibTeX](references.bib)由维护工具生成。",
         "",
-        "阅读策略与设计比较见 [研究综述](../research-landscape.md)；出处核验及读取限制见 [检索记录](search-log.md)，实现考察见 [源码记录](source-inspection.md)。",
+        "出处核验及读取限制见 [检索记录](search-log.md)。",
         "",
         "更新 catalog 后运行 `python3 scripts/render_references.py`，再运行仓库校验。当前资料是定向代表性综述；各条目说明实际阅读范围，不构成复现实验或性能排行榜。",
         "",

@@ -11,6 +11,8 @@
     "coe": "llm4om.server.graphs:coe",
     "optitree": "llm4om.server.graphs:optitree",
     "or_llm_agent": "llm4om.server.graphs:or_llm_agent",
+    "orthought": "llm4om.server.graphs:orthought",
+    "llmopt": "llm4om.server.graphs:llmopt",
     "autoformulation": "llm4om.server.graphs:autoformulation"
   },
   "http": {

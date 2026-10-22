@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm4om"
-version = "0.40.0"
+version = "0.41.0"
 description = "A platform for automated optimization modeling"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -33,7 +33,8 @@ dependencies = [
 [project.optional-dependencies]
 # Host-side solving for `--sandbox local` and tests. The Docker worker installs its own copies.
 # Match the HiGHS ABI bundled with OR-Tools 9.15 (google/or-tools#5246).
-solve = ["Pyomo==6.10.1", "highspy==1.12.0", "ortools==9.15.6755", "cpmpy==1.1.0"]
+solve = ["Pyomo==6.10.1", "highspy==1.12.0", "ortools==9.15.6755", "cpmpy==1.1.0", "PuLP==3.3.2", "cvxpy==1.8.2",
+         "clarabel==0.11.1"]
 gurobi = ["gurobipy==13.0.3"]
 # AutoFormulation's equivalence scripts use SymPy and Z3; the Docker worker has them, `--sandbox local` needs these.
 autoformulation = ["z3-solver==5.1.0.0", "sympy>=1.13,<2"]

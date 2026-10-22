@@ -1,8 +1,9 @@
 """Build and solve one generated model, or run one check script. Runs inside the sandbox; imports nothing from llm4om.
 
 Reads {code, data, language, time_limit} as JSON on stdin and prints one result line prefixed with RESULT_MARKER.
-`build_model(data)` returns the model in the chosen language (Pyomo, gurobipy, OR-Tools pywraplp or CPMpy); the worker
-solves it with that language's solver (HiGHS, Gurobi, SCIP or CP-SAT) through its own interface and reads the result.
+`build_model(data)` returns the model in the chosen language (Pyomo, gurobipy, OR-Tools pywraplp, CPMpy, PuLP or
+CVXPY); the worker solves it with that language's solver (HiGHS, Gurobi, SCIP, CP-SAT, CBC or Clarabel) through its own
+interface and reads the result. For an infeasible model it also looks for the conflicting constraints, for display.
 """
 
 import contextlib
@@ -111,8 +112,170 @@ def solve_cpsat(model, time_limit):
     return status, objective, values
 
 
+def solve_cbc(problem, time_limit):
+    """PuLP with the CBC binary it bundles."""
+    import pulp
+
+    _expect(problem, pulp.LpProblem, "pulp.LpProblem")
+    if problem.objective is None:
+        raise ModelError("The model has no objective; add one with `problem += expression`.")
+    problem.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=float(time_limit)))
+    status = {
+        pulp.LpSolutionOptimal: "optimal", pulp.LpSolutionIntegerFeasible: "feasible",
+        pulp.LpSolutionInfeasible: "infeasible", pulp.LpSolutionUnbounded: "unbounded",
+    }.get(problem.sol_status) or ("time_limit" if problem.status == pulp.LpStatusNotSolved else "error")
+    if status not in ("optimal", "feasible"):
+        return status, None, None
+    values = {variable.name: variable.varValue for variable in problem.variables() if variable.varValue is not None}
+    return status, pulp.value(problem.objective), values
+
+
+def solve_clarabel(problem, time_limit):
+    """CVXPY on Clarabel: continuous convex problems. Clarabel has no integer variables."""
+    import cvxpy as cp
+    import numpy as np
+
+    _expect(problem, cp.Problem, "cvxpy Problem")
+    problem.solve(solver=cp.CLARABEL, time_limit=float(time_limit))
+    status = {
+        cp.OPTIMAL: "optimal", cp.OPTIMAL_INACCURATE: "feasible", cp.INFEASIBLE: "infeasible",
+        cp.INFEASIBLE_INACCURATE: "infeasible", cp.UNBOUNDED: "unbounded", cp.UNBOUNDED_INACCURATE: "unbounded",
+        cp.USER_LIMIT: "time_limit",
+    }.get(problem.status, "error")
+    if status not in ("optimal", "feasible"):
+        return status, None, None
+    values = {}
+    for variable in problem.variables():
+        value = variable.value
+        if value is None:
+            continue
+        if np.ndim(value) == 0:
+            values[variable.name()] = value
+        else:
+            for index in np.ndindex(np.shape(value)):
+                values[f"{variable.name()}[{','.join(map(str, index))}]"] = value[index]
+    return status, problem.value, values
+
+
 # The language decides the solver.
-SOLVERS = {"pyomo": solve_highs, "gurobipy": solve_gurobi, "pywraplp": solve_ortools, "cpmpy": solve_cpsat}
+SOLVERS = {"pyomo": solve_highs, "gurobipy": solve_gurobi, "pywraplp": solve_ortools, "cpmpy": solve_cpsat,
+           "pulp": solve_cbc, "cvxpy": solve_clarabel}
+# Imported before the code runs: CVXPY logs a warning for every optional solver it cannot load, which is not output.
+PRELOAD = {"cvxpy": "cvxpy"}
+
+
+IIS_TIME_LIMIT = 20  # seconds for finding the conflict of an infeasible model, after solving it
+MAX_CONFLICT = 60  # constraints and bounds shown
+
+
+def _linear(terms):
+    """`(coefficient, name)` pairs as a readable sum, shortened after 12 terms."""
+    text = " ".join(f"{'-' if coefficient < 0 else '+'} {'' if abs(coefficient) == 1 else f'{abs(coefficient):g} '}{name}"
+                    for coefficient, name in terms[:12])
+    text = text[2:] if text.startswith("+ ") else text
+    return text + (" + ..." if len(terms) > 12 else "") if terms else "0"
+
+
+def _pyomo_label(name):
+    """Pyomo's LP label of a component (c_u_cap_, x(A_B)) shown close to its name (cap, x[A_B])."""
+    import re
+
+    name = re.sub(r"^c_[ulei]_(.*)_$", r"\1", name)
+    return re.sub(r"\(([^()]*)\)", r"[\1]", name)
+
+
+def gurobi_iis(model):
+    """The constraints and bounds of an irreducible infeasible subsystem of a gurobipy model, found by Gurobi."""
+    model.setParam("OutputFlag", 0)
+    model.setParam("TimeLimit", float(IIS_TIME_LIMIT))
+    model.computeIIS()
+    sense = {"<": "<=", ">": ">=", "=": "="}
+    items = []
+    for constraint in model.getConstrs():
+        if constraint.IISConstr:
+            row = model.getRow(constraint)
+            terms = [(row.getCoeff(i), row.getVar(i).VarName) for i in range(row.size())]
+            items.append(f"{constraint.ConstrName}: {_linear(terms)} {sense[constraint.Sense]} {constraint.RHS:g}")
+    items += [f"{constraint.QCName} (quadratic)" for constraint in model.getQConstrs() if constraint.IISQConstr]
+    items += [f"{constraint.GenConstrName} (general)" for constraint in model.getGenConstrs() if constraint.IISGenConstr]
+    for variable in model.getVars():
+        if variable.IISLB:
+            items.append(f"{variable.VarName} >= {variable.LB:g}")
+        if variable.IISUB:
+            items.append(f"{variable.VarName} <= {variable.UB:g}")
+    return items
+
+
+def _read_with_gurobi(write):
+    """A gurobipy copy of a model that `write(path)` saves as an LP file."""
+    import os
+    import tempfile
+
+    import gurobipy as gp
+
+    path = os.path.join(tempfile.mkdtemp(), "model.lp")
+    write(path)
+    return gp.read(path, env=gp.Env(params={"OutputFlag": 0}))
+
+
+def _write_text(text):
+    def write(path):
+        with open(path, "w", encoding="utf-8") as file:
+            file.write(text)
+
+    return write
+
+
+def pyomo_iis(model):
+    """Gurobi's IIS of a Pyomo model, with Pyomo's LP labels turned back towards the component names."""
+    import re
+
+    copy = _read_with_gurobi(lambda path: model.write(path, io_options={"symbolic_solver_labels": True}))
+    return [re.sub(r"[A-Za-z_][\w()]*", lambda match: _pyomo_label(match.group()), item) for item in gurobi_iis(copy)]
+
+
+def cpmpy_mus(model):
+    """A minimal unsatisfiable subset of the constraints, found by CPMpy with CP-SAT."""
+    from cpmpy.tools.explain import mus
+    from cpmpy.transformations.normalize import toplevel_list
+
+    return [str(constraint) for constraint in mus(toplevel_list(model.constraints), solver="ortools")]
+
+
+# How each language finds the conflict of an infeasible model. Linear models go to Gurobi through an LP file, so the
+# bundled size-limited license covers small models only. CVXPY has none: Clarabel reports no conflict.
+CONFLICTS = {
+    "gurobipy": ("Gurobi IIS", gurobi_iis),
+    "pyomo": ("Gurobi IIS", pyomo_iis),
+    "pywraplp": ("Gurobi IIS", lambda solver: gurobi_iis(_read_with_gurobi(_write_text(solver.ExportModelAsLpFormat(False))))),
+    "pulp": ("Gurobi IIS", lambda problem: gurobi_iis(_read_with_gurobi(problem.writeLP))),
+    "cpmpy": ("CPMpy MUS", cpmpy_mus),
+}
+
+
+def diagnose(language, model):
+    """The conflict of an infeasible model, for display only: a method's feedback never includes it. None when the
+    language has no way to find one."""
+    import signal
+
+    if language not in CONFLICTS:
+        return None
+    tool, find = CONFLICTS[language]
+
+    def stop(*_):
+        raise TimeoutError(f"No conflict found within {IIS_TIME_LIMIT} seconds.")
+
+    previous = signal.signal(signal.SIGALRM, stop)
+    signal.alarm(IIS_TIME_LIMIT + 5)  # Gurobi stops itself at IIS_TIME_LIMIT; this bounds the rest
+    try:
+        items = find(model)
+        return {"tool": tool, "items": items[:MAX_CONFLICT], "total": len(items), "error": None}
+    except BaseException as error:
+        lines = str(error).strip().splitlines()
+        return {"tool": tool, "items": [], "total": 0, "error": lines[0] if lines else type(error).__name__}
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 def clean(value):
@@ -130,9 +293,11 @@ def describe_error(error):
 
 
 def run(request):
-    result = {"status": "error", "objective": None, "variables": {}, "output": "", "error": None}
+    result = {"status": "error", "objective": None, "variables": {}, "output": "", "error": None, "diagnosis": None}
     output = io.StringIO()
     stage = "build"
+    if request["language"] in PRELOAD:
+        __import__(PRELOAD[request["language"]])
     try:
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
             namespace = {"__name__": "generated_model"}
@@ -146,6 +311,9 @@ def run(request):
                 raise ModelError("build_model(data) returned None; it must return the model object.")
             stage = "solve"
             status, objective, values = SOLVERS[request["language"]](model, request.get("time_limit", 60))
+            if status == "infeasible":
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    result["diagnosis"] = diagnose(request["language"], model)
         result["status"] = status
         if values is not None:
             result["objective"] = None if objective is None else clean(objective)

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Run } from "@langchain/langgraph-sdk";
-import { client } from "./api";
+import { client } from "./sdk";
 import { errorText } from "./format";
+import { t } from "./i18n";
 import type { RunMeta, RunValues, Step } from "./types";
 
 /** Text an LLM call has written so far, by step id; it goes away when the step finishes. */
@@ -87,7 +88,7 @@ export function useRun(threadId: string, onFinished: () => void): RunData {
         // Only a finished run can turn an unfinished step into a stopped step.
         if (!controller.signal.aborted) setData(current => ({ ...current, streaming: false, live: {},
           steps: current.steps.map(step => step.running && current.run?.status !== "running" && current.run?.status !== "pending"
-            ? { ...step, running: false, failed: true, content: step.content || "（已停止）" } : step) }));
+            ? { ...step, running: false, failed: true, content: step.content || t("（已停止）") } : step) }));
       }
     })();
     return () => controller.abort();

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, ChevronDown, ChevronsDownUp, ChevronsUpDown, CodeXml, Ellipsis, ListTree, Play, Sigma, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { t } from "@/i18n";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
@@ -38,17 +39,17 @@ export function Timeline({ steps, live, active, onShow }: {
   const allOpen = milestones.length > 0 && milestones.every(item => open.has(item.id));
   return <div className="flex h-full min-h-0 flex-col">
     <div className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
-      <h2 className="text-sm font-medium">建模过程</h2>
-      <span className="text-xs text-muted-foreground tabular">{milestones.length} 个阶段 · {calls} 次 LLM 调用</span>
+      <h2 className="text-sm font-medium">{t("建模过程")}</h2>
+      <span className="text-xs text-muted-foreground tabular">{t("{phases} 个阶段 · {calls} 次 LLM 调用", { phases: milestones.length, calls })}</span>
       {milestones.length ? <Button variant="ghost" size="xs" className="ml-auto text-muted-foreground"
         onClick={() => setOpen(allOpen ? new Set() : new Set(milestones.map(item => item.id)))}>
-        {allOpen ? <ChevronsDownUp /> : <ChevronsUpDown />}{allOpen ? "全部收起" : "全部展开"}</Button> : null}
+        {allOpen ? <ChevronsDownUp /> : <ChevronsUpDown />}{allOpen ? t("全部收起") : t("全部展开")}</Button> : null}
     </div>
     <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
       {!items.length ? <Empty className="h-full border-0">
         <EmptyHeader>
           <EmptyMedia variant="icon">{active ? <Spinner /> : <ListTree />}</EmptyMedia>
-          <EmptyDescription>{active ? "等待方法开始……" : "没有记录到过程。"}</EmptyDescription>
+          <EmptyDescription>{active ? t("等待方法开始……") : t("没有记录到过程。")}</EmptyDescription>
         </EmptyHeader>
       </Empty> : <ol className="flex flex-col p-4">
         {items.map((item, index) => <PhaseItem key={item.id} phase={item} index={index + 1} last={index === items.length - 1}
@@ -72,13 +73,13 @@ function PhaseItem({ phase, index, last, live, active, open, onOpenChange, onSho
   const failed = phase.kind === "error" || (phase.kind === "solve" && step?.status === "error") || calls.some(call => call.failed);
   const state = running ? "live" : phase.kind === "solve" ? tone(step?.status ?? "") : failed ? "bad" : phase.kind === "working" ? "idle" : "done";
   const title = phase.kind === "working"
-    ? (running ? `正在调用 LLM：${working(calls)}` : active ? "等待下一步" : "没有产出结果的 LLM 调用")
-    : step!.title;
+    ? (running ? t("正在调用 LLM：{calls}", { calls: working(calls) ?? "" }) : active ? t("等待下一步") : t("没有产出结果的 LLM 调用"))
+    : t(step!.title);
   const summary = phase.kind === "artifact" ? preview(step!.content)
     : phase.kind === "solve" && !running ? (step!.status === "error" ? step!.content.split("\n").find(line => line && !line.startsWith("Status"))
-      : step!.objective != null ? `目标值 ${formatNumber(step!.objective)}` : STATUS[step!.status ?? ""])
+      : step!.objective != null ? t("目标值 {value}", { value: formatNumber(step!.objective) }) : STATUS[step!.status ?? ""])
     : phase.kind === "error" ? step!.content.trim().split("\n").pop() : "";
-  const meta = [calls.length ? `${calls.length} 次调用` : "", phase.seconds ? duration(phase.seconds) : ""].filter(Boolean).join(" · ");
+  const meta = [calls.length ? t("{count} 次调用", { count: calls.length }) : "", phase.seconds ? duration(phase.seconds) : ""].filter(Boolean).join(" · ");
   const markerTone = state === "done" ? "border-primary/25 bg-primary/10 text-primary" : state === "live" ? TONE.live.soft
     : state === "idle" ? TONE.idle.soft : TONE[state as "good" | "bad" | "warn"].soft;
 
@@ -102,15 +103,15 @@ function PhaseItem({ phase, index, last, live, active, open, onOpenChange, onSho
         {phase.kind === "artifact" ? <>
           <Clipped><Markdown text={step!.content} /></Clipped>
           {step!.formulation || step!.code ? <div className="flex flex-wrap gap-2">
-            {step!.formulation ? <Button variant="secondary" size="xs" onClick={() => onShow("formulation", step!.id)}><Sigma />查看这一版数学模型</Button> : null}
-            {step!.code ? <Button variant="secondary" size="xs" onClick={() => onShow("code", step!.id)}><CodeXml />查看这一版代码</Button> : null}
+            {step!.formulation ? <Button variant="secondary" size="xs" onClick={() => onShow("formulation", step!.id)}><Sigma />{t("查看这一版数学模型")}</Button> : null}
+            {step!.code ? <Button variant="secondary" size="xs" onClick={() => onShow("code", step!.id)}><CodeXml />{t("查看这一版代码")}</Button> : null}
           </div> : null}
         </> : null}
-        {phase.kind === "solve" ? running ? <p className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-3" />正在沙箱中构建模型并求解……</p> : <>
+        {phase.kind === "solve" ? running ? <p className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-3" />{t("正在沙箱中构建模型并求解……")}</p> : <>
           <Plain tone={step!.status === "error" ? "bad" : undefined}>{step!.content}</Plain>
           {step!.code ? <Collapsible className="group/code">
             <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-              <ChevronDown className="size-3.5 -rotate-90 transition-transform group-data-[state=open]/code:rotate-0" />这次执行的代码</CollapsibleTrigger>
+              <ChevronDown className="size-3.5 -rotate-90 transition-transform group-data-[state=open]/code:rotate-0" />{t("这次执行的代码")}</CollapsibleTrigger>
             <CollapsibleContent className="pt-2"><Code text={step!.code} /></CollapsibleContent>
           </Collapsible> : null}
         </> : null}
@@ -126,7 +127,7 @@ function Calls({ calls, live, expanded }: { calls: Step[]; live: Live; expanded:
   if (expanded) return list;
   return <Collapsible className="group/calls">
     <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-      <ChevronDown className="size-3.5 -rotate-90 transition-transform group-data-[state=open]/calls:rotate-0" />LLM 调用（{calls.length}）</CollapsibleTrigger>
+      <ChevronDown className="size-3.5 -rotate-90 transition-transform group-data-[state=open]/calls:rotate-0" />{t("LLM 调用（{count}）", { count: calls.length })}</CollapsibleTrigger>
     <CollapsibleContent className="pt-2">{list}</CollapsibleContent>
   </Collapsible>;
 }
@@ -136,7 +137,7 @@ function Call({ call, live }: { call: Step; live?: Live[string] }) {
   const meta = [tokens, call.seconds != null ? duration(call.seconds) : ""].filter(Boolean).join(" · ");
   if (call.running) return <li className="rounded-md border border-primary/25 bg-primary/5 p-2">
     <div className="flex items-center gap-2 text-xs"><Spinner className="size-3 text-primary" /><span className="font-medium">{roleName(call.title)}</span>
-      <span className="text-muted-foreground">正在写……</span></div>
+      <span className="text-muted-foreground">{t("正在写……")}</span></div>
     <LiveText live={live} />
   </li>;
   return <li>
@@ -149,7 +150,7 @@ function Call({ call, live }: { call: Step; live?: Live[string] }) {
       </CollapsibleTrigger>
       <CollapsibleContent className="border-t p-2">
         {call.content ? <Plain className="max-h-96 overflow-y-auto border-0 bg-transparent p-0">{call.content}</Plain>
-          : <p className="text-xs text-muted-foreground">（没有文本输出）</p>}
+          : <p className="text-xs text-muted-foreground">{t("（没有文本输出）")}</p>}
       </CollapsibleContent>
     </Collapsible>
   </li>;
@@ -158,7 +159,7 @@ function Call({ call, live }: { call: Step; live?: Live[string] }) {
 function LiveText({ live }: { live?: Live[string] }) {
   const ref = useRef<HTMLPreElement>(null);
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [live]);
-  if (!live) return <p className="pt-1.5 text-xs text-muted-foreground">等待模型回复……</p>;
+  if (!live) return <p className="pt-1.5 text-xs text-muted-foreground">{t("等待模型回复……")}</p>;
   return <pre ref={ref} className="mt-1.5 max-h-56 overflow-y-auto font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">
     {live.reasoning ? <span className="text-muted-foreground italic">{live.reasoning}{live.text ? "\n\n" : ""}</span> : null}{live.text}
     <span className="caret" />
@@ -175,7 +176,7 @@ function Clipped({ children }: { children: React.ReactNode }) {
       {children}
       {tall && !open ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-background" /> : null}
     </div>
-    {tall ? <Button variant="link" size="xs" className="self-start px-0" onClick={() => setOpen(!open)}>{open ? "收起" : "展开全文"}</Button> : null}
+    {tall ? <Button variant="link" size="xs" className="self-start px-0" onClick={() => setOpen(!open)}>{open ? t("收起") : t("展开全文")}</Button> : null}
   </div>;
 }
 

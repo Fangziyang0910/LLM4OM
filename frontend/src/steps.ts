@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { Step } from "./types";
 
 /**
@@ -35,7 +36,7 @@ export function working(calls: Step[]): string | null {
   if (!running.length) return null;
   if (running.length === 1) return roleName(running[0].title);
   const roles = [...new Set(running.map(call => roleName(call.title)))];
-  return `${running.length} 个并行调用（${roles.slice(0, 3).join("、")}${roles.length > 3 ? "……" : ""}）`;
+  return t("{count} 个并行调用（{roles}）", { count: running.length, roles: roles.slice(0, 3).join(", ") + (roles.length > 3 ? "…" : "") });
 }
 
 /** The name of an LLM call's role without its method prefix: "trival.code_agent" → "code agent". */
@@ -61,6 +62,6 @@ export function versions(steps: Step[], key: "formulation" | "code", final?: str
     const text = step.type === "artifact" ? step[key] : undefined;
     if (text && text !== found[found.length - 1]?.text) found.push({ id: step.id, title: step.title, text, time: step.time });
   }
-  if (final && final !== found[found.length - 1]?.text) found.push({ id: "final", title: "最终结果", text: final, time: Infinity });
+  if (final && final !== found[found.length - 1]?.text) found.push({ id: "final", title: t("最终结果"), text: final, time: Infinity });
   return found;
 }

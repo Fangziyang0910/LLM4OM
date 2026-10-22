@@ -11,6 +11,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
+from llm4om.languages import LANGUAGES
 from llm4om.sandbox import WORKER_IMAGE
 
 
@@ -96,8 +97,8 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument("--file", help="UTF-8 file with the problem description.")
     run.add_argument("--data", action="append", default=[], help="Attach a CSV or JSON data file; repeatable.")
     run.add_argument("--method", default="direct")
-    run.add_argument("--language", default="pyomo",
-                     help="Code language, which decides the solver: pyomo (HiGHS), gurobipy (Gurobi), pywraplp (SCIP) or cpmpy (CP-SAT).")
+    run.add_argument("--language", default="pyomo", choices=list(LANGUAGES), help="Code language, which decides the solver: "
+                     + ", ".join(f"{item.id} ({item.solver})" for item in LANGUAGES.values()) + ".")
     run.add_argument("--preset", help="LLM preset id; default: the first preset.")
     run.add_argument("--workspace", default="runs/web", help="Directory with the saved LLM presets.")
     run.add_argument("--sandbox", choices=("docker", "local"), default="docker")

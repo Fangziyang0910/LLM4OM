@@ -116,8 +116,8 @@ class Method:
 
 生成代码的提示按所选代码写法动态组装：
 
-- 使用平台契约的方法（Direct、Feedback Repair、TriVAL、OptiTree、OR-LLM-Agent、CoE）把 `target.prompt` 拼进提示；原提示中写死的 “Gurobi” 换成 `target.library`。
-- 原提示逐句针对某个库的方法（OptiMUS、AutoFormulation）为每种写法准备一个方言：gurobipy 方言就是上游原文，Pyomo 和 `pywraplp` 方言只替换与库相关的句子、示例和变量代码。
+- 使用平台契约的方法（Direct、Feedback Repair、TriVAL、OptiTree、OR-LLM-Agent、CoE、ORThought、LLMOPT）把 `target.prompt` 拼进提示；原提示中写死的库名（“Gurobi”“Gurobipy”“Pyomo”）换成 `target.library`。
+- 原提示逐句针对某个库的方法（OptiMUS、AutoFormulation）为每种写法准备一个方言：gurobipy 方言就是上游原文，Pyomo、`pywraplp` 和 PuLP 方言只替换与库相关的句子、示例和变量代码。
 - 方法的建模范围只覆盖部分写法时，用 `Method.languages` 声明。服务端拒绝不支持的组合，前端只列出支持的写法。
 
 ## 代码契约
@@ -130,14 +130,18 @@ class Method:
 | gurobipy | `gp.Model` | Gurobi | `model.optimize()` |
 | OR-Tools `pywraplp` | `pywraplp.Solver` | SCIP | `solver.Solve()` |
 | CPMpy | `cp.Model` | OR-Tools CP-SAT | `SolverLookup.get("ortools", model).solve()` |
+| PuLP | `pulp.LpProblem` | CBC（PuLP 自带） | `problem.solve(PULP_CBC_CMD(...))` |
+| CVXPY | `cp.Problem` | Clarabel | `problem.solve(solver=CLARABEL)`；只接受连续凸模型，含整数变量时报错 |
 
-CPMpy 模型可以没有目标，此时是可满足性问题：找到解时状态为 `feasible`，没有目标值，但有变量取值。代码返回的对象与所选写法不符时，Worker 报告错误，错误信息交给方法作为反馈。
+MILP 写法是 Pyomo、gurobipy、`pywraplp` 和 PuLP（`languages.MILP_LANGUAGES`）。CPMpy 模型可以没有目标，此时是可满足性问题：找到解时状态为 `feasible`，没有目标值，但有变量取值。代码返回的对象与所选写法不符时，Worker 报告错误，错误信息交给方法作为反馈。
 
 ## 沙箱
 
 `Sandbox` 有两个动作：`solve(code, data, language, time_limit)` 构建并求解模型；`run_script(script, time_limit)` 运行检查脚本。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:5` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE` 时以只读方式挂载许可证。超时或取消时删除容器。
+`Sandbox("docker")` 在镜像 `llm4om-worker:6` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE` 时以只读方式挂载许可证。超时或取消时删除容器。
+
+求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CPMpy 模型用 CPMpy 的 MUS，CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。诊断只给人看：`feedback()` 不包含它，方法拿到的反馈与原方法相同。
 
 `Sandbox("local")` 用本机子进程运行同一脚本，只用于开发和测试。子进程只继承路径、语言、临时目录和 Gurobi 许可证位置等必要环境变量，不继承 API 密钥。超时或取消后等待子进程退出。
 
@@ -161,11 +165,11 @@ LLM 调用由聊天模型上的回调记录，包括子图和 `create_agent` 智
 
 | 位置 | 内容 |
 |---|---|
-| 线程元数据 | 标题、方法、代码写法、服务商与模型名（无密钥） |
+| 线程元数据 | 标题、方法、代码写法、服务商与模型名（无密钥）；对比运行的 `group`；用户写的 `note` 和 `tags` |
 | 线程状态 | 问题、数据文件、数学模型、代码、求解结果、失败原因、全部步骤、调用统计 |
 | 运行（run） | 状态：`pending`、`running`、`success`、`error`、`timeout`、`interrupted`（已停止） |
 
-服务器把线程、运行和检查点保存在 `<workspace>/.langgraph_api/`。停止运行时，方法节点被取消，线程状态只保留输入。页面打开已停止的运行时，从服务器保留的流中重放停止前的步骤；服务器重启后，这些步骤不再可得。
+服务器把线程、运行和检查点保存在 `<workspace>/.langgraph_api/`。内存运行时每 10 秒、以及正常退出时，把内存中的数据写入这些文件（先写临时文件再改名，不会写出半个文件）；进程被强制结束时，最多丢失最近约 10 秒的变化。备份就是复制整个工作区。停止运行时，方法节点被取消，线程状态只保留输入。页面打开已停止的运行时，从服务器保留的流中重放停止前的步骤；服务器重启后，这些步骤不再可得。
 
 ## 前端
 
@@ -174,9 +178,13 @@ LLM 调用由聊天模型上的回调记录，包括子图和 `create_agent` 智
 ```text
 frontend/src/
 ├── main.tsx        挂载：主题、QueryClient、Tooltip、Toaster、字体与全局样式
-├── App.tsx         布局、路由（/ 与 /run/{thread_id}）、对话框；运行页按需加载
+├── App.tsx         布局、路由（/、/run/{thread_id} 与 /compare/{group}）、对话框；运行页和对比页按需加载
 ├── index.css       Tailwind 入口、颜色变量（浅色与深色）、Markdown 与代码高亮样式
-├── api.ts          LangGraph 客户端、/api 请求
+├── api.ts          运行、对比、备注与标签、历史，/api 请求
+├── sdk.ts          LangGraph 客户端；体积大，首屏之后再加载
+├── i18n.ts         t()：中文原文为键，按语言取译文；locales/en.ts 是英文
+├── report.ts       一次运行的 Markdown 报告
+├── spreadsheet.ts  Excel 工作簿 → 每个工作表一个 CSV
 ├── format.ts       状态文案、数字、token 与耗时的格式化
 ├── useRun.ts       一次运行的实时数据：读取线程，并重放与接续流
 ├── steps.ts        步骤 → 阶段、版本、摘要（纯函数）
@@ -191,12 +199,15 @@ frontend/src/
     ├── Outputs     产物标签页：解、数学模型、求解代码、问题与数据；版本切换与对比
     ├── Solution    解：分组或列表、二维变量的矩阵视图、CSV 导出
     ├── Content     Markdown、代码、纯文本、差异视图
-    ├── Sidebar     历史运行、示例题库与预设模型入口、外观切换
+    ├── Compare     对比页：同一问题的各方法与预设并排
+    ├── Sidebar     历史运行（文字与 #标签 筛选）、示例题库与预设模型入口、外观与语言切换
     ├── Examples / PresetsDialog    题库与预设模型对话框
     └── status / theme              状态颜色与图标、主题菜单与 Toaster
 ```
 
-测试文件 `*.test.ts(x)` 放在被测模块旁边，由 Vitest（jsdom）运行。
+测试文件 `*.test.ts(x)` 放在被测模块旁边，由 Vitest（jsdom）运行。`frontend/e2e/` 是浏览器测试（Playwright）：它启动脚本化的 OpenAI 兼容服务（`e2e/mock_llm.py`）和使用本机沙箱的 `llm4om serve`，在真实页面上跑运行、对比、不可行诊断、备注与标签、报告导出、Excel 导入和英文界面，不需要密钥和 Docker。
+
+界面文字用中文原文作键（`t("开始建模")`），英文译文在 `locales/en.ts`；`i18n.test.ts` 检查每个键都有译文、占位符一致。服务器给出的方法说明和步骤标题也经过 `t()`。语言默认跟随浏览器，切换后保存在浏览器中。
 
 页面按用户的任务顺序组织：
 
@@ -226,8 +237,10 @@ frontend/src/
 
 Docker 部署（`Dockerfile`、`compose.yaml`）把服务器放进 `app` 容器，数据放在 `llm4om-data` 卷的 `/data` 中。`app` 通过挂载的宿主机 Docker socket 启动同级沙箱容器；启动脚本 `docker-entrypoint.sh` 采用 socket 的用户组后，以非 root 用户、无 capability 运行服务器，见 [ADR 0011](adr/0011-docker-compose-deployment.md)。
 
+两个可选上限防止共享部署被滥用：`LLM4OM_RUNS_PER_HOUR` 限制每个客户端地址每小时发起的运行数（中间件按 `RUN_STARTS` 匹配发起运行的请求，超过时返回 429）；`LLM4OM_DAILY_TOKENS` 限制每个预设每天的 token（`runtime.TokenBudget`，计数保存在 `.private/token-usage.json`，在每次 LLM 调用前检查）。服务在反向代理之后时设置 `LLM4OM_TRUST_PROXY=1`，按 `X-Forwarded-For` 的最后一项区分客户端。`compose.yaml` 的 `https` profile 用 Caddy 自动申请证书并反向代理到 `app`。
+
 工作台面向信任范围内的小组，不做登录和权限控制：能访问端口的人可以运行、添加和删除页面上的预设、删除运行记录。密钥是唯一的保密边界：它只保存在服务器上，不出现在任何接口响应、线程元数据或运行状态中。见 [ADR 0010](adr/0010-llm-presets.md)。
 
 ## 上限
 
-`Limits` 给出每次运行的 LLM 调用数、求解次数、单次求解时限和总时长。超过时方法抛出 `LimitExceeded`，运行记为失败。
+`Limits` 给出每次运行的 LLM 调用数、求解次数、单次求解时限和总时长。超过时方法抛出 `LimitExceeded`，运行记为失败。预设的每日 token 预算用同一个异常停止运行；最后一次调用可能略超预算。

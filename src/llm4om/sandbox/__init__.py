@@ -17,7 +17,7 @@ from typing import Any
 WORKER = Path(__file__).with_name("worker.py")
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
 # The image contains worker.py, so a change to worker.py or worker.Dockerfile needs a new tag (and compose.yaml's).
-WORKER_IMAGE = "llm4om-worker:5"
+WORKER_IMAGE = "llm4om-worker:6"
 START_MARGIN = 60  # seconds beyond the time limit for starting the sandbox, importing libraries and building the model
 
 
@@ -28,6 +28,9 @@ class SolveResult:
     variables: dict[str, float] = field(default_factory=dict)
     output: str = ""
     error: str | None = None
+    # For an infeasible model: {tool, items, total, error}, the constraints that conflict. Shown to people only;
+    # feedback() leaves it out, so no method gets help the original method did not have.
+    diagnosis: dict[str, Any] | None = None
 
     @property
     def executed(self) -> bool:

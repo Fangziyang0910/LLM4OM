@@ -32,3 +32,6 @@ dist/
 
 # Frontend build source; built assets ship inside src/llm4om/server/web_assets
 /frontend/node_modules/
+/frontend/test-results/
+/frontend/playwright-report/
+*.tsbuildinfo

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, CodeXml, Download, FileText, GitCompare, type LucideIcon, Sigma, Table2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { t } from "@/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,7 +17,7 @@ import { Solution } from "./Solution";
 
 export type Tab = "solution" | "formulation" | "code" | "problem";
 const TABS: [Tab, string, LucideIcon][] = [
-  ["solution", "解", Table2], ["formulation", "数学模型", Sigma], ["code", "求解代码", CodeXml], ["problem", "问题与数据", FileText],
+  ["solution", t("解"), Table2], ["formulation", t("数学模型"), Sigma], ["code", t("求解代码"), CodeXml], ["problem", t("问题与数据"), FileText],
 ];
 
 /** What the run produced: the solution, the formulation and the code (each in every version), and the problem. */
@@ -31,25 +32,25 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
 
   return <div className="flex h-full min-h-0 flex-col">
     <Tabs value={tab} onValueChange={value => setTab(value as Tab)} className="shrink-0 gap-0">
-      <TabsList variant="line" aria-label="运行产物" className="h-11 w-full justify-start overflow-x-auto rounded-none border-b px-3">
+      <TabsList variant="line" aria-label={t("运行产物")} className="h-11 w-full justify-start overflow-x-auto rounded-none border-b px-3">
         {TABS.map(([id, label, TabIcon]) => <TabsTrigger key={id} value={id} className="flex-none px-2 sm:px-2.5 [&_svg]:hidden sm:[&_svg]:inline-block">
           <TabIcon />{label}
           {(counts[id] ?? 0) > 1 ? <span className="rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground tabular">{counts[id]}</span> : null}
-          {active && (counts[id] ?? 0) > 0 ? <span className="size-1.5 animate-pulse rounded-full bg-primary" aria-label="正在更新" /> : null}
+          {active && (counts[id] ?? 0) > 0 ? <span className="size-1.5 animate-pulse rounded-full bg-primary" aria-label={t("正在更新")} /> : null}
         </TabsTrigger>)}
       </TabsList>
     </Tabs>
     <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
       {tab === "solution" ? values.solve ? <Solution solve={values.solve} />
-        : <Blank icon={Table2} text={active ? "代码在沙箱中求解后，解会显示在这里。" : values.failure ? "方法没有给出可求解的代码，因此没有解。" : finished ? "没有求解结果。" : "运行没有完成。"} />
+        : <Blank icon={Table2} text={active ? t("代码在沙箱中求解后，解会显示在这里。") : values.failure ? t("方法没有给出可求解的代码，因此没有解。") : finished ? t("没有求解结果。") : t("运行没有完成。")} />
         : null}
       {tab === "formulation" ? <Versioned key="formulation" items={formulations} picked={picked.formulation} pick={id => setPicked("formulation", id)}
-        noun="数学模型" active={active} file="formulation.md"
-        empty={active ? "方法给出数学模型后显示在这里。" : "这个方法没有单独给出数学模型；请看求解代码。"}
+        noun={t("数学模型")} active={active} file="formulation.md"
+        empty={active ? t("方法给出数学模型后显示在这里。") : t("这个方法没有单独给出数学模型；请看求解代码。")}
         render={text => <Markdown text={text} />} /> : null}
       {tab === "code" ? <Versioned key="code" items={codes} picked={picked.code} pick={id => setPicked("code", id)}
-        noun="代码" active={active} file="model.py" extra={language ? `${language.name} · ${language.solver} 求解` : undefined}
-        empty={active ? "方法写出代码后显示在这里。" : "没有求解代码。"}
+        noun={t("代码")} active={active} file="model.py" extra={language ? `${language.name} · ${t("{solver} 求解", { solver: language.solver })}` : undefined}
+        empty={active ? t("方法写出代码后显示在这里。") : t("没有求解代码。")}
         render={text => <Code text={text} />} /> : null}
       {tab === "problem" ? <Problem values={values} /> : null}
     </div>
@@ -68,7 +69,7 @@ function Versioned({ items, picked, pick, noun, active, file, extra, empty, rend
   extra?: string; empty: string; render: (text: string) => React.ReactNode;
 }) {
   const [compare, setCompare] = useState(false);
-  if (!items.length) return <Blank icon={noun === "代码" ? CodeXml : Sigma} text={empty} />;
+  if (!items.length) return <Blank icon={noun === t("代码") ? CodeXml : Sigma} text={empty} />;
   const current = items.find(item => item.id === picked) ?? items[items.length - 1];
   const position = items.indexOf(current);
   const latest = position === items.length - 1;
@@ -78,25 +79,25 @@ function Versioned({ items, picked, pick, noun, active, file, extra, empty, rend
   return <div className="flex flex-col gap-4">
     <div className="flex flex-wrap items-center gap-2">
       {items.length > 1 ? <div className="flex items-center gap-1">
-        <Button variant="outline" size="icon-sm" aria-label="上一版" disabled={position === 0} onClick={() => go(position - 1)}><ChevronLeft /></Button>
+        <Button variant="outline" size="icon-sm" aria-label={t("上一版")} disabled={position === 0} onClick={() => go(position - 1)}><ChevronLeft /></Button>
         <Select value={current.id} onValueChange={id => go(items.findIndex(item => item.id === id))}>
-          <SelectTrigger size="sm" aria-label={`${noun}版本`} className="max-w-72"><SelectValue /></SelectTrigger>
+          <SelectTrigger size="sm" aria-label={t("{noun}版本", { noun })} className="max-w-72"><SelectValue /></SelectTrigger>
           <SelectContent>{items.map((item, number) => <SelectItem key={item.id} value={item.id}>
-            第 {number + 1} 版<span className="text-muted-foreground">{item.title}</span></SelectItem>)}</SelectContent>
+            {t("第 {number} 版", { number: number + 1 })}<span className="text-muted-foreground">{t(item.title)}</span></SelectItem>)}</SelectContent>
         </Select>
-        <Button variant="outline" size="icon-sm" aria-label="下一版" disabled={latest} onClick={() => go(position + 1)}><ChevronRight /></Button>
-      </div> : <span className="text-xs text-muted-foreground">{current.title}</span>}
+        <Button variant="outline" size="icon-sm" aria-label={t("下一版")} disabled={latest} onClick={() => go(position + 1)}><ChevronRight /></Button>
+      </div> : <span className="text-xs text-muted-foreground">{t(current.title)}</span>}
       {extra ? <span className="text-xs text-muted-foreground">{extra}</span> : null}
       <span className="ml-auto flex items-center gap-1">
-        {previous ? <Toggle size="sm" pressed={compare} onPressedChange={setCompare} aria-label="与上一版对比" className="h-8 text-xs">
-          <GitCompare />对比上一版</Toggle> : null}
-        <CopyButton text={current.text} label={`复制${noun}`} />
-        <Button variant="ghost" size="icon-sm" aria-label={`下载${noun}`} title="下载" onClick={() => download(file, current.text)}><Download /></Button>
+        {previous ? <Toggle size="sm" pressed={compare} onPressedChange={setCompare} aria-label={t("与上一版对比")} className="h-8 text-xs">
+          <GitCompare />{t("对比上一版")}</Toggle> : null}
+        <CopyButton text={current.text} label={t("复制{noun}", { noun })} />
+        <Button variant="ghost" size="icon-sm" aria-label={t("下载{noun}", { noun })} title={t("下载")} onClick={() => download(file, current.text)}><Download /></Button>
       </span>
     </div>
     {!latest ? <Alert className="py-2"><AlertDescription className="flex flex-wrap items-center gap-x-2 text-xs">
-      这是第 {position + 1} 版，不是{active ? "目前" : "最终"}的{noun}。
-      <Button variant="link" size="xs" className="h-auto p-0" onClick={() => pick(undefined)}>看最新一版</Button></AlertDescription></Alert> : null}
+      {t(active ? "这是第 {number} 版，不是目前的{noun}。" : "这是第 {number} 版，不是最终的{noun}。", { number: position + 1, noun })}
+      <Button variant="link" size="xs" className="h-auto p-0" onClick={() => pick(undefined)}>{t("看最新一版")}</Button></AlertDescription></Alert> : null}
     {compare && previous ? <Diff before={previous.text} after={current.text} /> : render(current.text)}
   </div>;
 }
@@ -106,8 +107,8 @@ function Problem({ values }: { values: RunValues }) {
   return <div className="flex flex-col gap-4">
     <Card className="gap-3 py-4 shadow-none">
       <CardHeader className="flex items-center gap-2 px-4">
-        <CardTitle className="text-sm">问题描述</CardTitle>
-        <CopyButton text={values.description ?? ""} label="复制问题" className="ml-auto" />
+        <CardTitle className="text-sm">{t("问题描述")}</CardTitle>
+        <CopyButton text={values.description ?? ""} label={t("复制问题")} className="ml-auto" />
       </CardHeader>
       <CardContent className="px-4 text-sm leading-relaxed whitespace-pre-wrap">{values.description}</CardContent>
     </Card>
@@ -121,8 +122,8 @@ function DataFile({ name, content }: { name: string; content: string }) {
     <CardHeader className="flex items-center gap-2 px-4">
       <FileText className="size-4 text-muted-foreground" />
       <CardTitle className="font-mono text-sm">{name}</CardTitle>
-      <span className="text-xs text-muted-foreground">{content.split("\n").filter(Boolean).length} 行</span>
-      <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={`下载 ${name}`} onClick={() => download(name, content)}><Download /></Button>
+      <span className="text-xs text-muted-foreground">{t("{count} 行", { count: content.split("\n").filter(Boolean).length })}</span>
+      <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={t("下载 {name}", { name })} onClick={() => download(name, content)}><Download /></Button>
     </CardHeader>
     <CardContent className="px-4">
       {table ? <div className="max-h-96 overflow-auto rounded-lg border">

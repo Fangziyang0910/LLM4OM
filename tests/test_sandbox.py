@@ -38,6 +38,23 @@ def build_model(data):
     m.maximize(3 * x[0] + 2 * x[1])
     return m
 '''
+PULP_CODE = '''import pulp
+
+def build_model(data):
+    problem = pulp.LpProblem("production", pulp.LpMaximize)
+    x = pulp.LpVariable.dicts("x", ["A", "B"], lowBound=0, cat="Integer")
+    problem += 3 * x["A"] + 2 * x["B"]
+    problem += 2 * x["A"] + x["B"] <= 8, "cutting"
+    problem += x["A"] + 2 * x["B"] <= 8, "machining"
+    return problem
+'''
+CVXPY_CODE = '''import cvxpy as cp
+import numpy as np
+
+def build_model(data):
+    x = cp.Variable(2, name="x")
+    return cp.Problem(cp.Minimize(cp.sum_squares(x - np.array([1, 2]))), [x >= 0, cp.sum(x) <= 2])
+'''
 has_gurobi = importlib.util.find_spec("gurobipy") is not None
 
 
@@ -49,6 +66,7 @@ def solve(code: str, language: str = "pyomo", data: dict[str, str] | None = None
     pytest.param("pyomo", PRODUCTION_CODE, ("x[A]", "x[B]"), id="pyomo-highs"),
     pytest.param("pywraplp", ORTOOLS_CODE, ("x[A]", "x[B]"), id="pywraplp-scip"),
     pytest.param("cpmpy", CPMPY_CODE, ("x[0]", "x[1]"), id="cpmpy-cpsat"),
+    pytest.param("pulp", PULP_CODE, ("x_A", "x_B"), id="pulp-cbc"),
     pytest.param("gurobipy", GUROBIPY_CODE, ("x[A]", "x[B]"), id="gurobipy-gurobi",
                  marks=pytest.mark.skipif(not has_gurobi, reason="gurobipy is not installed"))])
 def test_every_language_is_solved_by_its_solver(language: str, code: str, names: tuple[str, str]) -> None:
@@ -56,6 +74,42 @@ def test_every_language_is_solved_by_its_solver(language: str, code: str, names:
     assert result.error is None, result.error
     assert (result.status, result.objective) == ("optimal", 13)
     assert {name.replace(" ", ""): value for name, value in result.variables.items()} == dict(zip(names, (3, 2)))
+
+
+def test_cvxpy_solves_a_convex_quadratic_program_with_clarabel() -> None:
+    result = solve(CVXPY_CODE, "cvxpy")
+    assert result.error is None and result.output == "", (result.error, result.output)  # CVXPY's import warnings stay out
+    assert result.status == "optimal" and result.objective == pytest.approx(0.5, abs=1e-6)
+    assert result.variables == pytest.approx({"x[0]": 0.5, "x[1]": 1.5}, abs=1e-6)
+
+
+def test_clarabel_rejects_integer_variables() -> None:
+    result = solve("import cvxpy as cp\n\ndef build_model(data):\n    y = cp.Variable(integer=True, name='y')\n"
+                   "    return cp.Problem(cp.Minimize(y), [y >= 1])\n", "cvxpy")
+    assert result.error is not None and "[solve]" in result.error and "mixed-integer" in result.error
+
+
+# Two demands that the capacity cannot both meet; `spare` is a constraint outside the conflict.
+CONFLICTS = {
+    "pyomo": PRODUCTION_CODE.replace("    return m", "    m.needA = pyo.Constraint(expr=m.x['A'] >= 5)\n"
+                                     "    m.needB = pyo.Constraint(expr=m.x['B'] >= 5)\n    return m"),
+    "pywraplp": ORTOOLS_CODE.replace("    return s", "    s.Add(x['A'] >= 5, 'needA')\n    s.Add(x['B'] >= 5, 'needB')\n    return s"),
+    "pulp": PULP_CODE.replace("    return problem", "    problem += x['A'] >= 5, 'needA'\n    problem += x['B'] >= 5, 'needB'\n"
+                              "    return problem"),
+    "cpmpy": CPMPY_CODE.replace("    m.maximize", "    m += x[0] >= 5\n    m += x[1] >= 5\n    m.maximize"),
+}
+
+
+@pytest.mark.parametrize("language", [pytest.param(language, marks=pytest.mark.skipif(
+    language != "cpmpy" and not has_gurobi, reason="the IIS of linear models comes from Gurobi")) for language in CONFLICTS])
+def test_an_infeasible_model_shows_its_conflict_but_feedback_leaves_it_out(language: str) -> None:
+    result = solve(CONFLICTS[language], language)
+    assert result.status == "infeasible" and result.diagnosis is not None, (result.error, result.output)
+    assert result.diagnosis["error"] is None and result.diagnosis["total"] == len(result.diagnosis["items"]) >= 2
+    text = " ".join(result.diagnosis["items"])
+    assert ("needA" in text and "needB" in text) if language != "cpmpy" else (">= 5" in text)
+    assert "machining" not in text or "cutting" not in text  # one capacity row is enough for the conflict
+    assert "needA" not in result.feedback() and "IIS" not in result.feedback()
 
 
 def test_cpmpy_satisfaction_problem_has_a_solution_without_objective() -> None:

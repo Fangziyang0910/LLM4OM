@@ -15,8 +15,6 @@
 
 ## 研究资料
 
-[研究综述](research-landscape.md)比较任务、方法和评测机制。[参考资料库](references/README.md)提供论文、代码和数据链接。[源码考察](references/source-inspection.md)记录固定提交及实际观察。[资料核验说明](references/search-log.md)说明来源和读取范围。
+[参考资料库](references/README.md)提供论文、代码和数据链接。[资料核验说明](references/search-log.md)说明来源和读取范围。
 
 论文元数据在 `references/catalog.json` 中维护。修改后运行 `python3 scripts/render_references.py` 重新生成资料页和 BibTeX。
-
-[30 天学生任务](development/assignments/README.md)以 v0.40 为基线，包含三阶段任务书、当前接口和交接要求。

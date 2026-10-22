@@ -1,7 +1,7 @@
 """Code languages: how generated code expresses the model, and the solver that runs it.
 
 The user chooses a language; each language has one solver: Pyomo runs on HiGHS, gurobipy on Gurobi, OR-Tools
-pywraplp on SCIP and CPMpy on OR-Tools CP-SAT. Generated code defines `build_model(data)` and returns the model; the
+pywraplp on SCIP, CPMpy on OR-Tools CP-SAT, PuLP on CBC and CVXPY on Clarabel. Generated code defines `build_model(data)` and returns the model; the
 worker solves it through that language's own interface. Methods add `CodeTarget.prompt` to their code-generation
 prompts; methods whose original prompts name one library keep a dialect per language, chosen by `CodeTarget.language`.
 """
@@ -96,6 +96,47 @@ def build_model(data):
 integers. Use `a.implies(b)`, `&`, `|`, `~` for logic and index arrays of variables with variables for Element."""
 
 
+PULP = """\
+## PuLP reference (solved with CBC)
+```python
+import pulp
+
+def build_model(data):
+    products = ["A", "B"]
+    profit = {"A": 3, "B": 2}
+    problem = pulp.LpProblem("production", pulp.LpMaximize)                                 # pulp.LpMinimize
+    x = pulp.LpVariable.dicts("x", products, lowBound=0, cat="Integer")                      # "Continuous", "Binary"
+    problem += pulp.lpSum(profit[p] * x[p] for p in products)                                # the objective comes first
+    problem += 2 * x["A"] + x["B"] <= 8, "cutting"                                           # (constraint, name)
+    for p in products:
+        problem += x[p] >= 0, f"demand_{p}"
+    return problem
+```
+- Return the `pulp.LpProblem`. Do not call `problem.solve()`; the platform solves the model.
+- The first expression added without a comparison is the objective. Constraint names must be unique and use letters, \
+digits and `_`. Variables are linear: no products of variables."""
+
+
+CVXPY = """\
+## CVXPY reference (solved with Clarabel)
+```python
+import cvxpy as cp
+import numpy as np
+
+def build_model(data):
+    target = np.array([1.0, 2.0])
+    x = cp.Variable(2, name="x", nonneg=True)                        # shape (n,) or (m, n); name every variable
+    objective = cp.Minimize(cp.sum_squares(x - target))               # cp.Maximize(concave expression)
+    constraints = [cp.sum(x) <= 2, x[0] >= 0.2]
+    return cp.Problem(objective, constraints)
+```
+- Return the `cp.Problem`. Do not call `problem.solve()`; the platform solves the model.
+- Clarabel solves continuous convex problems: LP, convex QP, SOCP, exponential and power cones, SDP. It has no \
+integer or Boolean variables. The problem must follow CVXPY's disciplined convex programming rules.
+- Use `@` for matrix products, `cp.sum`, `cp.norm`, `cp.quad_form` and other CVXPY atoms; do not use Python `max`, \
+`abs` or `if` on expressions."""
+
+
 STARTER = '''{imports}
 
 def build_model(data):
@@ -138,8 +179,13 @@ LANGUAGES = {
                          'pywraplp.Solver.CreateSolver("SCIP")'),
     "cpmpy": Language("cpmpy", "CPMpy", "OR-Tools CP-SAT", "CPMpy", CPMPY, "import cpmpy as cp",
                       "cp.Model", "cp.Model()", CP_OBJECTIVE),
+    "pulp": Language("pulp", "PuLP", "CBC", "PuLP", PULP, "import pulp", "pulp.LpProblem",
+                     'pulp.LpProblem("model", pulp.LpMinimize)'),
+    "cvxpy": Language("cvxpy", "CVXPY", "Clarabel", "CVXPY", CVXPY, "import cvxpy as cp\nimport numpy as np",
+                      "cp.Problem", "cp.Problem(cp.Minimize(0))"),
 }
-MILP_LANGUAGES = frozenset({"pyomo", "gurobipy", "pywraplp"})  # for methods whose original prompts ask for (MI)LP
+# For methods whose original prompts ask for (MI)LP. CVXPY is left out: Clarabel has no integer variables.
+MILP_LANGUAGES = frozenset({"pyomo", "gurobipy", "pywraplp", "pulp"})
 
 
 @dataclass(frozen=True)

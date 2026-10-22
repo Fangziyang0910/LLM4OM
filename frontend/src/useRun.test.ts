@@ -1,9 +1,9 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
-import { client } from "./api";
+import { client } from "./sdk";
 import { useRun } from "./useRun";
 
-vi.mock("./api", () => ({
+vi.mock("./sdk", () => ({
   client: { threads: { get: vi.fn(), getState: vi.fn() }, runs: { list: vi.fn(), joinStream: vi.fn() } },
 }));
 

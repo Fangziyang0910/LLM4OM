@@ -28,7 +28,7 @@ from langgraph.runtime import Runtime
 from llm4om.languages import CodeTarget
 from llm4om.llm import LLMPresetStore, LLMSettings, chat_model
 from llm4om.methods import Method, methods
-from llm4om.runtime import Context, Limits, Recorder
+from llm4om.runtime import Context, LimitExceeded, Limits, Recorder, TokenBudget
 from llm4om.sandbox import Sandbox
 
 RECURSION_LIMIT = 1_000_000  # loops are bounded by each method and by Limits, not by LangGraph's step count
@@ -62,8 +62,8 @@ class RunContext:
 class Resources:
     """What runs use besides their request: LLM presets, the sandbox, limits and the chat-model factory.
 
-    The server reads them from LLM4OM_WORKSPACE and LLM4OM_SANDBOX. In-process callers pass their own through
-    `config["configurable"]["llm4om_resources"]`; `llm` then replaces the presets.
+    The server reads them from LLM4OM_WORKSPACE, LLM4OM_SANDBOX and LLM4OM_DAILY_TOKENS. In-process callers pass
+    their own through `config["configurable"]["llm4om_resources"]`; `llm` then replaces the presets and the budget.
     """
 
     presets: LLMPresetStore
@@ -71,6 +71,7 @@ class Resources:
     limits: Limits = field(default_factory=Limits)
     model_factory: Callable[..., BaseChatModel] = chat_model
     llm: LLMSettings | None = None
+    budget: TokenBudget | None = None  # each preset's daily tokens
 
     def llm_settings(self, preset: str | None = None) -> LLMSettings:
         """The settings for one run: `llm` when given, otherwise the preset."""
@@ -78,11 +79,19 @@ class Resources:
         settings.validate()
         return settings
 
+    def charge(self, preset: str | None) -> Callable[[int], None] | None:
+        """Charges the tokens of one run to its preset's daily budget; None when nothing is budgeted."""
+        if self.llm or not self.budget:
+            return None
+        budget, preset_id = self.budget, self.presets.find(preset).id
+        return lambda tokens: budget.charge(preset_id, tokens)
+
 
 @cache
 def default_resources() -> Resources:
     workspace = Path(os.environ.get("LLM4OM_WORKSPACE", "runs/web"))
-    return Resources(LLMPresetStore(workspace), Sandbox(os.environ.get("LLM4OM_SANDBOX", "docker")))
+    return Resources(LLMPresetStore(workspace), Sandbox(os.environ.get("LLM4OM_SANDBOX", "docker")),
+                     budget=TokenBudget(workspace, int(os.environ.get("LLM4OM_DAILY_TOKENS") or 0)))
 
 
 def _resources() -> Resources:
@@ -160,7 +169,8 @@ def platform_graph(method: Method) -> Any:
         """The method context of one node; its recorder continues the run's counts."""
         resources = _resources()
         choice = runtime.context or RunContext()
-        recorder = Recorder(method.limits or resources.limits, state.get("usage"), runtime.stream_writer)
+        recorder = Recorder(method.limits or resources.limits, state.get("usage"), runtime.stream_writer,
+                            resources.charge(choice.preset))
 
         def model(role: str) -> BaseChatModel:
             return resources.model_factory(resources.llm_settings(choice.preset),
@@ -184,7 +194,9 @@ def platform_graph(method: Method) -> Any:
                 if not re.fullmatch(DATA_NAME, name):
                     raise ValueError(f"Invalid data file name {name!r}; use letters, digits, '-', '_', '.' and spaces.")
             _resources().llm_settings(choice.preset)
-        except ValueError as error:
+            if charge := _resources().charge(choice.preset):
+                charge(0)  # raises when the preset's daily budget is spent
+        except (ValueError, LimitExceeded) as error:
             return {"failure": str(error)}
         return {"problem": problem_text(state.get("description", ""), data), "failure": None, "_deadline": deadline}
 
