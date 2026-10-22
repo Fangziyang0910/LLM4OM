@@ -2,10 +2,11 @@
 
 import asyncio
 import importlib.util
+from pathlib import Path
 
 import pytest
 
-from llm4om.sandbox import Sandbox, SolveResult
+from llm4om.sandbox import WORKER_IMAGE, Sandbox, SolveResult
 from tests.conftest import PRODUCTION_CODE
 
 GUROBIPY_CODE = '''import gurobipy as gp
@@ -149,3 +150,8 @@ def build_model(data):
 
 def test_a_solver_error_is_not_successful_execution() -> None:
     assert not SolveResult('error').executed
+
+
+def test_compose_builds_the_worker_image_the_sandbox_runs() -> None:
+    compose = (Path(__file__).parents[1] / "compose.yaml").read_text(encoding="utf-8")
+    assert f"image: {WORKER_IMAGE}\n" in compose

@@ -1,0 +1,11 @@
+# The app image needs only the package sources and its entrypoint. Keep secrets and local state out of the context.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!NOTICE
+!src/
+!docker-entrypoint.sh
+**/__pycache__/
+**/*.py[cod]

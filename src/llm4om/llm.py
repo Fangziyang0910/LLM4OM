@@ -189,7 +189,8 @@ class LLMPresetStore:
         self._write([values for values in saved if values["id"] != preset])
 
     def _write(self, presets: list[dict[str, Any]]) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(self.path.parent, 0o700)
         self.path.touch(mode=0o600, exist_ok=True)
         os.chmod(self.path, 0o600)
         self.path.write_text(json.dumps({"presets": presets}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

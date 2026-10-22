@@ -71,10 +71,11 @@ def _serve(args: argparse.Namespace) -> int:
 
 
 def _build_worker(args: argparse.Namespace) -> int:
+    sandbox = files("llm4om.sandbox")
     with tempfile.TemporaryDirectory() as directory:
-        dockerfile = Path(directory) / "Dockerfile"
-        dockerfile.write_text(files("llm4om.sandbox").joinpath("worker.Dockerfile").read_text("utf-8"), encoding="utf-8")
-        return subprocess.run(["docker", "build", "-t", args.tag, directory]).returncode
+        for name in ("worker.Dockerfile", "worker.py"):
+            (Path(directory) / name).write_text(sandbox.joinpath(name).read_text("utf-8"), encoding="utf-8")
+        return subprocess.run(["docker", "build", "-f", str(Path(directory) / "worker.Dockerfile"), "-t", args.tag, directory]).returncode
 
 
 def main(argv: list[str] | None = None) -> int:

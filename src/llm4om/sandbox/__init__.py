@@ -16,7 +16,8 @@ from typing import Any
 
 WORKER = Path(__file__).with_name("worker.py")
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
-WORKER_IMAGE = "llm4om-worker:4"
+# The image contains worker.py, so a change to worker.py or worker.Dockerfile needs a new tag (and compose.yaml's).
+WORKER_IMAGE = "llm4om-worker:5"
 START_MARGIN = 60  # seconds beyond the time limit for starting the sandbox, importing libraries and building the model
 
 
@@ -76,8 +77,7 @@ class Sandbox:
             return [sys.executable, "-I", str(WORKER)]
         command = ["docker", "run", "--rm", "-i", "--pull", "never", "--name", name, "--network", "none", "--memory", "2g",
                    "--cpus", "2", "--pids-limit", "256", "--read-only", "--tmpfs", "/tmp:rw,size=256m",
-                   "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "-e", "HOME=/tmp",
-                   "-v", f"{WORKER}:/opt/llm4om/worker.py:ro"]
+                   "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "-e", "HOME=/tmp"]
         license_file = os.environ.get("GRB_LICENSE_FILE")
         if license_file and Path(license_file).is_file():
             command += ["-v", f"{license_file}:/opt/gurobi/gurobi.lic:ro", "-e", "GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic"]

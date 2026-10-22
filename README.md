@@ -12,11 +12,11 @@ LLM4OM（Large Language Models for Optimization Modeling）是一个自动优化
 
 ## 启动工作台
 
-需要 Python 3.11–3.13、[uv](https://docs.astral.sh/uv/) 和 Docker。在仓库根目录执行：
+需要 Python 3.11–3.13、[uv](https://docs.astral.sh/uv/) 和 Docker。在服务器上只装 Docker 时，见[用 Docker 部署](#用-docker-部署)。在仓库根目录执行：
 
 ```bash
 uv sync --all-extras
-uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:4；镜像版本变化后需重新构建
+uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:5；镜像版本变化后需重新构建
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
@@ -118,9 +118,49 @@ print(state["failure"] or state["solve"]["objective"])
 
 Python 接口用 `preset=` 选择预设，或用 `llm=LLMSettings(...)` 直接传入设置。`--sandbox local` 在本机子进程中执行生成代码，不做隔离，只用于开发。
 
+## 用 Docker 部署
+
+服务器上只需要 Docker（含 Compose v2.24 或更新版本），不需要 Python、uv 或 Node.js：
+
+```bash
+git clone https://github.com/Fangziyang0910/LLM4OM.git && cd LLM4OM
+cp .env.example .env && chmod 600 .env    # 填写默认预设的服务商、地址、模型和密钥
+docker compose up -d --build
+```
+
+在防火墙或云服务器安全组中放行端口 8767，其他人用 `http://<服务器 IP>:8767` 访问。换端口时在 `.env` 中设置 `LLM4OM_PORT`；使用 rootless Docker 时设置 `DOCKER_SOCKET` 为它的 socket 路径。
+
+| 组成 | 说明 |
+|---|---|
+| `app` 容器（镜像 `llm4om`） | 工作台和 LangGraph 服务器。启动脚本读取 Docker socket 的用户组、整理 `/data` 的属主后，以用户 `llm4om`（uid 10001）运行服务，不保留任何 capability；根文件系统只读，日志自动轮转，崩溃或重启服务器后自动恢复 |
+| 沙箱镜像 `llm4om-worker:5` | 由 `worker` 服务构建。每次求解，`app` 通过宿主机的 Docker 启动一个无网络、只读、非 root 的容器 |
+| 数据卷 `llm4om-data` | 预设模型（含密钥）和全部运行记录；`docker compose down` 不会删除它 |
+
+`app` 容器挂载了宿主机的 `/var/run/docker.sock`，相当于拥有宿主机的 root 权限。生成代码只在沙箱容器中运行，不在 `app` 中运行；不要把这台服务器放在需要保护的内网中。
+
+更新：`git pull && docker compose up -d --build`。查看日志：`docker compose logs -f app`。
+
+从直接运行的 `llm4om serve` 迁移时，把原工作区复制进数据卷（先停止服务，避免它退出时覆盖导入的记录）：
+
+```bash
+docker compose stop app && docker compose cp runs/web/. app:/data/ && docker compose start app
+```
+
+使用 Gurobi 完整许可证时，把许可证挂载进 `app` 容器，**容器内外路径相同**（沙箱容器由宿主机的 Docker 启动，按宿主机路径挂载），并在 `.env` 中设置 `GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic`：
+
+```yaml
+# compose.override.yaml
+services:
+  app:
+    volumes:
+      - /opt/gurobi/gurobi.lic:/opt/gurobi/gurobi.lic:ro
+```
+
+不用 Docker 部署时，按“启动工作台”的步骤直接运行 `llm4om serve`，同样默认监听 `0.0.0.0`。
+
 ## 部署给课题组使用
 
-在一台有公网 IP 的服务器上按“启动工作台”的步骤运行，在防火墙或云服务器安全组中放行端口（默认 8767），其他人用 `http://<公网 IP>:8767` 访问。服务器 `.env` 中的模型就是大家共用的默认预设。
+服务器 `.env` 中的模型就是大家共用的默认预设。
 
 工作台没有登录和权限控制，适合信任范围内的小组使用。能访问端口的人可以：
 

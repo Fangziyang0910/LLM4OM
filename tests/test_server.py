@@ -46,6 +46,8 @@ def test_presets_never_return_their_keys_and_cannot_be_changed(tmp_path: Path) -
     assert [item["id"] for item in listed["presets"]] == ["scripted", "scripted-2"]
     assert LLM.api_key not in str(listed) and all("api_key" not in item for item in listed["presets"])
     assert changes == [405, 405]
+    private = tmp_path / ".private"
+    assert (private.stat().st_mode & 0o777, (private / "llm-presets.json").stat().st_mode & 0o777) == (0o700, 0o600)
 
 
 def test_saved_presets_can_be_deleted_but_not_the_environment_one(tmp_path: Path, monkeypatch: Any) -> None:

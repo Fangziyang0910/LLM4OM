@@ -44,3 +44,13 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: docker compose build
+      - run: docker run --rm --network none --pull never llm4om-worker:5 python -c "import pyomo, highspy, ortools, cpmpy, gurobipy"
+      - run: docker run --rm --pull never --entrypoint llm4om llm4om --help

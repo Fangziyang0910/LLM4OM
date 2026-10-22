@@ -137,7 +137,7 @@ CPMpy 模型可以没有目标，此时是可满足性问题：找到解时状�
 
 `Sandbox` 有两个动作：`solve(code, data, language, time_limit)` 构建并求解模型；`run_script(script, time_limit)` 运行检查脚本。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:4` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。设置了 `GRB_LICENSE_FILE` 时以只读方式挂载许可证。超时或取消时删除容器。
+`Sandbox("docker")` 在镜像 `llm4om-worker:5` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE` 时以只读方式挂载许可证。超时或取消时删除容器。
 
 `Sandbox("local")` 用本机子进程运行同一脚本，只用于开发和测试。子进程只继承路径、语言、临时目录和 Gurobi 许可证位置等必要环境变量，不继承 API 密钥。超时或取消后等待子进程退出。
 
@@ -223,6 +223,8 @@ frontend/src/
 ## 服务器与安全
 
 `llm4om serve` 以内存运行时启动 `langgraph-api`（与 `langgraph dev` 相同），不需要 LangSmith 许可证。它注册每个方法的平台图，挂载 `server/app.py`，默认监听 `0.0.0.0`，CORS 不允许任何跨源请求。`server/app.py` 的中间件对所有路由（包括 LangGraph 接口）拒绝非 JSON 的 POST，因此其他网站无法借浏览器发起运行或修改预设。
+
+Docker 部署（`Dockerfile`、`compose.yaml`）把服务器放进 `app` 容器，数据放在 `llm4om-data` 卷的 `/data` 中。`app` 通过挂载的宿主机 Docker socket 启动同级沙箱容器；启动脚本 `docker-entrypoint.sh` 采用 socket 的用户组后，以非 root 用户、无 capability 运行服务器，见 [ADR 0011](adr/0011-docker-compose-deployment.md)。
 
 工作台面向信任范围内的小组，不做登录和权限控制：能访问端口的人可以运行、添加和删除页面上的预设、删除运行记录。密钥是唯一的保密边界：它只保存在服务器上，不出现在任何接口响应、线程元数据或运行状态中。见 [ADR 0010](adr/0010-llm-presets.md)。
 
