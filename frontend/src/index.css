@@ -1,0 +1,127 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+/* shadcn/ui tokens on a zinc base with an indigo accent; success and warning carry run and solver states. */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.985 0.002 270);
+  --foreground: oklch(0.21 0.006 285.885);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.006 285.885);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.006 285.885);
+  --primary: oklch(0.511 0.262 276.966);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.955 0.012 276);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.577 0.245 27.325);
+  --success: oklch(0.596 0.145 163.225);
+  --warning: oklch(0.666 0.179 58.318);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.585 0.233 277.117);
+  --sidebar: oklch(0.975 0.003 270);
+  --sidebar-foreground: oklch(0.21 0.006 285.885);
+  --sidebar-accent: oklch(0.94 0.01 276);
+  --sidebar-border: oklch(0.92 0.004 286.32);
+}
+
+.dark {
+  --background: oklch(0.16 0.005 285.823);
+  --foreground: oklch(0.96 0.002 286);
+  --card: oklch(0.2 0.006 285.885);
+  --card-foreground: oklch(0.96 0.002 286);
+  --popover: oklch(0.22 0.006 285.885);
+  --popover-foreground: oklch(0.96 0.002 286);
+  --primary: oklch(0.673 0.182 276.935);
+  --primary-foreground: oklch(0.16 0.005 285.823);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.96 0.002 286);
+  --muted: oklch(0.274 0.006 286.033);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.29 0.03 277);
+  --accent-foreground: oklch(0.96 0.002 286);
+  --destructive: oklch(0.704 0.191 22.216);
+  --success: oklch(0.765 0.177 163.223);
+  --warning: oklch(0.828 0.189 84.429);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.585 0.233 277.117);
+  --sidebar: oklch(0.185 0.005 285.823);
+  --sidebar-foreground: oklch(0.96 0.002 286);
+  --sidebar-accent: oklch(0.27 0.02 277);
+  --sidebar-border: oklch(1 0 0 / 10%);
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html, body, #root { @apply h-full; }
+  body { @apply bg-background text-foreground antialiased; font-feature-settings: "cv11", "ss01"; }
+}
+
+@utility tabular { font-variant-numeric: tabular-nums; }
+
+/* Markdown written by LLMs: tables, formulas and code stay inside their column. */
+.markdown { @apply prose prose-sm max-w-none dark:prose-invert prose-headings:font-semibold prose-headings:tracking-tight
+  prose-h1:text-lg prose-h2:text-base prose-h3:text-sm prose-p:leading-relaxed prose-li:my-0.5 prose-code:before:content-none
+  prose-code:after:content-none prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:font-normal
+  prose-table:my-3 prose-th:bg-muted/60 prose-th:px-2.5 prose-th:py-1.5 prose-td:px-2.5 prose-td:py-1.5 prose-pre:my-3; }
+.markdown table { @apply block w-full overflow-x-auto text-[13px]; }
+.markdown th, .markdown td { @apply border border-border align-top; }
+.markdown .katex-display { @apply my-3 overflow-x-auto overflow-y-hidden py-1; }
+
+/* highlight.js tokens */
+.hljs-keyword, .hljs-built_in, .hljs-literal { color: oklch(0.5 0.2 300); }
+.hljs-string { color: oklch(0.52 0.13 150); }
+.hljs-number { color: oklch(0.55 0.15 50); }
+.hljs-comment { color: var(--muted-foreground); font-style: italic; }
+.hljs-title, .hljs-title.function_ { color: oklch(0.5 0.17 260); }
+.hljs-params, .hljs-attr { color: oklch(0.5 0.1 220); }
+.dark .hljs-keyword, .dark .hljs-built_in, .dark .hljs-literal { color: oklch(0.75 0.15 310); }
+.dark .hljs-string { color: oklch(0.78 0.13 150); }
+.dark .hljs-number { color: oklch(0.8 0.13 60); }
+.dark .hljs-title, .dark .hljs-title.function_ { color: oklch(0.78 0.12 255); }
+.dark .hljs-params, .dark .hljs-attr { color: oklch(0.78 0.08 220); }
+
+@keyframes caret { 50% { opacity: 0; } }
+.caret { @apply ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 bg-primary; animation: caret 1s step-end infinite; }

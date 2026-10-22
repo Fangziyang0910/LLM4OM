@@ -1,16 +1,22 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
-import { Menu, Plus, TriangleAlert } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { Menu, Plus, RefreshCw, ServerCrash } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Spinner } from "@/components/ui/spinner";
 import { api, client, history, startRun } from "./api";
 import { errorText } from "./format";
 import { Composer, initialDraft } from "./components/Composer";
-import { Dialog } from "./components/Dialog";
 import { Examples } from "./components/Examples";
-import { RunView } from "./components/RunView";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { Draft, Entry, Options, Settings } from "./types";
+
+// The run page carries Markdown, KaTeX and highlighting; the composer loads without them.
+const RunView = lazy(() => import("./components/RunView").then(module => ({ default: module.RunView })));
 
 type Route = { name: "new" } | { name: "run"; id: string };
 type Confirm = { title: string; text: string; action: string; run: () => Promise<void> };
@@ -56,7 +62,7 @@ export default function App() {
     go({ name: "run", id });
   };
   const remove = (entry: Entry) => setConfirm({
-    title: "删除运行", action: "删除",
+    title: "删除这次运行？", action: "删除",
     text: `“${entry.meta.title}”的问题、数学模型、代码和过程都会被删除，无法恢复。`,
     run: async () => {
       await client.threads.delete(entry.id);
@@ -68,28 +74,43 @@ export default function App() {
 
   const current = route.name === "run" ? route.id : null;
   const currentEntry = entries.find(entry => entry.id === current);
-  return <div className={"shell" + (menuOpen ? " menu-open" : "")}>
-    <Sidebar entries={entries} current={current} options={options} settings={settings} onNew={() => go({ name: "new" })}
-      onOpen={id => go({ name: "run", id })} onDelete={remove}
-      onExamples={() => { setExamplesOpen(true); setMenuOpen(false); }} onSettings={() => { setSettingsOpen(true); setMenuOpen(false); }} />
-    <button className="scrim" aria-label="关闭菜单" tabIndex={-1} onClick={() => setMenuOpen(false)} />
+  const sidebar = <Sidebar entries={entries} current={current} options={options} settings={settings} onNew={() => go({ name: "new" })}
+    onOpen={id => go({ name: "run", id })} onDelete={remove}
+    onExamples={() => { setExamplesOpen(true); setMenuOpen(false); }} onSettings={() => { setSettingsOpen(true); setMenuOpen(false); }} />;
 
-    <div className="main">
-      <header className="topbar">
-        <button className="icon-button" aria-label="打开菜单" onClick={() => setMenuOpen(true)}><Menu /></button>
-        <span className="topbar-title">{route.name === "new" ? "新建建模" : currentEntry?.meta.title ?? "运行"}</span>
-        {route.name === "run" ? <button className="icon-button" aria-label="新建建模" onClick={() => go({ name: "new" })}><Plus /></button> : null}
+  return <div className="flex h-dvh overflow-hidden">
+    <aside aria-label="导航" className="hidden w-72 shrink-0 border-r border-sidebar-border md:block">{sidebar}</aside>
+    <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+      <SheetContent side="left" className="w-72 gap-0 p-0" aria-describedby={undefined}>
+        <SheetTitle className="sr-only">导航</SheetTitle>
+        {sidebar}
+      </SheetContent>
+    </Sheet>
+
+    <div className="flex min-w-0 flex-1 flex-col">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 md:hidden">
+        <Button variant="ghost" size="icon" aria-label="打开菜单" onClick={() => setMenuOpen(true)}><Menu /></Button>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? "新建建模" : "LLM4OM"}</span>
+        {route.name === "run" ? <Button variant="ghost" size="icon" aria-label="新建建模" onClick={() => go({ name: "new" })}><Plus /></Button> : null}
       </header>
-      <main>
-        {optionsQuery.error ? <div className="page-error"><TriangleAlert size={22} /><p>无法连接服务器：{errorText(optionsQuery.error)}</p>
-          <button className="button" onClick={() => void optionsQuery.refetch()}>重试</button></div>
-          : !options ? <div className="page-loading"><span className="spinner" />正在加载……</div>
+      <main className="min-h-0 flex-1">
+        {optionsQuery.error ? <Empty className="h-full">
+          <EmptyHeader>
+            <EmptyMedia variant="icon"><ServerCrash /></EmptyMedia>
+            <EmptyTitle>无法连接服务器</EmptyTitle>
+            <EmptyDescription>{errorText(optionsQuery.error)}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent><Button variant="outline" onClick={() => void optionsQuery.refetch()}><RefreshCw />重试</Button></EmptyContent>
+        </Empty>
+          : !options ? <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />正在加载……</div>
           : route.name === "new"
             ? <Composer options={options} settings={settings} draft={draft} setDraft={setDraft} onStart={start}
               openSettings={() => setSettingsOpen(true)} openExamples={() => setExamplesOpen(true)} />
-            : <RunView key={route.id} threadId={route.id} options={options} onFinished={() => void refresh()}
-              onEdit={next => { setDraft(next); go({ name: "new" }); }} onRerun={start}
-              onDelete={() => currentEntry ? remove(currentEntry) : undefined} />}
+            : <Suspense fallback={<div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />正在加载……</div>}>
+              <RunView key={route.id} threadId={route.id} options={options} onFinished={() => void refresh()}
+                onEdit={next => { setDraft(next); go({ name: "new" }); }} onRerun={start}
+                onDelete={() => currentEntry ? remove(currentEntry) : undefined} />
+            </Suspense>}
       </main>
     </div>
 
@@ -105,13 +126,19 @@ export default function App() {
 
 function ConfirmDialog({ confirm, onClose }: { confirm: Confirm | null; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
-  return <Dialog open={!!confirm} title={confirm?.title ?? ""} onClose={onClose} footer={<>
-    <button className="button" onClick={onClose}>取消</button>
-    <button className="button danger" disabled={busy} onClick={async () => {
-      setBusy(true);
-      try { await confirm?.run(); onClose(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
-    }}>{confirm?.action}</button>
-  </>}>
-    <p>{confirm?.text}</p>
+  return <Dialog open={!!confirm} onOpenChange={open => { if (!open) onClose(); }}>
+    <DialogContent className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>{confirm?.title}</DialogTitle>
+        <DialogDescription>{confirm?.text}</DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>取消</Button>
+        <Button variant="destructive" disabled={busy} onClick={async () => {
+          setBusy(true);
+          try { await confirm?.run(); onClose(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
+        }}>{busy ? <Spinner /> : null}{confirm?.action}</Button>
+      </DialogFooter>
+    </DialogContent>
   </Dialog>;
 }

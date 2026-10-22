@@ -1,9 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, BookOpen, Check, CodeXml, Cpu, FileText, Layers, Paperclip, Play, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { ArrowRight, BookOpen, Database, FileText, Paperclip, Play, Settings2, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
-import { errorText } from "../format";
-import type { Draft, Options, Settings } from "../types";
-import { Popover } from "./Popover";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { errorText } from "@/format";
+import type { Draft, Options, Settings } from "@/types";
 
 const DRAFT_KEY = "llm4om-draft";
 const MILP_ONLY = "原方法的提示只覆盖 LP/MILP，不支持 CPMpy";
@@ -37,7 +49,8 @@ export function initialDraft(): Draft {
 }
 
 export function Composer({ options, settings, draft, setDraft, onStart, openSettings, openExamples }: {
-  options: Options; settings: Settings; draft: Draft; setDraft: (draft: Draft) => void; onStart: (draft: Draft) => Promise<void>; openSettings: () => void; openExamples: () => void;
+  options: Options; settings: Settings; draft: Draft; setDraft: (draft: Draft) => void; onStart: (draft: Draft) => Promise<void>;
+  openSettings: () => void; openExamples: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -53,6 +66,7 @@ export function Composer({ options, settings, draft, setDraft, onStart, openSett
   const language = options.languages.find(item => item.id === draft.language && supports(item.id))
     ?? options.languages.find(item => supports(item.id))!;
   const model = draft.model || profile?.model || "";
+  const files = Object.entries(draft.data);
 
   useEffect(() => {
     if (method.id !== draft.method || language.id !== draft.language) set({ method: method.id, language: language.id });
@@ -62,9 +76,9 @@ export function Composer({ options, settings, draft, setDraft, onStart, openSett
   }, [draft]);
   useEffect(() => { input.current?.focus(); }, []);
 
-  const attach = async (files: FileList | null) => {
+  const attach = async (list: FileList | null) => {
     const data = { ...draft.data };
-    for (const file of Array.from(files ?? [])) {
+    for (const file of Array.from(list ?? [])) {
       if (file.size > 2_000_000) { toast.error(`${file.name} 超过 2 MB，没有添加。`); continue; }
       data[file.name] = await file.text();
     }
@@ -82,7 +96,7 @@ export function Composer({ options, settings, draft, setDraft, onStart, openSett
   useEffect(() => { startRef.current = start; });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !document.querySelector("dialog[open]")) {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !document.querySelector("[role=dialog]")) {
         event.preventDefault(); void startRef.current();
       }
     };
@@ -90,103 +104,142 @@ export function Composer({ options, settings, draft, setDraft, onStart, openSett
     return () => removeEventListener("keydown", onKey);
   }, []);
 
-  return <section className="home">
-    <header className="home-head">
-      <h1>描述一个优化问题</h1>
-      <p>写出要做的决策、目标和约束，附上数据。建模方法会先给出数学模型，再写成求解代码，并在隔离沙箱中求解。</p>
-    </header>
+  return <div className="h-full overflow-y-auto">
+    <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-6 px-4 py-6 md:px-8 md:py-10 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="flex min-w-0 flex-col gap-6">
+        <header className="flex flex-col gap-1.5">
+          <h1 className="text-2xl font-semibold tracking-tight">描述一个优化问题</h1>
+          <p className="max-w-2xl text-sm text-muted-foreground">写出要做的决策、目标和约束，附上数据。建模方法先给出数学模型，再写成求解代码，并在隔离沙箱中求解。</p>
+        </header>
 
-    <div className={"composer" + (dragging ? " dragging" : "")}
-      onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
-      onDrop={event => { event.preventDefault(); setDragging(false); void attach(event.dataTransfer.files); }}>
-      <textarea ref={input} aria-label="问题描述" value={draft.description} rows={7}
-        placeholder="例如：工厂生产 A、B 两种产品……请确定生产数量，使总利润最大。"
-        onChange={event => set({ description: event.target.value })} />
-      {Object.keys(draft.data).length ? <ul className="files" aria-label="数据文件">
-        {Object.entries(draft.data).map(([name, content]) => <li key={name} title={`${content.length.toLocaleString()} 字符`}>
-          <FileText size={14} /><span>{name}</span>
-          <button className="icon-button tiny" aria-label={`移除 ${name}`} onClick={() => {
-            const data = { ...draft.data }; delete data[name]; set({ data });
-          }}><X size={12} /></button>
-        </li>)}
-      </ul> : null}
-      <div className="composer-tools">
-        <label className="tool" title="CSV、JSON 或文本；代码中以 data[文件名] 读取">
-          <Paperclip size={16} />数据文件
-          <input type="file" multiple accept=".csv,.json,.txt,.tsv" onChange={event => { void attach(event.target.files); event.target.value = ""; }} />
-        </label>
-        <button className="tool" onClick={openExamples}><BookOpen size={16} />题库</button>
-        {draft.description || Object.keys(draft.data).length
-          ? <button className="tool" onClick={() => set({ description: "", data: {} })}><Trash2 size={15} />清空</button> : null}
-        <span className="spacer" />
-        <span className="kbd-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 开始</span>
-      </div>
+        <Card className={cn("gap-0 overflow-hidden py-0 transition-shadow focus-within:border-ring/60 focus-within:ring-[3px] focus-within:ring-ring/15",
+          dragging && "border-primary ring-[3px] ring-primary/20")}
+          onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
+          onDrop={event => { event.preventDefault(); setDragging(false); void attach(event.dataTransfer.files); }}>
+          <div className="relative">
+            <Textarea ref={input} aria-label="问题描述" value={draft.description}
+              placeholder="例如：工厂生产 A、B 两种产品……请确定生产数量，使总利润最大。"
+              onChange={event => set({ description: event.target.value })}
+              className="max-h-[55vh] min-h-56 resize-none rounded-none border-0 bg-transparent px-5 py-4 text-[15px] leading-relaxed shadow-none focus-visible:ring-0 dark:bg-transparent" />
+            {dragging ? <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-primary/5 text-sm font-medium text-primary">
+              <Upload className="size-4" />松开以添加数据文件</div> : null}
+          </div>
+          {files.length ? <ul aria-label="数据文件" className="flex flex-wrap gap-2 px-5 pb-3">
+            {files.map(([name, content]) => <li key={name} title={`${content.length.toLocaleString()} 字符`}
+              className="flex items-center gap-1.5 rounded-md border bg-muted/50 py-1 pr-1 pl-2 text-xs">
+              <FileText className="size-3.5 text-muted-foreground" /><span className="font-medium">{name}</span>
+              <span className="text-muted-foreground">{content.split("\n").filter(Boolean).length} 行</span>
+              <Button variant="ghost" size="icon-xs" aria-label={`移除 ${name}`} onClick={() => {
+                const data = { ...draft.data }; delete data[name]; set({ data });
+              }}><X /></Button>
+            </li>)}
+          </ul> : null}
+          <div className="flex flex-wrap items-center gap-1 border-t bg-muted/30 px-3 py-2">
+            <Button variant="ghost" size="sm" asChild>
+              <label title="CSV、JSON 或文本；代码中以 data[文件名] 读取" className="cursor-pointer">
+                <Paperclip />数据文件
+                <input type="file" multiple accept=".csv,.json,.txt,.tsv" className="sr-only"
+                  onChange={event => { void attach(event.target.files); event.target.value = ""; }} />
+              </label>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={openExamples}><BookOpen />从题库选题</Button>
+            {draft.description || files.length
+              ? <Button variant="ghost" size="sm" onClick={() => set({ description: "", data: {} })}><Trash2 />清空</Button> : null}
+            <span className="ml-auto px-2 text-xs text-muted-foreground tabular">{draft.description.length ? `${draft.description.length} 字` : ""}</span>
+          </div>
+        </Card>
 
-      <div className="composer-config">
-        <Popover label="建模方法" value={method.name} icon={<Layers size={17} />} wide>
-          {close => <div className="choice-grid" role="radiogroup" aria-label="建模方法">
-            {options.methods.map(item => <button key={item.id} role="radio" aria-checked={item.id === method.id}
-              className={"choice" + (item.id === method.id ? " selected" : "")} onClick={() => { set({ method: item.id }); close(); }}>
-              <span className="choice-head"><strong>{item.name}</strong>
-                {item.languages ? <span className="tag">LP / MILP</span> : null}
-                {item.id === method.id ? <Check size={15} className="choice-check" /> : null}</span>
-              <span className="choice-text">{item.description}</span>
+        {!draft.description ? <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-medium text-muted-foreground">从一个例子开始</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {STARTERS.map(item => <button key={item.title} onClick={() => set({ description: item.description, data: item.data ?? {} })}
+              className="group flex flex-col gap-2 rounded-xl border bg-card p-4 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+              <span className="flex items-center gap-2">
+                <span className="font-medium">{item.title}</span>
+                <Badge variant="secondary" className="font-normal">{item.tag}</Badge>
+                <ArrowRight className="ml-auto size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+              </span>
+              <span className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{item.description}</span>
             </button>)}
-          </div>}
-        </Popover>
+            <button onClick={openExamples}
+              className="group flex flex-col gap-2 rounded-xl border border-dashed p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/40">
+              <span className="flex items-center gap-2 font-medium"><Database className="size-4 text-primary" />公开题库
+                <ArrowRight className="ml-auto size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" /></span>
+              <span className="text-[13px] leading-relaxed text-muted-foreground">NL4Opt、MAMO、IndustryOR 等 Benchmark 的题面，可直接取用。</span>
+            </button>
+          </div>
+        </section> : null}
+      </section>
 
-        <Popover label="代码写法" value={<>{language.name} <span className="muted">→ {language.solver}</span></>} icon={<CodeXml size={17} />}>
-          {close => <div className="choice-list" role="radiogroup" aria-label="代码写法">
-            {options.languages.map(item => {
-              const allowed = supports(item.id);
-              return <button key={item.id} role="radio" aria-checked={item.id === language.id} disabled={!allowed}
-                className={"choice row" + (item.id === language.id ? " selected" : "")} onClick={() => { set({ language: item.id }); close(); }}>
-                <span className="choice-head"><strong>{item.name}</strong><span className="muted">由 {item.solver} 求解</span>
-                  {item.id === language.id ? <Check size={15} className="choice-check" /> : null}</span>
-                {!allowed ? <span className="choice-text">{method.name}：{MILP_ONLY}</span> : null}
-              </button>;
-            })}
-          </div>}
-        </Popover>
+      <aside className="lg:sticky lg:top-10 lg:self-start">
+        <Card className="gap-5">
+          <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Settings2 className="size-4 text-muted-foreground" />运行设置</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <fieldset className="flex min-w-0 flex-col gap-2">
+              <legend className="mb-2 text-xs font-medium text-muted-foreground">建模方法</legend>
+              <RadioGroup value={method.id} onValueChange={value => set({ method: value })} aria-label="建模方法"
+                className="max-h-[340px] gap-1.5 overflow-y-auto pr-1">
+                {options.methods.map(item => {
+                  const selected = item.id === method.id;
+                  return <Label key={item.id} htmlFor={`method-${item.id}`}
+                    className={cn("flex cursor-pointer items-start gap-3 rounded-lg border p-3 font-normal transition-colors hover:bg-accent/50",
+                      selected && "border-primary/50 bg-primary/5 hover:bg-primary/5")}>
+                    <RadioGroupItem id={`method-${item.id}`} value={item.id} className="mt-0.5" />
+                    <span className="flex min-w-0 flex-col gap-1">
+                      <span className="flex items-center gap-2 text-sm font-medium">{item.name}
+                        {item.languages ? <Badge variant="outline" className="h-4.5 px-1.5 text-[10px] font-normal text-muted-foreground">LP / MILP</Badge> : null}</span>
+                      <span className={cn("text-xs leading-relaxed text-muted-foreground", !selected && "line-clamp-1")}>{item.description}</span>
+                    </span>
+                  </Label>;
+                })}
+              </RadioGroup>
+            </fieldset>
 
-        <Popover label="LLM" value={profile ? model || "未填写模型" : "未配置"} icon={<Cpu size={17} />} align="end">
-          {close => profile ? <div className="model-panel">
-            <div className="choice-list" role="radiogroup" aria-label="LLM 服务">
-              {profiles.map(([id, item]) => <button key={id} role="radio" aria-checked={id === provider}
-                className={"choice row" + (id === provider ? " selected" : "")} onClick={() => set({ provider: id, model: "" })}>
-                <span className="choice-head"><strong>{providerLabel(id)}</strong><span className="muted">{item.model}</span>
-                  {id === provider ? <Check size={15} className="choice-check" /> : null}</span>
-              </button>)}
-            </div>
-            <label className="field">本次使用的模型 ID
-              <input value={draft.model} placeholder={profile.model} onChange={event => set({ model: event.target.value })} />
-            </label>
-            <button className="link" onClick={() => { close(); openSettings(); }}><SlidersHorizontal size={14} />管理 LLM 服务</button>
-          </div> : <div className="model-panel">
-            <p className="muted">还没有可用的 LLM 服务。</p>
-            <button className="button primary" onClick={() => { close(); openSettings(); }}>配置 LLM 服务</button>
-          </div>}
-        </Popover>
+            <fieldset className="flex min-w-0 flex-col">
+              <legend className="mb-2 text-xs font-medium text-muted-foreground">代码写法与求解器</legend>
+              <RadioGroup value={language.id} onValueChange={value => set({ language: value })} aria-label="代码写法" className="grid grid-cols-2 gap-1.5">
+                {options.languages.map(item => {
+                  const allowed = supports(item.id);
+                  const tile = <Label htmlFor={`language-${item.id}`}
+                    className={cn("flex h-full cursor-pointer flex-col items-start justify-center gap-0.5 rounded-lg border px-3 py-2 font-normal transition-colors hover:bg-accent/50",
+                      item.id === language.id && "border-primary/50 bg-primary/5 hover:bg-primary/5", !allowed && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
+                    <RadioGroupItem id={`language-${item.id}`} value={item.id} disabled={!allowed} className="sr-only" />
+                    <span className="text-sm font-medium">{item.name}</span>
+                    <span className="text-[11px] text-muted-foreground">{item.solver} 求解</span>
+                  </Label>;
+                  return allowed ? <div key={item.id} className="h-full">{tile}</div> : <Tooltip key={item.id}>
+                    <TooltipTrigger asChild><div className="h-full">{tile}</div></TooltipTrigger>
+                    <TooltipContent>{method.name}：{MILP_ONLY}</TooltipContent>
+                  </Tooltip>;
+                })}
+              </RadioGroup>
+            </fieldset>
 
-        <button className="button primary start-button" disabled={!ready || busy} onClick={() => void start()}>
-          {busy ? <span className="spinner" /> : <Play size={15} />}{busy ? "正在启动" : "开始建模"}
-        </button>
-      </div>
+            <fieldset className="flex min-w-0 flex-col gap-2">
+              <legend className="mb-2 flex w-full items-center text-xs font-medium text-muted-foreground">LLM
+                <Button variant="link" size="sm" className="ml-auto h-auto p-0 text-xs" onClick={openSettings}>管理</Button></legend>
+              {profile ? <>
+                <Select value={provider ?? undefined} onValueChange={value => set({ provider: value, model: "" })}>
+                  <SelectTrigger aria-label="LLM 服务" className="w-full min-w-0"><SelectValue /></SelectTrigger>
+                  <SelectContent>{profiles.map(([id, item]) => <SelectItem key={id} value={id}>
+                    {providerLabel(id)}<span className="text-muted-foreground">{item.model}</span></SelectItem>)}</SelectContent>
+                </Select>
+                <Input aria-label="本次使用的模型 ID" value={draft.model} placeholder={`模型 ID（默认 ${profile.model}）`}
+                  onChange={event => set({ model: event.target.value })} className="h-8 text-[13px]" />
+              </> : <Alert>
+                <AlertDescription className="flex flex-col items-start gap-2">还没有可用的 LLM 服务。
+                  <Button size="sm" onClick={openSettings}>配置 LLM 服务</Button></AlertDescription>
+              </Alert>}
+            </fieldset>
+
+            <Button size="lg" className="w-full" disabled={!ready || busy} onClick={() => void start()}>
+              {busy ? <Spinner /> : <Play />}{busy ? "正在启动" : "开始建模"}
+              {!busy ? <KbdGroup className="ml-1 hidden opacity-70 sm:inline-flex"><Kbd className="bg-primary-foreground/15 text-primary-foreground">Ctrl</Kbd>
+                <Kbd className="bg-primary-foreground/15 text-primary-foreground">↵</Kbd></KbdGroup> : null}
+            </Button>
+          </CardContent>
+        </Card>
+      </aside>
     </div>
-    <p className="method-note"><strong>{method.name}</strong>{method.description}</p>
-
-    {!draft.description ? <div className="starters">
-      <h2>从一个例子开始</h2>
-      <div className="starter-grid">
-        {STARTERS.map(item => <button key={item.title} className="starter" onClick={() => set({ description: item.description, data: item.data ?? {} })}>
-          <span className="starter-head"><strong>{item.title}</strong><span className="tag">{item.tag}</span></span>
-          <span className="starter-text">{item.description}</span>
-        </button>)}
-        <button className="starter more" onClick={openExamples}>
-          <span className="starter-head"><strong>公开题库</strong><ArrowRight size={15} /></span>
-          <span className="starter-text">NL4Opt、MAMO、IndustryOR 等 Benchmark 的题面，可直接取用。</span>
-        </button>
-      </div>
-    </div> : null}
-  </section>;
+  </div>;
 }

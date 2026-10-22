@@ -17,9 +17,11 @@ uv run llm4om build-worker
 npm --prefix frontend ci
 npm --prefix frontend run dev      # 开发服务器，/api、/threads、/assistants 代理到 8767
 npm --prefix frontend run lint     # ESLint（含 React Hooks 规则）
-npm --prefix frontend test         # Vitest：步骤分组、断流回归、公式渲染
+npm --prefix frontend test         # Vitest：步骤分组、断流回归、公式渲染、解的分组与表格解析
 npm --prefix frontend run build    # 输出到 src/llm4om/server/web_assets/
 ```
+
+界面组件优先用 `frontend/src/components/ui/` 中的 shadcn/ui 组件。需要新组件时，在 `frontend/` 下运行 `npx shadcn@latest add <组件>`，再检查生成文件的导入路径是否为 `@/lib/utils`。颜色使用 `index.css` 中的变量（如 `bg-muted`、`text-destructive`），不要写死色值。
 
 更新服务端代码后重启 `llm4om serve`。
 

@@ -1,13 +1,22 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, CodeXml, Copy, Download, FileText, type LucideIcon, Search, Sigma, Table } from "lucide-react";
-import { STATUS, formatNumber, tone } from "../format";
-import { versions, type Version } from "../steps";
-import type { Language, RunValues, Solve, Step } from "../types";
-import { Code, Markdown, copyText, download } from "./Content";
+import { ChevronLeft, ChevronRight, CodeXml, Download, FileText, GitCompare, type LucideIcon, Sigma, Table2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toggle } from "@/components/ui/toggle";
+import { versions, type Version } from "@/steps";
+import { parseDelimited } from "@/tables";
+import type { Language, RunValues, Step } from "@/types";
+import { Code, CopyButton, Diff, Markdown, Plain, download } from "./Content";
+import { Solution } from "./Solution";
 
 export type Tab = "solution" | "formulation" | "code" | "problem";
 const TABS: [Tab, string, LucideIcon][] = [
-  ["solution", "解", Table], ["formulation", "数学模型", Sigma], ["code", "求解代码", CodeXml], ["problem", "问题", FileText],
+  ["solution", "解", Table2], ["formulation", "数学模型", Sigma], ["code", "求解代码", CodeXml], ["problem", "问题与数据", FileText],
 ];
 
 /** What the run produced: the solution, the formulation and the code (each in every version), and the problem. */
@@ -18,107 +27,114 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
 }) {
   const formulations = useMemo(() => versions(steps, "formulation", values.formulation), [steps, values.formulation]);
   const codes = useMemo(() => versions(steps, "code", values.code), [steps, values.code]);
-  const fresh: Partial<Record<Tab, boolean>> = active ? { formulation: formulations.length > 0, code: codes.length > 0 } : {};
+  const counts: Partial<Record<Tab, number>> = { formulation: formulations.length, code: codes.length };
 
-  return <div className="outputs">
-    <div className="tabs" role="tablist" aria-label="运行产物">
-      {TABS.map(([id, label, TabIcon]) => <button key={id} role="tab" aria-selected={tab === id}
-        className={"tab" + (tab === id ? " active" : "")} onClick={() => setTab(id)}>
-        <TabIcon size={15} />{label}
-        {id === "formulation" && formulations.length > 1 ? <span className="count">{formulations.length}</span> : null}
-        {id === "code" && codes.length > 1 ? <span className="count">{codes.length}</span> : null}
-        {fresh[id] ? <span className="live-dot" aria-label="正在更新" /> : null}
-      </button>)}
-    </div>
-    <div className="pane-scroll tab-body" role="tabpanel">
-      {tab === "solution" ? values.solve ? <SolveView solve={values.solve} />
-        : <Empty icon={Table} text={active ? "代码在沙箱中求解后，解会显示在这里。" : values.failure ? "方法没有给出可求解的代码，因此没有解。" : finished ? "没有求解结果。" : "运行没有完成。"} />
+  return <div className="flex h-full min-h-0 flex-col">
+    <Tabs value={tab} onValueChange={value => setTab(value as Tab)} className="shrink-0 gap-0">
+      <TabsList variant="line" aria-label="运行产物" className="h-11 w-full justify-start overflow-x-auto rounded-none border-b px-3">
+        {TABS.map(([id, label, TabIcon]) => <TabsTrigger key={id} value={id} className="flex-none px-2 sm:px-2.5 [&_svg]:hidden sm:[&_svg]:inline-block">
+          <TabIcon />{label}
+          {(counts[id] ?? 0) > 1 ? <span className="rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground tabular">{counts[id]}</span> : null}
+          {active && (counts[id] ?? 0) > 0 ? <span className="size-1.5 animate-pulse rounded-full bg-primary" aria-label="正在更新" /> : null}
+        </TabsTrigger>)}
+      </TabsList>
+    </Tabs>
+    <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
+      {tab === "solution" ? values.solve ? <Solution solve={values.solve} />
+        : <Blank icon={Table2} text={active ? "代码在沙箱中求解后，解会显示在这里。" : values.failure ? "方法没有给出可求解的代码，因此没有解。" : finished ? "没有求解结果。" : "运行没有完成。"} />
         : null}
-      {tab === "formulation" ? <Versioned items={formulations} picked={picked.formulation} pick={id => setPicked("formulation", id)}
+      {tab === "formulation" ? <Versioned key="formulation" items={formulations} picked={picked.formulation} pick={id => setPicked("formulation", id)}
         noun="数学模型" active={active} file="formulation.md"
         empty={active ? "方法给出数学模型后显示在这里。" : "这个方法没有单独给出数学模型；请看求解代码。"}
         render={text => <Markdown text={text} />} /> : null}
-      {tab === "code" ? <Versioned items={codes} picked={picked.code} pick={id => setPicked("code", id)}
-        noun="代码" active={active} file="model.py" extra={language ? `${language.name} · 由 ${language.solver} 求解` : undefined}
+      {tab === "code" ? <Versioned key="code" items={codes} picked={picked.code} pick={id => setPicked("code", id)}
+        noun="代码" active={active} file="model.py" extra={language ? `${language.name} · ${language.solver} 求解` : undefined}
         empty={active ? "方法写出代码后显示在这里。" : "没有求解代码。"}
         render={text => <Code text={text} />} /> : null}
-      {tab === "problem" ? <div className="problem">
-        <p className="problem-text">{values.description}</p>
-        {Object.entries(values.data ?? {}).map(([name, content]) => <details key={name} className="disclosure">
-          <summary><FileText size={14} />{name}<span className="muted">{content.split("\n").filter(Boolean).length} 行</span></summary>
-          <pre className="plain">{content}</pre>
-        </details>)}
-      </div> : null}
+      {tab === "problem" ? <Problem values={values} /> : null}
     </div>
   </div>;
 }
 
-function Empty({ icon: EmptyIcon, text }: { icon: LucideIcon; text: string }) {
-  return <div className="empty"><EmptyIcon size={28} /><p>{text}</p></div>;
+function Blank({ icon: BlankIcon, text }: { icon: LucideIcon; text: string }) {
+  return <Empty className="h-full border-0">
+    <EmptyHeader><EmptyMedia variant="icon"><BlankIcon /></EmptyMedia><EmptyDescription>{text}</EmptyDescription></EmptyHeader>
+  </Empty>;
 }
 
+/** One output in every version the method wrote: step through them, compare with the previous one, copy or download. */
 function Versioned({ items, picked, pick, noun, active, file, extra, empty, render }: {
   items: Version[]; picked?: string; pick: (id: string | undefined) => void; noun: string; active: boolean; file: string;
   extra?: string; empty: string; render: (text: string) => React.ReactNode;
 }) {
-  if (!items.length) return <Empty icon={noun === "代码" ? CodeXml : Sigma} text={empty} />;
-  const index = Math.max(0, items.findIndex(item => item.id === picked));
-  const current = picked && items.some(item => item.id === picked) ? items[index] : items[items.length - 1];
+  const [compare, setCompare] = useState(false);
+  if (!items.length) return <Blank icon={noun === "代码" ? CodeXml : Sigma} text={empty} />;
+  const current = items.find(item => item.id === picked) ?? items[items.length - 1];
   const position = items.indexOf(current);
   const latest = position === items.length - 1;
-  return <div className="versioned">
-    <div className="toolbar">
-      {items.length > 1 ? <div className="stepper">
-        <button className="icon-button" aria-label="上一版" disabled={position === 0} onClick={() => pick(items[position - 1].id)}><ChevronLeft size={15} /></button>
-        <select aria-label={`${noun}版本`} value={current.id} onChange={event => pick(event.target.value === items[items.length - 1].id ? undefined : event.target.value)}>
-          {items.map((item, number) => <option key={item.id} value={item.id}>第 {number + 1} 版 · {item.title}</option>)}
-        </select>
-        <button className="icon-button" aria-label="下一版" disabled={latest} onClick={() => pick(position + 1 === items.length - 1 ? undefined : items[position + 1].id)}><ChevronRight size={15} /></button>
-      </div> : <span className="muted">{current.title}</span>}
-      {extra ? <span className="muted">{extra}</span> : null}
-      <span className="spacer" />
-      <button className="icon-button" title="复制" aria-label={`复制${noun}`} onClick={() => copyText(current.text)}><Copy size={15} /></button>
-      <button className="icon-button" title="下载" aria-label={`下载${noun}`} onClick={() => download(file, current.text)}><Download size={15} /></button>
+  const previous = position > 0 ? items[position - 1] : null;
+  const go = (index: number) => pick(index === items.length - 1 ? undefined : items[index].id);
+
+  return <div className="flex flex-col gap-4">
+    <div className="flex flex-wrap items-center gap-2">
+      {items.length > 1 ? <div className="flex items-center gap-1">
+        <Button variant="outline" size="icon-sm" aria-label="上一版" disabled={position === 0} onClick={() => go(position - 1)}><ChevronLeft /></Button>
+        <Select value={current.id} onValueChange={id => go(items.findIndex(item => item.id === id))}>
+          <SelectTrigger size="sm" aria-label={`${noun}版本`} className="max-w-72"><SelectValue /></SelectTrigger>
+          <SelectContent>{items.map((item, number) => <SelectItem key={item.id} value={item.id}>
+            第 {number + 1} 版<span className="text-muted-foreground">{item.title}</span></SelectItem>)}</SelectContent>
+        </Select>
+        <Button variant="outline" size="icon-sm" aria-label="下一版" disabled={latest} onClick={() => go(position + 1)}><ChevronRight /></Button>
+      </div> : <span className="text-xs text-muted-foreground">{current.title}</span>}
+      {extra ? <span className="text-xs text-muted-foreground">{extra}</span> : null}
+      <span className="ml-auto flex items-center gap-1">
+        {previous ? <Toggle size="sm" pressed={compare} onPressedChange={setCompare} aria-label="与上一版对比" className="h-8 text-xs">
+          <GitCompare />对比上一版</Toggle> : null}
+        <CopyButton text={current.text} label={`复制${noun}`} />
+        <Button variant="ghost" size="icon-sm" aria-label={`下载${noun}`} title="下载" onClick={() => download(file, current.text)}><Download /></Button>
+      </span>
     </div>
-    {!latest ? <p className="note">这是第 {position + 1} 版，不是{active ? "目前" : "最终"}的{noun}。<button className="link" onClick={() => pick(undefined)}>看最新一版</button></p> : null}
-    {render(current.text)}
+    {!latest ? <Alert className="py-2"><AlertDescription className="flex flex-wrap items-center gap-x-2 text-xs">
+      这是第 {position + 1} 版，不是{active ? "目前" : "最终"}的{noun}。
+      <Button variant="link" size="xs" className="h-auto p-0" onClick={() => pick(undefined)}>看最新一版</Button></AlertDescription></Alert> : null}
+    {compare && previous ? <Diff before={previous.text} after={current.text} /> : render(current.text)}
   </div>;
 }
 
-function SolveView({ solve }: { solve: Solve }) {
-  const [all, setAll] = useState(false);
-  const [filter, setFilter] = useState("");
-  const [limit, setLimit] = useState(200);
-  const entries = Object.entries(solve.variables);
-  const nonzero = entries.filter(([, value]) => value !== 0).length;
-  const query = filter.trim().toLowerCase();
-  const shown = entries.filter(([name, value]) => (all || value !== 0) && (!query || name.toLowerCase().includes(query)));
-  return <div className="solution">
-    <div className="metrics">
-      <div><span className="eyebrow">求解状态</span><span className={`badge large ${tone(solve.status)}`}>{STATUS[solve.status] ?? solve.status}</span></div>
-      <div><span className="eyebrow">目标值</span><strong className="number">{solve.objective != null ? formatNumber(solve.objective) : "—"}</strong></div>
-      <div><span className="eyebrow">非零变量 / 变量</span><strong className="number">{nonzero} / {entries.length}</strong></div>
-    </div>
-    {solve.error ? <div className="callout bad"><strong>代码执行出错</strong><pre className="plain">{solve.error}</pre></div> : null}
-    {entries.length ? <>
-      <div className="toolbar">
-        <div className="search"><Search size={15} />
-          <input aria-label="筛选变量" placeholder="按名称筛选" value={filter} onChange={event => setFilter(event.target.value)} /></div>
-        <label className="check"><input type="checkbox" checked={all} onChange={event => setAll(event.target.checked)} />含取值为 0 的变量</label>
-        <span className="spacer" />
-        <button className="icon-button" title="下载 CSV" aria-label="下载变量取值 CSV"
-          onClick={() => download("solution.csv", "variable,value\n" + entries.map(([name, value]) => `"${name.replace(/"/g, '""')}",${value}`).join("\n"))}>
-          <Download size={15} /></button>
-      </div>
-      <table className="variables">
-        <thead><tr><th>变量</th><th>取值</th></tr></thead>
-        <tbody>{shown.slice(0, limit).map(([name, value]) => <tr key={name} className={value === 0 ? "zero" : ""}>
-          <td><code>{name}</code></td><td>{formatNumber(value)}</td></tr>)}</tbody>
-      </table>
-      {!shown.length ? <p className="muted center">没有匹配的变量。</p> : null}
-      {shown.length > limit ? <button className="link center" onClick={() => setLimit(limit + 500)}>再显示 {Math.min(500, shown.length - limit)} 个（共 {shown.length} 个）</button> : null}
-    </> : null}
-    {solve.output.trim() ? <details className="disclosure"><summary>代码输出</summary><pre className="plain">{solve.output}</pre></details> : null}
-    {tone(solve.status) === "good" ? <p className="footnote">求解器只保证这个数学模型的解是{STATUS[solve.status]}。模型是否完整表达了问题，请在“数学模型”中核对。</p> : null}
+function Problem({ values }: { values: RunValues }) {
+  const files = Object.entries(values.data ?? {});
+  return <div className="flex flex-col gap-4">
+    <Card className="gap-3 py-4 shadow-none">
+      <CardHeader className="flex items-center gap-2 px-4">
+        <CardTitle className="text-sm">问题描述</CardTitle>
+        <CopyButton text={values.description ?? ""} label="复制问题" className="ml-auto" />
+      </CardHeader>
+      <CardContent className="px-4 text-sm leading-relaxed whitespace-pre-wrap">{values.description}</CardContent>
+    </Card>
+    {files.map(([name, content]) => <DataFile key={name} name={name} content={content} />)}
   </div>;
+}
+
+function DataFile({ name, content }: { name: string; content: string }) {
+  const table = useMemo(() => parseDelimited(content, name.endsWith(".tsv") ? "\t" : ","), [name, content]);
+  return <Card className="gap-3 py-4 shadow-none">
+    <CardHeader className="flex items-center gap-2 px-4">
+      <FileText className="size-4 text-muted-foreground" />
+      <CardTitle className="font-mono text-sm">{name}</CardTitle>
+      <span className="text-xs text-muted-foreground">{content.split("\n").filter(Boolean).length} 行</span>
+      <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={`下载 ${name}`} onClick={() => download(name, content)}><Download /></Button>
+    </CardHeader>
+    <CardContent className="px-4">
+      {table ? <div className="max-h-96 overflow-auto rounded-lg border">
+        <Table className="text-[13px]">
+          <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur"><TableRow>
+            {table[0].map((cell, index) => <TableHead key={index} className="h-8 font-mono text-xs">{cell}</TableHead>)}
+          </TableRow></TableHeader>
+          <TableBody>{table.slice(1, 501).map((row, index) => <TableRow key={index}>
+            {row.map((cell, column) => <TableCell key={column} className={column ? "py-1.5 text-right font-mono tabular" : "py-1.5 font-mono font-medium"}>{cell}</TableCell>)}
+          </TableRow>)}</TableBody>
+        </Table>
+      </div> : <Plain className="max-h-96 overflow-y-auto">{content}</Plain>}
+    </CardContent>
+  </Card>;
 }

@@ -171,29 +171,52 @@ LLM 调用由聊天模型上的回调记录，包括子图和 `create_agent` 智
 
 ```text
 frontend/src/
-├── main.tsx        挂载：QueryClient、图标默认值、Toaster
-├── App.tsx         布局、路由（/ 与 /run/{thread_id}）、对话框
+├── main.tsx        挂载：主题、QueryClient、Tooltip、Toaster、字体与全局样式
+├── App.tsx         布局、路由（/ 与 /run/{thread_id}）、对话框；运行页按需加载
+├── index.css       Tailwind 入口、颜色变量（浅色与深色）、Markdown 与代码高亮样式
 ├── api.ts          LangGraph 客户端、/api 请求
 ├── format.ts       状态文案、数字、token 与耗时的格式化
 ├── useRun.ts       一次运行的实时数据：读取线程，并重放与接续流
 ├── steps.ts        步骤 → 阶段、版本、摘要（纯函数）
+├── tables.ts       解的变量分组与矩阵视图、数据文件的 CSV/TSV 解析（纯函数）
 ├── types.ts        与服务器对应的类型
-└── components/     页面与控件
+├── lib/utils.ts    cn()：合并 Tailwind 类名
+└── components/
+    ├── ui/         shadcn/ui 组件（生成后按需修改）
+    ├── Composer    编辑页：问题与数据、运行设置
+    ├── RunView     运行页：结论卡、建模过程、产物
+    ├── Timeline    建模过程：阶段、LLM 调用、求解输出
+    ├── Outputs     产物标签页：解、数学模型、求解代码、问题与数据；版本切换与对比
+    ├── Solution    解：分组或列表、二维变量的矩阵视图、CSV 导出
+    ├── Content     Markdown、代码、纯文本、差异视图
+    ├── Sidebar     历史运行、示例题库与 LLM 服务入口、外观切换
+    ├── Examples / SettingsDialog   题库与 LLM 服务对话框
+    └── status / theme              状态颜色与图标、主题菜单与 Toaster
 ```
 
 测试文件 `*.test.ts(x)` 放在被测模块旁边，由 Vitest（jsdom）运行。
 
+页面按用户的任务顺序组织：
+
+1. 编辑页左侧写问题、附数据；右侧固定显示建模方法、写法与求解器、LLM，选择直接可见。
+2. 运行页先用结论卡回答“得到了什么”（目标值、状态或失败原因），再提供“核对数学模型”和“查看解”。
+3. 下方左栏是建模过程，右栏是产物。宽屏下两栏可拖动调整宽度；窄屏下用“结果 / 过程”切换。
+
 | 需要 | 使用 |
 |---|---|
+| 样式 | Tailwind CSS v4（`@tailwindcss/vite`）、tw-animate-css、`@tailwindcss/typography` |
+| 组件 | shadcn/ui（基于 `radix-ui`）：对话框、抽屉、下拉菜单、选择框、单选、标签页、折叠、提示 |
+| 主题 | next-themes：浅色、深色、跟随系统 |
+| 可调宽度的分栏 | react-resizable-panels |
+| 版本对比 | jsdiff（`diffLines`） |
+| 字体 | Fontsource：Inter Variable、JetBrains Mono Variable（随构建打包，不访问外网） |
 | 服务器数据（选项、设置、运行列表、题库分页） | TanStack Query：缓存、运行中轮询、失效后重取 |
 | 运行的实时流 | LangGraph SDK 的 `runs.joinStream` |
-| 弹出选择器 | Radix Popover：焦点、Escape、点外关闭、避让定位 |
-| 对话框 | 原生 `<dialog>`（`showModal`） |
 | 提示消息 | sonner |
 | 图标 | lucide-react |
 | Markdown 与公式 | react-markdown、remark-gfm、remark-math、rehype-katex；代码高亮用 highlight.js |
 
-样式是一份 `style.css`，颜色与尺寸都来自 `:root` 上的变量，暗色模式跟随系统。
+颜色只来自 `index.css` 中 `:root` 与 `.dark` 上的变量；组件不写死颜色值。
 
 ## 服务器与安全
 

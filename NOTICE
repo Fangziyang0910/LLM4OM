@@ -45,3 +45,9 @@ NL4Opt's MIT notice and MAMO's CC-BY-SA-4.0 license are retained as
 server/examples_data/NL4Opt-LICENSE.txt and server/examples_data/MAMO-LICENSE.txt.
 The OPT-Agent snapshot does not specify individual licenses for its other
 prepared datasets; the catalog records that absence without assigning one.
+
+The web workbench build in src/llm4om/server/web_assets/ bundles the Inter and
+JetBrains Mono variable fonts (via Fontsource), licensed under the SIL Open
+Font License 1.1. Copyright 2016 The Inter Project Authors; Copyright 2020
+The JetBrains Mono Project Authors. The license texts are shipped in
+web_assets/licenses/ (source: frontend/public/licenses/).

@@ -132,7 +132,7 @@ DeepSeek 的思考模式不支持强制 `tool_choice`，而 TriVAL 的结构化�
 
 ## 验证
 
-本轮维护检查：Python 3.12 的 64 项测试通过（含本机 Gurobi）。前端 6 项 Vitest 测试、lint、类型检查和构建通过，依赖审计无已知漏洞。四种语言在 Docker 中求得生产计划预期最优值，另验证了容器取消。LangGraph Server 的后台运行、流重放、历史读取和 TriVAL 取消使用假 HTTP 模型及真实本机求解验证，取消后没有继续发起模型请求。
+本轮维护检查：Python 3.12 的 65 项测试通过（含本机 Gurobi）。前端 10 项 Vitest 测试、lint、类型检查和构建通过，依赖审计无已知漏洞。四种语言在 Docker 中求得生产计划预期最优值，另验证了容器取消。LangGraph Server 的后台运行、流重放、历史读取和 TriVAL 取消使用假 HTTP 模型及真实本机求解验证，取消后没有继续发起模型请求。
 
 异常路径回归分布在对应模块的测试中（`tests/test_graph.py`、`test_llm.py`、`test_cli.py`、`test_methods.py`，前端 `src/useRun.test.ts`）：JSON 中的 URL、转义和嵌套结构；TriVAL 超时与多工具顺序编辑；AutoFormulation 并发取消；建模与最终求解共享截止时间；求解超限记录；Anthropic 额外参数；OpenRouter 流式工具对话保留推理字段；断线后重新读取运行状态；节点产物步骤先于下一节点的调用记录。沙箱测试另检查环境变量隔离和取消后的子进程回收。这些测试使用脚本模型或本地假 HTTP 响应。
 
