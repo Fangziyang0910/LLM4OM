@@ -5,11 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from llm4om.graph import Resources, RunContext, platform_graph, run
-from llm4om.llm import LLMPresetStore, LLMSettings
+from llm4om.llm import LLMSettings
+from llm4om.llm_presets import LLMPresetStore
 from llm4om.runtime import Context, Limits
 from llm4om.sandbox import Sandbox, SolveResult
 
-__all__ = ["Context", "LLMSettings", "Limits", "Resources", "RunContext", "Sandbox", "SolveResult", "platform_graph",
+__all__ = ["Context", "LLMPresetStore", "LLMSettings", "Limits", "Resources", "RunContext", "Sandbox", "SolveResult", "platform_graph",
            "run", "run_problem"]
 
 

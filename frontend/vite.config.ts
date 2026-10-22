@@ -17,6 +17,6 @@ export default defineConfig({
       { name: "ui", test: /node_modules[\\/](@radix-ui|@floating-ui|radix-ui|sonner|tailwind-merge|@tanstack|lucide-react)/ },
     ] } } },
   },
-  server: { proxy: { "/api": server, "/threads": server, "/assistants": server } },
+  server: { proxy: { "/api": server, "/threads": server, "/runs": server, "/store": server, "/assistants": server } },
   test: { environment: "jsdom", setupFiles: ["src/test-setup.ts"], include: ["src/**/*.test.{ts,tsx}"] },
 });

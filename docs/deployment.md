@@ -26,7 +26,7 @@ docker compose up -d --build
 浏览器 ──HTTP(S)──► app 容器（工作台 + LangGraph 服务器，用户 llm4om）
                       │  通过宿主机的 Docker socket，每次求解启动一个沙箱
                       ▼
-                    沙箱容器 llm4om-worker:7（无网络、只读、非 root，用完即删）
+                    沙箱容器 llm4om-worker:9（无网络、只读、非 root，用完即删）
 
 数据卷 llm4om-data：预设模型（含密钥）和全部运行记录
 ```
@@ -34,7 +34,7 @@ docker compose up -d --build
 | 组成 | 说明 |
 |---|---|
 | `app` 容器（镜像 `llm4om`） | 工作台和 LangGraph 服务器。启动脚本读取 Docker socket 的用户组，整理 `/data` 的属主，然后以用户 `llm4om`（uid 10001）运行服务，不保留任何 capability。根文件系统只读，日志自动轮转，崩溃或服务器重启后自动恢复 |
-| 沙箱镜像 `llm4om-worker:7` | 由 `worker` 服务构建。每次求解，`app` 通过宿主机的 Docker 启动一个沙箱容器 |
+| 沙箱镜像 `llm4om-worker:9` | 由 `worker` 服务构建。每次求解，`app` 通过宿主机的 Docker 启动一个沙箱容器 |
 | 数据卷 `llm4om-data` | 预设模型（含密钥）和全部运行记录。`docker compose down` 不会删除它 |
 
 `app` 容器挂载了宿主机的 Docker socket，相当于拥有宿主机的 root 权限。生成代码只在沙箱容器中运行，不在 `app` 中运行。不要把这台服务器放在需要保护的内网中。取舍见 [ADR 0011](adr/0011-docker-compose-deployment.md)。
@@ -89,7 +89,11 @@ LLM4OM_TRUST_PROXY=1                # 按代理转发的客户端地址计算运
 
 内部测试时，可以把每日 token 设得很大，例如 `LLM4OM_DAILY_TOKENS=1000000000`，并且不设每小时上限。
 
+批量发起运行时，每项都计入每小时上限，超限的整批请求会被拒绝。
+
 ### 并发
+
+一个工作区只供一个服务进程使用。
 
 同时执行的运行数由 `llm4om serve --jobs` 控制，默认是 4，其余运行排队。Docker 部署中，在 `compose.override.yaml` 里改 `app` 的 `command`：
 
@@ -98,6 +102,8 @@ services:
   app:
     command: ["llm4om", "serve", "--workspace", "/data", "--port", "8767", "--jobs", "8"]
 ```
+
+沙箱另有总并发上限：在 `.env` 设置 `LLM4OM_SANDBOX_JOBS=4`（默认 4，必须大于 0）。它同时覆盖所有运行的求解和检查脚本。AutoFormulation 在一个运行中并行检查多个候选，也不会突破这个上限。等候沙箱仍计入运行总时限。服务使用默认的单事件循环；不设置 `BG_JOB_ISOLATED_LOOPS`。
 
 ## Gurobi 许可证
 
@@ -117,7 +123,7 @@ Gurobi 学术许可证一般只限本人使用。供他人使用前，请确认�
 
 ## 备份与恢复
 
-数据卷 `llm4om-data` 保存全部运行记录和预设模型（含密钥）。服务每 10 秒和正常停止时把记录写入磁盘。写入先写临时文件再改名。进程被强制结束时，最多丢失最近约 10 秒的变化。
+数据卷 `llm4om-data` 保存全部运行记录和预设模型（含密钥）。服务每 10 秒和正常停止时把记录写入磁盘。写入先写临时文件再改名。进程被强制结束时，可能丢失最近约 10 秒的变化，运行进度另有最多约 1 秒的合并间隔。已正常取消的运行会保存公开步骤和中间产物，重启后仍能查看。
 
 备份前先停止服务，保证记录完整：
 
@@ -159,7 +165,7 @@ uv run llm4om serve --workspace /srv/llm4om --port 8767 --jobs 4
 | 现象 | 检查 |
 |---|---|
 | 其他机器打不开页面 | 防火墙和安全组是否放行端口；`LLM4OM_PORT` 是否写成了 `127.0.0.1:…` |
-| 运行失败，提示找不到镜像 | `docker compose up -d --build` 会构建 `llm4om-worker:7`；直接运行时执行 `uv run llm4om build-worker` |
+| 运行失败，提示找不到镜像 | `docker compose up -d --build` 会构建 `llm4om-worker:9`；直接运行时执行 `uv run llm4om build-worker` |
 | 运行失败，提示无法连接 Docker | rootless Docker 需要设置 `DOCKER_SOCKET`；查看 `docker compose logs app` |
 | 预设模型报 401 或 404 | 密钥、接口地址或模型 ID 有误。删掉预设，重新添加 |
 | HTTPS 证书申请失败 | 域名是否解析到本机；80 和 443 端口是否放行；查看 `docker compose logs https` |

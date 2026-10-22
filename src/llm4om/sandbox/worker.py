@@ -16,7 +16,6 @@ import traceback
 
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
 MAX_OUTPUT_CHARS = 20000
-MAX_VARIABLES = 2000
 
 
 class ModelError(Exception):
@@ -217,9 +216,10 @@ def _read_with_gurobi(write):
 
     import gurobipy as gp
 
-    path = os.path.join(tempfile.mkdtemp(), "model.lp")
-    write(path)
-    return gp.read(path, env=gp.Env(params={"OutputFlag": 0}))
+    with tempfile.TemporaryDirectory() as directory:
+        path = os.path.join(directory, "model.lp")
+        write(path)
+        return gp.read(path, env=gp.Env(params={"OutputFlag": 0}))
 
 
 def _write_text(text):
@@ -322,9 +322,7 @@ def run(request):
         if values is not None:
             result["objective"] = None if objective is None else clean(objective)
             mapped = {name: clean(value) for name, value in values.items()}
-            result["variables"] = dict(list(mapped.items())[:MAX_VARIABLES])
-            if len(mapped) > MAX_VARIABLES:
-                print(f"[llm4om] Showing the first {MAX_VARIABLES} of {len(mapped)} variables.", file=output)
+            result["variables"] = mapped
     except ModelError as error:
         result["error"] = f"[{stage}] {error}"
     except BaseException as error:

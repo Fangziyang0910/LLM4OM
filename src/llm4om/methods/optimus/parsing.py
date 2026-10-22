@@ -45,19 +45,16 @@ def shape_string_to_list(shape_string: Any) -> list[Any]:
 def extract_equal_sign_closed(text: str) -> str:
     text = _fences(text)
     ind_1 = text.find("=====")
-    ind_2 = text.find("=====", ind_1 + 1)
-    return text[ind_1 + 6: ind_2].strip()
+    ind_2 = text.find("=====", ind_1 + 5)
+    if ind_1 < 0 or ind_2 < 0:
+        raise ValueError("The reply needs opening and closing ===== fences.")
+    return text[ind_1 + 5:ind_2].strip()
 
 
 # ---- upstream objective.py, constraint_model.py, target_code.py, execute_code.py ----
 
 def extract_objective(text: str) -> str:
-    text = _fences(text)
-    ind_1 = text.find("=====")
-    ind_2 = text.find("=====", ind_1 + 1)
-    objective = text[ind_1:ind_2]
-    objective = objective.replace("=====", "").strip()
-    return objective.replace("OBJECTIVE:", "").strip()
+    return extract_equal_sign_closed(text).removeprefix("OBJECTIVE:").strip()
 
 
 def extract_formulation_from_end(text: str) -> tuple[str, dict[str, Any], list[str]]:
@@ -119,12 +116,12 @@ def extract_code_from_end(text: str) -> str:
     in Markdown often show a fragment first and the full statement last (a bare objective, then setObjective)."""
     text = _fences(text)
     if "=====" in text:
-        ind_1 = text.find("=====")
-        ind_2 = text.find("=====", ind_1 + 1)
-        code = text[ind_1 + len("====="): ind_2].strip()
+        code = extract_equal_sign_closed(text)
     else:
         ind_1 = text.rfind("```python")
         ind_2 = text.find("```", ind_1 + 1)
+        if ind_1 < 0 or ind_2 < 0:
+            raise ValueError("The reply needs a complete Python code block.")
         code = text[ind_1 + len("```"): ind_2].strip()
     if "```" in code:
         code = code.replace("```python", "").replace("```", "").strip()
@@ -132,15 +129,11 @@ def extract_code_from_end(text: str) -> str:
         code = code[len("====="):].strip()
     if code.endswith("====="):
         code = code[: -len("=====")].strip()
-    if "python" in code:
-        code = code.replace("python", "").strip()
-    return code
+    # llm4om: strip only the fence's language label, not identifiers or string contents.
+    return re.sub(r"^python[ \t]*\n", "", code).strip()
 
 
 def extract_debugged_code(text: str) -> str:
     """execute_code.extract_code."""
-    text = _fences(text)
-    ind_1 = text.find("=====")
-    ind_2 = text.find("=====", ind_1 + 1)
-    code = text[ind_1 + 5: ind_2].strip()
+    code = extract_equal_sign_closed(text)
     return code.replace("```python", "").replace("```", "").strip()

@@ -1,4 +1,4 @@
-"""The platform graph of a method: prepare → model (the method's own graph) → solve.
+"""The platform graph of a method: prepare → model (the method's own graph) → solve → finish.
 
 The LangGraph server registers one platform graph per method (`server/graphs.py`); `run()` executes one in process.
 A run's input is the problem description and its data files; its context names the code language and the LLM.
@@ -14,6 +14,7 @@ import time
 import traceback
 from dataclasses import asdict, dataclass, field
 from functools import cache
+from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated, Any, Callable, TypedDict
 from uuid import UUID
@@ -24,11 +25,15 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_config
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
+from langgraph.types import Overwrite
 
-from llm4om.languages import CodeTarget
-from llm4om.llm import LLMPresetStore, LLMSettings, chat_model
+from llm4om.budget import TokenBudget
+from llm4om.languages import LANGUAGES, CodeTarget
+from llm4om.llm import LLMSettings, chat_model
+from llm4om.llm_presets import LLMPresetStore
 from llm4om.methods import Method, methods
-from llm4om.runtime import Context, LimitExceeded, Limits, Recorder, TokenBudget
+from llm4om.progress import NAMESPACE, save_progress, timing
+from llm4om.runtime import Context, LimitExceeded, Limits, Recorder
 from llm4om.sandbox import Sandbox
 
 RECURSION_LIMIT = 1_000_000  # loops are bounded by each method and by Limits, not by LangGraph's step count
@@ -37,16 +42,21 @@ MAX_DATA_CHARS = 20000
 HIDDEN_KEYS = {"problem", "solve", "messages", "failure"}  # and keys starting with "_": never shown in a step
 
 
-class RunState(TypedDict, total=False):
+class RunInput(TypedDict, total=False):
     description: str  # input: the problem description
     data: dict[str, str]  # input: data file name -> text; the code reads them as build_model(data)
+
+
+class RunState(RunInput, total=False):
     problem: str  # the description followed by the data files, as the method sees it
     formulation: str | None
     code: str | None
     solve: dict[str, Any] | None  # SolveResult as a dict
-    failure: str | None  # why the run ended without code
+    failure: str | None  # why the run failed, possibly after producing code
     steps: Annotated[list[dict[str, Any]], operator.add]  # every recorded step, in order
     usage: dict[str, int]  # LLM calls, solves and tokens
+    spec: dict[str, Any] | None  # fixed method, LLM and solver settings; never credentials
+    timing: dict[str, float]  # execution time, independent of edits to thread metadata
     _deadline: float  # wall-clock deadline survives checkpoints between modeling and final solving
 
 
@@ -73,24 +83,24 @@ class Resources:
     llm: LLMSettings | None = None
     budget: TokenBudget | None = None  # each preset's daily tokens
 
-    def llm_settings(self, preset: str | None = None) -> LLMSettings:
-        """The settings for one run: `llm` when given, otherwise the preset."""
-        settings = self.llm or self.presets.get(preset)
+    def resolve(self, preset: str | None = None) -> tuple[str | None, LLMSettings]:
+        """Resolve the preset once per modeling node; the returned settings stay private."""
+        selected = self.presets.find(preset) if self.llm is None else None
+        settings = self.llm if self.llm is not None else selected.settings
         settings.validate()
-        return settings
+        return selected.id if selected else None, settings
 
     def charge(self, preset: str | None) -> Callable[[int], None] | None:
-        """Charges the tokens of one run to its preset's daily budget; None when nothing is budgeted."""
-        if self.llm or not self.budget:
+        if self.llm or not self.budget or preset is None:
             return None
-        budget, preset_id = self.budget, self.presets.find(preset).id
-        return lambda tokens: budget.charge(preset_id, tokens)
+        return lambda tokens: self.budget.charge(preset, tokens)
 
 
 @cache
 def default_resources() -> Resources:
     workspace = Path(os.environ.get("LLM4OM_WORKSPACE", "runs/web"))
-    return Resources(LLMPresetStore(workspace), Sandbox(os.environ.get("LLM4OM_SANDBOX", "docker")),
+    return Resources(LLMPresetStore(workspace), Sandbox(os.environ.get("LLM4OM_SANDBOX", "docker"),
+                     max_jobs=int(os.environ.get("LLM4OM_SANDBOX_JOBS") or 4)),
                      budget=TokenBudget(workspace, int(os.environ.get("LLM4OM_DAILY_TOKENS") or 0)))
 
 
@@ -165,24 +175,34 @@ class _NodeSteps(BaseCallbackHandler):
 def platform_graph(method: Method) -> Any:
     """The compiled platform graph that runs `method` and solves its final code."""
 
-    def context(state: RunState, runtime: Runtime[RunContext]) -> Context:
-        """The method context of one node; its recorder continues the run's counts."""
+    def context(state: RunState, runtime: Runtime[RunContext], settings: LLMSettings | None = None) -> Context:
+        """Continue this run's counts, using the already resolved LLM settings for every role."""
         resources = _resources()
         choice = runtime.context or RunContext()
         recorder = Recorder(method.limits or resources.limits, state.get("usage"), runtime.stream_writer,
-                            resources.charge(choice.preset))
+                            resources.charge((state.get("spec") or {}).get("preset")))
 
         def model(role: str) -> BaseChatModel:
-            return resources.model_factory(resources.llm_settings(choice.preset),
-                                           callbacks=[recorder.callback], metadata={"llm4om_role": role})
+            if settings is None:
+                raise RuntimeError("The modeling node must resolve its LLM before calling it.")
+            return resources.model_factory(settings, callbacks=[recorder.callback], metadata={"llm4om_role": role})
 
         return Context(recorder, resources.sandbox, model, CodeTarget(choice.language), state.get("data") or {})
+
+    def thread_id() -> str | None:
+        return get_config().get("configurable", {}).get("thread_id")
 
     async def prepare(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
         """Reject unusable requests before any LLM call; the reason becomes the run's failure."""
         choice = runtime.context or RunContext()
         data = state.get("data") or {}
-        deadline = time.time() + (method.limits or _resources().limits).run_timeout
+        started = time.time()
+        resources = _resources()
+        deadline = started + (method.limits or resources.limits).run_timeout
+        fresh = {"formulation": None, "code": None, "solve": None, "spec": None, "usage": {},
+                 "steps": Overwrite([]), "timing": timing(started), "problem": ""}
+        if runtime.store and (thread := thread_id()):
+            await runtime.store.adelete(NAMESPACE, thread)
         try:
             if not (state.get("description") or "").strip():
                 raise ValueError("Describe the optimization problem first.")
@@ -193,12 +213,17 @@ def platform_graph(method: Method) -> Any:
             for name in data:
                 if not re.fullmatch(DATA_NAME, name):
                     raise ValueError(f"Invalid data file name {name!r}; use letters, digits, '-', '_', '.' and spaces.")
-            _resources().llm_settings(choice.preset)
-            if charge := _resources().charge(choice.preset):
+            preset, settings = await asyncio.to_thread(resources.resolve, choice.preset)
+            if charge := resources.charge(preset):
                 charge(0)  # raises when the preset's daily budget is spent
         except (ValueError, LimitExceeded) as error:
-            return {"failure": str(error)}
-        return {"problem": problem_text(state.get("description", ""), data), "failure": None, "_deadline": deadline}
+            return {**fresh, "failure": str(error)}
+        spec = {"version": version("llm4om"), "method": method.id, "source": method.source,
+                "parameters": method.parameters(), "limits": asdict(method.limits or resources.limits),
+                "language": choice.language, "solver": LANGUAGES[choice.language].solver, "preset": preset, "llm": settings.public(),
+                "sandbox": resources.sandbox.kind, "worker_image": resources.sandbox.image if resources.sandbox.kind == "docker" else None}
+        return {**fresh, "problem": problem_text(state.get("description", ""), data), "failure": None, "_deadline": deadline,
+                "spec": spec, "timing": timing(started)}
 
     def failure(error: Exception, recorder: Recorder) -> dict[str, Any]:
         message = "The run exceeded its time limit." if isinstance(error, TimeoutError) else f"{type(error).__name__}: {error}"
@@ -207,7 +232,14 @@ def platform_graph(method: Method) -> Any:
 
     async def model(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
         """Run the method's graph; each titled node update becomes a step."""
-        run = context(state, runtime)
+        try:
+            _, settings = await asyncio.to_thread(_resources().resolve, state["spec"]["preset"])
+            if settings.public() != state["spec"]["llm"]:
+                raise ValueError("The LLM preset changed before modeling started. Start a new run with the intended preset.")
+        except ValueError as error:
+            recorder = context(state, runtime).recorder
+            return {**failure(error, recorder), **recorder.update()}
+        run = context(state, runtime, settings)
         recorder = run.recorder
         graph = method.graph()
         graph.checkpointer = False  # the method's inner states are not checkpointed; the platform state is
@@ -219,36 +251,45 @@ def platform_graph(method: Method) -> Any:
                                               stream_mode="values"):
                 final.update(values)
 
-        try:
-            await asyncio.wait_for(drive(), state["_deadline"] - time.time())
-            code = final.get("code")
-            solved = final.get("solve") or (run.solved.get(code) if code else None)
-            result = {"formulation": final.get("formulation"), "code": code, "solve": asdict(solved) if solved else None,
-                      "failure": None if code else final.get("failure") or f"{method.name} finished without code."}
-        except Exception as error:  # any method failure ends the run with a visible reason
-            result = failure(error, recorder)
+        async with save_progress(runtime.store, thread_id(), state, recorder):
+            try:
+                await asyncio.wait_for(drive(), state["_deadline"] - time.time())
+                code = final.get("code")
+                solved = final.get("solve") or (run.solved.get(code) if code else None)
+                result = {"formulation": final.get("formulation"), "code": code, "solve": asdict(solved) if solved else None,
+                          "failure": None if code else final.get("failure") or f"{method.name} finished without code."}
+            except Exception as error:  # Preserve completed artifacts when a later method step fails.
+                result = {"formulation": final.get("formulation"), "code": final.get("code"), **failure(error, recorder)}
         return {**result, **recorder.update()}
 
     async def solve(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
         """Solve the final code in the sandbox when the method did not."""
         run = context(state, runtime)
-        try:
-            solved = await asyncio.wait_for(run.solve(state.get("code") or "", title="求解最终代码"),
-                                            state["_deadline"] - time.time())
-            result = {"solve": asdict(solved)}
-        except Exception as error:
-            result = failure(error, run.recorder)
+        async with save_progress(runtime.store, thread_id(), state, run.recorder):
+            try:
+                solved = await asyncio.wait_for(run.solve(state.get("code") or "", title="求解最终代码"),
+                                                state["_deadline"] - time.time())
+                result = {"solve": asdict(solved)}
+            except Exception as error:
+                result = failure(error, run.recorder)
         return {**result, **run.recorder.update()}
 
-    builder = StateGraph(RunState, context_schema=RunContext)
+    async def finish(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
+        if runtime.store and (thread := thread_id()):
+            await runtime.store.adelete(NAMESPACE, thread)
+        return {"timing": timing(state["timing"]["started_at"], finished=True)}
+
+    builder = StateGraph(RunState, input_schema=RunInput, context_schema=RunContext)
     builder.add_node("prepare", prepare)
     builder.add_node("model", model)
     builder.add_node("solve", solve)
+    builder.add_node("finish", finish)
     builder.add_edge(START, "prepare")
-    builder.add_conditional_edges("prepare", lambda state: END if state.get("failure") else "model", ["model", END])
-    builder.add_conditional_edges("model", lambda state: "solve" if state.get("code") and not state.get("solve") else END,
-                                  ["solve", END])
-    builder.add_edge("solve", END)
+    builder.add_conditional_edges("prepare", lambda state: "finish" if state.get("failure") else "model", ["model", "finish"])
+    builder.add_conditional_edges("model", lambda state: "solve" if state.get("code") and not state.get("solve") and not state.get("failure") else "finish",
+                                  ["solve", "finish"])
+    builder.add_edge("solve", "finish")
+    builder.add_edge("finish", END)
     return builder.compile(name=method.id)
 
 

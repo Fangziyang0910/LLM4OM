@@ -9,7 +9,7 @@ LLM4OM 只做三件事：建模、求解、记录过程。LLM 调用、重试和
 LangGraph 服务器（langgraph-api，内存运行时，数据在 <workspace>/.langgraph_api/）
    │  每个方法注册为一张平台图（server/graphs.py）；/api/* 由 server/app.py 提供
    ▼
-平台图：prepare ──► model ──► solve
+平台图：prepare ──► model ──► solve ──► finish
           │           │           └─ 方法没有求解最终代码时，在沙箱中求解一次
           │           └─ method.graph().astream(..., context=Context)
           │                 ├─ runtime.context.llm(role)    → LangChain 聊天模型（流式；回调记录每次调用）
@@ -27,18 +27,24 @@ src/llm4om/
 ├── __init__.py          公共入口：run、run_problem 及常用类型
 ├── cli.py               命令行：serve、run、build-worker
 ├── languages.py         代码写法与代码契约：LANGUAGES、CodeTarget、MILP_LANGUAGES
-├── llm.py               服务商列表、LLMSettings、chat_model()、预设模型 LLMPresetStore
+├── llm.py               服务商列表、LLMSettings、chat_model()
+├── llm_presets.py       预设读写、迁移和环境预设；同一事务内读取并原子替换
+├── storage.py           私有 JSON 文件的原子写入，供预设和 token 预算共用
+├── budget.py            每个预设的每日 token 预算
+├── progress.py          可展示进度的保存、取消时刷新和执行计时
 ├── sandbox/             沙箱
 │   ├── __init__.py      Sandbox（solve、run_script）与 SolveResult
 │   ├── worker.py        沙箱内的独立脚本；不导入 llm4om
 │   └── worker.Dockerfile
 ├── runtime.py           运行中的状态：Limits、Recorder（计数、上限、步骤、推送）、方法使用的 Context
 ├── methods/             建模方法：Method、methods()、各方法的图
-│   └── presets.py       全部方法的参数，每次运行都用这一套
+│   ├── presets.py       全部方法的参数，每次运行都用这一套
+│   └── <method>/        复杂方法：__init__.py 导出入口，graph.py 编排，提示/解析/搜索各归其位
 ├── graph.py             平台图 platform_graph(method)、RunState、RunContext、Resources、进程内运行 run()
 └── server/              Web 工作台
     ├── graphs.py        每个方法的平台图，供 LangGraph 服务器注册
-    ├── app.py           服务器挂载的路由：选项、预设模型、模型列表、题库、前端页面；拒绝非 JSON 的 POST
+    ├── app.py           服务器挂载的路由：选项、预设模型、模型列表、题库、前端页面
+    ├── middleware.py    请求格式、运行频率、线程删除及进度清理
     ├── examples.py      内置题库的只读浏览（数据在 examples_data/）
     └── web_assets/      前端构建产物（源码在 frontend/）
 ```
@@ -47,6 +53,8 @@ src/llm4om/
 
 ```text
 languages · llm · sandbox  →  runtime  →  methods  →  graph  →  server · cli
+storage → llm_presets · budget ──────────────────────┘
+runtime → progress ─────────────────────────────────┘
 ```
 
 `languages`、`llm`、`sandbox` 互不依赖。方法只依赖 `runtime`、`languages`、`sandbox` 和 `methods` 本身，不依赖平台图或服务器。`sandbox/worker.py` 在沙箱中独立运行，因此不导入任何平台模块；它与 `languages.py` 各自列出六种写法，是隔离的代价。
@@ -57,17 +65,19 @@ languages · llm · sandbox  →  runtime  →  methods  →  graph  →  server
 |---|---|
 | 输入 | `description`（问题描述）、`data`（数据文件名到文本） |
 | 运行上下文 `RunContext` | `language`、`preset`。只写预设模型的 id，不写密钥，也不能改模型；服务器按 id 读取预设。方法参数不随运行传入，固定在 `methods/presets.py` |
-| 输出 | `formulation`、`code`、`solve`、`failure`、`steps`、`usage`（LLM 调用、求解、token） |
+| 输出 | `formulation`、`code`、`solve`、`failure`、`steps`、`usage`（LLM 调用、求解、token）、`spec`（配置快照）、`timing`（执行时间） |
 
-`prepare` 发现请求不可用时写入 `failure` 并结束运行，不调用 LLM；有效请求记录内部截止时间 `_deadline`。`model` 和 `solve` 共享剩余时间，超时、超限或出错时写入一个错误步骤和 `failure`。
+图的输入类型 `RunInput` 只开放问题与数据，内部结果不能通过输入注入。每次 `prepare` 都清空旧产物、步骤、计数和配置，再建立本次运行状态；同一线程再次运行也遵守这一规则。
 
-方法图在 `model` 节点内运行，平台不为它保存检查点（`checkpointer = False`）：AutoFormulation 这类方法的内部状态很大，逐步保存的代价高于收益。平台图本身由服务器保存检查点。
+`prepare` 发现请求不可用时写入 `failure` 并结束运行，不调用 LLM；有效请求记录内部截止时间 `_deadline` 和不含密钥的 `spec`，包括平台版本、方法来源与参数、限制、LLM 设置、代码写法、求解器和沙箱镜像。`model` 和 `solve` 共享剩余时间，超时、超限或出错时写入一个错误步骤和 `failure`，保留已完成的数学模型和代码。失败后不再补跑最终求解。`finish` 固定 `timing`：从开始校验到结束，不含服务器排队时间，不随备注和标签变化。没有完成计时的记录在对比表中显示未知；中断运行的详情可读取进度快照中的时间。
+
+方法图在 `model` 节点内运行，平台不为它保存检查点（`checkpointer = False`）：AutoFormulation 这类方法的内部状态很大，逐步保存的代价高于收益。平台图本身由服务器保存检查点。`progress.save_progress` 在方法执行期间合并公开步骤和产物，每秒至多一次写入原生 Store，取消时立即刷新；不保存内部搜索树或密钥。正常完成后删除临时进度，最终状态成为唯一结果。
 
 进程内运行（命令行、测试、`run_problem`）通过 `config["configurable"]["llm4om_resources"]` 传入 `Resources`，替换预设模型、沙箱、上限或聊天模型工厂。服务器从环境变量 `LLM4OM_WORKSPACE`、`LLM4OM_SANDBOX` 读取默认资源。
 
-运行用哪个 LLM 只由 `LLMPresetStore` 决定（`Resources.llm` 给出时除外）。预设列表是 `LLM4OM_LLM_*` 环境变量给出的预设（id 为 `env`），加上 `<workspace>/.private/llm-presets.json` 中按添加顺序保存的预设；第一个是默认预设。`get(preset)` 按 id 取设置，id 不存在时报错并列出可选 id。
+运行用哪个 LLM 只由 `LLMPresetStore` 决定（`Resources.llm` 给出时除外）。预设列表是 `LLM4OM_LLM_*` 环境变量给出的预设（id 为 `env`），加上 `<workspace>/.private/llm-presets.json` 中按添加顺序保存的预设；第一个是默认预设。`get(preset)` 按 id 取设置，id 不存在时报错并列出可选 id。`prepare` 记录配置，`model` 开始前校验配置仍一致，随后所有角色共享同一份已解析设置。建模过程中删除或替换同名预设不会切换该运行的 LLM。求解和预算扣费不再重新查询预设。
 
-预设只能添加（`add`）和删除（`delete`），没有修改操作；`env` 预设不能删除。`public()` 返回的预设不含密钥。模型列表接口 `/api/models` 只使用请求中填写的密钥，从不补入已保存的密钥，因此密钥只会发往与它一起保存的接口地址。
+预设只能添加（`add`）和删除（`delete`），没有修改操作；`env` 预设不能删除。新增预设用随机 UUID，不按模型名复用 ID；已有预设保留原 ID。`public()` 返回的预设不含密钥。额外请求参数不能覆盖显式配置字段或调用记录回调。预设读改写由服务内共享锁串行化；先写权限为 600 的临时文件，再原子替换，写入失败保留旧文件。预算文件损坏时报告错误，不把已有用量当成零；后台落盘失败记录错误日志，`flush()` 也会抛出写入异常。一个工作区只供一个服务进程使用，与内存运行时一致。模型列表接口 `/api/models` 只使用请求中填写的密钥，从不补入已保存的密钥，因此密钥只会发往与它一起保存的接口地址。
 
 ## 方法接口
 
@@ -75,7 +85,7 @@ LangGraph 就是平台的方法抽象。每个方法是一张编译好的 LangGr
 
 | 约定 | 内容 |
 |---|---|
-| 状态 | 继承 `ModelingState`。输入 `problem`（问题描述加数据文件）；输出 `formulation`、`code`，可选 `solve`（方法自己已求解时）和 `failure`（没有代码时的原因） |
+| 状态 | 继承 `ModelingState`。输入 `problem`（问题描述加数据文件）；输出 `formulation`、`code`，可选 `solve`（方法自己已求解时）和 `failure`（失败原因） |
 | 运行时 | 图以 `context_schema=Context` 编译；节点签名为 `node(state, runtime: Runtime[Context])` |
 | 步骤 | `Method.titles` 把节点名映射为步骤标题。只有列出的节点显示为步骤；每次更新渲染为 Markdown（文本原样、`code` 和 `*_code` 为代码块、其他为 JSON） |
 | 隐藏 | 以 `_` 开头的状态键、`problem`、`solve`、`messages`、`failure`，以及 `Method.hidden` 中的键，不显示 |
@@ -94,6 +104,7 @@ class Method:
     hidden: frozenset[str] = frozenset()
     languages: frozenset[str] | None = None  # 支持的代码写法；None 表示全部
     limits: Limits | None = None
+    parameters: Callable[[], dict[str, Any]] = dict  # 返回可 JSON 序列化的固定参数快照
 ```
 
 | `Context` 成员 | 用途 |
@@ -105,12 +116,12 @@ class Method:
 | `target.starter` | 所选写法的空 `build_model` 模板，供需要代码示例的提示使用 |
 | `llm(role)` | 配置好的 LangChain 聊天模型。`role` 写入调用元数据，用于在过程列表中命名调用 |
 | `solve(code, title)` | 在沙箱中构建并求解，返回 `SolveResult`；`feedback()` 给出可交给 LLM 的文本 |
-| `run_script(script)` | 在沙箱中把脚本作为 `__main__` 运行，返回标准输出和异常栈。不计入求解次数。供原方法自己的检查脚本使用 |
+| `run_script(script)` | 在沙箱中把脚本作为 `__main__` 运行，返回标准输出和异常栈。不计入求解次数，但共用沙箱并发额度。供原方法自己的检查脚本使用 |
 | `solves` | 本次运行到目前为止的求解次数 |
 
 方法图结束后，平台图取最终状态的代码。方法已求解过的代码复用结果；否则 `solve` 节点求解一次。
 
-新方法放在 `methods/` 并加入 `methods()`，或在其他包中注册 `llm4om.methods` 入口点。
+新方法放在 `methods/` 并加入 `methods()`，或在其他包中注册 `llm4om.methods` 入口点。简单方法保留单文件；复杂方法的包入口只导出方法对象与图工厂。AutoFormulation 的候选节点、UCT 和排名归入 `search.py`；CoE 的专家提示和输出解析分别放在 `prompts.py`、`parsing.py`。图节点只组织执行，上游提示与研究流程不变。平台在准备运行时调用 `Method.parameters()` 记录参数，不根据方法 ID 猜测 `presets.py` 中的变量名；无参数的方法默认返回空字典。
 
 ## 可插拔的代码提示
 
@@ -137,19 +148,21 @@ MILP 写法是 Pyomo、gurobipy、`pywraplp` 和 PuLP（`languages.MILP_LANGUAGE
 
 ## 沙箱
 
-`Sandbox` 有两个动作：`solve(code, data, language, time_limit)` 构建并求解模型；`run_script(script, time_limit)` 运行检查脚本。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。
+`Sandbox` 有两个动作：`solve(code, data, language, time_limit)` 构建并求解模型；`run_script(script, time_limit)` 运行检查脚本。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。所有运行共享服务的 Sandbox，`solve` 和 `run_script` 共用并发额度，默认最多 4 个，由 `LLM4OM_SANDBOX_JOBS` 设置。排队仍计入运行总时限，单次沙箱超时从取得额度后开始。`--jobs` 单独控制并发运行数。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:7` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE` 时以只读方式挂载许可证。超时或取消时删除容器。
+`Sandbox("docker")` 在镜像 `llm4om-worker:9` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE` 时以只读方式挂载许可证。超时或取消时等待 `docker rm --force` 完成，确保容器已删除才释放并发额度。
 
 求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CPMpy 模型用 CPMpy 的 MUS，CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。诊断只给人看：`feedback()` 不包含它，方法拿到的反馈与原方法相同。Gurobi 预求解把模型判为“不可行或无界”时，Worker 关闭对偶约简（`DualReductions=0`）再求解一次，得到确定的状态。
 
 `Sandbox("local")` 用本机子进程运行同一脚本，只用于开发和测试。子进程只继承路径、语言、临时目录和 Gurobi 许可证位置等必要环境变量，不继承 API 密钥。超时或取消后等待子进程退出。
 
+求解结果保留所有变量；前端按需显示更多、按完整数据筛选和导出 CSV。给 LLM 的反馈仍只展示有限的非零变量，保持原方法的反馈格式。
+
 ## 步骤记录与推送
 
 `Recorder` 是一次运行在一个节点内的记账：LLM 调用数、求解次数、token、上限和步骤。平台图的每个节点从状态的 `usage` 创建它，因此计数跨节点连续；节点结束时用 `recorder.update()` 写回本节点的步骤和最新计数。
 
-`Recorder.step()` 记录一步（`llm`、`artifact`、`solve` 或 `error`），并立即作为 LangGraph 的 custom 流事件推送 `{"step": ...}`。同一步开始时推送一次（`running: true`），结束时按 `id` 再推送一次。方法不直接记录步骤，也看不到 `Recorder`。
+`Recorder.step()` 记录一步（`llm`、`artifact`、`solve` 或 `error`），并立即作为 LangGraph 的 custom 流事件推送 `{"step": ...}`。同一步开始时推送一次（`running: true`），结束时按 `id` 再推送一次。方法无需直接记录步骤。
 
 方法图中 `Method.titles` 列出的节点结束时，回调（`graph._NodeSteps`）立即把该节点的更新记为一个 `artifact` 步骤。回调在下一个节点开始前触发，所以步骤顺序与执行顺序一致：一次代码生成的产物总在它的求解之前。
 
@@ -166,10 +179,13 @@ LLM 调用由聊天模型上的回调记录，包括子图和 `create_agent` 智
 | 位置 | 内容 |
 |---|---|
 | 线程元数据 | 标题、方法、代码写法、服务商与模型名（无密钥）；对比运行的 `group`；用户写的 `note` 和 `tags` |
-| 线程状态 | 问题、数据文件、数学模型、代码、求解结果、失败原因、全部步骤、调用统计 |
+| 线程状态 | 问题、数据文件、数学模型、代码、求解结果、失败原因、全部步骤、调用统计、固定配置和执行时间 |
+| Store 的 `("llm4om", "progress")` / thread id | 运行中和中断后的公开步骤、产物、配置与时间；服务端删除线程时一并清理 |
 | 运行（run） | 状态：`pending`、`running`、`success`、`error`、`timeout`、`interrupted`（已停止） |
 
-服务器把线程、运行和检查点保存在 `<workspace>/.langgraph_api/`。内存运行时每 10 秒、以及正常退出时，把内存中的数据写入这些文件（先写临时文件再改名，不会写出半个文件）；进程被强制结束时，最多丢失最近约 10 秒的变化。备份就是复制整个工作区。停止运行时，方法节点被取消，线程状态只保留输入。页面打开已停止的运行时，从服务器保留的流中重放停止前的步骤；服务器重启后，这些步骤不再可得。
+服务器把线程、运行、Store 和检查点保存在 `<workspace>/.langgraph_api/`。内存运行时每 10 秒、以及正常退出时，把内存中的数据写入这些文件（先写临时文件再改名，不会写出半个文件）；进程被强制结束时，可能丢失最近约 10 秒的已写入 Store 的变化，加上最多约 1 秒的进度合并间隔。备份就是复制整个工作区。停止运行时，方法节点被取消，公开进度刷新到 Store；页面将它合并到线程状态，重启后仍可查看已保存的步骤和产物。旧版本中断记录没有这份快照时，只能尝试重放尚未过期的流。保存进度不等于恢复方法内部执行。
+
+`ThreadCleanup` 使用原生 SDK 处理线程删除生命周期：对 `DELETE /threads/{id}` 和删除策略的 `POST /threads/prune`，先取消并等待正在排队或执行的运行，再交给原生接口删除线程，成功响应前清理进度。清理失败时保留失败响应；单个线程已不存在的删除重试仍清理剩余进度。客户端只需删除线程。这使用服务器的[自定义中间件](https://docs.langchain.com/langsmith/custom-middleware)，没有替代原生线程存储。
 
 ## 前端
 
@@ -177,35 +193,23 @@ LLM 调用由聊天模型上的回调记录，包括子图和 `create_agent` 智
 
 ```text
 frontend/src/
-├── main.tsx        挂载：主题、QueryClient、Tooltip、Toaster、字体与全局样式
-├── App.tsx         布局、路由（/、/run/{thread_id} 与 /compare/{group}）、对话框；运行页和对比页按需加载
-├── index.css       Tailwind 入口、颜色变量（浅色与深色）、Markdown 与代码高亮样式
-├── api.ts          运行、对比、备注与标签、历史，/api 请求
-├── sdk.ts          LangGraph 客户端；体积大，首屏之后再加载
-├── i18n.ts         t()：中文原文为键，按语言取译文；locales/en.ts 是英文
-├── report.ts       一次运行的 Markdown 报告
-├── spreadsheet.ts  Excel 工作簿 → 每个工作表一个 CSV
-├── format.ts       状态文案、数字、token 与耗时的格式化
-├── useRun.ts       一次运行的实时数据：读取线程，并重放与接续流
-├── steps.ts        步骤 → 阶段、版本、摘要（纯函数）
-├── tables.ts       解的变量分组与矩阵视图、数据文件的 CSV/TSV 解析（纯函数）
-├── types.ts        与服务器对应的类型
-├── lib/utils.ts    cn()：合并 Tailwind 类名
-└── components/
-    ├── ui/         shadcn/ui 组件（生成后按需修改）
-    ├── Composer    编辑页：问题与数据、运行设置
-    ├── RunView     运行页：结论卡、建模过程、产物
-    ├── Timeline    建模过程：阶段、LLM 调用、求解输出
-    ├── Outputs     产物标签页：解、数学模型、求解代码、问题与数据；版本切换与对比
-    ├── Solution    解：分组或列表、二维变量的矩阵视图、CSV 导出
-    ├── Content     Markdown、代码、纯文本、差异视图
-    ├── Compare     对比页：同一问题的各方法与预设并排
-    ├── Sidebar     历史运行（文字与 #标签 筛选）、示例题库与预设模型入口、外观与语言切换
-    ├── Examples / PresetsDialog    题库与预设模型对话框
-    └── status / theme              状态颜色与图标、主题菜单与 Toaster
+├── main.tsx / App.tsx   挂载、路由、布局和跨功能组合
+├── api.ts / types.ts   普通 JSON HTTP 请求和共享选项/预设类型
+├── i18n.ts / locales/  中英文文本
+├── format.ts          状态、数字和用时的展示
+├── features/
+│   ├── composer/      Composer、Examples、Excel 导入、Draft 类型及测试
+│   ├── presets/       PresetsDialog
+│   └── runs/          RunView、Compare、Outputs、Solution、Timeline、状态图标
+│                      api、sdk、useRun、types、steps、tables、report 及相邻测试
+├── components/        Sidebar、Content、theme 等共享界面
+│   └── ui/            shadcn/ui 组件
+└── lib/                utils.ts 合并 Tailwind 类名；csv.ts 统一 CSV 转义
 ```
 
-测试文件 `*.test.ts(x)` 放在被测模块旁边，由 Vitest（jsdom）运行。`frontend/e2e/` 是浏览器测试（Playwright）：它启动脚本化的 OpenAI 兼容服务（`e2e/mock_llm.py`）和使用本机沙箱的 `llm4om serve`，在真实页面上跑运行、对比、不可行诊断、备注与标签、报告导出、Excel 导入和英文界面，不需要密钥和 Docker。
+测试文件 `*.test.ts(x)` 放在被测模块旁边，由 Vitest（jsdom）运行。`frontend/e2e/` 是浏览器测试（Playwright）：它启动脚本化的 OpenAI 兼容服务（`e2e/mock_llm.py`）和使用本机沙箱的 `llm4om serve`，在真实页面上跑运行、对比、不可行诊断、备注与标签、报告导出、Excel 导入和英文界面，不需要密钥和 Docker。`tests/test_server_restart.py` 另验证真实服务正常退出后，重启仍能读取中断前的步骤与产物。
+
+历史列表使用 TanStack `useInfiniteQuery` 和原生 `threads.search(offset, limit)`，每页 100 条，可加载更早的记录。文字搜索作用于已加载记录，尚有未加载记录时明确显示范围。对比最多 12 次运行；耗时来自 `values.timing.elapsed`，不用可修改的线程更新时间。历史和详情共用 `runMeta()`：实际执行配置取 `spec`，备注和标签取线程元数据；旧记录没有 `spec` 时继续使用元数据。
 
 界面文字用中文原文作键（`t("开始建模")`），英文译文在 `locales/en.ts`；`i18n.test.ts` 检查每个键都有译文、占位符一致。服务器给出的方法说明和步骤标题也经过 `t()`。语言默认跟随浏览器，切换后保存在浏览器中。
 
@@ -227,17 +231,17 @@ frontend/src/
 | 运行的实时流 | LangGraph SDK 的 `runs.joinStream` |
 | 提示消息 | sonner |
 | 图标 | lucide-react |
-| Markdown 与公式 | react-markdown、remark-gfm、remark-math、rehype-katex；代码高亮用 highlight.js |
+| Markdown 与公式 | react-markdown、remark-gfm、remark-math、rehype-katex；mdast-util-from-markdown 标识公式转换需跳过的代码；代码高亮用 highlight.js |
 
 颜色只来自 `index.css` 中 `:root` 与 `.dark` 上的变量；组件不写死颜色值。
 
 ## 服务器与安全
 
-`llm4om serve` 以内存运行时启动 `langgraph-api`（与 `langgraph dev` 相同），不需要 LangSmith 许可证。它注册每个方法的平台图，挂载 `server/app.py`，默认监听 `0.0.0.0`，CORS 不允许任何跨源请求。`server/app.py` 的中间件对所有路由（包括 LangGraph 接口）拒绝非 JSON 的 POST，因此其他网站无法借浏览器发起运行或修改预设。
+`llm4om serve` 以内存运行时启动 `langgraph-api`（与 `langgraph dev` 相同），不需要 LangSmith 许可证。它注册每个方法的平台图，挂载 `server/app.py`，默认监听 `0.0.0.0`，CORS 不允许任何跨源请求。`server/middleware.py` 对所有路由（包括 LangGraph 接口）拒绝非 JSON 的 POST，因此其他网站无法借浏览器发起运行或修改预设。
 
 Docker 部署（`Dockerfile`、`compose.yaml`）把服务器放进 `app` 容器，数据放在 `llm4om-data` 卷的 `/data` 中。`app` 通过挂载的宿主机 Docker socket 启动同级沙箱容器；启动脚本 `docker-entrypoint.sh` 采用 socket 的用户组后，以非 root 用户、无 capability 运行服务器，见 [ADR 0011](adr/0011-docker-compose-deployment.md)。
 
-两个可选上限防止共享部署被滥用：`LLM4OM_RUNS_PER_HOUR` 限制每个客户端地址每小时发起的运行数（中间件按 `RUN_STARTS` 匹配发起运行的请求，超过时返回 429）；`LLM4OM_DAILY_TOKENS` 限制每个预设每天的 token（`runtime.TokenBudget`，计数保存在 `.private/token-usage.json`，在每次 LLM 调用前检查）。服务在反向代理之后时设置 `LLM4OM_TRUST_PROXY=1`，按 `X-Forwarded-For` 的最后一项区分客户端。`compose.yaml` 的 `https` profile 用 Caddy 自动申请证书并反向代理到 `app`。
+两个可选上限防止共享部署被滥用：`LLM4OM_RUNS_PER_HOUR` 限制每个客户端地址每小时发起的运行数（中间件按 `RUN_STARTS` 匹配发起运行的请求，批量请求按数组中的运行数计费，整批超限返回 429）；`LLM4OM_DAILY_TOKENS` 限制每个预设每天的 token（`budget.TokenBudget`，计数保存在 `.private/token-usage.json`，在每次 LLM 调用前检查）。服务在反向代理之后时设置 `LLM4OM_TRUST_PROXY=1`，按 `X-Forwarded-For` 的最后一项区分客户端。`compose.yaml` 的 `https` profile 用 Caddy 自动申请证书并反向代理到 `app`。
 
 工作台面向信任范围内的小组，不做登录和权限控制：能访问端口的人可以运行、添加和删除页面上的预设、删除运行记录。密钥是唯一的保密边界：它只保存在服务器上，不出现在任何接口响应、线程元数据或运行状态中。见 [ADR 0010](adr/0010-llm-presets.md)。
 

@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Menu, Plus, RefreshCw, ServerCrash } from "lucide-react";
 import { toast } from "sonner";
@@ -7,18 +7,21 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
-import { api, deleteRun, history, startComparison, startRun } from "./api";
-import { errorText } from "./format";
-import { Composer, initialDraft } from "./components/Composer";
-import { Examples } from "./components/Examples";
-import { PresetsDialog } from "./components/PresetsDialog";
-import { Sidebar } from "./components/Sidebar";
-import { t } from "./i18n";
-import type { Draft, Entry, Options, Preset, Presets } from "./types";
+import { api } from "@/api";
+import { deleteRun, history, startComparison, startRun } from "@/features/runs/api";
+import { errorText } from "@/format";
+import { Composer, initialDraft } from "@/features/composer/Composer";
+import { Examples } from "@/features/composer/Examples";
+import { PresetsDialog } from "@/features/presets/PresetsDialog";
+import { Sidebar } from "@/components/Sidebar";
+import { t } from "@/i18n";
+import type { Draft } from "@/features/composer/types";
+import type { Entry } from "@/features/runs/types";
+import type { Options, Preset, Presets } from "@/types";
 
 // The run page carries Markdown, KaTeX and highlighting; the composer loads without them.
-const RunView = lazy(() => import("./components/RunView").then(module => ({ default: module.RunView })));
-const Compare = lazy(() => import("./components/Compare").then(module => ({ default: module.Compare })));
+const RunView = lazy(() => import("@/features/runs/RunView").then(module => ({ default: module.RunView })));
+const Compare = lazy(() => import("@/features/runs/Compare").then(module => ({ default: module.Compare })));
 
 type Route = { name: "new" } | { name: "run"; id: string } | { name: "compare"; id: string };
 type Confirm = { title: string; text: string; action: string; run: () => Promise<void> };
@@ -35,8 +38,10 @@ export default function App() {
   const presetsQuery = useQuery({ queryKey: ["presets"], queryFn: () => api<Presets>("/api/presets") });
   const presets = presetsQuery.data?.presets ?? NO_PRESETS;
   // Runs started elsewhere (another tab, the CLI against the server) finish without telling this page.
-  const entries = useQuery({ queryKey: ["history"], queryFn: () => history(),
-    refetchInterval: query => query.state.data?.some(entry => entry.state === "running") ? 4000 : false }).data ?? [];
+  const historyQuery = useInfiniteQuery({ queryKey: ["history"], initialPageParam: 0,
+    queryFn: ({ pageParam }) => history(undefined, pageParam), getNextPageParam: page => page.nextOffset,
+    refetchInterval: query => query.state.data?.pages.some(page => page.entries.some(entry => entry.state === "running")) ? 4000 : false });
+  const entries = [...new Map((historyQuery.data?.pages.flatMap(page => page.entries) ?? []).map(entry => [entry.id, entry])).values()];
   const options = optionsQuery.data ?? null;
   const [route, setRoute] = useState<Route>(routeFromUrl);
   const [draft, setDraft] = useState<Draft>(initialDraft);
@@ -60,7 +65,7 @@ export default function App() {
   }, []);
 
   const start = async (request: Draft) => {
-    const id = await startRun(request, presets.find(item => item.id === request.preset) ?? presets[0]);
+    const id = await startRun(request, request.preset ? presets.find(item => item.id === request.preset) : presets[0]);
     void refresh();
     go({ name: "run", id });
   };
@@ -70,7 +75,7 @@ export default function App() {
     go({ name: "compare", id: group });
     if (error) toast.error(t("只启动了 {started}/{total} 个运行：{error}", { started, total: runs.length, error: errorText(error) }));
   };
-  const remove = (entry: Entry) => setConfirm({
+  const remove = (entry: Pick<Entry, "id" | "meta">) => setConfirm({
     title: t("删除这次运行？"), action: t("删除"),
     text: t("“{title}”的问题、数学模型、代码和过程都会被删除，无法恢复。", { title: entry.meta.title }),
     run: async () => {
@@ -82,8 +87,9 @@ export default function App() {
   });
 
   const current = route.name === "run" ? route.id : null;
-  const currentEntry = entries.find(entry => entry.id === current);
   const sidebar = <Sidebar entries={entries} current={current} options={options} presets={presets} onNew={() => go({ name: "new" })}
+    hasMore={historyQuery.hasNextPage} loading={historyQuery.isFetching} error={historyQuery.error ? errorText(historyQuery.error) : null}
+    onLoadMore={() => void historyQuery.fetchNextPage()} onRetry={() => void historyQuery.refetch()}
     onOpen={id => go({ name: "run", id })} onCompare={group => go({ name: "compare", id: group })} onDelete={remove}
     onExamples={() => { setExamplesOpen(true); setMenuOpen(false); }} onPresets={() => { setPresetsOpen(true); setMenuOpen(false); }} />;
 
@@ -119,7 +125,7 @@ export default function App() {
               {route.name === "compare" ? <Compare key={route.id} group={route.id} options={options} onOpen={id => go({ name: "run", id })} />
                 : <RunView key={route.id} threadId={route.id} options={options} onFinished={() => void refresh()}
                   onEdit={next => { setDraft({ ...next, comparing: false, methods: draft.methods, presets: draft.presets }); go({ name: "new" }); }}
-                  onRerun={start} onDelete={() => currentEntry ? remove(currentEntry) : undefined}
+                  onRerun={start} onDelete={meta => remove({ id: route.id, meta })}
                   onCompare={group => go({ name: "compare", id: group })} onMetaChange={() => void refresh()} />}
             </Suspense>}
       </main>

@@ -17,7 +17,7 @@ from typing import Any
 WORKER = Path(__file__).with_name("worker.py")
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
 # The image contains worker.py, so a change to worker.py or worker.Dockerfile needs a new tag (and compose.yaml's).
-WORKER_IMAGE = "llm4om-worker:7"
+WORKER_IMAGE = "llm4om-worker:9"
 START_MARGIN = 60  # seconds beyond the time limit for starting the sandbox, importing libraries and building the model
 
 
@@ -62,10 +62,13 @@ class SolveResult:
 class Sandbox:
     """Runs generated code in Docker (`docker`) or as a local subprocess (`local`)."""
 
-    def __init__(self, kind: str = "docker", image: str = WORKER_IMAGE) -> None:
+    def __init__(self, kind: str = "docker", image: str = WORKER_IMAGE, max_jobs: int = 4) -> None:
         if kind not in ("docker", "local"):
             raise ValueError("The sandbox must be 'docker' or 'local'.")
         self.kind, self.image = kind, image
+        if max_jobs < 1:
+            raise ValueError("The sandbox concurrency must be at least 1.")
+        self._slots = asyncio.Semaphore(max_jobs)
 
     async def solve(self, code: str, data: dict[str, str], language: str, time_limit: float) -> SolveResult:
         """Build the model from `code` with `data` and solve it with the language's solver, within `time_limit`."""
@@ -87,6 +90,10 @@ class Sandbox:
         return command + [self.image, "python", "-I", "/opt/llm4om/worker.py"]
 
     async def _run(self, request: dict[str, Any], time_limit: float) -> SolveResult:
+        async with self._slots:
+            return await self._execute(request, time_limit)
+
+    async def _execute(self, request: dict[str, Any], time_limit: float) -> SolveResult:
         timeout = time_limit + START_MARGIN
         name = "llm4om-" + uuid.uuid4().hex[:12]
         env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "GRB_LICENSE_FILE")
@@ -100,7 +107,7 @@ class Sandbox:
                 process.kill()
             await process.wait()
             if self.kind == "docker":
-                await (await asyncio.create_subprocess_exec("docker", "kill", name, stdout=asyncio.subprocess.DEVNULL,
+                await (await asyncio.create_subprocess_exec("docker", "rm", "--force", name, stdout=asyncio.subprocess.DEVNULL,
                                                             stderr=asyncio.subprocess.DEVNULL)).wait()
             if isinstance(error, asyncio.CancelledError):
                 raise

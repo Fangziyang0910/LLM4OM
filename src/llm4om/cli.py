@@ -24,7 +24,7 @@ def _print_step(step: dict[str, Any]) -> None:
 
 async def _run(args: argparse.Namespace) -> int:
     from llm4om.graph import Resources, run
-    from llm4om.llm import LLMPresetStore
+    from llm4om.llm_presets import LLMPresetStore
     from llm4om.sandbox import Sandbox, SolveResult
 
     try:

@@ -19,12 +19,14 @@ async function open(page: Page) {
 
 test("a run shows the solution, keeps a note and tags, and exports a report", async ({ page }) => {
   const errors = await open(page);
-  await page.getByRole("button", { name: /生产计划/ }).click();
+  await page.getByRole("button", { name: /^生产计划/ }).click();
   await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue(PRODUCTION);
   await page.getByRole("button", { name: "开始建模" }).click();
   await page.waitForURL(/\/run\//);
   await page.getByRole("button", { name: "查看解" }).waitFor({ timeout: 60_000 });
   await expect(page.getByText("目标值").first().locator("..")).toContainText("13");
+  const threadId = page.url().split("/").at(-1)!;
+  const before = (await (await page.request.get(`/threads/${threadId}`)).json()).values.timing;
 
   await page.getByRole("button", { name: "更多操作", exact: true }).click();
   await page.getByRole("menuitem", { name: "备注与标签" }).click();
@@ -38,6 +40,8 @@ test("a run shows the solution, keeps a note and tags, and exports a report", as
   // The tag filters the history after a reload, so the server kept it.
   await page.reload();
   await page.getByRole("button", { name: "查看解" }).waitFor();
+  const after = (await (await page.request.get(`/threads/${threadId}`)).json()).values.timing;
+  expect(after).toEqual(before);
   await page.getByRole("textbox", { name: "搜索运行" }).fill("#e2e");
   await expect(page.getByRole("navigation", { name: "运行记录" }).getByText(/工厂生产/)).toHaveCount(1);
   await page.getByRole("textbox", { name: "搜索运行" }).fill("#nosuch");
@@ -51,7 +55,58 @@ test("a run shows the solution, keeps a note and tags, and exports a report", as
   expect(report).toMatch(/目标值：13/);
   expect(report).toContain("整数约束已核对");
   expect(report).toContain("build_model");
+  expect(report).toContain("运行配置");
+  expect(report).not.toContain("e2e-not-a-key");
   expect(errors).toEqual([]);
+});
+
+test("a cancelled method keeps its draft after reloading without an event stream", async ({ page }) => {
+  const errors = await open(page);
+  await page.getByRole("textbox", { name: "问题描述" }).fill("E2E_PAUSE_REPAIR 工厂生产计划");
+  await page.locator("#method-feedback_repair").click();
+  await page.getByRole("button", { name: "开始建模" }).click();
+  await page.waitForURL(/\/run\//);
+  await expect(page.getByText(/LLM 正在处理：repair/)).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "停止", exact: true }).click();
+  await expect(page.getByText("运行已停止", { exact: true })).toBeVisible();
+  let streamRequests = 0;
+  await page.route(/\/runs\/[^/]+\/stream/, route => { streamRequests++; return route.abort(); });
+  await page.reload();
+  await expect(page.getByText("停止前已保存的过程和产物仍可查看。", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "求解代码", exact: true }).click();
+  await expect(page.getByRole("tabpanel")).toContainText("return m.missing");
+  expect(streamRequests).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test("history can load records beyond the first two hundred", async ({ page }) => {
+  const ids: string[] = [];
+  try {
+    for (let index = 0; index < 205; index++) {
+      const response = await page.request.post("/threads", { data: { metadata: {
+        title: index === 0 ? "pagination-first" : `pagination-${index}`, method: "direct", language: "pyomo", model: "mock-model",
+      } } });
+      expect(response.ok()).toBeTruthy();
+      ids.push((await response.json()).thread_id);
+    }
+    await open(page);
+    await page.getByRole("textbox", { name: "搜索运行" }).fill("pagination-first");
+    const history = page.getByRole("navigation", { name: "运行记录" });
+    await expect(history.getByText("pagination-first", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "加载更早的运行" }).click();
+    await page.getByRole("button", { name: "加载更早的运行" }).click();
+    await expect(history.getByText("pagination-first", { exact: true })).toBeVisible();
+    // Opening an old record directly does not load its row into the first history page.
+    await page.goto(`/run/${ids[1]}`);
+    await expect(history.getByText("pagination-1", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "更多操作", exact: true }).click();
+    await page.getByRole("menuitem", { name: "删除这次运行" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "删除", exact: true }).click();
+    await page.waitForURL("/");
+    expect((await page.request.get(`/threads/${ids[1]}`)).status()).toBe(404);
+  } finally {
+    await Promise.all(ids.map(id => page.request.delete(`/threads/${id}`)));
+  }
 });
 
 test("a comparison runs several methods on one problem, also over plain HTTP", async ({ page }) => {
@@ -61,7 +116,7 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
     Object.defineProperty(Navigator.prototype, "clipboard", { get: () => undefined });
   });
   const errors = await open(page);
-  await page.getByRole("button", { name: /生产计划/ }).click();
+  await page.getByRole("button", { name: /^生产计划/ }).click();
   await page.getByRole("switch", { name: "对比多个方法" }).click();
   await page.locator("#compare-feedback_repair").click();
   await page.getByRole("button", { name: "开始对比（2 个运行）" }).click();

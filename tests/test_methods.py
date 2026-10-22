@@ -134,7 +134,7 @@ def test_llmopt_returns_to_the_step_its_self_correction_rejects(run_method: Any)
 
 
 def test_llmopt_reads_a_five_element_split_over_several_blocks() -> None:
-    from llm4om.methods.llmopt import _five_element
+    from llm4om.methods.llmopt.graph import _five_element
 
     split = "## Sets:\n```text\nP = {A, B}\n```\n## Parameters:\n```\np = 3\n```\n## Variables:\nx\n## Objective:\nmax\n## Constraints:\nc"
     assert _five_element(split).startswith("## Sets:\nP = {A, B}\n## Parameters:") and "```" not in _five_element(split)
@@ -251,6 +251,23 @@ def test_optimus_takes_the_last_markdown_code_block() -> None:
     reply = ("The expression is:\n\n```python\nquicksum(c[i] * x[i] for i in I)\n```\n\nFinal code:\n\n"
              "```python\nmodel.setObjective(quicksum(c[i] * x[i] for i in I), GRB.MINIMIZE)\n```\n")  # seen from GPT
     assert extract_code_from_end(reply) == "model.setObjective(quicksum(c[i] * x[i] for i in I), GRB.MINIMIZE)"
+
+
+@pytest.mark.parametrize("fence", ["=====", "```python\n"])
+def test_optimus_preserves_python_in_code(fence: str) -> None:
+    from llm4om.methods.optimus.parsing import extract_code_from_end
+    code = 'python_count = 1\nlabel = "python"'
+    end = "=====" if fence == "=====" else "```"
+    assert extract_code_from_end(fence + code + end) == code
+
+
+def test_optimus_fences_need_no_newline_but_must_be_complete() -> None:
+    from llm4om.methods.optimus.parsing import extract_code_from_end, extract_equal_sign_closed, extract_objective
+    assert extract_equal_sign_closed("=====x + y=====") == "x + y"
+    assert extract_objective("=====OBJECTIVE: maximize x=====") == "maximize x"
+    for incomplete in ("unfenced", "=====x", "```python\nx"):
+        with pytest.raises(ValueError):
+            extract_code_from_end(incomplete)
 
 
 COE_REPLIES = {"conductor": ["Modeling Expert", "Programming Expert", "Code Reviewer"],
@@ -547,3 +564,15 @@ def test_autoformulation_dictionary_values_keep_braces_and_quotes(value: Any) ->
     expected = {'label': value}
     _, parsed = extract_dict_from_string(f"formalization_dict['parameters'] = {expected!r}", 'parameters')
     assert parsed == expected
+
+
+@pytest.mark.parametrize("value", ['a"b', "a'b", "line 1\nline 2\\tail"])
+def test_autoformulation_generated_literals_preserve_parameter_text(value: str) -> None:
+    import ast
+
+    from llm4om.methods.autoformulation.search import parse_dict_with_comments
+    from llm4om.methods.autoformulation.upstream.utils_general import get_param_code_str
+
+    assignment = ast.parse(get_param_code_str({"parameters": {"label": value}})).body[0]
+    assert isinstance(assignment, ast.Assign) and ast.literal_eval(assignment.value) == value
+    assert ast.literal_eval(parse_dict_with_comments({"label": value}, [""])) == {"label": value}

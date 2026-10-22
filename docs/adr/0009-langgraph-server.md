@@ -1,5 +1,7 @@
 # 用 LangGraph 服务器运行、推送和保存运行
 
+运行进度与中断记录的取舍已由 [0012](0012-run-records.md) 更新；方法内部仍不保存检查点。
+
 ## 背景
 
 [0007](0007-langchain-minimal-core.md) 让每个方法成为一张 LangGraph 图，但运行外壳仍是自建的：`Service` 启动后台任务，`RunLog` 把事件追加到 `events.jsonl`，页面按序号轮询，服务重启后未结束的运行只能标为中断。这一层与 LangGraph 服务器已有的线程、后台运行、可重放的流和检查点重复。

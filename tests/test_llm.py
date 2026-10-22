@@ -18,6 +18,19 @@ def test_anthropic_receives_extra_parameters() -> None:
     assert payload["thinking"] == thinking and payload["max_tokens"] == 2048
 
 
+@pytest.mark.parametrize("field", ["model", "api_key", "callbacks", "temperature"])
+def test_extra_parameters_cannot_override_recorded_settings_or_tracking(field: str) -> None:
+    with pytest.raises(ValueError, match="Extra parameters cannot replace"):
+        chat_model(LLMSettings("anthropic", "recorded-model", api_key="dummy", extra_body={field: "override"}))
+
+
+def test_provider_routing_remains_a_valid_extra_request_parameter() -> None:
+    routing = {"order": ["provider-a"]}
+    model = chat_model(LLMSettings("openai_compatible", "model", api_key="dummy", base_url="http://localhost:9/v1",
+                                   extra_body={"provider": routing}))
+    assert model._get_request_payload("test")["extra_body"] == {"provider": routing}
+
+
 def test_openrouter_preserves_reasoning_in_streamed_tool_conversations() -> None:
     requests = []
     details = [{"type": "reasoning.text", "text": "test thought", "index": 0, "format": "unknown"}]

@@ -1,5 +1,11 @@
 /** English for the page's Chinese text; keys are the Chinese exactly as written in t(...). */
 export const en: Record<string, string> = {
+  "原预设已删除，请重新选择预设模型。": "The original preset was deleted. Select an LLM preset again.",
+  "正在搜索已加载的 {count} 条记录": "Searching {count} loaded runs",
+  "加载更早的运行": "Load earlier runs",
+  "运行配置": "Run configuration",
+  "停止前已保存的过程和产物仍可查看。": "Saved steps and artifacts remain available after stopping.",
+  "报告只列出前 500 个非零变量；完整结果可下载 CSV。": "The report lists the first 500 nonzero variables. Download CSV for the complete result.",
   // App and navigation
   "删除这次运行？": "Delete this run?",
   "删除": "Delete",
@@ -209,8 +215,6 @@ export const en: Record<string, string> = {
   "正在建模": "Modeling",
   "个阶段": "phases",
   "运行已停止": "Run stopped",
-  "停止前的过程仍可查看。停止的运行不保存结果；服务器重启后，这些过程也不再保留。":
-    "The process before the stop can still be read. A stopped run keeps no result, and its process is gone after the server restarts.",
   "停止前的过程没有保存。": "The process before the stop was not saved.",
   "没有得到可求解的代码": "No code to solve",
   "运行没有正常结束。": "The run did not end normally.",

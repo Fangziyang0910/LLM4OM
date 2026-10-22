@@ -3,6 +3,8 @@ import { diffLines } from "diff";
 import hljs from "highlight.js/lib/core";
 import json from "highlight.js/lib/languages/json";
 import python from "highlight.js/lib/languages/python";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import type { Nodes } from "mdast";
 import { Check, Copy } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -16,9 +18,23 @@ import { cn } from "@/lib/utils";
 hljs.registerLanguage("python", python);
 hljs.registerLanguage("json", json);
 
-// LLMs often write \( \) and \[ \]; remark-math understands $ and $$.
-const normalizeMath = (text: string) =>
-  text.replace(/\\\[([\s\S]*?)\\\]/g, (_, body) => `$$${body}$$`).replace(/\\\(([\s\S]*?)\\\)/g, (_, body) => `$${body}$`);
+// Convert LLM math delimiters outside code; use Markdown's parser to locate code spans and blocks.
+function normalizeMath(text: string): string {
+  if (!/\\[[(]/.test(text)) return text;
+  const replace = (part: string) => part.replace(/\\\[([\s\S]*?)\\\]/g, (_, body) => `$$${body}$$`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_, body) => `$${body}$`);
+  const parts: string[] = [];
+  let offset = 0;
+  function visit(node: Nodes) {
+    if (node.type === "code" || node.type === "inlineCode") {
+      const start = node.position!.start.offset!, end = node.position!.end.offset!;
+      parts.push(replace(text.slice(offset, start)), text.slice(start, end));
+      offset = end;
+    } else if ("children" in node) node.children.forEach(visit);
+  }
+  visit(fromMarkdown(text));
+  return parts.join("") + replace(text.slice(offset));
+}
 
 /** Copies text; over plain HTTP the Clipboard API is missing, so a hidden text area is copied instead. */
 export async function copyText(text: string): Promise<void> {

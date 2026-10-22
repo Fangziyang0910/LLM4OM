@@ -133,6 +133,54 @@ def test_data_files_reach_build_model() -> None:
     assert solve(code, data={"profit.csv": "A,30"}).objective == 120  # x = (4, 0)
 
 
+def test_all_variables_are_returned_even_past_two_thousand() -> None:
+    code = '''import pyomo.environ as pyo
+def build_model(data):
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(range(2001), bounds=(0, 1))
+    m.c = pyo.Constraint(range(2001), rule=lambda m, i: m.x[i] == int(i == 2000))
+    m.obj = pyo.Objective(expr=sum(m.x.values()))
+    return m
+'''
+    result = solve(code)
+    assert result.objective == 1 and len(result.variables) == 2001
+    assert result.variables["x[2000]"] == 1
+
+
+def test_solves_and_scripts_share_capacity_and_queued_cancellation_releases_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def check() -> None:
+        sandbox = Sandbox("local", max_jobs=2)
+        release, full = asyncio.Event(), asyncio.Event()
+        active = peak = 0
+
+        async def execute(*args):
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            if active == 2:
+                full.set()
+            try:
+                await release.wait()
+                return SolveResult("executed")
+            finally:
+                active -= 1
+
+        monkeypatch.setattr(sandbox, "_execute", execute)
+        first = asyncio.create_task(sandbox.solve("", {}, "pyomo", 1))
+        second = asyncio.create_task(sandbox.run_script("", 1))
+        await asyncio.wait_for(full.wait(), 1)
+        queued = asyncio.create_task(sandbox.run_script("", 1))
+        await asyncio.sleep(0)
+        queued.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await queued
+        release.set()
+        await asyncio.gather(first, second)
+        assert (await sandbox.run_script("", 1)).executed and peak == 2 and active == 0
+
+    asyncio.run(check())
+
+
 def test_infeasible_model_is_a_solver_status_not_an_error() -> None:
     result = solve(PRODUCTION_CODE.replace("<= 8)\n    return", "<= 8)\n    m.need = pyo.Constraint(expr=m.x['A'] >= 9)\n    return"))
     assert result.executed and result.status in ("infeasible", "infeasible_or_unbounded")

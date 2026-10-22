@@ -1,5 +1,7 @@
 """Project baselines: one-shot generation, and generation with solver-feedback repair."""
 
+from dataclasses import asdict
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
@@ -91,4 +93,5 @@ DIRECT = Method("direct", "Direct", "一次调用生成数学模型和求解代�
                 titles={"generate": "生成数学模型和代码"})
 FEEDBACK_REPAIR = Method("feedback_repair", "Feedback Repair",
                          f"生成数学模型和代码后求解；没有得到解时，把求解反馈交给模型修正，最多修正 {presets.FEEDBACK_REPAIR.max_repairs} 次。", feedback_repair_graph,
-                         titles={"generate": "生成数学模型和代码", "repair": "按求解反馈修正", "finish": "选择最好的一次"})
+                         titles={"generate": "生成数学模型和代码", "repair": "按求解反馈修正", "finish": "选择最好的一次"},
+                         parameters=lambda: asdict(presets.FEEDBACK_REPAIR))

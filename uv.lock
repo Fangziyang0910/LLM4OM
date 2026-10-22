@@ -1167,6 +1167,7 @@ version = "0.41.1"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "json-repair" },
     { name = "langchain" },
     { name = "langchain-anthropic" },
@@ -1204,7 +1205,6 @@ solve = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -1217,6 +1217,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "gurobipy", marker = "extra == 'gurobi'", specifier = "==13.0.3" },
     { name = "highspy", marker = "extra == 'solve'", specifier = "==1.12.0" },
+    { name = "httpx", specifier = ">=0.27,<1" },
     { name = "json-repair", specifier = "==0.60.1" },
     { name = "langchain", specifier = ">=1.4.7,<2" },
     { name = "langchain-anthropic", specifier = ">=1.0,<2" },
@@ -1241,7 +1242,6 @@ provides-extras = ["solve", "gurobi", "autoformulation"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = ">=0.27,<1" },
     { name = "pytest", specifier = ">=9,<10" },
     { name = "ruff", specifier = ">=0.17,<0.18" },
 ]

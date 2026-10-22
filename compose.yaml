@@ -11,7 +11,7 @@ services:
     build:
       context: src/llm4om/sandbox
       dockerfile: worker.Dockerfile
-    image: llm4om-worker:7
+    image: llm4om-worker:9
     entrypoint: ["true"]
     network_mode: none
 

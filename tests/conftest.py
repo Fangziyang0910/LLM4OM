@@ -13,7 +13,8 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.utils.function_calling import convert_to_openai_tool
 
 from llm4om.graph import Resources, run
-from llm4om.llm import LLMPresetStore, LLMSettings
+from llm4om.llm import LLMSettings
+from llm4om.llm_presets import LLMPresetStore
 from llm4om.methods import presets
 from llm4om.runtime import Limits
 from llm4om.sandbox import Sandbox

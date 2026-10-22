@@ -3,7 +3,7 @@ import { t } from "./i18n";
 
 const STATUS_TEXT: Record<string, string> = {
   pending: "排队中", running: "建模中", success: "已完成", error: "运行出错", timeout: "超时", interrupted: "已停止",
-  failed: "未得到代码",
+  failed: "运行失败",
   optimal: "最优", feasible: "可行解", infeasible: "不可行", unbounded: "无界",
   infeasible_or_unbounded: "不可行或无界", time_limit: "达到时限", executed: "已执行",
 };
@@ -43,6 +43,8 @@ export const formatNumber = (value: number) =>
 
 export const formatTokens = (count: number) => count < 1000 ? String(count) : `${(count / 1000).toFixed(count < 10000 ? 1 : 0)}k`;
 
-export const duration = (seconds: number) =>
-  seconds < 60 ? t("{seconds} 秒", { seconds: seconds < 10 ? seconds.toFixed(1) : Math.round(seconds) })
-    : t("{minutes} 分 {seconds} 秒", { minutes: Math.floor(seconds / 60), seconds: Math.round(seconds % 60) });
+export function duration(seconds: number): string {
+  const rounded = Math.round(seconds);
+  return rounded < 60 ? t("{seconds} 秒", { seconds: seconds < 10 ? seconds.toFixed(1) : rounded })
+    : t("{minutes} 分 {seconds} 秒", { minutes: Math.floor(rounded / 60), seconds: rounded % 60 });
+}

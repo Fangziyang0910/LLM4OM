@@ -7,7 +7,7 @@
 ## 决定
 
 - `Dockerfile` 构建 `llm4om` 镜像：锁定依赖安装到虚拟环境，加上 Docker 命令行客户端，以非 root 用户运行，数据目录是 `/data`。
-- `compose.yaml` 有两个服务：`worker` 只构建沙箱镜像（如 `llm4om-worker:7`）；`app` 运行服务器，挂载宿主机的 `/var/run/docker.sock`，通过宿主机的 Docker 启动同级沙箱容器。
+- `compose.yaml` 有两个服务：`worker` 只构建沙箱镜像（如 `llm4om-worker:9`）；`app` 运行服务器，挂载宿主机的 `/var/run/docker.sock`，通过宿主机的 Docker 启动同级沙箱容器。
 - `app` 以 root 启动，只做两件事：读取 socket 的用户组，把 `/data` 交给用户 `llm4om`；然后用 `setpriv` 切换到该用户并清空 capability。容器只授予这两步需要的 capability，根文件系统只读，并设置 `no-new-privileges`。socket 的用户组因宿主机而异，因此在启动时读取，不需要配置。
 - `worker.py` 构建进沙箱镜像。同级容器的挂载路径按宿主机解析，`app` 容器内的文件无法挂载给沙箱。
 - 预设模型和运行记录放在命名卷 `llm4om-data` 中；默认预设由 `.env` 的 `LLM4OM_LLM_*` 给出。

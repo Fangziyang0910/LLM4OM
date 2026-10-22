@@ -27,10 +27,8 @@ def get_param_code_str(formalization_dict, apply_ast = False):
     param_dict = transform_keys(param_dict)
     prompt = ""
     for param, value in param_dict.items():
-        if isinstance(value, str):
-            prompt += f'{param} = "{str(value)}"\n'
-        else:
-            prompt += f'{param} = {value}\n'
+        # llm4om: repr preserves quotes, backslashes and line breaks in generated Python literals.
+        prompt += f'{param} = {value!r}\n'
     return prompt
 
 

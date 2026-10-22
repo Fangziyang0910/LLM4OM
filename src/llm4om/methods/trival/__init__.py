@@ -6,7 +6,9 @@ solver-selection and syntax sections are replaced by the platform code target, a
 platform's `problem` to `problem_description`. See README.md here.
 """
 
-from llm4om.methods import Method
+from dataclasses import asdict
+
+from llm4om.methods import Method, presets
 from llm4om.methods.trival.graph import create_trival_graph
 
 TITLES = {
@@ -28,4 +30,5 @@ HIDDEN = frozenset({"problem_description", "failure", "code_executable", "execut
 
 TRIVAL = Method("trival", "TriVAL",
                 "依次进行语义验证、数学模型验证和代码验证；每个阶段先构建、再验证、不通过就修订，代码缺陷可回溯到数学模型。",
-                create_trival_graph, "https://github.com/SCUT-EIPI/TriVAL/tree/380a529", titles=TITLES, hidden=HIDDEN)
+                create_trival_graph, "https://github.com/SCUT-EIPI/TriVAL/tree/380a529", titles=TITLES, hidden=HIDDEN,
+                parameters=lambda: asdict(presets.TRIVAL))

@@ -136,10 +136,10 @@ def node(x: int, y: int, w: int, c: dict[str, str], lines: tuple[str, ...], acce
 
 def architecture(c: dict[str, str], words: dict[str, tuple[str, ...]]) -> str:
     top, bottom = 50, 280
-    steps = "".join(f'<rect x="{18 + 80 * i}" y="70" width="66" height="26" rx="8" fill="{c["chip"]}" stroke="{c["border"]}"/>'
-                    + text(51 + 80 * i, 88, step, c, 12, "code", mono=True, anchor="middle")
-                    + (text(88 + 80 * i, 88, "→", c, 13, "muted", anchor="middle") if i < 2 else "")
-                    for i, step in enumerate(("prepare", "model", "solve")))
+    steps = "".join(f'<rect x="{18 + 57 * i}" y="70" width="50" height="26" rx="8" fill="{c["chip"]}" stroke="{c["border"]}"/>'
+                    + text(43 + 57 * i, 87, step, c, 10, "code", mono=True, anchor="middle")
+                    + (text(71.5 + 57 * i, 87, "→", c, 10, "muted", anchor="middle") if i < 3 else "")
+                    for i, step in enumerate(("prepare", "model", "solve", "finish")))
     platform = card(630, top, 250, 122, c, words["platform"][0], text(18, 52, words["platform"][1], c, 13, "muted") + steps,
                     accent=True)
     edges = words["edges"]

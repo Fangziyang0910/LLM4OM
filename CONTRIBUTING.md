@@ -14,7 +14,7 @@
 ```bash
 git clone https://github.com/Fangziyang0910/LLM4OM.git && cd LLM4OM
 uv sync --all-extras
-uv run llm4om build-worker          # 构建沙箱镜像 llm4om-worker:7
+uv run llm4om build-worker          # 构建沙箱镜像 llm4om-worker:9
 cp .env.example .env                # 填写默认预设，供真实运行使用
 ```
 
@@ -22,16 +22,7 @@ cp .env.example .env                # 填写默认预设，供真实运行使用
 
 ```text
 LLM4OM/
-├── src/llm4om/
-│   ├── cli.py               命令行：serve、run、build-worker
-│   ├── languages.py         代码写法与代码契约
-│   ├── llm.py               服务商、LLM 设置和预设模型
-│   ├── runtime.py           运行上下文、步骤记录、上限和每日 token 预算
-│   ├── graph.py             平台图：prepare → model → solve
-│   ├── methods/             10 种建模方法，每种是一张 LangGraph 图
-│   │   └── presets.py       全部方法的固定参数
-│   ├── sandbox/             沙箱：worker.py 在容器中构建并求解模型
-│   └── server/              LangGraph 服务器的图注册、/api 路由、题库和前端构建产物
+├── src/llm4om/              平台、方法、沙箱和服务器；模块边界见架构文档
 ├── frontend/                React 工作台（Vite、Tailwind v4、shadcn/ui）
 │   ├── src/                 页面、组件和 locales/en.ts 英文译文
 │   └── e2e/                 Playwright 测试和脚本化 LLM
@@ -41,7 +32,7 @@ LLM4OM/
 └── langgraph.json           LangGraph Studio 读取的图列表
 ```
 
-模块依赖只朝一个方向：`languages · llm · sandbox → runtime → methods → graph → server · cli`。详见[架构](docs/architecture.md)。
+模块图、依赖方向和接口统一维护于[架构](docs/architecture.md#模块)。
 
 ## 本地开发
 
@@ -139,7 +130,7 @@ MY_METHOD = Method("my_method", "我的方法", "一句话说明。", my_graph, 
 2. 记录固定的上游提交，填入 `Method.source`。
 3. 忠实移植核心建模逻辑：编排、提示、解析和停止条件。只做适配、避错和必要的修正，在[建模方法](docs/methods.md)和源码的 `llm4om:` 注释中逐条记录。论文与代码冲突时，以代码为准。
 4. 原提示写死某个库时，为每种代码写法准备方言，gurobipy 方言保留原文。方法只覆盖部分写法时（例如原提示要求 MILP），设置 `Method.languages`。
-5. 方法参数写入 `methods/presets.py`。
+5. 内置方法参数写入 `methods/presets.py`，由 `Method(parameters=lambda: asdict(presets.MY_METHOD))` 暴露快照。外部方法提供自己的参数函数，无需修改平台。
 6. 在 `tests/test_methods.py` 中用脚本化模型跑通主要路径。
 7. 在 `frontend/src/locales/en.ts` 中加方法说明和步骤标题的英文。
 8. 用真实 LLM 至少跑通一个问题，把结果写入[建模方法](docs/methods.md#验证)。
@@ -179,3 +170,16 @@ MY_METHOD = Method("my_method", "我的方法", "一句话说明。", my_graph, 
 - 密钥、运行数据和商业许可证不提交。
 - 报告改动、实际执行的检查和未验证的条件。
 - 安全问题按 [SECURITY](SECURITY.md) 私下报告。
+
+### Docker 集成检查
+
+涉及沙箱启动、取消或 Worker 时，在本机运行真实容器回归（CI 的 Docker job 执行同一组检查）：
+
+```bash
+uv run llm4om build-worker
+LLM4OM_TEST_DOCKER=1 uv run pytest tests/test_docker.py -W error::UserWarning
+```
+
+`tests/test_server_restart.py` 用本地脚本 LLM 和真实服务器验证中断进度在正常退出、重启后仍存在；普通 pytest 会运行它。
+
+前端代码按 `features/composer`、`features/runs`、`features/presets` 组织；功能类型与测试放在对应目录，共享 UI 放在 `components`。复杂方法的包入口只导出方法对象和图工厂，执行逻辑放在 `graph.py`，提示、解析与搜索按已有职责拆分。

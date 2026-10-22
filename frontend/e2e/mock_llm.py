@@ -37,6 +37,10 @@ FORMULATION = "$$\\max\\ 3x_A + 2x_B$$ subject to $2x_A + x_B \\le 8$, $x_A + 2x
 
 def reply(messages: list[dict]) -> str:
     text = json.dumps(messages, ensure_ascii=False)
+    if "E2E_PAUSE_REPAIR" in text:
+        if "## Solver feedback" in text:
+            time.sleep(30)
+        return f"### Formulation\n{FORMULATION}\n\n```python\n{FEASIBLE.replace('return m', 'return m.missing')}```"
     return f"### Formulation\n{FORMULATION}\n\n```python\n{INFEASIBLE if '合同' in text else FEASIBLE}```"
 
 

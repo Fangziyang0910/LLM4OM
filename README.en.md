@@ -42,7 +42,7 @@ It puts **10 published LLM modeling methods** on one platform, with one set of L
 |---|---|
 | 🧠 **10 modeling methods** | Direct, TriVAL, OptiMUS, Chain-of-Experts, OptiTree, OR-LLM-Agent, ORThought, LLMOPT, AutoFormulation and more, each with its original prompts and flow |
 | 🧩 **6 languages × 6 solvers** | Pyomo/HiGHS, gurobipy/Gurobi, OR-Tools/SCIP, PuLP/CBC, CPMpy/CP-SAT, CVXPY/Clarabel: LP, MILP, constraint programming and convex optimization |
-| 🔍 **Every step visible** | LLM calls stream live; every version of the formulation and the code can be viewed and diffed |
+| 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
 | ⚖️ **Compare methods** | Run up to 12 methods or models on one problem and compare objective, time and tokens |
 | 🧯 **Infeasibility diagnosis** | For an infeasible model, see a set of constraints that cannot hold together (Gurobi IIS / CPMpy MUS) |
 | 🔒 **Isolated sandbox** | Generated code runs in a container with no network, a read-only file system and no root, removed after use |
@@ -86,7 +86,7 @@ You need Python 3.11–3.13, [uv](https://docs.astral.sh/uv/) and Docker:
 
 ```bash
 uv sync --all-extras
-uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:7
+uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:9
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 

@@ -7,15 +7,10 @@ sent at once as a custom stream event, so a client sees the run as it happens.
 `Context` is what a method's nodes reach through `runtime.context`: data, code target, LLMs and the sandbox.
 """
 
-import datetime
 import json
-import os
-import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Callable, TypedDict
 from uuid import UUID
 
@@ -40,58 +35,6 @@ class Limits:
     max_solves: int = 40
     solve_time_limit: float = 60
     run_timeout: float = 3600
-
-
-class TokenBudget:
-    """The tokens each LLM preset may use per day across all runs; 0 means no limit. Usage is counted either way.
-
-    The day's counts live in `<workspace>/.private/token-usage.json`, so they survive restarts; a new day starts at
-    zero. A run stops at the first LLM call after its preset's budget is spent, so the last call can overshoot it.
-    The counts are read once and kept in memory; a background thread writes them, because LLM callbacks run on the
-    server's event loop, where file I/O is not allowed.
-    """
-
-    def __init__(self, workspace: Path, daily_limit: int) -> None:
-        self.path = workspace / ".private" / "token-usage.json"
-        self.daily_limit = daily_limit
-        self._lock = threading.Lock()  # held only while the counts change, never during file I/O
-        self._writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="token-usage")  # writes in order
-        try:
-            saved = json.loads(self.path.read_text(encoding="utf-8"))
-            self._day, self._tokens = saved["date"], dict(saved["tokens"])
-        except (FileNotFoundError, ValueError, KeyError, TypeError):
-            self._day, self._tokens = "", {}
-
-    def used(self) -> dict[str, int]:
-        """Tokens used today, by preset id."""
-        with self._lock:
-            return dict(self._tokens) if self._day == datetime.date.today().isoformat() else {}
-
-    def charge(self, preset: str, tokens: int = 0) -> None:
-        """Add `tokens` to the preset's count. With none, check it: raises LimitExceeded once the budget is spent."""
-        if not tokens:
-            if self.daily_limit and self.used().get(preset, 0) >= self.daily_limit:
-                raise LimitExceeded(f"The LLM preset {preset!r} used its daily budget of {self.daily_limit:,} "
-                                    "tokens. Choose another preset or try again tomorrow.")
-            return
-        today = datetime.date.today().isoformat()
-        with self._lock:
-            if self._day != today:
-                self._day, self._tokens = today, {}
-            self._tokens[preset] = self._tokens.get(preset, 0) + tokens
-            saved = {"date": today, "tokens": dict(self._tokens)}
-        self._writer.submit(self._save, saved)
-
-    def flush(self) -> None:
-        """Wait until every count is written."""
-        self._writer.submit(lambda: None).result()
-
-    def _save(self, saved: dict[str, Any]) -> None:
-        self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        temporary = self.path.with_suffix(".tmp")
-        temporary.touch(mode=0o600)
-        temporary.write_text(json.dumps(saved) + "\n", encoding="utf-8")
-        os.replace(temporary, self.path)
 
 
 class ModelingState(TypedDict, total=False):

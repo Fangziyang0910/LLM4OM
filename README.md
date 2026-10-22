@@ -42,7 +42,7 @@
 |---|---|
 | 🧠 **10 种建模方法** | Direct、TriVAL、OptiMUS、Chain-of-Experts、OptiTree、OR-LLM-Agent、ORThought、LLMOPT、AutoFormulation 等，保留原工作的提示和流程 |
 | 🧩 **6 种写法 × 6 个求解器** | Pyomo/HiGHS、gurobipy/Gurobi、OR-Tools/SCIP、PuLP/CBC、CPMpy/CP-SAT、CVXPY/Clarabel，覆盖 LP、MILP、约束规划和凸优化 |
-| 🔍 **全过程可见** | 每次 LLM 调用实时流式显示；数学模型和代码的每一版都能查看和对比 |
+| 🔍 **全过程可见** | 每次 LLM 调用实时显示；保留中断前已完成的步骤和产物；历史可分页，运行配置固定记录 |
 | ⚖️ **多方法对比** | 同一问题一次运行最多 12 个方法或模型，并排比较目标值、用时和 token |
 | 🧯 **不可行诊断** | 模型不可行时，列出一组不能同时满足的约束（Gurobi IIS / CPMpy MUS） |
 | 🔒 **隔离沙箱** | 生成代码在无网络、只读、非 root 的容器中运行，用完即删 |
@@ -86,7 +86,7 @@ docker compose up -d --build
 
 ```bash
 uv sync --all-extras
-uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:7
+uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:9
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 

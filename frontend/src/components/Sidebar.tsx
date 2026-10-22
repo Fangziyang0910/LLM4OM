@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { STATUS, formatNumber, tone } from "@/format";
 import { dateLocale, t } from "@/i18n";
-import type { Entry, Options, Preset } from "@/types";
-import { StatusIcon, TONE } from "./status";
-import { ThemeMenu } from "./theme";
+import type { Entry } from "@/features/runs/types";
+import type { Options, Preset } from "@/types";
+import { StatusIcon, TONE } from "@/features/runs/status";
+import { ThemeMenu } from "@/components/theme";
 
 const DAY = 86_400_000;
 
@@ -42,8 +43,10 @@ export function matches(entry: Entry, query: string, methodName: (id: string) =>
     .every(word => word.startsWith("#") && word.length > 1 ? tags.includes(word.slice(1)) : text.includes(word));
 }
 
-export function Sidebar({ entries, current, options, presets, onNew, onOpen, onCompare, onDelete, onExamples, onPresets }: {
+export function Sidebar({ entries, current, options, presets, hasMore, loading, error, onLoadMore, onRetry,
+  onNew, onOpen, onCompare, onDelete, onExamples, onPresets }: {
   entries: Entry[]; current: string | null; options: Options | null; presets: Preset[];
+  hasMore: boolean; loading: boolean; error: string | null; onLoadMore: () => void; onRetry: () => void;
   onNew: () => void; onOpen: (id: string) => void; onCompare: (group: string) => void; onDelete: (entry: Entry) => void;
   onExamples: () => void; onPresets: () => void;
 }) {
@@ -84,7 +87,7 @@ export function Sidebar({ entries, current, options, presets, onNew, onOpen, onC
 
     <div className="min-h-0 flex-1 overflow-y-auto">
       <nav aria-label={t("运行记录")} className="px-2 pb-3">
-        {!entries.length ? <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-xs text-muted-foreground">
+        {!entries.length && !loading && !error ? <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-xs text-muted-foreground">
           <History className="size-5" />{t("运行记录会出现在这里。")}</div> : null}
         {entries.length && !shown.length ? <p className="px-3 py-6 text-center text-xs text-muted-foreground">{t("没有匹配的运行。")}</p> : null}
         {[...groups].map(([label, items]) => <section key={label} className="mt-2">
@@ -120,6 +123,12 @@ export function Sidebar({ entries, current, options, presets, onNew, onOpen, onC
             </li>;
           })}</ul>
         </section>)}
+        {error ? <div className="p-3 text-xs text-destructive"><p>{error}</p><Button variant="link" size="sm" onClick={onRetry}>{t("重试")}</Button></div> : null}
+        {hasMore ? <div className="p-2 text-center">
+          {query ? <p className="mb-1 text-xs text-muted-foreground">{t("正在搜索已加载的 {count} 条记录", { count: entries.length })}</p> : null}
+          <Button variant="outline" size="sm" className="w-full" disabled={loading} onClick={onLoadMore}>
+            {loading ? t("正在加载……") : t("加载更早的运行")}</Button>
+        </div> : null}
       </nav>
     </div>
 
