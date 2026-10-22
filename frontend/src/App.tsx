@@ -11,9 +11,9 @@ import { api, client, history, startRun } from "./api";
 import { errorText } from "./format";
 import { Composer, initialDraft } from "./components/Composer";
 import { Examples } from "./components/Examples";
-import { SettingsDialog } from "./components/SettingsDialog";
+import { PresetsDialog } from "./components/PresetsDialog";
 import { Sidebar } from "./components/Sidebar";
-import type { Draft, Entry, Options, Settings } from "./types";
+import type { Draft, Entry, Options, Preset } from "./types";
 
 // The run page carries Markdown, KaTeX and highlighting; the composer loads without them.
 const RunView = lazy(() => import("./components/RunView").then(module => ({ default: module.RunView })));
@@ -25,12 +25,13 @@ const routeFromUrl = (): Route => {
   const match = location.pathname.match(/^\/run\/([\w-]+)/);
   return match ? { name: "run", id: match[1] } : { name: "new" };
 };
-const NO_SETTINGS: Settings = { selected: null, profiles: {} };
+const NO_PRESETS: Preset[] = [];
 
 export default function App() {
   const queryClient = useQueryClient();
   const optionsQuery = useQuery({ queryKey: ["options"], queryFn: () => api<Options>("/api/options"), staleTime: Infinity });
-  const settings = useQuery({ queryKey: ["settings"], queryFn: () => api<Settings>("/api/settings") }).data ?? NO_SETTINGS;
+  const presets = useQuery({ queryKey: ["presets"], queryFn: () => api<{ presets: Preset[] }>("/api/presets"),
+    select: data => data.presets }).data ?? NO_PRESETS;
   // Runs started elsewhere (another tab, the CLI against the server) finish without telling this page.
   const entries = useQuery({ queryKey: ["history"], queryFn: history,
     refetchInterval: query => query.state.data?.some(entry => entry.state === "running") ? 4000 : false }).data ?? [];
@@ -38,7 +39,7 @@ export default function App() {
   const [route, setRoute] = useState<Route>(routeFromUrl);
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [examplesOpen, setExamplesOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [presetsOpen, setPresetsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
 
@@ -57,7 +58,7 @@ export default function App() {
   }, []);
 
   const start = async (request: Draft) => {
-    const id = await startRun(request);
+    const id = await startRun(request, presets.find(item => item.id === request.preset) ?? presets[0]);
     void refresh();
     go({ name: "run", id });
   };
@@ -74,9 +75,9 @@ export default function App() {
 
   const current = route.name === "run" ? route.id : null;
   const currentEntry = entries.find(entry => entry.id === current);
-  const sidebar = <Sidebar entries={entries} current={current} options={options} settings={settings} onNew={() => go({ name: "new" })}
+  const sidebar = <Sidebar entries={entries} current={current} options={options} presets={presets} onNew={() => go({ name: "new" })}
     onOpen={id => go({ name: "run", id })} onDelete={remove}
-    onExamples={() => { setExamplesOpen(true); setMenuOpen(false); }} onSettings={() => { setSettingsOpen(true); setMenuOpen(false); }} />;
+    onExamples={() => { setExamplesOpen(true); setMenuOpen(false); }} onPresets={() => { setPresetsOpen(true); setMenuOpen(false); }} />;
 
   return <div className="flex h-dvh overflow-hidden">
     <aside aria-label="导航" className="hidden w-72 shrink-0 border-r border-sidebar-border md:block">{sidebar}</aside>
@@ -104,8 +105,8 @@ export default function App() {
         </Empty>
           : !options ? <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />正在加载……</div>
           : route.name === "new"
-            ? <Composer options={options} settings={settings} draft={draft} setDraft={setDraft} onStart={start}
-              openSettings={() => setSettingsOpen(true)} openExamples={() => setExamplesOpen(true)} />
+            ? <Composer options={options} presets={presets} draft={draft} setDraft={setDraft} onStart={start}
+              openPresets={() => setPresetsOpen(true)} openExamples={() => setExamplesOpen(true)} />
             : <Suspense fallback={<div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />正在加载……</div>}>
               <RunView key={route.id} threadId={route.id} options={options} onFinished={() => void refresh()}
                 onEdit={next => { setDraft(next); go({ name: "new" }); }} onRerun={start}
@@ -117,8 +118,8 @@ export default function App() {
     {options ? <>
       <Examples open={examplesOpen} onClose={() => setExamplesOpen(false)} datasets={options.datasets}
         onUse={description => { setDraft({ ...draft, description, data: {} }); setExamplesOpen(false); go({ name: "new" }); }} />
-      {settingsOpen ? <SettingsDialog onClose={() => setSettingsOpen(false)} settings={settings} providers={options.providers}
-        onChange={(value, message) => { queryClient.setQueryData(["settings"], value); toast.success(message); }} /> : null}
+      {presetsOpen ? <PresetsDialog onClose={() => setPresetsOpen(false)} presets={presets} providers={options.providers}
+        onChange={(value, message) => { queryClient.setQueryData(["presets"], value); toast.success(message); }} /> : null}
     </> : null}
     <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
   </div>;

@@ -1,4 +1,4 @@
-"""Routes the LangGraph server mounts beside its own API: options, LLM settings, examples and the built frontend.
+"""Routes the LangGraph server mounts beside its own API: options, LLM presets, examples and the built frontend.
 
 Runs, threads and streaming come from the LangGraph server itself (`/threads`, `/runs`, `/assistants`).
 """
@@ -16,7 +16,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from llm4om.graph import default_resources
 from llm4om.languages import LANGUAGES
-from llm4om.llm import PROVIDERS, LLMSettings, SettingsStore, list_models
+from llm4om.llm import PROVIDERS, LLMPresetStore, LLMSettings, list_models
 from llm4om.methods import methods
 from llm4om.server import examples
 
@@ -24,7 +24,7 @@ ASSETS = Path(str(files("llm4om.server").joinpath("web_assets")))
 PAGES = ("/", "/run/{thread_id}")  # the single-page app; no catch-all or /runs path, which would shadow the LangGraph API
 
 
-class SettingsBody(BaseModel):
+class PresetBody(BaseModel):
     provider: str
     model: str = ""
     api_key: str = ""
@@ -55,10 +55,10 @@ class JsonOnlyWrites:
         await self.app(scope, receive, send)
 
 
-def create_app(settings: SettingsStore | None = None) -> FastAPI:
+def create_app(presets: LLMPresetStore | None = None) -> FastAPI:
     app = FastAPI(title="LLM4OM")
     app.add_middleware(JsonOnlyWrites)
-    store = settings or default_resources().settings
+    store = presets or default_resources().presets
 
     @app.exception_handler(ValueError)
     async def bad_input(_: Request, error: ValueError) -> JSONResponse:
@@ -75,23 +75,27 @@ def create_app(settings: SettingsStore | None = None) -> FastAPI:
             "datasets": examples.datasets(),
         }
 
-    @app.get("/api/settings")
-    def get_settings() -> dict[str, Any]:
+    # Presets are added and deleted, never changed or read back with their keys.
+    @app.get("/api/presets")
+    def get_presets() -> dict[str, Any]:
         return store.public()
 
-    @app.post("/api/settings")
-    def save_settings(body: SettingsBody) -> dict[str, Any]:
-        store.save(LLMSettings(**body.model_dump()))
+    @app.post("/api/presets")
+    def add_preset(body: PresetBody) -> dict[str, Any]:
+        store.add(LLMSettings(**body.model_dump()))
         return store.public()
 
-    @app.delete("/api/settings/{provider}")
-    def delete_settings(provider: str) -> dict[str, Any]:
-        store.delete(provider)
+    @app.delete("/api/presets/{preset}")
+    def delete_preset(preset: str) -> dict[str, Any]:
+        store.delete(preset)
         return store.public()
 
     @app.post("/api/models")
-    async def models(body: SettingsBody) -> dict[str, Any]:
-        settings = store.with_key(LLMSettings(**body.model_dump()))
+    async def models(body: PresetBody) -> dict[str, Any]:
+        """The provider's model list, read with the key in the request; saved keys are never used here."""
+        settings = LLMSettings(**body.model_dump())
+        if not settings.api_key:
+            raise ValueError("Enter the API key to read the model list.")
         try:
             return {"models": await list_models(settings)}
         except Exception as error:  # report any catalog failure; the user can still type a model ID

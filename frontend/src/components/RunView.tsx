@@ -71,7 +71,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDele
   const tokens = usage ? usage.input_tokens + usage.output_tokens : null;
 
   const draft = (): Draft => ({ description: values.description ?? "", data: values.data ?? {}, method: meta.method,
-    language: meta.language, provider: meta.provider, model: meta.model ?? "" });
+    language: meta.language, preset: meta.preset ?? null });
   const stop = async () => {
     if (!run) return;
     setStopping(true);
@@ -91,7 +91,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDele
   const facts: [React.ReactNode, React.ReactNode, string?][] = [
     [<Layers />, method?.name ?? meta.method, method?.description],
     [<CodeXml />, language ? <>{language.name}<span className="text-muted-foreground/70"> · {language.solver}</span></> : meta.language],
-    [<Cpu />, meta.model ?? provider?.label ?? "默认模型", provider?.label],
+    [<Cpu />, meta.model ?? provider?.label, provider?.label],
     [<Clock />, duration(elapsed)],
   ];
   if (calls) facts.push([<Zap />, `${calls} 次调用${tokens ? ` · ${formatTokens(tokens)} token` : ""}`]);

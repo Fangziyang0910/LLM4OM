@@ -2,7 +2,8 @@
 
 import json
 import os
-from dataclasses import asdict, dataclass, field, replace
+import re
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -46,13 +47,6 @@ class LLMSettings:
     @property
     def url(self) -> str:
         return self.base_url or PROVIDERS[self.provider].base_url
-
-    def public(self) -> dict[str, Any]:
-        """Settings without the key, safe to store in run records and send to the browser."""
-        values = asdict(self)
-        key = values.pop("api_key")
-        values["api_key_preview"] = (key[:3] + "…" + key[-4:]) if len(key) > 8 else ("已设置" if key else "")
-        return values
 
     def validate(self) -> None:
         if self.provider not in PROVIDERS:
@@ -112,84 +106,96 @@ async def list_models(settings: LLMSettings) -> list[str]:
         return sorted([model.id async for model in client.models.list()])
 
 
-class SettingsStore:
-    """Per-provider settings in `<workspace>/.private/llm-settings.json` (mode 600), plus the selected provider."""
+@dataclass(frozen=True)
+class LLMPreset:
+    """A fixed LLM configuration that runs choose by id. `source` is "env" for the LLM4OM_LLM_* preset."""
+
+    id: str
+    settings: LLMSettings
+    source: str = "saved"
+
+    def public(self) -> dict[str, Any]:
+        """The preset without its key: what the browser and run records may see."""
+        values = asdict(self.settings)
+        del values["api_key"], values["timeout"], values["max_retries"]
+        return {"id": self.id, "source": self.source, **values}
+
+
+ENV_PRESET = "env"
+
+
+class LLMPresetStore:
+    """LLM presets in `<workspace>/.private/llm-presets.json` (mode 600), plus the LLM4OM_LLM_* preset.
+
+    Presets can be added and deleted but never changed, and their keys never leave the server: no route returns a
+    key, and a key is only sent to the base URL saved with it. The first preset is the default.
+    """
 
     def __init__(self, workspace: Path) -> None:
-        self.path = workspace / ".private" / "llm-settings.json"
+        self.path = workspace / ".private" / "llm-presets.json"
 
-    def _read(self) -> dict[str, Any]:
+    def _saved(self) -> list[dict[str, Any]]:
         if not self.path.exists():
-            return {"selected": None, "profiles": {}}
-        return json.loads(self.path.read_text(encoding="utf-8"))
+            return self._migrate()
+        return json.loads(self.path.read_text(encoding="utf-8"))["presets"]
 
-    def _profiles(self) -> tuple[str | None, dict[str, LLMSettings]]:
-        """The selected provider and every profile: the saved ones, plus the LLM4OM_LLM_* settings for their
-        provider when nothing is saved for it. The environment profile is selected when nothing is saved."""
-        saved = self._read()
-        profiles = {provider: LLMSettings(provider=provider, **values) for provider, values in saved["profiles"].items()}
-        selected = saved["selected"]
-        if (environment := settings_from_env()) is not None:
-            profiles.setdefault(environment.provider, environment)
-            selected = selected or environment.provider
-        return selected, profiles
+    def _migrate(self) -> list[dict[str, Any]]:
+        """v0.38 kept one profile per provider in llm-settings.json; each becomes a preset named after its provider."""
+        old = self.path.with_name("llm-settings.json")
+        if not old.exists():
+            return []
+        profiles = json.loads(old.read_text(encoding="utf-8"))["profiles"]
+        presets = [{"id": provider, "provider": provider, **values} for provider, values in profiles.items()]
+        self._write(presets)
+        old.unlink()
+        return presets
 
-    def load(self, provider: str | None = None) -> LLMSettings | None:
-        """The profile of `provider`, or of the selected provider."""
-        selected, profiles = self._profiles()
-        return profiles.get(provider or selected or "")
+    def presets(self) -> list[LLMPreset]:
+        """The environment preset first, then the saved ones in the order they were added."""
+        saved = [LLMPreset(values.pop("id"), LLMSettings(**values)) for values in self._saved()]
+        environment = settings_from_env()
+        return ([LLMPreset(ENV_PRESET, environment, "env")] if environment else []) + saved
 
-    def resolve(self, provider: str | None = None, model: str | None = None) -> LLMSettings:
-        """The settings a run uses: the provider's profile (default: the selected one), with `model` when it names one."""
-        return resolve(self.load(provider), model)
+    def get(self, preset: str | None = None) -> LLMSettings:
+        """The settings of `preset`, or of the default preset."""
+        presets = self.presets()
+        if not presets:
+            raise ValueError("Add an LLM preset first (Web workbench, or LLM4OM_LLM_* environment variables).")
+        if preset is None:
+            return presets[0].settings
+        for item in presets:
+            if item.id == preset:
+                return item.settings
+        raise ValueError(f"No LLM preset {preset!r}; choose one of {[item.id for item in presets]}.")
 
-    def with_key(self, settings: LLMSettings) -> LLMSettings:
-        """`settings` with the known key of its provider when its own key is empty: an empty key field keeps the key."""
-        if settings.api_key or (known := self.load(settings.provider)) is None:
-            return settings
-        return replace(settings, api_key=known.api_key)
-
-    def save(self, settings: LLMSettings) -> None:
-        settings = self.with_key(settings)
+    def add(self, settings: LLMSettings) -> LLMPreset:
+        """Save `settings` as a new preset; its id comes from the model name."""
         settings.validate()
-        saved = self._read()
-        values = asdict(settings)
-        del values["provider"]
-        saved["profiles"][settings.provider] = values
-        saved["selected"] = settings.provider
-        self._write(saved)
+        saved = self._saved()
+        taken = {ENV_PRESET} | {values["id"] for values in saved}
+        base = name = re.sub(r"[^a-z0-9._-]+", "-", settings.model.lower()).strip("-.") or "preset"
+        number = 2
+        while name in taken:
+            name, number = f"{base}-{number}", number + 1
+        self._write(saved + [{"id": name, **asdict(settings)}])
+        return LLMPreset(name, settings)
 
-    def _write(self, saved: dict[str, Any]) -> None:
+    def delete(self, preset: str) -> None:
+        if preset == ENV_PRESET:
+            raise ValueError("This preset comes from the server's LLM4OM_LLM_* variables; remove it there.")
+        saved = self._saved()
+        if not any(values["id"] == preset for values in saved):
+            raise ValueError(f"No saved LLM preset {preset!r}.")
+        self._write([values for values in saved if values["id"] != preset])
+
+    def _write(self, presets: list[dict[str, Any]]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.touch(mode=0o600, exist_ok=True)
         os.chmod(self.path, 0o600)
-        self.path.write_text(json.dumps(saved, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-    def delete(self, provider: str) -> None:
-        """Forget the saved profile of `provider`; the next saved one becomes selected."""
-        saved = self._read()
-        if provider not in saved["profiles"]:
-            raise ValueError("Only saved settings can be deleted; settings from LLM4OM_LLM_* stay in the environment.")
-        del saved["profiles"][provider]
-        if saved["selected"] == provider:
-            saved["selected"] = next(iter(saved["profiles"]), None)
-        self._write(saved)
+        self.path.write_text(json.dumps({"presets": presets}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     def public(self) -> dict[str, Any]:
-        """The selected provider and every profile, without keys; `saved` is false for the environment profile."""
-        selected, profiles = self._profiles()
-        saved = self._read()["profiles"]
-        return {"selected": selected, "profiles": {provider: {**settings.public(), "saved": provider in saved}
-                                                   for provider, settings in profiles.items()}}
-
-
-def resolve(settings: LLMSettings | None, model: str | None = None) -> LLMSettings:
-    """Valid settings for a run: `settings` with `model` when it names one."""
-    if settings is None:
-        raise ValueError("Configure an LLM first (Web settings, or LLM4OM_LLM_* environment variables).")
-    settings = replace(settings, model=model) if model else settings
-    settings.validate()
-    return settings
+        return {"presets": [preset.public() for preset in self.presets()]}
 
 
 def settings_from_env() -> LLMSettings | None:

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from llm4om.graph import Resources, RunContext, platform_graph, run
-from llm4om.llm import LLMSettings, SettingsStore
+from llm4om.llm import LLMPresetStore, LLMSettings
 from llm4om.runtime import Context, Limits
 from llm4om.sandbox import Sandbox, SolveResult
 
@@ -14,8 +14,10 @@ __all__ = ["Context", "LLMSettings", "Limits", "Resources", "RunContext", "Sandb
 
 
 def run_problem(problem: str, *, method: str = "direct", language: str = "pyomo",
-                data: dict[str, str] | None = None,
+                data: dict[str, str] | None = None, preset: str | None = None,
                 llm: LLMSettings | None = None, workspace: str | Path = "runs/web", sandbox: str = "docker") -> dict[str, Any]:
-    """Model and solve one problem; returns the final state with its formulation, code, solve result and steps."""
-    resources = Resources(SettingsStore(Path(workspace)), Sandbox(sandbox), llm=llm)
-    return asyncio.run(run(problem, method=method, language=language, data=data, resources=resources))
+    """Model and solve one problem; returns the final state with its formulation, code, solve result and steps.
+
+    The LLM is `llm` when given, otherwise the workspace's `preset` (default: the first preset)."""
+    resources = Resources(LLMPresetStore(Path(workspace)), Sandbox(sandbox), llm=llm)
+    return asyncio.run(run(problem, method=method, language=language, data=data, preset=preset, resources=resources))

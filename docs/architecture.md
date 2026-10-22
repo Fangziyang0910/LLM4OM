@@ -27,7 +27,7 @@ src/llm4om/
 ├── __init__.py          公共入口：run、run_problem 及常用类型
 ├── cli.py               命令行：serve、run、build-worker
 ├── languages.py         代码写法与代码契约：LANGUAGES、CodeTarget、MILP_LANGUAGES
-├── llm.py               服务商预设、LLMSettings、chat_model()、本机设置文件 SettingsStore
+├── llm.py               服务商列表、LLMSettings、chat_model()、预设模型 LLMPresetStore
 ├── sandbox/             沙箱
 │   ├── __init__.py      Sandbox（solve、run_script）与 SolveResult
 │   ├── worker.py        沙箱内的独立脚本；不导入 llm4om
@@ -38,7 +38,7 @@ src/llm4om/
 ├── graph.py             平台图 platform_graph(method)、RunState、RunContext、Resources、进程内运行 run()
 └── server/              Web 工作台
     ├── graphs.py        每个方法的平台图，供 LangGraph 服务器注册
-    ├── app.py           服务器挂载的路由：选项、LLM 设置、模型列表、题库、前端页面；拒绝非 JSON 的 POST
+    ├── app.py           服务器挂载的路由：选项、预设模型、模型列表、题库、前端页面；拒绝非 JSON 的 POST
     ├── examples.py      内置题库的只读浏览（数据在 examples_data/）
     └── web_assets/      前端构建产物（源码在 frontend/）
 ```
@@ -56,16 +56,18 @@ languages · llm · sandbox  →  runtime  →  methods  →  graph  →  server
 | 键 | 内容 |
 |---|---|
 | 输入 | `description`（问题描述）、`data`（数据文件名到文本） |
-| 运行上下文 `RunContext` | `language`、`provider`、`model`。只写服务商和模型名，不写密钥；服务器按服务商读取本机保存的设置。方法参数不随运行传入，固定在 `methods/presets.py` |
+| 运行上下文 `RunContext` | `language`、`preset`。只写预设模型的 id，不写密钥，也不能改模型；服务器按 id 读取预设。方法参数不随运行传入，固定在 `methods/presets.py` |
 | 输出 | `formulation`、`code`、`solve`、`failure`、`steps`、`usage`（LLM 调用、求解、token） |
 
 `prepare` 发现请求不可用时写入 `failure` 并结束运行，不调用 LLM；有效请求记录内部截止时间 `_deadline`。`model` 和 `solve` 共享剩余时间，超时、超限或出错时写入一个错误步骤和 `failure`。
 
 方法图在 `model` 节点内运行，平台不为它保存检查点（`checkpointer = False`）：AutoFormulation 这类方法的内部状态很大，逐步保存的代价高于收益。平台图本身由服务器保存检查点。
 
-进程内运行（命令行、测试、`run_problem`）通过 `config["configurable"]["llm4om_resources"]` 传入 `Resources`，替换设置文件、沙箱、上限或聊天模型工厂。服务器从环境变量 `LLM4OM_WORKSPACE`、`LLM4OM_SANDBOX` 读取默认资源。
+进程内运行（命令行、测试、`run_problem`）通过 `config["configurable"]["llm4om_resources"]` 传入 `Resources`，替换预设模型、沙箱、上限或聊天模型工厂。服务器从环境变量 `LLM4OM_WORKSPACE`、`LLM4OM_SANDBOX` 读取默认资源。
 
-运行用哪个 LLM 只由 `SettingsStore` 决定：已保存的服务商设置，加上 `LLM4OM_LLM_*` 环境变量给出的设置（该服务商没有保存设置时）；没有保存选择时选环境变量的服务商。`resolve(provider, model)` 取指定或已选服务商的设置，再用运行指定的模型名覆盖。设置页、模型列表和平台图都通过它读取。
+运行用哪个 LLM 只由 `LLMPresetStore` 决定（`Resources.llm` 给出时除外）。预设列表是 `LLM4OM_LLM_*` 环境变量给出的预设（id 为 `env`），加上 `<workspace>/.private/llm-presets.json` 中按添加顺序保存的预设；第一个是默认预设。`get(preset)` 按 id 取设置，id 不存在时报错并列出可选 id。
+
+预设只能添加（`add`）和删除（`delete`），没有修改操作；`env` 预设不能删除。`public()` 返回的预设不含密钥。模型列表接口 `/api/models` 只使用请求中填写的密钥，从不补入已保存的密钥，因此密钥只会发往与它一起保存的接口地址。
 
 ## 方法接口
 
@@ -135,7 +137,7 @@ CPMpy 模型可以没有目标，此时是可满足性问题：找到解时状�
 
 `Sandbox` 有两个动作：`solve(code, data, language, time_limit)` 构建并求解模型；`run_script(script, time_limit)` 运行检查脚本。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:3` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。设置了 `GRB_LICENSE_FILE` 时以只读方式挂载许可证。超时或取消时删除容器。
+`Sandbox("docker")` 在镜像 `llm4om-worker:4` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。设置了 `GRB_LICENSE_FILE` 时以只读方式挂载许可证。超时或取消时删除容器。
 
 `Sandbox("local")` 用本机子进程运行同一脚本，只用于开发和测试。子进程只继承路径、语言、临时目录和 Gurobi 许可证位置等必要环境变量，不继承 API 密钥。超时或取消后等待子进程退出。
 
@@ -189,8 +191,8 @@ frontend/src/
     ├── Outputs     产物标签页：解、数学模型、求解代码、问题与数据；版本切换与对比
     ├── Solution    解：分组或列表、二维变量的矩阵视图、CSV 导出
     ├── Content     Markdown、代码、纯文本、差异视图
-    ├── Sidebar     历史运行、示例题库与 LLM 服务入口、外观切换
-    ├── Examples / SettingsDialog   题库与 LLM 服务对话框
+    ├── Sidebar     历史运行、示例题库与预设模型入口、外观切换
+    ├── Examples / PresetsDialog    题库与预设模型对话框
     └── status / theme              状态颜色与图标、主题菜单与 Toaster
 ```
 
@@ -220,7 +222,9 @@ frontend/src/
 
 ## 服务器与安全
 
-`llm4om serve` 以内存运行时启动 `langgraph-api`（与 `langgraph dev` 相同），不需要 LangSmith 许可证。它注册每个方法的平台图，挂载 `server/app.py`，默认只监听 `127.0.0.1`，CORS 不允许任何跨源请求。`server/app.py` 的中间件对所有路由（包括 LangGraph 接口）拒绝非 JSON 的 POST，因此其他网站无法借浏览器发起运行或修改设置。
+`llm4om serve` 以内存运行时启动 `langgraph-api`（与 `langgraph dev` 相同），不需要 LangSmith 许可证。它注册每个方法的平台图，挂载 `server/app.py`，默认监听 `0.0.0.0`，CORS 不允许任何跨源请求。`server/app.py` 的中间件对所有路由（包括 LangGraph 接口）拒绝非 JSON 的 POST，因此其他网站无法借浏览器发起运行或修改预设。
+
+工作台面向信任范围内的小组，不做登录和权限控制：能访问端口的人可以运行、添加和删除页面上的预设、删除运行记录。密钥是唯一的保密边界：它只保存在服务器上，不出现在任何接口响应、线程元数据或运行状态中。见 [ADR 0010](adr/0010-llm-presets.md)。
 
 ## 上限
 

@@ -19,4 +19,4 @@
 
 论文元数据在 `references/catalog.json` 中维护。修改后运行 `python3 scripts/render_references.py` 重新生成资料页和 BibTeX。
 
-[30 天学生任务](development/assignments/README.md)以 v0.38 为基线，包含三阶段任务书、当前接口和交接要求。
+[30 天学生任务](development/assignments/README.md)以 v0.40 为基线，包含三阶段任务书、当前接口和交接要求。

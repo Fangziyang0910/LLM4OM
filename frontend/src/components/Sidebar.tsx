@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { STATUS, formatNumber, tone } from "@/format";
-import type { Entry, Options, Settings } from "@/types";
+import type { Entry, Options, Preset } from "@/types";
 import { StatusIcon, TONE } from "./status";
 import { ThemeMenu } from "./theme";
 
@@ -32,9 +32,9 @@ export function resultText(entry: Entry): string {
   return entry.objective != null && tone(entry.state) === "good" ? formatNumber(entry.objective) : STATUS[entry.state] ?? entry.state;
 }
 
-export function Sidebar({ entries, current, options, settings, onNew, onOpen, onDelete, onExamples, onSettings }: {
-  entries: Entry[]; current: string | null; options: Options | null; settings: Settings;
-  onNew: () => void; onOpen: (id: string) => void; onDelete: (entry: Entry) => void; onExamples: () => void; onSettings: () => void;
+export function Sidebar({ entries, current, options, presets, onNew, onOpen, onDelete, onExamples, onPresets }: {
+  entries: Entry[]; current: string | null; options: Options | null; presets: Preset[];
+  onNew: () => void; onOpen: (id: string) => void; onDelete: (entry: Entry) => void; onExamples: () => void; onPresets: () => void;
 }) {
   const [query, setQuery] = useState("");
   const methodName = (id: string) => options?.methods.find(item => item.id === id)?.name ?? id;
@@ -43,7 +43,7 @@ export function Sidebar({ entries, current, options, settings, onNew, onOpen, on
     || methodName(entry.meta.method).toLowerCase().includes(search));
   const groups = new Map<string, Entry[]>();
   for (const entry of shown) groups.set(group(entry.created), [...(groups.get(group(entry.created)) ?? []), entry]);
-  const selected = settings.selected ? settings.profiles[settings.selected] : undefined;
+  const preset = presets[0];
 
   return <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
     <div className="flex flex-col gap-3 p-3 pb-2">
@@ -106,11 +106,12 @@ export function Sidebar({ entries, current, options, settings, onNew, onOpen, on
     <div className="flex flex-col gap-0.5 border-t p-2">
       <Button variant="ghost" className="h-9 justify-start font-normal" onClick={onExamples}><BookOpen />示例题库</Button>
       <div className="flex items-center gap-1">
-        <Button variant="ghost" className="h-auto min-w-0 flex-1 justify-start py-1.5 font-normal" onClick={onSettings}>
+        <Button variant="ghost" className="h-auto min-w-0 flex-1 justify-start py-1.5 font-normal" onClick={onPresets}>
           <Cpu />
           <span className="flex min-w-0 flex-col items-start leading-tight">
-            <span>LLM 服务</span>
-            <span className={cn("truncate text-[11px]", selected ? "text-muted-foreground" : "text-destructive")}>{selected ? selected.model : "未配置"}</span>
+            <span>预设模型</span>
+            <span className={cn("truncate text-[11px]", preset ? "text-muted-foreground" : "text-destructive")}>
+              {preset ? presets.length > 1 ? `${preset.model} 等 ${presets.length} 个` : preset.model : "未配置"}</span>
           </span>
         </Button>
         <ThemeMenu />

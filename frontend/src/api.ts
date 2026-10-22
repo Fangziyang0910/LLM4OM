@@ -1,6 +1,6 @@
 import { Client } from "@langchain/langgraph-sdk";
 import { outcome } from "./format";
-import type { Draft, Entry, RunMeta } from "./types";
+import type { Draft, Entry, Preset, RunMeta } from "./types";
 
 /** The LangGraph server runs, streams and stores every run; this page is served by the same server. */
 export const client = new Client({ apiUrl: location.origin });
@@ -19,13 +19,14 @@ export async function api<T>(path: string, body?: unknown, method = body === und
 }
 
 /** Create a thread for the draft and start its run in the background; returns the thread id. */
-export async function startRun(draft: Draft): Promise<string> {
+export async function startRun(draft: Draft, preset: Preset | undefined): Promise<string> {
   const title = draft.description.trim().split("\n")[0].slice(0, 120);
-  const meta: RunMeta = { title, method: draft.method, language: draft.language, provider: draft.provider, model: draft.model || null };
+  const meta: RunMeta = { title, method: draft.method, language: draft.language, preset: preset?.id ?? null,
+    provider: preset?.provider ?? null, model: preset?.model ?? null };
   const thread = await client.threads.create({ metadata: meta });
   await client.runs.create(thread.thread_id, draft.method, {
     input: { description: draft.description, data: draft.data },
-    context: { language: draft.language, provider: draft.provider, model: draft.model || null },
+    context: { language: draft.language, preset: preset?.id ?? null },
     streamMode: ["custom"], streamResumable: true,
   });
   return thread.thread_id;

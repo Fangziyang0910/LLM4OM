@@ -8,7 +8,7 @@ LLM4OM（Large Language Models for Optimization Modeling）是一个自动优化
 问题描述 + 可选数据文件 → 建模方法（LLM） → 数学模型 + 求解代码 → 沙箱求解 → 结果
 ```
 
-平台本身很薄：LLM 调用由 LangChain 完成，每个方法是一张 LangGraph 图，运行、流式推送和历史由 LangGraph 服务器（内存运行时，无需许可证）承担。平台只提供代码契约、求解沙箱和工作台页面。当前支持线性规划（LP）、混合整数线性规划（MILP）和约束规划（CP）。版本 `0.38.0`。
+平台本身很薄：LLM 调用由 LangChain 完成，每个方法是一张 LangGraph 图，运行、流式推送和历史由 LangGraph 服务器（内存运行时，无需许可证）承担。平台只提供代码契约、求解沙箱和工作台页面。当前支持线性规划（LP）、混合整数线性规划（MILP）和约束规划（CP）。版本 `0.40.0`。
 
 ## 启动工作台
 
@@ -16,15 +16,15 @@ LLM4OM（Large Language Models for Optimization Modeling）是一个自动优化
 
 ```bash
 uv sync --all-extras
-uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:3，只需一次
+uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:4；镜像版本变化后需重新构建
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
-打开 <http://127.0.0.1:8767>。仓库已包含前端构建文件，无需 Node.js。
+打开 <http://127.0.0.1:8767>。服务默认监听 `0.0.0.0`，同一网络中的其他机器用本机地址访问；只给自己用时加 `--host 127.0.0.1`。仓库已包含前端构建文件，无需 Node.js。
 
-1. 点击左下角“LLM 服务”，选择服务商，填写密钥和默认模型 ID，保存。已设置 `LLM4OM_LLM_*` 环境变量时，这一步可以跳过。
+1. 点击左下角“预设模型”，添加一个预设：选择服务商，填写密钥和模型 ID。已设置 `LLM4OM_LLM_*` 环境变量时，这一步可以跳过。
 2. 写出问题的决策、目标和约束；需要时拖入或添加 CSV、JSON 文件。也可以从首页的例子或“示例题库”开始。
-3. 在右侧“运行设置”中选择建模方法、代码写法（写法决定求解器）和 LLM，点击“开始建模”或按 Ctrl+Enter。
+3. 在右侧“运行设置”中选择建模方法、代码写法（写法决定求解器）和预设模型，点击“开始建模”或按 Ctrl+Enter。
 4. 运行页顶部先给出结论：目标值与求解状态，或失败原因；“核对数学模型”和“查看解”直接跳到对应页签。下方左栏是“建模过程”，把 LLM 调用归入它们产出的阶段，正在进行的调用实时显示文字。右栏的“解”“数学模型”“求解代码”“问题与数据”四个页签给出产物：
    - 解可以按变量分组或列表查看，二维变量显示为矩阵，并可导出 CSV。
    - 方法改写过的数学模型和代码可以逐版查看，并与上一版对比。
@@ -75,9 +75,12 @@ OptiMUS、CoE、OptiTree、OR-LLM-Agent 和 AutoFormulation 使用原工作的�
 
 预设服务商：OpenAI、Google Gemini、Kimi、GLM、OpenRouter、阿里云百炼、DeepSeek、Anthropic。其他服务选择“OpenAI 兼容”并填写地址。
 
-设置保存在 `<workspace>/.private/llm-settings.json`，文件权限 `600`。密钥不写入运行记录，接口只返回掩码预览。
+运行只能选择**预设模型**。每个预设固定服务商、接口地址、密钥、模型 ID 和请求参数：
 
-命令行和未保存 Web 设置的工作区读取 `.env` 中的默认服务，变量见 [.env.example](.env.example)。
+- 预设只能添加和删除，不能修改。要换参数，删掉后重新添加。
+- 密钥只保存在服务器上（`<workspace>/.private/llm-presets.json`，文件权限 `600`），任何接口和运行记录都不返回密钥，也不显示掩码。密钥只发给与它一起保存的接口地址。
+- 服务器 `.env` 中的 `LLM4OM_LLM_*` 变量给出一个预设（id 为 `env`），排在第一位，是默认预设。页面上不能删除它，只能在服务器上修改。变量见 [.env.example](.env.example)。
+- v0.38 保存的 `llm-settings.json` 在首次读取时转换为预设。
 
 **DeepSeek 与 TriVAL**：DeepSeek 的思考模式不支持强制 `tool_choice`，TriVAL 的结构化输出需要它。在“高级参数 → 额外请求参数”中填写 `{"thinking": {"type": "disabled"}}`，或设置 `LLM4OM_LLM_EXTRA_BODY`。
 
@@ -104,7 +107,7 @@ uv run llm4om run --problem "……" --method trival --language pyomo
 uv run llm4om run --file problem.txt --data demand.csv --method coe
 ```
 
-命令在本进程中运行同一张图，逐步打印过程，最后输出数学模型、代码和求解结果。`--output state.json` 保存最终状态（含全部步骤）。`--provider` 和 `--model` 选择工作区中保存的模型，默认使用当前选中的模型或 `.env`。
+命令在本进程中运行同一张图，逐步打印过程，最后输出数学模型、代码和求解结果。`--output state.json` 保存最终状态（含全部步骤）。`--preset` 按 id 选择工作区中的预设模型，默认使用第一个预设。
 
 ```python
 from llm4om import run_problem
@@ -113,7 +116,19 @@ state = run_problem("……", method="optimus", language="gurobipy")
 print(state["failure"] or state["solve"]["objective"])
 ```
 
-`--sandbox local` 在本机子进程中执行生成代码，不做隔离，只用于开发。
+Python 接口用 `preset=` 选择预设，或用 `llm=LLMSettings(...)` 直接传入设置。`--sandbox local` 在本机子进程中执行生成代码，不做隔离，只用于开发。
+
+## 部署给课题组使用
+
+在一台有公网 IP 的服务器上按“启动工作台”的步骤运行，在防火墙或云服务器安全组中放行端口（默认 8767），其他人用 `http://<公网 IP>:8767` 访问。服务器 `.env` 中的模型就是大家共用的默认预设。
+
+工作台没有登录和权限控制，适合信任范围内的小组使用。能访问端口的人可以：
+
+- 用任一预设发起运行，消耗该预设的额度；
+- 添加和删除页面上添加的预设（服务器 `.env` 的预设不能删除）；
+- 查看和删除全部运行记录。
+
+访客读不到任何密钥。需要限制访问时，只放行课题组的 IP，或在前面加带登录的反向代理。Gurobi 学术许可证一般只限本人使用，供他人使用前请确认许可范围。
 
 ## 运行记录
 

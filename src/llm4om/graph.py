@@ -26,7 +26,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.languages import CodeTarget
-from llm4om.llm import LLMSettings, SettingsStore, chat_model, resolve
+from llm4om.llm import LLMPresetStore, LLMSettings, chat_model
 from llm4om.methods import Method, methods
 from llm4om.runtime import Context, Limits, Recorder
 from llm4om.sandbox import Sandbox
@@ -52,40 +52,43 @@ class RunState(TypedDict, total=False):
 
 @dataclass
 class RunContext:
-    """The run's choices. Keys stay with the server: the context names a saved provider, never a key."""
+    """The run's choices. Keys stay with the server: the context names an LLM preset, never a key or a model."""
 
     language: str = "pyomo"  # code language, which decides the solver
-    provider: str | None = None  # saved LLM provider; None means the selected one
-    model: str | None = None  # model ID; None means the provider's saved model
+    preset: str | None = None  # LLM preset id; None means the default preset
 
 
 @dataclass
 class Resources:
-    """What runs use besides their request: saved LLM settings, the sandbox, limits and the chat-model factory.
+    """What runs use besides their request: LLM presets, the sandbox, limits and the chat-model factory.
 
     The server reads them from LLM4OM_WORKSPACE and LLM4OM_SANDBOX. In-process callers pass their own through
-    `config["configurable"]["llm4om_resources"]`; `llm` then replaces the saved settings.
+    `config["configurable"]["llm4om_resources"]`; `llm` then replaces the presets.
     """
 
-    settings: SettingsStore
+    presets: LLMPresetStore
     sandbox: Sandbox
     limits: Limits = field(default_factory=Limits)
     model_factory: Callable[..., BaseChatModel] = chat_model
     llm: LLMSettings | None = None
 
-    def llm_settings(self, provider: str | None = None, model: str | None = None) -> LLMSettings:
-        """The settings for one run: a saved provider profile, with the run's model when it names one."""
-        return resolve(self.llm, model) if self.llm else self.settings.resolve(provider, model)
+    def llm_settings(self, preset: str | None = None) -> LLMSettings:
+        """The settings for one run: `llm` when given, otherwise the preset."""
+        settings = self.llm or self.presets.get(preset)
+        settings.validate()
+        return settings
 
 
 @cache
 def default_resources() -> Resources:
     workspace = Path(os.environ.get("LLM4OM_WORKSPACE", "runs/web"))
-    return Resources(SettingsStore(workspace), Sandbox(os.environ.get("LLM4OM_SANDBOX", "docker")))
+    return Resources(LLMPresetStore(workspace), Sandbox(os.environ.get("LLM4OM_SANDBOX", "docker")))
 
 
 def _resources() -> Resources:
-    return (get_config().get("configurable") or {}).get("llm4om_resources") or default_resources()
+    # Only in-process callers can pass Resources; a server request's JSON config cannot replace them.
+    resources = (get_config().get("configurable") or {}).get("llm4om_resources")
+    return resources if isinstance(resources, Resources) else default_resources()
 
 
 def problem_text(description: str, data: dict[str, str]) -> str:
@@ -160,7 +163,7 @@ def platform_graph(method: Method) -> Any:
         recorder = Recorder(method.limits or resources.limits, state.get("usage"), runtime.stream_writer)
 
         def model(role: str) -> BaseChatModel:
-            return resources.model_factory(resources.llm_settings(choice.provider, choice.model),
+            return resources.model_factory(resources.llm_settings(choice.preset),
                                            callbacks=[recorder.callback], metadata={"llm4om_role": role})
 
         return Context(recorder, resources.sandbox, model, CodeTarget(choice.language), state.get("data") or {})
@@ -180,7 +183,7 @@ def platform_graph(method: Method) -> Any:
             for name in data:
                 if not re.fullmatch(DATA_NAME, name):
                     raise ValueError(f"Invalid data file name {name!r}; use letters, digits, '-', '_', '.' and spaces.")
-            _resources().llm_settings(choice.provider, choice.model)
+            _resources().llm_settings(choice.preset)
         except ValueError as error:
             return {"failure": str(error)}
         return {"problem": problem_text(state.get("description", ""), data), "failure": None, "_deadline": deadline}
@@ -238,8 +241,7 @@ def platform_graph(method: Method) -> Any:
 
 
 async def run(description: str, *, method: str = "direct", language: str = "pyomo", data: dict[str, str] | None = None,
-              provider: str | None = None, model: str | None = None,
-              resources: Resources | None = None,
+              preset: str | None = None, resources: Resources | None = None,
               on_step: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
     """Run one method in process and return the final state. `on_step` receives each step as it is recorded."""
     available = methods()
@@ -249,7 +251,7 @@ async def run(description: str, *, method: str = "direct", language: str = "pyom
     config: RunnableConfig = {"configurable": {"llm4om_resources": resources}} if resources else {}
     async for mode, chunk in platform_graph(available[method]).astream(
             {"description": description, "data": data or {}}, config,
-            context=RunContext(language, provider, model), stream_mode=["custom", "values"]):
+            context=RunContext(language, preset), stream_mode=["custom", "values"]):
         if mode == "values":
             final = chunk
         elif on_step and "step" in chunk:

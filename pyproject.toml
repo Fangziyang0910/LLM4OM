@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm4om"
-version = "0.38.0"
+version = "0.40.0"
 description = "A platform for automated optimization modeling"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -23,8 +23,8 @@ dependencies = [
     "langgraph-api>=0.16,<0.17",
     "fastapi>=0.115,<1",
     "python-dotenv>=1.0,<2",
-    # OptiTree parses the upstream model replies with the json_repair version its port was checked against.
-    "json-repair==0.30.0",
+    # OptiTree parses model replies with json_repair; 0.60.1 is the first release without GHSA-xf7x-x43h-rpqh.
+    "json-repair==0.60.1",
     # AutoFormulation ranks candidates with numpy and scikit-learn.
     "numpy>=2,<3",
     "scikit-learn>=1.5,<2",

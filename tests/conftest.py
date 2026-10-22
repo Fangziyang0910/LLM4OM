@@ -13,7 +13,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.utils.function_calling import convert_to_openai_tool
 
 from llm4om.graph import Resources, run
-from llm4om.llm import LLMSettings, SettingsStore
+from llm4om.llm import LLMPresetStore, LLMSettings
 from llm4om.methods import presets
 from llm4om.runtime import Limits
 from llm4om.sandbox import Sandbox
@@ -67,13 +67,21 @@ class ScriptedChat(BaseChatModel):
 Script = Callable[[str, list[BaseMessage], list[str]], Any]
 
 
+@pytest.fixture(autouse=True)
+def no_environment_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests see no LLM4OM_LLM_* preset unless they set one: neither the shell's nor the repository's .env."""
+    for name in ("PROVIDER", "MODEL", "API_KEY", "BASE_URL", "EXTRA_BODY"):
+        monkeypatch.delenv(f"LLM4OM_LLM_{name}", raising=False)
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
+
+
 @pytest.fixture
 def make_resources(tmp_path: Path) -> Callable[..., Resources]:
     def make(script: Script, limits: Limits | None = None, llm: LLMSettings | None = LLM) -> Resources:
         def factory(settings: LLMSettings, *, callbacks: Any = None, metadata: Any = None) -> ScriptedChat:
             return ScriptedChat(script=script, callbacks=callbacks, metadata=metadata)
 
-        return Resources(SettingsStore(tmp_path / "workspace"), Sandbox("local"), limits or Limits(), factory, llm)
+        return Resources(LLMPresetStore(tmp_path / "workspace"), Sandbox("local"), limits or Limits(), factory, llm)
 
     return make
 

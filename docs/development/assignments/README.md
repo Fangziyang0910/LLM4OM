@@ -1,6 +1,6 @@
 # 30 天轮换开发任务
 
-任务基线为 v0.38：LangChain 调用模型，LangGraph 编排和保存运行，独立 Worker 执行代码。三位同学依次从已验收的 `main` 开发，每阶段按课余开发安排 10 天。
+任务基线为 v0.40：LangChain 调用模型，LangGraph 编排和保存运行，独立 Worker 执行代码。三位同学依次从已验收的 `main` 开发，每阶段按课余开发安排 10 天。
 
 | 阶段 | 负责人 | 主任务 | 接手条件 |
 |---|---|---|---|
@@ -17,6 +17,7 @@
 - 八种方法为 Direct、Feedback Repair、OptiMUS、CoE、OptiTree、OR-LLM-Agent、AutoFormulation 和 TriVAL。新增方法实现 `Method` 和 LangGraph 图，使用 `Context.llm()`、`Context.solve()`，不重建 Gateway 或插件框架。
 - 四种语言和求解器绑定为 Pyomo/HiGHS、gurobipy/Gurobi、pywraplp/SCIP、CPMpy/CP-SAT。`Method.languages` 限定支持范围；MILP 方法不能因界面新增选项就声称支持 CP。
 - 生成代码实现 `build_model(data)`。数据为文件名到文本的映射；Worker 求解，不把密钥传入生成代码。
+- 运行只选择预设模型（`LLMPresetStore`）：预设只能添加和删除，密钥不出现在任何接口响应中。新功能不能重新开放读取或修改密钥的路径，见 [ADR 0010](../../adr/0010-llm-presets.md)。
 - CLI 与 Web 共用 `platform_graph()`。Web 的 threads、runs、取消和 SSE 来自 LangGraph Server；前端通过官方 SDK 访问。步骤和最终结果来自同次运行。
 - 旧版 SolverBackend、严格 IR、独立产物目录、通用澄清、人工派生编辑和批量评测不属于当前接口。任务不要求恢复这些已移除功能。下载当前数学模型、代码及结果属于现有界面功能。
 

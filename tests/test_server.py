@@ -5,22 +5,27 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from llm4om.graph import run
-from llm4om.llm import SettingsStore
+from llm4om.llm import LLMPresetStore
 from llm4om.methods import methods
 from llm4om.server.app import create_app
 from tests.conftest import LLM, PRODUCTION_PROBLEM, TWO_PART_REPLY
 
 
 def client(tmp_path: Path) -> TestClient:
-    return TestClient(create_app(SettingsStore(tmp_path)))
+    return TestClient(create_app(LLMPresetStore(tmp_path)))
 
 
-def save_llm(api: TestClient) -> None:
-    body = {"provider": LLM.provider, "model": LLM.model, "api_key": LLM.api_key, "base_url": LLM.base_url}
-    assert api.post("/api/settings", json=body).status_code == 200
+PRESET = {"provider": LLM.provider, "model": LLM.model, "api_key": LLM.api_key, "base_url": LLM.base_url}
+
+
+def add_preset(api: TestClient) -> dict[str, Any]:
+    response = api.post("/api/presets", json=PRESET)
+    assert response.status_code == 200
+    return response.json()
 
 
 def test_options_list_methods_languages_and_providers(tmp_path: Path) -> None:
@@ -32,28 +37,63 @@ def test_options_list_methods_languages_and_providers(tmp_path: Path) -> None:
     assert optimus["languages"] == ["gurobipy", "pyomo", "pywraplp"]
 
 
-def test_settings_hide_the_key_and_keep_it_when_left_empty(tmp_path: Path) -> None:
+def test_presets_never_return_their_keys_and_cannot_be_changed(tmp_path: Path) -> None:
     with client(tmp_path) as api:
-        save_llm(api)
-        body = {"provider": LLM.provider, "model": "other-model", "base_url": LLM.base_url}
-        settings = api.post("/api/settings", json=body).json()
-    profile = settings["profiles"][LLM.provider]
-    assert "api_key" not in profile and LLM.api_key not in str(settings)
-    assert profile["api_key_preview"] and profile["model"] == "other-model"
+        add_preset(api)
+        listed = add_preset(api)  # the same settings again become a second preset, not an update
+        changes = [api.put("/api/presets/scripted", json=PRESET).status_code,
+                   api.patch("/api/presets/scripted", json=PRESET).status_code]
+    assert [item["id"] for item in listed["presets"]] == ["scripted", "scripted-2"]
+    assert LLM.api_key not in str(listed) and all("api_key" not in item for item in listed["presets"])
+    assert changes == [405, 405]
 
 
-def test_a_saved_profile_can_be_deleted(tmp_path: Path) -> None:
+def test_saved_presets_can_be_deleted_but_not_the_environment_one(tmp_path: Path, monkeypatch: Any) -> None:
+    monkeypatch.setenv("LLM4OM_LLM_MODEL", "env-model")
+    monkeypatch.setenv("LLM4OM_LLM_API_KEY", "env-key")
+    monkeypatch.setenv("LLM4OM_LLM_BASE_URL", "http://localhost:9")
     with client(tmp_path) as api:
-        save_llm(api)
-        deleted = api.delete(f"/api/settings/{LLM.provider}")
-        missing = api.delete("/api/settings/kimi")
-    assert deleted.status_code == 200 and not deleted.json()["profiles"].get(LLM.provider, {}).get("saved")
-    assert missing.status_code == 400
+        add_preset(api)
+        deleted = api.delete("/api/presets/scripted")
+        environment = api.delete("/api/presets/env")
+        missing = api.delete("/api/presets/scripted")
+    assert [item["id"] for item in deleted.json()["presets"]] == ["env"]
+    assert environment.status_code == 400 and missing.status_code == 400
+
+
+def test_the_model_list_never_sends_a_saved_key(tmp_path: Path) -> None:
+    with client(tmp_path) as api:
+        add_preset(api)
+        response = api.post("/api/models", json={**PRESET, "api_key": "", "base_url": "http://attacker.invalid/v1"})
+    assert response.status_code == 400 and "API key" in response.json()["detail"]
+
+
+def test_runs_choose_a_preset_by_id_and_the_first_is_the_default(tmp_path: Path, monkeypatch: Any) -> None:
+    store = LLMPresetStore(tmp_path)
+    with pytest.raises(ValueError, match="Add an LLM preset first"):
+        store.get()
+    store.add(LLM)
+    monkeypatch.setenv("LLM4OM_LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("LLM4OM_LLM_MODEL", "env-model")
+    monkeypatch.setenv("LLM4OM_LLM_API_KEY", "env-key")
+    assert [preset.id for preset in store.presets()] == ["env", "scripted"]
+    assert (store.get().model, store.get("scripted").model) == ("env-model", LLM.model)
+    with pytest.raises(ValueError, match=r"No LLM preset 'nosuch'; choose one of \['env', 'scripted'\]"):
+        store.get("nosuch")
+
+
+def test_v038_settings_become_presets(tmp_path: Path) -> None:
+    old = tmp_path / ".private" / "llm-settings.json"
+    old.parent.mkdir()
+    old.write_text(json.dumps({"selected": "deepseek", "profiles": {"deepseek": {"model": "deepseek-chat", "api_key": "k"}}}))
+    store = LLMPresetStore(tmp_path)
+    assert [(preset.id, preset.settings.model) for preset in store.presets()] == [("deepseek", "deepseek-chat")]
+    assert not old.exists() and store.path.exists()
 
 
 def test_posts_must_be_json(tmp_path: Path) -> None:
     with client(tmp_path) as api:
-        form = api.post("/api/settings", content="provider=x", headers={"content-type": "application/x-www-form-urlencoded"})
+        form = api.post("/api/presets", content="provider=x", headers={"content-type": "application/x-www-form-urlencoded"})
         runs = api.post("/threads", content="{}", headers={"content-type": "text/plain"})
         untyped = api.post("/threads", content="{}", headers={"content-type": ""})
         empty = api.post("/api/datasets/nl4opt")  # no body, like cancelling a run: passes the check, then 405
@@ -77,20 +117,6 @@ def test_the_server_registers_one_graph_per_method() -> None:
     assert config["graphs"] == {method: f"llm4om.server.graphs:{method}" for method in methods()}
 
 
-def test_the_environment_profile_is_listed_beside_saved_ones(tmp_path: Path, monkeypatch: Any) -> None:
-    monkeypatch.setenv("LLM4OM_LLM_PROVIDER", "deepseek")
-    monkeypatch.setenv("LLM4OM_LLM_MODEL", "env-model")
-    monkeypatch.setenv("LLM4OM_LLM_API_KEY", "env-key-123456")
-    store = SettingsStore(tmp_path)
-    assert store.public()["selected"] == "deepseek"
-    with client(tmp_path) as api:
-        save_llm(api)
-    public = store.public()
-    assert public["selected"] == LLM.provider and set(public["profiles"]) == {LLM.provider, "deepseek"}
-    assert store.resolve().model == LLM.model
-    assert (store.resolve("deepseek").model, store.resolve("deepseek", "other").model) == ("env-model", "other")
-
-
 def test_a_run_streams_each_step_before_it_ends(make_resources: Any) -> None:
     seen: list[dict[str, Any]] = []
     state = asyncio.run(run(PRODUCTION_PROBLEM, resources=make_resources(lambda *_: TWO_PART_REPLY),
@@ -99,3 +125,21 @@ def test_a_run_streams_each_step_before_it_ends(make_resources: Any) -> None:
         ("llm", True), ("llm", False), ("solve", True), ("solve", False)]
     assert [step["id"] for step in state["steps"]] == list(dict.fromkeys(step["id"] for step in seen))
     assert state["usage"] == {"llm_calls": 1, "solves": 1, "input_tokens": 10, "output_tokens": 5}
+
+
+def test_a_run_uses_the_chosen_preset(make_resources: Any) -> None:
+    resources = make_resources(lambda *_: TWO_PART_REPLY, llm=None)
+    resources.presets.add(LLM)
+    chosen = asyncio.run(run(PRODUCTION_PROBLEM, preset="scripted", resources=resources))
+    unknown = asyncio.run(run(PRODUCTION_PROBLEM, preset="nosuch", resources=resources))
+    assert chosen["solve"]["objective"] == 13
+    assert unknown["failure"].startswith("No LLM preset 'nosuch'")
+
+
+def test_a_request_config_cannot_replace_the_server_resources(monkeypatch: Any) -> None:
+    from llm4om import graph
+
+    seen: list[Any] = []
+    monkeypatch.setattr(graph, "default_resources", lambda: seen.append("default") or graph.Resources(None, None))  # type: ignore[arg-type]
+    monkeypatch.setattr(graph, "get_config", lambda: {"configurable": {"llm4om_resources": {"sandbox": "local"}}})
+    assert isinstance(graph._resources(), graph.Resources) and seen == ["default"]

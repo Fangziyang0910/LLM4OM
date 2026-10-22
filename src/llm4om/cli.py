@@ -23,14 +23,17 @@ def _print_step(step: dict[str, Any]) -> None:
 
 async def _run(args: argparse.Namespace) -> int:
     from llm4om.graph import Resources, run
-    from llm4om.llm import SettingsStore
+    from llm4om.llm import LLMPresetStore
     from llm4om.sandbox import Sandbox, SolveResult
 
-    problem = args.problem if args.problem is not None else Path(args.file).read_text(encoding="utf-8")
-    data = {Path(item).name: Path(item).read_text(encoding="utf-8") for item in args.data}
-    resources = Resources(SettingsStore(Path(args.workspace)), Sandbox(args.sandbox))
+    try:
+        problem = args.problem if args.problem is not None else Path(args.file).read_text(encoding="utf-8")
+        data = {Path(item).name: Path(item).read_text(encoding="utf-8") for item in args.data}
+    except OSError as error:
+        raise ValueError(f"Cannot read {error.filename}: {error.strerror}.") from error
+    resources = Resources(LLMPresetStore(Path(args.workspace)), Sandbox(args.sandbox))
     state = await run(problem, method=args.method, language=args.language, data=data,
-                      provider=args.provider, model=args.model, resources=resources, on_step=_print_step)
+                      preset=args.preset, resources=resources, on_step=_print_step)
     if args.output:
         Path(args.output).write_text(json.dumps(state, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
     if state.get("failure"):
@@ -58,7 +61,9 @@ def _serve(args: argparse.Namespace) -> int:
     os.chdir(workspace)
     graphs = {method.id: {"path": f"llm4om.server.graphs:{method.id}", "description": method.description}
               for method in methods().values()}
-    print(f"LLM4OM: http://{args.host}:{args.port}  (runs are kept in {workspace})", file=sys.stderr)
+    local = "127.0.0.1" if args.host == "0.0.0.0" else args.host
+    reach = "; other machines use this machine's address" if args.host == "0.0.0.0" else ""
+    print(f"LLM4OM: http://{local}:{args.port}{reach}  (runs are kept in {workspace})", file=sys.stderr)
     run_server(host=args.host, port=args.port, graphs=graphs, n_jobs_per_worker=args.jobs, open_browser=False,
                http={"app": "llm4om.server.app:app", "cors": {"allow_origins": []}},
                server_level="WARNING")
@@ -77,8 +82,8 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
 
     serve = commands.add_parser("serve", help="Start the Web workbench on the LangGraph server.")
-    serve.add_argument("--workspace", default="runs/web", help="Directory for settings and run history.")
-    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--workspace", default="runs/web", help="Directory for LLM presets and run history.")
+    serve.add_argument("--host", default="0.0.0.0", help="Address to listen on; 127.0.0.1 keeps the workbench on this machine.")
     serve.add_argument("--port", type=int, default=8767)
     serve.add_argument("--jobs", type=int, default=4, help="Runs that may execute at the same time.")
     serve.add_argument("--sandbox", choices=("docker", "local"), default="docker",
@@ -92,9 +97,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--method", default="direct")
     run.add_argument("--language", default="pyomo",
                      help="Code language, which decides the solver: pyomo (HiGHS), gurobipy (Gurobi), pywraplp (SCIP) or cpmpy (CP-SAT).")
-    run.add_argument("--provider", help="Saved LLM provider; default: the selected one.")
-    run.add_argument("--model", help="Model ID; default: the provider's saved model.")
-    run.add_argument("--workspace", default="runs/web", help="Directory with the saved LLM settings.")
+    run.add_argument("--preset", help="LLM preset id; default: the first preset.")
+    run.add_argument("--workspace", default="runs/web", help="Directory with the saved LLM presets.")
     run.add_argument("--sandbox", choices=("docker", "local"), default="docker")
     run.add_argument("--output", help="Write the final state (steps included) to this JSON file.")
 

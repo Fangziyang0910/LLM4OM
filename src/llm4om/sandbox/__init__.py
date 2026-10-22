@@ -16,7 +16,7 @@ from typing import Any
 
 WORKER = Path(__file__).with_name("worker.py")
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
-WORKER_IMAGE = "llm4om-worker:3"
+WORKER_IMAGE = "llm4om-worker:4"
 START_MARGIN = 60  # seconds beyond the time limit for starting the sandbox, importing libraries and building the model
 
 
@@ -74,7 +74,7 @@ class Sandbox:
     def _command(self, name: str) -> list[str]:
         if self.kind == "local":
             return [sys.executable, "-I", str(WORKER)]
-        command = ["docker", "run", "--rm", "-i", "--name", name, "--network", "none", "--memory", "2g",
+        command = ["docker", "run", "--rm", "-i", "--pull", "never", "--name", name, "--network", "none", "--memory", "2g",
                    "--cpus", "2", "--pids-limit", "256", "--read-only", "--tmpfs", "/tmp:rw,size=256m",
                    "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "-e", "HOME=/tmp",
                    "-v", f"{WORKER}:/opt/llm4om/worker.py:ro"]

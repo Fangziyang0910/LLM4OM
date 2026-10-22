@@ -1,0 +1,172 @@
+import { useState } from "react";
+import { ChevronDown, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
+import { cn } from "@/lib/utils";
+import { api } from "@/api";
+import { errorText } from "@/format";
+import type { Preset, Provider } from "@/types";
+
+type Form = { provider: string; model: string; api_key: string; base_url: string; temperature: string; max_tokens: string; extra_body: string };
+type Presets = { presets: Preset[] };
+
+const emptyForm = (provider: Provider): Form =>
+  ({ provider: provider.id, model: "", api_key: "", base_url: provider.base_url, temperature: "", max_tokens: "", extra_body: "" });
+
+function Field({ label, htmlFor, help, error, children }: { label: string; htmlFor: string; help?: string; error?: string | null; children: React.ReactNode }) {
+  return <div className="flex flex-col gap-1.5">
+    <Label htmlFor={htmlFor} className="text-xs">{label}</Label>
+    {children}
+    {error || help ? <p className={cn("text-xs", error ? "text-destructive" : "text-muted-foreground")}>{error ?? help}</p> : null}
+  </div>;
+}
+
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b py-2.5 text-sm last:border-0">
+    <dt className="text-muted-foreground">{label}</dt><dd className="min-w-0 break-words">{children}</dd>
+  </div>;
+}
+
+/** LLM presets: each is fixed once added. They can be added and deleted, never edited; keys are never shown again. */
+export function PresetsDialog({ onClose, presets, providers, onChange }: {
+  onClose: () => void; presets: Preset[]; providers: Provider[]; onChange: (presets: Presets, message: string) => void;
+}) {
+  const [viewing, setViewing] = useState<string | null>(presets[0]?.id ?? null);  // null: the add form
+  const [form, setForm] = useState<Form>(() => emptyForm(providers[0]));
+  const [models, setModels] = useState<string[] | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"add" | "models" | "delete" | null>(null);
+  const [confirming, setConfirming] = useState(false);  // deleting takes a second click
+
+  const label = (id: string) => providers.find(item => item.id === id)?.label ?? id;
+  const shown = presets.find(item => item.id === viewing);
+  const provider = providers.find(item => item.id === form.provider) ?? providers[0];
+  const set = (field: keyof Form) => (event: { target: { value: string } }) => setForm({ ...form, [field]: event.target.value });
+  const show = (id: string | null) => { setViewing(id); setProblem(null); setConfirming(false); };
+  let extraError: string | null = null;
+  try { if (form.extra_body.trim()) JSON.parse(form.extra_body); } catch { extraError = "不是有效的 JSON。"; }
+  const body = () => ({
+    provider: form.provider, model: form.model.trim(), api_key: form.api_key.trim(),
+    base_url: provider.base_url ? "" : form.base_url.trim(),
+    temperature: form.temperature === "" ? null : Number(form.temperature),
+    max_tokens: form.max_tokens === "" ? null : Number(form.max_tokens),
+    extra_body: form.extra_body.trim() ? JSON.parse(form.extra_body) : {},
+  });
+  const act = async (kind: "add" | "models" | "delete", action: () => Promise<void>) => {
+    setBusy(kind); setProblem(null);
+    try { await action(); } catch (error) { setProblem(errorText(error)); } finally { setBusy(null); }
+  };
+  const add = () => act("add", async () => {
+    const saved = await api<Presets>("/api/presets", body());
+    onChange(saved, `已添加预设 ${form.model.trim()}。`);
+    setForm(emptyForm(provider)); setModels(null);
+    show(saved.presets.at(-1)?.id ?? null);
+  });
+  const remove = (preset: Preset) => act("delete", async () => {
+    const saved = await api<Presets>(`/api/presets/${encodeURIComponent(preset.id)}`, undefined, "DELETE");
+    onChange(saved, `已删除预设 ${preset.model}。`);
+    show(saved.presets[0]?.id ?? null);
+  });
+  const listModels = () => act("models", async () => setModels((await api<{ models: string[] }>("/api/models", body())).models));
+  const filtered = models?.filter(item => item.toLowerCase().includes(form.model.trim().toLowerCase())) ?? [];
+
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+    <DialogContent className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-3xl">
+      <DialogHeader className="border-b px-6 py-4">
+        <DialogTitle>预设模型</DialogTitle>
+        <DialogDescription>运行只能选择预设。预设添加后不能修改，密钥只保存在服务器上，任何页面都读不到。</DialogDescription>
+      </DialogHeader>
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <nav aria-label="预设列表" className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-56 md:flex-col md:border-r md:border-b-0">
+          {presets.map((item, index) => <button key={item.id} onClick={() => show(item.id)}
+            className={cn("flex shrink-0 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
+              viewing === item.id && "bg-accent")}>
+            <span className="flex max-w-44 items-center gap-2 font-medium"><span className="truncate">{item.model}</span>
+              {index === 0 ? <Badge className="h-4 shrink-0 px-1.5 text-[10px]">默认</Badge> : null}</span>
+            <span className="max-w-44 truncate text-[11px] text-muted-foreground">{label(item.provider)}{item.source === "env" ? " · 服务器" : ""}</span>
+          </button>)}
+          <button onClick={() => show(null)}
+            className={cn("flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+              viewing === null && "bg-accent text-foreground")}><Plus className="size-4" />添加预设</button>
+        </nav>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
+          {shown ? <>
+            <h3 className="text-base font-semibold break-all">{shown.model}</h3>
+            <dl>
+              <Fact label="服务商">{label(shown.provider)}</Fact>
+              <Fact label="接口地址"><span className="font-mono text-xs">{shown.base_url || providers.find(item => item.id === shown.provider)?.base_url}</span></Fact>
+              <Fact label="API 密钥"><span className="flex items-center gap-1.5 text-muted-foreground"><KeyRound className="size-3.5" />已保存在服务器，不可查看</span></Fact>
+              <Fact label="温度">{shown.temperature ?? "服务默认"}</Fact>
+              <Fact label="最大输出 token">{shown.max_tokens ?? "服务默认"}</Fact>
+              <Fact label="额外请求参数">{Object.keys(shown.extra_body).length
+                ? <code className="font-mono text-xs">{JSON.stringify(shown.extra_body)}</code> : "无"}</Fact>
+            </dl>
+            {shown.source === "env" ? <Alert><AlertDescription className="text-xs"><p>
+              这个预设来自服务器的 <code className="font-mono">LLM4OM_LLM_*</code> 环境变量，只能在服务器上修改或删除。</p></AlertDescription></Alert> : null}
+          </> : <>
+            <Field label="服务商" htmlFor="provider">
+              <Select value={form.provider} onValueChange={value => { setForm(emptyForm(providers.find(item => item.id === value)!)); setModels(null); }}>
+                <SelectTrigger id="provider" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{providers.map(item => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+            <Field label="接口地址" htmlFor="base-url" help={provider.base_url ? "使用该服务商的官方地址。" : undefined}>
+              <Input id="base-url" value={provider.base_url || form.base_url} readOnly={!!provider.base_url} onChange={set("base_url")}
+                placeholder="https://example.com/v1" className={cn(provider.base_url && "bg-muted text-muted-foreground")} />
+            </Field>
+            <Field label="API 密钥" htmlFor="api-key" help="保存后不再显示。">
+              <Input id="api-key" type="password" autoComplete="off" value={form.api_key} onChange={set("api_key")} placeholder="输入密钥" />
+            </Field>
+            <Field label="模型 ID" htmlFor="model-id">
+              <div className="flex gap-2">
+                <Input id="model-id" value={form.model} onChange={set("model")} placeholder="例如 deepseek-chat" />
+                <Button type="button" variant="outline" disabled={!!busy || !form.api_key.trim()} onClick={() => void listModels()}>
+                  {busy === "models" ? <Spinner /> : <RefreshCw />}读取可用模型</Button>
+              </div>
+              {models ? <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pt-1">
+                {filtered.slice(0, 60).map(item => <Button key={item} type="button" size="xs" variant={item === form.model ? "default" : "secondary"}
+                  className="font-mono font-normal" onClick={() => setForm({ ...form, model: item })}>{item}</Button>)}
+                {!filtered.length ? <p className="text-xs text-muted-foreground">{models.length ? "没有匹配的模型。" : "服务没有返回模型列表，请直接填写。"}</p> : null}
+              </div> : null}
+            </Field>
+
+            <Collapsible className="group/advanced rounded-lg border">
+              <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium">
+                高级参数<ChevronDown className="ml-auto size-4 text-muted-foreground transition-transform group-data-[state=open]/advanced:rotate-180" /></CollapsibleTrigger>
+              <CollapsibleContent className="flex flex-col gap-4 border-t p-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="温度" htmlFor="temperature"><Input id="temperature" type="number" step="0.1" min="0" value={form.temperature} onChange={set("temperature")} placeholder="服务默认" /></Field>
+                  <Field label="最大输出 token" htmlFor="max-tokens"><Input id="max-tokens" type="number" min="1" value={form.max_tokens} onChange={set("max_tokens")} placeholder="服务默认" /></Field>
+                </div>
+                <Field label="额外请求参数（JSON）" htmlFor="extra-body" error={extraError}
+                  help="填写所选服务商支持的请求参数。DeepSeek 运行 TriVAL 时需要关闭思考模式。">
+                  <Input id="extra-body" value={form.extra_body} onChange={set("extra_body")} className="font-mono text-xs"
+                    placeholder='例如 {"thinking": {"type": "disabled"}}' aria-invalid={!!extraError} />
+                </Field>
+              </CollapsibleContent>
+            </Collapsible>
+          </>}
+          {problem ? <Alert variant="destructive" role="alert"><AlertDescription>{problem}</AlertDescription></Alert> : null}
+        </div>
+      </div>
+      <DialogFooter className="border-t px-6 py-3 sm:justify-between">
+        {shown?.source === "saved" ? <Button variant="ghost" className="text-destructive hover:text-destructive" disabled={!!busy}
+          onClick={() => confirming ? void remove(shown) : setConfirming(true)}>
+          {busy === "delete" ? <Spinner /> : <Trash2 />}{confirming ? "确认删除？" : "删除这个预设"}</Button> : <span />}
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={onClose}>关闭</Button>
+          {!shown ? <Button disabled={!!busy || !!extraError || !form.model.trim() || !form.api_key.trim()} onClick={() => void add()}>
+            {busy === "add" ? <Spinner /> : <Plus />}添加预设</Button> : null}
+        </div>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
+}

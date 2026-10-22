@@ -5,7 +5,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -15,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { errorText } from "@/format";
-import type { Draft, Options, Settings } from "@/types";
+import type { Draft, Options, Preset } from "@/types";
 
 const DRAFT_KEY = "llm4om-draft";
 const MILP_ONLY = "原方法的提示只覆盖 LP/MILP，不支持 CPMpy";
@@ -45,27 +44,24 @@ export function initialDraft(): Draft {
   let saved: Partial<Draft> = {};
   try { saved = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "{}"); } catch { /* storage may be unavailable */ }
   return { description: saved.description ?? "", data: saved.data ?? {}, method: saved.method ?? "direct",
-    language: saved.language ?? "pyomo", provider: saved.provider ?? null, model: saved.model ?? "" };
+    language: saved.language ?? "pyomo", preset: saved.preset ?? null };
 }
 
-export function Composer({ options, settings, draft, setDraft, onStart, openSettings, openExamples }: {
-  options: Options; settings: Settings; draft: Draft; setDraft: (draft: Draft) => void; onStart: (draft: Draft) => Promise<void>;
-  openSettings: () => void; openExamples: () => void;
+export function Composer({ options, presets, draft, setDraft, onStart, openPresets, openExamples }: {
+  options: Options; presets: Preset[]; draft: Draft; setDraft: (draft: Draft) => void; onStart: (draft: Draft) => Promise<void>;
+  openPresets: () => void; openExamples: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const set = (change: Partial<Draft>) => setDraft({ ...draft, ...change });
 
-  const profiles = Object.entries(settings.profiles);
-  const provider = draft.provider && settings.profiles[draft.provider] ? draft.provider : settings.selected;
-  const profile = provider ? settings.profiles[provider] : undefined;
+  const preset = presets.find(item => item.id === draft.preset) ?? presets[0];
   const providerLabel = (id: string) => options.providers.find(item => item.id === id)?.label ?? id;
   const method = options.methods.find(item => item.id === draft.method) ?? options.methods[0];
   const supports = (language: string) => !method.languages || method.languages.includes(language);
   const language = options.languages.find(item => item.id === draft.language && supports(item.id))
     ?? options.languages.find(item => supports(item.id))!;
-  const model = draft.model || profile?.model || "";
   const files = Object.entries(draft.data);
 
   useEffect(() => {
@@ -87,9 +83,9 @@ export function Composer({ options, settings, draft, setDraft, onStart, openSett
   const ready = draft.description.trim().length > 0;
   const start = async () => {
     if (!ready || busy) return;
-    if (!profile) { toast.error("先配置一个 LLM 服务。"); openSettings(); return; }
+    if (!preset) { toast.error("先添加一个预设模型。"); openPresets(); return; }
     setBusy(true);
-    try { await onStart({ ...draft, method: method.id, language: language.id, provider, model }); }
+    try { await onStart({ ...draft, method: method.id, language: language.id, preset: preset.id }); }
     catch (error) { toast.error(errorText(error)); setBusy(false); }
   };
   const startRef = useRef(start);
@@ -216,19 +212,16 @@ export function Composer({ options, settings, draft, setDraft, onStart, openSett
             </fieldset>
 
             <fieldset className="flex min-w-0 flex-col gap-2">
-              <legend className="mb-2 flex w-full items-center text-xs font-medium text-muted-foreground">LLM
-                <Button variant="link" size="sm" className="ml-auto h-auto p-0 text-xs" onClick={openSettings}>管理</Button></legend>
-              {profile ? <>
-                <Select value={provider ?? undefined} onValueChange={value => set({ provider: value, model: "" })}>
-                  <SelectTrigger aria-label="LLM 服务" className="w-full min-w-0"><SelectValue /></SelectTrigger>
-                  <SelectContent>{profiles.map(([id, item]) => <SelectItem key={id} value={id}>
-                    {providerLabel(id)}<span className="text-muted-foreground">{item.model}</span></SelectItem>)}</SelectContent>
-                </Select>
-                <Input aria-label="本次使用的模型 ID" value={draft.model} placeholder={`模型 ID（默认 ${profile.model}）`}
-                  onChange={event => set({ model: event.target.value })} className="h-8 text-[13px]" />
-              </> : <Alert>
-                <AlertDescription className="flex flex-col items-start gap-2">还没有可用的 LLM 服务。
-                  <Button size="sm" onClick={openSettings}>配置 LLM 服务</Button></AlertDescription>
+              <legend className="mb-2 flex w-full items-center text-xs font-medium text-muted-foreground">预设模型
+                <Button variant="link" size="sm" className="ml-auto h-auto p-0 text-xs" onClick={openPresets}>管理</Button></legend>
+              {preset ? <Select value={preset.id} onValueChange={value => set({ preset: value })}>
+                <SelectTrigger aria-label="预设模型" className="w-full min-w-0"><SelectValue /></SelectTrigger>
+                <SelectContent>{presets.map(item => <SelectItem key={item.id} value={item.id}>
+                  <span className="font-medium">{item.model}</span><span className="text-muted-foreground">{providerLabel(item.provider)}</span>
+                </SelectItem>)}</SelectContent>
+              </Select> : <Alert>
+                <AlertDescription className="flex flex-col items-start gap-2">还没有预设模型。
+                  <Button size="sm" onClick={openPresets}>添加预设模型</Button></AlertDescription>
               </Alert>}
             </fieldset>
 

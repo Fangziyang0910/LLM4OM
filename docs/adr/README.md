@@ -12,4 +12,5 @@ ADR 保留改变成本较高、需要解释取舍的决定。当前行为见[架
 | [0006](0006-modeling-process-replaces-candidate.md) | 用建模过程、阶段产物和公开检查组织运行 | 被 0007 取代 |
 | [0007](0007-langchain-minimal-core.md) | 以 LangChain 运行时和最小核心重建平台 | 有效；代码契约部分被 0008 取代，运行记录部分被 0009 取代 |
 | [0008](0008-code-language.md) | 用户选择代码写法，写法决定求解器 | 有效 |
-| [0009](0009-langgraph-server.md) | 用 LangGraph 服务器运行、推送和保存运行 | 有效 |
+| [0009](0009-langgraph-server.md) | 用 LangGraph 服务器运行、推送和保存运行 | 有效；运行上下文与设置部分被 0010 取代 |
+| [0010](0010-llm-presets.md) | 运行只选择预设模型，密钥不离开服务器 | 有效 |
