@@ -27,11 +27,10 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.languages import MILP_LANGUAGES
-from llm4om.methods import Method
+from llm4om.methods import Method, presets
 from llm4om.methods.optitree.prompts import CLASSIFY_PROMPT, INSPECTOR_PROMPT, MILP, REASON_PROMPT
 from llm4om.runtime import Context, ModelingState
 
-MAX_INSPECTIONS = 4  # upstream: `count > 3` ends the loop after the fourth inspection
 ROOT_TYPE = "Mixed Integer Programming"
 CODE_MARKERS = ["```python", "```Python", "```"]
 
@@ -79,7 +78,7 @@ class State(ModelingState, total=False):
 
 
 async def _reply(context: Context, role: str, system: str, user: str) -> str:
-    return (await context.llm(role).bind(temperature=0).ainvoke([SystemMessage(system), HumanMessage(user)])).text
+    return (await context.llm(role).bind(temperature=presets.OPTITREE.temperature).ainvoke([SystemMessage(system), HumanMessage(user)])).text
 
 
 async def classify(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
@@ -132,7 +131,7 @@ async def inspect(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
             {state["solve"].feedback()}
             """
     messages = state["_inspector"] + [HumanMessage(request)]
-    reply = (await context.llm("inspector").bind(temperature=0).ainvoke(
+    reply = (await context.llm("inspector").bind(temperature=presets.OPTITREE.temperature).ainvoke(
         [SystemMessage(INSPECTOR_PROMPT + "\n" + context.target.prompt), *messages])).text
     return {"reply": reply, "code": extract_code(reply), "inspections": state["inspections"] + 1,
             "_inspector": messages + [AIMessage(reply)]}
@@ -148,7 +147,7 @@ def after_code(state: State) -> str:
 
 def after_execute(state: State) -> str:
     assert state["solve"] is not None
-    return END if state["solve"].executed or state["inspections"] >= MAX_INSPECTIONS else "inspect"
+    return END if state["solve"].executed or state["inspections"] >= presets.OPTITREE.max_inspections else "inspect"
 
 
 def optitree_graph():

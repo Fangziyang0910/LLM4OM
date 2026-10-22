@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, CodeXml, Cpu, Ellipsis, Play, Sigma, TriangleAlert, X } from "lucide-react";
-import { STATUS, duration, formatNumber, formatTokens, tone } from "../api";
+import { STATUS, duration, formatNumber, formatTokens, tone } from "../format";
 import { phases, preview, roleName, working, type Phase } from "../steps";
 import type { Step } from "../types";
 import type { Live } from "../useRun";

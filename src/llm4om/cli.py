@@ -14,17 +14,6 @@ from typing import Any
 from llm4om.sandbox import WORKER_IMAGE
 
 
-def _parse_options(values: list[str]) -> dict[str, object]:
-    options: dict[str, object] = {}
-    for item in values:
-        key, _, raw = item.partition("=")
-        try:
-            options[key] = json.loads(raw)
-        except ValueError:
-            options[key] = raw
-    return options
-
-
 def _print_step(step: dict[str, Any]) -> None:
     if step.get("running"):
         return
@@ -40,7 +29,7 @@ async def _run(args: argparse.Namespace) -> int:
     problem = args.problem if args.problem is not None else Path(args.file).read_text(encoding="utf-8")
     data = {Path(item).name: Path(item).read_text(encoding="utf-8") for item in args.data}
     resources = Resources(SettingsStore(Path(args.workspace)), Sandbox(args.sandbox))
-    state = await run(problem, method=args.method, language=args.language, data=data, options=_parse_options(args.option),
+    state = await run(problem, method=args.method, language=args.language, data=data,
                       provider=args.provider, model=args.model, resources=resources, on_step=_print_step)
     if args.output:
         Path(args.output).write_text(json.dumps(state, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
@@ -71,7 +60,7 @@ def _serve(args: argparse.Namespace) -> int:
               for method in methods().values()}
     print(f"LLM4OM: http://{args.host}:{args.port}  (runs are kept in {workspace})", file=sys.stderr)
     run_server(host=args.host, port=args.port, graphs=graphs, n_jobs_per_worker=args.jobs, open_browser=False,
-               http={"app": "llm4om.server.app:app", "cors": {"allow_origins": []}}, allow_blocking=True,
+               http={"app": "llm4om.server.app:app", "cors": {"allow_origins": []}},
                server_level="WARNING")
     return 0
 
@@ -105,7 +94,6 @@ def main(argv: list[str] | None = None) -> int:
                      help="Code language, which decides the solver: pyomo (HiGHS), gurobipy (Gurobi), pywraplp (SCIP) or cpmpy (CP-SAT).")
     run.add_argument("--provider", help="Saved LLM provider; default: the selected one.")
     run.add_argument("--model", help="Model ID; default: the provider's saved model.")
-    run.add_argument("--option", action="append", default=[], help="Method option key=value (JSON value); repeatable.")
     run.add_argument("--workspace", default="runs/web", help="Directory with the saved LLM settings.")
     run.add_argument("--sandbox", choices=("docker", "local"), default="docker")
     run.add_argument("--output", help="Write the final state (steps included) to this JSON file.")

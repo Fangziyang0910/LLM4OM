@@ -10,25 +10,24 @@ readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = "Apache-2.0"
 dependencies = [
-    "langchain==1.4.6",
-    "langchain-core==1.6.12",
-    "langchain-openai==1.7.0",
+    "langchain>=1.4.7,<2",
+    "langchain-core>=1.6.13,<2",
+    "langchain-openai>=1.7.2,<2",
     "langchain-anthropic>=1.0,<2",
     "langchain-deepseek>=1.0,<2",
-    "langgraph==1.2.14",
-    "langgraph-prebuilt==1.1.0",
-    "langgraph-checkpoint==4.2.0",
+    "langchain-openrouter>=0.2.9,<0.3",
+    "openrouter>=0.11,<0.12",  # llm.py validates the reasoning options with its request models
+    "langgraph>=1.2.16,<2",
     # The LangGraph server with its in-memory runtime: it runs, streams and stores runs, with no license key.
-    "langgraph-cli[inmem]==0.4.33",
-    "langgraph-api==0.10.3",
-    "langgraph-runtime-inmem==0.30.3",
+    "langgraph-cli[inmem]>=0.4.37,<0.5",
+    "langgraph-api>=0.16,<0.17",
     "fastapi>=0.115,<1",
     "python-dotenv>=1.0,<2",
-    # OptiTree parses the upstream model replies with json_repair; AutoFormulation ranks with numpy and scikit-learn.
+    # OptiTree parses the upstream model replies with the json_repair version its port was checked against.
     "json-repair==0.30.0",
+    # AutoFormulation ranks candidates with numpy and scikit-learn.
     "numpy>=2,<3",
     "scikit-learn>=1.5,<2",
-    "langchain-openrouter==0.2.9",
 ]
 
 [project.optional-dependencies]
@@ -38,7 +37,9 @@ solve = ["Pyomo==6.10.1", "highspy==1.12.0", "ortools==9.15.6755", "cpmpy==1.1.0
 gurobi = ["gurobipy==13.0.3"]
 # AutoFormulation's equivalence scripts use SymPy and Z3; the Docker worker has them, `--sandbox local` needs these.
 autoformulation = ["z3-solver==5.1.0.0", "sympy>=1.13,<2"]
-dev = ["pytest>=8,<9", "httpx>=0.27,<1", "ruff>=0.15,<0.16"]
+
+[dependency-groups]
+dev = ["pytest>=9,<10", "httpx>=0.27,<1", "ruff>=0.17,<0.18"]
 
 [project.scripts]
 llm4om = "llm4om.cli:main"
@@ -56,7 +57,8 @@ target-version = "py311"
 extend-exclude = ["src/llm4om/methods/optitree/source"]
 
 [tool.ruff.lint]
-extend-select = ["I"]
+# Pyflakes, syntax-level pycodestyle errors and import order; explicit, so a ruff upgrade does not change the rules.
+select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

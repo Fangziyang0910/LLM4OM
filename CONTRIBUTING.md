@@ -17,7 +17,7 @@ uv run llm4om build-worker
 npm --prefix frontend ci
 npm --prefix frontend run dev      # 开发服务器，/api、/threads、/assistants 代理到 8767
 npm --prefix frontend run lint     # ESLint（含 React Hooks 规则）
-npm --prefix frontend test         # 运行状态与断流回归
+npm --prefix frontend test         # Vitest：步骤分组、断流回归、公式渲染
 npm --prefix frontend run build    # 输出到 src/llm4om/server/web_assets/
 ```
 

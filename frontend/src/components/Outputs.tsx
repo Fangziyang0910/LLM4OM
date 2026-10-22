@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, CodeXml, Copy, Download, FileText, type LucideIcon, Search, Sigma, Table } from "lucide-react";
-import { STATUS, formatNumber, tone } from "../api";
+import { STATUS, formatNumber, tone } from "../format";
 import { versions, type Version } from "../steps";
 import type { Language, RunValues, Solve, Step } from "../types";
 import { Code, Markdown, copyText, download } from "./Content";

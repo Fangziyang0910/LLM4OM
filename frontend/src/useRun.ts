@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Run } from "@langchain/langgraph-sdk";
-import { client, errorText } from "./api";
+import { client } from "./api";
+import { errorText } from "./format";
 import type { RunMeta, RunValues, Step } from "./types";
 
 /** Text an LLM call has written so far, by step id; it goes away when the step finishes. */

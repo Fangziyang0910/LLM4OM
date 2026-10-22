@@ -14,7 +14,7 @@ LangGraph 服务器（langgraph-api，内存运行时，数据在 <workspace>/.l
           │           └─ method.graph().astream(..., context=Context)
           │                 ├─ runtime.context.llm(role)    → LangChain 聊天模型（流式；回调记录每次调用）
           │                 ├─ runtime.context.solve(code)  → Docker Worker：构建 → 用该写法的求解器求解
-          │                 └─ Method.titles 中节点的更新     → 中间产物步骤
+          │                 └─ Method.titles 中节点结束时的更新 → 中间产物步骤
           └─ 校验请求：问题非空、写法存在且方法支持、LLM 已配置
 ```
 
@@ -34,6 +34,7 @@ src/llm4om/
 │   └── worker.Dockerfile
 ├── runtime.py           运行中的状态：Limits、Recorder（计数、上限、步骤、推送）、方法使用的 Context
 ├── methods/             建模方法：Method、methods()、各方法的图
+│   └── presets.py       全部方法的参数，每次运行都用这一套
 ├── graph.py             平台图 platform_graph(method)、RunState、RunContext、Resources、进程内运行 run()
 └── server/              Web 工作台
     ├── graphs.py        每个方法的平台图，供 LangGraph 服务器注册
@@ -55,7 +56,7 @@ languages · llm · sandbox  →  runtime  →  methods  →  graph  →  server
 | 键 | 内容 |
 |---|---|
 | 输入 | `description`（问题描述）、`data`（数据文件名到文本） |
-| 运行上下文 `RunContext` | `language`、`provider`、`model`、`options`。只写服务商和模型名，不写密钥；服务器按服务商读取本机保存的设置 |
+| 运行上下文 `RunContext` | `language`、`provider`、`model`。只写服务商和模型名，不写密钥；服务器按服务商读取本机保存的设置。方法参数不随运行传入，固定在 `methods/presets.py` |
 | 输出 | `formulation`、`code`、`solve`、`failure`、`steps`、`usage`（LLM 调用、求解、token） |
 
 `prepare` 发现请求不可用时写入 `failure` 并结束运行，不调用 LLM；有效请求记录内部截止时间 `_deadline`。`model` 和 `solve` 共享剩余时间，超时、超限或出错时写入一个错误步骤和 `failure`。
@@ -104,7 +105,6 @@ class Method:
 | `solve(code, title)` | 在沙箱中构建并求解，返回 `SolveResult`；`feedback()` 给出可交给 LLM 的文本 |
 | `run_script(script)` | 在沙箱中把脚本作为 `__main__` 运行，返回标准输出和异常栈。不计入求解次数。供原方法自己的检查脚本使用 |
 | `solves` | 本次运行到目前为止的求解次数 |
-| `options` | 方法自定义参数 |
 
 方法图结束后，平台图取最终状态的代码。方法已求解过的代码复用结果；否则 `solve` 节点求解一次。
 
@@ -145,6 +145,8 @@ CPMpy 模型可以没有目标，此时是可满足性问题：找到解时状�
 
 `Recorder.step()` 记录一步（`llm`、`artifact`、`solve` 或 `error`），并立即作为 LangGraph 的 custom 流事件推送 `{"step": ...}`。同一步开始时推送一次（`running: true`），结束时按 `id` 再推送一次。方法不直接记录步骤，也看不到 `Recorder`。
 
+方法图中 `Method.titles` 列出的节点结束时，回调（`graph._NodeSteps`）立即把该节点的更新记为一个 `artifact` 步骤。回调在下一个节点开始前触发，所以步骤顺序与执行顺序一致：一次代码生成的产物总在它的求解之前。
+
 LLM 调用由聊天模型上的回调记录，包括子图和 `create_agent` 智能体中的调用。回调在调用开始时检查上限；模型流式输出时，每 0.25 秒推送一次新写出的文本 `{"delta": {"id", "text", "reasoning"}}`；调用结束时写入输出文本、工具调用、token 数和耗时。方法无需自己记录。
 
 前端用 `runs.create` 创建后台运行，并设置 `streamResumable`。页面无论是刚创建运行还是稍后打开，都用 `runs.joinStream(..., lastEventId: "-1")` 从第一个事件重放，再接上实时事件。运行结束后，页面读取线程状态。
@@ -171,12 +173,15 @@ LLM 调用由聊天模型上的回调记录，包括子图和 `create_agent` 智
 frontend/src/
 ├── main.tsx        挂载：QueryClient、图标默认值、Toaster
 ├── App.tsx         布局、路由（/ 与 /run/{thread_id}）、对话框
-├── api.ts          LangGraph 客户端、/api 请求、状态文案、格式化
+├── api.ts          LangGraph 客户端、/api 请求
+├── format.ts       状态文案、数字、token 与耗时的格式化
 ├── useRun.ts       一次运行的实时数据：读取线程，并重放与接续流
 ├── steps.ts        步骤 → 阶段、版本、摘要（纯函数）
 ├── types.ts        与服务器对应的类型
 └── components/     页面与控件
 ```
+
+测试文件 `*.test.ts(x)` 放在被测模块旁边，由 Vitest（jsdom）运行。
 
 | 需要 | 使用 |
 |---|---|

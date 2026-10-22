@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BookOpen, ChartSpline, Clock, Cpu, Plus, Search, Trash2 } from "lucide-react";
-import { STATUS, formatNumber, tone } from "../api";
+import { STATUS, formatNumber, tone } from "../format";
 import type { Entry, Options, Settings } from "../types";
 
 const DAY = 86_400_000;

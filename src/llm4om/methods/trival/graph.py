@@ -1,5 +1,6 @@
 from langgraph.graph import END, START, StateGraph
 
+from llm4om.methods import presets
 from llm4om.methods.trival.nodes.semantic_validation import (
     ambiguity_resolver,
     semantic_fact_extractor,
@@ -38,7 +39,7 @@ def route_after_formulation_selector(state: State) -> str | list[str]:
 
 def route_formulation_validation(state: State) -> str | list[str]:
     formulation_validation_count = state.get("formulation_validation_count", 0)
-    if formulation_validation_count >= 5:
+    if formulation_validation_count >= presets.TRIVAL.max_validations:
         logger.warning(
             "⚠️ Formulation validation reached its limit (%d); ending this stage",
             formulation_validation_count,
@@ -62,7 +63,7 @@ def route_formulation_validation(state: State) -> str | list[str]:
 def route_after_code_execution(state: State) -> str | list[str]:
     if state.get("code_executable"):
         return "code_validator"
-    if state.get("code_execution_count", 0) >= 20:
+    if state.get("code_execution_count", 0) >= presets.TRIVAL.max_code_executions:
         return END
     return "code_agent"
 
@@ -76,10 +77,10 @@ def route_code_validation(state: State) -> str | list[str]:
     if state.get("error_attribution") == "formulation":
         return END
 
-    if state.get("code_execution_count", 0) >= 20:
+    if state.get("code_execution_count", 0) >= presets.TRIVAL.max_code_executions:
         return END
 
-    if code_validation_count >= 5:
+    if code_validation_count >= presets.TRIVAL.max_validations:
         logger.warning(
             "⚠️ Code validation reached maximum attempts (%d), forcing exit",
             code_validation_count,
@@ -125,7 +126,7 @@ def route_after_semantic_extraction(state: State) -> str:
 def route_semantic_validation(state: State) -> str | list[str]:
     semantic_validation_count = state.get("semantic_validation_count", 0)
 
-    if semantic_validation_count >= 5:
+    if semantic_validation_count >= presets.TRIVAL.max_validations:
         logger.warning(
             "⚠️ Semantic validation reached its limit (%d); ending this stage",
             semantic_validation_count,
@@ -267,7 +268,7 @@ def create_code_validation_subgraph():
 
 def route_after_code_validation(state: State) -> str:
     """Route formulation defects back to Formulation Validation."""
-    if state.get("code_validation_count", 0) >= 5:
+    if state.get("code_validation_count", 0) >= presets.TRIVAL.max_validations:
         logger.warning(
             "⚠️ Code validation reached maximum attempts (%d), stopping workflow",
             state.get("code_validation_count", 0),
@@ -276,7 +277,7 @@ def route_after_code_validation(state: State) -> str:
     if state.get("code_validation_passed"):
         return END
 
-    if state.get("code_execution_count", 0) >= 20:
+    if state.get("code_execution_count", 0) >= presets.TRIVAL.max_code_executions:
         return END
 
     if state.get("error_attribution") == "formulation":
@@ -290,7 +291,7 @@ def route_after_code_validation(state: State) -> str:
 
 def route_after_semantic_validation(state: State) -> str:
     """Routing after semantic specification stage: check if it passed before moving to formulation."""
-    if state.get("semantic_validation_count", 0) >= 5:
+    if state.get("semantic_validation_count", 0) >= presets.TRIVAL.max_validations:
         logger.warning(
             "⚠️ Semantic validation reached maximum attempts (%d), forcing exit to formulation",
             state.get("semantic_validation_count", 0),
@@ -310,7 +311,7 @@ def route_after_semantic_validation(state: State) -> str:
 
 def route_after_formulation_validation(state: State) -> str:
     """Routing after formulation stage: check if it passed before moving to Code."""
-    if state.get("formulation_validation_count", 0) >= 5:
+    if state.get("formulation_validation_count", 0) >= presets.TRIVAL.max_validations:
         logger.warning(
             "⚠️ Formulation validation reached maximum attempts (%d), moving to Code Validation",
             state.get("formulation_validation_count", 0),

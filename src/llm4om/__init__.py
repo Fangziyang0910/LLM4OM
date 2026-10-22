@@ -14,8 +14,8 @@ __all__ = ["Context", "LLMSettings", "Limits", "Resources", "RunContext", "Sandb
 
 
 def run_problem(problem: str, *, method: str = "direct", language: str = "pyomo",
-                data: dict[str, str] | None = None, options: dict[str, Any] | None = None,
+                data: dict[str, str] | None = None,
                 llm: LLMSettings | None = None, workspace: str | Path = "runs/web", sandbox: str = "docker") -> dict[str, Any]:
     """Model and solve one problem; returns the final state with its formulation, code, solve result and steps."""
     resources = Resources(SettingsStore(Path(workspace)), Sandbox(sandbox), llm=llm)
-    return asyncio.run(run(problem, method=method, language=language, data=data, options=options, resources=resources))
+    return asyncio.run(run(problem, method=method, language=language, data=data, resources=resources))

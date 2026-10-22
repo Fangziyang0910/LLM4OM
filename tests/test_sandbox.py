@@ -145,3 +145,7 @@ def build_model(data):
 '''
     result = solve(code)
     assert result.executed and result.objective == pytest.approx(1e-10, rel=1e-9, abs=0)
+
+
+def test_a_solver_error_is_not_successful_execution() -> None:
+    assert not SolveResult('error').executed

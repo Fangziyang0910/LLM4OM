@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
-import { api, errorText } from "../api";
+import { api } from "../api";
+import { errorText } from "../format";
 import type { Provider, Settings } from "../types";
 import { Dialog } from "./Dialog";
 

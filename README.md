@@ -99,7 +99,7 @@ Anthropic 的额外参数支持 `thinking`。OpenRouter 使用专用集成保留
 
 ```bash
 uv run llm4om run --problem "……" --method trival --language pyomo
-uv run llm4om run --file problem.txt --data demand.csv --method coe --option max_trials=2
+uv run llm4om run --file problem.txt --data demand.csv --method coe
 ```
 
 命令在本进程中运行同一张图，逐步打印过程，最后输出数学模型、代码和求解结果。`--output state.json` 保存最终状态（含全部步骤）。`--provider` 和 `--model` 选择工作区中保存的模型，默认使用当前选中的模型或 `.env`。

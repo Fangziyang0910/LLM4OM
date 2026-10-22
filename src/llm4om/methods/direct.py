@@ -3,7 +3,7 @@
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from llm4om.methods import Method
+from llm4om.methods import Method, presets
 from llm4om.methods.common import ask, split_formulation_and_code
 from llm4om.runtime import Context, ModelingState
 from llm4om.sandbox import SolveResult
@@ -54,9 +54,9 @@ async def solve(state: RepairState, runtime: Runtime[Context]) -> dict[str, obje
     return {"_best": best, "solve": result}
 
 
-def route_after_solve(state: RepairState, runtime: Runtime[Context]) -> str:
+def route_after_solve(state: RepairState) -> str:
     done = state["solve"] is not None and state["solve"].has_solution
-    return "finish" if done or state.get("repairs", 0) >= int(runtime.context.options.get("max_repairs", 3)) else "repair"
+    return "finish" if done or state.get("repairs", 0) >= presets.FEEDBACK_REPAIR.max_repairs else "repair"
 
 
 async def repair(state: RepairState, runtime: Runtime[Context]) -> dict[str, object]:
@@ -90,5 +90,5 @@ def feedback_repair_graph():
 DIRECT = Method("direct", "Direct", "一次调用生成数学模型和求解代码，然后求解。", direct_graph,
                 titles={"generate": "生成数学模型和代码"})
 FEEDBACK_REPAIR = Method("feedback_repair", "Feedback Repair",
-                         "生成数学模型和代码后求解；没有得到解时，把求解反馈交给模型修正，最多修正 3 次。", feedback_repair_graph,
+                         f"生成数学模型和代码后求解；没有得到解时，把求解反馈交给模型修正，最多修正 {presets.FEEDBACK_REPAIR.max_repairs} 次。", feedback_repair_graph,
                          titles={"generate": "生成数学模型和代码", "repair": "按求解反馈修正", "finish": "选择最好的一次"})

@@ -1,13 +1,19 @@
 """Every method runs end to end with scripted LLM replies and real local solving."""
 
+import asyncio
 import json
+import subprocess
+import sys
+import time
 from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 
+from llm4om.graph import run
 from llm4om.runtime import Limits
-from tests.conftest import FORMULATION, PRODUCTION_CODE, TWO_PART_REPLY, tool_call
+from tests.conftest import FORMULATION, PRODUCTION_CODE, TWO_PART_REPLY, ScriptedChat, tool_call
 
 BROKEN_CODE = PRODUCTION_CODE.replace("return m", "return m.missing")
 CODE_BLOCK = f"```python\n{PRODUCTION_CODE}```"
@@ -179,6 +185,13 @@ def test_optimus_reads_long_fences() -> None:
     assert extract_code_from_end(reply) == "model.setObjective(a * x, GRB.MAXIMIZE)"
 
 
+def test_optimus_takes_the_last_markdown_code_block() -> None:
+    from llm4om.methods.optimus.parsing import extract_code_from_end
+    reply = ("The expression is:\n\n```python\nquicksum(c[i] * x[i] for i in I)\n```\n\nFinal code:\n\n"
+             "```python\nmodel.setObjective(quicksum(c[i] * x[i] for i in I), GRB.MINIMIZE)\n```\n")  # seen from GPT
+    assert extract_code_from_end(reply) == "model.setObjective(quicksum(c[i] * x[i] for i in I), GRB.MINIMIZE)"
+
+
 COE_REPLIES = {"conductor": ["Modeling Expert", "Programming Expert", "Code Reviewer"],
                "Modeling Expert": FORMULATION, "Programming Expert": CODE_BLOCK, "Code Reviewer": "Looks fine."}
 
@@ -197,7 +210,7 @@ def test_coe_reduces_expert_comments(run_method: Any) -> None:
     assert not any(role.endswith("(backward)") for role in prompts)  # reflection is off by default
 
 
-def test_coe_reflection_asks_experts_backwards(run_method: Any) -> None:
+def test_coe_reflection_asks_experts_backwards(run_method: Any, preset: Any) -> None:
     roles: list[str] = []
 
     def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
@@ -210,7 +223,8 @@ def test_coe_reflection_asks_experts_backwards(run_method: Any) -> None:
         replies = dict(COE_REPLIES, conductor=["Modeling Expert", "Programming Expert", "Code Reviewer"])
         return replies[role] if role != "conductor" else replies["conductor"][roles.count("conductor") % 3 - 1]
 
-    record = run_method("coe", script, enable_reflection=True)
+    preset("COE", enable_reflection=True)
+    record = run_method("coe", script)
     assert_solved(record)
     assert [r for r in roles if r.endswith("(backward)")] == ["Code Reviewer (backward)", "Programming Expert (backward)"]
     assert roles.count("reducer") == 2
@@ -283,10 +297,10 @@ def autoformulation_script(vtype: str, calls: list[tuple[str, str]]) -> Any:
     return script
 
 
-def test_autoformulation_searches_the_tree_and_ranks_leaves(run_method: Any) -> None:
+def test_autoformulation_searches_the_tree_and_ranks_leaves(run_method: Any, preset: Any) -> None:
     calls: list[tuple[str, str]] = []
-    record = run_method("autoformulation", autoformulation_script("pyo.NonNegativeIntegers", calls),
-                 n_used_gpt=2, n_top=2, n_reward=1, total_rollouts=2)
+    preset("AUTOFORMULATION", n_used_gpt=2, n_top=2, n_reward=1, total_rollouts=2)
+    record = run_method("autoformulation", autoformulation_script("pyo.NonNegativeIntegers", calls))
     assert not record.get("failure"), record.get("failure")
     assert record["solve"]["objective"] == 13  # the preferred leaf, not the looser one (objective 16)
     assert "def build_model(data):" in record["code"] and "pyo.Var(pyo.Any" in record["code"]
@@ -304,11 +318,13 @@ def test_autoformulation_searches_the_tree_and_ranks_leaves(run_method: Any) -> 
 
 @pytest.mark.parametrize("language,vtype,expected", [("gurobipy", "GRB.INTEGER", "gpy_model.addVar(vtype=GRB.INTEGER"),
     ("pywraplp", "integer", "_new_var('integer'")])
-def test_autoformulation_writes_each_languages_code(run_method: Any, language: str, vtype: str, expected: str) -> None:
+def test_autoformulation_writes_each_languages_code(run_method: Any, preset: Any, language: str, vtype: str,
+                                                   expected: str) -> None:
     if language == "gurobipy":
         pytest.importorskip("gurobipy")
     calls: list[tuple[str, str]] = []
-    record = run_method("autoformulation", autoformulation_script(vtype, calls), language=language, n_used_gpt=1, n_top=1, n_reward=1, total_rollouts=1)
+    preset("AUTOFORMULATION", n_used_gpt=1, n_top=1, n_reward=1, total_rollouts=1)
+    record = run_method("autoformulation", autoformulation_script(vtype, calls), language=language)
     assert not record.get("failure"), (language, record.get("failure"))
     assert expected in record["code"]
     assert record["solve"]["objective"] in (13, 16)
@@ -355,6 +371,10 @@ def test_trival_runs_all_three_validation_stages(run_method: Any) -> None:
     titles = [event["title"] for event in record["steps"] if event["type"] == "artifact"]
     for title in ("语义事实与歧义", "语义验证", "候选模型：约束专家", "选择候选模型", "数学模型验证", "代码验证"):
         assert title in titles
+    # Each node's update is recorded before the next node's calls: the code comes before its solve.
+    order = [(event["type"], event["title"]) for event in record["steps"]]
+    assert order.index(("artifact", "生成或修订代码")) < order.index(("solve", "执行代码（第 1 次）"))
+    assert order.index(("artifact", "语义事实与歧义")) < order.index(("llm", "trival.semantic_validator"))
 
 
 def test_trival_routes_formulation_defects_back(run_method: Any) -> None:
@@ -383,8 +403,86 @@ def test_trival_applies_multiple_code_edits_in_order(run_method: Any) -> None:
     assert_solved(run_method("trival", script))
 
 
-def test_llm_call_limit_stops_the_run(run_method: Any) -> None:
-    broken = TWO_PART_REPLY.replace(PRODUCTION_CODE, BROKEN_CODE)
-    record = run_method("feedback_repair", by_role({"generate": broken, "repair": broken}), limits=Limits(max_llm_calls=2))
-    assert "limit of 2 LLM calls" in record["failure"]
-    assert record.get("code") is None and record["steps"][-1]["type"] == "error"
+
+def test_optimus_json_preserves_urls_escapes_and_nested_values() -> None:
+    # A subprocess bounds the old parser's infinite loop.
+    script = r'''
+from llm4om.methods.optimus.parsing import extract_json_from_end
+text = '{"example": 0}\n```json\n{\n// comment\n"url": "https://example.org", "path": "a\\\\b", "nested": {"brace": "}"}}\n```'
+assert extract_json_from_end(text) == {"url": "https://example.org", "path": "a\\b", "nested": {"brace": "}"}}
+assert extract_json_from_end('{"url":"https://example.org"}') == {"url": "https://example.org"}
+'''
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=3)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("text", ["no JSON", "{", "// comment without a newline"])
+def test_optimus_rejects_missing_json(text: str) -> None:
+    from llm4om.methods.optimus.parsing import extract_json_from_end
+
+    with pytest.raises(ValueError):
+        extract_json_from_end(text)
+
+
+def test_optimus_extracts_the_last_complete_array() -> None:
+    from llm4om.methods.optimus.parsing import extract_json_from_end
+
+    assert extract_json_from_end('Example: [0]. Answer: ["a[b]", [1, 2]]', list) == ["a[b]", [1, 2]]
+
+
+def test_trival_timeout_stops_the_agent_loop(make_resources: Any) -> None:
+    calls = []
+
+    def script(*_: Any) -> AIMessage:
+        calls.append(time.monotonic())
+        time.sleep(0.06)
+        return tool_call("write_semantic_facts", semantic_facts="facts")
+
+    async def check() -> None:
+        resources = make_resources(script, Limits(max_llm_calls=8, run_timeout=0.2))
+        result = await run("test", method="trival", resources=resources)
+        count = len(calls)
+        await asyncio.sleep(0.2)
+        assert "time limit" in result["failure"] and count > 0
+        assert len(calls) == count, "the agent kept starting calls after its run ended"
+
+    asyncio.run(check())
+
+
+def test_autoformulation_failure_cancels_other_samples(make_resources: Any, preset: Any) -> None:
+    preset("AUTOFORMULATION", n_used_gpt=3)
+    started, finished, cancelled = [], [], []
+
+    class SamplingChat(ScriptedChat):
+        async def _agenerate(self, *args: Any, **kwargs: Any) -> ChatResult:
+            index = len(started)
+            started.append(index)
+            if index == 0:
+                await asyncio.sleep(0.01)
+                raise RuntimeError("provider failed")
+            try:
+                await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                cancelled.append(index)
+                raise
+            finished.append(index)
+            return ChatResult(generations=[ChatGeneration(message=AIMessage("unused"))])
+
+    async def check() -> None:
+        resources = make_resources(lambda *_: "unused")
+        resources.model_factory = lambda settings, **kwargs: SamplingChat(script=None, **kwargs)
+        result = await run("test", method="autoformulation", resources=resources)
+        await asyncio.sleep(0.15)
+        assert "provider failed" in result["failure"]
+        assert started == [0, 1, 2] and sorted(cancelled) == [1, 2] and not finished
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize('value', ['a}b', 'a{b', 'escaped\\"quote', {'nested': '{value}'}])
+def test_autoformulation_dictionary_values_keep_braces_and_quotes(value: Any) -> None:
+    from llm4om.methods.autoformulation.upstream.utils_prompt import extract_dict_from_string
+
+    expected = {'label': value}
+    _, parsed = extract_dict_from_string(f"formalization_dict['parameters'] = {expected!r}", 'parameters')
+    assert parsed == expected

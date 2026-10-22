@@ -115,13 +115,15 @@ def extract_formulation_from_end(text: str) -> tuple[str, dict[str, Any], list[s
 
 
 def extract_code_from_end(text: str) -> str:
+    """llm4om: without "=====" fences, take the last ```python block. Upstream takes the first; models that answer
+    in Markdown often show a fragment first and the full statement last (a bare objective, then setObjective)."""
     text = _fences(text)
     if "=====" in text:
         ind_1 = text.find("=====")
         ind_2 = text.find("=====", ind_1 + 1)
         code = text[ind_1 + len("====="): ind_2].strip()
     else:
-        ind_1 = text.find("```python")
+        ind_1 = text.rfind("```python")
         ind_2 = text.find("```", ind_1 + 1)
         code = text[ind_1 + len("```"): ind_2].strip()
     if "```" in code:

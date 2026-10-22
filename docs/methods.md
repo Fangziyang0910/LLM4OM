@@ -6,16 +6,18 @@
 
 ## 方法一览
 
-| id | 名称 | 图 | 参数（`options`） |
+| id | 名称 | 图 | 预设参数 |
 |---|---|---|---|
 | `direct` | Direct | `generate` | — |
 | `feedback_repair` | Feedback Repair | `generate → solve →（repair → solve）* → finish`；没有可行解时按最近一次求解反馈修正，保留最好的一次 | `max_repairs`=3 |
-| `trival` | TriVAL | 语义验证 → 数学模型验证 → 代码验证；每阶段构建、验证、修订；代码缺陷可回溯到数学模型 | — |
-| `optimus` | OptiMUS | `parameters → objective → constraints → check_constraints → formulate_constraints → formulate_objective → write_code → assemble → execute →（debug → use_fix → execute）*`，最多 3 次执行 | — |
-| `coe` | Chain-of-Experts | `start_trial → conductor ⇄ expert → reducer →（evaluate → backward）→ finish`；协调者逐个选专家，专家依次评论，汇总器写代码；开启反思时，代码出错则从最后一位专家向前询问责任 | `max_collaborate_nums`=3、`max_trials`=3、`enable_reflection`=false、`seed` |
-| `optitree` | OptiTree | `classify*（逐层匹配问题类型）→ retrieve → reason → execute →（inspect → execute）*`，最多检查 4 次 | — |
-| `or_llm_agent` | OR-LLM-Agent | `math_model → write_code → execute →（fix → execute）* → end_round`，再按结果做一轮不可行检查或模型复查 | — |
-| `autoformulation` | AutoFormulation | `start → expand*（深度优先建树）→ rollout*（MCTS）→ select` | `n_used_gpt`=8、`n_top`=3、`n_reward`=5、`total_rollouts`=16 |
+| `trival` | TriVAL | 语义验证 → 数学模型验证 → 代码验证；每阶段构建、验证、修订；代码缺陷可回溯到数学模型 | 每阶段最多验证 5 轮（`max_validations`），代码最多执行 20 次（`max_code_executions`） |
+| `optimus` | OptiMUS | `parameters → objective → constraints → check_constraints → formulate_constraints → formulate_objective → write_code → assemble → execute →（debug → use_fix → execute）*`，最多 3 次执行 | `temperature`=1.0、`max_debug_tries`=3 |
+| `coe` | Chain-of-Experts | `start_trial → conductor ⇄ expert → reducer →（evaluate → backward）→ finish`；协调者逐个选专家，专家依次评论，汇总器写代码；开启反思时，代码出错则从最后一位专家向前询问责任 | `temperature`=0、`max_collaborate_nums`=3、`enable_reflection`=false、`max_trials`=3 |
+| `optitree` | OptiTree | `classify*（逐层匹配问题类型）→ retrieve → reason → execute →（inspect → execute）*`，最多检查 4 次 | `temperature`=0、`max_inspections`=4 |
+| `or_llm_agent` | OR-LLM-Agent | `math_model → write_code → execute →（fix → execute）* → end_round`，再按结果做一轮不可行检查或模型复查 | `temperature`=0.2；主轮 3 次、不可行检查 1 次、复查 2 次（`attempts`） |
+| `autoformulation` | AutoFormulation | `start → expand*（深度优先建树）→ rollout*（MCTS）→ select` | `n_used_gpt`=8、`n_top`=3、`n_reward`=5、`total_rollouts`=16；其余搜索常数和运行上限见预设文件 |
+
+参数全部集中在 [`src/llm4om/methods/presets.py`](../src/llm4om/methods/presets.py)，每个方法一个不可变的 dataclass。移植方法的取值是上游在固定提交上的默认值。运行时不能改参数：命令行、Python 接口和页面都不接受方法参数；要换参数，改这个文件。
 
 ## 固定来源与实现方式
 
@@ -64,6 +66,7 @@ DeepSeek 的思考模式不支持强制 `tool_choice`，而 TriVAL 的结构化�
 | 组装结果包装为 `build_model(files)`，参数取值写入代码；删去 `model.optimize()` 和结果打印 | 适配 | 平台契约只构建模型 |
 | 约束检查走上游的 `ask_LLM` 分支；参数的人工确认（`input()`）不执行 | 适配 | 平台运行没有人工交互；上游 `main.py` 本身也不运行参数提取 |
 | 解析时把五个以上连续的 `=` 视为一个 `=====` 分隔符 | 避错 | 上游在 `=======` 内部找到“闭合”分隔符，取出空代码。DeepSeek 实测这样写，目标函数代码因此丢失，模型以目标值 0 “最优”结束 |
+| 回复没有 `=====` 分隔符时，取最后一个 ```` ```python ```` 代码块（上游取第一个） | 避错 | 模型用 Markdown 作答时常先写表达式片段，最后才写完整语句。实测 gurobipy 下第一个块是裸的 `quicksum(...)`，目标未设置，模型以目标值 0 “最优”结束 |
 | JSON 对象和数组由同一个解析器读取，保留转义和嵌套结构，只清理字符串外的行注释 | 避错 | 原解析器会破坏转义，并在含 URL 且没有后续换行时无限循环；删除备用解析器 |
 
 调试以“求解状态为最优”为成功条件，与上游一致。因此不可行或无界的模型也会进入调试。
@@ -124,16 +127,16 @@ DeepSeek 的思考模式不支持强制 `tool_choice`，而 TriVAL 的结构化�
 
 注意事项：
 
-- **成本**：默认参数下，建树约需 500 次以上 LLM 调用，每次 rollout 再需约 30 次。试用时可减小参数，例如 `n_used_gpt=3 n_top=2 n_reward=2 total_rollouts=4`。
+- **成本**：这里的“调用”指单个回答（补全）。上游一次请求用 `n` 取多个回答；这里每个回答单独请求，回答数与上游相同，请求数更多。默认参数下，建树最多约 540 个回答（上游约 80 次请求）；前 3 次 rollout 只作基线，之后每次最多 30 个回答。候选等价时会被剪掉，简单问题实际少得多。要试用，可在 `presets.py` 中临时减小这些值，例如 `n_used_gpt=8 n_top=2 n_reward=2 total_rollouts=2`（约 50 次调用）。`n_used_gpt` 太小时，候选可能全部因代码错误被剪掉。
 - **简单问题**：候选全部等价时树只有一个完整模型，rollout 阶段没有比较；`many_rollouts` 在 1000 次无效 rollout 后停止，这一步不调用 LLM。
 
 ## 验证
 
-本轮维护检查：Python 3.12 的 63 项测试通过（含本机 Gurobi）；Python 3.11 的干净环境 59 项通过、4 项因未安装可选 Gurobi 跳过。前端 4 项测试、lint、类型检查和构建通过，依赖审计无已知漏洞。四种语言在 Docker 中求得生产计划预期最优值，另验证了容器取消。LangGraph Server 的后台运行、流重放、历史读取和 TriVAL 取消使用假 HTTP 模型及真实本机求解验证，取消后没有继续发起模型请求。
+本轮维护检查：Python 3.12 的 64 项测试通过（含本机 Gurobi）。前端 6 项 Vitest 测试、lint、类型检查和构建通过，依赖审计无已知漏洞。四种语言在 Docker 中求得生产计划预期最优值，另验证了容器取消。LangGraph Server 的后台运行、流重放、历史读取和 TriVAL 取消使用假 HTTP 模型及真实本机求解验证，取消后没有继续发起模型请求。
 
-异常路径回归见 `tests/test_regressions.py` 和 `frontend/tests/useRun.test.cjs`：JSON 中的 URL、转义和嵌套结构；TriVAL 超时与多工具顺序编辑；AutoFormulation 并发取消；建模与最终求解共享截止时间；求解超限记录；Anthropic 额外参数；OpenRouter 流式工具对话保留推理字段；断线后重新读取运行状态。沙箱测试另检查环境变量隔离和取消后的子进程回收。这些测试使用脚本模型或本地假 HTTP 响应。
+异常路径回归分布在对应模块的测试中（`tests/test_graph.py`、`test_llm.py`、`test_cli.py`、`test_methods.py`，前端 `src/useRun.test.ts`）：JSON 中的 URL、转义和嵌套结构；TriVAL 超时与多工具顺序编辑；AutoFormulation 并发取消；建模与最终求解共享截止时间；求解超限记录；Anthropic 额外参数；OpenRouter 流式工具对话保留推理字段；断线后重新读取运行状态；节点产物步骤先于下一节点的调用记录。沙箱测试另检查环境变量隔离和取消后的子进程回收。这些测试使用脚本模型或本地假 HTTP 响应。
 
-确定性测试（`tests/test_methods.py`、`tests/test_sandbox.py`、`tests/test_server.py`）用脚本化的聊天模型跑通全部 8 张图，覆盖：四种代码写法各自由对应求解器求到最优；CPMpy 可满足性问题；代码与写法不符时的报错；MILP 方法拒绝 CPMpy；Direct 生成 CPMpy 代码；OR-LLM-Agent 的修复与不可行复查；OptiMUS 在三种写法方言下的组装、调试和长分隔符解析；CoE 的反向反思；OptiTree 沿类型树匹配并检查失败代码；AutoFormulation 的参数众数、变量分组、SymPy 等价剪枝、排名、双向比较和两模型排名；TriVAL 回溯到数学模型的路径；LLM 调用上限。
+确定性测试（`tests/test_methods.py`、`tests/test_sandbox.py`、`tests/test_server.py`）用脚本化的聊天模型跑通全部 8 张图，覆盖：四种代码写法各自由对应求解器求到最优；CPMpy 可满足性问题；代码与写法不符时的报错；MILP 方法拒绝 CPMpy；Direct 生成 CPMpy 代码；OR-LLM-Agent 的修复与不可行复查；OptiMUS 在三种写法方言下的组装、调试、长分隔符与多代码块解析；CoE 的反向反思；OptiTree 沿类型树匹配并检查失败代码；AutoFormulation 的参数众数、变量分组、SymPy 等价剪枝、排名、双向比较和两模型排名；TriVAL 回溯到数学模型的路径；LLM 调用上限。
 
 2026-10-21 用 DeepSeek（关闭思考模式）在 Docker 沙箱中做了真实运行：
 

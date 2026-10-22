@@ -2,6 +2,7 @@
 
 import asyncio
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable
 
@@ -13,6 +14,7 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 
 from llm4om.graph import Resources, run
 from llm4om.llm import LLMSettings, SettingsStore
+from llm4om.methods import presets
 from llm4om.runtime import Limits
 from llm4om.sandbox import Sandbox
 
@@ -80,8 +82,16 @@ def make_resources(tmp_path: Path) -> Callable[..., Resources]:
 def run_method(make_resources: Callable[..., Resources]) -> Callable[..., dict[str, Any]]:
     """Run a method in process; returns the final state."""
     def execute(method: str, script: Script, *, language: str = "pyomo", limits: Limits | None = None,
-                problem: str = PRODUCTION_PROBLEM, **options: Any) -> dict[str, Any]:
-        return asyncio.run(run(problem, method=method, language=language, options=options,
-                               resources=make_resources(script, limits)))
+                problem: str = PRODUCTION_PROBLEM) -> dict[str, Any]:
+        return asyncio.run(run(problem, method=method, language=language, resources=make_resources(script, limits)))
 
     return execute
+
+
+@pytest.fixture
+def preset(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
+    """Change fields of one method's preset for a test, e.g. preset("AUTOFORMULATION", n_top=1)."""
+    def change(name: str, **fields: Any) -> None:
+        monkeypatch.setattr(presets, name, replace(getattr(presets, name), **fields))
+
+    return change

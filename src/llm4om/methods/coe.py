@@ -24,7 +24,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.languages import MILP_LANGUAGES
-from llm4om.methods import Method
+from llm4om.methods import Method, presets
 from llm4om.runtime import Context, ModelingState
 from llm4om.sandbox import SolveResult
 
@@ -276,7 +276,7 @@ def parse_json_from_string(text: Any, expected_type: type | None = None) -> Any:
 async def _predict(context: Context, role: str, template: str, bind: dict[str, Any] | None = None, **values: Any) -> str:
     """Upstream PromptModelChain: the formatted template as one user message, temperature 0."""
     prompt = PromptTemplate.from_template(template).invoke(values)
-    return (await context.llm(role).bind(temperature=0, **(bind or {})).ainvoke(prompt)).text
+    return (await context.llm(role).bind(temperature=presets.COE.temperature, **(bind or {})).ainvoke(prompt)).text
 
 
 def _role(expert: Expert, context: Context) -> str:
@@ -318,11 +318,8 @@ class State(ModelingState, total=False):
     blamed: str | None  # the expert that said it caused the failure
 
 
-def _settings(context: Context) -> tuple[int, bool, int]:
-    collaborate_nums = min(int(context.options.get("max_collaborate_nums", 3)), len(EXPERTS))
-    enable_reflection = bool(context.options.get("enable_reflection", False))  # upstream CLI default
-    trials = int(context.options.get("max_trials", 3)) if enable_reflection else 1
-    return collaborate_nums, enable_reflection, trials
+def _collaborate_nums() -> int:
+    return min(presets.COE.max_collaborate_nums, len(EXPERTS))
 
 
 def start_trial(state: State) -> dict[str, Any]:
@@ -331,7 +328,7 @@ def start_trial(state: State) -> dict[str, Any]:
 
 async def conductor(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     context = runtime.context
-    collaborate_nums = _settings(context)[0]
+    collaborate_nums = _collaborate_nums()
     commented = [name for name, _ in state["_comments"]]
     remaining = [expert for expert in EXPERTS if expert.name not in commented]
     experts_info = '\n'.join(f'{expert.name}: {expert.description}' for expert in EXPERTS)
@@ -339,7 +336,7 @@ async def conductor(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
                             experts_info=experts_info, commented_experts=str(commented),
                             remaining_experts=str([e.name for e in remaining]), max_collaborate_nums=collaborate_nums,
                             remaining_collaborate_nums=max(0, collaborate_nums - len(commented)))
-    rng = random.Random(f"{context.options.get('seed')}-{state['trial']}-{len(commented)}")
+    rng = random.Random(f"{state['trial']}-{len(commented)}")
     expert = (next((e for e in remaining if e.name in choice), None) or next((e for e in EXPERTS if e.name in choice), None)
               or rng.choice(remaining or EXPERTS))
     return {"expert": expert.name}
@@ -396,22 +393,22 @@ def finish(state: State) -> dict[str, Any]:
     return {"formulation": formulation or None}
 
 
-def after_expert(state: State, runtime: Runtime[Context]) -> str:
-    return "conductor" if len(state["_stack"]) < _settings(runtime.context)[0] else "reducer"
+def after_expert(state: State) -> str:
+    return "conductor" if len(state["_stack"]) < _collaborate_nums() else "reducer"
 
 
-def after_reducer(state: State, runtime: Runtime[Context]) -> str:
-    return "evaluate" if _settings(runtime.context)[1] else "finish"
+def after_reducer(state: State) -> str:
+    return "evaluate" if presets.COE.enable_reflection else "finish"
 
 
 def after_evaluate(state: State) -> str:
     return "finish" if state["feedback"] is None else "backward"
 
 
-def after_backward(state: State, runtime: Runtime[Context]) -> str:
+def after_backward(state: State) -> str:
     if not state.get("blamed") and state["_stack"]:
         return "backward"
-    return "start_trial" if state["trial"] < _settings(runtime.context)[2] else "finish"
+    return "start_trial" if state["trial"] < presets.COE.max_trials else "finish"  # backward runs with reflection on
 
 
 def coe_graph():

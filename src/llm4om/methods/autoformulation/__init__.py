@@ -34,7 +34,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.languages import MILP_LANGUAGES
-from llm4om.methods import Method
+from llm4om.methods import Method, presets
 from llm4om.methods.autoformulation import codegen
 from llm4om.methods.autoformulation.search import (
     check_constraints_for_correctness_obj,
@@ -61,7 +61,7 @@ from llm4om.methods.autoformulation.upstream.utils_prompt import (
     obtain_new_prompt,
     update_rank,
 )
-from llm4om.runtime import Context, Limits, ModelingState
+from llm4om.runtime import Context, ModelingState
 from llm4om.sandbox import SolveResult
 
 STEPS = {1: "parameters", 2: "decision_variables", 3: "objective", 4: "equality_constraints", 5: "inequality_constraints"}
@@ -69,13 +69,6 @@ INSTRUCTIONS = {1: P.INST_PARAMETERS, 2: P.INST_DV, 3: P.INST_OBJ, 4: P.INST_EQ_
 DEPTH_TERMINAL = 5
 EXECUTABLE_STEPS = ("objective", "equality_constraints", "inequality_constraints")
 ERROR_KEYWORDS = ("Error", "Exception", "Traceback", "fatal", "failed")  # utils_exec.check_script_output
-DEFAULTS = {"n_used_gpt": 8, "n_top": 3, "n_reward": 5, "total_rollouts": 16}
-N_DV_UNIQUE_GPT = 8
-N_EVAL = 5  # judgments per pairwise comparison
-NUM_WARMUP, W_EXP, LAMBDA_CTE = 3, 1, 0.5
-MAX_ROLLOUT_ATTEMPTS = 1000  # many_rollouts stops after 1000 rollouts that reach no new leaf
-MAX_COMPARISON_TRIES = 5
-TEMPERATURE = 1.0  # upstream samples n completions at the API default
 GUROBI_TYPE_RULE = ("Replace <type> with a string representing the Gurobi variable type (e.g., GRB.INTEGER), as this "
                     "will be used to create the variable via Gurobi's addVar function.")
 DV_TYPE_RULES = {
@@ -137,13 +130,9 @@ class State(ModelingState, total=False):
     rollout: str  # what the latest effective rollout did
 
 
-def _setting(context: Context, name: str) -> int:
-    return int(context.options.get(name, DEFAULTS[name]))
-
-
 async def _sample(context: Context, role: str, prompt: str, n: int) -> list[str]:
     """Upstream chat_gpt with n_used: n completions of one user message."""
-    model = context.llm(role).bind(temperature=TEMPERATURE)
+    model = context.llm(role).bind(temperature=presets.AUTOFORMULATION.temperature)
     return [reply.text for reply in await _gather(*(model.ainvoke([HumanMessage(prompt)]) for _ in range(n)))]
 
 
@@ -227,7 +216,7 @@ async def _unique_by_llm(context: Context, parent: Node, nodes: list[Node], prob
     step = STEPS[parent.depth + 1]
     prompt = get_rank_filtering_prompt(P.INST_GROUP_DV, problem, parent.form_dict_str,
                                        solution_prompt(step, [node.form_dict_str for node in nodes]))
-    replies = await _sample(context, "group_decision_variables", prompt, N_DV_UNIQUE_GPT)
+    replies = await _sample(context, "group_decision_variables", prompt, presets.AUTOFORMULATION.n_dv_unique_gpt)
     try:
         return [nodes[index] for index in extract_unique_group_idx(replies, len(nodes), step)]
     except Exception:
@@ -242,7 +231,7 @@ async def _rewards(context: Context, parent: Node, nodes: list[Node], problem: s
     prompt = get_rank_filtering_prompt(P.INST_RANK.replace("#VARIABLE#", step), problem, parent.form_dict_str,
                                        solution_prompt(step, [node.form_dict_str for node in nodes]))
     current = {f"{step}_{idx}": 0 for idx in range(len(nodes))}
-    for reply in await _sample(context, f"rank.{step}", prompt, _setting(context, "n_reward")):
+    for reply in await _sample(context, f"rank.{step}", prompt, presets.AUTOFORMULATION.n_reward):
         try:
             rank = extract_dictionary_rank(reply, len(nodes), step)
             if rank is not None:
@@ -265,7 +254,7 @@ async def expand(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     template = P.TEMPLATE_PROBLEM.replace("###PROBLEM DESCRIPTION###", state["problem"])
     prompt = obtain_new_prompt(template, parent.form_dict_str, _instruction(context, parent.depth + 1))
     candidates: list[Node] = []
-    for content in await _sample(context, f"generate.{step}", prompt, _setting(context, "n_used_gpt")):
+    for content in await _sample(context, f"generate.{step}", prompt, presets.AUTOFORMULATION.n_used_gpt):
         try:
             text, value = extract_dict_from_string(content, step)
         except Exception:
@@ -286,7 +275,7 @@ async def expand(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
         if node not in unique:
             node.status = "clustered"
     rewards = await _rewards(context, parent, unique, state["problem"])
-    highest = sorted(rewards, reverse=True)[:_setting(context, "n_top")]
+    highest = sorted(rewards, reverse=True)[:presets.AUTOFORMULATION.n_top]
     for node, reward in zip(unique, rewards):
         node.r0 = reward
         if reward in highest:
@@ -314,19 +303,20 @@ def _last_line(output: str) -> str:
 
 
 def _uct(search: Search, node: Node, log_n: float) -> float:
-    n = search.N.get(node.id, 0)
+    preset, n = presets.AUTOFORMULATION, search.N.get(node.id, 0)
     if n == 0:
-        return node.r0 + W_EXP * math.sqrt(log_n)
-    value = LAMBDA_CTE * node.r0 + (1 - LAMBDA_CTE) * search.Q[node.id] / n
-    return value + W_EXP * math.sqrt(log_n / n)
+        return node.r0 + preset.w_exp * math.sqrt(log_n)
+    value = preset.lambda_cte * node.r0 + (1 - preset.lambda_cte) * search.Q[node.id] / n
+    return value + preset.w_exp * math.sqrt(log_n / n)
 
 
 async def _compare(context: Context, problem: str, first: Node, second: Node) -> tuple[float, float]:
-    """utils_metrics.compare_solutions_form: the shares of N_EVAL judgments that prefer each formalization."""
+    """utils_metrics.compare_solutions_form: the shares of n_eval judgments that prefer each formalization."""
+    preset = presets.AUTOFORMULATION
     prompt = comparison_prompt(second.form_dict_str, first.form_dict_str, problem, context.target.library)
-    for attempt in range(MAX_COMPARISON_TRIES):
-        picks = [extract_best_solution(reply).get("1") for reply in await _sample(context, "compare", prompt, N_EVAL)]
-        if all(picks) or attempt == MAX_COMPARISON_TRIES - 1:
+    for attempt in range(preset.max_comparison_tries):
+        picks = [extract_best_solution(reply).get("1") for reply in await _sample(context, "compare", prompt, preset.n_eval)]
+        if all(picks) or attempt == preset.max_comparison_tries - 1:
             break
     wins_first, wins_second = picks.count("solution_B"), picks.count("solution_A")
     total = wins_first + wins_second
@@ -372,7 +362,7 @@ def _ranking(search: Search) -> list[int] | None:
 async def rollout(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """MCTS.rollout over the built tree, repeated until one rollout reaches a leaf not yet evaluated."""
     nodes, search = state["_nodes"], state["_search"]
-    while search.attempts < MAX_ROLLOUT_ATTEMPTS:
+    while search.attempts < presets.AUTOFORMULATION.max_rollout_attempts:
         search.attempts += 1
         path = [nodes[0]]
         while path[-1].step != "inequality_constraints" and path[-1].children:  # _select_prior
@@ -393,7 +383,7 @@ async def rollout(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
                 effective = True
                 if leaf.achieved:
                     reward = await _reward_by_ranking(runtime.context, state["problem"], nodes, search, leaf) or 0.0
-                    if len(search.baselines) < NUM_WARMUP:
+                    if len(search.baselines) < presets.AUTOFORMULATION.num_warmup:
                         search.baselines.append(leaf.id)
                         reward = 0.5
                 search.r_baseline[leaf.id] = reward
@@ -427,9 +417,9 @@ def after_expand(state: State) -> str:
     return "expand" if state["_stack"] else "rollout"
 
 
-def after_rollout(state: State, runtime: Runtime[Context]) -> str:
-    search = state["_search"]
-    done = search.effective >= _setting(runtime.context, "total_rollouts") or search.attempts >= MAX_ROLLOUT_ATTEMPTS
+def after_rollout(state: State) -> str:
+    search, preset = state["_search"], presets.AUTOFORMULATION
+    done = search.effective >= preset.total_rollouts or search.attempts >= preset.max_rollout_attempts
     return "select" if done else "rollout"
 
 
@@ -451,5 +441,5 @@ AUTOFORMULATION = Method("autoformulation", "AutoFormulation",
                          "https://github.com/jumpynitro/AutoFormulator/tree/52148018d04de23dc2d36d4281eb6244c2a42ffc",
                          titles={"expand": "扩展建模树", "rollout": "MCTS rollout", "select": "选中的数学模型"},
                          hidden=frozenset({"solve"}),
-                         limits=Limits(max_llm_calls=20000, max_solves=1000, run_timeout=6 * 3600),
+                         limits=presets.AUTOFORMULATION.limits,
                          languages=MILP_LANGUAGES)

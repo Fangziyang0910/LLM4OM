@@ -18,8 +18,12 @@ export function phases(steps: Step[]): Phase[] {
   const seconds = (items: Step[]) => items.reduce((total, item) => total + (item.seconds ?? 0), 0);
   for (const step of steps) {
     if (step.type === "llm") { calls.push(step); continue; }
-    result.push({ id: step.id, kind: step.type, step, calls, seconds: seconds(calls) + (step.type === "solve" ? step.seconds ?? 0 : 0) });
-    calls = [];
+    // Parallel nodes end one by one: a node's update takes the calls named after it and leaves the others' calls.
+    const own = step.node ? calls.filter(call => roleName(call.title) === roleName(step.node!)) : [];
+    const taken = own.length ? own : calls;
+    calls = own.length ? calls.filter(call => !own.includes(call)) : [];
+    result.push({ id: step.id, kind: step.type, step, calls: taken,
+      seconds: seconds(taken) + (step.type === "solve" ? step.seconds ?? 0 : 0) });
   }
   if (calls.length) result.push({ id: "working-" + calls[0].id, kind: "working", step: null, calls, seconds: seconds(calls) });
   return result;

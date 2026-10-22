@@ -1,8 +1,8 @@
 """The platform graph of a method: prepare → model (the method's own graph) → solve.
 
 The LangGraph server registers one platform graph per method (`server/graphs.py`); `run()` executes one in process.
-A run's input is the problem description and its data files; its context names the code language, the LLM and
-the method options. The final state holds the formulation, the code, the solve result and every recorded step.
+A run's input is the problem description and its data files; its context names the code language and the LLM.
+Method parameters are fixed in `llm4om.methods.presets`. The final state holds the formulation, the code, the solve result and every recorded step.
 """
 
 import asyncio
@@ -16,7 +16,9 @@ from dataclasses import asdict, dataclass, field
 from functools import cache
 from pathlib import Path
 from typing import Annotated, Any, Callable, TypedDict
+from uuid import UUID
 
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_config
@@ -55,7 +57,6 @@ class RunContext:
     language: str = "pyomo"  # code language, which decides the solver
     provider: str | None = None  # saved LLM provider; None means the selected one
     model: str | None = None  # model ID; None means the provider's saved model
-    options: dict[str, Any] = field(default_factory=dict)  # method options
 
 
 @dataclass
@@ -118,6 +119,37 @@ def render_update(update: dict[str, Any], hidden: frozenset[str] = frozenset()) 
     return "\n\n".join(parts)
 
 
+class _NodeSteps(BaseCallbackHandler):
+    """Records the update of each titled method node as an artifact step the moment the node ends.
+
+    A node's end callback runs before the next node starts, so the step lands between the LLM calls and solves
+    that produced it and those that follow; a consumer of the graph's update stream would see it late.
+    """
+
+    run_inline = True
+
+    def __init__(self, method: Method, recorder: Recorder) -> None:
+        self.method, self.recorder = method, recorder
+        self.nodes: dict[UUID, str] = {}  # run id -> node name, for the runs of titled nodes
+
+    def on_chain_start(self, serialized: dict[str, Any] | None, inputs: Any, *, run_id: UUID,
+                       tags: list[str] | None = None, metadata: dict[str, Any] | None = None, **kwargs: Any) -> None:
+        node = (metadata or {}).get("langgraph_node")
+        # A node's own run carries its name and a graph-step tag; runnables inside it inherit only the metadata.
+        if node in self.method.titles and kwargs.get("name") == node and any(
+                tag.startswith("graph:step:") for tag in tags or []):
+            self.nodes[run_id] = node
+
+    def on_chain_end(self, outputs: Any, *, run_id: UUID, **kwargs: Any) -> None:
+        node = self.nodes.pop(run_id, None)
+        if node and isinstance(outputs, dict) and (text := render_update(outputs, self.method.hidden)):
+            produced = {key: outputs[key] for key in ("formulation", "code") if isinstance(outputs.get(key), str)}
+            self.recorder.step("artifact", self.method.titles[node], text, node=node, **produced)
+
+    def on_chain_error(self, error: BaseException, *, run_id: UUID, **kwargs: Any) -> None:
+        self.nodes.pop(run_id, None)
+
+
 def platform_graph(method: Method) -> Any:
     """The compiled platform graph that runs `method` and solves its final code."""
 
@@ -131,8 +163,7 @@ def platform_graph(method: Method) -> Any:
             return resources.model_factory(resources.llm_settings(choice.provider, choice.model),
                                            callbacks=[recorder.callback], metadata={"llm4om_role": role})
 
-        return Context(recorder, resources.sandbox, model, CodeTarget(choice.language), state.get("data") or {},
-                       choice.options)
+        return Context(recorder, resources.sandbox, model, CodeTarget(choice.language), state.get("data") or {})
 
     async def prepare(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
         """Reject unusable requests before any LLM call; the reason becomes the run's failure."""
@@ -168,19 +199,10 @@ def platform_graph(method: Method) -> Any:
         final: dict[str, Any] = {}
 
         async def drive() -> None:
-            root = None  # the method graph's own namespace; it is nested in this node's namespace
-            async for namespace, mode, chunk in graph.astream(
-                    {"problem": state.get("problem", "")}, context=run, config={"recursion_limit": RECURSION_LIMIT},
-                    stream_mode=["updates", "values"], subgraphs=True):
-                if mode == "values":
-                    root = namespace if root is None else root  # the graph sends its input values first
-                    if namespace == root:
-                        final.update(chunk)
-                    continue
-                for node, update in chunk.items():
-                    if node in method.titles and isinstance(update, dict) and (text := render_update(update, method.hidden)):
-                        outputs = {key: update[key] for key in ("formulation", "code") if isinstance(update.get(key), str)}
-                        recorder.step("artifact", method.titles[node], text, node=node, **outputs)
+            config: RunnableConfig = {"recursion_limit": RECURSION_LIMIT, "callbacks": [_NodeSteps(method, recorder)]}
+            async for values in graph.astream({"problem": state.get("problem", "")}, config, context=run,
+                                              stream_mode="values"):
+                final.update(values)
 
         try:
             await asyncio.wait_for(drive(), state["_deadline"] - time.time())
@@ -216,7 +238,7 @@ def platform_graph(method: Method) -> Any:
 
 
 async def run(description: str, *, method: str = "direct", language: str = "pyomo", data: dict[str, str] | None = None,
-              options: dict[str, Any] | None = None, provider: str | None = None, model: str | None = None,
+              provider: str | None = None, model: str | None = None,
               resources: Resources | None = None,
               on_step: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
     """Run one method in process and return the final state. `on_step` receives each step as it is recorded."""
@@ -227,7 +249,7 @@ async def run(description: str, *, method: str = "direct", language: str = "pyom
     config: RunnableConfig = {"configurable": {"llm4om_resources": resources}} if resources else {}
     async for mode, chunk in platform_graph(available[method]).astream(
             {"description": description, "data": data or {}}, config,
-            context=RunContext(language, provider, model, options or {}), stream_mode=["custom", "values"]):
+            context=RunContext(language, provider, model), stream_mode=["custom", "values"]):
         if mode == "values":
             final = chunk
         elif on_step and "step" in chunk:

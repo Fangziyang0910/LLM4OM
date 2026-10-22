@@ -4,13 +4,13 @@
 creates one in each of its nodes from the state's `usage`, so counting continues across nodes; each recorded step is
 sent at once as a custom stream event, so a client sees the run as it happens.
 
-`Context` is what a method's nodes reach through `runtime.context`: data, options, code target, LLMs and the sandbox.
+`Context` is what a method's nodes reach through `runtime.context`: data, code target, LLMs and the sandbox.
 """
 
 import json
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, TypedDict
 from uuid import UUID
 
@@ -79,16 +79,18 @@ class Recorder:
         return {"steps": list(self.steps.values()), "usage": dict(self.usage)}
 
 
+@dataclass
 class Context:
-    """The runtime context of a method graph: data, options, code target, LLMs and solving."""
+    """The runtime context of a method graph: data, code target, LLMs and solving. Method parameters live in
+    `llm4om.methods.presets`."""
 
-    def __init__(self, recorder: Recorder, sandbox: Sandbox, chat_model: Callable[[str], BaseChatModel],
-                 target: CodeTarget, data: dict[str, str], options: dict[str, Any] | None = None) -> None:
-        self.recorder, self.target, self.data = recorder, target, data
-        self.options = options or {}
-        self.solved: dict[str, SolveResult] = {}  # latest result for each solved code
-        self._sandbox, self._chat_model = sandbox, chat_model
-        self._models: dict[str, BaseChatModel] = {}
+    recorder: Recorder
+    sandbox: Sandbox
+    chat_model: Callable[[str], BaseChatModel]  # role -> a chat model whose calls the recorder records
+    target: CodeTarget
+    data: dict[str, str]
+    solved: dict[str, SolveResult] = field(default_factory=dict, init=False)  # latest result for each solved code
+    _models: dict[str, BaseChatModel] = field(default_factory=dict, init=False, repr=False)
 
     @property
     def solves(self) -> int:
@@ -98,7 +100,7 @@ class Context:
     def llm(self, role: str) -> BaseChatModel:
         """The configured chat model. `role` names its calls in the run's steps."""
         if role not in self._models:
-            self._models[role] = self._chat_model(role)
+            self._models[role] = self.chat_model(role)
         return self._models[role]
 
     async def solve(self, code: str, *, title: str = "求解") -> SolveResult:
@@ -108,7 +110,7 @@ class Context:
         start = time.monotonic()
         id = recorder.step("solve", title, code=code, running=True)
         try:
-            result = await self._sandbox.solve(code, self.data, self.target.language, recorder.limits.solve_time_limit)
+            result = await self.sandbox.solve(code, self.data, self.target.language, recorder.limits.solve_time_limit)
         except BaseException as error:
             recorder.step("solve", title, f"{type(error).__name__}: {error}", id=id, running=False, failed=True,
                           seconds=round(time.monotonic() - start, 1))
@@ -123,7 +125,7 @@ class Context:
 
         Not a solve: it is neither counted nor recorded. Methods use it where the original runs helper scripts.
         """
-        return await self._sandbox.run_script(script, self.recorder.limits.solve_time_limit)
+        return await self.sandbox.run_script(script, self.recorder.limits.solve_time_limit)
 
 
 class _LLMEvents(BaseCallbackHandler):

@@ -1,7 +1,8 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
-import { api, errorText } from "../api";
+import { api } from "../api";
+import { errorText } from "../format";
 import type { Dataset } from "../types";
 import { Dialog } from "./Dialog";
 

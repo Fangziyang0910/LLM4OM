@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, BookOpen, Check, CodeXml, Cpu, FileText, Layers, Paperclip, Play, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import { errorText } from "../api";
+import { errorText } from "../format";
 import type { Draft, Options, Settings } from "../types";
 import { Popover } from "./Popover";
 

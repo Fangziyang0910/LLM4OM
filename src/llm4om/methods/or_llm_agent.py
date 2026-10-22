@@ -18,11 +18,8 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.languages import MILP_LANGUAGES
-from llm4om.methods import Method
+from llm4om.methods import Method, presets
 from llm4om.runtime import Context, ModelingState
-
-TEMPERATURE = 0.2  # upstream query_llm default
-ATTEMPTS = {"main": 3, "infeasible": 1, "recheck": 2}
 
 MODELING_SYSTEM = (
     "You are an operations research expert. Based on the optimization problem provided by the user, construct a mathematical model that effectively models the original problem using mathematical (linear programming) expressions."
@@ -62,7 +59,7 @@ class State(ModelingState, total=False):
 
 
 async def _query(context: Context, role: str, messages: list[BaseMessage]) -> str:
-    return (await context.llm(role).bind(temperature=TEMPERATURE).ainvoke(messages)).text
+    return (await context.llm(role).bind(temperature=presets.OR_LLM_AGENT.temperature).ainvoke(messages)).text
 
 
 async def math_model(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
@@ -100,7 +97,7 @@ def after_execute(state: State) -> str:
 
 def after_fix(state: State) -> str:
     # Upstream asks for a fix after every failed run, including the last; that last fix is not run.
-    return "execute" if state["attempts"] < ATTEMPTS[state["stage"]] else "end_round"
+    return "execute" if state["attempts"] < presets.OR_LLM_AGENT.attempts[state["stage"]] else "end_round"
 
 
 def end_round(state: State) -> dict[str, Any]:

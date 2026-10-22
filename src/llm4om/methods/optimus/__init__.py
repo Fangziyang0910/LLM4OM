@@ -26,7 +26,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.languages import MILP_LANGUAGES
-from llm4om.methods import Method
+from llm4om.methods import Method, presets
 from llm4om.methods.optimus import prompts as P
 from llm4om.methods.optimus.dialects import DIALECTS
 from llm4om.methods.optimus.parsing import (
@@ -39,9 +39,6 @@ from llm4om.methods.optimus.parsing import (
     shape_string_to_list,
 )
 from llm4om.runtime import Context, ModelingState
-
-TEMPERATURE = 1.0  # upstream sends no temperature; 1.0 is the OpenAI default
-MAX_DEBUG_TRIES = 3
 
 PARAMS_PROMPT = P.PARAMETERS__PROMPT_PARAMS.replace(
     '        "type": "TYPE"\n    }}\n}}',
@@ -68,7 +65,7 @@ class State(ModelingState, total=False):
 
 async def _ask(context: Context, role: str, prompt: str) -> str:
     """Upstream get_response: one user message."""
-    return (await context.llm(role).bind(temperature=TEMPERATURE).ainvoke([HumanMessage(prompt)])).text
+    return (await context.llm(role).bind(temperature=presets.OPTIMUS.temperature).ainvoke([HumanMessage(prompt)])).text
 
 
 def _dump(value: Any) -> str:
@@ -259,7 +256,7 @@ def after_execute(state: State) -> str:
 
 
 def after_debug(state: State) -> str:
-    return "use_fix" if state["tries"] < MAX_DEBUG_TRIES else END
+    return "use_fix" if state["tries"] < presets.OPTIMUS.max_debug_tries else END
 
 
 def use_fix(state: State) -> dict[str, Any]:

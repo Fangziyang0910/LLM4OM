@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Check, Clock, CodeXml, Cpu, Layers, Pencil, RefreshCw, Square, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
-import { STATUS, client, duration, errorText, formatNumber, formatTokens, outcome, tone } from "../api";
+import { client } from "../api";
+import { STATUS, duration, errorText, formatNumber, formatTokens, outcome, tone } from "../format";
 import { phases, working } from "../steps";
 import type { Draft, Options, RunValues, Step } from "../types";
 import { useRun } from "../useRun";
