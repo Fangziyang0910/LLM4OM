@@ -64,6 +64,10 @@ def solve_gurobi(model, time_limit):
     model.setParam("OutputFlag", 0)
     model.setParam("TimeLimit", float(time_limit))
     model.optimize()
+    if model.Status == gp.GRB.INF_OR_UNBD:
+        # Presolve's dual reductions can leave this open; solving without them tells infeasible from unbounded.
+        model.setParam("DualReductions", 0)
+        model.optimize()
     status = {
         gp.GRB.OPTIMAL: "optimal", gp.GRB.INFEASIBLE: "infeasible", gp.GRB.UNBOUNDED: "unbounded",
         gp.GRB.INF_OR_UNBD: "infeasible_or_unbounded", gp.GRB.TIME_LIMIT: "time_limit",

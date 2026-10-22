@@ -91,6 +91,9 @@ def test_clarabel_rejects_integer_variables() -> None:
 
 # Two demands that the capacity cannot both meet; `spare` is a constraint outside the conflict.
 CONFLICTS = {
+    # Gurobi's presolve calls this model "infeasible or unbounded"; the worker settles which.
+    "gurobipy": GUROBIPY_CODE.replace("    return m", "    m.addConstr(x['A'] >= 5, 'needA')\n    m.addConstr(x['B'] >= 5, 'needB')\n"
+                                      "    return m"),
     "pyomo": PRODUCTION_CODE.replace("    return m", "    m.needA = pyo.Constraint(expr=m.x['A'] >= 5)\n"
                                      "    m.needB = pyo.Constraint(expr=m.x['B'] >= 5)\n    return m"),
     "pywraplp": ORTOOLS_CODE.replace("    return s", "    s.Add(x['A'] >= 5, 'needA')\n    s.Add(x['B'] >= 5, 'needB')\n    return s"),
