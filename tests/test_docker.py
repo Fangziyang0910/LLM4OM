@@ -7,6 +7,7 @@ import pytest
 
 from llm4om.sandbox import Sandbox
 from tests.conftest import PRODUCTION_CODE
+from tests.test_new_solvers import COPT_CODE, IPOPT_CODE, SCIP_CODE
 from tests.test_sandbox import CPMPY_CODE, CVXPY_CODE, GUROBIPY_CODE, ORTOOLS_CODE, PULP_CODE
 
 pytestmark = [pytest.mark.docker, pytest.mark.skipif(os.environ.get("LLM4OM_TEST_DOCKER") != "1",
@@ -14,11 +15,19 @@ pytestmark = [pytest.mark.docker, pytest.mark.skipif(os.environ.get("LLM4OM_TEST
 
 
 @pytest.mark.parametrize("language,code,objective", [("pyomo", PRODUCTION_CODE, 13), ("pywraplp", ORTOOLS_CODE, 13),
-    ("cpmpy", CPMPY_CODE, 13), ("pulp", PULP_CODE, 13), ("gurobipy", GUROBIPY_CODE, 13), ("cvxpy", CVXPY_CODE, 0.5)])
+    ("cpmpy", CPMPY_CODE, 13), ("pulp", PULP_CODE, 13), ("gurobipy", GUROBIPY_CODE, 13), ("cvxpy", CVXPY_CODE, 0.5),
+    ("pyscipopt", SCIP_CODE, 13), ("coptpy", COPT_CODE, 13), ("casadi", IPOPT_CODE, 0),
+    ("cvxpy_osqp", CVXPY_CODE, 0.5), ("cvxpy_scs", CVXPY_CODE, 0.5)])
 def test_worker_solves_each_language(language: str, code: str, objective: float) -> None:
     result = asyncio.run(Sandbox().solve(code, {}, language, 10))
     assert result.error is None, result.error
     assert result.objective == pytest.approx(objective, abs=1e-6) and result.variables
+
+
+def test_mosek_without_license_is_an_explicit_solver_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MOSEKLM_LICENSE_FILE", raising=False)
+    result = asyncio.run(Sandbox().solve(CVXPY_CODE, {}, "cvxpy_mosek", 10))
+    assert not result.executed and result.objective is None and "license" in result.error.lower()
 
 
 def test_worker_is_nonroot_readonly_and_has_no_network_or_keys(monkeypatch: pytest.MonkeyPatch) -> None:

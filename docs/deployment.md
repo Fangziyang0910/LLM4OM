@@ -26,7 +26,7 @@ docker compose up -d --build
 浏览器 ──HTTP(S)──► app 容器（工作台 + LangGraph 服务器，用户 llm4om）
                       │  通过宿主机的 Docker socket，每次求解启动一个沙箱
                       ▼
-                    沙箱容器 llm4om-worker:9（无网络、只读、非 root，用完即删）
+                    沙箱容器 llm4om-worker:10（无网络、只读、非 root，用完即删）
 
 数据卷 llm4om-data：预设模型（含密钥）和全部运行记录
 ```
@@ -34,7 +34,7 @@ docker compose up -d --build
 | 组成 | 说明 |
 |---|---|
 | `app` 容器（镜像 `llm4om`） | 工作台和 LangGraph 服务器。启动脚本读取 Docker socket 的用户组，整理 `/data` 的属主，然后以用户 `llm4om`（uid 10001）运行服务，不保留任何 capability。根文件系统只读，日志自动轮转，崩溃或服务器重启后自动恢复 |
-| 沙箱镜像 `llm4om-worker:9` | 由 `worker` 服务构建。每次求解，`app` 通过宿主机的 Docker 启动一个沙箱容器 |
+| 沙箱镜像 `llm4om-worker:10` | 由 `worker` 服务构建。每次求解，`app` 通过宿主机的 Docker 启动一个沙箱容器 |
 | 数据卷 `llm4om-data` | 预设模型（含密钥）和全部运行记录。`docker compose down` 不会删除它 |
 
 `app` 容器挂载了宿主机的 Docker socket，相当于拥有宿主机的 root 权限。生成代码只在沙箱容器中运行，不在 `app` 中运行。不要把这台服务器放在需要保护的内网中。取舍见 [ADR 0011](adr/0011-docker-compose-deployment.md)。
@@ -165,7 +165,27 @@ uv run llm4om serve --workspace /srv/llm4om --port 8767 --jobs 4
 | 现象 | 检查 |
 |---|---|
 | 其他机器打不开页面 | 防火墙和安全组是否放行端口；`LLM4OM_PORT` 是否写成了 `127.0.0.1:…` |
-| 运行失败，提示找不到镜像 | `docker compose up -d --build` 会构建 `llm4om-worker:9`；直接运行时执行 `uv run llm4om build-worker` |
+| 运行失败，提示找不到镜像 | `docker compose up -d --build` 会构建 `llm4om-worker:10`；直接运行时执行 `uv run llm4om build-worker` |
 | 运行失败，提示无法连接 Docker | rootless Docker 需要设置 `DOCKER_SOCKET`；查看 `docker compose logs app` |
 | 预设模型报 401 或 404 | 密钥、接口地址或模型 ID 有误。删掉预设，重新添加 |
 | HTTPS 证书申请失败 | 域名是否解析到本机；80 和 443 端口是否放行；查看 `docker compose logs https` |
+
+## 其他商业求解器许可证
+
+Worker 10 已安装 PySCIPOpt、CasADi/Ipopt、COPT、MOSEK、OSQP、SCS。MOSEK 需要许可证；COPT 无许可证时仅限小规模非商业模式。没有许可证时平台不会静默切换求解器。
+
+MOSEK 使用 `MOSEKLM_LICENSE_FILE=/opt/mosek/mosek.lic`。COPT 使用 `COPT_LICENSE_DIR=/opt/copt`，该目录下放 `license.dat` 与 `license.key`。本地启动时通过环境变量设置；Compose 部署时还需把相同宿主机绝对路径挂载到 app 容器，并通过 `.env` 传入变量：
+
+```yaml
+# compose.override.yaml；只保留实际使用的许可证
+services:
+  app:
+    volumes:
+      - /opt/mosek/mosek.lic:/opt/mosek/mosek.lic:ro
+      - /opt/copt/license.dat:/opt/copt/license.dat:ro
+      - /opt/copt/license.key:/opt/copt/license.key:ro
+```
+
+沙箱只读挂载这些许可证文件，不挂载整个许可证目录，也不传入 LLM 密钥。沙箱仍无网络，因此这里支持可离线使用且适用于容器的许可证；不打开网络来连接浮动许可服务器。许可必须允许实际部署用途，COPT 的无许可模式不是商业服务的授权。
+
+官方配置说明：[MOSEK](https://docs.mosek.com/latest/licensing/client-setup.html)、[COPT](https://guide.coap.online/copt/en-doc/install.html#installing-license)。

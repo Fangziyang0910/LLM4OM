@@ -1,5 +1,27 @@
 /** English for the page's Chinese text; keys are the Chinese exactly as written in t(...). */
 export const en: Record<string, string> = {
+  "局部最优": "Locally optimal",
+  "已找到局部最优解；非凸问题仍可能存在更好的解。": "A local optimum was found; a nonconvex problem may still have a better solution.",
+  "本次局部搜索未找到可行解，不能据此断定整个问题不可行。": "This local search did not find a feasible solution; it does not prove the whole problem infeasible.",
+  "局部不可行": "Locally infeasible",
+  "达到迭代上限": "Iteration limit",
+  "提取语义锚点，将约束代码回译并比较，逐项修正语义偏差。": "Extract semantic anchors, backtranslate constraint code, and repair mismatched constraints.",
+  "数据留在求解环境，以结构描述建模，再用执行反馈修正代码。": "Keep data in the solver environment, model from its schema, and repair using execution feedback.",
+  "按问题类型选用公开建模提示，并结合求解结果迭代检查模型。": "Select published modeling hints by problem class and iteratively check the model against solver feedback.",
+  "数据结构": "Data schema",
+  "BIND 建模": "BIND modeling",
+  "匹配建模提示": "Select modeling hints",
+  "OptiMind 建模与检查": "OptiMind modeling and review",
+  "参数锚点": "Parameter anchors",
+  "变量锚点": "Variable anchors",
+  "目标锚点": "Objective anchor",
+  "约束锚点": "Constraint anchors",
+  "分项建模": "Generate model components",
+  "约束回译": "Backtranslate constraints",
+  "语义比较": "Compare semantics",
+  "修正约束": "Repair constraints",
+  "组装模型": "Assemble model",
+  "修正执行错误": "Repair execution errors",
   "原预设已删除，请重新选择预设模型。": "The original preset was deleted. Select an LLM preset again.",
   "正在搜索已加载的 {count} 条记录": "Searching {count} loaded runs",
   "加载更早的运行": "Load earlier runs",
@@ -52,7 +74,7 @@ export const en: Record<string, string> = {
   "对比": "Compare",
   "对比多个方法": "Compare several methods",
   "建模方法（可多选）": "Modeling methods (choose several)",
-  "{method}：原方法的提示只覆盖 LP/MILP，不支持这种写法": "{method}: the original prompts cover LP/MILP only, not this code language",
+  "{method}：当前方法不支持这种代码写法与求解器": "{method}: this method does not support this code language and solver",
   "代码写法与求解器": "Code language and solver",
   "{solver} 求解": "solved by {solver}",
   "预设模型（可多选）": "LLM presets (choose several)",
@@ -334,8 +356,13 @@ export const en: Record<string, string> = {
 
   // Method descriptions and step titles, which come from the server
   "一次调用生成数学模型和求解代码，然后求解。": "One call writes the formulation and the code, which is then solved.",
+  "一次调用生成数学模型和求解代码，检查输出格式后求解。": "One call writes the formulation and code; the output format is checked before solving.",
   "生成数学模型和代码后求解；没有得到解时，把求解反馈交给模型修正，最多修正 3 次。":
     "Writes the formulation and code and solves them; without a solution, the solver feedback goes back to the model for up to 3 repairs.",
+  "生成、求解并复核模型；根据格式、执行或建模问题修正，最多修正 3 次。":
+    "Generates, solves and reviews the model; corrects output, execution or modeling errors, with up to 3 repairs.",
+  "按反馈修正模型和代码": "Revise the formulation and code from feedback",
+  "复核模型与求解结果": "Review the model and solver result",
   "依次进行语义验证、数学模型验证和代码验证；每个阶段先构建、再验证、不通过就修订，代码缺陷可回溯到数学模型。":
     "Validates semantics, then the formulation, then the code; each stage builds, validates and revises, and code defects can lead back to the formulation.",
   "提取目标和约束并逐条检查，逐条建模约束和目标，为每条约束生成代码，组装后执行并调试。":

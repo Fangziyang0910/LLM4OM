@@ -288,7 +288,7 @@ def optimus_graph():
     return graph.compile(name="optimus")
 
 
-OPTIMUS = Method("optimus", "OptiMUS",
+OPTIMUS = Method("optimus", "OptiMUS 0.3",
                  "提取目标和约束并逐条检查，逐条建模约束和目标，为每条约束生成代码，组装后执行并调试。", optimus_graph,
                  "https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484",
                  titles={"parameters": "参数", "objective": "目标", "constraints": "约束（去冗余后）",

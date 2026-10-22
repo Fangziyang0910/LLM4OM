@@ -29,7 +29,7 @@
 
 **LLM4OM** (Large Language Models for Optimization Modeling) is a platform for automated optimization modeling. You describe a problem in plain language and choose a modeling method and a code language. An LLM writes the mathematical formulation and the solver code. The platform solves the code in an isolated container and shows every intermediate step.
 
-It puts **10 published LLM modeling methods** on one platform, with one set of LLM presets, one code contract and one solver sandbox. Researchers can compare them side by side on the same problem, or plug in their own method.
+The platform includes **13 LLM modeling methods**: its own Direct and Feedback Repair methods, plus eleven methods from public research. Enter a problem, run the modeling process and inspect the model and result without writing solver code yourself.
 
 <p align="center">
   <img src="docs/assets/demo.gif" alt="Demo: pick the transport problem and ORThought, start modeling, then see the solution, the formulation and the code" width="100%">
@@ -40,8 +40,8 @@ It puts **10 published LLM modeling methods** on one platform, with one set of L
 
 | Feature | What you get |
 |---|---|
-| 🧠 **10 modeling methods** | Direct, TriVAL, OptiMUS, Chain-of-Experts, OptiTree, OR-LLM-Agent, ORThought, LLMOPT, AutoFormulation and more, each with its original prompts and flow |
-| 🧩 **6 languages × 6 solvers** | Pyomo/HiGHS, gurobipy/Gurobi, OR-Tools/SCIP, PuLP/CBC, CPMpy/CP-SAT, CVXPY/Clarabel: LP, MILP, constraint programming and convex optimization |
+| 🧠 **13 modeling methods** | Direct, Feedback Repair, TriVAL, SAC-Opt, BIND, OptiMind and more; each has its own LangGraph |
+| 🧩 **12 solver paths** | 9 modeling interfaces and 11 solvers for LP, MILP, constraint programming, convex and nonlinear optimization |
 | 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
 | ⚖️ **Compare methods** | Run up to 12 methods or models on one problem and compare objective, time and tokens |
 | 🧯 **Infeasibility diagnosis** | For an infeasible model, see a set of constraints that cannot hold together (Gurobi IIS / CPMpy MUS) |
@@ -86,7 +86,7 @@ You need Python 3.11–3.13, [uv](https://docs.astral.sh/uv/) and Docker:
 
 ```bash
 uv sync --all-extras
-uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:9
+uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:10
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
@@ -119,17 +119,20 @@ print(state["failure"] or state["solve"]["objective"])
 | Method | Flow | Source |
 |---|---|---|
 | Direct | One call writes the formulation and the code | Baseline |
-| Feedback Repair | Direct, then repairs from solver feedback | Baseline |
+| Feedback Repair | Generates, solves and checks against the problem; repairs format, execution or modeling errors | In-house method |
 | TriVAL | Validates semantics, formulation and code in three stages; each stage builds, validates and revises | [Code](https://github.com/SCUT-EIPI/TriVAL/tree/380a529) |
-| OptiMUS | Extracts parameters, objective and constraints; models and codes each one; assembles and debugs | [ICML 2024](https://arxiv.org/abs/2402.10172) · [Code](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) |
+| OptiMUS 0.3 | Extracts parameters, objective and constraints; models and codes each one; assembles and debugs | [v0.3 paper](https://arxiv.org/abs/2407.19633) · [Code](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) |
 | Chain-of-Experts | A conductor picks experts one by one; a reducer writes the code; optional backward reflection | [ICLR 2024](https://openreview.net/forum?id=HobyL1B9CZ) · [Code](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) |
 | OptiTree | Matches the problem to modeling thoughts in a problem-type tree, then writes the model and code | [NeurIPS 2025](https://arxiv.org/abs/2510.22192) · [Code](https://github.com/MIRALab-USTC/OptiTree/tree/2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9) |
 | OR-LLM-Agent | Formulates, writes code, debugs from execution errors, then checks infeasibility | [arXiv](https://arxiv.org/abs/2503.10009) · [Code](https://github.com/bwz96sco/or_llm_agent/tree/5dccdaab89ab91c3cb28066fe849423dc124d287) |
 | ORThought | Writes a solution path, formulation and code with expert modeling thoughts; debugs with the model and the error | [arXiv](https://arxiv.org/abs/2508.14410) · [Code](https://github.com/BeinuoYang/ORThought/tree/5293e24861a65d1e4a2f61f4fad0a81de901ee38) |
 | LLMOPT | Writes a five-element model, then code; the LLM judges both and rewrites the wrong step | [ICLR 2025](https://arxiv.org/abs/2410.13213) · [Code](https://github.com/antgroup/LLMOPT/tree/1492dd33e39ea13f1afe32a0adc13d4217334195) |
 | AutoFormulation | Builds a tree by sampling and pruning layer by layer, then ranks with MCTS and pairwise comparison (many calls) | [ICML 2025](https://arxiv.org/abs/2411.01679) · [Code](https://github.com/jumpynitro/AutoFormulator/tree/52148018d04de23dc2d36d4281eb6244c2a42ffc) |
+| SAC-Opt | Semantic anchors, constraint backtranslation and selective repair (independent implementation) | [Paper](https://proceedings.mlr.press/v306/zhang26cb.html) · [Adaptation](src/llm4om/methods/sac_opt/README.md) |
+| BIND | Prompt with schemas; read full attachments in code; repair execution failures | [Paper](https://arxiv.org/abs/2605.21751) · [Adaptation](src/llm4om/methods/bind/README.md) |
+| OptiMind | Public class hints, modeling, execution feedback and iterative review | [Paper](https://arxiv.org/abs/2509.22979) · [Public scope](src/llm4om/methods/optimind/README.md) |
 
-Each research method is pinned to an upstream commit and keeps its original prompts, orchestration and stopping rules. The platform only makes the adaptations needed to plug it in, and records each one. Methods whose original prompts ask for LP/MILP offer only the four MILP languages. See [methods](docs/methods.md) (in Chinese).
+Each method records its reference commit and adaptations. SAC-Opt is independently implemented; BIND uses no benchmark reference answers; OptiMind integrates the public inference workflow and the published TSP hint subset, not trained weights. Each method exposes its supported code targets. See [methods](docs/methods.md).
 
 ## Code languages and solvers
 
@@ -143,6 +146,12 @@ You choose the code language; the language decides the solver. Generated code de
 | PuLP | CBC | LP, MILP |
 | CPMpy | OR-Tools CP-SAT | Constraint programming: integer and Boolean variables, global constraints, satisfaction |
 | CVXPY | Clarabel | Continuous convex optimization: LP, convex QP, SOCP and more |
+| PySCIPOpt | Native SCIP | Mixed integer linear and nonlinear constraints |
+| CasADi | Ipopt | Smooth continuous nonlinear optimization; local solutions |
+| coptpy | COPT | LP, MILP, convex quadratic/conic optimization; small non-commercial models without a license |
+| CVXPY / OSQP | OSQP | Continuous convex QP with linear constraints |
+| CVXPY / SCS | SCS | Continuous convex conic problems, including SDP, exponential and power cones |
+| CVXPY / MOSEK | MOSEK | Convex conic/SDP and mixed integer conic problems (no mixed integer SDP); license required |
 
 ## Architecture
 

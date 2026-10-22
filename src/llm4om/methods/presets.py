@@ -11,7 +11,7 @@ from llm4om.runtime import Limits
 
 @dataclass(frozen=True)
 class FeedbackRepair:
-    max_repairs: int = 3  # repairs after the first solve when it found no solution
+    max_repairs: int = 3  # corrections of reply format, execution errors or discrepancies found in model review
 
 
 @dataclass(frozen=True)
@@ -58,6 +58,28 @@ class LLMOpt:
 
 
 @dataclass(frozen=True)
+class SACOpt:
+    temperature: float = 0.0
+    max_parse_attempts: int = 5
+    max_semantic_rounds: int = 5
+    max_executions: int = 3
+
+
+@dataclass(frozen=True)
+class BIND:
+    temperature: float = 0.0
+    top_p: float = 1.0
+    max_rounds: int = 3  # total generation/execution attempts
+
+
+@dataclass(frozen=True)
+class OptiMind:
+    max_turns: int = 5
+    temperature: float = 0.6
+    top_p: float = 0.95
+
+
+@dataclass(frozen=True)
 class AutoFormulation:
     temperature: float = 1.0  # upstream samples n completions at the API default
     n_used_gpt: int = 8  # completions sampled per tree node
@@ -84,3 +106,6 @@ OR_LLM_AGENT = ORLLMAgent()
 AUTOFORMULATION = AutoFormulation()
 ORTHOUGHT = ORThought()
 LLMOPT = LLMOpt()
+SAC_OPT = SACOpt()
+BIND = BIND()
+OPTIMIND = OptiMind()

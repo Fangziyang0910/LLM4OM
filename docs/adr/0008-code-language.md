@@ -28,3 +28,7 @@
 ## 后续
 
 v0.41 按同一规则增加两种写法：PuLP → CBC（MILP，PuLP 自带 CBC），CVXPY → Clarabel（连续凸优化，不接受整数变量）。MILP 写法因此是四种。
+
+2026-10-22 扩展：一个 `language` 仍表示确定的“建模库 + 求解器”组合，同一个库可以出现多个组合。保留 `cvxpy` → Clarabel 的旧含义，新增 `cvxpy_osqp`、`cvxpy_scs`、`cvxpy_mosek`。这样可以开放各求解器的能力，不增加独立的求解器选项或不受支持的交叉组合。Worker 共用 CVXPY 的结果读取，按组合设置求解器和时限。
+
+原生 SCIP 使用 `pyscipopt`；Ipopt 使用 `casadi.Opti`；COPT 使用 `coptpy`。选择 CasADi 是因为其二进制包自带 Ipopt 和自动微分，避免部署额外的 Ipopt 可执行文件或 PyNumero/ASL 编译链。Ipopt 的成功和失败分别报告局部最优、局部不可行，不能等同于全局结论。已有方法的四种 MILP 方言保持原范围，新方法单独声明实际支持的组合。

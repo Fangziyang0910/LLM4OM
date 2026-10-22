@@ -39,6 +39,7 @@ src/llm4om/
 ├── runtime.py           运行中的状态：Limits、Recorder（计数、上限、步骤、推送）、方法使用的 Context
 ├── methods/             建模方法：Method、methods()、各方法的图
 │   ├── presets.py       全部方法的参数，每次运行都用这一套
+│   ├── direct/          Direct 与 Feedback Repair 共用生成节点和提示，分别编译为图
 │   └── <method>/        复杂方法：__init__.py 导出入口，graph.py 编排，提示/解析/搜索各归其位
 ├── graph.py             平台图 platform_graph(method)、RunState、RunContext、Resources、进程内运行 run()
 └── server/              Web 工作台
@@ -57,7 +58,7 @@ storage → llm_presets · budget ───────────────�
 runtime → progress ─────────────────────────────────┘
 ```
 
-`languages`、`llm`、`sandbox` 互不依赖。方法只依赖 `runtime`、`languages`、`sandbox` 和 `methods` 本身，不依赖平台图或服务器。`sandbox/worker.py` 在沙箱中独立运行，因此不导入任何平台模块；它与 `languages.py` 各自列出六种写法，是隔离的代价。
+`languages`、`llm`、`sandbox` 互不依赖。方法只依赖 `runtime`、`languages`、`sandbox` 和 `methods` 本身，不依赖平台图或服务器。`sandbox/worker.py` 在沙箱中独立运行，因此不导入任何平台模块；它与 `languages.py` 各自列出十二条求解路径，是隔离的代价。
 
 ## 平台图
 
@@ -73,6 +74,8 @@ runtime → progress ───────────────────�
 
 方法图在 `model` 节点内运行，平台不为它保存检查点（`checkpointer = False`）：AutoFormulation 这类方法的内部状态很大，逐步保存的代价高于收益。平台图本身由服务器保存检查点。`progress.save_progress` 在方法执行期间合并公开步骤和产物，每秒至多一次写入原生 Store，取消时立即刷新；不保存内部搜索树或密钥。正常完成后删除临时进度，最终状态成为唯一结果。
 
+方法返回的 `failure` 即使已有代码也会保留，例如 Feedback Repair 达到修正上限但仍有建模问题。后续节点抛出异常时，平台保留已完成的数学模型、代码和对应求解结果。
+
 进程内运行（命令行、测试、`run_problem`）通过 `config["configurable"]["llm4om_resources"]` 传入 `Resources`，替换预设模型、沙箱、上限或聊天模型工厂。服务器从环境变量 `LLM4OM_WORKSPACE`、`LLM4OM_SANDBOX` 读取默认资源。
 
 运行用哪个 LLM 只由 `LLMPresetStore` 决定（`Resources.llm` 给出时除外）。预设列表是 `LLM4OM_LLM_*` 环境变量给出的预设（id 为 `env`），加上 `<workspace>/.private/llm-presets.json` 中按添加顺序保存的预设；第一个是默认预设。`get(preset)` 按 id 取设置，id 不存在时报错并列出可选 id。`prepare` 记录配置，`model` 开始前校验配置仍一致，随后所有角色共享同一份已解析设置。建模过程中删除或替换同名预设不会切换该运行的 LLM。求解和预算扣费不再重新查询预设。
@@ -85,7 +88,7 @@ LangGraph 就是平台的方法抽象。每个方法是一张编译好的 LangGr
 
 | 约定 | 内容 |
 |---|---|
-| 状态 | 继承 `ModelingState`。输入 `problem`（问题描述加数据文件）；输出 `formulation`、`code`，可选 `solve`（方法自己已求解时）和 `failure`（失败原因） |
+| 状态 | 继承 `ModelingState`。输入 `problem`（问题描述加附件预览）与 `description`（仅题面）；输出 `formulation`、`code`，可选 `solve`（方法自己已求解时）和 `failure`（失败原因） |
 | 运行时 | 图以 `context_schema=Context` 编译；节点签名为 `node(state, runtime: Runtime[Context])` |
 | 步骤 | `Method.titles` 把节点名映射为步骤标题。只有列出的节点显示为步骤；每次更新渲染为 Markdown（文本原样、`code` 和 `*_code` 为代码块、其他为 JSON） |
 | 隐藏 | 以 `_` 开头的状态键、`problem`、`solve`、`messages`、`failure`，以及 `Method.hidden` 中的键，不显示 |
@@ -143,16 +146,20 @@ class Method:
 | CPMpy | `cp.Model` | OR-Tools CP-SAT | `SolverLookup.get("ortools", model).solve()` |
 | PuLP | `pulp.LpProblem` | CBC（PuLP 自带） | `problem.solve(PULP_CBC_CMD(...))` |
 | CVXPY | `cp.Problem` | Clarabel | `problem.solve(solver=CLARABEL)`；只接受连续凸模型，含整数变量时报错 |
+| PySCIPOpt | `pyscipopt.Model` | 原生 SCIP | `model.optimize()`，含非线性约束 |
+| CasADi | `ca.Opti` | Ipopt | 配置平台时限后 `solve_limited()`；局部状态 |
+| coptpy | `coptpy.Model` | COPT | `model.solve()`，统一 Status/HasSol/ObjVal 接口 |
+| CVXPY / OSQP、SCS、MOSEK | `cp.Problem` | 所选组合对应的求解器 | 共用结果读取，分别设置 `time_limit`、`time_limit_secs`、`mosek_params` |
 
-MILP 写法是 Pyomo、gurobipy、`pywraplp` 和 PuLP（`languages.MILP_LANGUAGES`）。CPMpy 模型可以没有目标，此时是可满足性问题：找到解时状态为 `feasible`，没有目标值，但有变量取值。代码返回的对象与所选写法不符时，Worker 报告错误，错误信息交给方法作为反馈。
+`languages.MILP_LANGUAGES` 保留原有方法支持的四种方言（Pyomo、gurobipy、`pywraplp`、PuLP），不是所有支持 MILP 的求解器清单。新增方法单独声明扩展组合。CPMpy 模型可以没有目标，此时是可满足性问题：找到解时状态为 `feasible`，没有目标值，但有变量取值。代码返回的对象与所选写法不符时，Worker 报告错误，错误信息交给方法作为反馈。
 
 ## 沙箱
 
 `Sandbox` 有两个动作：`solve(code, data, language, time_limit)` 构建并求解模型；`run_script(script, time_limit)` 运行检查脚本。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。所有运行共享服务的 Sandbox，`solve` 和 `run_script` 共用并发额度，默认最多 4 个，由 `LLM4OM_SANDBOX_JOBS` 设置。排队仍计入运行总时限，单次沙箱超时从取得额度后开始。`--jobs` 单独控制并发运行数。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:9` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE` 时以只读方式挂载许可证。超时或取消时等待 `docker rm --force` 完成，确保容器已删除才释放并发额度。
+`Sandbox("docker")` 在镜像 `llm4om-worker:10` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件；不挂载 COPT 整个目录。超时或取消时等待 `docker rm --force` 完成，确保容器已删除才释放并发额度。
 
-求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CPMpy 模型用 CPMpy 的 MUS，CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。诊断只给人看：`feedback()` 不包含它，方法拿到的反馈与原方法相同。Gurobi 预求解把模型判为“不可行或无界”时，Worker 关闭对偶约简（`DualReductions=0`）再求解一次，得到确定的状态。
+求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CPMpy 模型用 CPMpy 的 MUS，CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。`feedback()` 不包含诊断，已移植的研究方法继续使用原反馈；本项目的 Feedback Repair 单独读取诊断，用于对照题面复核。Gurobi 预求解把模型判为“不可行或无界”时，Worker 关闭对偶约简（`DualReductions=0`）再求解一次，得到确定的状态。
 
 `Sandbox("local")` 用本机子进程运行同一脚本，只用于开发和测试。子进程只继承路径、语言、临时目录和 Gurobi 许可证位置等必要环境变量，不继承 API 密钥。超时或取消后等待子进程退出。
 
@@ -248,3 +255,10 @@ Docker 部署（`Dockerfile`、`compose.yaml`）把服务器放进 `app` 容器�
 ## 上限
 
 `Limits` 给出每次运行的 LLM 调用数、求解次数、单次求解时限和总时长。超过时方法抛出 `LimitExceeded`，运行记为失败。预设的每日 token 预算用同一个异常停止运行；最后一次调用可能略超预算。
+
+
+## 新方法的数据边界
+
+`ModelingState.description` 保留不含附件预览的题面；`problem` 保留现有题面加预览语义。BIND 只读取前者与完整附件的结构，避免先拼接长数据再从字符串剥离。其他方法继续使用 `problem`。完整附件始终从 `Context.data` 传入沙箱的 `build_model(data)`。
+
+SAC-Opt 在图状态中保留原约束、组件、回译、逐项比较和已通过标志。回译不读取原约束；已通过组件不进入下一轮修正。最终语义未通过仍保留求解结果和失败标记。OptiMind 的发布提示在包内固定存储；分类只选择这些类型，执行反馈不含基准真值。

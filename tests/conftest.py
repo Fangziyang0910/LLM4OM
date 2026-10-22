@@ -37,6 +37,7 @@ def build_model(data):
 '''
 FORMULATION = "$$\\max\\ 3x_A + 2x_B$$ subject to $2x_A + x_B \\le 8$, $x_A + 2x_B \\le 8$, $x \\in \\mathbb{Z}_+$."
 TWO_PART_REPLY = f"### Formulation\n{FORMULATION}\n\n```python\n{PRODUCTION_CODE}```"
+ACCEPT_REVIEW = '{"action": "accept", "reason": "The formulation and code match the stated requirements."}'
 
 
 def tool_call(name: str, **args: Any) -> AIMessage:
@@ -91,8 +92,8 @@ def make_resources(tmp_path: Path) -> Callable[..., Resources]:
 def run_method(make_resources: Callable[..., Resources]) -> Callable[..., dict[str, Any]]:
     """Run a method in process; returns the final state."""
     def execute(method: str, script: Script, *, language: str = "pyomo", limits: Limits | None = None,
-                problem: str = PRODUCTION_PROBLEM) -> dict[str, Any]:
-        return asyncio.run(run(problem, method=method, language=language, resources=make_resources(script, limits)))
+                problem: str = PRODUCTION_PROBLEM, data: dict[str, str] | None = None) -> dict[str, Any]:
+        return asyncio.run(run(problem, method=method, language=language, data=data, resources=make_resources(script, limits)))
 
     return execute
 

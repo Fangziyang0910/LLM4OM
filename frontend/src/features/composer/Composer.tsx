@@ -53,7 +53,7 @@ export function initialDraft(): Draft {
     comparing: saved.comparing ?? false, methods: saved.methods ?? [], presets: saved.presets ?? [] };
 }
 
-/** Why a method cannot use a language: its original prompts cover LP/MILP only. */
+/** Methods expose only the code interfaces and solvers their implementation supports. */
 const unsupported = (method: Method, language: string) => !!method.languages && !method.languages.includes(language);
 
 export function Composer({ options, presets, draft, setDraft, onStart, onCompare, openPresets, openExamples }: {
@@ -211,7 +211,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
                 {options.methods.map(item => {
                   const blocked = unsupported(item, language.id);
                   const selected = !blocked && !!draft.methods?.includes(item.id);
-                  return <Label key={item.id} htmlFor={`compare-${item.id}`} title={blocked ? t("{method}：原方法的提示只覆盖 LP/MILP，不支持这种写法", { method: item.name }) : undefined}
+                  return <Label key={item.id} htmlFor={`compare-${item.id}`} title={blocked ? t("{method}：当前方法不支持这种代码写法与求解器", { method: item.name }) : undefined}
                     className={cn("flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 font-normal transition-colors hover:bg-accent/50",
                       selected && "border-primary/50 bg-primary/5 hover:bg-primary/5", blocked && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
                     <Checkbox id={`compare-${item.id}`} checked={selected} disabled={blocked} onCheckedChange={on => toggle("methods", item.id, on === true)} />
@@ -251,7 +251,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
                   </Label>;
                   return allowed ? <div key={item.id} className="h-full">{tile}</div> : <Tooltip key={item.id}>
                     <TooltipTrigger asChild><div className="h-full">{tile}</div></TooltipTrigger>
-                    <TooltipContent>{t("{method}：原方法的提示只覆盖 LP/MILP，不支持这种写法", { method: method.name })}</TooltipContent>
+                    <TooltipContent>{t("{method}：当前方法不支持这种代码写法与求解器", { method: method.name })}</TooltipContent>
                   </Tooltip>;
                 })}
               </RadioGroup>

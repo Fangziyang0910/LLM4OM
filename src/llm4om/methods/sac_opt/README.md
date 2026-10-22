@@ -1,0 +1,17 @@
+# SAC-Opt
+
+固定参考：[Forrest-Stone/SAC-Opt@ec0ddb544ae6b70714181740ebbba16027df50e4](https://github.com/Forrest-Stone/SAC-Opt/tree/ec0ddb544ae6b70714181740ebbba16027df50e4)，[论文](https://proceedings.mlr.press/v306/zhang26cb.html)。上游该提交没有许可证声明。本目录根据公开算法独立实现，提示为本项目重新编写，不复制上游代码或提示，也不宣称逐字复现。
+
+LangGraph：`parameters → variables → objective → constraints → generate → backtranslate → compare → (repair → backtranslate)* → assemble → solve → (debug → solve)*`。只支持 gurobipy/Gurobi。
+
+保留参数、变量、目标、约束四类语义锚点。参数和变量置信评分大于 3 才保留；低置信约束再判断是否修正。代码按 setup、目标、各约束拆开。约束代码回译不读取原始约束；比较器检查回译与原约束是否等价。通过的约束冻结，只重写未通过的组件。与上游相同，回译循环检查约束，不把它描述成对目标的独立验证。温度 0；解析最多 5 次；语义比较最多 5 轮；执行最多 3 次。
+
+`llm4om:` 适配差异：
+
+- 原逐参数字典和变量声明改为带符号、形状、域、单位的文字锚点；同一次生成返回 setup、目标和约束组件。参数值可来自 `build_model(data)` 的完整附件，不要求宿主机 `data.json`。
+- 约束提取同时去重；回译、比较和修正将当前待检查组件批量提交，每个组件仍单独判断。原始 JSON 输出改为 Pydantic 校验，组件数量必须与锚点对应；响应中的代码围栏在组装前移除。数量或格式不完整进入同一解析重试上限；不重试已删除的低置信参数。
+- 提示移除上游激励性措辞；不发送 OpenAI 专用 `seed=42`，以支持平台的不同 LLM 提供商。
+- 最后一轮比较失败时保留模型与求解结果，但明确标记语义检查未通过，不以未经再次验证的最后修正冒充通过。
+- 不静默删除包含辅助变量的约束代码。输出数学模型与代码；调试完整程序后重新执行，确保最终代码对应最终求解结果。
+
+此实现保留语义锚点和选择性修正机制；数值效果需要独立评估，不能直接沿用论文报告。

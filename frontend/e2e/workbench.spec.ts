@@ -79,6 +79,29 @@ test("a cancelled method keeps its draft after reloading without an event stream
   expect(errors).toEqual([]);
 });
 
+test("new methods expose supported solver choices and BIND runs through the workbench", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#method-sac_opt").click();
+  await expect(page.locator("#language-gurobipy")).toBeChecked();
+  await expect(page.locator("#language-pyomo")).toBeDisabled();
+  await page.locator("#method-optimind").click();
+  await expect(page.locator("#language-pyscipopt")).toBeEnabled();
+  await expect(page.locator("#language-cpmpy")).toBeDisabled();
+  await page.locator("#method-bind").click();
+  await expect(page.locator("#language-casadi")).toBeEnabled();
+  await expect(page.locator("#language-cvxpy_mosek")).toBeEnabled();
+  await page.locator('label[for="language-pyomo"]').click();
+  await page.getByRole("button", { name: /^生产计划/ }).click();
+  await page.getByRole("button", { name: "开始建模" }).click();
+  await page.waitForURL(/\/run\//);
+  await page.getByRole("button", { name: "查看解" }).waitFor({ timeout: 60_000 });
+  await expect(page.getByText("目标值").first().locator("..")).toContainText("13");
+  const state = (await (await page.request.get(`/threads/${page.url().split("/").at(-1)}`)).json()).values;
+  expect(state.spec.method).toBe("bind");
+  expect(state.failure).toBeNull();
+  expect(errors).toEqual([]);
+});
+
 test("history can load records beyond the first two hundred", async ({ page }) => {
   const ids: string[] = [];
   try {

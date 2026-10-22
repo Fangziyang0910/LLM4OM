@@ -98,8 +98,10 @@ Please fix the code based on the error information above.
 
     logger.info("✅ code_agent completed")
 
+    code = result.get("code", state.get("code"))
     return {
-        "code": result.get("code", state.get("code")),
+        "code": code,
+        "failure": None if code else state.get("failure"),  # llm4om: clear the pre-code failure after generation.
         "code_validation_passed": None,
         "code_validation_feedback": None,
     }

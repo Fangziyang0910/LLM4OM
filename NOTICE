@@ -4,6 +4,18 @@ Copyright 2026 Ziyang Fang
 This repository contains an implementation of an automated optimization
 modeling platform and its documentation.
 
+OptiMind's public hints and adapted inference prompts are from Microsoft
+OptiGuide/optimind, commit 419cf7b9eee20b6af036abf15152fa775b20c951.
+Copyright (c) 2025 Microsoft, MIT license. The original hint CSV, license,
+source paths and hashes are retained in methods/optimind/source/.
+BIND's workflow is adapted from SprocketLab/Text2Opt-Bench, commit
+1dac06be656c41d827ef20987cf8af0b48d382a2, Copyright (c) 2026 SprocketLab,
+MIT license, retained in methods/bind/LICENSE.txt.
+The SAC-Opt integration is an independent implementation with newly written
+prompts based on the published algorithm and reference commit
+ec0ddb544ae6b70714181740ebbba16027df50e4 of Forrest-Stone/SAC-Opt.
+No source code or prompt text from that unlicensed repository is bundled.
+
 OptiTree's fixed public modeling-thought library and tree mapping are bundled
 under their original MIT license in src/llm4om/methods/optitree/source/.
 Copyright (c) 2025 MIRA Lab.

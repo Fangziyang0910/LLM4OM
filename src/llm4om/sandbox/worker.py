@@ -1,9 +1,8 @@
 """Build and solve one generated model, or run one check script. Runs inside the sandbox; imports nothing from llm4om.
 
 Reads {code, data, language, time_limit} as JSON on stdin and prints one result line prefixed with RESULT_MARKER.
-`build_model(data)` returns the model in the chosen language (Pyomo, gurobipy, OR-Tools pywraplp, CPMpy, PuLP or
-CVXPY); the worker solves it with that language's solver (HiGHS, Gurobi, SCIP, CP-SAT, CBC or Clarabel) through its own
-interface and reads the result. For an infeasible model it also looks for the conflicting constraints, for display.
+`build_model(data)` returns the model in the chosen interface; the worker solves it with the paired solver through
+its native API and reads the result. For supported infeasible models it also finds conflicting constraints for display.
 """
 
 import contextlib
@@ -13,6 +12,7 @@ import linecache
 import math
 import sys
 import traceback
+from functools import partial
 
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
 MAX_OUTPUT_CHARS = 20000
@@ -133,13 +133,19 @@ def solve_cbc(problem, time_limit):
     return status, pulp.value(problem.objective), values
 
 
-def solve_clarabel(problem, time_limit):
-    """CVXPY on Clarabel: continuous convex problems. Clarabel has no integer variables."""
+def solve_cvxpy(problem, time_limit, *, solver):
+    """One CVXPY result reader, with each solver's own time-limit option."""
     import cvxpy as cp
     import numpy as np
 
     _expect(problem, cp.Problem, "cvxpy Problem")
-    problem.solve(solver=cp.CLARABEL, time_limit=float(time_limit))
+    options = {
+        "CLARABEL": {"time_limit": float(time_limit)},
+        "OSQP": {"time_limit": float(time_limit)},
+        "SCS": {"time_limit_secs": float(time_limit)},
+        "MOSEK": {"mosek_params": {"MSK_DPAR_OPTIMIZER_MAX_TIME": float(time_limit)}},
+    }
+    problem.solve(solver=solver, **options[solver])
     status = {
         cp.OPTIMAL: "optimal", cp.OPTIMAL_INACCURATE: "feasible", cp.INFEASIBLE: "infeasible",
         cp.INFEASIBLE_INACCURATE: "infeasible", cp.UNBOUNDED: "unbounded", cp.UNBOUNDED_INACCURATE: "unbounded",
@@ -160,11 +166,72 @@ def solve_clarabel(problem, time_limit):
     return status, problem.value, values
 
 
+def solve_scip(model, time_limit):
+    from pyscipopt import Model
+
+    _expect(model, Model, "pyscipopt.Model")
+    model.hideOutput()
+    model.setRealParam("limits/time", float(time_limit))
+    model.optimize()
+    status = {"optimal": "optimal", "infeasible": "infeasible", "unbounded": "unbounded",
+              "inforunbd": "infeasible_or_unbounded", "timelimit": "time_limit"}.get(str(model.getStatus()))
+    solution = model.getBestSol()
+    if solution is None:
+        return status or "error", None, None
+    return status or "feasible", model.getSolObjVal(solution), {v.name: model.getSolVal(solution, v) for v in model.getVars()}
+
+
+def solve_ipopt(model, time_limit):
+    import casadi as ca
+
+    _expect(model, ca.Opti, "casadi.Opti")
+    model.solver("ipopt", {"print_time": False}, {"print_level": 0, "sb": "yes", "max_wall_time": float(time_limit)})
+    try:
+        solution = model.solve_limited()
+    except RuntimeError as error:
+        try:
+            status = model.stats()["return_status"]
+        except RuntimeError:
+            raise error
+        if status == "Infeasible_Problem_Detected":
+            return "locally_infeasible", None, None
+        raise
+    status = {"Solve_Succeeded": "locally_optimal", "Solved_To_Acceptable_Level": "feasible",
+              "Maximum_WallTime_Exceeded": "time_limit", "Maximum_CpuTime_Exceeded": "time_limit",
+              "Maximum_Iterations_Exceeded": "iteration_limit"}.get(solution.stats()["return_status"], "error")
+    if status not in ("locally_optimal", "feasible"):
+        return status, None, None  # an unfinished NLP iterate is not necessarily feasible
+    values = {}
+    for variable in ca.symvar(model.x):
+        for row in range(variable.size1()):
+            for col in range(variable.size2()):
+                index = f"[{row},{col}]" if variable.size2() > 1 else f"[{row}]" if variable.size1() > 1 else ""
+                values[variable.name() + index] = solution.value(variable[row, col])
+    return status, solution.value(model.f), values
+
+
+def solve_copt(model, time_limit):
+    import coptpy as cp
+
+    _expect(model, cp.Model, "coptpy.Model")
+    model.setParam("Logging", 0)
+    model.setParam("TimeLimit", float(time_limit))
+    model.solve()
+    status = {cp.COPT.OPTIMAL: "optimal", cp.COPT.INFEASIBLE: "infeasible", cp.COPT.UNBOUNDED: "unbounded",
+              cp.COPT.INF_OR_UNB: "infeasible_or_unbounded", cp.COPT.TIMEOUT: "time_limit",
+              cp.COPT.LOCAL_OPTIMAL: "locally_optimal", cp.COPT.LOCAL_INFEASIBLE: "locally_infeasible"}.get(model.status)
+    if not model.hasSol:
+        return status or "error", None, None
+    return status or "feasible", model.objval, {v.name: v.x for v in model.getVars()}
+
+
 # The language decides the solver.
 SOLVERS = {"pyomo": solve_highs, "gurobipy": solve_gurobi, "pywraplp": solve_ortools, "cpmpy": solve_cpsat,
-           "pulp": solve_cbc, "cvxpy": solve_clarabel}
+           "pulp": solve_cbc, "pyscipopt": solve_scip, "casadi": solve_ipopt, "coptpy": solve_copt,
+           **{key: partial(solve_cvxpy, solver=solver) for key, solver in
+              [("cvxpy", "CLARABEL"), ("cvxpy_osqp", "OSQP"), ("cvxpy_scs", "SCS"), ("cvxpy_mosek", "MOSEK")]}}
 # Imported before the code runs: CVXPY logs a warning for every optional solver it cannot load, which is not output.
-PRELOAD = {"cvxpy": "cvxpy"}
+PRELOAD = {key: "cvxpy" for key in SOLVERS if key.startswith("cvxpy")}
 
 
 IIS_TIME_LIMIT = 20  # seconds for finding the conflict of an infeasible model, after solving it

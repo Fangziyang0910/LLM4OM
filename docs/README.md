@@ -21,6 +21,8 @@
 
 [参考资料库](references/README.md)提供论文、代码和数据链接。[资料核验说明](references/search-log.md)说明来源和读取范围。
 
+[方法与求解器接入调查](references/methods-solvers.md)对照现有实现，说明哪些候选能补充建模和求解能力、需要哪些接入条件。
+
 论文元数据在 `references/catalog.json` 中维护。修改后运行 `python3 scripts/render_references.py`，重新生成资料页和 BibTeX。
 
 ## 图片

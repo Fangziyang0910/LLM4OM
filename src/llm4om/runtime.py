@@ -41,10 +41,11 @@ class ModelingState(TypedDict, total=False):
     """The keys every method graph shares with the platform; a method's state extends it."""
 
     problem: str  # input: the problem description followed by the attached data files
+    description: str  # input: the description alone, for methods that offload data instead of prompting with it
     formulation: str | None  # output: Markdown with LaTeX
     code: str | None  # output: Python code that defines build_model(data)
     solve: SolveResult | None  # output, optional: the result of `code` when the method solved it itself
-    failure: str | None  # output, optional: why the method stopped without code
+    failure: str | None  # output, optional: why the method failed, even if code was generated
 
 
 class Recorder:

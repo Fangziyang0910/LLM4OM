@@ -13,7 +13,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 
 from llm4om.graph import run
 from llm4om.runtime import Limits
-from tests.conftest import FORMULATION, PRODUCTION_CODE, TWO_PART_REPLY, ScriptedChat, tool_call
+from tests.conftest import ACCEPT_REVIEW, FORMULATION, PRODUCTION_CODE, TWO_PART_REPLY, ScriptedChat, tool_call
 
 BROKEN_CODE = PRODUCTION_CODE.replace("return m", "return m.missing")
 CODE_BLOCK = f"```python\n{PRODUCTION_CODE}```"
@@ -40,6 +40,14 @@ def test_direct_generates_and_solves(run_method: Any) -> None:
     assert FORMULATION in record["formulation"]
     llm_event = next(event for event in record["steps"] if event["type"] == "llm")
     assert (llm_event["title"], llm_event["output_tokens"]) == ("generate", 5)
+    assert record["usage"]["llm_calls"] == record["usage"]["solves"] == 1
+
+
+@pytest.mark.parametrize("reply", ["A model without code.", CODE_BLOCK, "Formulation\n```python\n\n```"])
+def test_direct_reports_incomplete_outputs_without_solving(run_method: Any, reply: str) -> None:
+    record = run_method("direct", by_role({"generate": reply}))
+    assert record["failure"] and not record.get("solve")
+    assert record["usage"]["llm_calls"] == 1 and record["usage"]["solves"] == 0
 
 
 def test_feedback_repair_uses_the_solver_error(run_method: Any) -> None:
@@ -47,12 +55,124 @@ def test_feedback_repair_uses_the_solver_error(run_method: Any) -> None:
 
     def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
         seen.append(messages[-1].text)
+        if role == "review":
+            return ACCEPT_REVIEW
         return TWO_PART_REPLY.replace(PRODUCTION_CODE, BROKEN_CODE) if role == "generate" else TWO_PART_REPLY
 
     record = run_method("feedback_repair", script)
     assert_solved(record)
     assert "missing" in seen[1]  # the repair prompt carries the execution error
     assert [event["status"] for event in record["steps"] if event["type"] == "solve"] == ["error", "optimal"]
+
+
+def test_feedback_repair_recovers_a_malformed_reply(run_method: Any) -> None:
+    seen = []
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        seen.append((role, messages[-1].text))
+        return {"generate": "The reply was cut off before the code block.", "repair": TWO_PART_REPLY,
+                "review": ACCEPT_REVIEW}[role]
+
+    record = run_method("feedback_repair", script)
+    assert_solved(record)
+    assert "Output format error" in seen[1][1] and "cut off" in seen[1][1]
+    assert [role for role, _ in seen] == ["generate", "repair", "review"]
+    assert record["usage"]["solves"] == 1
+
+
+def test_feedback_repair_checks_semantics_even_after_an_optimal_solve(run_method: Any) -> None:
+    wrong = TWO_PART_REPLY.replace('3 * m.x["A"]', '6 * m.x["A"]')
+    reviews = iter(['{"action":"repair","reason":"The code uses profit 6 for A, but the problem states 3."}', ACCEPT_REVIEW])
+    repair_prompts = []
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        if role == "generate":
+            return wrong
+        if role == "review":
+            return next(reviews)
+        repair_prompts.append(messages[-1].text)
+        return TWO_PART_REPLY
+
+    record = run_method("feedback_repair", script)
+    assert_solved(record)
+    assert [step["objective"] for step in record["steps"] if step["type"] == "solve"] == [24, 13]
+    assert "profit 6" in repair_prompts[0] and "## Model review" in repair_prompts[0]
+
+
+def test_feedback_repair_stops_when_output_format_cannot_be_repaired(run_method: Any, preset: Any) -> None:
+    preset("FEEDBACK_REPAIR", max_repairs=1)
+    record = run_method("feedback_repair", by_role({"generate": "No code.", "repair": "Still no code."}))
+    assert "Output format could not be repaired" in record["failure"]
+    assert not record["code"] and not record["solve"]
+    assert record["usage"]["llm_calls"] == 2 and record["usage"]["solves"] == 0
+
+
+def test_feedback_repair_accepts_a_faithful_infeasible_model(run_method: Any) -> None:
+    infeasible = TWO_PART_REPLY.replace("<= 8)", "<= -8)", 1)
+    record = run_method("feedback_repair", by_role({"generate": infeasible, "review": ACCEPT_REVIEW}),
+                        problem="Use the same production model, but cutting capacity is -8, so it is infeasible.")
+    assert not record["failure"] and record["solve"]["status"] == "infeasible"
+    assert record["usage"]["llm_calls"] == 2 and record["usage"]["solves"] == 1
+    assert record["code"] in infeasible
+
+
+@pytest.mark.parametrize("status,objective", [("time_limit", None), ("time_limit", 12), ("unbounded", None), ("feasible", None)])
+def test_feedback_repair_does_not_rewrite_for_solver_status_alone(make_resources: Any, status: str, objective: Any) -> None:
+    from llm4om.sandbox import Sandbox, SolveResult
+
+    class StatusSandbox(Sandbox):
+        async def solve(self, *args: Any) -> SolveResult:
+            return SolveResult(status, objective, {"x": 1} if status == "feasible" or objective else {})
+
+    resources = make_resources(by_role({"generate": TWO_PART_REPLY, "review": ACCEPT_REVIEW}))
+    resources.sandbox = StatusSandbox("local")
+    record = asyncio.run(run("test", method="feedback_repair", resources=resources))
+    assert not record["failure"] and record["solve"]["status"] == status
+    assert record["usage"]["llm_calls"] == 2 and record["usage"]["solves"] == 1
+
+
+def test_feedback_repair_keeps_unresolved_review_as_a_failure(run_method: Any, preset: Any) -> None:
+    preset("FEEDBACK_REPAIR", max_repairs=1)
+    wrong = TWO_PART_REPLY.replace('3 * m.x["A"]', '6 * m.x["A"]')
+    record = run_method("feedback_repair", by_role({"generate": wrong, "repair": wrong,
+                         "review": '{"action":"repair","reason":"Wrong profit coefficient for A."}'}))
+    assert "Wrong profit" in record["failure"]
+    assert record["solve"]["objective"] == 24 and record["code"] in wrong
+    assert record["usage"]["llm_calls"] == 4 and record["usage"]["solves"] == 2
+
+
+def test_feedback_repair_keeps_the_last_evaluated_attempt_when_repair_is_malformed(run_method: Any, preset: Any) -> None:
+    preset("FEEDBACK_REPAIR", max_repairs=1)
+    record = run_method("feedback_repair", by_role({"generate": TWO_PART_REPLY.replace(PRODUCTION_CODE, BROKEN_CODE),
+                                                   "repair": "An incomplete response without code."}))
+    assert "Output format could not be repaired" in record["failure"]
+    assert record["code"].strip() == BROKEN_CODE.strip() and record["solve"]["status"] == "error"
+    assert record["usage"]["llm_calls"] == 2 and record["usage"]["solves"] == 1
+
+
+@pytest.mark.parametrize("reply", ["Not JSON", '{"action":"maybe","reason":"Unknown"}', '{"action":"accept"}'])
+def test_feedback_repair_does_not_accept_an_invalid_review(run_method: Any, reply: str) -> None:
+    record = run_method("feedback_repair", by_role({"generate": TWO_PART_REPLY, "review": reply}))
+    assert "Could not read the model review" in record["failure"]
+    assert record["solve"]["objective"] == 13 and record["usage"]["solves"] == 1
+
+
+def test_feedback_repair_can_read_a_fenced_json_review(run_method: Any) -> None:
+    record = run_method("feedback_repair", by_role({"generate": TWO_PART_REPLY,
+                                                   "review": f"```json\n{ACCEPT_REVIEW}\n```"}))
+    assert_solved(record)
+
+
+def test_feedback_repair_keeps_solved_artifacts_when_review_call_fails(run_method: Any) -> None:
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        if role == "review":
+            raise RuntimeError("Review provider unavailable")
+        return TWO_PART_REPLY
+
+    record = run_method("feedback_repair", script)
+    assert "Review provider unavailable" in record["failure"]
+    assert record["solve"]["objective"] == 13 and record["code"].strip() == PRODUCTION_CODE.strip()
+    assert record["usage"]["solves"] == 1
 
 
 CPMPY_REPLY = """### Formulation

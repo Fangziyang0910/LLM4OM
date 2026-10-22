@@ -19,7 +19,7 @@ from llm4om.methods import Method, methods
 from llm4om.progress import NAMESPACE
 from llm4om.runtime import ModelingState
 from llm4om.storage import write_private_json
-from tests.conftest import LLM, PRODUCTION_CODE, TWO_PART_REPLY
+from tests.conftest import ACCEPT_REVIEW, LLM, PRODUCTION_CODE, TWO_PART_REPLY
 
 
 def test_concurrent_preset_edits_keep_every_successful_write(tmp_path: Path) -> None:
@@ -99,7 +99,7 @@ def test_every_role_keeps_the_llm_selected_before_modeling(make_resources: Any) 
             resources.presets.delete(selected.id)
             resources.presets.add(replace(LLM, provider="deepseek", api_key="replacement-key"))
             return broken
-        return TWO_PART_REPLY
+        return ACCEPT_REVIEW if role == "review" else TWO_PART_REPLY
 
     resources = make_resources(script, llm=None)
     selected = resources.presets.add(LLM)
@@ -113,7 +113,7 @@ def test_every_role_keeps_the_llm_selected_before_modeling(make_resources: Any) 
     resources.model_factory = model
     result = asyncio.run(run("test", method="feedback_repair", resources=resources))
     assert result["solve"]["objective"] == 13
-    assert len(seen) == 2 and all(settings == LLM for settings in seen)
+    assert len(seen) == 3 and all(settings == LLM for settings in seen)
     assert result["spec"]["llm"] == LLM.public()
     assert result["spec"]["parameters"] == {"max_repairs": 3}
     assert LLM.api_key not in json.dumps(result) and "api_key" not in result["spec"]["llm"]

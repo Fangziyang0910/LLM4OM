@@ -26,10 +26,10 @@ _Avoid_: LLM 服务设置、profile；不要与方法的预设参数混用。
 
 **代码契约（Code Target）**：所选代码写法对应的代码要求，由平台拼接到方法的代码提示中。
 
-**代码写法（Code Language）**：生成代码使用的建模库：Pyomo、gurobipy、OR-Tools `pywraplp`、PuLP、CPMpy 或 CVXPY。用户选择写法，写法决定求解器。方法可以只支持部分写法。
+**代码写法（Code Language）**：一次运行使用的建模库与固定求解器组合，例如 Pyomo/HiGHS、PySCIPOpt/SCIP、CasADi/Ipopt 或 CVXPY/MOSEK。同一建模库可以有多个求解器版本，用户选择一个组合；方法可以只支持部分组合。
 _Avoid_: 建模后端（Backend）；它已与求解器合并为代码写法。
 
-**求解器（Solver）**：求解模型的程序，由代码写法决定：Pyomo → HiGHS，gurobipy → Gurobi，`pywraplp` → SCIP，PuLP → CBC，CPMpy → OR-Tools CP-SAT，CVXPY → Clarabel。
+**求解器（Solver）**：计算模型解的程序，由所选代码写法决定，例如 HiGHS、Gurobi、SCIP、CP-SAT、CBC、Clarabel、OSQP、SCS、Ipopt、COPT、MOSEK。
 
 **方言（Dialect）**：原提示针对某个库的方法为每种代码写法准备的提示与代码片段。gurobipy 方言保留上游原文。
 

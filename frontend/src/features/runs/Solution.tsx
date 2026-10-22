@@ -42,6 +42,8 @@ export function Solution({ solve }: { solve: Solve }) {
       <Metric label={t("非零变量 / 变量")}><span className="text-xl font-semibold tracking-tight tabular">{nonzero}<span className="text-muted-foreground"> / {entries.length}</span></span></Metric>
     </div>
 
+    {solve.status === "locally_optimal" ? <p className="text-sm text-muted-foreground">{t("已找到局部最优解；非凸问题仍可能存在更好的解。")}</p> : null}
+    {solve.status === "locally_infeasible" ? <p className="text-sm text-muted-foreground">{t("本次局部搜索未找到可行解，不能据此断定整个问题不可行。")}</p> : null}
     {solve.error ? <Alert variant="destructive"><TriangleAlert /><AlertTitle>{t("代码执行出错")}</AlertTitle>
       <AlertDescription><Plain tone="bad" className="mt-1 w-full">{solve.error}</Plain></AlertDescription></Alert> : null}
     {solve.diagnosis ? <Conflict diagnosis={solve.diagnosis} /> : null}

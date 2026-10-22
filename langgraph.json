@@ -13,7 +13,10 @@
     "or_llm_agent": "llm4om.server.graphs:or_llm_agent",
     "orthought": "llm4om.server.graphs:orthought",
     "llmopt": "llm4om.server.graphs:llmopt",
-    "autoformulation": "llm4om.server.graphs:autoformulation"
+    "autoformulation": "llm4om.server.graphs:autoformulation",
+    "sac_opt": "llm4om.server.graphs:sac_opt",
+    "bind": "llm4om.server.graphs:bind",
+    "optimind": "llm4om.server.graphs:optimind"
   },
   "http": {
     "app": "llm4om.server.app:app",

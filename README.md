@@ -29,7 +29,7 @@
 
 **LLM4OM**（Large Language Models for Optimization Modeling）是一个自动优化建模平台。你用自然语言描述问题，选择建模方法和代码写法。平台调用 LLM 写出数学模型和求解代码，在隔离的容器中求解，并展示每一步的中间产物。
 
-它把 **10 种已发表的 LLM 建模方法**放在同一个平台上，使用同一套模型、代码契约和求解沙箱。研究者可以在同一个问题上并排比较它们，也可以接入自己的方法。
+平台内置 **13 种 LLM 建模方法**，包括 Direct、Feedback Repair 两种自有方法，以及 11 种来自公开研究的方法。你不需要手写求解代码，可以直接输入问题、运行建模，再查看模型和结果。
 
 <p align="center">
   <img src="docs/assets/demo.gif" alt="演示：选择运输问题和 ORThought，开始建模，查看解、数学模型和代码" width="100%">
@@ -40,8 +40,8 @@
 
 | 能力 | 说明 |
 |---|---|
-| 🧠 **10 种建模方法** | Direct、TriVAL、OptiMUS、Chain-of-Experts、OptiTree、OR-LLM-Agent、ORThought、LLMOPT、AutoFormulation 等，保留原工作的提示和流程 |
-| 🧩 **6 种写法 × 6 个求解器** | Pyomo/HiGHS、gurobipy/Gurobi、OR-Tools/SCIP、PuLP/CBC、CPMpy/CP-SAT、CVXPY/Clarabel，覆盖 LP、MILP、约束规划和凸优化 |
+| 🧠 **13 种建模方法** | Direct、Feedback Repair、TriVAL、SAC-Opt、BIND、OptiMind 等；每种方法都有独立 LangGraph 图 |
+| 🧩 **12 条求解路径** | 9 种建模接口、11 个求解器，覆盖 LP、MILP、约束规划、凸优化和非线性优化 |
 | 🔍 **全过程可见** | 每次 LLM 调用实时显示；保留中断前已完成的步骤和产物；历史可分页，运行配置固定记录 |
 | ⚖️ **多方法对比** | 同一问题一次运行最多 12 个方法或模型，并排比较目标值、用时和 token |
 | 🧯 **不可行诊断** | 模型不可行时，列出一组不能同时满足的约束（Gurobi IIS / CPMpy MUS） |
@@ -86,7 +86,7 @@ docker compose up -d --build
 
 ```bash
 uv sync --all-extras
-uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:9
+uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:10
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
@@ -121,17 +121,20 @@ print(state["failure"] or state["solve"]["objective"])
 | 方法 | 流程 | 来源 |
 |---|---|---|
 | Direct | 一次调用，同时给出数学模型和代码 | 基线 |
-| Feedback Repair | Direct，然后根据求解反馈修正 | 基线 |
+| Feedback Repair | 生成、求解、复核题意一致性，按格式、执行或建模问题修正 | 自有方法 |
 | TriVAL | 语义、数学模型、代码三阶段验证；每阶段构建、验证、修订 | [代码](https://github.com/SCUT-EIPI/TriVAL/tree/380a529) |
-| OptiMUS | 提取参数、目标和约束，逐条建模和写代码，组装后调试 | [ICML 2024](https://arxiv.org/abs/2402.10172) · [代码](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) |
+| OptiMUS 0.3 | 提取参数、目标和约束，逐条建模和写代码，组装后调试 | [v0.3 论文](https://arxiv.org/abs/2407.19633) · [代码](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) |
 | Chain-of-Experts | 协调者逐个选择专家，汇总器写代码；可选反向反思 | [ICLR 2024](https://openreview.net/forum?id=HobyL1B9CZ) · [代码](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) |
 | OptiTree | 在问题类型树中匹配建模思路，再生成模型和代码 | [NeurIPS 2025](https://arxiv.org/abs/2510.22192) · [代码](https://github.com/MIRALab-USTC/OptiTree/tree/2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9) |
 | OR-LLM-Agent | 先数学建模，再生成代码，按执行错误调试，最后检查不可行 | [arXiv](https://arxiv.org/abs/2503.10009) · [代码](https://github.com/bwz96sco/or_llm_agent/tree/5dccdaab89ab91c3cb28066fe849423dc124d287) |
 | ORThought | 按专家建模思路写出求解思路、数学模型和代码；出错时带上模型和错误调试 | [arXiv](https://arxiv.org/abs/2508.14410) · [代码](https://github.com/BeinuoYang/ORThought/tree/5293e24861a65d1e4a2f61f4fad0a81de901ee38) |
 | LLMOPT | 先写五要素模型，再写代码；LLM 判断对错，回到错的一步重写 | [ICLR 2025](https://arxiv.org/abs/2410.13213) · [代码](https://github.com/antgroup/LLMOPT/tree/1492dd33e39ea13f1afe32a0adc13d4217334195) |
 | AutoFormulation | 逐层采样并剪枝建树，再用 MCTS 和两两比较排名（调用量很大） | [ICML 2025](https://arxiv.org/abs/2411.01679) · [代码](https://github.com/jumpynitro/AutoFormulator/tree/52148018d04de23dc2d36d4281eb6244c2a42ffc) |
+| SAC-Opt | 语义锚点提取、约束代码回译、比较与选择性修正（独立实现） | [论文](https://proceedings.mlr.press/v306/zhang26cb.html) · [适配说明](src/llm4om/methods/sac_opt/README.md) |
+| BIND | 提示只读附件结构，代码读取完整数据，执行失败时修正 | [论文](https://arxiv.org/abs/2605.21751) · [适配说明](src/llm4om/methods/bind/README.md) |
+| OptiMind | 公开类型提示、建模、求解反馈与多轮检查 | [论文](https://arxiv.org/abs/2509.22979) · [公开范围](src/llm4om/methods/optimind/README.md) |
 
-研究方法固定在上游的某个提交，保留原工作的提示、编排和停止条件。平台只做接入所需的适配和避错，每条改动都有记录。原提示要求 LP/MILP 的方法只提供四种 MILP 写法。详见[建模方法](docs/methods.md)。
+各方法固定参考提交并记录差异。SAC-Opt 根据公开算法独立实现；BIND 不使用基准参考答案；OptiMind 接入公开推理流程，提示库目前只有旅行商问题。方法只开放实际支持的代码写法。详见[建模方法](docs/methods.md)。
 
 ## 代码写法与求解器
 
@@ -145,6 +148,12 @@ print(state["failure"] or state["solve"]["objective"])
 | PuLP | CBC | LP、MILP |
 | CPMpy | OR-Tools CP-SAT | 约束规划：整数与布尔变量、全局约束、可满足性问题 |
 | CVXPY | Clarabel | 连续凸优化：LP、凸二次规划、二阶锥等 |
+| PySCIPOpt | SCIP 原生接口 | 混合整数线性/非线性约束 |
+| CasADi | Ipopt | 连续光滑非线性问题，返回局部解 |
+| coptpy | COPT | LP、MILP、凸二次/锥优化；无许可证时仅限小规模非商业使用 |
+| CVXPY / OSQP | OSQP | 连续凸二次规划、线性约束 |
+| CVXPY / SCS | SCS | 连续凸锥优化，含半正定、指数锥、幂锥 |
+| CVXPY / MOSEK | MOSEK | 凸锥、半正定及混合整数锥优化（不含混合整数 SDP）；需要许可证 |
 
 ## 架构
 

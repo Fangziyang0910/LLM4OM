@@ -1,6 +1,6 @@
 """A scripted OpenAI-compatible chat endpoint for the browser tests: no key, no network, the same reply every time.
 
-Every request gets a Direct-style reply (a formulation, then pyomo code). A problem that mentions a contract
+Generation requests get a formulation and pyomo code; model reviews accept the result. A problem that mentions a contract
 (合同) gets a model whose contract bounds conflict with the cutting capacity, so the solver finds it infeasible.
 Usage: python e2e/mock_llm.py PORT
 """
@@ -37,6 +37,8 @@ FORMULATION = "$$\\max\\ 3x_A + 2x_B$$ subject to $2x_A + x_B \\le 8$, $x_A + 2x
 
 def reply(messages: list[dict]) -> str:
     text = json.dumps(messages, ensure_ascii=False)
+    if "Review an optimization formulation and its code" in text:
+        return json.dumps({"action": "accept", "reason": "The model matches the test problem."})
     if "E2E_PAUSE_REPAIR" in text:
         if "## Solver feedback" in text:
             time.sleep(30)

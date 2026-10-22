@@ -20,6 +20,7 @@
 | `graph.py`、`state.py` | 增加入口节点 `receive_problem`，状态增加平台的 `problem` 与 `failure` | 适配 |
 | `nodes/code_validation/code_executor.py` | 改为异步，调用平台 `solve()`；`code_executable` 取 `result.executed`，`execution_feedback` 取 `result.feedback()` | 适配 |
 | `nodes/code_validation/code_agent.py` | 删除求解器选择和 OR-Tools、CP-SAT、CVXPY 语法段落，改述核心职责；系统提示末尾拼接平台代码契约 | 适配 |
+| `nodes/code_validation/code_agent.py` | 生成代码后清除入口预设的失败标记，避免成功运行携带“未生成代码”的错误 | 避错 |
 | `nodes/code_validation/code_validator.py` | 删除“代码是否输出可解释的求解结果”一条 | 适配 |
 | 读取模型回复 | `messages[-1].content` 改为 `.text` | 避错 |
 

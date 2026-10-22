@@ -17,13 +17,13 @@ from typing import Any
 WORKER = Path(__file__).with_name("worker.py")
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
 # The image contains worker.py, so a change to worker.py or worker.Dockerfile needs a new tag (and compose.yaml's).
-WORKER_IMAGE = "llm4om-worker:9"
+WORKER_IMAGE = "llm4om-worker:10"
 START_MARGIN = 60  # seconds beyond the time limit for starting the sandbox, importing libraries and building the model
 
 
 @dataclass
 class SolveResult:
-    status: str  # optimal, feasible, infeasible, unbounded, infeasible_or_unbounded, time_limit, executed or error
+    status: str  # also distinguishes locally_optimal/locally_infeasible for nonlinear solvers
     objective: float | None = None
     variables: dict[str, float] = field(default_factory=dict)
     output: str = ""
@@ -84,9 +84,19 @@ class Sandbox:
         command = ["docker", "run", "--rm", "-i", "--pull", "never", "--name", name, "--network", "none", "--memory", "2g",
                    "--cpus", "2", "--pids-limit", "256", "--read-only", "--tmpfs", "/tmp:rw,size=256m",
                    "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "-e", "HOME=/tmp"]
-        license_file = os.environ.get("GRB_LICENSE_FILE")
-        if license_file and Path(license_file).is_file():
-            command += ["-v", f"{license_file}:/opt/gurobi/gurobi.lic:ro", "-e", "GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic"]
+        for variable, destination in [("GRB_LICENSE_FILE", "/opt/gurobi/gurobi.lic"),
+                                      ("MOSEKLM_LICENSE_FILE", "/opt/mosek/mosek.lic")]:
+            license_file = os.environ.get(variable)
+            if license_file and Path(license_file).is_file():
+                command += ["-v", f"{Path(license_file).resolve()}:{destination}:ro", "-e", f"{variable}={destination}"]
+        # Mount only COPT's two license files, never the entire installation or home directory.
+        license_dir = os.environ.get("COPT_LICENSE_DIR")
+        if license_dir:
+            for filename in ("license.dat", "license.key"):
+                path = Path(license_dir, filename)
+                if path.is_file():
+                    command += ["-v", f"{path.resolve()}:/opt/copt/{filename}:ro"]
+            command += ["-e", "COPT_LICENSE_DIR=/opt/copt"]
         return command + [self.image, "python", "-I", "/opt/llm4om/worker.py"]
 
     async def _run(self, request: dict[str, Any], time_limit: float) -> SolveResult:
@@ -96,7 +106,8 @@ class Sandbox:
     async def _execute(self, request: dict[str, Any], time_limit: float) -> SolveResult:
         timeout = time_limit + START_MARGIN
         name = "llm4om-" + uuid.uuid4().hex[:12]
-        env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "GRB_LICENSE_FILE")
+        env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "GRB_LICENSE_FILE",
+                                               "MOSEKLM_LICENSE_FILE", "COPT_LICENSE_DIR")
                if key in os.environ} if self.kind == "local" else None
         process = await asyncio.create_subprocess_exec(*self._command(name), stdin=asyncio.subprocess.PIPE,
                                                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env)

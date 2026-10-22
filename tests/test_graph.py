@@ -10,19 +10,19 @@ from llm4om.graph import RunContext, platform_graph, run
 from llm4om.methods import methods
 from llm4om.runtime import Limits
 from llm4om.sandbox import Sandbox
-from tests.conftest import PRODUCTION_CODE, TWO_PART_REPLY
+from tests.conftest import ACCEPT_REVIEW, PRODUCTION_CODE, TWO_PART_REPLY
 
 BROKEN_CODE = PRODUCTION_CODE.replace("return m", "return m.missing")
 
 
 def test_a_node_update_is_recorded_before_the_next_node_starts(run_method: Any) -> None:
     broken = TWO_PART_REPLY.replace(PRODUCTION_CODE, BROKEN_CODE)
-    replies = iter([broken, TWO_PART_REPLY])
+    replies = iter([broken, TWO_PART_REPLY, ACCEPT_REVIEW])
     record = run_method("feedback_repair", lambda *_: next(replies))
     order = [(step["type"], step["title"]) for step in record["steps"]]
     assert order == [("llm", "generate"), ("artifact", "生成数学模型和代码"), ("solve", "求解"),
-                     ("llm", "repair"), ("artifact", "按求解反馈修正"), ("solve", "求解（修正 1）"),
-                     ("artifact", "选择最好的一次")]
+                     ("llm", "repair"), ("artifact", "按反馈修正模型和代码"), ("solve", "求解（修正 1）"),
+                     ("llm", "review"), ("artifact", "复核模型与求解结果")]
 
 
 def test_llm_call_limit_stops_the_run(run_method: Any) -> None:

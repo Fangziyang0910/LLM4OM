@@ -38,7 +38,10 @@ def test_options_list_methods_languages_and_providers(tmp_path: Path) -> None:
     with client(tmp_path) as api:
         options = api.get("/api/options").json()
     assert {"direct", "trival", "optimus", "coe", "optitree", "or_llm_agent", "autoformulation"} <= {m["id"] for m in options["methods"]}
-    assert {item["id"] for item in options["languages"]} == {"pyomo", "gurobipy", "pywraplp", "cpmpy", "pulp", "cvxpy"}
+    assert {item["id"] for item in options["languages"]} == {
+        "pyomo", "gurobipy", "pywraplp", "cpmpy", "pulp", "cvxpy", "pyscipopt", "casadi", "coptpy",
+        "cvxpy_osqp", "cvxpy_scs", "cvxpy_mosek",
+    }
     optimus = next(m for m in options["methods"] if m["id"] == "optimus")
     assert optimus["languages"] == ["gurobipy", "pulp", "pyomo", "pywraplp"]
 

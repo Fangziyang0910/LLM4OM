@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/microsoft/OptiGuide",
+  "commit": "419cf7b9eee20b6af036abf15152fa775b20c951",
+  "files": {
+    "hints_subset.csv": {
+      "source": "optimind/data/hints_subset.csv",
+      "sha256": "7cdc647fedddd194b86d361e285fac65318498dc1b0f371839df42e07e20f361"
+    },
+    "LICENSE.txt": {
+      "source": "optimind/LICENSE",
+      "sha256": "98a96c38494df4963951e32b81ec4effebe4c8a812ab8d9e7d185d59e86fe2fc"
+    }
+  }
+}

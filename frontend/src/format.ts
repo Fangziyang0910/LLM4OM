@@ -5,15 +5,16 @@ const STATUS_TEXT: Record<string, string> = {
   pending: "排队中", running: "建模中", success: "已完成", error: "运行出错", timeout: "超时", interrupted: "已停止",
   failed: "运行失败",
   optimal: "最优", feasible: "可行解", infeasible: "不可行", unbounded: "无界",
+  locally_optimal: "局部最优", locally_infeasible: "局部不可行", iteration_limit: "达到迭代上限",
   infeasible_or_unbounded: "不可行或无界", time_limit: "达到时限", executed: "已执行",
 };
 export const STATUS: Record<string, string> = Object.fromEntries(Object.entries(STATUS_TEXT).map(([key, text]) => [key, t(text)]));
 
 /** The colour family of a status: good, bad, warn, live or idle. */
 export function tone(state: string): "good" | "bad" | "warn" | "live" | "idle" {
-  if (["optimal", "feasible", "success", "executed"].includes(state)) return "good";
+  if (["optimal", "locally_optimal", "feasible", "success", "executed"].includes(state)) return "good";
   if (["failed", "error", "infeasible", "unbounded", "infeasible_or_unbounded"].includes(state)) return "bad";
-  if (["time_limit", "timeout", "interrupted"].includes(state)) return "warn";
+  if (["time_limit", "timeout", "interrupted", "locally_infeasible", "iteration_limit"].includes(state)) return "warn";
   if (["running", "pending"].includes(state)) return "live";
   return "idle";
 }

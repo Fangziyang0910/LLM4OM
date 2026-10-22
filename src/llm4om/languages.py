@@ -1,10 +1,4 @@
-"""Code languages: how generated code expresses the model, and the solver that runs it.
-
-The user chooses a language; each language has one solver: Pyomo runs on HiGHS, gurobipy on Gurobi, OR-Tools
-pywraplp on SCIP, CPMpy on OR-Tools CP-SAT, PuLP on CBC and CVXPY on Clarabel. Generated code defines `build_model(data)` and returns the model; the
-worker solves it through that language's own interface. Methods add `CodeTarget.prompt` to their code-generation
-prompts; methods whose original prompts name one library keep a dialect per language, chosen by `CodeTarget.language`.
-"""
+"""Each code target pairs a modeling interface with its solver; generated code only builds the model."""
 
 from dataclasses import dataclass
 
@@ -118,7 +112,7 @@ digits and `_`. Variables are linear: no products of variables."""
 
 
 CVXPY = """\
-## CVXPY reference (solved with Clarabel)
+## CVXPY reference (solved with {solver})
 ```python
 import cvxpy as cp
 import numpy as np
@@ -131,10 +125,69 @@ def build_model(data):
     return cp.Problem(objective, constraints)
 ```
 - Return the `cp.Problem`. Do not call `problem.solve()`; the platform solves the model.
-- Clarabel solves continuous convex problems: LP, convex QP, SOCP, exponential and power cones, SDP. It has no \
-integer or Boolean variables. The problem must follow CVXPY's disciplined convex programming rules.
+- {capability} The problem must follow CVXPY's disciplined convex programming rules.
 - Use `@` for matrix products, `cp.sum`, `cp.norm`, `cp.quad_form` and other CVXPY atoms; do not use Python `max`, \
 `abs` or `if` on expressions."""
+
+
+PYSCIPOPT = """\
+## Native SCIP through PySCIPOpt
+```python
+from pyscipopt import Model, quicksum
+
+def build_model(data):
+    model = Model("production")
+    x = {p: model.addVar(name=f"x[{p}]", vtype="I", lb=0) for p in "AB"}
+    model.setObjective(3*x["A"] + 2*x["B"], "maximize")
+    model.addCons(2*x["A"] + x["B"] <= 8, name="cutting")
+    model.addCons(x["A"] + 2*x["B"] <= 8, name="machining")
+    return model
+```
+- Supports mixed integer linear and nonlinear constraints. Types: "C", "I", "B"; lb=None allows negative infinity.
+- The objective must be linear. Express a nonlinear objective with an auxiliary variable and an epigraph/hypograph \
+constraint with the correct direction. Do not call optimize()."""
+
+
+CASADI = """\
+## CasADi Opti with Ipopt (smooth continuous nonlinear optimization)
+```python
+import casadi as ca
+
+def build_model(data):
+    model = ca.Opti()
+    x = model.variable(2)
+    model.minimize((1-x[0])**2 + 100*(x[1]-x[0]**2)**2)
+    model.subject_to(model.bounded(-2, x, 2))
+    model.set_initial(x, [0, 0])
+    return model
+```
+- Return ca.Opti, not an NLP dictionary or a solver function. Do not call solver() or solve().
+- Ipopt finds a local solution; it does not establish global optimality for nonconvex problems. No integer variables.
+- Use smooth CasADi expressions. Maximize f by minimizing -f; state clearly that the reported objective is -f.
+- Opti assigns variable names automatically (e.g. opti0_x_1); explain their components in the formulation.
+- Set useful initial guesses and finite bounds when the problem gives them."""
+
+
+COPT = """\
+## COPT through coptpy
+```python
+import coptpy as cp
+from coptpy import COPT
+
+def build_model(data):
+    model = cp.Envr().createModel("production")
+    x = model.addVars(["A", "B"], vtype=COPT.INTEGER, lb=0, nameprefix="x")
+    model.setObjective(3*x["A"] + 2*x["B"], COPT.MAXIMIZE)
+    model.addConstr(2*x["A"] + x["B"] <= 8, name="cutting")
+    model.addConstr(x["A"] + 2*x["B"] <= 8, name="machining")
+    return model
+```
+- Supports LP, MILP, convex quadratic and conic optimization. Use coptpy expressions, cp.quicksum, COPT.CONTINUOUS, \
+COPT.BINARY and COPT.INFINITY. Do not call solve()."""
+
+
+def cvxpy_reference(solver: str, capability: str) -> str:
+    return CVXPY.format(solver=solver, capability=capability)
 
 
 STARTER = '''{imports}
@@ -181,8 +234,22 @@ LANGUAGES = {
                       "cp.Model", "cp.Model()", CP_OBJECTIVE),
     "pulp": Language("pulp", "PuLP", "CBC", "PuLP", PULP, "import pulp", "pulp.LpProblem",
                      'pulp.LpProblem("model", pulp.LpMinimize)'),
-    "cvxpy": Language("cvxpy", "CVXPY", "Clarabel", "CVXPY", CVXPY, "import cvxpy as cp\nimport numpy as np",
+    "cvxpy": Language("cvxpy", "CVXPY", "Clarabel", "CVXPY", cvxpy_reference("Clarabel",
+                      "Continuous convex LP, QP, SOCP, exponential/power cones and SDP; no integer or Boolean variables."),
+                      "import cvxpy as cp\nimport numpy as np",
                       "cp.Problem", "cp.Problem(cp.Minimize(0))"),
+    "pyscipopt": Language("pyscipopt", "PySCIPOpt", "SCIP", "PySCIPOpt", PYSCIPOPT,
+                          "from pyscipopt import Model, quicksum", "pyscipopt.Model", 'Model("model")'),
+    "casadi": Language("casadi", "CasADi", "Ipopt", "CasADi", CASADI, "import casadi as ca", "ca.Opti", "ca.Opti()"),
+    "coptpy": Language("coptpy", "coptpy", "COPT", "COPT", COPT, "import coptpy as cp\nfrom coptpy import COPT",
+                        "coptpy.Model", 'cp.Envr().createModel("model")'),
+    **{key: Language(key, "CVXPY", solver, "CVXPY", cvxpy_reference(solver, capability),
+                     "import cvxpy as cp\nimport numpy as np", "cp.Problem", "cp.Problem(cp.Minimize(0))")
+       for key, solver, capability in [
+           ("cvxpy_osqp", "OSQP", "Continuous convex quadratic objectives with linear constraints only; no integer variables or cones."),
+           ("cvxpy_scs", "SCS", "Continuous convex conic optimization including SDP, exponential and power cones; no integer variables."),
+           ("cvxpy_mosek", "MOSEK", "Convex LP/QP and conic optimization, including mixed integer conic models; no mixed integer SDP. A MOSEK license is required."),
+       ]},
 }
 # For methods whose original prompts ask for (MI)LP. CVXPY is left out: Clarabel has no integer variables.
 MILP_LANGUAGES = frozenset({"pyomo", "gurobipy", "pywraplp", "pulp"})

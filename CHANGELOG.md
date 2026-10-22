@@ -4,8 +4,22 @@
 
 ## [Unreleased]
 
+### 建模流程
+
+- Direct 保留一次生成调用，补全变量域、约束、数据绑定和输出格式要求。
+- Feedback Repair 的 LangGraph 图增加题意复核：格式错误、执行错误和具体建模问题进入修正，最多三次；真实不可行、无界或无目标可满足性结果可以正常结束。复核读取可用的冲突诊断。
+- 未解决的复核问题明确记录为失败；后续生成或复核失败时保留已完成产物和对应求解结果，不再按求解状态把不同模型排成“最好的一次”。
+- OptiMUS 标注为已接入的 v0.3，修正论文链接；补充方法与求解器的接入调查。
+
+### 新增方法与求解器
+
+- SAC-Opt、BIND、OptiMind 各自接入独立 LangGraph 图，记录固定参考提交和适配差异。SAC-Opt 独立实现；BIND 不依赖基准真值；OptiMind 仅使用公开提示子集。
+- 新增 PySCIPOpt/SCIP、CasADi/Ipopt、coptpy/COPT、CVXPY/OSQP、CVXPY/SCS、CVXPY/MOSEK；保留既有代码写法 ID，求解路径总数为 12。
+- 非线性求解区分局部最优与局部不可行；新增 MOSEK/COPT 许可证只读挂载，Worker 镜像升至 `llm4om-worker:10`。
+
 ### 修复
 
+- 平台不再因代码存在而忽略方法的显式失败；TriVAL 生成代码后清除过期的“未生成代码”失败标记。
 - 求解结果不再截断前 2000 个变量；变量视图按需展示，搜索和 CSV 导出使用完整数据。Worker 镜像升至 `llm4om-worker:9`，诊断用的临时 LP 文件及时删除。
 - 预设的读改写串行化并原子落盘；每日 token 写入按计数变更顺序排队，刷新时报告写入错误。
 - 同一运行的不同 LLM 角色使用固定配置。保存不含密钥的配置快照；已删除预设不会在再次运行时静默替换为默认预设。
@@ -27,7 +41,7 @@
 - 前端按 composer、runs、presets 组织功能，类型和测试与功能相邻；HTTP 通用请求和运行 SDK 分开。
 - 历史与详情共用配置快照合并规则；Excel 导入与解导出共用 CSV 转义；架构文档集中维护模块图。
 - 新增并发、服务重启持久化、分页、完整导出和取消回归；CI 增加真实 Docker 六种写法求解、隔离与取消清理测试。
-- Python 入口保持 `llm4om.run` / `run_problem`；预设存储从 `llm4om.llm_presets` 或 `llm4om` 导入，预算从 `llm4om.budget` 导入。方法提示、参数和研究流程不变。
+- Python 入口保持 `llm4om.run` / `run_problem`；预设存储从 `llm4om.llm_presets` 或 `llm4om` 导入，预算从 `llm4om.budget` 导入。已移植研究方法的提示、参数和核心流程不变。
 
 ## [0.41.1] - 2026-10-22
 

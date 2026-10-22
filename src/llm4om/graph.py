@@ -39,7 +39,7 @@ from llm4om.sandbox import Sandbox
 RECURSION_LIMIT = 1_000_000  # loops are bounded by each method and by Limits, not by LangGraph's step count
 DATA_NAME = r"[\w\-][\w\-. ]*"
 MAX_DATA_CHARS = 20000
-HIDDEN_KEYS = {"problem", "solve", "messages", "failure"}  # and keys starting with "_": never shown in a step
+HIDDEN_KEYS = {"problem", "description", "solve", "messages", "failure"}  # and keys starting with "_"
 
 
 class RunInput(TypedDict, total=False):
@@ -247,19 +247,20 @@ def platform_graph(method: Method) -> Any:
 
         async def drive() -> None:
             config: RunnableConfig = {"recursion_limit": RECURSION_LIMIT, "callbacks": [_NodeSteps(method, recorder)]}
-            async for values in graph.astream({"problem": state.get("problem", "")}, config, context=run,
+            async for values in graph.astream({"problem": state.get("problem", ""),
+                                               "description": state.get("description", "")}, config, context=run,
                                               stream_mode="values"):
                 final.update(values)
 
         async with save_progress(runtime.store, thread_id(), state, recorder):
             try:
                 await asyncio.wait_for(drive(), state["_deadline"] - time.time())
-                code = final.get("code")
-                solved = final.get("solve") or (run.solved.get(code) if code else None)
-                result = {"formulation": final.get("formulation"), "code": code, "solve": asdict(solved) if solved else None,
-                          "failure": None if code else final.get("failure") or f"{method.name} finished without code."}
+                result = {"failure": final.get("failure") or (None if final.get("code") else f"{method.name} finished without code.")}
             except Exception as error:  # Preserve completed artifacts when a later method step fails.
-                result = {"formulation": final.get("formulation"), "code": final.get("code"), **failure(error, recorder)}
+                result = failure(error, recorder)
+            code = final.get("code")
+            solved = final.get("solve") or (run.solved.get(code) if code else None)
+            result.update(formulation=final.get("formulation"), code=code, solve=asdict(solved) if solved else None)
         return {**result, **recorder.update()}
 
     async def solve(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:

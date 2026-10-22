@@ -1,6 +1,7 @@
 """Modeling methods. A method is a LangGraph graph over a state that extends `ModelingState`.
 
-The graph reads `problem` and writes `formulation` and `code` (and `solve` when it solved the code itself).
+The graph reads `problem` (or `description` without attachment previews) and writes `formulation` and `code`
+(and `solve` when it solved the code itself).
 Its nodes take `runtime: Runtime[Context]` to reach the LLM, the solver and the run log. The run view shows each
 update of a titled node as one step.
 """
@@ -28,9 +29,23 @@ class Method:
 
 def methods() -> dict[str, Method]:
     """Built-in methods plus any installed under the `llm4om.methods` entry-point group."""
-    from llm4om.methods import autoformulation, coe, direct, llmopt, optimus, optitree, or_llm_agent, orthought, trival
+    from llm4om.methods import (
+        autoformulation,
+        bind,
+        coe,
+        direct,
+        llmopt,
+        optimind,
+        optimus,
+        optitree,
+        or_llm_agent,
+        orthought,
+        sac_opt,
+        trival,
+    )
 
     found = [direct.DIRECT, direct.FEEDBACK_REPAIR, trival.TRIVAL, optimus.OPTIMUS, coe.COE, optitree.OPTITREE,
-             or_llm_agent.OR_LLM_AGENT, orthought.ORTHOUGHT, llmopt.LLMOPT, autoformulation.AUTOFORMULATION]
+             or_llm_agent.OR_LLM_AGENT, orthought.ORTHOUGHT, llmopt.LLMOPT, autoformulation.AUTOFORMULATION,
+             sac_opt.SAC_OPT, bind.BIND, optimind.OPTIMIND]
     found += [entry.load() for entry in entry_points(group="llm4om.methods")]
     return {method.id: method for method in found}
