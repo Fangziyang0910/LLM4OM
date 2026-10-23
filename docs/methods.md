@@ -2,7 +2,7 @@
 
 方法负责建模流程：调用 LLM、输出中间产物、请求求解、根据反馈修正。平台提供 LLM、代码契约和求解沙箱。接口见[架构](architecture.md#方法接口)。
 
-每个方法都是一张 LangGraph 图，即使只有一个节点。生成代码的提示按所选代码写法动态组装（见[可插拔的代码提示](architecture.md#可插拔的代码提示)）。OptiMUS、CoE、OptiTree、OR-LLM-Agent、AutoFormulation 保留四种 MILP 方言。SAC-Opt 只支持 gurobipy；OptiMind 支持四种原 MILP 方言及 PySCIPOpt、coptpy、CVXPY/MOSEK；其他方法使用平台代码契约，开放现有全部组合。
+每个方法都是一张 LangGraph 图，即使只有一个节点。代码提示按建模库与可选后端组装；库内 API 由代码表达，平台自动识别原生模型。OptiMUS、CoE、OptiTree、OR-LLM-Agent、AutoFormulation 保留四种 MILP 方言。SAC-Opt 只支持 gurobipy；OptiMind 另支持 PySCIPOpt、coptpy、CVXPY。其他方法使用平台统一代码契约。后端须支持模型的变量类型、约束和目标。
 
 ## 方法一览
 

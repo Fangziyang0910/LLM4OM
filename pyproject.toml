@@ -47,7 +47,10 @@ dependencies = [
 # Match the HiGHS ABI bundled with OR-Tools 9.15 (google/or-tools#5246).
 solve = ["Pyomo==6.10.1", "highspy==1.12.0", "ortools==9.15.6755", "cpmpy==1.1.0", "PuLP==3.3.2", "cvxpy==1.8.2",
          "clarabel==0.11.1", "osqp==1.1.3", "scs==3.3.1", "pyscipopt==6.3.0", "casadi==3.8.1", "coptpy==8.0.7",
-         "Mosek==11.2.6"]
+         "Mosek==11.2.6", "cvxopt==1.3.3", "ecos==2.0.14", "cylp==0.94.0", "daqp==0.10.3", "piqp==0.6.4",
+         "proxsuite==0.7.3", "qoco==0.3.2", "qpalm==1.3.0", "python-sat==1.9.dev17", "pysdd==1.0.6",
+         "exact==2.2.1", "pychoco==0.4.0", "pumpkin-solver==0.5.0", "pindakaas==0.6.1", "gcspy==0.1.9",
+         "minizinc==0.10.0", "cplex==22.2.0.1", "xpress==9.9.1", "swiglpk==5.0.13", "docplex>=2.30,<3"]
 gurobi = ["gurobipy==13.0.3"]
 # AutoFormulation's equivalence scripts use SymPy and Z3; the Docker worker has them, `--sandbox local` needs these.
 autoformulation = ["z3-solver==5.1.0.0", "sympy>=1.13,<2"]

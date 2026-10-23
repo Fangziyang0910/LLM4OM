@@ -109,7 +109,7 @@ async def _gather(*calls: Coroutine[Any, Any, Any]) -> list[Any]:
 
 
 def _instruction(context: Context, depth: int) -> str:
-    rule = DV_TYPE_RULES.get(context.target.language)
+    rule = DV_TYPE_RULES.get(context.target.dialect)
     return INSTRUCTIONS[depth].replace(GUROBI_TYPE_RULE, rule) if rule else INSTRUCTIONS[depth]
 
 
@@ -128,7 +128,7 @@ async def _check(context: Context, node: Node) -> None:
     elif node.run_code and step == "objective" and not check_constraints_for_correctness_obj(value):
         not_empty = node.run_code = False
     if step in EXECUTABLE_STEPS and node.run_code:
-        language = context.target.language
+        language = context.target.dialect
         try:
             code = codegen.model_code(language, node.form_dict_eval) if step == "inequality_constraints" \
                 else codegen.check_script(language, node.form_dict_eval, step)
@@ -343,7 +343,7 @@ def select(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     ranked = [by_order[order] for order in search.ranking or [] if by_order[order] in solved]
     best = nodes[ranked[0] if ranked else solved[0]]
     formulation = "\n\n".join(f"### {step}\n```python\n{best.form_dict_str.get(step, '')}\n```" for step in STEPS.values())
-    return {"formulation": formulation, "code": codegen.model_code(runtime.context.target.language, best.form_dict_eval),
+    return {"formulation": formulation, "code": codegen.model_code(runtime.context.target.dialect, best.form_dict_eval),
             "solve": best.solve}
 
 

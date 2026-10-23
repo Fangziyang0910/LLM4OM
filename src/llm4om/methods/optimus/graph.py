@@ -198,7 +198,7 @@ async def formulate_objective(state: State, runtime: Runtime[Context]) -> dict[s
 async def write_code(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """target_code.get_codes for the selected language's dialect."""
     context, desc, params, variables = runtime.context, state["problem"], state["parameters"], state["variables"]
-    dialect = DIALECTS[context.target.language]
+    dialect = DIALECTS[context.target.dialect]
     coded = []
     for c in state["constraints"]:
         res = await _ask(context, "constraint_code", dialect.constraint_prompt().format(
@@ -218,7 +218,7 @@ def _indent(code: str) -> str:
 
 def assemble(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """generate_code.generate_code as `build_model`; data.json is embedded as DATA."""
-    dialect = DIALECTS[runtime.context.target.language]
+    dialect = DIALECTS[runtime.context.target.dialect]
     body = [dialect.setup + "\n", "data = DATA\n", "\n\n### Define the parameters\n"]
     for symbol, v in state["parameters"].items():
         body.append(f'{symbol} = data["{symbol}"] # shape: {v["shape"]}, definition: {v["definition"]}\n')

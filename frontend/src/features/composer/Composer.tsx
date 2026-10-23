@@ -1,6 +1,8 @@
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import { ArrowRight, BookOpen, Columns3, Database, FileText, Paperclip, Play, Settings2, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +21,7 @@ import { errorText } from "@/format";
 import { t } from "@/i18n";
 import { excelToCsv } from "@/features/composer/spreadsheet";
 import type { Draft } from "@/features/composer/types";
-import type { Method, Options, Preset } from "@/types";
+import type { BackendCatalog, Method, Options, Preset } from "@/types";
 
 const DRAFT_KEY = "llm4om-draft";
 export const MAX_COMPARED = 12;  // runs one comparison may start
@@ -48,13 +50,16 @@ const STARTERS: { title: string; tag: string; description: string; data?: Record
 export function initialDraft(): Draft {
   let saved: Partial<Draft> = {};
   try { saved = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "{}") ?? {}; } catch { /* storage may be unavailable */ }
+  const legacy = /^cvxpy_(osqp|scs|mosek)$/.exec(saved.language ?? "");
   return { description: saved.description ?? "", data: saved.data ?? {}, method: saved.method ?? "direct",
-    language: saved.language ?? "pyomo", preset: saved.preset ?? null,
+    language: legacy ? "cvxpy" : saved.language === "pywraplp" ? "ortools" : saved.language ?? "pyomo", preset: saved.preset ?? null,
+    solver: saved.solver ?? legacy?.[1].toUpperCase(),
     comparing: saved.comparing ?? false, methods: saved.methods ?? [], presets: saved.presets ?? [] };
 }
 
-/** Methods expose only the code interfaces and solvers their implementation supports. */
+/** Methods declare the modeling libraries they support. */
 const unsupported = (method: Method, language: string) => !!method.languages && !method.languages.includes(language);
+
 
 export function Composer({ options, presets, draft, setDraft, onStart, onCompare, openPresets, openExamples }: {
   options: Options; presets: Preset[]; draft: Draft; setDraft: Dispatch<SetStateAction<Draft>>; onStart: (draft: Draft) => Promise<void>;
@@ -73,6 +78,10 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
   const supports = (language: string) => comparing || !unsupported(method, language);
   const language = options.languages.find(item => item.id === draft.language && supports(item.id))
     ?? options.languages.find(item => supports(item.id))!;
+  const backend = draft.solver ?? "AUTO";
+  const catalog = useQuery({ queryKey: ["backends"], queryFn: () => api<BackendCatalog>("/api/backends"), staleTime: Infinity, retry: false });
+  const backends = catalog.data?.libraries[language.id];
+  const backendUnavailable = !!backends && !backends.some(item => item.id === backend && item.available);
   const files = Object.entries(draft.data);
   // A comparison runs each chosen method that supports the language with each chosen preset.
   const compared = options.methods.filter(item => draft.methods?.includes(item.id) && !unsupported(item, language.id));
@@ -81,7 +90,8 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
     .map(chosen => ({ method: item.id, preset: chosen })));
 
   useEffect(() => {
-    if (method.id !== draft.method || language.id !== draft.language) set({ method: method.id, language: language.id });
+    if (method.id !== draft.method || language.id !== draft.language)
+      set({ method: method.id, language: language.id, solver: language.id !== draft.language ? undefined : draft.solver });
   }, [method.id, language.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* storage may be unavailable or full */ }
@@ -102,13 +112,14 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
     }
     setDraft(current => ({ ...current, data: { ...current.data, ...data } }));
   };
-  const ready = draft.description.trim().length > 0 && (!comparing || (runs.length > 0 && runs.length <= MAX_COMPARED));
+  const ready = draft.description.trim().length > 0 && !backendUnavailable
+    && (!comparing || (runs.length > 0 && runs.length <= MAX_COMPARED));
   const start = async () => {
     if (!ready || busy) return;
     if (!preset) { toast.error(t("先添加一个预设模型。")); openPresets(); return; }
     setBusy(true);
     try {
-      const request = { ...draft, method: method.id, language: language.id, preset: preset.id };
+      const request = { ...draft, method: method.id, language: language.id, solver: backend, preset: preset.id };
       await (comparing ? onCompare(request, runs) : onStart(request));
     } catch (error) { toast.error(errorText(error)); setBusy(false); }
   };
@@ -238,8 +249,8 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
             </fieldset>
 
             <fieldset className="flex min-w-0 flex-col">
-              <legend className="mb-2 text-xs font-medium text-muted-foreground">{t("代码写法与求解器")}</legend>
-              <RadioGroup value={language.id} onValueChange={value => set({ language: value })} aria-label={t("代码写法")} className="grid grid-cols-2 gap-1.5">
+              <legend className="mb-2 text-xs font-medium text-muted-foreground">{t("建模求解器")}</legend>
+              <RadioGroup value={language.id} onValueChange={value => set({ language: value, solver: undefined })} aria-label={t("建模求解器")} className="grid grid-cols-2 gap-1.5">
                 {options.languages.map(item => {
                   const allowed = supports(item.id);
                   const tile = <Label htmlFor={`language-${item.id}`}
@@ -247,7 +258,6 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
                       item.id === language.id && "border-primary/50 bg-primary/5 hover:bg-primary/5", !allowed && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
                     <RadioGroupItem id={`language-${item.id}`} value={item.id} disabled={!allowed} className="sr-only" />
                     <span className="text-sm font-medium">{item.name}</span>
-                    <span className="text-[11px] text-muted-foreground">{t("{solver} 求解", { solver: item.solver })}</span>
                   </Label>;
                   return allowed ? <div key={item.id} className="h-full">{tile}</div> : <Tooltip key={item.id}>
                     <TooltipTrigger asChild><div className="h-full">{tile}</div></TooltipTrigger>
@@ -255,6 +265,19 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
                   </Tooltip>;
                 })}
               </RadioGroup>
+              <div className="mt-3 flex flex-col gap-2">
+                <Label htmlFor="solver-backend">{t("求解后端")}</Label>
+                <Select value={backend} onValueChange={value => set({ solver: value })}>
+                  <SelectTrigger id="solver-backend" aria-label={t("求解后端")} className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{(backends ?? [{ id: backend, available: true, detail: "" }]).map(item =>
+                    <SelectItem key={item.id} value={item.id} disabled={!item.available} title={item.detail}>
+                      {item.id === "AUTO" ? t("自动选择") : item.id}{!item.available ? ` · ${t("当前环境不可用")}` : ""}
+                    </SelectItem>)}</SelectContent>
+                </Select>
+                {catalog.isPending ? <p className="text-xs text-muted-foreground">{t("正在检查求解后端……")}</p> : null}
+                {catalog.error ? <p className="text-xs text-destructive">{errorText(catalog.error)}</p> : null}
+                {backendUnavailable ? <p className="text-xs text-destructive">{t("所选后端在当前环境不可用，请选择其他后端。")}</p> : null}
+              </div>
             </fieldset>
 
             <fieldset className="flex min-w-0 flex-col gap-2">

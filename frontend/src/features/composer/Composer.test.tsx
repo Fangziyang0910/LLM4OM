@@ -3,17 +3,20 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, expect, test, vi } from "vitest";
 import { toast } from "sonner";
 import { Composer, initialDraft } from "./Composer";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("@/api", () => ({ api: vi.fn(async () => ({ libraries: {} })) }));
 
 afterEach(() => { cleanup(); localStorage.removeItem("llm4om-draft"); vi.clearAllMocks(); });
 
 function Form() {
   const [draft, setDraft] = useState(initialDraft);
-  return <Composer options={{ methods: [{ id: "direct", name: "Direct", description: "", source: null, languages: null }],
+  const [client] = useState(() => new QueryClient());
+  return <QueryClientProvider client={client}><Composer options={{ methods: [{ id: "direct", name: "Direct", description: "", source: null, languages: null }],
     languages: [{ id: "pyomo", name: "Pyomo", solver: "highs" }], providers: [], datasets: [] }}
     presets={[]} draft={draft} setDraft={setDraft} onStart={vi.fn()} onCompare={vi.fn()}
-    openPresets={vi.fn()} openExamples={vi.fn()} />;
+    openPresets={vi.fn()} openExamples={vi.fn()} /></QueryClientProvider>;
 }
 
 test("finishing an attachment preserves text edited while the file was loading", async () => {
@@ -39,4 +42,11 @@ test("an unreadable text attachment reports the failure and keeps the draft", as
 test("an empty stored draft uses the defaults", () => {
   localStorage.setItem("llm4om-draft", "null");
   expect(initialDraft()).toMatchObject({ description: "", data: {}, method: "direct" });
+});
+
+test("saved backend pairs become one library while preserving the chosen backend", () => {
+  localStorage.setItem("llm4om-draft", JSON.stringify({ language: "cvxpy_osqp" }));
+  expect(initialDraft()).toMatchObject({ language: "cvxpy", solver: "OSQP" });
+  localStorage.setItem("llm4om-draft", JSON.stringify({ language: "pywraplp" }));
+  expect(initialDraft()).toMatchObject({ language: "ortools" });
 });

@@ -39,11 +39,11 @@ def test_options_list_methods_languages_and_providers(tmp_path: Path) -> None:
         options = api.get("/api/options").json()
     assert {"direct", "trival", "optimus", "coe", "optitree", "or_llm_agent", "autoformulation"} <= {m["id"] for m in options["methods"]}
     assert {item["id"] for item in options["languages"]} == {
-        "pyomo", "gurobipy", "pywraplp", "cpmpy", "pulp", "cvxpy", "pyscipopt", "casadi", "coptpy",
-        "cvxpy_osqp", "cvxpy_scs", "cvxpy_mosek",
+        "pyomo", "gurobipy", "ortools", "cpmpy", "pulp", "cvxpy", "pyscipopt", "casadi", "coptpy",
     }
     optimus = next(m for m in options["methods"] if m["id"] == "optimus")
-    assert optimus["languages"] == ["gurobipy", "pulp", "pyomo", "pywraplp"]
+    assert optimus["languages"] == ["gurobipy", "ortools", "pulp", "pyomo"]
+    assert all('interfaces' not in item and item['solver'] == 'AUTO' for item in options['languages'])
 
 
 def test_presets_never_return_their_keys_and_cannot_be_changed(tmp_path: Path) -> None:

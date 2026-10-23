@@ -58,8 +58,8 @@ def build_model(data):
 has_gurobi = importlib.util.find_spec("gurobipy") is not None
 
 
-def solve(code: str, language: str = "pyomo", data: dict[str, str] | None = None) -> SolveResult:
-    return asyncio.run(Sandbox("local").solve(code, data or {}, language, time_limit=10))
+def solve(code: str, language: str = "pyomo", data: dict[str, str] | None = None, **choice) -> SolveResult:
+    return asyncio.run(Sandbox("local").solve(code, data or {}, language, time_limit=10, **choice))
 
 
 @pytest.mark.parametrize("language,code,names", [
@@ -85,7 +85,7 @@ def test_cvxpy_solves_a_convex_quadratic_program_with_clarabel() -> None:
 
 def test_clarabel_rejects_integer_variables() -> None:
     result = solve("import cvxpy as cp\n\ndef build_model(data):\n    y = cp.Variable(integer=True, name='y')\n"
-                   "    return cp.Problem(cp.Minimize(y), [y >= 1])\n", "cvxpy")
+                   "    return cp.Problem(cp.Minimize(y), [y >= 1])\n", "cvxpy", solver="CLARABEL")
     assert result.error is not None and "[solve]" in result.error and "mixed-integer" in result.error
 
 
@@ -125,7 +125,7 @@ def test_cpmpy_satisfaction_problem_has_a_solution_without_objective() -> None:
 
 def test_code_in_another_language_is_reported() -> None:
     result = solve(PRODUCTION_CODE, "pywraplp")
-    assert result.error is not None and "pywraplp.Solver" in result.error and "ConcreteModel" in result.error
+    assert result.error is not None and "native OR-Tools model" in result.error and "ConcreteModel" in result.error
 
 
 def test_data_files_reach_build_model() -> None:
@@ -161,7 +161,7 @@ def test_solves_and_scripts_share_capacity_and_queued_cancellation_releases_it(m
                 full.set()
             try:
                 await release.wait()
-                return SolveResult("executed")
+                return {"status": "executed"}
             finally:
                 active -= 1
 

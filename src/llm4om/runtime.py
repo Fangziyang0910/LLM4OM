@@ -116,7 +116,8 @@ class Context:
         start = time.monotonic()
         id = recorder.step("solve", title, code=code, running=True)
         try:
-            result = await self.sandbox.solve(code, self.data, self.target.language, recorder.limits.solve_time_limit)
+            result = await self.sandbox.solve(code, self.data, self.target.language, recorder.limits.solve_time_limit,
+                                              solver=self.target.solver)
         except BaseException as error:
             recorder.step("solve", title, f"{type(error).__name__}: {error}", id=id, running=False, failed=True,
                           seconds=round(time.monotonic() - start, 1))

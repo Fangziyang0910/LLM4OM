@@ -33,6 +33,21 @@ def build_model(data):
     return m
 '''
 FORMULATION = "$$\\max\\ 3x_A + 2x_B$$ subject to $2x_A + x_B \\le 8$, $x_A + 2x_B \\le 8$, $x \\in \\mathbb{Z}_+$."
+CP_SAT = '''from ortools.sat.python import cp_model
+def build_model(data):
+    m = cp_model.CpModel()
+    a, b = m.new_int_var(0,8,'A'), m.new_int_var(0,8,'B')
+    m.add(2*a+b<=8)
+    m.add(a+2*b<=8)
+    m.maximize(3*a+2*b)
+    return m
+'''
+CVXPY = '''import cvxpy as cp
+import numpy as np
+def build_model(data):
+    x = cp.Variable(2, name='x')
+    return cp.Problem(cp.Minimize(cp.sum_squares(x-np.array([1,2]))), [x>=0,cp.sum(x)<=2])
+'''
 
 
 def reply(messages: list[dict]) -> str:
@@ -43,6 +58,10 @@ def reply(messages: list[dict]) -> str:
         if "## Solver feedback" in text:
             time.sleep(30)
         return f"### Formulation\n{FORMULATION}\n\n```python\n{FEASIBLE.replace('return m', 'return m.missing')}```"
+    if 'cp_model.CpModel' in text:
+        return f"### Formulation\n{FORMULATION}\n\n```python\n{CP_SAT}```"
+    if 'import cvxpy as cp' in text:
+        return f"### Formulation\nMinimize squared distance to (1,2), with nonnegative x and sum(x)<=2.\n\n```python\n{CVXPY}```"
     return f"### Formulation\n{FORMULATION}\n\n```python\n{INFEASIBLE if '合同' in text else FEASIBLE}```"
 
 

@@ -24,7 +24,13 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install uv==0.12.19
       # SAC-Opt's small regression models use gurobipy's bundled size-limited license.
-      - run: uv sync --locked --extra solve --extra autoformulation --extra gurobi --python "${{ matrix.python }}"
+      # GCSpy otherwise clones the full JSON dependency history during its CMake build.
+      - run: |
+          curl -fsSL https://codeload.github.com/nlohmann/json/tar.gz/9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03 -o /tmp/llm4om-json.tar.gz
+          echo '0dbc5e40a01ff142e7e68c03e85247a4dcede2f592d12d3677dee3664d17975a  /tmp/llm4om-json.tar.gz' | sha256sum --check
+          mkdir /tmp/llm4om-gcs-json
+          tar -xzf /tmp/llm4om-json.tar.gz --strip-components=1 -C /tmp/llm4om-gcs-json
+      - run: CMAKE_BUILD_PARALLEL_LEVEL=2 uv sync --locked --config-settings-package gcspy:cmake.define.FETCHCONTENT_SOURCE_DIR_JSON=/tmp/llm4om-gcs-json --extra solve --extra autoformulation --extra gurobi --python "${{ matrix.python }}"
       - run: uv run --locked ruff check
       - run: uv run --locked pytest -W error::UserWarning
       - run: uv build
@@ -61,7 +67,13 @@ jobs:
           node-version: 22
       - run: python -m pip install uv==0.12.19
       # gurobipy's bundled size-limited license finds the conflict of the infeasible test model.
-      - run: uv sync --locked --extra solve --extra gurobi
+      # GCSpy otherwise clones the full JSON dependency history during its CMake build.
+      - run: |
+          curl -fsSL https://codeload.github.com/nlohmann/json/tar.gz/9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03 -o /tmp/llm4om-json.tar.gz
+          echo '0dbc5e40a01ff142e7e68c03e85247a4dcede2f592d12d3677dee3664d17975a  /tmp/llm4om-json.tar.gz' | sha256sum --check
+          mkdir /tmp/llm4om-gcs-json
+          tar -xzf /tmp/llm4om-json.tar.gz --strip-components=1 -C /tmp/llm4om-gcs-json
+      - run: CMAKE_BUILD_PARALLEL_LEVEL=2 uv sync --locked --config-settings-package gcspy:cmake.define.FETCHCONTENT_SOURCE_DIR_JSON=/tmp/llm4om-gcs-json --extra solve --extra gurobi
       - run: npm ci
         working-directory: frontend
       - run: npm run build
@@ -83,13 +95,13 @@ jobs:
         with:
           persist-credentials: false
       - run: docker compose build
-      - run: docker run --rm --network none --pull never llm4om-worker:10 python -c "import pyomo, highspy, ortools, cpmpy, gurobipy, pulp, cvxpy, clarabel, osqp, scs, pyscipopt, casadi, coptpy, mosek"
+      - run: docker run --rm --network none --pull never llm4om-worker:11 python -c "import pyomo, highspy, ortools, cpmpy, gurobipy, pulp, cvxpy, clarabel, osqp, scs, pyscipopt, casadi, coptpy, mosek"
       - run: docker run --rm --pull never --entrypoint llm4om llm4om --help
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
       - run: python -m pip install uv==0.12.19
       - run: uv sync --locked
-      - run: uv run --locked pytest tests/test_docker.py -W error::UserWarning
+      - run: uv run --locked pytest tests/test_docker.py tests/test_modeling_interfaces.py tests/test_modeling_backends.py -m docker -W error::UserWarning
         env:
           LLM4OM_TEST_DOCKER: "1"

@@ -121,7 +121,7 @@ def test_feedback_repair_does_not_rewrite_for_solver_status_alone(make_resources
     from llm4om.sandbox import Sandbox, SolveResult
 
     class StatusSandbox(Sandbox):
-        async def solve(self, *args: Any) -> SolveResult:
+        async def solve(self, *args: Any, **kwargs: Any) -> SolveResult:
             return SolveResult(status, objective, {"x": 1} if status == "feasible" or objective else {})
 
     resources = make_resources(by_role({"generate": TWO_PART_REPLY, "review": ACCEPT_REVIEW}))
@@ -205,7 +205,7 @@ def test_direct_writes_cpmpy_for_cp_sat(run_method: Any) -> None:
 def test_milp_methods_reject_cpmpy(run_method: Any) -> None:
     for method in ("optimus", "coe", "optitree", "or_llm_agent", "autoformulation"):
         record = run_method(method, by_role({}), language="cpmpy")
-        assert "does not support the code language 'cpmpy'" in record["failure"] and not record.get("steps")
+        assert "does not support cpmpy" in record["failure"] and not record.get("steps")
 
 
 def test_or_llm_agent_fixes_code_in_the_conversation(run_method: Any) -> None:

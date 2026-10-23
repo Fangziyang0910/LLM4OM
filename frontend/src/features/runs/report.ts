@@ -2,6 +2,7 @@ import { STATUS, formatNumber } from "@/format";
 import { locale, t } from "@/i18n";
 import type { Options } from "@/types";
 import type { RunMeta, RunValues } from "@/features/runs/types";
+import { targetLabel } from "./target";
 
 const MAX_DATA = 4000;  // characters of each data file in the report
 const COLON = locale === "zh" ? "：" : ": ";
@@ -13,12 +14,11 @@ const fence = (text: string, lang = "") => {
 /** One run as a Markdown report: settings, problem and data, formulation, code, solution and counts. */
 export function report(meta: RunMeta, values: RunValues, options: Options, link?: string): string {
   const method = options.methods.find(item => item.id === meta.method);
-  const language = options.languages.find(item => item.id === meta.language);
   const solve = values.solve;
   const usage = values.usage;
   const parts = [`# ${meta.title}`, [
     `- ${t("建模方法")}${COLON}${method?.name ?? meta.method}`,
-    `- ${t("代码写法")}${COLON}${language ? `${language.name} (${language.solver})` : meta.language}`,
+    `- ${t("建模求解器")}${COLON}${targetLabel(options, meta, solve?.solver)}`,
     `- ${t("预设模型")}${COLON}${meta.model ?? "—"}`,
     ...(usage ? [`- ${t("调用")}${COLON}${t("{calls} 次 LLM 调用，{solves} 次求解，{tokens} token", {
       calls: usage.llm_calls, solves: usage.solves, tokens: (usage.input_tokens + usage.output_tokens).toLocaleString() })}`] : []),

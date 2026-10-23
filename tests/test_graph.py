@@ -36,7 +36,7 @@ def test_deadline_includes_final_solving(make_resources: Any) -> None:
     class SlowSandbox(Sandbox):
         cancelled = False
 
-        async def solve(self, *args: Any) -> None:
+        async def solve(self, *args: Any, **kwargs: Any) -> None:
             try:
                 await asyncio.sleep(10)
             except asyncio.CancelledError:

@@ -61,10 +61,18 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
             "methods": [{"id": m.id, "name": m.name, "description": m.description, "source": m.source,
                          "languages": sorted(m.languages) if m.languages is not None else None}
                         for m in methods().values()],
-            "languages": [{"id": item.id, "name": item.name, "solver": item.solver} for item in LANGUAGES.values()],
+            "languages": [{"id": item.id, "name": item.name, "solver": "AUTO"}
+                          for item in LANGUAGES.values()],
             "providers": [asdict(provider) for provider in PROVIDERS.values()],
             "datasets": examples.datasets(),
         }
+
+    @app.get("/api/backends")
+    async def backends() -> dict[str, Any]:
+        try:
+            return await default_resources().sandbox.catalog()
+        except RuntimeError as error:
+            raise HTTPException(503, str(error)) from error
 
     def public() -> dict[str, Any]:
         """The presets without keys, with the tokens each used today and the daily budget (0: none)."""

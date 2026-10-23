@@ -10,6 +10,7 @@ export type Diagnosis = { tool: string; items: string[]; total: number; error: s
 export type Solve = {
   status: string; objective: number | null; variables: Record<string, number>; output: string; error: string | null;
   diagnosis?: Diagnosis | null;
+  solver?: string | null;
 };
 export type Usage = { llm_calls: number; solves: number; input_tokens: number; output_tokens: number };
 export type Timing = { started_at: number; elapsed: number; finished_at?: number };
@@ -27,6 +28,7 @@ export type RunValues = {
 /** What the run is and with what it ran, kept as thread metadata; `group` joins the runs of one comparison. */
 export type RunMeta = {
   title: string; method: string; language: string; preset?: string | null; provider: string | null; model: string | null;
+  solver?: string;
   group?: string | null; note?: string; tags?: string[];
 };
 /** A run in the history list. */

@@ -89,7 +89,9 @@ test("new methods expose supported solver choices and BIND runs through the work
   await expect(page.locator("#language-cpmpy")).toBeDisabled();
   await page.locator("#method-bind").click();
   await expect(page.locator("#language-casadi")).toBeEnabled();
-  await expect(page.locator("#language-cvxpy_mosek")).toBeEnabled();
+  await expect(page.locator("#language-cvxpy")).toBeEnabled();
+  await expect(page.locator('[id^="language-"]')).toHaveCount(9);
+  await page.locator('label[for="language-ortools"]').click();
   await page.locator('label[for="language-pyomo"]').click();
   await page.getByRole("button", { name: /^生产计划/ }).click();
   await page.getByRole("button", { name: "开始建模" }).click();
@@ -99,6 +101,38 @@ test("new methods expose supported solver choices and BIND runs through the work
   const state = (await (await page.request.get(`/threads/${page.url().split("/").at(-1)}`)).json()).values;
   expect(state.spec.method).toBe("bind");
   expect(state.failure).toBeNull();
+  expect(errors).toEqual([]);
+});
+
+test("native APIs run without an interface setting and a library can use different backends", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator('label[for="language-ortools"]').click();
+  await expect(page.getByRole('combobox', { name: '建模接口', exact: true })).toHaveCount(0);
+  await page.getByRole('combobox', { name: '求解后端', exact: true }).click();
+  await page.getByRole('option', { name: 'CP_SAT', exact: true }).click();
+  await page.getByRole('button', { name: /^生产计划/ }).click();
+  await page.getByRole('button', { name: '开始建模' }).click();
+  await page.waitForURL(/\/run\//);
+  await page.getByRole('button', { name: '查看解' }).waitFor({ timeout: 60_000 });
+  let state = (await (await page.request.get(`/threads/${page.url().split('/').at(-1)}`)).json()).values;
+  expect(state.spec).toMatchObject({ language: 'ortools', solver: 'CP_SAT' });
+  expect(state.solve.objective).toBe(13);
+
+  for (const solver of ['OSQP', 'SCS']) {
+    await page.goto('/');
+    await page.locator('label[for="language-cvxpy"]').click();
+    await expect(page.locator('[id^="language-"]')).toHaveCount(9);
+    await page.getByRole('textbox', { name: '问题描述' }).fill('连续变量 x,y>=0，x+y<=2。最小化(x-1)^2+(y-2)^2。');
+    await page.getByRole('combobox', { name: '求解后端', exact: true }).click();
+    await page.getByRole('option', { name: solver, exact: true }).click();
+    await page.getByRole('button', { name: '开始建模' }).click();
+    await page.waitForURL(/\/run\//);
+    await page.getByRole('button', { name: '查看解' }).waitFor({ timeout: 60_000 });
+    state = (await (await page.request.get(`/threads/${page.url().split('/').at(-1)}`)).json()).values;
+    expect(state.spec).toMatchObject({ language: 'cvxpy', solver });
+    expect(state.solve.solver).toBe(solver);
+    expect(state.solve.objective).toBeCloseTo(0.5, 4);
+  }
   expect(errors).toEqual([]);
 });
 

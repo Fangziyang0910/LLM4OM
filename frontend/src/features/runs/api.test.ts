@@ -21,6 +21,13 @@ beforeEach(() => {
   threads.delete.mockResolvedValue(undefined as never);
 });
 
+test("library and backend reach the run independently", async () => {
+  await startRun({ ...draft, language: "ortools", solver: "CP_SAT" }, undefined);
+  expect(runs.create).toHaveBeenCalledWith("thread-1", "direct", expect.objectContaining({
+    context: { language: "ortools", solver: "CP_SAT", preset: null },
+  }));
+});
+
 test("a rejected run start leaves no empty run behind", async () => {
   runs.create.mockRejectedValue(limited);
   await expect(startRun(draft, undefined)).rejects.toBe(limited);

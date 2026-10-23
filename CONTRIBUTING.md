@@ -14,7 +14,7 @@
 ```bash
 git clone https://github.com/Fangziyang0910/LLM4OM.git && cd LLM4OM
 uv sync --all-extras
-uv run llm4om build-worker          # 构建沙箱镜像 llm4om-worker:10
+uv run llm4om build-worker          # 构建沙箱镜像 llm4om-worker:11
 cp .env.example .env                # 填写默认预设，供真实运行使用
 ```
 
@@ -137,16 +137,16 @@ MY_METHOD = Method("my_method", "我的方法", "一句话说明。", my_graph, 
 
 第三方代码和数据保留来源与许可，并更新 [NOTICE](NOTICE)。
 
-## 增加代码写法
+## 增加建模接口或求解后端
 
-一种写法对应一个建模库和一个求解器（[ADR 0008](docs/adr/0008-code-language.md)）。需要改这些地方：
+先读 [ADR 0013](docs/adr/0013-modeling-libraries.md)。只配置九个建模库与可选原生后端；库内 API 由代码表达：
 
-1. `languages.py`：在 `LANGUAGES` 中加入 `Language`（库名、求解器、代码契约和起始代码）。MILP 写法加入 `MILP_LANGUAGES`。
-2. `sandbox/worker.py`：在 `SOLVERS` 中加入求解函数。能找出冲突约束时，加入 `CONFLICTS`。
-3. `sandbox/worker.Dockerfile` 和 `pyproject.toml` 的 `solve` 可选依赖：加入库和求解器。
-4. 更换沙箱镜像标签：`WORKER_IMAGE`、`compose.yaml`，以及文档和 CI 中的标签。
-5. `tests/test_sandbox.py`：求解、错误和不可行三种情况。
-6. README、[GLOSSARY](GLOSSARY.md) 和[架构](docs/architecture.md)中的写法表。
+1. 同一种原生模型的新写法通常不需要适配，只需补充数值集成测试。示例放在 `tests/modeling_examples.py`；确有必要的生成指引才进入生产代码。
+2. 原生模型类型或结果确实不同时，在 `sandbox/worker.py` 自动识别并读取。后端使用库自己的插件注册表与分发入口，不建立接口配置层或方法兼容矩阵。
+3. 需要新运行时依赖时，更新 `worker.Dockerfile`、`pyproject.toml` 的 solve 依赖和 uv.lock，核对许可证及加载条件。
+4. Worker 代码或依赖变化时，更新 `WORKER_IMAGE`、Compose、CI 中的镜像标签。
+5. 用真实模型验证数值结果、不可用错误和状态语义。明确选择的后端不能隐式替换或放松整数域。
+6. 固定方言的方法只修改必要的代码模板；界面从 options/backends 读取库和后端，不复制插件名单。同步 README 与[原生 API 说明](docs/references/modeling-libraries.md)。
 
 ## 文档
 

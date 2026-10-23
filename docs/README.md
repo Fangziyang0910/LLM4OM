@@ -28,3 +28,5 @@
 ## 图片
 
 `assets/` 中有 README 和使用指南用的横幅、截图和演示动图。更新方法见[开发指南](../CONTRIBUTING.md#文档)。
+
+九个建模库的原生 API、后端发现与验证见[接口清单](references/modeling-libraries.md)；代码与执行的边界见 [ADR 0013](adr/0013-modeling-libraries.md)。

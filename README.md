@@ -41,7 +41,7 @@
 | 能力 | 说明 |
 |---|---|
 | 🧠 **13 种建模方法** | Direct、Feedback Repair、TriVAL、SAC-Opt、BIND、OptiMind 等；每种方法都有独立 LangGraph 图 |
-| 🧩 **12 条求解路径** | 9 种建模接口、11 个求解器，覆盖 LP、MILP、约束规划、凸优化和非线性优化 |
+| 🧩 **9 种建模求解器** | 支持各库原生 API 与多种求解后端，覆盖数学规划、约束规划、路径、网络流和非线性优化 |
 | 🔍 **全过程可见** | 每次 LLM 调用实时显示；保留中断前已完成的步骤和产物；历史可分页，运行配置固定记录 |
 | ⚖️ **多方法对比** | 同一问题一次运行最多 12 个方法或模型，并排比较目标值、用时和 token |
 | 🧯 **不可行诊断** | 模型不可行时，列出一组不能同时满足的约束（Gurobi IIS / CPMpy MUS） |
@@ -86,7 +86,7 @@ docker compose up -d --build
 
 ```bash
 uv sync --all-extras
-uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:10
+uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:11
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
@@ -136,24 +136,25 @@ print(state["failure"] or state["solve"]["objective"])
 
 各方法固定参考提交并记录差异。SAC-Opt 根据公开算法独立实现；BIND 不使用基准参考答案；OptiMind 接入公开推理流程，提示库目前只有旅行商问题。方法只开放实际支持的代码写法。详见[建模方法](docs/methods.md)。
 
-## 代码写法与求解器
+## 建模求解器与后端
 
-用户选择代码写法，写法决定求解器。生成的代码定义 `build_model(data)` 并返回模型，由沙箱用该写法自己的接口求解。
+一个建模库只算一种建模求解器。只需选择这九个库之一，后端默认自动选择，也可指定。库内 API 由代码表达，平台自动识别原生模型，不需要再选建模接口。后端列表从实际沙箱的原生插件注册表读取，并显示安装状态；增加后端不会增加一级分类。
 
-| 代码写法 | 求解器 | 适用问题 |
+| 建模求解器 | 原生 API | 后端接入方式 |
 |---|---|---|
-| Pyomo | HiGHS | LP、MILP |
-| gurobipy | Gurobi | LP、MILP（无完整许可证时只能求解小规模模型） |
-| OR-Tools `pywraplp` | SCIP | LP、MILP |
-| PuLP | CBC | LP、MILP |
-| CPMpy | OR-Tools CP-SAT | 约束规划：整数与布尔变量、全局约束、可满足性问题 |
-| CVXPY | Clarabel | 连续凸优化：LP、凸二次规划、二阶锥等 |
-| PySCIPOpt | SCIP 原生接口 | 混合整数线性/非线性约束 |
-| CasADi | Ipopt | 连续光滑非线性问题，返回局部解 |
-| coptpy | COPT | LP、MILP、凸二次/锥优化；无许可证时仅限小规模非商业使用 |
-| CVXPY / OSQP | OSQP | 连续凸二次规划、线性约束 |
-| CVXPY / SCS | SCS | 连续凸锥优化，含半正定、指数锥、幂锥 |
-| CVXPY / MOSEK | MOSEK | 凸锥、半正定及混合整数锥优化（不含混合整数 SDP）；需要许可证 |
+| Pyomo | Algebraic（ConcreteModel、AbstractModel）、Kernel | 原生 SolverFactory 适配器，包括 HiGHS、CBC、GLPK、Gurobi、SCIP、CPLEX 等 |
+| gurobipy | 标量/表达式、矩阵 | Gurobi 原生引擎 |
+| OR-Tools | MPSolver、MathOpt、CP-SAT、ModelBuilder、Routing、Constraint Solver、最大流、最小费用流、指派、背包 | 各接口原生支持的引擎和算法 |
+| CPMpy | Model、SolverInterface | SolverLookup 注册的 CP、SAT、SMT、MIP、MaxSAT、知识编译等后端及子求解器 |
+| PuLP | 行式、列式建模 | 原生 getSolver 注册的 Python、命令行及动态库适配器 |
+| CVXPY | DCP、DGP、DQCP | 原生求解器注册表；AUTO 使用 solver_path 选择可执行后端，记录实际引擎 |
+| PySCIPOpt | 标量/表达式、矩阵 | SCIP 原生引擎 |
+| CasADi | Opti NLP、Opti Conic、nlpsol、qpsol、conic | Nlpsol/Conic 原生插件，包括 Ipopt、SQP、QP 和其他可加载插件 |
+| coptpy | 标量/表达式、矩阵 | COPT 原生引擎 |
+
+生成代码定义 `build_model(data)`。常规接口返回原生模型；Routing、网络流端点、Knapsack 和 CasADi 底层接口按约定返回模型或问题参数字典。Worker 调用对应库的原生求解接口，统一读取结果。明确选择的后端不可用时会报错，不会换引擎或放松变量域。
+
+各接口的返回类型、后端探测、部署依赖与验证记录见[建模库与官方接口](docs/references/modeling-libraries.md)。商业后端需要相应许可证或遵守其有限规模模式；可加载不等于许可已验证。非凸 NLP 的局部解、Routing 的启发式解按实际状态展示。
 
 ## 架构
 

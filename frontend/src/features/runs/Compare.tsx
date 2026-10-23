@@ -6,6 +6,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { history } from "@/features/runs/api";
+import { targetLabel } from "@/features/runs/target";
 import { STATUS, duration, errorText, formatNumber, formatTokens, tone } from "@/format";
 import { t } from "@/i18n";
 import type { Entry } from "@/features/runs/types";
@@ -32,7 +33,6 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
   if (!entries.length) return <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">{t("这个对比没有运行，可能已被删除。")}</div>;
 
   const methodName = (id: string) => options.methods.find(item => item.id === id)?.name ?? id;
-  const language = (id: string) => options.languages.find(item => item.id === id);
   const running = entries.filter(entry => entry.state === "running").length;
   const result = agreement(entries);
 
@@ -58,11 +58,10 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
             <TableHead className="text-right">Token</TableHead><TableHead />
           </TableRow></TableHeader>
           <TableBody>{entries.map(entry => {
-            const code = language(entry.meta.language);
             const tokens = entry.usage ? entry.usage.input_tokens + entry.usage.output_tokens : null;
             return <TableRow key={entry.id} className="cursor-pointer" onClick={() => onOpen(entry.id)}>
               <TableCell className="font-medium">{methodName(entry.meta.method)}</TableCell>
-              <TableCell>{code ? <>{code.name}<span className="text-muted-foreground"> · {code.solver}</span></> : entry.meta.language}</TableCell>
+              <TableCell>{targetLabel(options, entry.meta)}</TableCell>
               <TableCell className="max-w-48 truncate">{entry.meta.model ?? "—"}</TableCell>
               <TableCell><span className={cn("flex items-center gap-1.5", TONE[tone(entry.state)].text)} title={entry.failure ?? undefined}>
                 <StatusIcon status={entry.state} className="size-3.5" />{(STATUS[entry.state] ?? entry.state)}</span></TableCell>

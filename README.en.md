@@ -41,7 +41,7 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
 | Feature | What you get |
 |---|---|
 | 🧠 **13 modeling methods** | Direct, Feedback Repair, TriVAL, SAC-Opt, BIND, OptiMind and more; each has its own LangGraph |
-| 🧩 **12 solver paths** | 9 modeling interfaces and 11 solvers for LP, MILP, constraint programming, convex and nonlinear optimization |
+| 🧩 **9 modeling libraries** | Native modeling APIs, with backend discovery through each library’s own plugin registry |
 | 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
 | ⚖️ **Compare methods** | Run up to 12 methods or models on one problem and compare objective, time and tokens |
 | 🧯 **Infeasibility diagnosis** | For an infeasible model, see a set of constraints that cannot hold together (Gurobi IIS / CPMpy MUS) |
@@ -86,7 +86,7 @@ You need Python 3.11–3.13, [uv](https://docs.astral.sh/uv/) and Docker:
 
 ```bash
 uv sync --all-extras
-uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:10
+uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:11
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
@@ -134,24 +134,25 @@ print(state["failure"] or state["solve"]["objective"])
 
 Each method records its reference commit and adaptations. SAC-Opt is independently implemented; BIND uses no benchmark reference answers; OptiMind integrates the public inference workflow and the published TSP hint subset, not trained weights. Each method exposes its supported code targets. See [methods](docs/methods.md).
 
-## Code languages and solvers
+## Modeling libraries and backends
 
-You choose the code language; the language decides the solver. Generated code defines `build_model(data)` and returns the model; the sandbox solves it through the language's own API.
+Each library counts once. Choose one of these nine libraries; the backend is automatic unless specified. Native API choice stays in the code, and the worker recognizes the returned model. The backend list comes from native registries in the actual sandbox and includes installation status.
 
-| Language | Solver | Problems |
+| Modeling library | Native APIs | Backend integration |
 |---|---|---|
-| Pyomo | HiGHS | LP, MILP |
-| gurobipy | Gurobi | LP, MILP (small models only without a full license) |
-| OR-Tools `pywraplp` | SCIP | LP, MILP |
-| PuLP | CBC | LP, MILP |
-| CPMpy | OR-Tools CP-SAT | Constraint programming: integer and Boolean variables, global constraints, satisfaction |
-| CVXPY | Clarabel | Continuous convex optimization: LP, convex QP, SOCP and more |
-| PySCIPOpt | Native SCIP | Mixed integer linear and nonlinear constraints |
-| CasADi | Ipopt | Smooth continuous nonlinear optimization; local solutions |
-| coptpy | COPT | LP, MILP, convex quadratic/conic optimization; small non-commercial models without a license |
-| CVXPY / OSQP | OSQP | Continuous convex QP with linear constraints |
-| CVXPY / SCS | SCS | Continuous convex conic problems, including SDP, exponential and power cones |
-| CVXPY / MOSEK | MOSEK | Convex conic/SDP and mixed integer conic problems (no mixed integer SDP); license required |
+| Pyomo | Algebraic (ConcreteModel/AbstractModel), Kernel | Native SolverFactory adapters |
+| gurobipy | Scalar/expression, matrix | Native Gurobi engine |
+| OR-Tools | MPSolver, MathOpt, CP-SAT, ModelBuilder, Routing, Constraint Solver, max flow, min-cost flow, assignment, knapsack | Each interface’s native engines and algorithms |
+| CPMpy | Model, SolverInterface | SolverLookup, including native subsolvers |
+| PuLP | Row-oriented, column-oriented | Native getSolver registry |
+| CVXPY | DCP, DGP, DQCP | Native registry; AUTO uses solver_path and records the actual engine |
+| PySCIPOpt | Scalar/expression, matrix | Native SCIP engine |
+| CasADi | Opti NLP, Opti Conic, nlpsol, qpsol, conic | Native Nlpsol/Conic plugins |
+| coptpy | Scalar/expression, matrix | Native COPT engine |
+
+Generated code defines `build_model(data)`. Ordinary interfaces return native models. Interfaces that need endpoints, bounds or structured problem inputs return the documented dictionaries. The worker uses the selected native API. An explicit unavailable backend fails instead of changing engines or relaxing integer domains.
+
+See [interface contracts and validation](docs/references/modeling-libraries.md). Commercial engines require a suitable license or compliance with their limited mode. Loading an adapter does not validate its license. Local NLP solutions and heuristic routing results retain their actual status.
 
 ## Architecture
 

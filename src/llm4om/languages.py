@@ -1,6 +1,9 @@
-"""Each code target pairs a modeling interface with its solver; generated code only builds the model."""
+"""Nine modeling libraries and their native code contracts. API choice stays in the code."""
 
+import re
 from dataclasses import dataclass
+
+from llm4om.code_prompts import REFERENCES
 
 CONTRACT = """\
 ## Code contract
@@ -10,7 +13,8 @@ When no file is attached, `data` is empty; take the numbers from the problem des
 - Do not solve the model and do not print the solution. The platform solves it with {solver} and reports the result.
 - Do not read files, environment variables or the network.
 - {objective} Python control flow must not depend on variable values.
-- Give variables readable names that include their indices, because results are reported by variable name."""
+- Where the native API supports explicit names, give variables readable indexed names. Otherwise use the native \
+variable order and explain its components in the formulation; do not invent unsupported name arguments."""
 
 PYOMO = """\
 ## Pyomo reference (solved with HiGHS)
@@ -161,7 +165,7 @@ def build_model(data):
     model.set_initial(x, [0, 0])
     return model
 ```
-- Return ca.Opti, not an NLP dictionary or a solver function. Do not call solver() or solve().
+- This example returns ca.Opti. The native problem dictionaries described below are also supported. Do not call solve().
 - Ipopt finds a local solution; it does not establish global optimality for nonconvex problems. No integer variables.
 - Use smooth CasADi expressions. Maximize f by minimizing -f; state clearly that the reported objective is -f.
 - Opti assigns variable names automatically (e.g. opti0_x_1); explain their components in the formulation.
@@ -212,63 +216,109 @@ CP_OBJECTIVE = "The model has at most one objective; without one it is a satisfa
 @dataclass(frozen=True)
 class Language:
     id: str
-    name: str  # the library as users know it
-    solver: str  # the solver that runs this language
-    library: str  # the name prompts use for the code, e.g. "Gurobi" in "write Gurobi code"
+    name: str
+    solver: str  # the default engine when code does not select one
+    library: str
     reference: str
-    imports: str  # the rest feeds the starter code
+    imports: str
     model_type: str
     constructor: str
     objective: str = ONE_OBJECTIVE
 
 
 LANGUAGES = {
-    "pyomo": Language("pyomo", "Pyomo", "HiGHS", "Pyomo", PYOMO, "import pyomo.environ as pyo",
-                      "pyo.ConcreteModel", "pyo.ConcreteModel()"),
-    "gurobipy": Language("gurobipy", "gurobipy", "Gurobi", "Gurobi", GUROBIPY,
+    "pyomo": Language("pyomo", "Pyomo", "highs", "Pyomo", PYOMO, "import pyomo.environ as pyo",
+                      "instantiated Pyomo model or kernel block", "pyo.ConcreteModel()"),
+    "gurobipy": Language("gurobipy", "gurobipy", "gurobi", "Gurobi", GUROBIPY,
                          "import gurobipy as gp\nfrom gurobipy import GRB", "gp.Model", 'gp.Model("model")'),
-    "pywraplp": Language("pywraplp", "OR-Tools pywraplp", "SCIP", "OR-Tools", ORTOOLS,
-                         "from ortools.linear_solver import pywraplp", "pywraplp.Solver",
-                         'pywraplp.Solver.CreateSolver("SCIP")'),
-    "cpmpy": Language("cpmpy", "CPMpy", "OR-Tools CP-SAT", "CPMpy", CPMPY, "import cpmpy as cp",
-                      "cp.Model", "cp.Model()", CP_OBJECTIVE),
-    "pulp": Language("pulp", "PuLP", "CBC", "PuLP", PULP, "import pulp", "pulp.LpProblem",
+    "ortools": Language("ortools", "OR-Tools", "SCIP", "OR-Tools", ORTOOLS,
+                        "from ortools.linear_solver import pywraplp", "native OR-Tools model (with search arguments when needed)",
+                        'pywraplp.Solver.CreateSolver("SCIP")', CP_OBJECTIVE),
+    "cpmpy": Language("cpmpy", "CPMpy", "ortools", "CPMpy", CPMPY, "import cpmpy as cp",
+                      "cp.Model or native CPMpy SolverInterface", "cp.Model()", CP_OBJECTIVE),
+    "pulp": Language("pulp", "PuLP", "PULP_CBC_CMD", "PuLP", PULP, "import pulp", "pulp.LpProblem",
                      'pulp.LpProblem("model", pulp.LpMinimize)'),
-    "cvxpy": Language("cvxpy", "CVXPY", "Clarabel", "CVXPY", cvxpy_reference("Clarabel",
-                      "Continuous convex LP, QP, SOCP, exponential/power cones and SDP; no integer or Boolean variables."),
-                      "import cvxpy as cp\nimport numpy as np",
+    "cvxpy": Language("cvxpy", "CVXPY", "AUTO", "CVXPY", CVXPY, "import cvxpy as cp\nimport numpy as np",
                       "cp.Problem", "cp.Problem(cp.Minimize(0))"),
-    "pyscipopt": Language("pyscipopt", "PySCIPOpt", "SCIP", "PySCIPOpt", PYSCIPOPT,
+    "pyscipopt": Language("pyscipopt", "PySCIPOpt", "scip", "PySCIPOpt", PYSCIPOPT,
                           "from pyscipopt import Model, quicksum", "pyscipopt.Model", 'Model("model")'),
-    "casadi": Language("casadi", "CasADi", "Ipopt", "CasADi", CASADI, "import casadi as ca", "ca.Opti", "ca.Opti()"),
-    "coptpy": Language("coptpy", "coptpy", "COPT", "COPT", COPT, "import coptpy as cp\nfrom coptpy import COPT",
+    "casadi": Language("casadi", "CasADi", "ipopt", "CasADi", CASADI, "import casadi as ca",
+                       "ca.Opti or a native solver dictionary", "ca.Opti()"),
+    "coptpy": Language("coptpy", "coptpy", "copt", "COPT", COPT, "import coptpy as cp\nfrom coptpy import COPT",
                         "coptpy.Model", 'cp.Envr().createModel("model")'),
-    **{key: Language(key, "CVXPY", solver, "CVXPY", cvxpy_reference(solver, capability),
-                     "import cvxpy as cp\nimport numpy as np", "cp.Problem", "cp.Problem(cp.Minimize(0))")
-       for key, solver, capability in [
-           ("cvxpy_osqp", "OSQP", "Continuous convex quadratic objectives with linear constraints only; no integer variables or cones."),
-           ("cvxpy_scs", "SCS", "Continuous convex conic optimization including SDP, exponential and power cones; no integer variables."),
-           ("cvxpy_mosek", "MOSEK", "Convex LP/QP and conic optimization, including mixed integer conic models; no mixed integer SDP. A MOSEK license is required."),
-       ]},
 }
-# For methods whose original prompts ask for (MI)LP. CVXPY is left out: Clarabel has no integer variables.
-MILP_LANGUAGES = frozenset({"pyomo", "gurobipy", "pywraplp", "pulp"})
+MILP_LANGUAGES = frozenset({"pyomo", "gurobipy", "ortools", "pulp"})
+LEGACY_TARGETS = {"pywraplp": ("ortools", "SCIP"),
+                  **{"cvxpy_"+solver.lower(): ("cvxpy", solver) for solver in ("OSQP", "SCS", "MOSEK")}}
+
+# Native APIs are code choices, not another run setting.
+API_NOTES = {
+    "pyomo": "ConcreteModel, instantiated AbstractModel and pyomo.kernel blocks are supported. Return the native object.",
+    "gurobipy": "Both scalar/expression and matrix APIs return the same gp.Model; use either or combine them.",
+    "pulp": "Both row-oriented and column-oriented modeling return the same LpProblem; use either.",
+    "pyscipopt": "Scalar and matrix APIs return the same Model; use either or combine them.",
+    "coptpy": "Scalar and matrix APIs return the same Model; use either or combine them.",
+    "cpmpy": "Scalar/array expressions and a direct SolverLookup interface are supported. Return Model or SolverInterface.",
+    "cvxpy": "DCP, DGP and DQCP are detected from the Problem. Use explicit sign attributes for geometric/quasiconvex expressions.",
+    "ortools": """Use MPSolver, MathOpt Model, CpModel or ModelBuilder as appropriate; return the native object.
+For Routing return {"model": RoutingModel, "manager": RoutingIndexManager}.
+For the original constraint solver return {"model": Solver, "variables": [IntVar, ...], "objective": optional IntVar, "sense": "min"/"max"}; search is an optional native DecisionBuilder.
+For maximum flow return {"model": SimpleMaxFlow, "source": int, "sink": int}.
+Return SimpleMinCostFlow (or {"model": model, "maximize_flow": True}) or SimpleLinearSumAssignment directly.
+For knapsack return {"values": [...], "weights": [[...], ...], "capacities": [...]}.
+The platform recognizes the returned model; there is no separate interface setting.""",
+    "casadi": """Opti and Opti('conic') are supported. For Opti('conic'), return {"model": opti, "solver": "qrqp"}; optional native options use "options".
+For nlpsol/qpsol/conic return {"problem": the native symbolic problem or sparsity structure, "arguments": its native numerical arguments, "solver": the plugin name, "options": optional native options}.
+The platform uses the selected native plugin; do not call it to solve. Result variables follow native decision-vector order x[i].""",
+}
 
 
 @dataclass(frozen=True)
 class CodeTarget:
     language: str
+    solver: str | None = None
 
     def __post_init__(self) -> None:
+        if self.language in LEGACY_TARGETS:
+            library, solver = LEGACY_TARGETS[self.language]
+            object.__setattr__(self, "language", library)
+            object.__setattr__(self, "solver", self.solver or solver)
         if self.language not in LANGUAGES:
             raise ValueError(f"Unknown code language {self.language!r}; choose one of {sorted(LANGUAGES)}.")
+        object.__setattr__(self, "solver", self.solver or "AUTO")
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:-]*", self.solver):
+            raise ValueError("Use a native solver identifier, not a path or command.")
+
+    @property
+    def dialect(self) -> str:
+        return "pywraplp" if self.language == "ortools" else self.language
 
     @property
     def prompt(self) -> str:
-        """Instructions that make generated code fit this language and its solver."""
-        language = LANGUAGES[self.language]
-        return CONTRACT.format(model_type=language.model_type, solver=language.solver,
-                               objective=language.objective) + "\n\n" + language.reference
+        definition = LANGUAGES[self.language]
+        backend = definition.solver if self.solver == "AUTO" else self.solver
+        reference = definition.reference.replace("{solver}", backend)
+        if self.language == "cvxpy":
+            mip = backend.upper() in {"AUTO", "SCIP", "SCIPY", "GUROBI", "CPLEX", "COPT", "MOSEK", "CBC", "GLPK_MI", "ECOS_BB", "XPRESS", "HIGHS"}
+            capability = "Integer/Boolean variables require a compatible mixed-integer backend." if mip else "Continuous variables only; no integer or Boolean variables."
+            if backend == "OSQP":
+                capability += " Only quadratic objectives and linear constraints; no other cones."
+            reference = cvxpy_reference(backend, capability).replace("The problem must follow CVXPY's disciplined convex programming rules.", "Use the native DCP, DGP or DQCP rules as appropriate.")
+        elif self.language == "ortools":
+            key = {"GSCIP": "mathopt", "HIGHS": "mathopt", "CP_SAT": "cp_sat", "ROUTING": "routing", "CP": "constraint",
+                   "MAX_FLOW": "max_flow", "MIN_COST_FLOW": "min_cost_flow", "ASSIGNMENT": "assignment"}.get(backend)
+            if backend.startswith("KNAPSACK_"):
+                key = "knapsack"
+            reference = REFERENCES["ortools."+key].replace("{solver}", backend) if key else reference.replace('"SCIP"', '"'+backend+'"').replace("with SCIP", "with "+backend)
+        elif self.language == "pyomo":
+            reference = reference.replace("with HiGHS", "with "+backend)
+        elif self.language == "cpmpy":
+            reference = reference.replace("with OR-Tools CP-SAT", "with "+("OR-Tools CP-SAT" if backend == "ortools" else backend))
+        elif self.language == "pulp":
+            reference = reference.replace("with CBC", "with "+backend)
+        elif self.language == "casadi":
+            reference = reference.replace("with Ipopt", "with "+backend)
+        return CONTRACT.format(model_type=definition.model_type, solver=self.solver, objective=definition.objective) + "\n\n" + reference + "\n" + API_NOTES[self.language]
 
     @property
     def library(self) -> str:
@@ -276,7 +326,6 @@ class CodeTarget:
 
     @property
     def starter(self) -> str:
-        """An empty `build_model` stating its interface, for methods whose prompts take a starter code."""
-        language = LANGUAGES[self.language]
-        return STARTER.format(imports=language.imports, model_type="a " + language.model_type, solver=language.solver,
-                              constructor=language.constructor)
+        definition = LANGUAGES[self.language]
+        return STARTER.format(imports=definition.imports, model_type=definition.model_type, solver=self.solver,
+                              constructor=definition.constructor)

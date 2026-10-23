@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { updateMeta } from "@/features/runs/api";
+import { targetLabel } from "@/features/runs/target";
 import { client } from "@/features/runs/sdk";
 import { t } from "@/i18n";
 import { report } from "@/features/runs/report";
@@ -85,7 +86,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDele
   const tokens = usage ? usage.input_tokens + usage.output_tokens : null;
 
   const draft = (): Draft => ({ description: values.description ?? "", data: values.data ?? {}, method: meta.method,
-    language: meta.language, preset: meta.preset ?? null });
+    language: meta.language, solver: meta.solver, preset: meta.preset ?? null });
   const stop = async () => {
     if (!run) return;
     setStopping(true);
@@ -104,7 +105,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDele
   const title = meta.title || (values.description ?? "").trim().split("\n")[0] || t("未命名运行");
   const facts: [React.ReactNode, React.ReactNode, string?][] = [
     [<Layers />, method?.name ?? meta.method, method?.description],
-    [<CodeXml />, language ? <>{language.name}<span className="text-muted-foreground/70"> · {language.solver}</span></> : meta.language],
+    [<CodeXml />, targetLabel(options, meta, solve?.solver)],
     [<Cpu />, meta.model ?? provider?.label, provider?.label],
     [<Clock />, elapsed == null ? "—" : duration(elapsed)],
   ];

@@ -17,7 +17,7 @@ from typing import Any
 WORKER = Path(__file__).with_name("worker.py")
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
 # The image contains worker.py, so a change to worker.py or worker.Dockerfile needs a new tag (and compose.yaml's).
-WORKER_IMAGE = "llm4om-worker:10"
+WORKER_IMAGE = "llm4om-worker:11"
 START_MARGIN = 60  # seconds beyond the time limit for starting the sandbox, importing libraries and building the model
 
 
@@ -31,6 +31,7 @@ class SolveResult:
     # For an infeasible model: {tool, items, total, error}, the constraints that conflict. Shown to people only;
     # feedback() leaves it out, so no method gets help the original method did not have.
     diagnosis: dict[str, Any] | None = None
+    solver: str | None = None  # actual backend, also when the library selected it automatically
 
     @property
     def executed(self) -> bool:
@@ -69,21 +70,39 @@ class Sandbox:
         if max_jobs < 1:
             raise ValueError("The sandbox concurrency must be at least 1.")
         self._slots = asyncio.Semaphore(max_jobs)
+        self._catalog: dict[str, Any] | None = None
+        self._catalog_lock = asyncio.Lock()
 
-    async def solve(self, code: str, data: dict[str, str], language: str, time_limit: float) -> SolveResult:
+    async def solve(self, code: str, data: dict[str, str], language: str, time_limit: float, *,
+                    solver: str | None = None) -> SolveResult:
         """Build the model from `code` with `data` and solve it with the language's solver, within `time_limit`."""
-        return await self._run({"code": code, "data": data, "language": language, "time_limit": time_limit}, time_limit)
+        from llm4om.languages import CodeTarget
+
+        target = CodeTarget(language, solver)
+        return SolveResult(**await self._run({"code": code, "data": data, "language": target.language,
+                           "solver": target.solver, "time_limit": time_limit}, time_limit))
 
     async def run_script(self, script: str, time_limit: float) -> SolveResult:
         """Run a script as __main__; `output` holds what it printed and any traceback."""
-        return await self._run({"script": script}, time_limit)
+        return SolveResult(**await self._run({"script": script}, time_limit))
+
+    async def catalog(self) -> dict[str, Any]:
+        """One native capability discovery per service process, in the actual solving environment."""
+        async with self._catalog_lock:
+            if self._catalog is None:
+                result = await self._run({"catalog": True}, 120)
+                if result.get("error"):
+                    raise RuntimeError(result['error'])
+                self._catalog = result
+            return self._catalog
 
     def _command(self, name: str) -> list[str]:
         if self.kind == "local":
             return [sys.executable, "-I", str(WORKER)]
         command = ["docker", "run", "--rm", "-i", "--pull", "never", "--name", name, "--network", "none", "--memory", "2g",
                    "--cpus", "2", "--pids-limit", "256", "--read-only", "--tmpfs", "/tmp:rw,size=256m",
-                   "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "-e", "HOME=/tmp"]
+                   "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "-e", "HOME=/tmp",
+                   "-e", "OPENBLAS_NUM_THREADS=1", "-e", "OMP_NUM_THREADS=2"]
         for variable, destination in [("GRB_LICENSE_FILE", "/opt/gurobi/gurobi.lic"),
                                       ("MOSEKLM_LICENSE_FILE", "/opt/mosek/mosek.lic")]:
             license_file = os.environ.get(variable)
@@ -99,16 +118,18 @@ class Sandbox:
             command += ["-e", "COPT_LICENSE_DIR=/opt/copt"]
         return command + [self.image, "python", "-I", "/opt/llm4om/worker.py"]
 
-    async def _run(self, request: dict[str, Any], time_limit: float) -> SolveResult:
+    async def _run(self, request: dict[str, Any], time_limit: float) -> dict[str, Any]:
         async with self._slots:
             return await self._execute(request, time_limit)
 
-    async def _execute(self, request: dict[str, Any], time_limit: float) -> SolveResult:
+    async def _execute(self, request: dict[str, Any], time_limit: float) -> dict[str, Any]:
         timeout = time_limit + START_MARGIN
         name = "llm4om-" + uuid.uuid4().hex[:12]
         env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "GRB_LICENSE_FILE",
                                                "MOSEKLM_LICENSE_FILE", "COPT_LICENSE_DIR")
                if key in os.environ} if self.kind == "local" else None
+        if env is not None:
+            env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="2")
         process = await asyncio.create_subprocess_exec(*self._command(name), stdin=asyncio.subprocess.PIPE,
                                                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env)
         try:
@@ -122,10 +143,10 @@ class Sandbox:
                                                             stderr=asyncio.subprocess.DEVNULL)).wait()
             if isinstance(error, asyncio.CancelledError):
                 raise
-            return SolveResult("error", error=f"Execution exceeded {timeout:g} seconds and was stopped.")
+            return {"status": "error", "error": f"Execution exceeded {timeout:g} seconds and was stopped."}
         for line in reversed(stdout.decode(errors="replace").splitlines()):
             if line.startswith(RESULT_MARKER):
-                return SolveResult(**json.loads(line[len(RESULT_MARKER):]))
+                return json.loads(line[len(RESULT_MARKER):])
         detail = stderr.decode(errors="replace").strip()[-2000:]
         hint = " Build it with `llm4om build-worker`." if "Unable to find image" in detail else ""
-        return SolveResult("error", error=f"The sandbox did not return a result (exit code {process.returncode}).{hint}\n{detail}")
+        return {"status": "error", "error": f"The sandbox did not return a result (exit code {process.returncode}).{hint}\n{detail}"}

@@ -26,7 +26,8 @@ LangGraph 服务器（langgraph-api，内存运行时，数据在 <workspace>/.l
 src/llm4om/
 ├── __init__.py          公共入口：run、run_problem 及常用类型
 ├── cli.py               命令行：serve、run、build-worker
-├── languages.py         代码写法与代码契约：LANGUAGES、CodeTarget、MILP_LANGUAGES
+├── languages.py         九个建模库、原生代码契约和 CodeTarget
+├── code_prompts.py      官方建模接口的代码参考
 ├── llm.py               服务商列表、LLMSettings、chat_model()
 ├── llm_presets.py       预设读写、迁移和环境预设；同一事务内读取并原子替换
 ├── storage.py           私有 JSON 文件的原子写入，供预设和 token 预算共用
@@ -58,14 +59,14 @@ storage → llm_presets · budget ───────────────�
 runtime → progress ─────────────────────────────────┘
 ```
 
-`languages`、`llm`、`sandbox` 互不依赖。方法只依赖 `runtime`、`languages`、`sandbox` 和 `methods` 本身，不依赖平台图或服务器。`sandbox/worker.py` 在沙箱中独立运行，因此不导入任何平台模块；它与 `languages.py` 各自列出十二条求解路径，是隔离的代价。
+`languages`、`llm`、`sandbox` 互不依赖。方法只依赖 `runtime`、`languages`、`sandbox` 和 `methods` 本身，不依赖平台图或服务器。`sandbox/worker.py` 在沙箱中独立运行，因此不导入任何平台模块；它按库调用原生接口与插件注册表。`languages.py` 只描述九个库和生成代码的契约，不复制后端插件名单。
 
 ## 平台图
 
 | 键 | 内容 |
 |---|---|
 | 输入 | `description`（问题描述）、`data`（数据文件名到文本） |
-| 运行上下文 `RunContext` | `language`、`preset`。只写预设模型的 id，不写密钥，也不能改模型；服务器按 id 读取预设。方法参数不随运行传入，固定在 `methods/presets.py` |
+| 运行上下文 `RunContext` | `language`、`solver`、`preset`。只写预设模型的 id，不写密钥，也不能改模型；服务器按 id 读取预设。方法参数不随运行传入，固定在 `methods/presets.py` |
 | 输出 | `formulation`、`code`、`solve`、`failure`、`steps`、`usage`（LLM 调用、求解、token）、`spec`（配置快照）、`timing`（执行时间） |
 
 图的输入类型 `RunInput` 只开放问题与数据，内部结果不能通过输入注入。每次 `prepare` 都清空旧产物、步骤、计数和配置，再建立本次运行状态；同一线程再次运行也遵守这一规则。
@@ -93,7 +94,7 @@ LangGraph 就是平台的方法抽象。每个方法是一张编译好的 LangGr
 | 步骤 | `Method.titles` 把节点名映射为步骤标题。只有列出的节点显示为步骤；每次更新渲染为 Markdown（文本原样、`code` 和 `*_code` 为代码块、其他为 JSON） |
 | 隐藏 | 以 `_` 开头的状态键、`problem`、`solve`、`messages`、`failure`，以及 `Method.hidden` 中的键，不显示 |
 | 上限 | `Method.limits` 覆盖默认上限（AutoFormulation 的搜索需要数千次调用） |
-| 写法 | `Method.languages` 声明支持的代码写法；不声明表示全部支持 |
+| 写法 | `Method.languages` 声明建模库；原生 API 的选择在代码中表达 |
 
 ```python
 @dataclass(frozen=True)
@@ -113,7 +114,9 @@ class Method:
 | `Context` 成员 | 用途 |
 |---|---|
 | `data` | 数据文件名到文本内容；问题全文在状态的 `problem` 中 |
-| `target.language` | 所选代码写法：`pyomo`、`gurobipy`、`pywraplp` 或 `cpmpy` |
+| `target.language` | 所选九个建模库之一；OR-Tools 的规范 ID 为 `ortools` |
+| `target.solver` | 原生后端标识，默认 AUTO |
+| `target.dialect` | 固定方言的内部键；OR-Tools 旧模板继续使用 `pywraplp`，不增加一级分类 |
 | `target.prompt` | 所选写法的代码契约，直接拼接到生成代码的提示中 |
 | `target.library` | 代码所用的库名（`Pyomo`、`Gurobi`、`OR-Tools`、`CPMpy`），用于替换原提示中写死的库名 |
 | `target.starter` | 所选写法的空 `build_model` 模板，供需要代码示例的提示使用 |
@@ -136,28 +139,19 @@ class Method:
 
 ## 代码契约
 
-一次运行分两个阶段：数学建模（方法产出数学模型）和代码表达（方法把模型写成代码）。代码在沙箱中求解。用户选择代码写法，写法决定求解器。所有写法的代码结构相同：定义 `build_model(data)` 并返回模型对象，不调用求解。Worker 用该写法自己的接口求解，统一设置时限，读出状态、目标值和变量取值：
+数学建模与代码生成仍在方法图中完成。只选择建模库与可选后端。Worker 自动识别原生模型类型；同一模型的标量、矩阵等写法共用求解入口。原生 API 与返回类型见[接口清单](references/modeling-libraries.md)。
 
-| 代码写法 | 代码返回 | 求解器 | Worker 求解 |
-|---|---|---|---|
-| Pyomo | `pyo.ConcreteModel` | HiGHS | Pyomo 的 HiGHS 接口（`pyomo.contrib.solver` 的 `highs`） |
-| gurobipy | `gp.Model` | Gurobi | `model.optimize()` |
-| OR-Tools `pywraplp` | `pywraplp.Solver` | SCIP | `solver.Solve()` |
-| CPMpy | `cp.Model` | OR-Tools CP-SAT | `SolverLookup.get("ortools", model).solve()` |
-| PuLP | `pulp.LpProblem` | CBC（PuLP 自带） | `problem.solve(PULP_CBC_CMD(...))` |
-| CVXPY | `cp.Problem` | Clarabel | `problem.solve(solver=CLARABEL)`；只接受连续凸模型，含整数变量时报错 |
-| PySCIPOpt | `pyscipopt.Model` | 原生 SCIP | `model.optimize()`，含非线性约束 |
-| CasADi | `ca.Opti` | Ipopt | 配置平台时限后 `solve_limited()`；局部状态 |
-| coptpy | `coptpy.Model` | COPT | `model.solve()`，统一 Status/HasSol/ObjVal 接口 |
-| CVXPY / OSQP、SCS、MOSEK | `cp.Problem` | 所选组合对应的求解器 | 共用结果读取，分别设置 `time_limit`、`time_limit_secs`、`mosek_params` |
+`build_model(data)` 只构建原生模型。需要端点、变量集合或底层符号/数值输入的接口返回规定的字典。Worker 调用所选原生后端，不跨库翻译数学模型。MPSolver 自身绑定后端，所以使用其原生 protobuf 在该接口内部转入指定引擎，并拒绝把整数模型交给 LP 引擎求连续松弛。
 
-`languages.MILP_LANGUAGES` 保留原有方法支持的四种方言（Pyomo、gurobipy、`pywraplp`、PuLP），不是所有支持 MILP 的求解器清单。新增方法单独声明扩展组合。CPMpy 模型可以没有目标，此时是可满足性问题：找到解时状态为 `feasible`，没有目标值，但有变量取值。代码返回的对象与所选写法不符时，Worker 报告错误，错误信息交给方法作为反馈。
+`CodeTarget` 负责库和接口代码契约；后端名单由执行环境的原生注册表提供。`MILP_LANGUAGES` 仍表示既有方法的四种方言（Pyomo、gurobipy、OR-Tools、PuLP）。OptiMUS 和 AutoFormulation 的固定模板只开放对应接口，其他方法按明确声明的支持范围生成代码。
+
+CPMpy 和原生 CP 接口允许无目标的可满足性模型，成功时保存变量但目标值为空。CVXPY AUTO 走原生 solver_path，并把真正使用的引擎写入 SolveResult.solver；显式后端不会自动替换。Routing 启发式结果是 feasible，非凸 NLP 的局部结果使用 locally_optimal/locally_infeasible。原生接口的安装、模型兼容性和商业许可分别对待。
 
 ## 沙箱
 
-`Sandbox` 有两个动作：`solve(code, data, language, time_limit)` 构建并求解模型；`run_script(script, time_limit)` 运行检查脚本。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。所有运行共享服务的 Sandbox，`solve` 和 `run_script` 共用并发额度，默认最多 4 个，由 `LLM4OM_SANDBOX_JOBS` 设置。排队仍计入运行总时限，单次沙箱超时从取得额度后开始。`--jobs` 单独控制并发运行数。
+`Sandbox.solve(code, data, language, time_limit, solver=...)` 构建并求解模型；`run_script` 运行方法的检查脚本；`catalog` 在同一执行环境读取并缓存后端能力。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。所有运行共享服务的 Sandbox，`solve` 和 `run_script` 共用并发额度，默认最多 4 个，由 `LLM4OM_SANDBOX_JOBS` 设置。排队仍计入运行总时限，单次沙箱超时从取得额度后开始。`--jobs` 单独控制并发运行数。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:10` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件；不挂载 COPT 整个目录。超时或取消时等待 `docker rm --force` 完成，确保容器已删除才释放并发额度。
+`Sandbox("docker")` 在镜像 `llm4om-worker:11` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件；不挂载 COPT 整个目录。超时或取消时等待 `docker rm --force` 完成，确保容器已删除才释放并发额度。
 
 求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CPMpy 模型用 CPMpy 的 MUS，CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。`feedback()` 不包含诊断，已移植的研究方法继续使用原反馈；本项目的 Feedback Repair 单独读取诊断，用于对照题面复核。Gurobi 预求解把模型判为“不可行或无界”时，Worker 关闭对偶约简（`DualReductions=0`）再求解一次，得到确定的状态。
 
@@ -222,7 +216,7 @@ frontend/src/
 
 页面按用户的任务顺序组织：
 
-1. 编辑页左侧写问题、附数据；右侧固定显示建模方法、写法与求解器、LLM，选择直接可见。
+1. 编辑页左侧写问题、附数据；右侧固定显示建模方法、九个建模求解器及库内接口/后端、LLM，选择直接可见。
 2. 运行页先用结论卡回答“得到了什么”（目标值、状态或失败原因），再提供“核对数学模型”和“查看解”。
 3. 下方左栏是建模过程，右栏是产物。宽屏下两栏可拖动调整宽度；窄屏下用“结果 / 过程”切换。
 

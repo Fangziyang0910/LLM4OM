@@ -35,14 +35,15 @@
 
 也可以从首页的三个例子开始，或在“示例题库”中选择公开题目。
 
-### 3. 选择方法、写法和模型
+### 3. 选择方法、建模求解器和模型
 
-右侧“运行设置”有三项：
+右侧“运行设置”包括：
 
 | 设置 | 说明 |
 |---|---|
 | 建模方法 | 13 种方法，见 [README](../README.md#建模方法)和[建模方法](methods.md) |
-| 代码写法 | 写法决定求解器，例如 Pyomo 用 HiGHS。页面只允许当前方法支持的组合；SAC-Opt 使用 gurobipy，OptiMind 限 MILP 接口 |
+| 建模求解器 | 九个建模库之一，每个库只出现一次 |
+| 求解后端 | 所选库的原生后端，默认自动选择。列表显示当前沙箱的安装状态；商业许可在实际执行时校验 |
 | 预设模型 | 本次运行使用的 LLM |
 
 点击“开始建模”，或按 Ctrl+Enter。
@@ -134,7 +135,8 @@ uv run llm4om run --file problem.txt --data demand.csv --method coe
 | `--problem` / `--file` | 问题描述文本，或 UTF-8 文本文件 |
 | `--data` | 数据文件（CSV 或 JSON），可以重复 |
 | `--method` | 方法 id，例如 `direct`、`orthought`、`llmopt` |
-| `--language` | `pyomo`、`gurobipy`、`pywraplp`、`pulp`、`cpmpy` 或 `cvxpy` |
+| `--language` | 九个库的 ID：`pyomo`、`gurobipy`、`ortools`、`cpmpy`、`pulp`、`cvxpy`、`pyscipopt`、`casadi`、`coptpy` |
+| `--solver` | 原生后端 ID；省略时为 AUTO，由模型和库选择原生后端 |
 | `--preset` | 预设模型 id；默认用第一个预设 |
 | `--workspace` | 保存预设的工作区 |
 | `--output` | 把最终状态（含全部步骤）写入 JSON 文件 |
@@ -149,7 +151,7 @@ state = run_problem("……", method="optimus", language="gurobipy")
 print(state["failure"] or state["solve"]["objective"])
 ```
 
-用 `preset=` 选择预设，或用 `llm=LLMSettings(...)` 直接传入模型设置。
+用 `preset=` 选择预设，或用 `llm=LLMSettings(...)` 直接传入模型设置。`solver=` 可指定原生后端；省略时自动选择。库内 API 由生成代码表达，无需配置接口。
 
 ## 运行记录
 
@@ -166,7 +168,7 @@ print(state["failure"] or state["solve"]["objective"])
 
 **运行失败，提示 Docker 或镜像不存在。** 先运行 `uv run llm4om build-worker` 构建沙箱镜像。Docker 部署会自动构建。
 
-**gurobipy 写法提示许可证或规模限制。** 没有完整许可证时，Gurobi 只能求解小规模模型。换用 Pyomo、`pywraplp` 或 PuLP，或按[部署指南](deployment.md#gurobi-许可证)挂载许可证。
+**gurobipy 提示许可证或规模限制。** 没有完整许可证时，Gurobi 只能求解小规模模型。换用 Pyomo、OR-Tools 或 PuLP 的开放后端，或按[部署指南](deployment.md#gurobi-许可证)挂载许可证。
 
 **提示预设的每日 token 已用完。** 服务器设置了 `LLM4OM_DAILY_TOKENS`。换一个预设，或等到第二天。
 
@@ -186,4 +188,4 @@ print(state["failure"] or state["solve"]["objective"])
 
 原生 SCIP（PySCIPOpt）可以表达非线性约束。CasADi/Ipopt 用于光滑连续非线性问题；“局部最优”不代表全局最优，“局部不可行”也不证明整个问题不可行。CasADi 只提供最小化：最大化问题写成最小化负目标时，报告的目标值也相应取负，数学模型中会注明。
 
-CVXPY 可选 Clarabel、OSQP、SCS、MOSEK；OSQP 限连续凸二次规划，MOSEK 需要许可证。COPT 可在无许可证的小规模非商业模式下运行，商业部署与大模型需相应许可。许可证配置见[部署指南](deployment.md#其他商业求解器许可证)。
+CVXPY 的后端由原生注册表提供，不单独计成多个建模求解器。AUTO 使用原生候选路径选择可执行后端；显式选择的后端失败时不会替换。OSQP 限连续凸二次规划，MOSEK 需要许可证。COPT 可在无许可证的小规模非商业模式下运行，商业部署与大模型需相应许可。许可证配置见[部署指南](deployment.md#其他商业求解器许可证)。

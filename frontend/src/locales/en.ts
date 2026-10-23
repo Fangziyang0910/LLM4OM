@@ -1,5 +1,11 @@
 /** English for the page's Chinese text; keys are the Chinese exactly as written in t(...). */
 export const en: Record<string, string> = {
+  "建模求解器": "Modeling library",
+  "求解后端": "Solver backend",
+  "自动选择": "Automatic",
+  "当前环境不可用": "Unavailable in this environment",
+  "正在检查求解后端……": "Checking solver backends…",
+  "所选后端在当前环境不可用，请选择其他后端。": "The selected backend is unavailable in this environment. Choose another backend.",
   "局部最优": "Locally optimal",
   "已找到局部最优解；非凸问题仍可能存在更好的解。": "A local optimum was found; a nonconvex problem may still have a better solution.",
   "本次局部搜索未找到可行解，不能据此断定整个问题不可行。": "This local search did not find a feasible solution; it does not prove the whole problem infeasible.",

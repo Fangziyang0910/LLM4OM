@@ -87,5 +87,6 @@ OPTIMIND = Method(
     id="optimind", name="OptiMind", description="按问题类型选用公开建模提示，并结合求解结果迭代检查模型。",
     graph=graph, source="https://github.com/microsoft/OptiGuide/tree/419cf7b9eee20b6af036abf15152fa775b20c951/optimind",
     titles={"classify": "匹配建模提示", "generate": "OptiMind 建模与检查"}, hidden=frozenset({"reflection"}),
-    languages=MILP_LANGUAGES | {"pyscipopt", "coptpy", "cvxpy_mosek"}, parameters=lambda: asdict(presets.OPTIMIND),
+    languages=MILP_LANGUAGES | {"pyscipopt", "coptpy", "cvxpy"},
+    parameters=lambda: asdict(presets.OPTIMIND),
 )

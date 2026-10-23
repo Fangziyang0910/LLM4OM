@@ -28,7 +28,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import Overwrite
 
 from llm4om.budget import TokenBudget
-from llm4om.languages import LANGUAGES, CodeTarget
+from llm4om.languages import CodeTarget
 from llm4om.llm import LLMSettings, chat_model
 from llm4om.llm_presets import LLMPresetStore
 from llm4om.methods import Method, methods
@@ -66,6 +66,7 @@ class RunContext:
 
     language: str = "pyomo"  # code language, which decides the solver
     preset: str | None = None  # LLM preset id; None means the default preset
+    solver: str | None = None
 
 
 @dataclass
@@ -187,7 +188,7 @@ def platform_graph(method: Method) -> Any:
                 raise RuntimeError("The modeling node must resolve its LLM before calling it.")
             return resources.model_factory(settings, callbacks=[recorder.callback], metadata={"llm4om_role": role})
 
-        return Context(recorder, resources.sandbox, model, CodeTarget(choice.language), state.get("data") or {})
+        return Context(recorder, resources.sandbox, model, CodeTarget(choice.language, choice.solver), state.get("data") or {})
 
     def thread_id() -> str | None:
         return get_config().get("configurable", {}).get("thread_id")
@@ -206,10 +207,10 @@ def platform_graph(method: Method) -> Any:
         try:
             if not (state.get("description") or "").strip():
                 raise ValueError("Describe the optimization problem first.")
-            CodeTarget(choice.language)  # raises for an unknown language
-            if method.languages is not None and choice.language not in method.languages:
-                raise ValueError(f"{method.name} does not support the code language {choice.language!r}; "
-                                 f"choose one of {sorted(method.languages)}.")
+            target = CodeTarget(choice.language, choice.solver)
+            if method.languages is not None and target.language not in method.languages:
+                raise ValueError(f"{method.name} does not support {target.language}; "
+                                 "choose a supported modeling library.")
             for name in data:
                 if not re.fullmatch(DATA_NAME, name):
                     raise ValueError(f"Invalid data file name {name!r}; use letters, digits, '-', '_', '.' and spaces.")
@@ -220,7 +221,8 @@ def platform_graph(method: Method) -> Any:
             return {**fresh, "failure": str(error)}
         spec = {"version": version("llm4om"), "method": method.id, "source": method.source,
                 "parameters": method.parameters(), "limits": asdict(method.limits or resources.limits),
-                "language": choice.language, "solver": LANGUAGES[choice.language].solver, "preset": preset, "llm": settings.public(),
+                "language": target.language, "solver": target.solver,
+                "preset": preset, "llm": settings.public(),
                 "sandbox": resources.sandbox.kind, "worker_image": resources.sandbox.image if resources.sandbox.kind == "docker" else None}
         return {**fresh, "problem": problem_text(state.get("description", ""), data), "failure": None, "_deadline": deadline,
                 "spec": spec, "timing": timing(started)}
@@ -294,7 +296,8 @@ def platform_graph(method: Method) -> Any:
     return builder.compile(name=method.id)
 
 
-async def run(description: str, *, method: str = "direct", language: str = "pyomo", data: dict[str, str] | None = None,
+async def run(description: str, *, method: str = "direct", language: str = "pyomo",
+              solver: str | None = None, data: dict[str, str] | None = None,
               preset: str | None = None, resources: Resources | None = None,
               on_step: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
     """Run one method in process and return the final state. `on_step` receives each step as it is recorded."""
@@ -305,7 +308,7 @@ async def run(description: str, *, method: str = "direct", language: str = "pyom
     config: RunnableConfig = {"configurable": {"llm4om_resources": resources}} if resources else {}
     async for mode, chunk in platform_graph(available[method]).astream(
             {"description": description, "data": data or {}}, config,
-            context=RunContext(language, preset), stream_mode=["custom", "values"]):
+            context=RunContext(language, preset, solver), stream_mode=["custom", "values"]):
         if mode == "values":
             final = chunk
         elif on_step and "step" in chunk:

@@ -34,7 +34,7 @@ async def _run(args: argparse.Namespace) -> int:
         raise ValueError(f"Cannot read {error.filename}: {error.strerror}.") from error
     resources = Resources(LLMPresetStore(Path(args.workspace)), Sandbox(args.sandbox))
     state = await run(problem, method=args.method, language=args.language, data=data,
-                      preset=args.preset, resources=resources, on_step=_print_step)
+                      solver=args.solver, preset=args.preset, resources=resources, on_step=_print_step)
     if args.output:
         Path(args.output).write_text(json.dumps(state, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
     if state.get("failure"):
@@ -97,8 +97,8 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument("--file", help="UTF-8 file with the problem description.")
     run.add_argument("--data", action="append", default=[], help="Attach a CSV or JSON data file; repeatable.")
     run.add_argument("--method", default="direct")
-    run.add_argument("--language", default="pyomo", choices=list(LANGUAGES), help="Code language, which decides the solver: "
-                     + ", ".join(f"{item.id} ({item.solver})" for item in LANGUAGES.values()) + ".")
+    run.add_argument("--language", default="pyomo", help="Modeling library: " + ", ".join(LANGUAGES) + ".")
+    run.add_argument("--solver", help="Native backend identifier; default: AUTO (the code's native backend).")
     run.add_argument("--preset", help="LLM preset id; default: the first preset.")
     run.add_argument("--workspace", default="runs/web", help="Directory with the saved LLM presets.")
     run.add_argument("--sandbox", choices=("docker", "local"), default="docker")

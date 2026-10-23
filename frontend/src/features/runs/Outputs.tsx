@@ -50,7 +50,7 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
         empty={active ? t("方法给出数学模型后显示在这里。") : t("这个方法没有单独给出数学模型；请看求解代码。")}
         render={text => <Markdown text={text} />} /> : null}
       {tab === "code" ? <Versioned key="code" items={codes} picked={picked.code} pick={id => setPicked("code", id)}
-        noun={t("代码")} active={active} file="model.py" extra={language ? `${language.name} · ${t("{solver} 求解", { solver: language.solver })}` : undefined}
+        noun={t("代码")} active={active} file="model.py" extra={language?.name}
         empty={active ? t("方法写出代码后显示在这里。") : t("没有求解代码。")}
         render={text => <Code text={text} />} /> : null}
       {tab === "problem" ? <Problem values={values} /> : null}
