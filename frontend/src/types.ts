@@ -4,7 +4,7 @@ export type Backend = { id: string; available: boolean; detail: string };
 export type BackendCatalog = { libraries: Record<string, Backend[]> };
 export type Provider = { id: string; label: string; protocol: string; base_url: string };
 export type Dataset = { id: string; title: string; description: string; count: number; license: string; source_url: string };
-export type Options = { methods: Method[]; languages: Language[]; providers: Provider[]; datasets: Dataset[] };
+export type Options = { methods: Method[]; languages: Language[]; providers: Provider[]; datasets: Dataset[]; search_configured?: boolean };
 
 /** A fixed LLM configuration; the server never returns its key. `env` comes from the server's LLM4OM_LLM_* variables. */
 export type Preset = {

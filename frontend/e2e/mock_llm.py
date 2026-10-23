@@ -8,6 +8,7 @@ Usage: python e2e/mock_llm.py PORT
 import json
 import sys
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 FEASIBLE = '''import pyomo.environ as pyo
@@ -48,10 +49,35 @@ def build_model(data):
     x = cp.Variable(2, name='x')
     return cp.Problem(cp.Minimize(cp.sum_squares(x-np.array([1,2]))), [x>=0,cp.sum(x)<=2])
 '''
+REQUIREMENTS = ("工厂生产 A、B 两种产品，数量必须是非负整数。每件 A 利润为 3，每件 B 利润为 2。"
+                "A 消耗 2 单位切割资源和 1 单位加工资源，B 消耗 1 单位切割资源和 2 单位加工资源。"
+                "两种资源各有 8 单位。请确定生产数量，使总利润最大。")
+CHAT_FAILURES: set[str] = set()
 
 
-def reply(messages: list[dict]) -> str:
+def reply(messages: list[dict]) -> str | dict:
     text = json.dumps(messages, ensure_ascii=False)
+    if "Help an ordinary user turn an idea into a business problem" in text:
+        latest = next(message["content"] for message in reversed(messages) if message["role"] == "user")
+        if "E2E_PAUSE_CHAT" in latest and messages[-1]["role"] == "user":
+            time.sleep(3)
+        if "E2E_CHAT_RETRY" in latest and latest not in CHAT_FAILURES:
+            CHAT_FAILURES.add(latest)
+            return ""
+        complete = "各有 8" in latest or "E2E_CHAT_RETRY" in latest
+        if messages[-1]["role"] == "tool" and messages[-1]["content"] == "The business draft was updated.":
+            if "E2E_STREAM" in latest:
+                return "这是逐字显示的回复。我们可以先确定生产目标，再补充实际资源和数量。流式回复已经完整输出。"
+            if "E2E_SEARCH" in latest:
+                return "查到一份[排班参考](https://example.org/shift-guide)。请确认是否把这些建议用于你的门店。"
+            return "可以检查需求稿并用于建模。" if complete else "每件产品的利润和资源消耗是多少？两种资源各有多少容量？"
+        name = "web_search" if "E2E_SEARCH" in latest and messages[-1]["role"] == "user" else "update_draft"
+        description = REQUIREMENTS if complete else "工厂安排 A、B 两种产品的生产。希望总利润最大。\n\n待确认：每件利润、资源消耗和资源容量。"
+        if "costs.csv" in text:
+            description += "\n\n附数据文件 costs.csv。"
+        args = {"query": "门店排班 公开参考"} if name == "web_search" else {"description": description}
+        return {"role": "assistant", "content": "", "tool_calls": [{"id": "call_" + uuid.uuid4().hex[:8], "type": "function",
+                "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)}}]}
     if "Explain an infeasible optimization model" in text:
         facts = json.loads(messages[-1]["content"])
         return json.dumps({"summary": "合同要求的最低交货量超过了切割资源能支持的数量。",
@@ -92,23 +118,40 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         request = json.loads(self.rfile.read(int(self.headers["content-length"])))
+        if self.path == "/v1/tools/search":
+            self.answer(200, {"results": [{"title": "排班参考", "url": "https://example.org/shift-guide",
+                                         "snippet": "可以参考的排班建议，仍需用户确认。", "date": "2026-10-20"}]})
+            return
         content = reply(request["messages"])
+        message = content if isinstance(content, dict) else {"role": "assistant", "content": content}
+        finish = "tool_calls" if message.get("tool_calls") else "stop"
         usage = {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
         chunk = {"id": "mock", "object": "chat.completion.chunk", "created": int(time.time()), "model": request["model"]}
         if not request.get("stream"):
             self.answer(200, {**chunk, "object": "chat.completion", "usage": usage, "choices": [
-                {"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": content}}]})
+                {"index": 0, "finish_reason": finish, "message": message}]})
             return
         self.send_response(200)
         self.send_header("content-type", "text/event-stream")
         self.end_headers()
-        pieces = [content[i:i + 200] for i in range(0, len(content), 200)]
-        for index, piece in enumerate(pieces):
-            delta = {"role": "assistant", "content": piece} if index == 0 else {"content": piece}
-            self.event({**chunk, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]})
-        self.event({**chunk, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
-        self.event({**chunk, "choices": [], "usage": usage})
-        self.wfile.write(b"data: [DONE]\n\n")
+        try:
+            if message.get("tool_calls"):
+                self.event({**chunk, "choices": [{"index": 0, "delta": {"role": "assistant", "tool_calls": [
+                    {"index": i, **call} for i, call in enumerate(message["tool_calls"])]}, "finish_reason": None}]})
+            else:
+                slow = "这是逐字显示的回复。" in content
+                size = 10 if slow else 200
+                pieces = [content[i:i + size] for i in range(0, len(content), size)]
+                for index, piece in enumerate(pieces):
+                    delta = {"role": "assistant", "content": piece} if index == 0 else {"content": piece}
+                    self.event({**chunk, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]})
+                    if slow:
+                        time.sleep(0.5)
+            self.event({**chunk, "choices": [{"index": 0, "delta": {}, "finish_reason": finish}]})
+            self.event({**chunk, "choices": [], "usage": usage})
+            self.wfile.write(b"data: [DONE]\n\n")
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # The browser deliberately disconnects in the cancellation test.
 
     def event(self, payload: dict) -> None:
         self.wfile.write(f"data: {json.dumps(payload)}\n\n".encode())

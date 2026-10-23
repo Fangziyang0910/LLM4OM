@@ -2,5 +2,7 @@
 
 from llm4om.graph import platform_graph
 from llm4om.methods import methods
+from llm4om.requirements import requirements_graph
 
 globals().update({method.id: platform_graph(method) for method in methods().values()})
+requirements = requirements_graph()

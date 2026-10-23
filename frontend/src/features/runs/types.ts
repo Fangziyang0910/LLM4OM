@@ -41,13 +41,15 @@ export type RunValues = {
 };
 /** What the run is and with what it ran, kept as thread metadata; `group` joins the runs of one comparison. */
 export type RunMeta = {
+  kind?: "run";
   title: string; method: string; language: string; preset?: string | null; provider: string | null; model: string | null;
   solver?: string;
   group?: string | null; note?: string; tags?: string[];
   parent?: SourceRun;
 };
+export type RequirementsMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags"> & { kind: "requirements"; search?: boolean };
 /** A run in the history list. */
-export type Entry = {
-  id: string; created: string; updated: string; meta: RunMeta; state: string; objective: number | null;
+export type Entry<Meta = RunMeta | RequirementsMeta> = {
+  id: string; created: string; updated: string; meta: Meta; state: string; objective: number | null;
   failure: string | null; usage: Usage | null; elapsed: number | null;
 };

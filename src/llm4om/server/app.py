@@ -24,7 +24,7 @@ from llm4om.server import examples
 from llm4om.server.middleware import JsonOnlyWrites, RunRateLimit, ThreadCleanup
 
 ASSETS = Path(str(files("llm4om.server").joinpath("web_assets")))
-PAGES = ("/", "/run/{thread_id}", "/compare/{group}")  # the single-page app; no catch-all or /runs path, which would shadow the LangGraph API
+PAGES = ("/", "/run/{thread_id}", "/compare/{group}", "/chat/{thread_id}")  # no catch-all or /runs path, which would shadow the LangGraph API
 
 
 class PresetBody(BaseModel):
@@ -66,6 +66,7 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
                           for item in LANGUAGES.values()],
             "providers": [asdict(provider) for provider in PROVIDERS.values()],
             "datasets": examples.datasets(),
+            "search_configured": bool(os.environ.get("LLM4OM_SEARCH_API_KEY")),
         }
 
     @app.get("/api/backends")

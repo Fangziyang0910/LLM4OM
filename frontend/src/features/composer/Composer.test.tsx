@@ -16,7 +16,7 @@ function Form() {
   return <QueryClientProvider client={client}><Composer options={{ methods: [{ id: "direct", name: "Direct", description: "", source: null, languages: null }],
     languages: [{ id: "pyomo", name: "Pyomo", solver: "highs" }], providers: [], datasets: [] }}
     presets={[]} draft={draft} setDraft={setDraft} onStart={vi.fn()} onCompare={vi.fn()}
-    openPresets={vi.fn()} openExamples={vi.fn()} /></QueryClientProvider>;
+    openPresets={vi.fn()} openExamples={vi.fn()} onDiscuss={vi.fn()} /></QueryClientProvider>;
 }
 
 test("finishing an attachment preserves text edited while the file was loading", async () => {

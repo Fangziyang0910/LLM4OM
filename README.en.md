@@ -32,8 +32,8 @@
 The platform includes **13 LLM modeling methods**: its own Direct and Feedback Repair methods, plus eleven methods from public research. Enter a problem, run the modeling process and inspect the model and result without writing solver code yourself.
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Demo: export an Excel plan, explain infeasibility, select a requirement change and view the new plan" width="100%">
-  <br><sub>Replay of real runs: Direct · Pyomo/HiGHS and gurobipy · DeepSeek. Export Excel, inspect a conflict, select a change and compare the newly solved plan.</sub>
+  <img src="docs/assets/demo.gif" alt="Demo: discuss requirements, review the draft, hand it to modeling and solve" width="100%">
+  <br><sub>A real run: DeepSeek searches public references and streams a business draft, then Feedback Repair · OR-Tools models and solves it.</sub>
 </p>
 
 ## Highlights
@@ -42,6 +42,7 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
 |---|---|
 | 🧠 **13 modeling methods** | Direct, Feedback Repair, TriVAL, SAC-Opt, BIND, OptiMind and more; each has its own LangGraph |
 | 🧩 **9 modeling libraries** | Native modeling APIs, with backend discovery through each library’s own plugin registry |
+| 📝 **Requirements chat** | Multi-turn streaming chat with optional DeepSeek web search and source links; review the editable draft, then hand it to any modeling method |
 | 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
 | ⚖️ **Compare methods** | Run up to 12 methods or models on one problem and compare objective, time and tokens |
 | 💬 **Explain and revise plans** | Read decisions in business terms, change conditions in plain language, and compare the new plan with the saved original |
@@ -56,6 +57,9 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
   <tr>
     <td width="50%"><img src="docs/assets/home.png" alt="New problem"><p align="center"><sub>Write the problem; choose method, language and model</sub></p></td>
     <td width="50%"><img src="docs/assets/run.png" alt="Run result"><p align="center"><sub>The verdict first: objective, modeling process, solution matrix</sub></p></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/assets/requirements.png" alt="Requirements conversation and editable draft"><p align="center"><sub>Discuss business requirements, then review the draft before modeling</sub></p></td>
   </tr>
   <tr>
     <td><img src="docs/assets/formulation.png" alt="Formulation"><p align="center"><sub>Formulations render as LaTeX; each version can be diffed</sub></p></td>
@@ -101,6 +105,8 @@ The repository includes the built frontend, so Node.js is not needed.
    > A factory makes products A and B in non-negative integer quantities. Each A earns 3 and each B earns 2. A uses 2 units of cutting and 1 unit of machining; B uses 1 unit of cutting and 2 units of machining. Each resource has 8 units. Choose the quantities that maximize total profit.
 
 3. Click **Start modeling**. In a few seconds the page shows the optimum A=3, B=2 with profit 13.
+
+If you have only an idea, click **Discuss your requirements**. The assistant updates an editable draft as you talk. Add data and review the text, then click **Use for modeling** to return to the existing settings. You choose when to click **Start modeling**. Saved conversations can be continued from history. Press Enter to send, or Shift+Enter for a new line. Enable **Web search** to find public references and inspect their sources. DeepSeek presets use their own search endpoint; other models can use a separate server-side search key (see `.env.example`).
 
 You can also run from the command line or Python:
 

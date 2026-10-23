@@ -62,6 +62,7 @@ def _serve(args: argparse.Namespace) -> int:
     os.chdir(workspace)
     graphs = {method.id: {"path": f"llm4om.server.graphs:{method.id}", "description": method.description}
               for method in methods().values()}
+    graphs["requirements"] = {"path": "llm4om.server.graphs:requirements", "description": "Discuss and prepare business requirements"}
     local = "127.0.0.1" if args.host == "0.0.0.0" else args.host
     reach = "; other machines use this machine's address" if args.host == "0.0.0.0" else ""
     print(f"LLM4OM: http://{local}:{args.port}{reach}  (runs are kept in {workspace})", file=sys.stderr)

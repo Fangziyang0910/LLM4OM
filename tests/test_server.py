@@ -34,9 +34,11 @@ def add_preset(api: TestClient) -> dict[str, Any]:
     return response.json()
 
 
-def test_options_list_methods_languages_and_providers(tmp_path: Path) -> None:
+def test_options_list_methods_languages_and_providers(tmp_path: Path, monkeypatch: Any) -> None:
+    monkeypatch.setenv("LLM4OM_SEARCH_API_KEY", "server-search-secret")
     with client(tmp_path) as api:
         options = api.get("/api/options").json()
+    assert options["search_configured"] is True and "server-search-secret" not in str(options)
     assert {"direct", "trival", "optimus", "coe", "optitree", "or_llm_agent", "autoformulation"} <= {m["id"] for m in options["methods"]}
     assert {item["id"] for item in options["languages"]} == {
         "pyomo", "gurobipy", "ortools", "cpmpy", "pulp", "cvxpy", "pyscipopt", "casadi", "coptpy",
@@ -184,9 +186,10 @@ def test_the_server_registers_one_graph_per_method() -> None:
 
     for method in methods():
         assert getattr(graphs, method).name == method
-    # `langgraph dev` reads the graphs from langgraph.json; `llm4om serve` builds the same list from methods().
+    # Both entry points register the modeling methods and the separate requirements conversation.
     config = json.loads((Path(__file__).parents[1] / "langgraph.json").read_text(encoding="utf-8"))
-    assert config["graphs"] == {method: f"llm4om.server.graphs:{method}" for method in methods()}
+    assert graphs.requirements.name == "requirements" and "requirements" not in methods()
+    assert config["graphs"] == {name: f"llm4om.server.graphs:{name}" for name in [*methods(), "requirements"]}
 
 
 def test_a_run_streams_each_step_before_it_ends(make_resources: Any) -> None:
@@ -228,7 +231,7 @@ def test_a_request_config_cannot_replace_the_server_resources(monkeypatch: Any) 
     seen: list[Any] = []
     monkeypatch.setattr(graph, "default_resources", lambda: seen.append("default") or graph.Resources(None, None))  # type: ignore[arg-type]
     monkeypatch.setattr(graph, "get_config", lambda: {"configurable": {"llm4om_resources": {"sandbox": "local"}}})
-    assert isinstance(graph._resources(), graph.Resources) and seen == ["default"]
+    assert isinstance(graph.get_resources(), graph.Resources) and seen == ["default"]
 
 
 def test_a_preset_stops_once_its_daily_token_budget_is_spent(make_resources: Any, tmp_path: Path) -> None:

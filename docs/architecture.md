@@ -1,6 +1,6 @@
 # 架构
 
-LLM4OM 只做三件事：建模、求解、记录过程。LLM 调用、重试和回调交给 LangChain；图编排、运行、流式推送和持久化交给 LangGraph 及其服务器。平台只保留它们不提供的部分：代码目标、求解沙箱、步骤记录和工作台页面。
+LLM4OM 围绕问题建模、求解和过程记录工作。需求对话是形成问题文本的可选入口。LLM 调用、重试和回调交给 LangChain；图编排、运行、流式推送和持久化交给 LangGraph 及其服务器。平台只保留业务提示、代码目标、求解沙箱、步骤记录和工作台页面。
 
 ```text
 浏览器（React + @langchain/langgraph-sdk）
@@ -22,6 +22,10 @@ solve：方法没有求解最终代码时，在沙箱中求解一次
 一次运行分两个阶段：数学建模和代码表达，都在方法图内完成；代码随后在沙箱中运行，得到结果。平台图把“方法”和“最终求解”分成两个节点，方法内部是否交错两个阶段、是否根据求解反馈回到建模，由方法自己决定。
 
 条件调整的 `revise` 和结果解读的 `explain` 位于方法图外。它们复用本次运行的 LLM、预算、步骤和持久化，不改变方法内部编排或提示。
+
+需求对话独立注册为 `requirements` 图（`START → discuss → END`），不计入建模方法。每轮通过 LangChain `create_agent` 运行原生模型／工具循环，复用预设、`Resources`、`Recorder` 和 token 预算。回复直接流式输出自然文本，`update_draft` 通过 `Command` 更新完整需求稿，可选 `web_search` 调用 DeepSeek 独立 Search API。搜索结果和来源放在原生 `ToolMessage.artifact`，凭据仅在工具闭包中。独立搜索密钥绑定独立地址，否则仅 DeepSeek 预设在自身地址使用自身密钥。调用失败保留上一份需求稿、用户消息和已计量用量，重试复用原消息 ID。状态由原生线程和检查点保存。前端用 SDK `useStream` 的原生消息流继续对话（含子图 token）、`threads.updateState` 保存人工改稿；新建空对话用 `threads.create` 的 `graphId` 与 `supersteps` 保存初稿，不调用 LLM。
+
+用户点击“用于建模”后，将 `description + data` 填入现有 Composer，再由用户选择方法并启动新运行。聊天记录、追问和助手判断不作为额外指令注入方法；需求稿没有强制“完整”门槛。边界见 [ADR 0014](adr/0014-requirements-conversation.md)。
 
 ## 模块
 
@@ -48,8 +52,10 @@ src/llm4om/
 │   └── <method>/        复杂方法：__init__.py 导出入口，graph.py 编排，提示/解析/搜索各归其位
 ├── graph.py             平台图 platform_graph(method)、RunState、RunContext、Resources、进程内运行 run()
 ├── followups.py         完整题面整理、方案与无解解释、实际变量及冲突证据引用校验
+├── requirements.py      需求对话图、业务需求稿与 LangChain Agent
+├── web_search.py        DeepSeek 搜索工具、来源与端点凭据绑定
 └── server/              Web 工作台
-    ├── graphs.py        每个方法的平台图，供 LangGraph 服务器注册
+    ├── graphs.py        各方法的平台图及独立需求对话图，供 LangGraph 服务器注册
     ├── app.py           服务器挂载的路由：选项、预设模型、模型列表、题库、前端页面
     ├── middleware.py    请求格式、运行频率、线程删除及进度清理
     ├── examples.py      内置题库的只读浏览（数据在 examples_data/）
@@ -59,7 +65,7 @@ src/llm4om/
 依赖只朝一个方向：
 
 ```text
-languages · llm · sandbox  →  runtime  →  methods  →  graph  →  server · cli
+languages · llm · sandbox  →  runtime  →  methods  →  graph  →  requirements · server · cli
 storage → llm_presets · budget ──────────────────────┘
 runtime → progress ─────────────────────────────────┘
 ```
@@ -215,6 +221,7 @@ frontend/src/
 ├── features/
 │   ├── composer/      Composer、ProblemEditor、Examples、Excel 导入、Draft 类型及测试
 │   ├── presets/       PresetsDialog
+│   ├── requirements/  需求对话、可编辑需求稿、原生线程创建与交接
 │   └── runs/          RunView、Compare、Outputs、Solution、Timeline、状态图标
 │                      Explanation、Infeasibility、RevisionDialog、ScenarioComparison
 │                      api、sdk、useRun、types、steps、tables、report、workbook 及相邻测试

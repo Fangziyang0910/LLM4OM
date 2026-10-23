@@ -16,7 +16,8 @@
     "autoformulation": "llm4om.server.graphs:autoformulation",
     "sac_opt": "llm4om.server.graphs:sac_opt",
     "bind": "llm4om.server.graphs:bind",
-    "optimind": "llm4om.server.graphs:optimind"
+    "optimind": "llm4om.server.graphs:optimind",
+    "requirements": "llm4om.server.graphs:requirements"
   },
   "http": {
     "app": "llm4om.server.app:app",

@@ -113,7 +113,7 @@ def default_resources() -> Resources:
                      budget=TokenBudget(workspace, int(os.environ.get("LLM4OM_DAILY_TOKENS") or 0)))
 
 
-def _resources() -> Resources:
+def get_resources() -> Resources:
     # Only in-process callers can pass Resources; a server request's JSON config cannot replace them.
     resources = (get_config().get("configurable") or {}).get("llm4om_resources")
     return resources if isinstance(resources, Resources) else default_resources()
@@ -186,7 +186,7 @@ def platform_graph(method: Method) -> Any:
 
     def context(state: RunState, runtime: Runtime[RunContext], settings: LLMSettings | None = None) -> Context:
         """Continue this run's counts, using the already resolved LLM settings for every role."""
-        resources = _resources()
+        resources = get_resources()
         choice = runtime.context or RunContext()
         recorder = Recorder(method.limits or resources.limits, state.get("usage"), runtime.stream_writer,
                             resources.charge((state.get("spec") or {}).get("preset")))
@@ -206,7 +206,7 @@ def platform_graph(method: Method) -> Any:
         choice = runtime.context or RunContext()
         data = state.get("data") or {}
         started = time.time()
-        resources = _resources()
+        resources = get_resources()
         deadline = started + (method.limits or resources.limits).run_timeout
         fresh = {"formulation": None, "code": None, "solve": None, "spec": None, "usage": {},
                  "steps": Overwrite([]), "timing": timing(started), "problem": "", "change": None,
@@ -248,7 +248,7 @@ def platform_graph(method: Method) -> Any:
         return {"failure": message}
 
     async def llm_context(state: RunState, runtime: Runtime[RunContext]) -> Context:
-        _, settings, _ = await asyncio.to_thread(_resources().resolve, state["spec"]["preset"])
+        _, settings, _ = await asyncio.to_thread(get_resources().resolve, state["spec"]["preset"])
         if settings.public() != state["spec"]["llm"]:
             raise ValueError("The LLM preset changed before the next platform step. Start a new run with the intended preset.")
         return context(state, runtime, settings)

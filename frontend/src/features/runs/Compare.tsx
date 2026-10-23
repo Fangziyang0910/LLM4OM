@@ -9,7 +9,7 @@ import { history } from "@/features/runs/api";
 import { targetLabel } from "@/features/runs/target";
 import { STATUS, duration, errorText, formatNumber, formatTokens, tone } from "@/format";
 import { t } from "@/i18n";
-import type { Entry } from "@/features/runs/types";
+import type { Entry, RunMeta } from "@/features/runs/types";
 import type { Options } from "@/types";
 import { StatusIcon, TONE } from "@/features/runs/status";
 
@@ -25,7 +25,8 @@ export function agreement(entries: Entry[]): { solved: number; same: boolean; lo
 export function Compare({ group, options, onOpen }: { group: string; options: Options; onOpen: (id: string) => void }) {
   const query = useQuery({ queryKey: ["compare", group], queryFn: () => history({ group }),
     refetchInterval: current => current.state.data?.entries.some(entry => entry.state === "running") ? 3000 : false });
-  const entries = [...(query.data?.entries ?? [])].reverse();  // in the order they started
+  const entries = (query.data?.entries ?? []).filter((entry): entry is Entry<RunMeta> => entry.meta.kind !== "requirements")
+    .reverse();  // in the order they started
 
   if (query.error) return <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm">
     <TriangleAlert className="size-6 text-destructive" /><p>{errorText(query.error)}</p></div>;

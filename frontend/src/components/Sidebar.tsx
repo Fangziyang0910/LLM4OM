@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, ChartSpline, Columns3, Cpu, History, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
+import { BookOpen, ChartSpline, Columns3, Cpu, History, MessageSquare, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -30,13 +30,16 @@ function when(created: string): string {
 
 /** What came of a run, in a few characters: the objective when it solved, otherwise its state. */
 export function resultText(entry: Entry): string {
+  if (entry.meta.kind === "requirements") return entry.state === "running" ? t("正在整理")
+    : entry.failure ? t("整理未完成") : t("需求对话");
   if (entry.state === "running") return t("建模中");
   return entry.objective != null && tone(entry.state) === "good" ? formatNumber(entry.objective) : STATUS[entry.state] ?? entry.state;
 }
 
 /** Whether a run matches a search: every word is in its title, method, model, note or tags; `#tag` needs that tag. */
 export function matches(entry: Entry, query: string, methodName: (id: string) => string): boolean {
-  const text = [entry.meta.title, methodName(entry.meta.method), entry.meta.model ?? "", entry.meta.note ?? "", ...(entry.meta.tags ?? [])]
+  const text = [entry.meta.title, entry.meta.kind === "requirements" ? t("需求对话") : methodName(entry.meta.method),
+    entry.meta.model ?? "", entry.meta.note ?? "", ...(entry.meta.tags ?? [])]
     .join("\n").toLowerCase();
   const tags = (entry.meta.tags ?? []).map(tag => tag.toLowerCase());
   return query.trim().toLowerCase().split(/\s+/).filter(Boolean)
@@ -47,7 +50,7 @@ export function Sidebar({ entries, current, options, presets, hasMore, loading, 
   onNew, onOpen, onCompare, onDelete, onExamples, onPresets }: {
   entries: Entry[]; current: string | null; options: Options | null; presets: Preset[];
   hasMore: boolean; loading: boolean; error: string | null; onLoadMore: () => void; onRetry: () => void;
-  onNew: () => void; onOpen: (id: string) => void; onCompare: (group: string) => void; onDelete: (entry: Entry) => void;
+  onNew: () => void; onOpen: (entry: Entry) => void; onCompare: (group: string) => void; onDelete: (entry: Entry) => void;
   onExamples: () => void; onPresets: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -94,18 +97,20 @@ export function Sidebar({ entries, current, options, presets, hasMore, loading, 
           <h2 className="px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground">{label}</h2>
           <ul className="flex flex-col gap-0.5">{items.map(entry => {
             const selectedItem = entry.id === current;
+            const comparison = entry.meta.kind === "requirements" ? null : entry.meta.group;
             return <li key={entry.id} className="group/item relative">
-              <button onClick={() => onOpen(entry.id)} aria-current={selectedItem ? "page" : undefined}
+              <button onClick={() => onOpen(entry)} aria-current={selectedItem ? "page" : undefined}
                 className={cn("flex w-full flex-col gap-1 rounded-md px-2.5 py-2 pr-8 text-left transition-colors hover:bg-sidebar-accent",
                   selectedItem && "bg-sidebar-accent")}>
                 <span className="flex items-center gap-2">
-                  <StatusIcon status={entry.state} className="size-3.5 shrink-0" />
+                  {entry.meta.kind === "requirements" ? <MessageSquare className="size-3.5 shrink-0 text-muted-foreground" />
+                    : <StatusIcon status={entry.state} className="size-3.5 shrink-0" />}
                   <span className={cn("truncate text-[13px]", selectedItem ? "font-medium" : "text-foreground/90")}>{entry.meta.title}</span>
                 </span>
                 <span className="flex items-center gap-1.5 pl-5.5 text-[11px] text-muted-foreground">
-                  <span className={cn("tabular font-medium", TONE[tone(entry.state)].text)}>{resultText(entry)}</span>
-                  <span>·</span><span className="truncate">{methodName(entry.meta.method)}</span>
-                  {entry.meta.group ? <Columns3 className="size-3 shrink-0" aria-label={t("方法对比")} /> : null}
+                  <span className={cn("shrink-0 whitespace-nowrap tabular font-medium", TONE[tone(entry.state)].text)}>{resultText(entry)}</span>
+                  <span>·</span><span className="truncate">{entry.meta.kind === "requirements" ? entry.meta.model : methodName(entry.meta.method)}</span>
+                  {comparison ? <Columns3 className="size-3 shrink-0" aria-label={t("方法对比")} /> : null}
                   <span className="ml-auto shrink-0 tabular">{when(entry.created)}</span>
                 </span>
               </button>
@@ -116,7 +121,7 @@ export function Sidebar({ entries, current, options, presets, hasMore, loading, 
                     <MoreHorizontal /></Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" side="right">
-                  {entry.meta.group ? <DropdownMenuItem onClick={() => onCompare(entry.meta.group!)}><Columns3 />{t("查看对比")}</DropdownMenuItem> : null}
+                  {comparison ? <DropdownMenuItem onClick={() => onCompare(comparison)}><Columns3 />{t("查看对比")}</DropdownMenuItem> : null}
                   <DropdownMenuItem variant="destructive" onClick={() => onDelete(entry)}><Trash2 />{t("删除")}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

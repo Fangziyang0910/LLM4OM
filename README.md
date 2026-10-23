@@ -32,8 +32,8 @@
 平台内置 **13 种 LLM 建模方法**，包括 Direct、Feedback Repair 两种自有方法，以及 11 种来自公开研究的方法。你不需要手写求解代码，可以直接输入问题、运行建模，再查看模型和结果。
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="演示：导出 Excel 生产方案、解释无解原因、选择条件调整和查看新方案" width="100%">
-  <br><sub>真实运行记录回放：Direct · Pyomo/HiGHS 与 gurobipy · DeepSeek。导出 Excel，查看冲突解释，选择调整并比较重新求解的方案。</sub>
+  <img src="docs/assets/demo.gif" alt="演示：需求对话、确认需求稿、交给建模并求解" width="100%">
+  <br><sub>真实运行：DeepSeek 联网查阅公开资料，流式整理业务需求，再交给 Feedback Repair · OR-Tools 求解。</sub>
 </p>
 
 ## 亮点
@@ -42,6 +42,7 @@
 |---|---|
 | 🧠 **13 种建模方法** | Direct、Feedback Repair、TriVAL、SAC-Opt、BIND、OptiMind 等；每种方法都有独立 LangGraph 图 |
 | 🧩 **9 种建模求解器** | 支持各库原生 API 与多种求解后端，覆盖数学规划、约束规划、路径、网络流和非线性优化 |
+| 📝 **需求对话** | 多轮流式聊天，可用 DeepSeek 联网搜索并查看来源；确认可编辑需求稿后，交给任意建模方法 |
 | 🔍 **全过程可见** | 每次 LLM 调用实时显示；保留中断前已完成的步骤和产物；历史可分页，运行配置固定记录 |
 | ⚖️ **多方法对比** | 同一问题一次运行最多 12 个方法或模型，并排比较目标值、用时和 token |
 | 💬 **方案解读与条件调整** | 用业务名称展示实际决策数值；一句话修改条件，重新建模并与原方案对比，保留原运行 |
@@ -56,6 +57,9 @@
   <tr>
     <td width="50%"><img src="docs/assets/home.png" alt="新建页面"><p align="center"><sub>写问题，选择方法、写法和模型</sub></p></td>
     <td width="50%"><img src="docs/assets/run.png" alt="运行结果"><p align="center"><sub>结论先行：目标值、建模过程和解的矩阵</sub></p></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/assets/requirements.png" alt="需求对话与可编辑需求稿"><p align="center"><sub>聊天整理业务要求，确认需求稿后再建模</sub></p></td>
   </tr>
   <tr>
     <td><img src="docs/assets/formulation.png" alt="数学模型"><p align="center"><sub>数学模型用 LaTeX 渲染，每一版都能对比</sub></p></td>
@@ -101,6 +105,8 @@ uv run llm4om serve --workspace runs/web --port 8767
    > 工厂生产 A、B 两种产品，数量必须是非负整数。每件 A 利润为 3，每件 B 利润为 2。A 消耗 2 单位切割资源和 1 单位加工资源，B 消耗 1 单位切割资源和 2 单位加工资源。两种资源各有 8 单位。请确定生产数量，使总利润最大。
 
 3. 点击“开始建模”。几秒后，页面给出最优解 A=3、B=2，总利润 13。
+
+如果还只有一个想法，点击“通过对话整理需求”。助手会边聊边整理需求稿；你可以修改文本、附上数据，再点击“用于建模”回到运行设置。建模仍由你点击“开始建模”启动。对话可从历史记录继续。Enter 发送，Shift+Enter 换行；可打开“联网搜索”查阅公开资料并核对来源。DeepSeek 预设直接使用自身搜索接口，其他模型可配合服务端独立搜索密钥（见 `.env.example`）。
 
 也可以在命令行或 Python 中运行：
 

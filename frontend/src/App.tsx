@@ -13,6 +13,7 @@ import { errorText } from "@/format";
 import { Composer, initialDraft } from "@/features/composer/Composer";
 import { Examples } from "@/features/composer/Examples";
 import { PresetsDialog } from "@/features/presets/PresetsDialog";
+import { createRequirements } from "@/features/requirements/api";
 import { Sidebar } from "@/components/Sidebar";
 import { t } from "@/i18n";
 import type { Draft } from "@/features/composer/types";
@@ -22,13 +23,14 @@ import type { Options, Preset, Presets } from "@/types";
 // Load run pages on demand.
 const RunView = lazy(() => import("@/features/runs/RunView").then(module => ({ default: module.RunView })));
 const Compare = lazy(() => import("@/features/runs/Compare").then(module => ({ default: module.Compare })));
+const Requirements = lazy(() => import("@/features/requirements/Requirements").then(module => ({ default: module.Requirements })));
 
-type Route = { name: "new" } | { name: "run"; id: string } | { name: "compare"; id: string };
+type Route = { name: "new" } | { name: "run" | "compare" | "chat"; id: string };
 type Confirm = { title: string; text: string; action: string; run: () => Promise<void> };
 
 const routeFromUrl = (): Route => {
-  const match = location.pathname.match(/^\/(run|compare)\/([\w-]+)/);
-  return match ? { name: match[1] as "run" | "compare", id: match[2] } : { name: "new" };
+  const match = location.pathname.match(/^\/(run|compare|chat)\/([\w-]+)/);
+  return match ? { name: match[1] as "run" | "compare" | "chat", id: match[2] } : { name: "new" };
 };
 const NO_PRESETS: Preset[] = [];
 
@@ -76,21 +78,23 @@ export default function App() {
     if (error) toast.error(t("只启动了 {started}/{total} 个运行：{error}", { started, total: runs.length, error: errorText(error) }));
   };
   const remove = (entry: Pick<Entry, "id" | "meta">) => setConfirm({
-    title: t("删除这次运行？"), action: t("删除"),
-    text: t("“{title}”的问题、数学模型、代码和过程都会被删除，无法恢复。", { title: entry.meta.title }),
+    title: entry.meta.kind === "requirements" ? t("删除这段需求对话？") : t("删除这次运行？"), action: t("删除"),
+    text: entry.meta.kind === "requirements" ? t("“{title}”的对话、需求稿和附件都会被删除，已创建的建模运行会保留。", { title: entry.meta.title })
+      : t("“{title}”的问题、数学模型、代码和过程都会被删除，无法恢复。", { title: entry.meta.title }),
     run: async () => {
       await deleteRun(entry.id);
-      if (route.name === "run" && route.id === entry.id) go({ name: "new" });
+      if ((route.name === "run" || route.name === "chat") && route.id === entry.id) go({ name: "new" });
       await refresh();
       toast.success(t("已删除。"));
     },
   });
 
-  const current = route.name === "run" ? route.id : null;
+  const current = route.name === "run" || route.name === "chat" ? route.id : null;
   const sidebar = <Sidebar entries={entries} current={current} options={options} presets={presets} onNew={() => go({ name: "new" })}
     hasMore={historyQuery.hasNextPage} loading={historyQuery.isFetching} error={historyQuery.error ? errorText(historyQuery.error) : null}
     onLoadMore={() => void historyQuery.fetchNextPage()} onRetry={() => void historyQuery.refetch()}
-    onOpen={id => go({ name: "run", id })} onCompare={group => go({ name: "compare", id: group })} onDelete={remove}
+    onOpen={entry => go({ name: entry.meta.kind === "requirements" ? "chat" : "run", id: entry.id })}
+    onCompare={group => go({ name: "compare", id: group })} onDelete={remove}
     onExamples={() => { setExamplesOpen(true); setMenuOpen(false); }} onPresets={() => { setPresetsOpen(true); setMenuOpen(false); }} />;
 
   return <div className="flex h-dvh overflow-hidden">
@@ -120,9 +124,16 @@ export default function App() {
           : !options ? <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载……")}</div>
           : route.name === "new"
             ? <Composer options={options} presets={presets} draft={draft} setDraft={setDraft} onStart={start} onCompare={compare}
-              openPresets={() => setPresetsOpen(true)} openExamples={() => setExamplesOpen(true)} />
+              openPresets={() => setPresetsOpen(true)} openExamples={() => setExamplesOpen(true)} onDiscuss={async () => {
+                const preset = presets.find(item => item.id === draft.preset) ?? presets[0];
+                const id = await createRequirements({ description: draft.description, data: draft.data }, preset);
+                void refresh(); go({ name: "chat", id });
+              }} />
             : <Suspense fallback={<div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载……")}</div>}>
               {route.name === "compare" ? <Compare key={route.id} group={route.id} options={options} onOpen={id => go({ name: "run", id })} />
+                : route.name === "chat" ? <Requirements key={route.id} threadId={route.id} presets={presets} searchConfigured={!!options.search_configured}
+                  openPresets={() => setPresetsOpen(true)} onFinished={() => void refresh()}
+                  onUse={next => { setDraft({ ...draft, ...next }); go({ name: "new" }); }} />
                 : <RunView key={route.id} threadId={route.id} options={options} onFinished={() => void refresh()}
                   onEdit={next => { setDraft({ ...next, comparing: false, methods: draft.methods, presets: draft.presets }); go({ name: "new" }); }}
                   onRerun={start} onRevise={async instruction => {

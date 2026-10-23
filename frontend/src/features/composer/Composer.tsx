@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
-import { ArrowRight, Columns3, Database, Play, Settings2 } from "lucide-react";
+import { ArrowRight, Columns3, Database, MessageSquare, Play, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api";
@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { errorText } from "@/format";
 import { t } from "@/i18n";
 import { ProblemEditor } from "@/features/composer/ProblemEditor";
-import { excelToCsv } from "@/features/composer/spreadsheet";
+import { readDataFiles } from "@/features/composer/files";
 import type { Draft } from "@/features/composer/types";
 import type { BackendCatalog, Method, Options, Preset } from "@/types";
 
@@ -61,10 +61,10 @@ export function initialDraft(): Draft {
 const unsupported = (method: Method, language: string) => !!method.languages && !method.languages.includes(language);
 
 
-export function Composer({ options, presets, draft, setDraft, onStart, onCompare, openPresets, openExamples }: {
+export function Composer({ options, presets, draft, setDraft, onStart, onCompare, openPresets, openExamples, onDiscuss }: {
   options: Options; presets: Preset[]; draft: Draft; setDraft: Dispatch<SetStateAction<Draft>>; onStart: (draft: Draft) => Promise<void>;
   onCompare: (draft: Draft, runs: { method: string; preset: Preset }[]) => Promise<void>;
-  openPresets: () => void; openExamples: () => void;
+  openPresets: () => void; openExamples: () => void; onDiscuss: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
   const set = (change: Partial<Draft>) => setDraft(current => ({ ...current, ...change }));
@@ -95,17 +95,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
   }, [draft]);
 
   const attach = async (list: FileList | null) => {
-    const data: Record<string, string> = {};
-    for (const file of Array.from(list ?? [])) {
-      if (file.size > 2_000_000) { toast.error(t("{name} 超过 2 MB，没有添加。", { name: file.name })); continue; }
-      try {
-        if (/\.xlsx$/i.test(file.name)) {
-          const sheets = await excelToCsv(file);
-          Object.assign(data, sheets);
-          toast.success(t("{name} 已转换为 {count} 个 CSV 文件。", { name: file.name, count: Object.keys(sheets).length }));
-        } else data[file.name] = await file.text();
-      } catch (error) { toast.error(t("无法读取 {name}：{error}", { name: file.name, error: errorText(error) })); }
-    }
+    const data = await readDataFiles(list);
     setDraft(current => ({ ...current, data: { ...current.data, ...data } }));
   };
   const ready = draft.description.trim().length > 0 && !backendUnavailable
@@ -153,7 +143,13 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="flex min-h-full flex-col gap-5 p-4 sm:p-6 lg:h-full">
         <header className="flex shrink-0 flex-col gap-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("描述一个优化问题")}</h1>
+          <Button variant="outline" size="sm" disabled={busy} onClick={async () => {
+            setBusy(true);
+            try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
+          }}><MessageSquare />{t("通过对话整理需求")}</Button>
+          </div>
           <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{t("写出要做的决策、目标和约束，附上数据。建模方法先给出数学模型，再写成求解代码，并在隔离沙箱中求解。")}</p>
         </header>
 
