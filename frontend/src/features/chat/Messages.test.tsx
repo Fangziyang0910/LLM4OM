@@ -6,6 +6,42 @@ import { ChatMessages, type ChatProgress } from "./Messages";
 afterEach(cleanup);
 const question: Message = { type: "human", id: "question", content: "帮我看一下方案" };
 
+test("chat formulas render as math while user-entered prices remain literal", () => {
+  const { container } = render(<ChatMessages messages={[{...question, content: "单价 $4，另一项 $8。数量为 $x_A$。"},
+    { type: "ai", content: String.raw`令 $x_A$ 为产量，约束为 \(2x_A + x_B \le 8\)。` }]}
+    loading={false} label="优化助手" onRetry={vi.fn()} />);
+  expect(container.querySelectorAll(".katex-mathml")).toHaveLength(3);
+  expect(screen.getByRole("article", { name: "你" }).textContent).toContain("单价 $4，另一项 $8。");
+});
+
+test("reasoning-only streaming is visible, stays separate from the answer, and can be expanded", () => {
+  const thought: Message = { type: "ai", id: "reply", content: "", additional_kwargs: { reasoning_content: "先核对资源容量。" } };
+  const { container, rerender } = render(<ChatMessages messages={[question, thought]} loading label="优化助手" onRetry={vi.fn()} />);
+  expect(screen.getByText("正在思考……")).toBeTruthy();
+  expect(screen.queryByText("正在准备回复……")).toBeNull();
+  const details = container.querySelector("details")!;
+  expect(details.open).toBe(false);
+  expect(screen.queryByText("先核对资源容量。")).toBeNull();
+  details.open = true;
+  fireEvent(details, new Event("toggle"));
+  expect(screen.getByText("先核对资源容量。")).toBeTruthy();
+  rerender(<ChatMessages messages={[question, { ...thought, content: "最终目标值是 13。" }]} loading={false} label="优化助手" onRetry={vi.fn()} />);
+  expect(screen.getByText("思考过程")).toBeTruthy();
+  expect(details.open).toBe(true);
+  expect(screen.getByText("最终目标值是 13。")).toBeTruthy();
+});
+
+test("a first calculation's result card uses the stored objective and opens its independent run", () => {
+  const open = vi.fn();
+  render(<ChatMessages messages={[question, { type: "tool", name: "model_and_solve", tool_call_id: "calculate", content: "",
+    artifact: { plans: [{ name: "生产计划", source: { thread_id: "calculated", checkpoint_id: "saved" },
+      instruction: "实际问题", status: "optimal", objective: 0 }] } }]} loading={false} label="优化助手" onRetry={vi.fn()} onOpenPlan={open} />);
+  const result = screen.getByRole("complementary", { name: "本轮计算结果" });
+  expect(result.textContent).toContain("目标值 0");
+  fireEvent.click(within(result).getByRole("button", { name: "查看计算方案" }));
+  expect(open).toHaveBeenCalledWith("calculated");
+});
+
 test("only an unfinished turn offers retry, and error details stay available without filling the log", () => {
   const retry = vi.fn();
   const { rerender } = render(<ChatMessages messages={[question]} loading={false} label="方案助手" onRetry={retry} />);

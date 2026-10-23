@@ -1,0 +1,141 @@
+import { expect, test } from "@playwright/test";
+
+test("the independent agent discusses an idea, models it, and calculates changes without leaving the conversation", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(String(error)));
+  await page.goto("/agent");
+  const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  await input.fill("E2E_AGENT_IDEA 帮我排班");
+  await input.press("Enter");
+  await page.waitForURL(/\/agent\//);
+  const chat = page.url().split("/").at(-1)!;
+  await expect(page.getByRole("log")).toContainText("每班至少需要几个人");
+  expect((await (await page.request.get(`/threads/${chat}`)).json()).values.plans).toEqual([]);
+  await input.fill("请计算工厂的生产计划");
+  await input.press("Enter");
+  await expect(page.getByRole("log")).toContainText("实际求解结果：13", { timeout: 60_000 });
+  let saved = await (await page.request.get(`/threads/${chat}`)).json();
+  expect(saved.metadata.kind).toBe("optimization");
+  expect(saved.values.plans).toHaveLength(1);
+  const first = saved.values.source;
+  const original = await (await page.request.get(`/threads/${first.thread_id}`)).json();
+  expect(original.values.solve.objective).toBe(13);
+  expect(original.values.spec.method).toBe("direct");
+  const workspace = page.getByRole("complementary", { name: "建模工作区" });
+  await expect(workspace).toBeVisible();
+  await workspace.getByRole("tab", { name: /数学模型/ }).click();
+  await expect(workspace.getByRole("tabpanel")).toContainText("max");
+  await input.fill("B 至少生产 3 件，请重新计算");
+  await input.press("Enter");
+  await expect(page.getByRole("log")).toContainText("目标值 12", { timeout: 60_000 });
+  saved = await (await page.request.get(`/threads/${chat}`)).json();
+  expect(saved.values.source).toEqual(first);
+  expect(saved.values.current.thread_id).not.toBe(first.thread_id);
+  expect(saved.values.plans).toHaveLength(2);
+  expect((await (await page.request.get(`/threads/${first.thread_id}`)).json()).values).toEqual(original.values);
+  await input.fill("E2E_AGENT_BATCH 从原方案比较两种条件");
+  await input.press("Enter");
+  await expect(page.getByRole("button", { name: "对比本轮方案" })).toBeVisible({ timeout: 60_000 });
+  await page.reload();
+  await expect(page.getByRole("log")).toContainText("目标值 12");
+  await page.getByRole("button", { name: "对比本轮方案" }).click();
+  await page.waitForURL(/\/compare\//);
+  expect(errors).toEqual([]);
+});
+
+test("pinned choices, data edits, retries and saved plans survive reload", async ({ page }) => {
+  await page.goto("/agent");
+  await page.getByRole("button", { name: "添加数据文件" }).click();
+  await page.getByLabel("数据文件", { exact: true }).setInputFiles({ name: "capacity.csv", mimeType: "text/csv", buffer: Buffer.from("capacity\n8\n") });
+  await page.getByRole("button", { name: "capacity.csv", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "编辑数据：capacity.csv" });
+  await editor.getByRole("textbox", { name: "第 1 列列名" }).fill("capacity（单位）");
+  await editor.getByRole("button", { name: "保存数据" }).click();
+  await page.getByRole("button", { name: "建模偏好" }).click();
+  await page.getByRole("combobox", { name: "固定建模方法" }).click();
+  await page.getByRole("option", { name: "Direct", exact: true }).click();
+  await page.getByRole("combobox", { name: "固定建模求解器" }).click();
+  await page.getByRole("option", { name: "OR-Tools", exact: true }).click();
+  const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  await input.fill("E2E_AGENT_REPLY_RETRY 请计算生产计划");
+  await input.press("Enter");
+  await page.waitForURL(/\/agent\//);
+  await expect(page.getByText("这轮回复未完成，可以重试。", { exact: true })).toBeVisible({ timeout: 60_000 });
+  const id = page.url().split("/").at(-1)!;
+  const before = await (await page.request.get(`/threads/${id}`)).json();
+  const plan = await (await page.request.get(`/threads/${before.values.current.thread_id}`)).json();
+  expect(plan.values.spec.language).toBe("ortools");
+  expect(plan.values.solve.objective).toBe(13);
+  expect(plan.values.data["capacity.csv"]).toContain("capacity（单位）");
+  await input.fill("下一条还没发送的草稿");
+  await page.getByRole("button", { name: "重试这一轮" }).click();
+  await expect(page.getByRole("log")).toContainText("没有重复求解");
+  await expect(input).toHaveValue("下一条还没发送的草稿");
+  await page.reload();
+  const after = await (await page.request.get(`/threads/${id}`)).json();
+  expect(after.values.plans).toHaveLength(1);
+  expect(after.values.messages.filter((m: { type: string }) => m.type === "human")).toHaveLength(1);
+  await page.getByRole("button", { name: "建模偏好" }).click();
+  await expect(page.getByRole("combobox", { name: "固定建模求解器" })).toContainText("OR-Tools");
+});
+
+test("an in-flight modeling task shows real steps and can be stopped and retried", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/agent");
+  const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  await input.fill("E2E_AGENT_PAUSE 请计算生产计划");
+  await input.press("Enter");
+  await page.waitForURL(/\/agent\//);
+  await expect(page.getByText("正在建模求解……", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "查看正在生成的产物" })).toBeVisible();
+  await page.getByRole("button", { name: "停止", exact: true }).click();
+  await expect(page.getByText("这轮回复已停止，可以重新回答。", { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "重试这一轮" }).click();
+  await expect(page.getByRole("log")).toContainText("实际求解结果：13", { timeout: 60_000 });
+  await expect(page.getByRole("complementary", { name: "建模工作区" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("search and manual modeling remain available from the agent entry", async ({ page }) => {
+  await page.goto("/agent");
+  await page.getByRole("button", { name: "联网搜索", exact: true }).click();
+  await page.getByRole("textbox", { name: "发送给优化助手" }).fill("E2E_AGENT_SEARCH 请查公开排班参考");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  await page.waitForURL(/\/agent\//);
+  await expect(page.getByRole("log")).toContainText("公开排班参考");
+  await page.getByRole("complementary", { name: "搜索来源" }).locator("summary").click();
+  await expect(page.getByRole("link", { name: "排班参考", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "手动建模", exact: true }).click();
+  await page.waitForURL(/\/$/);
+  await expect(page.getByRole("textbox", { name: "问题描述" })).toBeVisible();
+});
+
+
+test("the original workbench and agent have independent entry points and preserve the manual draft", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "问题描述" }).fill("原有工作台的未发送问题");
+  await page.getByRole("button", { name: "优化对话", exact: true }).click();
+  await page.waitForURL(/\/agent$/);
+  await expect(page.getByRole("textbox", { name: "发送给优化助手" })).toBeVisible();
+  await page.getByRole("textbox", { name: "发送给优化助手" }).fill("Agent 里另一份未发送草稿");
+  await page.getByRole("button", { name: "手动建模", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue("原有工作台的未发送问题");
+  await page.getByRole("button", { name: "优化对话", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "发送给优化助手" })).toHaveValue("Agent 里另一份未发送草稿");
+  await page.getByRole("button", { name: "新建建模", exact: true }).click();
+  await page.waitForURL(/\/$/);
+  await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue("原有工作台的未发送问题");
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue("原有工作台的未发送问题");
+});
+
+test("the agent entry works on a windowed desktop in English and dark mode", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.addInitScript(() => { localStorage.setItem("llm4om-locale", "en"); localStorage.setItem("theme", "dark"); });
+  await page.goto("/agent");
+  await expect(page.getByRole("heading", { name: "What would you like to optimize?" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Message the optimization assistant" })).toBeVisible();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

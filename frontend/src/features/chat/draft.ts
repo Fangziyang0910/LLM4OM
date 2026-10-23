@@ -6,9 +6,9 @@ import { client } from "@/features/runs/sdk";
 type Pending = { id: string; text: string };
 
 /** Unsent messages stay in this browser tab and never enter the conversation history. */
-export function useChatDraft(threadId: string) {
+export function useChatDraft(threadId: string, initial = "") {
   const key = `llm4om-message-${threadId}`;
-  const [value, setValue] = useState(() => { try { return sessionStorage.getItem(key) ?? ""; } catch { return ""; } });
+  const [value, setValue] = useState(() => { try { return initial || sessionStorage.getItem(key) || ""; } catch { return initial; } });
   const pending = useRef<Pending | null>(null);
   if (pending.current === null) {
     try { pending.current = JSON.parse(sessionStorage.getItem(`${key}-pending`) ?? "null") as Pending | null; } catch { /* storage may be unavailable */ }

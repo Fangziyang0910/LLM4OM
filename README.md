@@ -27,19 +27,20 @@
 
 ---
 
-**LLM4OM**（Large Language Models for Optimization Modeling）是一个自动优化建模平台。你用自然语言描述问题，选择建模方法和代码写法。平台调用 LLM 写出数学模型和求解代码，在隔离的容器中求解，并展示每一步的中间产物。
+**LLM4OM**（Large Language Models for Optimization Modeling）是一个自动优化建模平台。你可以在原工作台配置运行，也可以与优化助手对话、上传数据，由 Agent 调用建模方法，写出数学模型和求解代码，在隔离容器中求解。实际步骤、模型、代码和结果可在旁边的建模工作区查看，也可以继续对话调整条件。
 
 平台内置 **13 种 LLM 建模方法**，包括 Direct、Feedback Repair 两种自有方法，以及 11 种来自公开研究的方法。你不需要手写求解代码，可以直接输入问题、运行建模，再查看模型和结果。
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="演示：编辑数据、建模求解、方案对话和业务场景对比" width="100%">
-  <br><sub>真实运行：编辑生产数据，使用 DeepSeek · Direct · Pyomo 求解，再通过方案对话调整条件并比较多个业务场景。</sub>
+  <img src="docs/assets/demo.gif" alt="演示：原工作台与独立优化 Agent、建模求解和条件调整" width="100%">
+  <br><sub>真实运行：保留原工作台草稿，从独立优化 Agent 使用 DeepSeek · Direct · Pyomo 求解，再通过对话调整条件。</sub>
 </p>
 
 ## 亮点
 
 | 能力 | 说明 |
 |---|---|
+| 💬 **对话完成建模** | 从想法沟通到首次求解、结果讨论和条件调整，在同一个 Agent 中完成；可直接指定方法和建模库，手动配置入口仍保留 |
 | 🧠 **13 种建模方法** | Direct、Feedback Repair、TriVAL、SAC-Opt、BIND、OptiMind 等；每种方法都有独立 LangGraph 图 |
 | 🧩 **9 种建模求解器** | 支持各库原生 API 与多种求解后端，覆盖数学规划、约束规划、路径、网络流和非线性优化 |
 | 📝 **需求对话** | 多轮流式聊天，搜索来源按需展开，停止或失败后可重试原问题；确认可编辑需求稿后，交给任意建模方法 |
@@ -53,11 +54,15 @@
 | 👥 **团队部署** | 一条 `docker compose up` 启动；预设模型的密钥不出服务器；可选 HTTPS 和用量上限 |
 | 🌗 **好用的工作台** | 导出含业务名称、单位和完整数值的 Excel 方案；备注与标签、Markdown 报告、Excel 导入、2033 道公开题、中英文界面、深色模式 |
 
-工作台以电脑端的建模流程为主：写问题、配置方法与建模求解器、运行并核对数学模型、代码和结果。运行配置集中展示，点击展开；运行时可跟随建模过程，完成后结果占据主区域。需求助手和方案助手按需在旁边展开；同一问题的关联记录归并展示，单次运行仍独立保存。
+原工作台继续作为首页，保留问题编辑、配置、运行和检查结果的使用方式。侧栏新增“优化对话”入口（`/agent`）：描述问题或附上数据，助手按需追问，并调用完整建模流程。默认使用 Direct、Pyomo 和自动求解后端，可通过对话指定其他方法或建模库，也可在“建模偏好”中固定选择。计算时展示实际步骤；建模工作区查看数学模型、代码和结果。每个方案独立保存，后续修改保留原方案。两套交互并列提供，共用建模方法与独立运行记录。
 
 ## 截图
 
 <table>
+  <tr>
+    <td width="50%"><img src="docs/assets/agent-home.png" alt="独立优化对话入口"><p align="center"><sub>独立 Agent 入口，从一个问题开始</sub></p></td>
+    <td width="50%"><img src="docs/assets/agent.png" alt="优化 Agent 与建模工作区"><p align="center"><sub>对话完成求解，旁边查看实际模型与结果</sub></p></td>
+  </tr>
   <tr>
     <td width="50%"><img src="docs/assets/home.png" alt="新建页面"><p align="center"><sub>写问题，选择方法、写法和模型</sub></p></td>
     <td width="50%"><img src="docs/assets/run.png" alt="运行结果"><p align="center"><sub>结论先行：目标值、建模过程和解的矩阵</sub></p></td>
@@ -109,6 +114,8 @@ uv run llm4om serve --workspace runs/web --port 8767
 仓库已包含前端构建文件，不需要 Node.js。
 
 ### 试一个问题
+
+按下面的步骤使用原有工作台。也可以点击侧栏“优化对话”，直接发送完整问题开始建模。
 
 1. 没有在 `.env` 中设置模型时，点击左下角“预设模型”，添加服务商、密钥和模型 ID。
 2. 点击首页的“生产计划”例子，或输入：

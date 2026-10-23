@@ -22,7 +22,7 @@ from llm4om.languages import CodeTarget
 from llm4om.sandbox import Sandbox, SolveResult
 
 MAX_STEP_TEXT = 40000
-TEXT_INTERVAL = 0.25  # seconds between two live-text events of one LLM call
+TEXT_INTERVAL = 0.05  # at most 20 live-text events per second, matching the chat UI's refresh interval
 
 
 class LimitExceeded(Exception):

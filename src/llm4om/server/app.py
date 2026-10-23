@@ -24,7 +24,7 @@ from llm4om.server import examples
 from llm4om.server.middleware import JsonOnlyWrites, RunRateLimit, ThreadCleanup
 
 ASSETS = Path(str(files("llm4om.server").joinpath("web_assets")))
-PAGES = ("/", "/run/{thread_id}", "/compare/{group}", "/chat/{thread_id}", "/discussion/{thread_id}")  # no catch-all or /runs path
+PAGES = ("/", "/model", "/agent", "/agent/{thread_id}", "/run/{thread_id}", "/compare/{group}", "/chat/{thread_id}", "/discussion/{thread_id}")
 
 
 class PresetBody(BaseModel):

@@ -64,6 +64,7 @@ def _serve(args: argparse.Namespace) -> int:
               for method in methods().values()}
     graphs["requirements"] = {"path": "llm4om.server.graphs:requirements", "description": "Discuss and prepare business requirements"}
     graphs["solution_chat"] = {"path": "llm4om.server.graphs:solution_chat", "description": "Discuss and revise computed plans"}
+    graphs["optimization"] = {"path": "llm4om.server.graphs:optimization", "description": "Converse, model, solve and revise optimization problems"}
     local = "127.0.0.1" if args.host == "0.0.0.0" else args.host
     reach = "; other machines use this machine's address" if args.host == "0.0.0.0" else ""
     print(f"LLM4OM: http://{local}:{args.port}{reach}  (runs are kept in {workspace})", file=sys.stderr)

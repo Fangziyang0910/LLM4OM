@@ -40,8 +40,8 @@ TWO_PART_REPLY = f"### Formulation\n{FORMULATION}\n\n```python\n{PRODUCTION_CODE
 ACCEPT_REVIEW = '{"action": "accept", "reason": "The formulation and code match the stated requirements."}'
 
 
-def tool_call(name: str, **args: Any) -> AIMessage:
-    return AIMessage("", tool_calls=[{"name": name, "args": args, "id": "call_" + uuid.uuid4().hex[:8]}])
+def tool_call(tool_name: str, **args: Any) -> AIMessage:
+    return AIMessage("", tool_calls=[{"name": tool_name, "args": args, "id": "call_" + uuid.uuid4().hex[:8]}])
 
 
 class ScriptedChat(BaseChatModel):

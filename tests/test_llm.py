@@ -2,12 +2,45 @@
 
 import asyncio
 import json
+from uuid import uuid4
 
 import httpx
 import pytest
 from langchain_core.messages import HumanMessage, ToolMessage
 
 from llm4om.llm import LLMSettings, chat_model
+from llm4om.runtime import Limits, Recorder
+
+
+def test_modeling_stream_coalesces_tokens_without_quarter_second_pauses(monkeypatch) -> None:
+    elapsed = [0.0]
+    monkeypatch.setattr("llm4om.runtime.time.monotonic", lambda: elapsed[0])
+    events = []
+    recorder = Recorder(Limits(), emit=events.append)
+    identity = uuid4()
+    recorder.callback.on_chat_model_start({}, [[]], run_id=identity)
+    for index in range(1, 7):
+        elapsed[0] = index * 0.02
+        recorder.callback.on_llm_new_token(str(index), run_id=identity)
+    assert [event["delta"]["text"] for event in events if "delta" in event] == ["123", "456"]
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_conversation_thinking_reaches_the_native_request_without_mutating_the_preset(enabled: bool) -> None:
+    extra = {"thinking": {"type": "enabled"}, "reasoning_effort": "high", "other": "keep"}
+    preset = LLMSettings("deepseek", "deepseek-flash", api_key="dummy", extra_body=extra)
+    override = preset.with_thinking(enabled)
+    payload = chat_model(override)._get_request_payload("test")["extra_body"]
+    assert payload["thinking"] == {"type": "enabled" if enabled else "disabled"}
+    assert payload["other"] == "keep"
+    assert ("reasoning_effort" in payload) == enabled
+    assert preset.extra_body == extra and preset.extra_body["thinking"]["type"] == "enabled"
+    assert preset.with_thinking(None) is preset
+
+
+def test_thinking_switch_does_not_guess_other_providers_protocols() -> None:
+    with pytest.raises(ValueError, match="requires a DeepSeek preset"):
+        LLMSettings("openai", "model", api_key="dummy").with_thinking(True)
 
 
 def test_anthropic_receives_extra_parameters() -> None:

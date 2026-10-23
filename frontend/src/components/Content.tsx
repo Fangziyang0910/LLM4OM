@@ -1,4 +1,5 @@
 import "katex/dist/katex.min.css";
+import katex from "katex";
 import { diffLines } from "diff";
 import hljs from "highlight.js/lib/core";
 import json from "highlight.js/lib/languages/json";
@@ -7,8 +8,7 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import type { Nodes } from "mdast";
 import { Check, Copy } from "lucide-react";
 import { memo, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeKatex from "rehype-katex";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { Button } from "@/components/ui/button";
@@ -20,9 +20,12 @@ hljs.registerLanguage("json", json);
 
 // Convert LLM math delimiters outside code; use Markdown's parser to locate code spans and blocks.
 function normalizeMath(text: string, singleDollarMath: boolean): string {
-  if (!/\\[[(]/.test(text)) return text;
-  const replace = (part: string) => part.replace(/\\\[([\s\S]*?)\\\]/g, (_, body) => `$$${body}$$`)
-    .replace(/\\\(([\s\S]*?)\\\)/g, (_, body) => singleDollarMath ? `$${body}$` : `$$${body}$$`);
+  if (!/\\[[(]|\$/.test(text)) return text;
+  const replace = (part: string) => part.replace(
+    /\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]|\\\(([\s\S]*?)\\\)|(?<![\\$])\$(?![\s$])([^\n$]*?\S)\$(?![\d$])/g,
+    (match, dollars, brackets, inline, single) => dollars !== undefined || brackets !== undefined
+      ? `\n\n$$\n${(dollars ?? brackets).trim()}\n$$\n\n`
+      : inline !== undefined ? `$$${inline}$$` : singleDollarMath ? `$$${single}$$` : match);
   const parts: string[] = [];
   let offset = 0;
   function visit(node: Nodes) {
@@ -63,19 +66,34 @@ export function CopyButton({ text, label = t("复制"), className }: { text: str
   </Button>;
 }
 
+const MathFormula = memo(function MathFormula({ text, display }: { text: string; display: boolean }) {
+  const html = useMemo(() => {
+    try { return katex.renderToString(text, { displayMode: display, throwOnError: true, strict: "ignore" }); }
+    catch { return null; } // A streamed formula may be unfinished; keep its source readable until it is valid.
+  }, [text, display]);
+  return html ? <span dangerouslySetInnerHTML={{ __html: html }} />
+    : <span className={cn("font-mono text-muted-foreground", display && "my-3 block overflow-x-auto whitespace-pre-wrap")}>{text}</span>;
+});
+
+// Stable component identities keep completed formulas and highlighted code mounted while the reply grows.
+const markdownComponents: Components = {
+  code: ({ className, children }) => {
+    const language = /language-(python|py|json)/.exec(className ?? "")?.[1];
+    const source = String(children ?? "");
+    if (className?.includes("language-math")) return <MathFormula text={source.replace(/\n$/, "")} display={!className.includes("math-inline")} />;
+    if (!className && !source.includes("\n")) return <code>{children}</code>;
+    return language ? <Code text={source.replace(/\n$/, "")} language={language === "json" ? "json" : "python"} className="not-prose" />
+      : <Plain className="not-prose">{source.replace(/\n$/, "")}</Plain>;
+  },
+  pre: ({ children }) => <>{children}</>,
+};
+
 export const Markdown = memo(function Markdown({ text, className, singleDollarMath = true }: {
   // Problems contain dollar prices; explicit math delimiters keep those views unambiguous.
   text: string; className?: string; singleDollarMath?: boolean;
 }) {
   return <div className={cn("markdown", className)}>
-    <ReactMarkdown remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: singleDollarMath }]]} rehypePlugins={[rehypeKatex]}
-      components={{ code: ({ className, children }) => {
-        const language = /language-(python|py|json)/.exec(className ?? "")?.[1];
-        const source = String(children ?? "");
-        if (!className && !source.includes("\n")) return <code>{children}</code>;  // inline code
-        return language ? <Code text={source.replace(/\n$/, "")} language={language === "json" ? "json" : "python"} className="not-prose" />
-          : <Plain className="not-prose">{source.replace(/\n$/, "")}</Plain>;
-      }, pre: ({ children }) => <>{children}</> }}>
+    <ReactMarkdown remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }]]} components={markdownComponents}>
       {normalizeMath(text, singleDollarMath)}
     </ReactMarkdown>
   </div>;

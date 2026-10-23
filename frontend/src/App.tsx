@@ -27,13 +27,15 @@ const RunView = lazy(() => import("@/features/runs/RunView").then(module => ({ d
 const Compare = lazy(() => import("@/features/runs/Compare").then(module => ({ default: module.Compare })));
 const Requirements = lazy(() => import("@/features/requirements/Requirements").then(module => ({ default: module.Requirements })));
 const SolutionChat = lazy(() => import("@/features/solution_chat/SolutionChat").then(module => ({ default: module.SolutionChat })));
+const Agent = lazy(() => import("@/features/agent/Agent").then(module => ({ default: module.Agent })));
 
-type Route = { name: "new" } | { name: "run" | "compare" | "chat" | "discussion"; id: string };
+type Route = { name: "new" } | { name: "agent-new" } | { name: "run" | "compare" | "chat" | "discussion" | "agent"; id: string };
 type Confirm = { title: string; text: string; action: string; run: () => Promise<void> };
 
 const routeFromUrl = (): Route => {
-  const match = location.pathname.match(/^\/(run|compare|chat|discussion)\/([\w-]+)/);
-  return match ? { name: match[1] as "run" | "compare" | "chat" | "discussion", id: match[2] } : { name: "new" };
+  const match = location.pathname.match(/^\/(run|compare|chat|discussion|agent)\/([\w-]+)/);
+  return match ? { name: match[1] as "run" | "compare" | "chat" | "discussion" | "agent", id: match[2] }
+    : { name: location.pathname === "/agent" ? "agent-new" : "new" };
 };
 const NO_PRESETS: Preset[] = [];
 
@@ -50,6 +52,7 @@ export default function App() {
   const options = optionsQuery.data ?? null;
   const [route, setRoute] = useState<Route>(routeFromUrl);
   const [draft, setDraft] = useState<Draft>(initialDraft);
+  const [agentDraft, setAgentDraft] = useState({ description: "", data: {} as Record<string, string> });
   const [examplesOpen, setExamplesOpen] = useState(false);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -57,13 +60,14 @@ export default function App() {
   const [confirm, setConfirm] = useState<Confirm | null>(null);
 
   const go = useCallback((next: Route) => {
-    const path = next.name === "new" ? "/" : `/${next.name}/${next.id}`;
+    const path = next.name === "new" ? "/" : next.name === "agent-new" ? "/agent" : `/${next.name}/${next.id}`;
     if (location.pathname !== path) window.history.pushState(null, "", path);
     setRoute(next);
     setMenuOpen(false);
   }, []);
   const refresh = useCallback(() => queryClient.invalidateQueries({ queryKey: ["history"] }), [queryClient]);
   const newProblem = () => { setDraft(current => ({ ...current, origin: undefined })); go({ name: "new" }); };
+  const newAgent = () => { setAgentDraft({ description: "", data: {} }); go({ name: "agent-new" }); };
 
   useEffect(() => {
     const onPop = () => setRoute(routeFromUrl());
@@ -83,25 +87,30 @@ export default function App() {
     if (error) toast.error(t("只启动了 {started}/{total} 个运行：{error}", { started, total: runs.length, error: errorText(error) }));
   };
   const remove = (entry: Pick<Entry, "id" | "meta">) => setConfirm({
-    title: entry.meta.kind === "solution_chat" ? t("删除这段方案对话？") : entry.meta.kind === "requirements" ? t("删除这段需求对话？") : t("删除这次运行？"), action: t("删除"),
-    text: entry.meta.kind === "solution_chat" ? t("“{title}”的对话记录会被删除，原方案和已生成的方案会保留。", { title: entry.meta.title })
+    title: entry.meta.kind === "optimization" ? t("删除这段优化对话？") : entry.meta.kind === "solution_chat" ? t("删除这段方案对话？") : entry.meta.kind === "requirements" ? t("删除这段需求对话？") : t("删除这次运行？"), action: t("删除"),
+    text: entry.meta.kind === "solution_chat" || entry.meta.kind === "optimization" ? t("“{title}”的对话记录会被删除，原方案和已生成的方案会保留。", { title: entry.meta.title })
       : entry.meta.kind === "requirements" ? t("“{title}”的对话、需求稿和附件都会被删除，已创建的建模运行会保留。", { title: entry.meta.title })
       : t("“{title}”的问题、数学模型、代码和过程都会被删除，无法恢复。", { title: entry.meta.title }),
     run: async () => {
       await deleteRun(entry.id);
       try { sessionStorage.removeItem(`llm4om-message-${entry.id}`); } catch { /* storage may be unavailable */ }
-      if ((route.name === "run" || route.name === "chat" || route.name === "discussion") && route.id === entry.id) go({ name: "new" });
+      if ("id" in route && route.id === entry.id) go({ name: entry.meta.kind === "optimization" ? "agent-new" : "new" });
       await refresh();
       toast.success(t("已删除。"));
     },
   });
 
-  const renderRun = (id: string, assistantOpen = false) => <RunView key={id} threadId={id} options={options!} assistantOpen={assistantOpen} onFinished={() => void refresh()}
+  const renderRun = (id: string, assistantOpen = false, embedded = false) => <RunView key={id} threadId={id} options={options!} assistantOpen={assistantOpen} embedded={embedded} onFinished={() => void refresh()}
     onDiscuss={async () => {
       if (assistantOpen) { go({ name: "run", id }); return; }
       const chat = await createSolutionChat(id); void refresh(); go({ name: "discussion", id: chat });
     }}
-    onConversation={id => go({ name: "discussion", id })} onScenarios={async scenarios => {
+    onConversation={id => {
+      void import("@/features/runs/sdk").then(async ({ client }) => {
+        const thread = await client.threads.get(id);
+        go({ name: thread.metadata?.kind === "optimization" ? "agent" : "discussion", id });
+      }).catch(error => toast.error(errorText(error)));
+    }} onScenarios={async scenarios => {
       const result = await startScenarios(id, scenarios, presets);
       void refresh(); go({ name: "compare", id: result.group });
       if (result.error) toast.error(t("只启动了 {started}/{total} 个运行：{error}", { started: result.started, total: scenarios.length, error: errorText(result.error) }));
@@ -116,12 +125,12 @@ export default function App() {
     presetsStatus: presetsQuery.data ? "ready" as const : presetsQuery.error ? "error" as const : "loading" as const,
     openPresets: () => setPresetsOpen(true), openExamples: () => setExamplesOpen(true) });
 
-  const current = route.name === "run" || route.name === "chat" || route.name === "discussion" ? route.id : null;
-  const sidebar = <Sidebar entries={entries} current={current} options={options} presets={presets} onNew={newProblem}
+  const current = "id" in route ? route.id : null;
+  const sidebar = <Sidebar entries={entries} current={current} options={options} presets={presets} onNew={newProblem} onAgent={newAgent}
     query={search} onQuery={setSearch}
     hasMore={historyQuery.hasNextPage} loading={historyQuery.isFetching} error={historyQuery.error ? errorText(historyQuery.error) : null}
     onLoadMore={() => void historyQuery.fetchNextPage()} onRetry={() => void historyQuery.refetch()}
-    onOpen={entry => go({ name: entry.meta.kind === "solution_chat" ? "discussion" : entry.meta.kind === "requirements" ? "chat" : "run", id: entry.id })}
+    onOpen={entry => go({ name: entry.meta.kind === "optimization" ? "agent" : entry.meta.kind === "solution_chat" ? "discussion" : entry.meta.kind === "requirements" ? "chat" : "run", id: entry.id })}
     onCompare={group => go({ name: "compare", id: group })} onDelete={remove}
     onExamples={() => { setExamplesOpen(true); setMenuOpen(false); }} onPresets={() => { setPresetsOpen(true); setMenuOpen(false); }} />;
 
@@ -138,7 +147,7 @@ export default function App() {
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 xl:hidden">
         <Button variant="ghost" size="icon" aria-label={t("打开菜单")} onClick={() => setMenuOpen(true)}><Menu /></Button>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? t("新建建模")
-          : route.name === "chat" ? t("需求对话") : route.name === "discussion" ? t("方案对话") : route.name === "compare" ? t("对比") : t("建模结果")}</span>
+          : route.name === "agent-new" || route.name === "agent" ? t("优化对话") : route.name === "chat" ? t("需求对话") : route.name === "discussion" ? t("方案对话") : route.name === "compare" ? t("对比") : t("建模结果")}</span>
         {route.name !== "new" ? <Button variant="ghost" size="icon" aria-label={t("新建建模")} onClick={newProblem}><Plus /></Button> : null}
       </header>
       {presetsQuery.error ? <div role="alert" className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 border-b px-4 py-2 text-xs text-destructive sm:px-6">
@@ -155,6 +164,13 @@ export default function App() {
           <EmptyContent><Button variant="outline" onClick={() => void optionsQuery.refetch()}><RefreshCw />{t("重试")}</Button></EmptyContent>
         </Empty>
           : !options ? <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载……")}</div>
+          : route.name === "agent-new" || route.name === "agent"
+            ? <PageErrorBoundary key={route.name === "agent" ? route.id : `new-${agentDraft.description}`}><Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
+              <Agent key={route.name === "agent" ? route.id : `new-${agentDraft.description}`} threadId={route.name === "agent" ? route.id : undefined}
+                options={options} presets={presets} initial={agentDraft} onThread={id => go({ name: "agent", id })}
+                openPresets={() => setPresetsOpen(true)} onExamples={() => setExamplesOpen(true)} onManual={() => go({ name: "new" })}
+                onFinished={() => void refresh()} onOpen={id => go({ name: "run", id })} onCompare={id => go({ name: "compare", id })} renderRun={id => renderRun(id, false, true)} />
+            </Suspense></PageErrorBoundary>
           : route.name === "new"
             ? <Composer {...modelingProps(options)} onDiscuss={async () => {
                 const preset = presets.find(item => item.id === draft.preset) ?? presets[0];
@@ -176,7 +192,11 @@ export default function App() {
 
     {options ? <>
       <Examples open={examplesOpen} onClose={() => setExamplesOpen(false)} datasets={options.datasets}
-        onUse={description => { setDraft({ ...draft, description, data: {}, origin: undefined }); setExamplesOpen(false); go({ name: "new" }); }} />
+        onUse={description => {
+          if (route.name === "agent-new" || route.name === "agent") { setAgentDraft({ description, data: {} }); go({ name: "agent-new" }); }
+          else { setDraft({ ...draft, description, data: {}, origin: undefined }); go({ name: "new" }); }
+          setExamplesOpen(false);
+        }} />
       {presetsOpen ? <PresetsDialog onClose={() => setPresetsOpen(false)} presets={presets} dailyTokens={presetsQuery.data?.daily_tokens ?? 0}
         providers={options.providers}
         onChange={(value, message) => { queryClient.setQueryData(["presets"], value); toast.success(message); }} /> : null}

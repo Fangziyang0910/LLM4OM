@@ -53,10 +53,54 @@ REQUIREMENTS = ("工厂生产 A、B 两种产品，数量必须是非负整数�
                 "A 消耗 2 单位切割资源和 1 单位加工资源，B 消耗 1 单位切割资源和 2 单位加工资源。"
                 "两种资源各有 8 单位。请确定生产数量，使总利润最大。")
 CHAT_FAILURES: set[str] = set()
+POLISH_REPLY = "\n\n".join(
+    f"### 决策说明 {index}\n\n令 $x_A$ 和 $x_B$ 为产量。A costs $4 and B costs $8."
+    "\n\n" + r"\[\begin{aligned}2x_A+x_B&\le8\\x_A+2x_B&\le8\end{aligned}\]"
+    "\n\n" + "先核对每项资源，再按实际条件建模。" * 4 for index in range(1, 25)
+) + "\n\n流式公式回复已完成。"
 
 
 def reply(messages: list[dict], tools: list[dict]) -> str | dict:
     text = json.dumps(messages, ensure_ascii=False)
+    if "E2E_POLISH_STREAM" in messages[-1].get("content", "") and messages[-1]["role"] == "user":
+        return POLISH_REPLY
+    if "You are the optimization agent for LLM4OM" in text:
+        latest = next(message["content"] for message in reversed(messages) if message["role"] == "user")
+        snapshot = json.loads(messages[0]["content"].split("Current frozen plan:\n", 1)[1])
+        if snapshot.get("already_computed_scenarios"):
+            return "已经计算完成，实际目标值为 13，没有重复求解。"
+        if messages[-1]["role"] == "tool":
+            facts = json.loads(messages[-1]["content"])
+            if "E2E_AGENT_REPLY_RETRY" in latest and latest not in CHAT_FAILURES:
+                CHAT_FAILURES.add(latest)
+                return ""
+            if isinstance(facts, list):
+                return "已实际计算：" + "；".join(f"{item['name']}，目标值 {item['objective']}" for item in facts)
+            if "methods" in facts:
+                return "实际注册了十三种建模方法和九个建模库。"
+            if "E2E_AGENT_SEARCH" in latest:
+                return "找到了[公开排班参考](https://example.org/shift-guide)，请确认是否采用其中的业务条件。"
+            return "实际求解结果：" + str(facts.get("objective"))
+        if "E2E_AGENT_IDEA" in latest:
+            return "每班至少需要几个人？每个人最多工作几天？"
+        if "E2E_AGENT_CAPABILITIES" in latest:
+            name, args = "modeling_capabilities", {}
+        elif "E2E_AGENT_SEARCH" in latest:
+            name, args = "web_search", {"query": "门店排班 公开参考"}
+        elif "E2E_AGENT_BATCH" in latest:
+            name, args = "solve_scenarios", {"scenarios": [{"name": "B 至少 3 件", "instruction": "B 至少生产 3 件"},
+                                                          {"name": "B 至少 4 件", "instruction": "B 至少生产 4 件"}]}
+            if "从原方案" in latest:
+                args["base_plan_id"] = snapshot["available_plans"][0]["id"]
+        elif snapshot.get("available_plans") and "B 至少生产 3 件" in latest:
+            name, args = "solve_scenarios", {"scenarios": [{"name": "B 至少 3 件", "instruction": "B 至少生产 3 件"}]}
+        elif "E2E_AGENT_LOOKUP" in latest:
+            name, args = "lookup_variables", {"query": ""}
+        else:
+            name, args = "model_and_solve", {"description": REQUIREMENTS + (" E2E_AGENT_PAUSE" if "E2E_AGENT_PAUSE" in latest else ""),
+                "name": "生产计划", "method": "direct", "language": "pyomo"}
+        return {"role": "assistant", "content": "", "tool_calls": [{"id": "call_" + uuid.uuid4().hex[:8], "type": "function",
+                "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)}}]}
     if "Discuss an optimization plan with an ordinary user" in text:
         latest = next(message["content"] for message in reversed(messages) if message["role"] == "user")
         snapshot = json.loads(messages[0]["content"].split("Current frozen plan:\n", 1)[1])
@@ -126,11 +170,13 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
         return request["original_problem"] + "\n\n" + request["change_request"]
     if "Review an optimization formulation and its code" in text:
         return json.dumps({"action": "accept", "reason": "The model matches the test problem."})
+    if "E2E_AGENT_PAUSE" in text:
+        time.sleep(4)
     if "E2E_PAUSE_REPAIR" in text:
         if "## Solver feedback" in text:
             time.sleep(30)
         return f"### Formulation\n{FORMULATION}\n\n```python\n{FEASIBLE.replace('return m', 'return m.missing')}```"
-    if 'cp_model.CpModel' in text:
+    if 'cp_model.CpModel' in text or 'native OR-Tools model' in text:
         return f"### Formulation\n{FORMULATION}\n\n```python\n{CP_SAT}```"
     if 'import cvxpy as cp' in text:
         return f"### Formulation\nMinimize squared distance to (1,2), with nonnegative x and sum(x)<=2.\n\n```python\n{CVXPY}```"
@@ -157,6 +203,10 @@ class Handler(BaseHTTPRequestHandler):
                                          "snippet": "可以参考的排班建议，仍需用户确认。", "date": "2026-10-20"}]})
             return
         content = reply(request["messages"], request.get("tools", []))
+        polish = isinstance(content, str) and content == POLISH_REPLY
+        thinking = request.get("thinking", {}).get("type") == "enabled"
+        if polish:
+            content = ("思考已开启。" if thinking else "思考已关闭。") + "\n\n" + content
         message = content if isinstance(content, dict) else {"role": "assistant", "content": content}
         finish = "tool_calls" if message.get("tool_calls") else "stop"
         usage = {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
@@ -169,18 +219,24 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("content-type", "text/event-stream")
         self.end_headers()
         try:
+            if polish and thinking:
+                for part in ["先核对实际资源。", "逐项检查数量、单位与边界。", "再整理公式和结论。"]:
+                    self.event({**chunk, "choices": [{"index": 0, "delta": {"reasoning_content": part}, "finish_reason": None}]})
+                    time.sleep(0.15)
             if message.get("tool_calls"):
                 self.event({**chunk, "choices": [{"index": 0, "delta": {"role": "assistant", "tool_calls": [
                     {"index": i, **call} for i, call in enumerate(message["tool_calls"])]}, "finish_reason": None}]})
             else:
                 slow = "这是逐字显示的回复。" in content
-                size = 10 if slow else 200
+                size = 10 if slow else 120 if polish else 200
                 pieces = [content[i:i + size] for i in range(0, len(content), size)]
                 for index, piece in enumerate(pieces):
                     delta = {"role": "assistant", "content": piece} if index == 0 else {"content": piece}
                     self.event({**chunk, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]})
                     if slow:
                         time.sleep(0.5)
+                    elif polish:
+                        time.sleep(0.06)
             self.event({**chunk, "choices": [{"index": 0, "delta": {}, "finish_reason": finish}]})
             self.event({**chunk, "choices": [], "usage": usage})
             self.wfile.write(b"data: [DONE]\n\n")

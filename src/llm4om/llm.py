@@ -1,6 +1,6 @@
 """LLM settings, providers and LangChain chat-model construction."""
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
@@ -49,6 +49,17 @@ class LLMSettings:
         values = asdict(self)
         del values["api_key"]
         return {**values, "base_url": self.url}
+
+    def with_thinking(self, enabled: bool | None) -> "LLMSettings":
+        """Apply a conversation's DeepSeek switch without editing its shared preset."""
+        if enabled is None:
+            return self
+        if self.provider != "deepseek":
+            raise ValueError("The conversation thinking switch requires a DeepSeek preset.")
+        extra = {**self.extra_body, "thinking": {"type": "enabled" if enabled else "disabled"}}
+        if not enabled:
+            extra.pop("reasoning_effort", None)
+        return replace(self, extra_body=extra)
 
     def validate(self) -> None:
         if self.provider not in PROVIDERS:

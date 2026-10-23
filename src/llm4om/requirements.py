@@ -41,6 +41,7 @@ class RequirementsContext:
     preset: str | None = None
     locale: Literal["zh", "en"] = "zh"
     search: bool = False
+    thinking: bool | None = None
 
 
 class DraftState(AgentState):
@@ -68,6 +69,7 @@ def requirements_graph() -> Any:
         choice = runtime.context or RequirementsContext()
         resources = get_resources()
         preset, settings, _ = await asyncio.to_thread(resources.resolve, choice.preset)
+        settings = settings.with_thinking(choice.thinking)
         recorder = Recorder(resources.limits, charge=resources.charge(preset))
         model = resources.model_factory(settings, callbacks=[recorder.callback], metadata={"llm4om_role": "requirements"})
         language = "简体中文" if choice.locale == "zh" else "English"

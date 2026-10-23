@@ -33,3 +33,14 @@ test("comparison siblings join even while their source is deleted or on another 
   expect(groups[0].entry).toBe(original);
   expect(groups[0].related).toEqual([b, a]);
 });
+
+test("an optimization conversation remains the primary history entry for all its calculated plans", () => {
+  const chat = entry("agent", { kind: "optimization" });
+  const original = entry("first", { origin: "agent", conversation: "agent" }, 1);
+  const revised = entry("second", { parent: source("first"), conversation: "agent" }, 2);
+  const groups = groupHistory([revised, original, chat]);
+  expect(groups).toHaveLength(1);
+  expect(groups[0].entry).toBe(chat);
+  expect(groups[0].related).toEqual([revised, original]);
+  expect(groupHistory([revised, chat])[0].entry).toBe(chat);
+});

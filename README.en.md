@@ -27,19 +27,20 @@
 
 ---
 
-**LLM4OM** (Large Language Models for Optimization Modeling) is a platform for automated optimization modeling. You describe a problem in plain language and choose a modeling method and a code language. An LLM writes the mathematical formulation and the solver code. The platform solves the code in an isolated container and shows every intermediate step.
+**LLM4OM** (Large Language Models for Optimization Modeling) is a platform for automated optimization modeling. Use the original configuration workbench, or chat with the optimization assistant and attach data. The agent calls a complete modeling method to write the mathematical model and solver code, then solve in an isolated container. Inspect actual steps and results in the modeling workspace, and continue the conversation to change conditions.
 
 The platform includes **13 LLM modeling methods**: its own Direct and Feedback Repair methods, plus eleven methods from public research. Enter a problem, run the modeling process and inspect the model and result without writing solver code yourself.
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Demo: edit data, solve, discuss the plan and compare business scenarios" width="100%">
-  <br><sub>A real run: edit production data, solve with DeepSeek · Direct · Pyomo, then discuss changed conditions and compare business scenarios.</sub>
+  <img src="docs/assets/demo.gif" alt="Demo: the original workbench, independent optimization agent, modeling and changed conditions" width="100%">
+  <br><sub>A real run: preserve the manual draft, solve through the independent agent with DeepSeek · Direct · Pyomo, then change conditions in the same conversation.</sub>
 </p>
 
 ## Highlights
 
 | Feature | What you get |
 |---|---|
+| 💬 **Model through conversation** | Discuss an idea, calculate a first plan, inspect results and revise conditions in one agent. Specify methods and libraries in chat, or use the retained manual workbench |
 | 🧠 **13 modeling methods** | Direct, Feedback Repair, TriVAL, SAC-Opt, BIND, OptiMind and more; each has its own LangGraph |
 | 🧩 **9 modeling libraries** | Native modeling APIs, with backend discovery through each library’s own plugin registry |
 | 📝 **Requirements chat** | Multi-turn streaming chat with expandable search sources and retry after stopping or failure; review the editable draft, then hand it to any modeling method |
@@ -53,11 +54,15 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
 | 👥 **Team deployment** | One `docker compose up`; preset keys never leave the server; optional HTTPS and usage limits |
 | 🌗 **A workbench people like** | Export Excel plans with business labels, units and all actual values; notes and tags, Markdown reports, Excel import, 2,033 public problems, Chinese and English, dark mode |
 
-The desktop workbench centers on modeling: describe the problem, configure the method and modeling library, then inspect the mathematical model, code and computed results. A compact configuration summary opens the full settings. The process stays visible during execution; completed results occupy the main area. Requirements and plan assistants open beside the work when needed. Related history is grouped by problem, with each run saved independently.
+The original workbench remains the desktop home page. A separate “Optimization chat” entry opens `/agent`. Describe a problem or attach data; the assistant asks focused questions when needed and calls a complete modeling workflow. Defaults are Direct, Pyomo and automatic backend selection. Specify alternatives in chat or pin them under modeling preferences. Actual steps stream to a task card; the modeling workspace shows the mathematical model, code and results. Each plan is saved independently. Both interfaces remain available and share the same modeling methods and independently saved runs.
 
 ## Screenshots
 
 <table>
+  <tr>
+    <td width="50%"><img src="docs/assets/agent-home.png" alt="Independent optimization chat"><p align="center"><sub>A separate agent entry, starting from a problem</sub></p></td>
+    <td width="50%"><img src="docs/assets/agent.png" alt="Optimization agent and modeling workspace"><p align="center"><sub>Calculate through chat; inspect actual models and results alongside</sub></p></td>
+  </tr>
   <tr>
     <td width="50%"><img src="docs/assets/home.png" alt="New problem"><p align="center"><sub>Write the problem; choose method, language and model</sub></p></td>
     <td width="50%"><img src="docs/assets/run.png" alt="Run result"><p align="center"><sub>The verdict first: objective, modeling process, solution matrix</sub></p></td>

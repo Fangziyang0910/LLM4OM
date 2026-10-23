@@ -18,6 +18,7 @@ import type { RequirementsDraft } from "./api";
 import { ChatMessages } from "@/features/chat/Messages";
 import { ChatInput } from "@/features/chat/ChatInput";
 import { useChatDraft } from "@/features/chat/draft";
+import { useChatScroll } from "@/features/chat/scroll";
 
 type Values = Partial<RequirementsDraft> & { messages?: Message[]; usage?: Usage; failure?: string | null };
 const STARTERS = [
@@ -34,6 +35,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const thread = useQuery({ queryKey: ["requirements", threadId], queryFn: () => client.threads.get(threadId) });
   const meta = thread.data?.metadata as RequirementsMeta | undefined;
   const [selected, setSelected] = useState<string>();
+  const [thinking, setThinking] = useState<boolean>();
   const [search, setSearch] = useState<boolean>();
   const { value: input, setValue: setInput, prepare, acknowledge, savePending } = useChatDraft(threadId);
   const [edited, setEdited] = useState<RequirementsDraft | null>(null);
@@ -43,10 +45,9 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const [saving, setSaving] = useState(false);
   const [savedDraft, setSavedDraft] = useState<RequirementsDraft | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [follow, setFollow] = useState(true);
+  const { log, content, follow, followLatest } = useChatScroll();
   const saved = useRef<RequirementsDraft | null>(null);
   const saveQueue = useRef(Promise.resolve());
-  const log = useRef<HTMLDivElement>(null);
   const inputArea = useRef<HTMLTextAreaElement>(null);
   const runId = useRef<string | null>(null);
   const stream = useStream<Values>({ client, assistantId: "requirements", threadId, reconnectOnMount: true,
@@ -64,15 +65,13 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const messages = stream.messages;
   const presetId = selected ?? meta?.preset ?? presets[0]?.id;
   const preset = presets.find(item => item.id === presetId);
+  const thinkingMode = preset?.provider === "deepseek" ? thinking ?? meta?.thinking ?? null : null;
   const canSearch = searchConfigured || preset?.provider === "deepseek";
   const searchOn = !!canSearch && (search ?? meta?.search ?? false);
   const busy = action || stopping || reading || thread.isPending || stream.isLoading || stream.isThreadLoading;
   const failure = stream.error || stream.values.failure;
   useEffect(() => { acknowledge((thread.data?.values as Values | undefined)?.messages); }, [thread.data?.values, acknowledge]);
 
-  useEffect(() => {
-    if (follow && log.current) log.current.scrollTop = log.current.scrollHeight;
-  }, [messages, stream.isLoading, failure, follow]);
 
   const save = (snapshot = edited) => {
     // Serialize a blur-save with Send/Use so an edit cannot land after a new turn has started.
@@ -94,16 +93,16 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
     if (busy || (!retry && !input.trim())) return;
     if (!preset) { toast.error(t("先选择一个可用的预设模型。")); openPresets(); return; }
     setAction(true);
-    setFollow(true);
+    followLatest();
     try {
       await save();
       await client.threads.update(threadId, { metadata: { preset: preset.id, provider: preset.provider,
-        model: preset.name || preset.model, search: searchOn, ...(!messages.length ? { title: input.trim().slice(0, 120) } : {}) } });
+        model: preset.name || preset.model, thinking: thinkingMode, search: searchOn, ...(!messages.length ? { title: input.trim().slice(0, 120) } : {}) } });
       const last = [...messages].reverse().find(message => message.type === "human");
       const question = retry && last?.type === "human" ? last : prepare(input);
       runId.current = null;
       await stream.submit({ ...draft, messages: [question] }, {
-        context: { preset: preset.id, locale, search: searchOn }, multitaskStrategy: "reject", streamResumable: true, streamSubgraphs: true,
+        context: { preset: preset.id, locale, search: searchOn, thinking: thinkingMode }, multitaskStrategy: "reject", streamResumable: true, streamSubgraphs: true,
         optimisticValues: retry ? undefined : current => ({ ...draft,
           messages: [...(current.messages ?? []), question] }),
       });
@@ -143,24 +142,25 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
       }}>{t("用于建模")}<ArrowRight /></Button>
     </div>
           <div className="relative flex min-h-0 flex-1 flex-col">
-            <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={stream.isLoading} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 sm:px-3"
-              onScroll={event => { const node = event.currentTarget; setFollow(node.scrollHeight - node.scrollTop - node.clientHeight < 80); }}>
-              {!messages.length && !failure ? <div className="mx-auto flex min-h-full flex-col justify-center gap-5 py-6">
-                <span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
-                <div><h2 className="text-base font-semibold">{t("先说说，你想安排什么？")}</h2>
-                  <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">{t("一个大概的想法就够了。我们边聊边把目标、条件和数据整理清楚。")}</p></div>
-                <div className="grid gap-2 ">{STARTERS.map(item => <button key={item.title} type="button"
-                  disabled={busy} onClick={() => { setInput(t(item.text)); inputArea.current?.focus(); }}
-                  className="flex items-center gap-3 rounded-xl border bg-card p-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ">
-                  <item.icon className="size-4 text-primary" /><span>{t(item.title)}</span></button>)}</div>
-              </div> : <ChatMessages messages={messages} loading={stream.isLoading} label={t("需求助手")}
-                failure={failure} disabled={busy} onRetry={() => void submit(true)} />}
+            <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={stream.isLoading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain px-1 sm:px-3">
+              <div ref={content} className="grid min-h-full grid-cols-1">
+                {!messages.length && !failure ? <div className="mx-auto flex min-h-full flex-col justify-center gap-5 py-6">
+                  <span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
+                  <div><h2 className="text-base font-semibold">{t("先说说，你想安排什么？")}</h2>
+                    <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">{t("一个大概的想法就够了。我们边聊边把目标、条件和数据整理清楚。")}</p></div>
+                  <div className="grid gap-2 ">{STARTERS.map(item => <button key={item.title} type="button"
+                    disabled={busy} onClick={() => { setInput(t(item.text)); inputArea.current?.focus(); }}
+                    className="flex items-center gap-3 rounded-xl border bg-card p-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ">
+                    <item.icon className="size-4 text-primary" /><span>{t(item.title)}</span></button>)}</div>
+                </div> : <ChatMessages messages={messages} loading={stream.isLoading} label={t("需求助手")}
+                  failure={failure} disabled={busy} onRetry={() => void submit(true)} />}
+              </div>
             </div>
             {!follow ? <Button type="button" variant="outline" size="icon-sm" aria-label={t("回到最新消息")}
-              className="absolute right-3 bottom-3 rounded-full bg-background shadow-sm" onClick={() => setFollow(true)}><ArrowDown /></Button> : null}
+              className="absolute right-3 bottom-3 rounded-full bg-background shadow-sm" onClick={followLatest}><ArrowDown /></Button> : null}
           </div>
           <ChatInput value={input} onChange={setInput} disabled={busy} loading={stream.isLoading} stopping={stopping} label={t("发送给需求助手")}
-            inputRef={inputArea} presets={presets} presetId={presetId} onPreset={setSelected} openPresets={openPresets}
+            inputRef={inputArea} presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets}
             onSend={() => void submit()} onStop={() => void stop()}>
               <Button asChild type="button" variant="ghost" size="icon-sm" title={Object.keys(draft.data).join(", ") || t("添加附件")}>
                 <label className={cn("relative cursor-pointer", busy && "pointer-events-none opacity-50")}><Paperclip />

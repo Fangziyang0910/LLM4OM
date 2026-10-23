@@ -14,3 +14,4 @@ ADR 保留改变成本较高、需要解释取舍的决定。当前行为见[架
 | [0013](0013-modeling-libraries.md) | 九个建模库与原生求解后端 | 有效 |
 | [0014](0014-requirements-conversation.md) | 需求对话与建模方法通过问题文本交接 | 有效 |
 | [0015](0015-plan-conversation.md) | 方案对话读取固定结果，明确变更交回平台图 | 有效 |
+| [0016](0016-optimization-agent.md) | 独立优化 Agent 与原工作台并列，工具调用完整建模流程 | 有效 |

@@ -13,8 +13,10 @@ import pytest
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
+from llm4om.agent import AgentContext, optimization_graph, solution_graph
 from llm4om.graph import run
-from llm4om.solution_chat import SolutionContext, solution_graph
+from llm4om.llm import LLMSettings
+from llm4om.requirements import RequirementsContext, requirements_graph
 from tests.conftest import PRODUCTION_PROBLEM, TWO_PART_REPLY, tool_call
 from tests.test_followups import EXPLANATION, REVISED_REPLY
 
@@ -37,8 +39,30 @@ def checkpoint_client(monkeypatch: pytest.MonkeyPatch, original: dict) -> tuple[
 
     client = SimpleNamespace(threads=SimpleNamespace(get=AsyncMock(side_effect=get),
         get_state=AsyncMock(side_effect=get), create=AsyncMock(side_effect=create)))
-    monkeypatch.setattr("llm4om.solution_chat.get_client", lambda **kwargs: client)
+    monkeypatch.setattr("llm4om.agent.get_client", lambda **kwargs: client)
     return client, snapshots, source
+
+
+@pytest.mark.parametrize("kind", ["requirements", "optimization", "solution_chat"])
+def test_each_conversation_applies_thinking_only_to_its_own_model(make_resources, monkeypatch, kind):
+    resources = make_resources(lambda *_: "确认了，可以继续讨论。", llm=LLMSettings(
+        "deepseek", "deepseek-flash", api_key="test-key", extra_body={"thinking": {"type": "disabled"}}))
+    _, _, source = checkpoint_client(monkeypatch, {"description": "原问题", "spec": {"preset": None}})
+    seen = []
+    factory = resources.model_factory
+
+    def model(settings, **kwargs):
+        seen.append(settings.extra_body["thinking"]["type"])
+        return factory(settings, **kwargs)
+
+    resources.model_factory = model
+    graph = {"requirements": requirements_graph, "optimization": optimization_graph, "solution_chat": solution_graph}[kind]()
+    context = RequirementsContext(thinking=True) if kind == "requirements" else AgentContext(thinking=True)
+    result = asyncio.run(graph.ainvoke({"messages": [("human", "继续解释")], "source": source},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": resources}}, context=context))
+    assert result["failure"] is None, result["failure"]
+    assert seen == ["enabled"]
+    assert resources.llm.extra_body["thinking"]["type"] == "disabled"
 
 
 def test_a_result_question_reads_actual_values_without_running_a_model(make_resources: Any, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -54,7 +78,7 @@ def test_a_result_question_reads_actual_values_without_running_a_model(make_reso
     original = asyncio.run(run(PRODUCTION_PROBLEM, resources=resources))
     client, snapshots, source = checkpoint_client(monkeypatch, original)
     result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [("human", "B 的数量是多少？")]},
-        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": resources}}, context=SolutionContext()))
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": resources}}, context=AgentContext()))
     assert result["failure"] is None and not result["plans"]
     assert result["usage"]["llm_calls"] == 2 and result["usage"]["solves"] == 0
     client.threads.create.assert_not_called()
@@ -117,7 +141,7 @@ def test_changes_use_the_existing_pipeline_and_save_real_results(make_resources:
                               resources=make_resources(lambda *_: TWO_PART_REPLY)))
     client, snapshots, source = checkpoint_client(monkeypatch, original)
     result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [HumanMessage("请计算这些新条件")]},
-        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": resources}}, context=SolutionContext()))
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": resources}}, context=AgentContext()))
     assert result["failure"] is None, result["failure"]
     assert len(result["plans"]) == len(scenarios) and result["usage"]["llm_calls"] == 2
     assert result["current"] == (source if multiple else result["plans"][0]["source"])

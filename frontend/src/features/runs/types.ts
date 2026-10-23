@@ -49,11 +49,15 @@ export type RunMeta = {
   parent?: SourceRun;
   scenario?: { name: string; instruction: string };
   conversation?: string;
+  thinking?: boolean | null;
 };
-export type RequirementsMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags" | "origin"> & { kind: "requirements"; search?: boolean };
-export type SolutionChatMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags"> & { kind: "solution_chat"; parent: SourceRun };
+export type RequirementsMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags" | "origin" | "thinking"> & { kind: "requirements"; search?: boolean };
+export type SolutionChatMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags" | "thinking"> & { kind: "solution_chat"; parent: SourceRun };
+export type OptimizationMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags" | "thinking"> & {
+  kind: "optimization"; method?: string | null; language?: string | null; search?: boolean;
+};
 /** A run in the history list. */
-export type Entry<Meta = RunMeta | RequirementsMeta | SolutionChatMeta> = {
+export type Entry<Meta = RunMeta | RequirementsMeta | SolutionChatMeta | OptimizationMeta> = {
   id: string; created: string; updated: string; meta: Meta; state: string; objective: number | null;
   failure: string | null; usage: Usage | null; elapsed: number | null;
 };

@@ -16,6 +16,7 @@ export function groupHistory(entries: Entry[]): HistoryGroup[] {
     root(entry.id);
     if ("parent" in entry.meta && entry.meta.parent) join(entry.id, entry.meta.parent.thread_id);
     if ("origin" in entry.meta && entry.meta.origin) join(entry.id, entry.meta.origin);
+    if (isRunEntry(entry) && entry.meta.conversation) join(entry.id, entry.meta.conversation);
     if (isRunEntry(entry) && entry.meta.group) join(entry.id, `group:${entry.meta.group}`);
   }
   const groups = new Map<string, Entry[]>();
@@ -25,7 +26,8 @@ export function groupHistory(entries: Entry[]): HistoryGroup[] {
     groups.get(id)!.push(entry);
   }
   return [...groups.values()].map(items => {
-    const ordered = [...items].sort((a, b) => Number(isRunEntry(b)) - Number(isRunEntry(a)) || a.created.localeCompare(b.created));
+    const ordered = [...items].sort((a, b) => Number(b.meta.kind === "optimization") - Number(a.meta.kind === "optimization")
+      || Number(isRunEntry(b)) - Number(isRunEntry(a)) || a.created.localeCompare(b.created));
     return { entry: ordered[0], related: items.filter(item => item !== ordered[0]),
       created: items.reduce((latest, item) => item.created > latest ? item.created : latest, items[0].created) };
   }).sort((a, b) => b.created.localeCompare(a.created));

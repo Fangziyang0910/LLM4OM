@@ -52,8 +52,8 @@ function useWide(): boolean {
   }, () => matchMedia(WIDE).matches);
 }
 
-export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevise, onDelete, onCompare, onMetaChange, onDiscuss, onScenarios, onConversation, assistantOpen = false }: {
-  threadId: string; options: Options; onFinished: () => void; assistantOpen?: boolean;
+export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevise, onDelete, onCompare, onMetaChange, onDiscuss, onScenarios, onConversation, assistantOpen = false, embedded = false }: {
+  threadId: string; options: Options; onFinished: () => void; assistantOpen?: boolean; embedded?: boolean;
   onEdit: (draft: Draft) => void; onRerun: (draft: Draft) => Promise<void>; onDelete: (meta: RunMeta) => void;
   onRevise: (instruction: string) => Promise<void>;
   onDiscuss: () => Promise<void>; onScenarios: (scenarios: { name: string; instruction: string }[]) => Promise<void>;
@@ -73,7 +73,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
   const [stopping, setStopping] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const wide = useWide();
+  const wide = useWide() && !embedded;
   const layout = useDefaultLayout({ id: "llm4om-run", panelIds: ["process", "outputs"], onlySaveAfterUserInteractions: true });
   const active = streaming || run?.status === "pending" || run?.status === "running";
   const now = useNow(active);
@@ -171,7 +171,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" disabled={busy} aria-label={t("更多操作")} title={t("更多操作")}><MoreHorizontal /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {meta.group ? <DropdownMenuItem onClick={() => onCompare(meta.group!)}><Columns3 />{t("查看对比")}</DropdownMenuItem> : null}
-            {meta.conversation ? <DropdownMenuItem onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回方案对话")}</DropdownMenuItem> : null}
+            {meta.conversation && !embedded ? <DropdownMenuItem onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回方案对话")}</DropdownMenuItem> : null}
             <DropdownMenuItem disabled={active || busy || !values.description} onClick={() => void rerun()}><RefreshCw />{t("再运行一次")}</DropdownMenuItem>
             <DropdownMenuItem disabled={!values.description} onClick={() => onEdit(draft())}>
               <Pencil />{t("修改后运行")}</DropdownMenuItem>
@@ -191,7 +191,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
       <Summary state={state} values={values} steps={steps} error={error} active={active} elapsed={elapsed} onTab={showTab} />
     </div>
 
-    {!active ? <div role="group" aria-label={t("运行操作")} className="flex shrink-0 items-center gap-1 overflow-x-auto px-4 pt-3 md:px-6 [&>button]:shrink-0">
+    {!active && !embedded ? <div role="group" aria-label={t("运行操作")} className="flex shrink-0 items-center gap-1 overflow-x-auto px-4 pt-3 md:px-6 [&>button]:shrink-0">
       <span className="mr-2 hidden text-xs text-muted-foreground sm:block">{t("继续调整")}</span>
       <Button variant="outline" size="sm" disabled={busy || !values.description} onClick={() => setRevision("")}><Pencil />{t("调整条件")}</Button>
       <Button variant="ghost" size="sm" disabled={busy || !values.spec} onClick={() => setScenarios(true)}><Columns3 />{t("业务场景对比")}</Button>
@@ -206,7 +206,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
       <ResizableHandle withHandle aria-label={t("调整过程与结果的宽度")} className="mx-2 bg-transparent" />
       <ResizablePanel id="outputs" defaultSize="68%" minSize="30%"><Pane>{outputs}</Pane></ResizablePanel>
     </ResizablePanelGroup> : <div className="flex min-h-96 flex-1 shrink-0 flex-col gap-3 px-4 pt-4 pb-4 md:px-6 md:pb-6 lg:min-h-0 lg:shrink">
-      {!wide ? <Tabs value={view} onValueChange={value => setView(value as "outputs" | "process")}>
+      {!wide && !embedded ? <Tabs value={view} onValueChange={value => setView(value as "outputs" | "process")}>
         <TabsList className="w-full">
           <TabsTrigger value="outputs">{t("结果")}</TabsTrigger>
           <TabsTrigger value="process">{t("过程")}{active ? <span className="size-1.5 animate-pulse rounded-full bg-primary" /> : null}</TabsTrigger>

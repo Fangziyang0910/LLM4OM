@@ -1,7 +1,7 @@
 import { outcome } from "@/format";
 import { locale, t } from "@/i18n";
 import type { Draft } from "@/features/composer/types";
-import type { Entry, RequirementsMeta, SolutionChatMeta, RunMeta, RunSpec, RunValues, SourceRun, Usage } from "@/features/runs/types";
+import type { Entry, RequirementsMeta, SolutionChatMeta, OptimizationMeta, RunMeta, RunSpec, RunValues, SourceRun, Usage } from "@/features/runs/types";
 import type { Preset } from "@/types";
 
 /** The LangGraph SDK client, loaded on first use. */
@@ -120,9 +120,9 @@ export async function history(metadata?: Record<string, unknown>, offset = 0): P
     const state = outcome(thread.status === "busy", thread.status === "idle" ? "success" : thread.status, extracted.failure,
       extracted.solved as string | undefined);
     const spec = extracted.spec as RunSpec | undefined;
-    const meta = thread.metadata?.kind === "requirements" || thread.metadata?.kind === "solution_chat"
-      ? thread.metadata as RequirementsMeta | SolutionChatMeta : runMeta(thread.metadata as RunMeta, spec);
-    if ("method" in meta && typeof extracted.actual_solver === "string") meta.solver = extracted.actual_solver;
+    const meta = ["requirements", "solution_chat", "optimization"].includes(String(thread.metadata?.kind))
+      ? thread.metadata as RequirementsMeta | SolutionChatMeta | OptimizationMeta : runMeta(thread.metadata as RunMeta, spec);
+    if ((meta.kind == null || meta.kind === "run") && typeof extracted.actual_solver === "string") (meta as RunMeta).solver = extracted.actual_solver;
     return { id: thread.thread_id, created: thread.created_at, updated: thread.updated_at, meta, state,
       objective: typeof extracted.objective === "number" ? extracted.objective : null,
       elapsed: extracted.finished_at && typeof extracted.elapsed === "number" ? extracted.elapsed : null,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, BookOpen, ChartSpline, Columns3, Cpu, History, MessageSquare, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
+import { ChevronDown, BookOpen, ChartSpline, Columns3, Cpu, History, MessageSquare, MoreHorizontal, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ function when(created: string): string {
 
 /** What came of a run, in a few characters: the objective when it solved, otherwise its state. */
 export function resultText(entry: Entry): string {
+  if (entry.meta.kind === "optimization") return entry.state === "running" ? t("正在处理") : entry.failure ? t("对话未完成") : t("优化对话");
   if (entry.meta.kind === "solution_chat") return entry.state === "running" ? t("正在讨论") : entry.failure ? t("讨论未完成") : t("方案对话");
   if (entry.meta.kind === "requirements") return entry.state === "running" ? t("正在整理")
     : entry.failure ? t("整理未完成") : t("需求对话");
@@ -40,7 +41,7 @@ export function resultText(entry: Entry): string {
 
 /** Whether a run matches a search: every word is in its title, method, model, note or tags; `#tag` needs that tag. */
 export function matches(entry: Entry, query: string, methodName: (id: string) => string): boolean {
-  const text = [entry.meta.title, isRunEntry(entry) ? methodName(entry.meta.method) : entry.meta.kind === "requirements" ? t("需求对话") : t("方案对话"),
+  const text = [entry.meta.title, isRunEntry(entry) ? methodName(entry.meta.method) : entry.meta.kind === "optimization" ? t("优化对话") : entry.meta.kind === "requirements" ? t("需求对话") : t("方案对话"),
     entry.meta.model ?? "", entry.meta.note ?? "", ...(entry.meta.tags ?? [])]
     .join("\n").toLowerCase();
   const tags = (entry.meta.tags ?? []).map(tag => tag.toLowerCase());
@@ -49,11 +50,11 @@ export function matches(entry: Entry, query: string, methodName: (id: string) =>
 }
 
 export function Sidebar({ entries, current, options, presets, query, onQuery, hasMore, loading, error, onLoadMore, onRetry,
-  onNew, onOpen, onCompare, onDelete, onExamples, onPresets }: {
+  onNew, onAgent, onOpen, onCompare, onDelete, onExamples, onPresets }: {
   entries: Entry[]; current: string | null; options: Options | null; presets: Preset[];
   query: string; onQuery: (query: string) => void;
   hasMore: boolean; loading: boolean; error: string | null; onLoadMore: () => void; onRetry: () => void;
-  onNew: () => void; onOpen: (entry: Entry) => void; onCompare: (group: string) => void; onDelete: (entry: Entry) => void;
+  onNew: () => void; onAgent: () => void; onOpen: (entry: Entry) => void; onCompare: (group: string) => void; onDelete: (entry: Entry) => void;
   onExamples: () => void; onPresets: () => void;
 }) {
   const methodName = (id: string) => options?.methods.find(item => item.id === id)?.name ?? id;
@@ -109,6 +110,7 @@ export function Sidebar({ entries, current, options, presets, query, onQuery, ha
         </span>
       </a>
       <Button onClick={onNew} className="w-full justify-start"><Plus />{t("新建建模")}</Button>
+      <Button variant="outline" onClick={onAgent} className="w-full justify-start"><Sparkles />{t("优化对话")}</Button>
       <div className="relative">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input aria-label={t("搜索运行")} placeholder={t("搜索问题或方法")} value={query} onChange={event => onQuery(event.target.value)}

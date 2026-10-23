@@ -34,6 +34,14 @@ def add_preset(api: TestClient) -> dict[str, Any]:
     return response.json()
 
 
+def test_workbench_routes_can_be_opened_directly(tmp_path: Path) -> None:
+    with client(tmp_path) as api:
+        for path in ("/", "/model", "/agent", f"/agent/{uuid4()}", f"/chat/{uuid4()}", f"/discussion/{uuid4()}", f"/run/{uuid4()}"):
+            response = api.get(path)
+            assert response.status_code == 200 and "text/html" in response.headers["content-type"]
+        assert api.get("/unknown-page").status_code == 404
+
+
 def test_options_list_methods_languages_and_providers(tmp_path: Path, monkeypatch: Any) -> None:
     monkeypatch.setenv("LLM4OM_SEARCH_API_KEY", "server-search-secret")
     with client(tmp_path) as api:
@@ -186,11 +194,12 @@ def test_the_server_registers_one_graph_per_method() -> None:
 
     for method in methods():
         assert getattr(graphs, method).name == method
-    # Both entry points register the modeling methods and the two separate conversation graphs.
+    # Both entry points register the modeling methods and the conversation graphs.
     config = json.loads((Path(__file__).parents[1] / "langgraph.json").read_text(encoding="utf-8"))
     assert graphs.requirements.name == "requirements" and "requirements" not in methods()
     assert graphs.solution_chat.name == "solution_chat" and "solution_chat" not in methods()
-    assert config["graphs"] == {name: f"llm4om.server.graphs:{name}" for name in [*methods(), "requirements", "solution_chat"]}
+    assert graphs.optimization.name == "optimization" and "optimization" not in methods()
+    assert config["graphs"] == {name: f"llm4om.server.graphs:{name}" for name in [*methods(), "requirements", "solution_chat", "optimization"]}
 
 
 def test_a_run_streams_each_step_before_it_ends(make_resources: Any) -> None:

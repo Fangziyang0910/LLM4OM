@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChatMessages, type ChatProgress } from "@/features/chat/Messages";
 import { ChatInput } from "@/features/chat/ChatInput";
 import { useChatDraft } from "@/features/chat/draft";
+import { useChatScroll } from "@/features/chat/scroll";
 import { client } from "@/features/runs/sdk";
 import { StatusBadge } from "@/features/runs/status";
 import { errorText, formatNumber } from "@/format";
@@ -28,12 +29,12 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
   const meta = thread.data?.metadata as SolutionChatMeta | undefined;
   const { value: input, setValue: setInput, prepare, acknowledge, savePending } = useChatDraft(threadId);
   const [selected, setSelected] = useState<string>();
+  const [thinking, setThinking] = useState<boolean>();
   const [viewed, setViewed] = useState<string>();
   const [action, setAction] = useState(false);
   const [stopping, setStopping] = useState(false);
-  const [follow, setFollow] = useState(true);
+  const { log, content, follow, followLatest } = useChatScroll();
   const [progress, setProgress] = useState<ChatProgress>();
-  const log = useRef<HTMLDivElement>(null);
   const inputArea = useRef<HTMLTextAreaElement>(null);
   const runId = useRef<string | null>(null);
   const stream = useStream<Values, { CustomEventType: ChatProgress }>({ client, assistantId: "solution_chat", threadId, reconnectOnMount: true,
@@ -50,24 +51,24 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
   const values = current.data?.values as RunValues | undefined;
   const presetId = selected ?? meta?.preset ?? presets[0]?.id;
   const preset = presets.find(item => item.id === presetId);
+  const thinkingMode = preset?.provider === "deepseek" ? thinking ?? meta?.thinking ?? null : null;
   const busy = action || stopping || stream.isLoading || stream.isThreadLoading || thread.isPending;
   const failure = stream.error || stream.values.failure;
   useEffect(() => { acknowledge((thread.data?.values as Values | undefined)?.messages); }, [thread.data?.values, acknowledge]);
   const plans = stream.values.plans ?? [];
   const groups = [...new Set(plans.flatMap(plan => plan.group ? [plan.group] : []))];
-  useEffect(() => { if (follow && log.current) log.current.scrollTop = log.current.scrollHeight; }, [messages, stream.isLoading, progress, failure, follow]);
 
   const submit = async (retry = false) => {
     if (busy || (!retry && !input.trim())) return;
     if (!preset) { toast.error(t("先选择一个可用的预设模型。")); openPresets(); return; }
-    setAction(true); setFollow(true); setViewed(undefined); setProgress(undefined);
+    setAction(true); followLatest(); setViewed(undefined); setProgress(undefined);
     try {
-      await client.threads.update(threadId, { metadata: { preset: preset.id, provider: preset.provider, model: preset.name || preset.model } });
+      await client.threads.update(threadId, { metadata: { preset: preset.id, provider: preset.provider, model: preset.name || preset.model, thinking: thinkingMode } });
       const last = [...messages].reverse().find(message => message.type === "human");
       const question = retry && last?.type === "human" ? last : prepare(input);
       runId.current = null;
       await stream.submit({ messages: [question] }, {
-        context: { preset: preset.id, locale }, multitaskStrategy: "reject", streamResumable: true, streamSubgraphs: true,
+        context: { preset: preset.id, locale, thinking: thinkingMode }, multitaskStrategy: "reject", streamResumable: true, streamSubgraphs: true,
         optimisticValues: retry ? undefined : current => ({ ...current, messages: [...(current.messages ?? []), question] }),
       });
     } catch (error) { toast.error(errorText(error)); }
@@ -112,23 +113,24 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
             {viewed && viewed !== source?.thread_id ? <Button variant="link" size="xs" className="mt-2 h-auto p-0" onClick={() => setViewed(undefined)}>{t("查看讨论中的方案")}</Button> : null}
           </div>
           <div className="relative flex min-h-0 flex-1 flex-col">
-            <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={stream.isLoading} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 sm:px-3"
-              onScroll={event => { const node = event.currentTarget; setFollow(node.scrollHeight - node.scrollTop - node.clientHeight < 80); }}>
-              {messages.length || failure ? <ChatMessages messages={messages} loading={stream.isLoading} label={t("方案助手")}
-                failure={failure} disabled={busy} onRetry={() => void submit(true)} progress={progress}
-                onOpenPlan={setViewed} onCompare={onCompare} />
-                : <div className="mx-auto flex min-h-full max-w-md flex-col justify-center gap-4 py-6">
-                  <span className="grid size-8 place-items-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
-                  <h2 className="text-base font-semibold">{t("接下来，想了解或调整什么？")}</h2>
-                  <p className="text-sm leading-6 text-muted-foreground">{t("可以询问决策值的含义，也可以给出新的条件。新方案会实际建模求解，并单独保存。")}</p>
-                  <Button variant="outline" className="self-start" onClick={() => { setInput(t("请用通俗的话解释这个方案的主要决策。")); inputArea.current?.focus(); }}>{t("解释主要决策")}</Button>
-                </div>}
+            <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={stream.isLoading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain px-1 sm:px-3">
+              <div ref={content} className="grid min-h-full grid-cols-1">
+                {messages.length || failure ? <ChatMessages messages={messages} loading={stream.isLoading} label={t("方案助手")}
+                  failure={failure} disabled={busy} onRetry={() => void submit(true)} progress={progress}
+                  onOpenPlan={setViewed} onCompare={onCompare} />
+                  : <div className="mx-auto flex min-h-full max-w-md flex-col justify-center gap-4 py-6">
+                    <span className="grid size-8 place-items-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
+                    <h2 className="text-base font-semibold">{t("接下来，想了解或调整什么？")}</h2>
+                    <p className="text-sm leading-6 text-muted-foreground">{t("可以询问决策值的含义，也可以给出新的条件。新方案会实际建模求解，并单独保存。")}</p>
+                    <Button variant="outline" className="self-start" onClick={() => { setInput(t("请用通俗的话解释这个方案的主要决策。")); inputArea.current?.focus(); }}>{t("解释主要决策")}</Button>
+                  </div>}
+              </div>
             </div>
-            {!follow ? <Button variant="outline" size="icon-sm" aria-label={t("回到最新消息")} className="absolute right-3 bottom-3 rounded-full bg-background shadow-sm" onClick={() => setFollow(true)}><ArrowDown /></Button> : null}
+            {!follow ? <Button variant="outline" size="icon-sm" aria-label={t("回到最新消息")} className="absolute right-3 bottom-3 rounded-full bg-background shadow-sm" onClick={followLatest}><ArrowDown /></Button> : null}
           </div>
           <ChatInput label={t("发送给方案助手")} value={input} onChange={setInput} disabled={busy} loading={stream.isLoading} stopping={stopping}
             inputRef={inputArea}
-            presets={presets} presetId={presetId} onPreset={setSelected} openPresets={openPresets} onSend={() => void submit()}
+            presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets} onSend={() => void submit()}
             placeholder={t("追问方案，或说明你想调整的条件……")} onStop={() => void stop()} />
           <p className="shrink-0 text-center text-[11px] text-muted-foreground">{t(stream.isLoading ? "回复期间可继续输入，完成后发送。" : "Enter 发送，Shift+Enter 换行")}</p>
 

@@ -18,7 +18,8 @@
     "bind": "llm4om.server.graphs:bind",
     "optimind": "llm4om.server.graphs:optimind",
     "requirements": "llm4om.server.graphs:requirements",
-    "solution_chat": "llm4om.server.graphs:solution_chat"
+    "solution_chat": "llm4om.server.graphs:solution_chat",
+    "optimization": "llm4om.server.graphs:optimization"
   },
   "http": {
     "app": "llm4om.server.app:app",
