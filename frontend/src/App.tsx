@@ -16,6 +16,7 @@ import { PresetsDialog } from "@/features/presets/PresetsDialog";
 import { createRequirements } from "@/features/requirements/api";
 import { createSolutionChat } from "@/features/solution_chat/api";
 import { Sidebar } from "@/components/Sidebar";
+import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { t } from "@/i18n";
 import type { Draft } from "@/features/composer/types";
 import type { Entry } from "@/features/runs/types";
@@ -52,6 +53,7 @@ export default function App() {
   const [examplesOpen, setExamplesOpen] = useState(false);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [confirm, setConfirm] = useState<Confirm | null>(null);
 
   const go = useCallback((next: Route) => {
@@ -86,6 +88,7 @@ export default function App() {
       : t("“{title}”的问题、数学模型、代码和过程都会被删除，无法恢复。", { title: entry.meta.title }),
     run: async () => {
       await deleteRun(entry.id);
+      try { sessionStorage.removeItem(`llm4om-message-${entry.id}`); } catch { /* storage may be unavailable */ }
       if ((route.name === "run" || route.name === "chat" || route.name === "discussion") && route.id === entry.id) go({ name: "new" });
       await refresh();
       toast.success(t("已删除。"));
@@ -94,6 +97,7 @@ export default function App() {
 
   const current = route.name === "run" || route.name === "chat" || route.name === "discussion" ? route.id : null;
   const sidebar = <Sidebar entries={entries} current={current} options={options} presets={presets} onNew={() => go({ name: "new" })}
+    query={search} onQuery={setSearch}
     hasMore={historyQuery.hasNextPage} loading={historyQuery.isFetching} error={historyQuery.error ? errorText(historyQuery.error) : null}
     onLoadMore={() => void historyQuery.fetchNextPage()} onRetry={() => void historyQuery.refetch()}
     onOpen={entry => go({ name: entry.meta.kind === "solution_chat" ? "discussion" : entry.meta.kind === "requirements" ? "chat" : "run", id: entry.id })}
@@ -112,9 +116,14 @@ export default function App() {
     <div className="flex min-w-0 flex-1 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 xl:hidden">
         <Button variant="ghost" size="icon" aria-label={t("打开菜单")} onClick={() => setMenuOpen(true)}><Menu /></Button>
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? t("新建建模") : "LLM4OM"}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? t("新建建模")
+          : route.name === "chat" ? t("需求对话") : route.name === "discussion" ? t("方案对话") : route.name === "compare" ? t("对比") : t("建模结果")}</span>
         {route.name !== "new" ? <Button variant="ghost" size="icon" aria-label={t("新建建模")} onClick={() => go({ name: "new" })}><Plus /></Button> : null}
       </header>
+      {presetsQuery.error ? <div role="alert" className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 border-b px-4 py-2 text-xs text-destructive sm:px-6">
+        <span>{t("预设模型加载失败：{error}", { error: errorText(presetsQuery.error) })}</span>
+        <Button variant="outline" size="sm" disabled={presetsQuery.isFetching} onClick={() => void presetsQuery.refetch()}><RefreshCw />{t("重试")}</Button>
+      </div> : null}
       <main className="mx-auto min-h-0 w-full max-w-[1600px] flex-1">
         {optionsQuery.error ? <Empty className="h-full">
           <EmptyHeader>
@@ -127,12 +136,13 @@ export default function App() {
           : !options ? <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载……")}</div>
           : route.name === "new"
             ? <Composer options={options} presets={presets} draft={draft} setDraft={setDraft} onStart={start} onCompare={compare}
+              presetsStatus={presetsQuery.data ? "ready" : presetsQuery.error ? "error" : "loading"}
               openPresets={() => setPresetsOpen(true)} openExamples={() => setExamplesOpen(true)} onDiscuss={async () => {
                 const preset = presets.find(item => item.id === draft.preset) ?? presets[0];
                 const id = await createRequirements({ description: draft.description, data: draft.data }, preset);
                 void refresh(); go({ name: "chat", id });
               }} />
-            : <Suspense fallback={<div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载……")}</div>}>
+            : <PageErrorBoundary key={route.id}><Suspense fallback={<div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载……")}</div>}>
               {route.name === "compare" ? <Compare key={route.id} group={route.id} options={options} onOpen={id => go({ name: "run", id })} />
                 : route.name === "chat" ? <Requirements key={route.id} threadId={route.id} presets={presets} searchConfigured={!!options.search_configured}
                   openPresets={() => setPresetsOpen(true)} onFinished={() => void refresh()}
@@ -153,7 +163,7 @@ export default function App() {
                     void refresh(); go({ name: "run", id });
                   }} onDelete={meta => remove({ id: route.id, meta })}
                   onCompare={group => go({ name: "compare", id: group })} onMetaChange={() => void refresh()} />}
-            </Suspense>}
+            </Suspense></PageErrorBoundary>}
       </main>
     </div>
 

@@ -39,8 +39,9 @@ export function Timeline({ steps, live, active, onShow }: {
   const allOpen = milestones.length > 0 && milestones.every(item => open.has(item.id));
   return <div className="flex h-full min-h-0 flex-col">
     <div className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
-      <h2 className="text-sm font-medium">{t("建模过程")}</h2>
-      <span className="text-xs text-muted-foreground tabular">{t("{phases} 个阶段 · {calls} 次 LLM 调用", { phases: milestones.length, calls })}</span>
+      <h2 className="shrink-0 text-sm font-medium">{t("建模过程")}</h2>
+      <span className="min-w-0 truncate text-xs text-muted-foreground tabular" title={t("{phases} 个阶段 · {calls} 次 LLM 调用", { phases: milestones.length, calls })}>
+        {t("{phases} 个阶段 · {calls} 次 LLM 调用", { phases: milestones.length, calls })}</span>
       {milestones.length ? <Button variant="ghost" size="xs" className="ml-auto text-muted-foreground"
         onClick={() => setOpen(allOpen ? new Set() : new Set(milestones.map(item => item.id)))}>
         {allOpen ? <ChevronsDownUp /> : <ChevronsUpDown />}{allOpen ? t("全部收起") : t("全部展开")}</Button> : null}
@@ -92,7 +93,7 @@ function PhaseItem({ phase, index, last, live, active, open, onOpenChange, onSho
     <Collapsible open={open} onOpenChange={onOpenChange} disabled={phase.kind === "working"}
       className={cn("min-w-0 flex-1 rounded-lg border bg-background transition-colors", open ? "shadow-xs" : "hover:border-foreground/15",
         running && "border-primary/30")}>
-      <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left disabled:cursor-default">
+      <CollapsibleTrigger title={title} className="flex w-full items-center gap-2 px-3 py-2 text-left disabled:cursor-default">
         <span className={cn("min-w-0 flex-1 truncate text-[13px] font-medium", phase.kind === "working" && "text-muted-foreground")}>{title}</span>
         {phase.kind === "solve" && step?.status && !running ? <StatusBadge status={step.status} className="h-5 text-[11px]" /> : null}
         <span className="shrink-0 text-[11px] text-muted-foreground tabular">{meta}</span>
@@ -158,9 +159,12 @@ function Call({ call, live }: { call: Step; live?: Live[string] }) {
 
 function LiveText({ live }: { live?: Live[string] }) {
   const ref = useRef<HTMLPreElement>(null);
-  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [live]);
+  const follow = useRef(true);
+  useEffect(() => { if (ref.current && follow.current) ref.current.scrollTop = ref.current.scrollHeight; }, [live]);
   if (!live) return <p className="pt-1.5 text-xs text-muted-foreground">{t("等待模型回复……")}</p>;
-  return <pre ref={ref} className="mt-1.5 max-h-56 overflow-y-auto font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">
+  return <pre ref={ref} tabIndex={0} aria-label={t("当前生成内容")} onScroll={event => {
+    const node = event.currentTarget; follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+  }} className="mt-1.5 max-h-56 overflow-y-auto font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">
     {live.reasoning ? <span className="text-muted-foreground italic">{live.reasoning}{live.text ? "\n\n" : ""}</span> : null}{live.text}
     <span className="caret" />
   </pre>;

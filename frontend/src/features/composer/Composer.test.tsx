@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock("@/api", () => ({ api: vi.fn(async () => ({ libraries: {} })) }));
+vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
 
 afterEach(() => { cleanup(); localStorage.removeItem("llm4om-draft"); vi.clearAllMocks(); });
 
@@ -24,6 +25,8 @@ test("finishing an attachment preserves text edited while the file was loading",
   let resolve!: (text: string) => void;
   const file = { name: "data.csv", size: 12, text: () => new Promise<string>(done => { resolve = done; }) };
   fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+  expect((screen.getByRole("button", { name: /正在读取数据/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect((container.querySelector('input[type="file"]') as HTMLInputElement).disabled).toBe(true);
   fireEvent.change(screen.getByRole("textbox", { name: "问题描述" }), { target: { value: "new problem" } });
   await act(async () => resolve("a,b\n1,2"));
   expect((screen.getByRole("textbox", { name: "问题描述" }) as HTMLTextAreaElement).value).toBe("new problem");

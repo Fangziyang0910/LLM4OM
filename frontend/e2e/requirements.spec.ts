@@ -9,7 +9,7 @@ test("requesting prices with search off finishes instead of repeatedly updating 
   await page.getByLabel("发送给需求助手").fill("E2E_LOOP_DRAFT：常见的价格和来源你联网搜索得到，成本按每周算。");
   await page.getByLabel("发送给需求助手").press("Enter");
   await expect(page.getByRole("log")).toContainText("联网搜索未开启，请开启后再查询实时价格");
-  await expect(page.getByLabel("发送给需求助手")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
   const state = (await (await page.request.get(`/threads/${id}`)).json()).values;
   expect(state.failure).toBeNull();
   expect(state.usage.llm_calls).toBe(2);
@@ -31,11 +31,16 @@ test("Enter sends a streamed reply, Shift+Enter adds a line, and composition doe
   await expect(input).toHaveValue(/\n$/);
   await input.press("Enter");
   await expect(page.getByRole("log")).toContainText("这是逐字显示的回复。");
-  await expect(input).toBeDisabled();
+  await expect(input).toBeEditable();
+  await expect(page.getByRole("button", { name: "停止", exact: true })).toBeVisible();
+  await input.fill("下一条还没有发送的消息");
+  await input.press("Enter");
   await expect(page.getByRole("log")).not.toContainText("流式回复已经完整输出");
-  await expect(input).toBeEnabled();
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
+  await expect(input).toHaveValue("下一条还没有发送的消息");
   await expect(page.getByRole("log")).toContainText("流式回复已经完整输出");
   await page.reload();
+  await expect(input).toHaveValue("下一条还没有发送的消息");
   await expect(page.getByRole("log").getByRole("article", { name: "需求助手" })).toHaveCount(1);
   expect((await (await page.request.get(`/threads/${id}`)).json()).values.messages).toHaveLength(4);
 });
@@ -48,7 +53,7 @@ test("web search shows actual tool sources and preserves them on reload without 
   await page.getByRole("button", { name: "联网搜索", exact: true }).click();
   await page.getByLabel("发送给需求助手").fill("E2E_SEARCH：查一下门店排班有哪些公开资料。");
   await page.getByLabel("发送给需求助手").press("Enter");
-  await expect(page.getByLabel("发送给需求助手")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
   const sources = page.getByRole("complementary", { name: "搜索来源" });
   await expect(sources.getByRole("link", { name: "排班参考" })).toHaveAttribute("href", "https://example.org/shift-guide");
   await expect(sources).toContainText("1 个来源");
@@ -192,7 +197,7 @@ test("stopping a requirements turn keeps the question and draft available after 
   await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect.poll(async () => (await (await page.request.get(`/threads/${id}/state`)).json()).values.messages?.length).toBe(1);
   await page.getByRole("button", { name: "停止", exact: true }).click();
-  await expect(page.getByLabel("发送给需求助手")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("问题描述")).toHaveValue("原需求稿：整数生产计划");
   await expect(page.getByRole("log")).toContainText("E2E_PAUSE_CHAT：继续整理");

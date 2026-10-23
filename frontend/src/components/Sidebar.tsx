@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { BookOpen, ChartSpline, Columns3, Cpu, History, MessageSquare, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
+import { BookOpen, ChartSpline, Columns3, Cpu, History, MessageSquare, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -47,14 +46,14 @@ export function matches(entry: Entry, query: string, methodName: (id: string) =>
     .every(word => word.startsWith("#") && word.length > 1 ? tags.includes(word.slice(1)) : text.includes(word));
 }
 
-export function Sidebar({ entries, current, options, presets, hasMore, loading, error, onLoadMore, onRetry,
+export function Sidebar({ entries, current, options, presets, query, onQuery, hasMore, loading, error, onLoadMore, onRetry,
   onNew, onOpen, onCompare, onDelete, onExamples, onPresets }: {
   entries: Entry[]; current: string | null; options: Options | null; presets: Preset[];
+  query: string; onQuery: (query: string) => void;
   hasMore: boolean; loading: boolean; error: string | null; onLoadMore: () => void; onRetry: () => void;
   onNew: () => void; onOpen: (entry: Entry) => void; onCompare: (group: string) => void; onDelete: (entry: Entry) => void;
   onExamples: () => void; onPresets: () => void;
 }) {
-  const [query, setQuery] = useState("");
   const methodName = (id: string) => options?.methods.find(item => item.id === id)?.name ?? id;
   const shown = entries.filter(entry => matches(entry, query, methodName));
   const tags = [...new Set(entries.flatMap(entry => entry.meta.tags ?? []))].slice(0, 12);
@@ -76,13 +75,14 @@ export function Sidebar({ entries, current, options, presets, hasMore, loading, 
       <Button onClick={onNew} className="w-full justify-start"><Plus />{t("新建建模")}</Button>
       <div className="relative">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input aria-label={t("搜索运行")} placeholder={t("搜索问题或方法")} value={query} onChange={event => setQuery(event.target.value)}
-          className="h-8 bg-background pl-8 text-[13px]" />
+        <Input aria-label={t("搜索运行")} placeholder={t("搜索问题或方法")} value={query} onChange={event => onQuery(event.target.value)}
+          className="h-9 bg-background pr-8 pl-8 text-[13px]" />
+        {query ? <Button variant="ghost" size="icon-xs" aria-label={t("清除搜索")} className="absolute top-1/2 right-1 -translate-y-1/2" onClick={() => onQuery("")}><X /></Button> : null}
       </div>
       {tags.length ? <div className="flex flex-wrap gap-1" aria-label={t("按标签筛选")}>
         {tags.map(tag => {
           const on = query.split(/\s+/).includes(`#${tag}`);
-          return <button key={tag} onClick={() => setQuery(on ? query.split(/\s+/).filter(word => word !== `#${tag}`).join(" ")
+          return <button key={tag} onClick={() => onQuery(on ? query.split(/\s+/).filter(word => word !== `#${tag}`).join(" ")
             : `${query.trim()} #${tag}`.trim())} className={cn("rounded-full border px-2 py-0.5 text-[11px] transition-colors hover:bg-sidebar-accent",
             on ? "border-primary/40 bg-primary/10 text-primary" : "text-muted-foreground")}>#{tag}</button>;
         })}
@@ -100,7 +100,7 @@ export function Sidebar({ entries, current, options, presets, hasMore, loading, 
             const selectedItem = entry.id === current;
             const comparison = isRunEntry(entry) ? entry.meta.group : null;
             return <li key={entry.id} className="group/item relative">
-              <button onClick={() => onOpen(entry)} aria-current={selectedItem ? "page" : undefined}
+              <button onClick={() => onOpen(entry)} title={entry.meta.title} aria-current={selectedItem ? "page" : undefined}
                 className={cn("flex w-full flex-col gap-1 rounded-md px-2.5 py-2 pr-8 text-left transition-colors hover:bg-sidebar-accent",
                   selectedItem && "bg-sidebar-accent")}>
                 <span className="flex items-center gap-2">
@@ -117,8 +117,8 @@ export function Sidebar({ entries, current, options, presets, hasMore, loading, 
               </button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-xs" aria-label={t("更多操作：{title}", { title: entry.meta.title })}
-                    className="absolute top-1.5 right-1.5 opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100">
+                  <Button variant="ghost" size="icon-sm" aria-label={t("更多操作：{title}", { title: entry.meta.title })}
+                    className="absolute top-1 right-1 opacity-100 [@media(hover:hover)]:opacity-0 group-hover/item:opacity-100 group-focus-within/item:opacity-100 data-[state=open]:opacity-100">
                     <MoreHorizontal /></Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" side="right">

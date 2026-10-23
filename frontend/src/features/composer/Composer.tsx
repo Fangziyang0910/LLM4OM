@@ -61,12 +61,16 @@ export function initialDraft(): Draft {
 const unsupported = (method: Method, language: string) => !!method.languages && !method.languages.includes(language);
 
 
-export function Composer({ options, presets, draft, setDraft, onStart, onCompare, openPresets, openExamples, onDiscuss }: {
+export function Composer({ options, presets, draft, setDraft, onStart, onCompare, openPresets, openExamples, onDiscuss, presetsStatus = "ready" }: {
   options: Options; presets: Preset[]; draft: Draft; setDraft: Dispatch<SetStateAction<Draft>>; onStart: (draft: Draft) => Promise<void>;
   onCompare: (draft: Draft, runs: { method: string; preset: Preset }[]) => Promise<void>;
   openPresets: () => void; openExamples: () => void; onDiscuss: () => Promise<void>;
+  presetsStatus?: "loading" | "error" | "ready";
 }) {
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
+  const settings = useRef<HTMLElement>(null);
+  const methodList = useRef<HTMLDivElement>(null);
   const set = (change: Partial<Draft>) => setDraft(current => ({ ...current, ...change }));
 
   const comparing = !!draft.comparing;
@@ -93,12 +97,20 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
   useEffect(() => {
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* storage may be unavailable or full */ }
   }, [draft]);
+  useEffect(() => {
+    const list = methodList.current;
+    const selected = list?.querySelector<HTMLElement>('[data-state="checked"]')?.closest("label");
+    if (list && selected) list.scrollTop += selected.getBoundingClientRect().top - list.getBoundingClientRect().top - (list.clientHeight - selected.clientHeight) / 2;
+  }, [method.id, comparing]);
 
   const attach = async (list: FileList | null) => {
-    const data = await readDataFiles(list);
-    setDraft(current => ({ ...current, data: { ...current.data, ...data } }));
+    setReading(true);
+    try {
+      const data = await readDataFiles(list);
+      setDraft(current => ({ ...current, data: { ...current.data, ...data } }));
+    } finally { setReading(false); }
   };
-  const ready = draft.description.trim().length > 0 && !backendUnavailable
+  const ready = draft.description.trim().length > 0 && !reading && !backendUnavailable && presetsStatus === "ready"
     && (!comparing || (runs.length > 0 && runs.length <= MAX_COMPARED));
   const start = async () => {
     if (!ready || busy) return;
@@ -113,7 +125,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
   useEffect(() => { startRef.current = start; });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !document.querySelector("[role=dialog]")) {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.isComposing && event.keyCode !== 229 && !document.querySelector("[role=dialog]")) {
         event.preventDefault(); void startRef.current();
       }
     };
@@ -122,7 +134,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
   }, []);
   const toggle = (key: "methods" | "presets", id: string, on: boolean) =>
     set({ [key]: on ? [...(draft[key] ?? []).filter(item => item !== id), id] : (draft[key] ?? []).filter(item => item !== id) });
-  const label = busy ? t("正在启动") : comparing ? t("开始对比（{count} 个运行）", { count: runs.length }) : t("开始建模");
+  const label = reading ? t("正在读取数据……") : busy ? t("正在启动") : comparing ? t("开始对比（{count} 个运行）", { count: runs.length }) : t("开始建模");
 
   const choiceClass = "flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-sm font-normal transition-colors hover:bg-accent/50 sm:min-h-9 sm:py-1.5";
   const methodChoices = options.methods.map(item => {
@@ -145,29 +157,32 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
         <header className="flex shrink-0 flex-col gap-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("描述一个优化问题")}</h1>
-          <Button variant="outline" size="sm" disabled={busy} onClick={async () => {
+          <Button variant="outline" size="sm" disabled={busy || reading} onClick={async () => {
             setBusy(true);
             try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
           }}><MessageSquare />{t("通过对话整理需求")}</Button>
           </div>
-          <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{t("写出要做的决策、目标和约束，附上数据。建模方法先给出数学模型，再写成求解代码，并在隔离沙箱中求解。")}</p>
+          <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{t("写清要安排什么、希望达到的目标，以及必须满足的条件。需要时附上数据。")}</p>
         </header>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_384px]">
           <section className="flex min-h-0 min-w-0 flex-col gap-4">
-            <ProblemEditor value={draft.description} data={draft.data} onChange={description => set({ description })}
-              onFiles={list => void attach(list)} onExamples={openExamples} onClear={() => set({ description: "", data: {} })}
+            <ProblemEditor autoFocus value={draft.description} data={draft.data} reading={reading} onChange={description => set({ description })}
+              onFiles={list => void attach(list)} onExamples={openExamples} onClear={() => {
+                const previous = { description: draft.description, data: draft.data }; set({ description: "", data: {} });
+                toast.success(t("已清空问题和附件。"), { action: { label: t("撤销"), onClick: () => set(previous) } });
+              }}
               onDataChange={(name, content) => setDraft(current => ({ ...current, data: { ...current.data, [name]: content } }))}
               onRemove={name => setDraft(current => {
                 const data = { ...current.data }; delete data[name]; return { ...current, data };
               })} />
             {!draft.description ? <section className="flex shrink-0 flex-col gap-3">
               <h2 className="text-sm font-medium text-muted-foreground">{t("从一个例子开始")}</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 {STARTERS.map(item => <button key={item.title} onClick={() => set({ description: t(item.description), data: item.data ?? {} })}
                   className="group flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-4 text-left shadow-xs transition-colors hover:border-primary/40 hover:bg-accent/40">
                   <span className="flex items-center gap-2 text-sm">
-                    <span className="font-medium">{t(item.title)}</span><Badge variant="secondary" className="font-normal">{t(item.tag)}</Badge>
+                    <span className="font-medium whitespace-nowrap">{t(item.title)}</span><Badge variant="secondary" className="hidden font-normal sm:inline-flex">{t(item.tag)}</Badge>
                     <ArrowRight className="ml-auto size-4 text-muted-foreground" />
                   </span>
                   <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t(item.description)}</span>
@@ -182,7 +197,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
             </section> : null}
           </section>
 
-          <aside aria-label={t("运行设置")} className="min-h-0 min-w-0">
+          <aside ref={settings} tabIndex={-1} aria-label={t("运行设置")} className="min-h-0 min-w-0 scroll-mt-4 outline-none">
             <Card className="h-full min-h-0 gap-0 overflow-hidden py-0">
               <div className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
                 <h2 className="flex items-center gap-2 text-sm font-semibold"><Settings2 className="size-4 text-muted-foreground" />{t("运行设置")}</h2>
@@ -195,8 +210,8 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
               <div className="flex min-h-0 flex-1 flex-col divide-y overflow-y-auto">
                 <section aria-labelledby="methods-label" className="min-w-0 px-4 py-3">
                   <h3 id="methods-label" className="mb-3 text-xs font-medium text-muted-foreground">{comparing ? t("建模方法（可多选）") : t("建模方法")}</h3>
-                  {comparing ? <div role="group" aria-label={t("建模方法")} className={methodListClass}>{methodChoices}</div>
-                    : <RadioGroup value={method.id} onValueChange={value => set({ method: value })} aria-label={t("建模方法")}
+                  {comparing ? <div ref={methodList} role="group" aria-label={t("建模方法")} className={methodListClass}>{methodChoices}</div>
+                    : <RadioGroup ref={methodList} value={method.id} onValueChange={value => set({ method: value })} aria-label={t("建模方法")}
                       aria-describedby="method-description" className={methodListClass}>{methodChoices}</RadioGroup>}
                   <p id="method-description" title={comparing ? undefined : t(method.description)} className="mt-3 line-clamp-2 min-h-8 text-xs leading-relaxed text-muted-foreground">
                     {t(comparing ? "同一问题同时用多个方法或预设运行，并排比较结果" : method.description)}</p>
@@ -239,7 +254,9 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
                     <h3 id="presets-label" className="text-xs font-medium text-muted-foreground">{comparing ? t("预设模型（可多选）") : t("预设模型")}</h3>
                     <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={openPresets}>{t("管理")}</Button>
                   </div>
-                  {!preset ? <Alert>
+                  {!preset && presetsStatus !== "ready" ? <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {presetsStatus === "loading" ? <Spinner /> : null}{t(presetsStatus === "loading" ? "正在加载预设模型……" : "预设模型暂不可用，请重试加载。")}
+                  </p> : !preset ? <Alert>
                     <AlertDescription className="flex flex-col items-start gap-2">{t("还没有预设模型。")}
                       <Button size="sm" onClick={openPresets}>{t("添加预设模型")}</Button></AlertDescription>
                   </Alert> : comparing ? <div role="group" aria-label={t("预设模型")} className="flex flex-col gap-1.5">
@@ -269,8 +286,12 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
         </div>
       </div>
     </div>
-    <footer className="flex shrink-0 items-center justify-between gap-4 border-t bg-card px-4 py-3 sm:px-6">
-      <div className="hidden min-w-0 flex-1 flex-col gap-0.5 sm:flex">
+    <footer className="flex shrink-0 items-center justify-between gap-2 border-t bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-4 sm:px-6">
+      <Button variant="ghost" className="h-auto min-w-0 max-w-[45%] shrink-0 justify-start gap-2 px-1 text-left lg:hidden"
+        aria-label={t("查看运行设置")} onClick={() => { settings.current?.scrollIntoView({ block: "start" }); settings.current?.focus({ preventScroll: true }); }}>
+        <Settings2 className="shrink-0" /><span className="truncate text-xs">{method.name}<span className="block truncate font-normal text-muted-foreground">{language.name}</span></span>
+      </Button>
+      <div className="hidden min-w-0 flex-1 flex-col gap-0.5 lg:flex">
         <span className="truncate text-sm font-medium">{comparing ? t("方法对比") : method.name} · {language.name}</span>
         <span className="truncate text-xs text-muted-foreground" title={preset?.name || preset?.model}>{preset?.name || preset?.model}</span>
       </div>
@@ -278,7 +299,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
         {comparing && runs.length > MAX_COMPARED ? <p className="text-xs text-destructive">
           {t("一次最多对比 {max} 个运行，当前为 {count} 个。", { max: MAX_COMPARED, count: runs.length })}</p> : null}
         <Button size="lg" className="w-full" disabled={!ready || busy} onClick={() => void start()}>
-          {busy ? <Spinner /> : comparing ? <Columns3 /> : <Play />}{label}
+          {busy || reading ? <Spinner /> : comparing ? <Columns3 /> : <Play />}{label}
           {!busy ? <KbdGroup className="ml-1 hidden opacity-70 sm:inline-flex"><Kbd className="bg-primary-foreground/15 text-primary-foreground">Ctrl</Kbd>
             <Kbd className="bg-primary-foreground/15 text-primary-foreground">↵</Kbd></KbdGroup> : null}
         </Button>

@@ -74,11 +74,11 @@ test("a plan conversation explains actual values, computes changes and continues
   const input = page.getByLabel("发送给方案助手");
   await input.fill("请解释主要决策"); await input.press("Enter");
   await expect(page.getByRole("log")).toContainText("x[B] = 2");
-  await expect(input).toBeEnabled();
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
   expect((await (await page.request.get(`/threads/${id}`)).json()).values.plans).toHaveLength(0);
   await input.fill("B 至少生产 3 件，其他条件不变，帮我计算新方案。"); await input.press("Enter");
   await expect(page.getByRole("log")).toContainText("目标值 12", { timeout: 60_000 });
-  await expect(input).toBeEnabled();
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
   await expect(page.getByRole("log")).not.toContainText("def build_model");
   const state = (await (await page.request.get(`/threads/${id}`)).json()).values;
   expect(state.plans).toHaveLength(1);
@@ -103,7 +103,8 @@ test("a plan conversation explains actual values, computes changes and continues
 test("a business scenario comparison keeps one frozen baseline and shows actual decisions", async ({ page }) => {
   const sourceId = await production(page);
   const original = (await (await page.request.get(`/threads/${sourceId}`)).json()).values;
-  await page.getByRole("button", { name: "业务场景对比", exact: true }).click();
+  await page.getByRole("button", { name: "更多操作", exact: true }).click();
+  await page.getByRole("menuitem", { name: "业务场景对比", exact: true }).click();
   await page.getByLabel("场景 1 名称", { exact: true }).fill("B 至少 3 件");
   await page.getByLabel("场景 1 调整要求", { exact: true }).fill("B 至少生产 3 件");
   await page.getByLabel("场景 2 名称", { exact: true }).fill("B 至少 4 件");

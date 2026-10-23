@@ -22,13 +22,13 @@ export function Examples({ open, onClose, datasets, onUse }: {
   const [dataset, setDataset] = useState<Dataset>(datasets[0]);
   const [offset, setOffset] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const { data: page, error } = useQuery({
+  const { data: page, error, refetch, isFetching } = useQuery({
     queryKey: ["dataset", dataset?.id, offset], enabled: open && !!dataset, staleTime: Infinity,
     queryFn: () => api<{ total: number; cases: Case[] }>(`/api/datasets/${dataset.id}?offset=${offset}&limit=${PAGE}`),
   });
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => { list.current?.scrollTo(0, 0); }, [page]);
-  const choose = (item: Dataset) => { setDataset(item); setOffset(0); };
+  const choose = (item: Dataset) => { setDataset(item); setOffset(0); setExpanded(null); };
 
   return <Dialog open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <DialogContent className="flex h-[min(820px,90dvh)] flex-col gap-0 p-0 sm:max-w-5xl">
@@ -51,7 +51,8 @@ export function Examples({ open, onClose, datasets, onUse }: {
             <Button variant="link" size="sm" asChild className="h-auto shrink-0 p-0">
               <a href={dataset.source_url} target="_blank" rel="noreferrer">{t("来源")}<ExternalLink /></a></Button>
           </div> : null}
-          {error ? <Alert variant="destructive"><AlertDescription>{errorText(error)}</AlertDescription></Alert>
+          {error ? <Alert variant="destructive"><AlertDescription>{errorText(error)}
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>{t("重试")}</Button></AlertDescription></Alert>
             : !page ? <div className="flex flex-col gap-3">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)}</div> : <>
             <ol className="flex flex-col gap-3">{page.cases.map(item => <li key={item.id}
               className="group flex flex-col gap-2 rounded-xl border bg-card p-4 transition-colors hover:border-primary/30">
@@ -65,14 +66,14 @@ export function Examples({ open, onClose, datasets, onUse }: {
               {item.description.length > 280 ? <Button variant="link" size="xs" className="self-start p-0"
                 onClick={() => setExpanded(expanded === item.id ? null : item.id)}>{expanded === item.id ? t("收起") : t("展开全文")}</Button> : null}
             </li>)}</ol>
-            <div className="mt-4 flex items-center justify-center gap-3">
-              <Button variant="outline" size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}><ChevronLeft />{t("上一页")}</Button>
-              <span className="text-xs text-muted-foreground tabular">{offset + 1}–{Math.min(offset + PAGE, page.total)} / {page.total}</span>
-              <Button variant="outline" size="sm" disabled={offset + PAGE >= page.total} onClick={() => setOffset(offset + PAGE)}>{t("下一页")}<ChevronRight /></Button>
-            </div>
           </>}
         </div>
       </div>
+      {page ? <div className="flex shrink-0 items-center justify-center gap-3 border-t bg-card px-4 py-3">
+        <Button variant="outline" size="sm" disabled={isFetching || offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}><ChevronLeft />{t("上一页")}</Button>
+        <span className="text-xs text-muted-foreground tabular">{page.total ? offset + 1 : 0}–{Math.min(offset + PAGE, page.total)} / {page.total}</span>
+        <Button variant="outline" size="sm" disabled={isFetching || offset + PAGE >= page.total} onClick={() => setOffset(offset + PAGE)}>{t("下一页")}<ChevronRight /></Button>
+      </div> : null}
     </DialogContent>
   </Dialog>;
 }

@@ -19,6 +19,7 @@ import type { Preset } from "@/types";
 import type { RequirementsDraft } from "./api";
 import { ChatMessages } from "@/features/chat/Messages";
 import { ChatInput } from "@/features/chat/ChatInput";
+import { useChatDraft } from "@/features/chat/draft";
 
 type Values = Partial<RequirementsDraft> & { messages?: Message[]; usage?: Usage; failure?: string | null };
 const STARTERS = [
@@ -36,7 +37,7 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
   const meta = thread.data?.metadata as RequirementsMeta | undefined;
   const [selected, setSelected] = useState<string>();
   const [search, setSearch] = useState<boolean>();
-  const [input, setInput] = useState("");
+  const [input, setInput] = useChatDraft(threadId);
   const [edited, setEdited] = useState<RequirementsDraft | null>(null);
   const [action, setAction] = useState(false);
   const [reading, setReading] = useState(false);
@@ -48,9 +49,10 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
   const saveQueue = useRef(Promise.resolve());
   const log = useRef<HTMLDivElement>(null);
   const inputArea = useRef<HTMLTextAreaElement>(null);
+  const sending = useRef<string | null>(null);
   const stream = useStream<Values>({ client, assistantId: "requirements", threadId, reconnectOnMount: true,
     fetchStateHistory: false, throttle: 50,
-    onCreated: () => { setInput(""); onFinished(); },
+    onCreated: () => { if (sending.current !== null) setInput(value => value === sending.current ? "" : value); onFinished(); },
     onFinish: state => {
       if (!state.values.failure && !state.tasks?.some(task => task.error)) setEdited(null);
       onFinished();
@@ -96,6 +98,7 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
       await client.threads.update(threadId, { metadata: { preset: preset.id, provider: preset.provider,
         model: preset.name || preset.model, search: searchOn, ...(!messages.length ? { title: input.trim().slice(0, 120) } : {}) } });
       const last = [...messages].reverse().find(message => message.type === "human");
+      sending.current = retry ? null : input;
       await stream.submit({ ...draft, messages: retry && last?.type === "human" ? [last] : [{ type: "human", content: input.trim() }] }, {
         context: { preset: preset.id, locale, search: searchOn }, multitaskStrategy: "reject", streamResumable: true, streamSubgraphs: true,
         optimisticValues: retry ? undefined : current => ({ ...draft,
@@ -115,7 +118,8 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
     finally { setReading(false); }
   };
 
-  if (thread.error) return <div role="alert" className="p-6 text-sm text-destructive">{errorText(thread.error)}</div>;
+  if (thread.error) return <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-destructive">
+    <p>{errorText(thread.error)}</p><Button variant="outline" onClick={() => void thread.refetch()}><RefreshCw />{t("重试")}</Button></div>;
 
   return <div className="flex h-full flex-col gap-4 p-4 sm:gap-5 sm:p-6">
     <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5">
@@ -168,7 +172,7 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
                   onClick={() => setSearch(!searchOn)}><Globe /><span className="hidden md:inline">{searchOn ? t("联网搜索已开启") : t("联网搜索未开启")}</span></Button>
               </span>
           </ChatInput>
-          <p className="shrink-0 text-center text-[11px] text-muted-foreground">{t("Enter 发送，Shift+Enter 换行")}</p>
+          <p className="shrink-0 text-center text-[11px] text-muted-foreground">{t(stream.isLoading ? "回复期间可继续输入，完成后发送。" : "Enter 发送，Shift+Enter 换行")}</p>
         </TabsContent>
 
         <TabsContent value="draft" forceMount className="mt-0 flex min-h-0 min-w-0 flex-col gap-3 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
@@ -178,7 +182,7 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
               // Dialog focus events bubble through React portals; only the draft itself triggers autosave.
               if (!busy && event.currentTarget.contains(event.target) && !event.currentTarget.contains(event.relatedTarget)) void save().catch(() => undefined);
             }}>
-            <ProblemEditor value={draft.description} data={draft.data} disabled={busy} onChange={description => setEdited({ ...draft, description })}
+            <ProblemEditor value={draft.description} data={draft.data} disabled={busy} reading={reading} onChange={description => setEdited({ ...draft, description })}
               label={t("当前需求稿")} placeholder={t("对话中确认的目标和条件会整理到这里，也可以直接编辑。")}
               actions={<Button variant="ghost" size="icon-sm" aria-label={t("保存需求稿")}
                 title={saving ? t("正在保存……") : t("保存需求稿")} disabled={busy || saving || !edited || edited === savedDraft}

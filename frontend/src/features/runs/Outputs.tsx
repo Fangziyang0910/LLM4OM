@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, CodeXml, Download, FileText, GitCompare, type LucideIcon, Sigma, Table2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -31,13 +31,19 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
   language?: Language; finished: boolean; source?: SourceRun;
   onAdjust: (instruction: string) => void;
 }) {
+  const tabs = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const list = tabs.current;
+    const selected = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (list && selected) list.scrollLeft += selected.getBoundingClientRect().left - list.getBoundingClientRect().left - (list.clientWidth - selected.clientWidth) / 2;
+  }, [tab]);
   const formulations = useMemo(() => versions(steps, "formulation", values.formulation), [steps, values.formulation]);
   const codes = useMemo(() => versions(steps, "code", values.code), [steps, values.code]);
   const counts: Partial<Record<Tab, number>> = { formulation: formulations.length, code: codes.length };
 
   return <div className="flex h-full min-h-0 flex-col">
     <Tabs value={tab} onValueChange={value => setTab(value as Tab)} className="shrink-0 gap-0">
-      <TabsList variant="line" aria-label={t("运行产物")} className="h-11 w-full justify-start overflow-x-auto rounded-none border-b px-3">
+      <TabsList ref={tabs} variant="line" aria-label={t("运行产物")} className="h-11 w-full justify-start overflow-x-auto rounded-none border-b px-3">
         {[...TABS, ...(source ? [["comparison", t("方案对比"), Table2] as const] : [])].map(([id, label, TabIcon]) => <TabsTrigger key={id} value={id} className="flex-none px-2 sm:px-2.5 [&_svg]:hidden sm:[&_svg]:inline-block">
           <TabIcon />{label}
           {(counts[id] ?? 0) > 1 ? <span className="rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground tabular">{counts[id]}</span> : null}
@@ -50,7 +56,10 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
         {values.explanation ? <Explanation explanation={values.explanation} solve={values.solve} /> : null}
         {values.infeasibility ? <Infeasibility explanation={values.infeasibility} onAdjust={active ? undefined : onAdjust} /> : null}
         {values.explanation_error ? <Alert><AlertDescription>{t("方案解读未完成，求解结果仍可正常查看。")}</AlertDescription></Alert> : null}
-        <Solution solve={values.solve} />
+        {values.explanation ? <details className="rounded-lg border p-3">
+          <summary className="cursor-pointer text-sm font-medium">{t("完整变量取值（{count} 个）", { count: Object.keys(values.solve.variables).length })}</summary>
+          <div className="mt-4"><Solution solve={values.solve} /></div>
+        </details> : <Solution solve={values.solve} />}
       </div>
         : <Blank icon={Table2} text={active ? t("代码在沙箱中求解后，解会显示在这里。") : values.failure ? t("没有求解结果。") : finished ? t("没有求解结果。") : t("运行没有完成。")} />
         : null}
@@ -132,12 +141,12 @@ function Problem({ values }: { values: RunValues }) {
 }
 
 function DataFile({ name, content }: { name: string; content: string }) {
-  const table = useMemo(() => parseDelimited(content, name.endsWith(".tsv") ? "\t" : ","), [name, content]);
+  const table = useMemo(() => parseDelimited(content, /\.tsv$/i.test(name) ? "\t" : ","), [name, content]);
   return <Card className="gap-3 py-4 shadow-none">
     <CardHeader className="flex items-center gap-2 px-4">
-      <FileText className="size-4 text-muted-foreground" />
-      <CardTitle className="font-mono text-sm">{name}</CardTitle>
-      <span className="text-xs text-muted-foreground">{t("{count} 行", { count: content.split("\n").filter(Boolean).length })}</span>
+      <FileText className="size-4 shrink-0 text-muted-foreground" />
+      <CardTitle className="min-w-0 font-mono text-sm break-all">{name}</CardTitle>
+      <span className="shrink-0 text-xs text-muted-foreground">{t("{count} 行", { count: content.split("\n").filter(Boolean).length })}</span>
       <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={t("下载 {name}", { name })} onClick={() => download(name, content)}><Download /></Button>
     </CardHeader>
     <CardContent className="px-4">
@@ -151,6 +160,7 @@ function DataFile({ name, content }: { name: string; content: string }) {
           </TableRow>)}</TableBody>
         </Table>
       </div> : <Plain className="max-h-96 overflow-y-auto">{content}</Plain>}
+      {table && table.length > 501 ? <p className="mt-2 text-xs text-muted-foreground">{t("仅预览前 500 行，下载可查看完整数据。")}</p> : null}
     </CardContent>
   </Card>;
 }

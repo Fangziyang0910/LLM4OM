@@ -15,7 +15,6 @@ import { t } from "@/i18n";
 import { asMatrix, groupVariables, type VariableGroup } from "@/features/runs/tables";
 import type { Diagnosis, Solve } from "@/features/runs/types";
 import { Plain, download } from "@/components/Content";
-import { StatusBadge } from "@/features/runs/status";
 
 const value = (number: number) => <span className={cn("font-mono tabular", number === 0 && "text-muted-foreground/50")}>{formatNumber(number)}</span>;
 
@@ -26,7 +25,6 @@ export function Solution({ solve }: { solve: Solve }) {
   const [layout, setLayout] = useState<"grouped" | "list">("grouped");
   const [limit, setLimit] = useState(200);
   const entries = Object.entries(solve.variables);
-  const nonzero = entries.filter(([, number]) => number !== 0).length;
   const groups = useMemo(() => groupVariables(solve.variables), [solve.variables]);
   const query = filter.trim().toLowerCase();
   const matches = (name: string) => !query || name.toLowerCase().includes(query);
@@ -36,12 +34,6 @@ export function Solution({ solve }: { solve: Solve }) {
   }).filter(group => group.variables.length);
 
   return <div className="flex flex-col gap-5">
-    <div className="grid grid-cols-3 gap-3">
-      <Metric label={t("求解状态")}><StatusBadge status={solve.status} /></Metric>
-      <Metric label={t("目标值")}><span className="text-xl font-semibold tracking-tight tabular">{solve.objective != null ? formatNumber(solve.objective) : "—"}</span></Metric>
-      <Metric label={t("非零变量 / 变量")}><span className="text-xl font-semibold tracking-tight tabular">{nonzero}<span className="text-muted-foreground"> / {entries.length}</span></span></Metric>
-    </div>
-
     {solve.status === "locally_optimal" ? <p className="text-sm text-muted-foreground">{t("已找到局部最优解；非凸问题仍可能存在更好的解。")}</p> : null}
     {solve.status === "locally_infeasible" ? <p className="text-sm text-muted-foreground">{t("本次局部搜索未找到可行解，不能据此断定整个问题不可行。")}</p> : null}
     {solve.status === "infeasible" && !solve.diagnosis?.items.length ? <p className="text-sm text-muted-foreground">
@@ -110,12 +102,6 @@ function Conflict({ diagnosis }: { diagnosis: Diagnosis }) {
       <p className="text-[11px] text-muted-foreground">{t("调整条件会创建新方案，保留本次模型和结果。")}</p>
     </>}
   </section>;
-}
-
-function Metric({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 px-3 py-2.5">
-    <span className="text-[11px] text-muted-foreground">{label}</span><div className="flex h-7 items-center">{children}</div>
-  </div>;
 }
 
 /** One base name: a matrix for two indices, otherwise index → value rows. */

@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Columns3, TriangleAlert } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowRight, Columns3, RefreshCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -30,7 +29,8 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
     .reverse();  // in the order they started
 
   if (query.error) return <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm">
-    <TriangleAlert className="size-6 text-destructive" /><p>{errorText(query.error)}</p></div>;
+    <TriangleAlert className="size-6 text-destructive" /><p>{errorText(query.error)}</p>
+    <Button variant="outline" size="sm" onClick={() => void query.refetch()}><RefreshCw />{t("重试")}</Button></div>;
   if (!query.data) return <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在读取对比……")}</div>;
   if (!entries.length) return <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">{t("这个对比没有运行，可能已被删除。")}</div>;
   if (entries[0].meta.scenario) return <ScenarioResults entries={entries} onOpen={onOpen} />;
@@ -67,7 +67,8 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
               <TableCell>{targetLabel(options, entry.meta)}</TableCell>
               <TableCell className="max-w-48 truncate">{entry.meta.model ?? "—"}</TableCell>
               <TableCell><span className={cn("flex items-center gap-1.5", TONE[tone(entry.state)].text)} title={entry.failure ?? undefined}>
-                <StatusIcon status={entry.state} className="size-3.5" />{(STATUS[entry.state] ?? entry.state)}</span></TableCell>
+                <StatusIcon status={entry.state} className="size-3.5" />{(STATUS[entry.state] ?? entry.state)}</span>
+                {entry.failure ? <p className="mt-1 max-w-64 text-xs whitespace-normal text-destructive">{entry.failure}</p> : null}</TableCell>
               <TableCell className="text-right font-mono tabular">
                 {entry.objective != null && tone(entry.state) === "good"
                   ? formatNumber(entry.objective) : "—"}</TableCell>
@@ -81,7 +82,6 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
         {t("目标值相同不代表模型都对：几个方法可能犯同样的错。点击一行查看它的数学模型、代码和过程。")}
-        {entries.some(entry => entry.failure) ? <> <Badge variant="outline" className="ml-1 font-normal">{t("悬停在失败的结果上可看原因")}</Badge></> : null}
       </p>
     </div>
   </div>;

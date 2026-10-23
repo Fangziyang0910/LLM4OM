@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { ArrowRight, CircleCheck, Clock, CodeXml, Columns3, Cpu, FileDown, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sigma, Square, Tag, Trash2, TriangleAlert, Zap } from "lucide-react";
+import { useDefaultLayout } from "react-resizable-panels";
+import { ArrowRight, ChevronDown, CircleCheck, Clock, CodeXml, Columns3, Cpu, FileDown, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sigma, Square, Tag, Trash2, TriangleAlert, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -25,7 +26,7 @@ import type { Draft } from "@/features/composer/types";
 import type { Options } from "@/types";
 import type { RunMeta, RunValues, Step } from "@/features/runs/types";
 import { useRun } from "@/features/runs/useRun";
-import { copyText, download } from "@/components/Content";
+import { copyText, download, Plain } from "@/components/Content";
 import { Outputs, type Tab } from "@/features/runs/Outputs";
 import { StatusBadge, TONE } from "@/features/runs/status";
 import { Timeline } from "@/features/runs/Timeline";
@@ -72,11 +73,13 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const wide = useWide();
+  const layout = useDefaultLayout({ id: "llm4om-run", panelIds: ["process", "outputs"], onlySaveAfterUserInteractions: true });
   const active = streaming || run?.status === "pending" || run?.status === "running";
   const now = useNow(active);
 
   if (!meta) return error ? <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm">
-    <TriangleAlert className="size-6 text-destructive" /><p>{error}</p></div>
+    <TriangleAlert className="size-6 text-destructive" /><p>{error}</p>
+    <Button variant="outline" size="sm" onClick={() => location.reload()}><RefreshCw />{t("重新连接")}</Button></div>
     : <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在读取运行……")}</div>;
 
   const method = options.methods.find(item => item.id === meta.method);
@@ -136,34 +139,41 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
           <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{title}</h1></TooltipTrigger>
           <TooltipContent className="max-w-md whitespace-pre-wrap">{(values.description || title).slice(0, 400)}</TooltipContent>
         </Tooltip>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground [&_svg]:size-3.5">
-          {facts.filter(([, text]) => text).map(([icon, text, hint], index) => <span key={index} title={hint} className="flex items-center gap-1.5">{icon}{text}</span>)}
+        <details className="group/info min-w-0 text-xs text-muted-foreground">
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <span className="truncate">{method?.name ?? meta.method} · {language?.name ?? meta.language}{elapsed == null ? "" : ` · ${duration(elapsed)}`}</span>
+            <span className="shrink-0">{t("运行信息")}</span><ChevronDown className="size-3.5 shrink-0 transition-transform group-open/info:rotate-180" />
+          </summary>
+          <div className="mt-2 flex flex-col gap-1.5 border-l pl-3 [&_svg]:size-3.5">
+            {facts.filter(([, text]) => text).map(([icon, text, hint], index) => <span key={index} title={hint} className="flex min-w-0 items-center gap-1.5 break-all [&_svg]:shrink-0">{icon}{text}</span>)}
+          </div>
+        </details>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5 empty:hidden">
           {meta.tags?.map(tag => <Badge key={tag} variant="secondary" className="h-5 gap-1 font-normal"><Tag className="size-3" />{tag}</Badge>)}
           {meta.note ? <button className="flex max-w-80 items-center gap-1.5 truncate hover:text-foreground" title={meta.note} onClick={() => setNoting(true)}>
             <NotebookPen />{meta.note.split("\n")[0]}</button> : null}
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        {meta.group ? <Button variant="ghost" size="sm" onClick={() => onCompare(meta.group!)} title={meta.scenario ? t("这次运行属于一组业务场景对比") : t("这次运行属于一组方法对比")}>
-          <Columns3 />{t("查看对比")}</Button> : null}
+      <div role="group" aria-label={t("运行操作")} className="flex shrink-0 flex-wrap items-center gap-1.5 sm:gap-2">
         {active ? <Button variant="outline" size="sm" disabled={stopping} onClick={() => void stop()}>
           {stopping ? <Spinner /> : <Square className="fill-current" />}{stopping ? t("正在停止") : t("停止")}</Button> : <>
-          {hasSolution(solve) ? <Button variant="outline" size="sm" disabled={exporting} onClick={() => void exportExcel()}>
-            {exporting ? <Spinner /> : <FileDown />}{t("导出 Excel")}</Button> : null}
-          <Button variant="outline" size="sm" disabled={busy || !values.spec} onClick={async () => {
+          <Button variant="outline" size="sm" className="px-2 sm:px-3" disabled={busy || !values.spec} onClick={async () => {
             setBusy(true);
             try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
-          }}><MessageSquare />{t("讨论方案")}</Button>
-          <Button variant="outline" size="sm" disabled={busy || !values.spec} onClick={() => setScenarios(true)}><Columns3 />{t("业务场景对比")}</Button>
-          <Button variant="outline" size="sm" disabled={busy || !values.description} onClick={() => void rerun()} title={t("用同样的问题和设置再运行一次")}>
-            {busy ? <Spinner /> : <RefreshCw />}{t("再运行一次")}</Button>
-          <Button size="sm" disabled={!values.description} onClick={() => setRevision("")}>
+          }}>{busy ? <Spinner /> : <MessageSquare />}{t("讨论方案")}</Button>
+          <Button size="sm" className="px-2 sm:px-3" disabled={busy || !values.description} onClick={() => setRevision("")}>
             <Pencil />{t("调整条件")}</Button>
+          {hasSolution(solve) ? <Button variant="outline" size="sm" className="size-8 p-0 sm:w-auto sm:px-3" aria-label={t("导出 Excel")}
+            title={t("导出 Excel")} disabled={exporting} onClick={() => void exportExcel()}>
+            {exporting ? <Spinner /> : <FileDown />}<span className="hidden sm:inline">{t("导出 Excel")}</span></Button> : null}
         </>}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={t("更多操作")}><MoreHorizontal /></Button></DropdownMenuTrigger>
+          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" disabled={busy} aria-label={t("更多操作")} title={t("更多操作")}><MoreHorizontal /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {meta.group ? <DropdownMenuItem onClick={() => onCompare(meta.group!)}><Columns3 />{t("查看对比")}</DropdownMenuItem> : null}
             {meta.conversation ? <DropdownMenuItem onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回方案对话")}</DropdownMenuItem> : null}
+            <DropdownMenuItem disabled={active || !values.spec} onClick={() => setScenarios(true)}><Columns3 />{t("业务场景对比")}</DropdownMenuItem>
+            <DropdownMenuItem disabled={active || busy || !values.description} onClick={() => void rerun()}><RefreshCw />{t("再运行一次")}</DropdownMenuItem>
             <DropdownMenuItem disabled={!values.description} onClick={() => onEdit(draft())}>
               <Pencil />{t("修改后运行")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => void copyText(location.href).then(() => toast.success(t("已复制链接。")), () => toast.error(t("无法复制，请手动复制地址栏中的链接。")))}>
@@ -182,10 +192,10 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
       <Summary state={state} values={values} steps={steps} error={error} active={active} elapsed={elapsed} onTab={showTab} />
     </div>
 
-    {wide ? <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1 px-6 pt-4 pb-6">
-      <ResizablePanel defaultSize="40" minSize="25"><Pane>{timeline}</Pane></ResizablePanel>
-      <ResizableHandle withHandle className="mx-2 bg-transparent" />
-      <ResizablePanel defaultSize="60" minSize="30"><Pane>{outputs}</Pane></ResizablePanel>
+    {wide ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1 px-6 pt-4 pb-6">
+      <ResizablePanel id="process" defaultSize="32%" minSize="25%"><Pane>{timeline}</Pane></ResizablePanel>
+      <ResizableHandle withHandle aria-label={t("调整过程与结果的宽度")} className="mx-2 bg-transparent" />
+      <ResizablePanel id="outputs" defaultSize="68%" minSize="30%"><Pane>{outputs}</Pane></ResizablePanel>
     </ResizablePanelGroup> : <div className="flex min-h-96 flex-1 shrink-0 flex-col gap-3 px-4 pt-3 pb-4">
       <Tabs value={view} onValueChange={value => setView(value as "outputs" | "process")}>
         <TabsList className="w-full">
@@ -254,9 +264,9 @@ function Summary({ state, values, steps, error, active, elapsed, onTab }: {
 }) {
   const solve = values.solve;
   const frame = (kind: keyof typeof TONE, icon: React.ReactNode, body: React.ReactNode, side?: React.ReactNode) =>
-    <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border bg-card p-4 shadow-xs", TONE[kind].border)}>
+    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-3 rounded-xl border bg-card p-3 shadow-xs sm:gap-x-4 sm:p-4", TONE[kind].border)}>
       <span className={cn("grid size-10 shrink-0 place-items-center rounded-full [&_svg]:size-5", TONE[kind].soft)}>{icon}</span>
-      <div className="min-w-0 flex-1 basis-56">{body}</div>
+      <div className="min-w-0 flex-1 basis-40">{body}</div>
       {side ? <div className="flex flex-wrap gap-2">{side}</div> : null}
     </div>;
 
@@ -278,7 +288,8 @@ function Summary({ state, values, steps, error, active, elapsed, onTab }: {
   if (state === "interrupted") return frame("warn", <Square />, <><p className="font-medium">{t("运行已停止")}</p>
     <p className="text-sm text-muted-foreground">{steps.length ? t("停止前已保存的过程和产物仍可查看。") : t("停止前的过程没有保存。")}</p></>);
   if (state === "failed") return frame("bad", <TriangleAlert />, <><p className="font-medium">{t("运行失败")}</p>
-    <p className="line-clamp-2 text-sm text-muted-foreground">{values.failure}</p></>);
+    <p className="line-clamp-2 text-sm text-muted-foreground">{values.failure}</p>
+    <details className="mt-2 text-xs"><summary className="cursor-pointer text-muted-foreground">{t("查看完整错误")}</summary><Plain className="mt-2 max-h-64 overflow-auto">{values.failure}</Plain></details></>);
   if (!solve) return frame(tone(state), <TriangleAlert />, <><p className="font-medium">{STATUS[state] ?? state}</p>
     <p className="text-sm text-muted-foreground">{t("运行没有正常结束。")}</p></>);
   if (solve.error) return frame("bad", <TriangleAlert />, <><p className="font-medium">{t("代码执行出错")}</p>
@@ -296,8 +307,9 @@ function Summary({ state, values, steps, error, active, elapsed, onTab }: {
     : STATUS[solve.status] ?? solve.status;
   return frame(kind, kind === "good" ? <CircleCheck /> : <TriangleAlert />, <div className="flex flex-col gap-1">
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      {solve.objective != null ? <span className="flex items-baseline gap-2"><span className="text-xs text-muted-foreground">{t("目标值")}</span>
-        <span className="text-2xl font-semibold tracking-tight tabular">{formatNumber(solve.objective)}</span></span> : null}
+      {solve.objective != null ? <span className="flex flex-wrap items-baseline gap-2"><span className="text-xs text-muted-foreground">{values.explanation?.objective_label || t("目标值")}</span>
+        <span className="text-2xl font-semibold tracking-tight tabular">{formatNumber(solve.objective)}</span>
+        {values.explanation?.objective_unit ? <span className="text-xs text-muted-foreground">{values.explanation.objective_unit}</span> : null}</span> : null}
       <StatusBadge status={solve.status} />
     </div>
     <p className="text-sm text-muted-foreground">{explain}</p>

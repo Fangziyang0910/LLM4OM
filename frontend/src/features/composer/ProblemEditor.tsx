@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BookOpen, FileText, Paperclip, Trash2, Upload, X } from "lucide-react";
 import { Markdown } from "@/components/Content";
 import { Button } from "@/components/ui/button";
@@ -6,29 +6,36 @@ import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 import { DATA_FILE_ACCEPT } from "./files";
 import { DataEditor } from "./DataEditor";
 
 /** Editing and preview share the original text; rendering never changes the submitted problem. */
-export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, onRemove, onClear, onExamples, disabled = false,
-  label = t("问题描述"), actions, placeholder }: {
+export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, onRemove, onClear, onExamples, disabled = false, reading = false,
+  label = t("问题描述"), actions, placeholder, autoFocus = false }: {
   value: string; data: Record<string, string>; onChange: (value: string) => void;
   onFiles: (files: FileList | null) => void; onRemove: (name: string) => void; onClear: () => void; onExamples?: () => void;
   onDataChange: (name: string, content: string) => void | Promise<void>;
-  disabled?: boolean;
+  disabled?: boolean; reading?: boolean;
+  autoFocus?: boolean;
   label?: string; actions?: ReactNode; placeholder?: string;
 }) {
   const [mode, setMode] = useState("edit");
   const [dragging, setDragging] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const files = Object.entries(data);
+  const locked = disabled || reading;
+  const input = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (autoFocus && matchMedia("(pointer: fine)").matches && document.activeElement === document.body) input.current?.focus({ preventScroll: true });
+  }, [autoFocus]);
 
-  return <Card className={cn("relative h-[min(60dvh,32rem)] min-h-80 min-w-0 flex-none gap-0 overflow-hidden py-0 lg:h-auto lg:min-h-0 lg:flex-1",
+  return <Card className={cn("relative h-[min(44dvh,24rem)] min-h-64 min-w-0 flex-none gap-0 overflow-hidden py-0 lg:h-auto lg:min-h-0 lg:flex-1",
     dragging && "border-primary ring-2 ring-primary/20")}
-    onDragOver={event => { event.preventDefault(); if (!disabled) setDragging(true); }} onDragLeave={() => setDragging(false)}
-    onDrop={event => { event.preventDefault(); setDragging(false); if (!disabled) onFiles(event.dataTransfer.files); }}>
+    onDragOver={event => { event.preventDefault(); if (!locked) setDragging(true); }} onDragLeave={() => setDragging(false)}
+    onDrop={event => { event.preventDefault(); setDragging(false); if (!locked) onFiles(event.dataTransfer.files); }}>
     <Tabs value={mode} onValueChange={setMode} className="min-h-0 flex-1 gap-0">
       <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
         <Label htmlFor="problem-description" className="min-w-0 text-sm font-semibold">{label}</Label>
@@ -40,8 +47,8 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
         </TabsList>
         </div>
       </div>
-      <TabsContent value="edit" className="mt-0 flex min-h-0 flex-col">
-        <Textarea id="problem-description" aria-label={t("问题描述")} value={value} disabled={disabled}
+      <TabsContent value="edit" forceMount className="mt-0 flex min-h-0 flex-col data-[state=inactive]:hidden">
+        <Textarea ref={input} id="problem-description" aria-label={t("问题描述")} value={value} disabled={disabled}
           placeholder={placeholder ?? t("例如：工厂生产 A、B 两种产品……请确定生产数量，使总利润最大。")}
           onChange={event => onChange(event.target.value)}
           className="h-full min-h-0 flex-1 field-sizing-fixed resize-none rounded-none border-0 bg-transparent p-4 text-base leading-relaxed shadow-none focus-visible:ring-0 sm:text-sm dark:bg-transparent" />
@@ -54,24 +61,25 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
     {files.length ? <ul aria-label={t("数据文件")} className="flex max-h-28 shrink-0 flex-wrap gap-2 overflow-y-auto border-t px-4 py-3">
       {files.map(([name, content]) => <li key={name} title={name}
         className="flex min-w-0 max-w-full items-center gap-1.5 rounded-md border bg-muted/50 py-1 pr-1 pl-2 text-xs">
-        <button type="button" disabled={disabled} aria-label={t("编辑 {name}", { name })} onClick={() => setEditing(name)}
+        <button type="button" disabled={locked} aria-label={t("编辑 {name}", { name })} onClick={() => setEditing(name)}
           className="flex min-w-0 items-center gap-1.5 rounded-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
           <FileText className="size-3.5 shrink-0 text-muted-foreground" /><span className="max-w-48 truncate font-medium">{name}</span>
         </button>
         <span className="shrink-0 text-muted-foreground">{t("{count} 行", { count: content.split("\n").filter(Boolean).length })}</span>
-        <Button variant="ghost" size="icon-xs" disabled={disabled} aria-label={t("移除 {name}", { name })} onClick={() => onRemove(name)}><X /></Button>
+        <Button variant="ghost" size="icon-xs" disabled={locked} aria-label={t("移除 {name}", { name })} onClick={() => onRemove(name)}><X /></Button>
       </li>)}
     </ul> : null}
     <div className="flex shrink-0 flex-wrap items-center gap-1 border-t bg-muted/30 px-3 py-2">
       <Button variant="ghost" size="sm" asChild>
-        <label title={t("CSV、JSON、文本或 Excel（转换为 CSV）；代码中以 data[文件名] 读取")} className="cursor-pointer">
-          <Paperclip />{t("数据文件")}
-          <input type="file" multiple disabled={disabled} accept={DATA_FILE_ACCEPT} className="sr-only"
+        <label title={t("支持 CSV、TSV、JSON、文本和 Excel。点击已添加的文件名可检查和编辑。")}
+          className={cn("cursor-pointer rounded-md focus-within:ring-2 focus-within:ring-ring", locked && "pointer-events-none opacity-50")}>
+          {reading ? <Spinner /> : <Paperclip />}{t(reading ? "正在读取数据……" : "数据文件")}
+          <input type="file" multiple disabled={locked} accept={DATA_FILE_ACCEPT} className="sr-only"
             onChange={event => { onFiles(event.target.files); event.target.value = ""; }} />
         </label>
       </Button>
-      {onExamples ? <Button variant="ghost" size="sm" disabled={disabled} onClick={onExamples}><BookOpen />{t("从题库选题")}</Button> : null}
-      {value || files.length ? <Button variant="ghost" size="sm" disabled={disabled} onClick={() => { onClear(); setMode("edit"); }}><Trash2 />{t("清空")}</Button> : null}
+      {onExamples ? <Button variant="ghost" size="sm" disabled={locked} onClick={onExamples}><BookOpen />{t("从题库选题")}</Button> : null}
+      {value || files.length ? <Button variant="ghost" size="sm" disabled={locked} onClick={() => { onClear(); setMode("edit"); }}><Trash2 />{t("清空")}</Button> : null}
       <span className="ml-auto px-1 text-xs text-muted-foreground tabular">{value.length ? t("{count} 字", { count: value.length }) : ""}</span>
     </div>
     {dragging ? <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 bg-card/90 text-sm font-medium text-primary">

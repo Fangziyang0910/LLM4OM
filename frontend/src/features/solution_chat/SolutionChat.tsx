@@ -11,6 +11,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChatMessages } from "@/features/chat/Messages";
 import { ChatInput } from "@/features/chat/ChatInput";
+import { useChatDraft } from "@/features/chat/draft";
 import { client } from "@/features/runs/sdk";
 import { StatusBadge } from "@/features/runs/status";
 import { errorText, formatNumber } from "@/format";
@@ -27,13 +28,16 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
 }) {
   const thread = useQuery({ queryKey: ["solution-chat", threadId], queryFn: () => client.threads.get(threadId) });
   const meta = thread.data?.metadata as SolutionChatMeta | undefined;
-  const [input, setInput] = useState("");
+  const [input, setInput] = useChatDraft(threadId);
   const [selected, setSelected] = useState<string>();
   const [action, setAction] = useState(false);
   const [follow, setFollow] = useState(true);
   const log = useRef<HTMLDivElement>(null);
+  const inputArea = useRef<HTMLTextAreaElement>(null);
+  const sending = useRef<string | null>(null);
   const stream = useStream<Values>({ client, assistantId: "solution_chat", threadId, reconnectOnMount: true,
-    fetchStateHistory: false, throttle: 50, onCreated: () => { setInput(""); onFinished(); },
+    fetchStateHistory: false, throttle: 50,
+    onCreated: () => { if (sending.current !== null) setInput(value => value === sending.current ? "" : value); onFinished(); },
     onFinish: () => onFinished(), onError: () => onFinished() });
   const messages = stream.messages;
   const source = stream.values.current ?? stream.values.source ?? meta?.parent;
@@ -55,6 +59,7 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
     try {
       await client.threads.update(threadId, { metadata: { preset: preset.id, provider: preset.provider, model: preset.name || preset.model } });
       const last = [...messages].reverse().find(message => message.type === "human");
+      sending.current = retry ? null : input;
       await stream.submit({ messages: retry && last?.type === "human" ? [last] : [{ type: "human", content: input.trim() }] }, {
         context: { preset: preset.id, locale }, multitaskStrategy: "reject", streamResumable: true, streamSubgraphs: true,
         optimisticValues: retry ? undefined : current => ({ ...current, messages: [...(current.messages ?? []), { type: "human", content: input.trim() }] }),
@@ -62,7 +67,8 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
     } catch (error) { toast.error(errorText(error)); }
     finally { setAction(false); }
   };
-  if (thread.error) return <div role="alert" className="p-6 text-sm text-destructive">{errorText(thread.error)}</div>;
+  if (thread.error) return <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-destructive">
+    <p>{errorText(thread.error)}</p><Button variant="outline" onClick={() => void thread.refetch()}><RefreshCw />{t("重试")}</Button></div>;
   return <div className="flex h-full flex-col gap-4 p-4 sm:gap-5 sm:p-6">
     <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
       <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight"><Sparkles className="size-5 text-primary" />{t("方案对话")}</h1>
@@ -81,7 +87,7 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
                   <span className="grid size-11 place-items-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
                   <h2 className="text-xl font-semibold">{t("接下来，想了解或调整什么？")}</h2>
                   <p className="text-sm leading-6 text-muted-foreground">{t("可以询问决策值的含义，也可以给出新的条件。新方案会实际建模求解，并单独保存。")}</p>
-                  <Button variant="outline" className="self-start" onClick={() => setInput(t("请用通俗的话解释这个方案的主要决策。"))}>{t("解释主要决策")}</Button>
+                  <Button variant="outline" className="self-start" onClick={() => { setInput(t("请用通俗的话解释这个方案的主要决策。")); inputArea.current?.focus(); }}>{t("解释主要决策")}</Button>
                 </div>}
             </div>
             {!follow ? <Button variant="outline" size="icon-sm" aria-label={t("回到最新消息")} className="absolute right-3 bottom-3 rounded-full bg-background shadow-sm" onClick={() => setFollow(true)}><ArrowDown /></Button> : null}
@@ -89,9 +95,10 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
           {failure && !stream.isLoading ? <Alert variant="destructive"><AlertDescription>{errorText(failure)}
             <Button variant="outline" size="sm" disabled={busy} onClick={() => void submit(true)}><RefreshCw />{t("重试这一轮")}</Button></AlertDescription></Alert> : null}
           <ChatInput label={t("发送给方案助手")} value={input} onChange={setInput} disabled={busy} loading={stream.isLoading}
+            inputRef={inputArea}
             presets={presets} presetId={presetId} onPreset={setSelected} openPresets={openPresets} onSend={() => void submit()}
             onStop={() => void stream.stop().catch(error => toast.error(errorText(error)))} />
-          <p className="shrink-0 text-center text-[11px] text-muted-foreground">{t("Enter 发送，Shift+Enter 换行")}</p>
+          <p className="shrink-0 text-center text-[11px] text-muted-foreground">{t(stream.isLoading ? "回复期间可继续输入，完成后发送。" : "Enter 发送，Shift+Enter 换行")}</p>
         </TabsContent>
         <TabsContent value="plans" forceMount className="mt-0 min-h-0 min-w-0 overflow-y-auto data-[state=inactive]:hidden lg:data-[state=inactive]:block">
           <Card className="gap-3 py-4 shadow-sm"><CardHeader><CardTitle className="text-sm">{t("当前方案")}</CardTitle></CardHeader>

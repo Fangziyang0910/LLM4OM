@@ -24,7 +24,7 @@ test("a run shows the solution, keeps a note and tags, and exports a report", as
   await page.getByRole("button", { name: "开始建模" }).click();
   await page.waitForURL(/\/run\//);
   await page.getByRole("button", { name: "查看解" }).waitFor({ timeout: 60_000 });
-  await expect(page.getByText("目标值").first().locator("..")).toContainText("13");
+  await expect(page.getByText("总利润", { exact: true }).locator("..")).toContainText("13");
   const threadId = page.url().split("/").at(-1)!;
   const before = (await (await page.request.get(`/threads/${threadId}`)).json()).values.timing;
 
@@ -121,7 +121,7 @@ test("new methods expose supported solver choices and BIND runs through the work
   await page.getByRole("button", { name: "开始建模" }).click();
   await page.waitForURL(/\/run\//);
   await page.getByRole("button", { name: "查看解" }).waitFor({ timeout: 60_000 });
-  await expect(page.getByText("目标值").first().locator("..")).toContainText("13");
+  await expect(page.getByText("总利润", { exact: true }).locator("..")).toContainText("13");
   const state = (await (await page.request.get(`/threads/${page.url().split("/").at(-1)}`)).json()).values;
   expect(state.spec.method).toBe("bind");
   expect(state.failure).toBeNull();
@@ -209,7 +209,9 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
   await rows.filter({ hasText: "Feedback Repair" }).click();
   await page.waitForURL(/\/run\//);
   await page.setViewportSize({ width: 320, height: 740 });
-  await expect(page.getByRole("button", { name: "查看对比", exact: true })).toBeInViewport();
+  await page.getByRole("button", { name: "更多操作", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "查看对比", exact: true })).toBeInViewport();
+  await page.keyboard.press("Escape");
   expect(await page.getByRole("main").evaluate(main => main.scrollWidth <= main.clientWidth)).toBe(true);
   for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(viewport);
@@ -221,7 +223,8 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
   await page.getByRole("button", { name: "更多操作", exact: true }).click();
   await page.getByRole("menuitem", { name: "复制链接" }).click();
   await page.locator("[data-sonner-toast]").filter({ hasText: "已复制链接。" }).waitFor();
-  await page.getByRole("button", { name: "查看对比" }).click();
+  await page.getByRole("button", { name: "更多操作", exact: true }).click();
+  await page.getByRole("menuitem", { name: "查看对比", exact: true }).click();
   await page.waitForURL(/\/compare\//);
   expect(errors).toEqual([]);
 });

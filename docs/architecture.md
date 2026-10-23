@@ -225,14 +225,14 @@ frontend/src/
 ├── format.ts          状态、数字和用时的展示
 ├── features/
 │   ├── composer/      Composer、ProblemEditor、DataEditor、Examples、Excel 导入、Draft 类型及测试
-│   ├── chat/          两种对话共用的消息渲染、输入与模型选择
+│   ├── chat/          两种对话共用的消息渲染、输入、模型选择和标签页内的未发送草稿
 │   ├── presets/       PresetsDialog
 │   ├── requirements/  需求对话、可编辑需求稿、原生线程创建与交接
 │   ├── solution_chat/ 方案对话、固定方案读取与独立方案导航
 │   └── runs/          RunView、Compare、Outputs、Solution、Timeline、状态图标
 │                      Explanation、Infeasibility、RevisionDialog、ScenarioComparison、ScenariosDialog、ScenarioResults
 │                      api、sdk、useRun、types、steps、tables、report、workbook 及相邻测试
-├── components/        Sidebar、Content、theme 等共享界面
+├── components/        Sidebar、Content、PageErrorBoundary、theme 等共享界面
 │   └── ui/            shadcn/ui 组件
 └── lib/                utils.ts 合并 Tailwind 类名；csv.ts 统一 CSV/TSV 无损文本解析与转义
 ```
@@ -248,6 +248,12 @@ frontend/src/
 1. 编辑页用 `ProblemEditor` 管理编辑、Markdown 预览和附件展示，`Composer` 管理草稿、文件读取及运行设置。左侧写问题，右侧选择建模方法、九个建模求解器、原生后端和 LLM；底部操作区常驻。
 2. 运行页先用结论卡回答“得到了什么”（目标值、状态或失败原因），再提供“核对数学模型”和“查看解”。
 3. 下方左栏是建模过程，右栏是产物。宽屏下两栏可拖动调整宽度；窄屏下用“结果 / 过程”切换。
+
+电脑端结果区默认占较大宽度。分栏保存与恢复直接使用 `react-resizable-panels.useDefaultLayout`，只保存用户操作造成的变化；不另外维护布局格式。运行头部收拢低频操作和技术信息，业务解读下折叠完整变量，避免重复统计。流式文字只在读者停留底部时跟随。问题编辑区在 Markdown 预览期间保留 textarea，保留选区和滚动位置；隐藏的预览不持续渲染。
+
+两类对话共用 `ChatInput` 和 `useChatDraft`：未发送文字只存入标签页的 `sessionStorage`，按线程区分；服务器接收消息时仅清除对应提交的文本，保留后来起草的文字。回复期间允许起草，但下一次发送仍受原生运行状态限制。导航搜索状态由 App 持有，抽屉关闭或布局变化不重置。懒加载页面失败由 React 错误边界保留导航并提供重载；服务数据失败就地重试，不创建额外运行。
+
+依赖锁文件合并同版本的 Radix 内部包，使抽屉、菜单和选择器共用焦点与弹层状态；不通过重置页面样式或取消焦点管理来绕过嵌套弹窗问题。
 
 `Explanation` 将业务标签与实际求解数值组合。`RevisionDialog` 收集调整要求；`startRevision()` 从原生检查点读取题面、附件和固定配置，发起新线程。`ScenarioComparison` 读取该检查点，按实际数值比较目标和同名变量；变量缺失与零值保持区分。Markdown 报告同时包含解读、调整要求和原题。
 

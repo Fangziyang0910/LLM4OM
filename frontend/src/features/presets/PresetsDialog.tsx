@@ -29,8 +29,8 @@ function Field({ label, htmlFor, help, error, children }: { label: string; htmlF
 }
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 border-b py-2.5 text-sm last:border-0">
-    <dt className="text-muted-foreground">{label}</dt><dd className="min-w-0 break-words">{children}</dd>
+  return <div className="grid grid-cols-1 gap-1 border-b py-2.5 text-sm last:border-0 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-3">
+    <dt className="text-xs text-muted-foreground sm:text-sm">{label}</dt><dd className="min-w-0 [overflow-wrap:anywhere]">{children}</dd>
   </div>;
 }
 
@@ -77,27 +77,27 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
   const listModels = () => act("models", async () => setModels((await api<{ models: string[] }>("/api/models", body())).models));
   const filtered = models?.filter(item => item.toLowerCase().includes(form.model.trim().toLowerCase())) ?? [];
 
-  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-3xl">
+  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
+    <DialogContent showCloseButton={!busy} className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-3xl">
       <DialogHeader className="border-b px-6 py-4">
         <DialogTitle>{t("预设模型")}</DialogTitle>
-        <DialogDescription>{t("运行只能选择预设。预设添加后不能修改，密钥只保存在服务器上，任何页面都读不到。")}</DialogDescription>
+        <DialogDescription>{t("选择用于对话和建模的模型，密钥仅保存在服务器。")}</DialogDescription>
       </DialogHeader>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <nav aria-label={t("预设列表")} className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-56 md:flex-col md:border-r md:border-b-0">
-          {presets.map((item, index) => <button key={item.id} onClick={() => show(item.id)}
+        <nav aria-label={t("预设列表")} className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-56 md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
+          {presets.map((item, index) => <button key={item.id} disabled={!!busy} aria-current={viewing === item.id} onClick={() => show(item.id)}
             className={cn("flex shrink-0 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
               viewing === item.id && "bg-accent")}>
             <span className="flex max-w-44 items-center gap-2 font-medium"><span className="truncate">{item.name || item.model}</span>
               {index === 0 ? <Badge className="h-4 shrink-0 px-1.5 text-[10px]">{t("默认")}</Badge> : null}</span>
             <span className="max-w-44 truncate text-[11px] text-muted-foreground">{label(item.provider)}{item.source === "env" ? t(" · 服务器") : ""}</span>
           </button>)}
-          <button onClick={() => show(null)}
+          <button disabled={!!busy} aria-current={viewing === null} onClick={() => show(null)}
             className={cn("flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
               viewing === null && "bg-accent text-foreground")}><Plus className="size-4" />{t("添加预设")}</button>
         </nav>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4 sm:p-6">
           {shown ? <>
             <h3 className="text-base font-semibold break-all">{shown.name || shown.model}</h3>
             <dl>
@@ -115,7 +115,10 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
             </dl>
             {shown.source === "env" ? <Alert><AlertDescription className="text-xs"><p>
               {t("这个预设来自服务器的 LLM4OM_LLM_* 环境变量，只能在服务器上修改或删除。")}</p></AlertDescription></Alert> : null}
-          </> : <>
+          </> : <form id="preset-form" className="flex flex-col gap-4" onSubmit={event => {
+            event.preventDefault(); if (!busy && !extraError && form.model.trim() && form.api_key.trim()) void add();
+          }}>
+            <fieldset disabled={!!busy} className="flex min-w-0 flex-col gap-4">
             <Field label={t("服务商")} htmlFor="provider">
               <Select value={form.provider} onValueChange={value => { setForm(emptyForm(providers.find(item => item.id === value)!)); setModels(null); }}>
                 <SelectTrigger id="provider" className="w-full"><SelectValue /></SelectTrigger>
@@ -133,9 +136,9 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
               <Input id="preset-name" value={form.name} onChange={set("name")} />
             </Field>
             <Field label={t("模型 ID")} htmlFor="model-id">
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Input id="model-id" value={form.model} onChange={set("model")} placeholder={t("例如 deepseek-chat")} />
-                <Button type="button" variant="outline" disabled={!!busy || !form.api_key.trim()} onClick={() => void listModels()}>
+                <Button type="button" variant="outline" disabled={!!busy || !!extraError || !form.api_key.trim()} onClick={() => void listModels()}>
                   {busy === "models" ? <Spinner /> : <RefreshCw />}{t("读取可用模型")}</Button>
               </div>
               {models ? <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pt-1">
@@ -146,7 +149,7 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
             </Field>
 
             <Collapsible className="group/advanced rounded-lg border">
-              <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium">
+              <CollapsibleTrigger type="button" className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium">
                 {t("高级参数")}<ChevronDown className="ml-auto size-4 text-muted-foreground transition-transform group-data-[state=open]/advanced:rotate-180" /></CollapsibleTrigger>
               <CollapsibleContent className="flex flex-col gap-4 border-t p-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -160,7 +163,8 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
                 </Field>
               </CollapsibleContent>
             </Collapsible>
-          </>}
+            </fieldset>
+          </form>}
           {problem ? <Alert variant="destructive" role="alert"><AlertDescription>{problem}</AlertDescription></Alert> : null}
         </div>
       </div>
@@ -169,8 +173,8 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
           onClick={() => confirming ? void remove(shown) : setConfirming(true)}>
           {busy === "delete" ? <Spinner /> : <Trash2 />}{confirming ? t("确认删除？") : t("删除这个预设")}</Button> : <span />}
         <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose}>{t("关闭")}</Button>
-          {!shown ? <Button disabled={!!busy || !!extraError || !form.model.trim() || !form.api_key.trim()} onClick={() => void add()}>
+          <Button variant="outline" disabled={!!busy} onClick={onClose}>{t("关闭")}</Button>
+          {!shown ? <Button type="submit" form="preset-form" disabled={!!busy || !!extraError || !form.model.trim() || !form.api_key.trim()}>
             {busy === "add" ? <Spinner /> : <Plus />}{t("添加预设")}</Button> : null}
         </div>
       </DialogFooter>
