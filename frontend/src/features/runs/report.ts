@@ -40,6 +40,14 @@ export function report(meta: RunMeta, values: RunValues, options: Options, link?
   if (values.formulation) parts.push(`## ${t("数学模型")}\n\n${values.formulation.trim()}`);
   if (values.code) parts.push(`## ${t("求解代码")}\n\n${fence(values.code, "python")}`);
   if (solve) {
+    if (values.infeasibility) {
+      const explanation = values.infeasibility;
+      parts.push([`## ${t("为什么无解")}`, explanation.summary,
+        ...explanation.conflicts.map(item => `${item.explanation}\n\n${item.constraints.map(constraint => `- \`${constraint}\``).join("\n")}`),
+        ...(explanation.adjustments.length ? [`### ${t("可以尝试的调整")}`, t("建议尚未验证。选择后可编辑调整要求，再重新建模验证。"),
+          ...explanation.adjustments.map(item => `- **${item.title}**${COLON}${item.instruction}`)] : []),
+      ].join("\n\n"));
+    }
     if (values.explanation) {
       const explanation = values.explanation;
       const decisions = explanation.decisions.map(item => `- ${item.label}${COLON}${formatNumber(solve.variables[item.variable])} ${item.unit}`);

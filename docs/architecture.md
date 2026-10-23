@@ -47,7 +47,7 @@ src/llm4om/
 │   ├── direct/          Direct 与 Feedback Repair 共用生成节点和提示，分别编译为图
 │   └── <method>/        复杂方法：__init__.py 导出入口，graph.py 编排，提示/解析/搜索各归其位
 ├── graph.py             平台图 platform_graph(method)、RunState、RunContext、Resources、进程内运行 run()
-├── followups.py         完整题面整理、业务解读结构和实际变量引用校验
+├── followups.py         完整题面整理、方案与无解解释、实际变量及冲突证据引用校验
 └── server/              Web 工作台
     ├── graphs.py        每个方法的平台图，供 LangGraph 服务器注册
     ├── app.py           服务器挂载的路由：选项、预设模型、模型列表、题库、前端页面
@@ -72,13 +72,17 @@ runtime → progress ───────────────────�
 |---|---|
 | 输入 | `description`（问题描述）、`data`（数据文件名到文本）、可选 `change`（条件调整要求） |
 | 运行上下文 `RunContext` | `language`、`solver`、`preset`、`explain`、`locale`。只写预设模型的 id，不写密钥，也不能改模型；服务器按 id 读取预设。方法参数固定在 `methods/presets.py` |
-| 输出 | `formulation`、`code`、`solve`、`failure`、`steps`、`usage`、`spec`、`timing`；条件调整保存 `revision`，结果解读保存 `explanation` 或 `explanation_error` |
+| 输出 | `formulation`、`code`、`solve`、`failure`、`steps`、`usage`、`spec`、`timing`；条件调整保存 `revision`，方案解读保存 `explanation`，无解解释保存 `infeasibility`；解释失败保存 `explanation_error` |
 
 图的输入类型 `RunInput` 只开放问题、数据和调整要求，内部结果不能通过输入注入。每次 `prepare` 都清空旧产物、解读、步骤、计数和配置，再建立本次运行状态；同一线程再次运行也遵守这一规则。
 
 有 `change` 时先运行 `revise`，把原题和调整要求保存为 `revision`，整理新题面并交给原方法。调整要求只消费一次，再次运行同一线程不会重复应用。工作台创建独立新线程，元数据 `parent` 记录原线程和检查点 ID；读取基准通过 SDK 原生 `threads.getState(thread, checkpoint)`，不自建版本存储，也不把不同条件混入方法对比组。
 
 工作台设置 `explain=true`，有可用解且建模未失败时执行 `explain`。LLM 返回业务标签、单位、定性说明及对实际变量的引用；平台校验引用，展示和报告中的数值始终读取 `solve`。没有统一计算依据的资源剩余量和敏感性指标不补造。解读失败写入独立错误，保留原求解状态。进程内 `run()` / `run_problem()` 可传 `explain=True` 和 `change=...`；默认保留只建模与求解的调用行为。
+
+同一个 `explain` 节点也处理有实际诊断的 `infeasible` 结果。LLM 解释冲突并引用证据 ID；平台校验 ID，再绑定到原始约束字符串。没有冲突证据或只报告局部不可行时不调用。候选调整作为未验证的要求变更展示，点击后填入现有条件调整窗口，不执行代码或修改原状态；用户提交后沿原生检查点关系建立新线程求解。
+
+Excel 导出由 `frontend/src/features/runs/workbook.ts` 完成。工作簿从实际 `solve` 读取完整数值，按精确变量名关联业务标签；使用 `write-excel-file` 按需生成，复用已有下载入口。问题工作表保存完整题面和运行背景，不添加服务器导出端点、额外 LLM 调用或业务模板框架。
 
 `prepare` 发现请求不可用时写入 `failure` 并结束运行，不调用 LLM；有效请求记录内部截止时间 `_deadline` 和不含密钥的 `spec`，包括平台版本、方法来源与参数、限制、LLM 设置、代码写法、求解器和沙箱镜像。`model` 和 `solve` 共享剩余时间，超时、超限或出错时写入一个错误步骤和 `failure`，保留已完成的数学模型和代码。失败后不再补跑最终求解。`finish` 固定 `timing`：从开始校验到结束，不含服务器排队时间，不随备注和标签变化。没有完成计时的记录在对比表中显示未知；中断运行的详情可读取进度快照中的时间。
 
@@ -212,13 +216,14 @@ frontend/src/
 │   ├── composer/      Composer、ProblemEditor、Examples、Excel 导入、Draft 类型及测试
 │   ├── presets/       PresetsDialog
 │   └── runs/          RunView、Compare、Outputs、Solution、Timeline、状态图标
-│                      api、sdk、useRun、types、steps、tables、report 及相邻测试
+│                      Explanation、Infeasibility、RevisionDialog、ScenarioComparison
+│                      api、sdk、useRun、types、steps、tables、report、workbook 及相邻测试
 ├── components/        Sidebar、Content、theme 等共享界面
 │   └── ui/            shadcn/ui 组件
 └── lib/                utils.ts 合并 Tailwind 类名；csv.ts 统一 CSV 转义
 ```
 
-测试文件 `*.test.ts(x)` 放在被测模块旁边，由 Vitest（jsdom）运行。`frontend/e2e/` 是浏览器测试（Playwright）：它启动脚本化的 OpenAI 兼容服务（`e2e/mock_llm.py`）和使用本机沙箱的 `llm4om serve`，在真实页面上跑运行、对比、不可行诊断、备注与标签、报告导出、Excel 导入和英文界面，不需要密钥和 Docker。`tests/test_server_restart.py` 另验证真实服务正常退出后，重启仍能读取中断前的步骤与产物。
+测试文件 `*.test.ts(x)` 放在被测模块旁边，由 Vitest 运行（界面使用 jsdom，Excel 写入与回读使用 Node）。`frontend/e2e/` 是浏览器测试（Playwright）：它启动脚本化的 OpenAI 兼容服务（`e2e/mock_llm.py`）和使用本机沙箱的 `llm4om serve`，在真实页面上跑运行、对比、无解解释及调整、备注与标签、报告导出、Excel 导入导出和英文界面，不需要密钥和 Docker。`tests/test_server_restart.py` 另验证真实服务正常退出后，重启仍能读取中断前的步骤与产物。
 
 历史列表使用 TanStack `useInfiniteQuery` 和原生 `threads.search(offset, limit)`，每页 100 条，可加载更早的记录。文字搜索作用于已加载记录，尚有未加载记录时明确显示范围。对比最多 12 次运行；耗时来自 `values.timing.elapsed`，不用可修改的线程更新时间。历史和详情共用 `runMeta()`：实际执行配置取 `spec`，备注和标签取线程元数据；旧记录没有 `spec` 时继续使用元数据。
 

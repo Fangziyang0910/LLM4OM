@@ -48,8 +48,8 @@ export async function copyText(text: string): Promise<void> {
   if (!copied) throw new Error("copy failed");
 }
 
-export function download(name: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+export function download(name: string, content: string | Blob) {
+  const url = URL.createObjectURL(typeof content === "string" ? new Blob([content], { type: "text/plain;charset=utf-8" }) : content);
   const link = Object.assign(document.createElement("a"), { href: url, download: name });
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);

@@ -44,6 +44,8 @@ export function Solution({ solve }: { solve: Solve }) {
 
     {solve.status === "locally_optimal" ? <p className="text-sm text-muted-foreground">{t("已找到局部最优解；非凸问题仍可能存在更好的解。")}</p> : null}
     {solve.status === "locally_infeasible" ? <p className="text-sm text-muted-foreground">{t("本次局部搜索未找到可行解，不能据此断定整个问题不可行。")}</p> : null}
+    {solve.status === "infeasible" && !solve.diagnosis?.items.length ? <p className="text-sm text-muted-foreground">
+      {t("本次求解未提供具体冲突约束。可核对数学模型与原问题，或通过“调整条件”重新建模。")}</p> : null}
     {solve.error ? <Alert variant="destructive"><TriangleAlert /><AlertTitle>{t("代码执行出错")}</AlertTitle>
       <AlertDescription><Plain tone="bad" className="mt-1 w-full">{solve.error}</Plain></AlertDescription></Alert> : null}
     {solve.diagnosis ? <Conflict diagnosis={solve.diagnosis} /> : null}
@@ -93,19 +95,19 @@ export function Solution({ solve }: { solve: Solve }) {
   </div>;
 }
 
-/** The constraints of an infeasible model that cannot all hold; shown to people, never sent back to the method. */
+/** The actual solver evidence, separate from the platform's business explanation and candidate changes. */
 function Conflict({ diagnosis }: { diagnosis: Diagnosis }) {
   return <section className="flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
     <h3 className="flex items-center gap-2 text-sm font-medium"><SearchX className="size-4 text-destructive" />{t("不能同时满足的约束")}
       <span className="text-xs font-normal text-muted-foreground">{diagnosis.tool}</span></h3>
     {diagnosis.error ? <p className="text-xs text-muted-foreground">{t("没有找到冲突：{error}", { error: diagnosis.error })}</p> : <>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        {t("这些约束和变量界限放在一起无解；去掉其中任意一条，其余的就能同时满足。请对照问题检查它们。")}</p>
+        {t("求解器在这组约束和变量界限中定位到了冲突。请对照原问题核对它们。")}</p>
       <ul className="flex flex-col gap-1">{diagnosis.items.map(item => <li key={item}
         className="rounded-md border bg-background px-2 py-1 font-mono text-xs break-all">{item}</li>)}</ul>
       {diagnosis.total > diagnosis.items.length ? <p className="text-xs text-muted-foreground">
         {t("只显示前 {shown} 条，共 {total} 条。", { shown: diagnosis.items.length, total: diagnosis.total })}</p> : null}
-      <p className="text-[11px] text-muted-foreground">{t("这项诊断只供查看，不会发给建模方法。")}</p>
+      <p className="text-[11px] text-muted-foreground">{t("调整条件会创建新方案，保留本次模型和结果。")}</p>
     </>}
   </section>;
 }

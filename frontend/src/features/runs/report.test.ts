@@ -6,6 +6,17 @@ const options = { methods: [{ id: "direct", name: "Direct", description: "", sou
   languages: [{ id: "pyomo", name: "Pyomo", solver: "HiGHS" }], providers: [], datasets: [] } as Options;
 
 describe("run report", () => {
+  it("exports evidence-backed infeasibility explanations and marks candidate changes as unverified", () => {
+    const text = report({ title: "合同方案", method: "direct", language: "pyomo", provider: null, model: "m1" }, {
+      infeasibility: { summary: "最低交货量超过产能。", conflicts: [{ explanation: "合同与产能冲突。", constraints: ["capacity <= 8"] }],
+        adjustments: [{ title: "增加产能", instruction: "切割资源提高至 15。" }] },
+      solve: { status: "infeasible", objective: null, variables: {}, output: "", error: null },
+    }, options);
+    expect(text).toContain("## 为什么无解\n\n最低交货量超过产能。");
+    expect(text).toContain("`capacity <= 8`");
+    expect(text).toContain("建议尚未验证。");
+    expect(text).toContain("**增加产能**：切割资源提高至 15。");
+  });
   it("exports the original problem, requested change and business values from the actual solution", () => {
     const text = report({ title: "新方案", method: "direct", language: "pyomo", provider: null, model: "m1" },
       { description: "新题面", revision: { description: "原题面", instruction: "B 至少生产 3 件" },

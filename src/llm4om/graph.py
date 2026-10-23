@@ -28,7 +28,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import Overwrite
 
 from llm4om.budget import TokenBudget
-from llm4om.followups import explain_result, revise_problem
+from llm4om.followups import explain_infeasibility, explain_result, revise_problem
 from llm4om.languages import CodeTarget
 from llm4om.llm import LLMSettings, chat_model
 from llm4om.llm_presets import LLMPresetStore
@@ -57,6 +57,7 @@ class RunState(RunInput, total=False):
     failure: str | None  # why the run failed, possibly after producing code
     revision: dict[str, str] | None  # original description and the user's change request
     explanation: dict[str, Any] | None
+    infeasibility: dict[str, Any] | None
     explanation_error: str | None  # presentation failure does not invalidate a solved model
     steps: Annotated[list[dict[str, Any]], operator.add]  # every recorded step, in order
     usage: dict[str, int]  # LLM calls, solves and tokens
@@ -72,7 +73,7 @@ class RunContext:
     language: str = "pyomo"  # code language, which decides the solver
     preset: str | None = None  # LLM preset id; None means the default preset
     solver: str | None = None
-    explain: bool = False  # the workbench enables business interpretation after a successful solve
+    explain: bool = False  # the workbench explains solutions and diagnosed infeasible models
     locale: Literal["zh", "en"] = "zh"
 
 
@@ -209,7 +210,7 @@ def platform_graph(method: Method) -> Any:
         deadline = started + (method.limits or resources.limits).run_timeout
         fresh = {"formulation": None, "code": None, "solve": None, "spec": None, "usage": {},
                  "steps": Overwrite([]), "timing": timing(started), "problem": "", "change": None,
-                 "revision": None, "explanation": None, "explanation_error": None}
+                 "revision": None, "explanation": None, "infeasibility": None, "explanation_error": None}
         if runtime.store and (thread := thread_id()):
             await runtime.store.adelete(NAMESPACE, thread)
         try:
@@ -315,11 +316,13 @@ def platform_graph(method: Method) -> Any:
         try:
             run = await llm_context(state, runtime)
             async with save_progress(runtime.store, thread_id(), state, run.recorder):
-                explanation = await asyncio.wait_for(explain_result(run, state["problem"], state.get("formulation"),
-                                                                   state.get("code"), state["solve"], state["spec"]["locale"]),
+                infeasible = state["solve"]["status"] == "infeasible"
+                interpret = explain_infeasibility if infeasible else explain_result
+                explanation = await asyncio.wait_for(interpret(run, state["problem"], state.get("formulation"),
+                                                              state.get("code"), state["solve"], state["spec"]["locale"]),
                                                      state["_deadline"] - time.time())
-                run.recorder.step("artifact", "解读求解结果", explanation["summary"])
-            result = {"explanation": explanation, "explanation_error": None}
+                run.recorder.step("artifact", "解释无解原因" if infeasible else "解读求解结果", explanation["summary"])
+            result = {"infeasibility" if infeasible else "explanation": explanation, "explanation_error": None}
         except Exception as error:
             message = str(error) or type(error).__name__
             run.recorder.step("error", "结果解读未完成", message)
@@ -343,8 +346,10 @@ def platform_graph(method: Method) -> Any:
 
     def after_solve(state: RunState) -> str:
         solved = state.get("solve") or {}
+        diagnosis = solved.get("diagnosis") or {}
+        diagnosed = solved.get("status") == "infeasible" and diagnosis.get("items") and not diagnosis.get("error")
         interpret = ((state.get("spec") or {}).get("explain") and not state.get("failure") and not solved.get("error")
-                     and solved.get("status") in {"optimal", "feasible", "locally_optimal"})
+                     and (solved.get("status") in {"optimal", "feasible", "locally_optimal"} or diagnosed))
         return "explain" if interpret else "finish"
 
     builder = StateGraph(RunState, input_schema=RunInput, context_schema=RunContext)

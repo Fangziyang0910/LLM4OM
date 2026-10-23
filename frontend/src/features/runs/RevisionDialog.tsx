@@ -9,8 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { errorText } from "@/format";
 import { t } from "@/i18n";
 
-export function RevisionDialog({ onClose, onRevise }: { onClose: () => void; onRevise: (instruction: string) => Promise<void> }) {
-  const [instruction, setInstruction] = useState("");
+export function RevisionDialog({ initialInstruction = "", onClose, onRevise }: {
+  initialInstruction?: string; onClose: () => void; onRevise: (instruction: string) => Promise<void>;
+}) {
+  const [instruction, setInstruction] = useState(initialInstruction);
   const [busy, setBusy] = useState(false);
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
     <DialogContent className="sm:max-w-lg">

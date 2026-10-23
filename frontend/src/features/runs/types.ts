@@ -5,7 +5,7 @@ export type Step = {
   input_tokens?: number | null; output_tokens?: number | null;
   status?: string; objective?: number | null; code?: string; formulation?: string;
 };
-/** The constraints of an infeasible model that cannot hold together, found by `tool`; for reading only. */
+/** The constraints of an infeasible model that cannot hold together, found by `tool`. */
 export type Diagnosis = { tool: string; items: string[]; total: number; error: string | null };
 export type Solve = {
   status: string; objective: number | null; variables: Record<string, number>; output: string; error: string | null;
@@ -18,6 +18,10 @@ export type SourceRun = { thread_id: string; checkpoint_id: string };
 export type Explanation = {
   summary: string; objective_label: string; objective_unit: string;
   decisions: { variable: string; label: string; unit: string }[]; notes: string[]; total_variables: number;
+};
+export type Infeasibility = {
+  summary: string; conflicts: { explanation: string; constraints: string[] }[];
+  adjustments: { title: string; instruction: string }[];
 };
 export type RunSpec = {
   version: string; method: string; source: string | null; parameters: Record<string, unknown>; limits: Record<string, number>;
@@ -33,6 +37,7 @@ export type RunValues = {
   solve?: Solve | null; failure?: string | null; steps?: Step[]; usage?: Usage; spec?: RunSpec | null; timing?: Timing;
   revision?: { description: string; instruction: string } | null;
   explanation?: Explanation | null; explanation_error?: string | null;
+  infeasibility?: Infeasibility | null;
 };
 /** What the run is and with what it ran, kept as thread metadata; `group` joins the runs of one comparison. */
 export type RunMeta = {

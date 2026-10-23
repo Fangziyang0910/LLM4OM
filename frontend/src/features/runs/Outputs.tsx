@@ -16,6 +16,7 @@ import type { RunValues, SourceRun, Step } from "@/features/runs/types";
 import { Code, CopyButton, Diff, Markdown, Plain, download } from "@/components/Content";
 import { Solution } from "@/features/runs/Solution";
 import { Explanation } from "@/features/runs/Explanation";
+import { Infeasibility } from "@/features/runs/Infeasibility";
 import { ScenarioComparison } from "@/features/runs/ScenarioComparison";
 
 export type Tab = "solution" | "formulation" | "code" | "problem" | "comparison";
@@ -24,10 +25,11 @@ const TABS: [Tab, string, LucideIcon][] = [
 ];
 
 /** What the run produced: the solution, the formulation and the code (each in every version), and the problem. */
-export function Outputs({ values, steps, active, tab, setTab, picked, setPicked, language, finished, source }: {
+export function Outputs({ values, steps, active, tab, setTab, picked, setPicked, language, finished, source, onAdjust }: {
   values: RunValues; steps: Step[]; active: boolean; tab: Tab; setTab: (tab: Tab) => void;
   picked: Partial<Record<"formulation" | "code", string>>; setPicked: (key: "formulation" | "code", id: string | undefined) => void;
   language?: Language; finished: boolean; source?: SourceRun;
+  onAdjust: (instruction: string) => void;
 }) {
   const formulations = useMemo(() => versions(steps, "formulation", values.formulation), [steps, values.formulation]);
   const codes = useMemo(() => versions(steps, "code", values.code), [steps, values.code]);
@@ -46,6 +48,7 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
     <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
       {tab === "solution" ? values.solve ? <div className="flex flex-col gap-4">
         {values.explanation ? <Explanation explanation={values.explanation} solve={values.solve} /> : null}
+        {values.infeasibility ? <Infeasibility explanation={values.infeasibility} onAdjust={active ? undefined : onAdjust} /> : null}
         {values.explanation_error ? <Alert><AlertDescription>{t("方案解读未完成，求解结果仍可正常查看。")}</AlertDescription></Alert> : null}
         <Solution solve={values.solve} />
       </div>

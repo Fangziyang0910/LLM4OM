@@ -18,6 +18,7 @@ import { targetLabel } from "@/features/runs/target";
 import { client } from "@/features/runs/sdk";
 import { t } from "@/i18n";
 import { report } from "@/features/runs/report";
+import { exportSolution, hasSolution } from "@/features/runs/workbook";
 import { STATUS, duration, errorText, formatNumber, formatTokens, outcome, tone } from "@/format";
 import { phases, working } from "@/features/runs/steps";
 import type { Draft } from "@/features/composer/types";
@@ -58,13 +59,14 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
   const { meta: loaded, values, steps, live, run, streaming, error } = useRun(threadId, onFinished);
   const [changed, setChanged] = useState<Partial<RunMeta>>({});  // note and tags saved since the run was read
   const [noting, setNoting] = useState(false);
-  const [revising, setRevising] = useState(false);
+  const [revision, setRevision] = useState<string | null>(null);
   const meta = loaded ? { ...loaded, ...changed } : null;
   const [chosen, setTab] = useState<Tab | null>(null);  // null follows the run
   const [picked, setPicked] = useState<Partial<Record<"formulation" | "code", string>>>({});
   const [view, setView] = useState<"outputs" | "process">("outputs");  // narrow screens show one pane at a time
   const [stopping, setStopping] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const wide = useWide();
   const active = streaming || run?.status === "pending" || run?.status === "running";
   const now = useNow(active);
@@ -99,12 +101,20 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
     setBusy(true);
     try { await onRerun(draft()); } catch (reason) { toast.error(errorText(reason)); setBusy(false); }
   };
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      download(`${(meta.title || "solution").slice(0, 40).replace(/[\\/:*?"<>|]/g, "_")}.xlsx`,
+        await exportSolution(meta, values, options, location.href));
+    } catch (reason) { toast.error(errorText(reason)); }
+    finally { setExporting(false); }
+  };
   const showTab = (next: Tab) => { setTab(next); setView("outputs"); };
   const show = (key: "formulation" | "code", id: string) => { setPicked(current => ({ ...current, [key]: id })); showTab(key); };
 
   const timeline = <Timeline steps={steps} live={live} active={active} onShow={show} />;
   const outputs = <Outputs values={values} steps={steps} active={active} tab={tab} setTab={setTab} picked={picked} language={language}
-    finished={finished} source={meta.parent} setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))} />;
+    finished={finished} source={meta.parent} onAdjust={setRevision} setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))} />;
   const title = meta.title || (values.description ?? "").trim().split("\n")[0] || t("未命名运行");
   const facts: [React.ReactNode, React.ReactNode, string?][] = [
     [<Layers />, method?.name ?? meta.method, method?.description],
@@ -133,9 +143,11 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
           <Columns3 />{t("查看对比")}</Button> : null}
         {active ? <Button variant="outline" size="sm" disabled={stopping} onClick={() => void stop()}>
           {stopping ? <Spinner /> : <Square className="fill-current" />}{stopping ? t("正在停止") : t("停止")}</Button> : <>
+          {hasSolution(solve) ? <Button variant="outline" size="sm" disabled={exporting} onClick={() => void exportExcel()}>
+            {exporting ? <Spinner /> : <FileDown />}{t("导出 Excel")}</Button> : null}
           <Button variant="outline" size="sm" disabled={busy || !values.description} onClick={() => void rerun()} title={t("用同样的问题和设置再运行一次")}>
             {busy ? <Spinner /> : <RefreshCw />}{t("再运行一次")}</Button>
-          <Button size="sm" disabled={!values.description} onClick={() => setRevising(true)}>
+          <Button size="sm" disabled={!values.description} onClick={() => setRevision("")}>
             <Pencil />{t("调整条件")}</Button>
         </>}
         <DropdownMenu>
@@ -177,7 +189,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
       setChanged(current => ({ ...current, ...change }));
       onMetaChange();
     }} /> : null}
-    {revising ? <RevisionDialog onClose={() => setRevising(false)} onRevise={onRevise} /> : null}
+    {revision !== null ? <RevisionDialog initialInstruction={revision} onClose={() => setRevision(null)} onRevise={onRevise} /> : null}
   </div>;
 }
 

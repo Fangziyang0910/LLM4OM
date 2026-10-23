@@ -32,8 +32,8 @@
 平台内置 **13 种 LLM 建模方法**，包括 Direct、Feedback Repair 两种自有方法，以及 11 种来自公开研究的方法。你不需要手写求解代码，可以直接输入问题、运行建模，再查看模型和结果。
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="演示：生产计划、业务方案解读、自然语言调整条件和新旧方案对比" width="100%">
-  <br><sub>真实运行录屏：生产计划 · Direct · Pyomo/HiGHS · DeepSeek。调整条件后重新建模并比较方案，录屏加速 2 倍。</sub>
+  <img src="docs/assets/demo.gif" alt="演示：导出 Excel 生产方案、解释无解原因、选择条件调整和查看新方案" width="100%">
+  <br><sub>真实运行记录回放：Direct · Pyomo/HiGHS 与 gurobipy · DeepSeek。导出 Excel，查看冲突解释，选择调整并比较重新求解的方案。</sub>
 </p>
 
 ## 亮点
@@ -45,10 +45,10 @@
 | 🔍 **全过程可见** | 每次 LLM 调用实时显示；保留中断前已完成的步骤和产物；历史可分页，运行配置固定记录 |
 | ⚖️ **多方法对比** | 同一问题一次运行最多 12 个方法或模型，并排比较目标值、用时和 token |
 | 💬 **方案解读与条件调整** | 用业务名称展示实际决策数值；一句话修改条件，重新建模并与原方案对比，保留原运行 |
-| 🧯 **不可行诊断** | 模型不可行时，列出一组不能同时满足的约束（Gurobi IIS / CPMpy MUS） |
+| 🧯 **无解原因与调整** | 根据实际冲突约束解释业务矛盾；选择并编辑候选调整，再重新建模验证（Gurobi IIS / CPMpy MUS） |
 | 🔒 **隔离沙箱** | 生成代码在无网络、只读、非 root 的容器中运行，用完即删 |
 | 👥 **团队部署** | 一条 `docker compose up` 启动；预设模型的密钥不出服务器；可选 HTTPS 和用量上限 |
-| 🌗 **好用的工作台** | 备注与标签、Markdown 报告、Excel 导入、2033 道公开题、中英文界面、深色模式 |
+| 🌗 **好用的工作台** | 导出含业务名称、单位和完整数值的 Excel 方案；备注与标签、Markdown 报告、Excel 导入、2033 道公开题、中英文界面、深色模式 |
 
 ## 截图
 
@@ -62,7 +62,7 @@
     <td><img src="docs/assets/compare.png" alt="方法对比"><p align="center"><sub>5 种方法同题对比</sub></p></td>
   </tr>
   <tr>
-    <td><img src="docs/assets/conflict.png" alt="不可行诊断"><p align="center"><sub>不可行模型：Gurobi IIS 找到 3 条冲突约束</sub></p></td>
+    <td><img src="docs/assets/conflict.png" alt="无解解释与候选调整"><p align="center"><sub>把实际冲突解释成业务要求，选择调整后重新求解</sub></p></td>
     <td><img src="docs/assets/dark-en.png" alt="深色英文界面"><p align="center"><sub>深色模式和英文界面</sub></p></td>
   </tr>
 </table>

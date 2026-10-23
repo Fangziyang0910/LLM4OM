@@ -13,6 +13,7 @@ test("large results are paged for display but searched and exported in full", ()
   expect(screen.getByTitle("x[2000]")).toBeTruthy();
   fireEvent.click(screen.getByLabelText("下载变量取值 CSV"));
   const csv = vi.mocked(download).mock.calls[0][1];
-  expect(csv.trimEnd().split("\n")).toHaveLength(2002);
+  expect(typeof csv).toBe("string");
+  expect(String(csv).trimEnd().split("\n")).toHaveLength(2002);
   expect(csv).toContain('x[2000],1');
 });

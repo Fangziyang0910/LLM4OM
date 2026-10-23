@@ -52,6 +52,12 @@ def build_model(data):
 
 def reply(messages: list[dict]) -> str:
     text = json.dumps(messages, ensure_ascii=False)
+    if "Explain an infeasible optimization model" in text:
+        facts = json.loads(messages[-1]["content"])
+        return json.dumps({"summary": "合同要求的最低交货量超过了切割资源能支持的数量。",
+                           "conflicts": [{"constraint_ids": list(map(int, facts["constraints"])),
+                                          "explanation": "两种产品各至少生产 5 件，需要 15 单位切割资源，但现有容量只有 8 单位。"}],
+                           "adjustments": [{"title": "增加切割资源", "instruction": "将切割资源提高至 15 单位，其他条件保持不变。"}]}, ensure_ascii=False)
     if "Explain a computed optimization solution" in text:
         facts = json.loads(messages[-1]["content"])
         return json.dumps({"summary": "按表中数量安排生产，满足题面要求。", "objective_label": "总利润", "objective_unit": "元",
@@ -59,6 +65,8 @@ def reply(messages: list[dict]) -> str:
                                          for name in facts["variables"]], "notes": ["数量采用非负整数。"]}, ensure_ascii=False)
     if "Revise an optimization problem according to the user's change request" in text:
         request = json.loads(messages[-1]["content"])
+        if request["change_request"] == "将切割资源提高至 15 单位，其他条件保持不变。":
+            return request["original_problem"].replace("切割资源共 8 单位", "切割资源共 15 单位")
         return request["original_problem"] + "\n\n" + request["change_request"]
     if "Review an optimization formulation and its code" in text:
         return json.dumps({"action": "accept", "reason": "The model matches the test problem."})
@@ -71,6 +79,8 @@ def reply(messages: list[dict]) -> str:
     if 'import cvxpy as cp' in text:
         return f"### Formulation\nMinimize squared distance to (1,2), with nonnegative x and sum(x)<=2.\n\n```python\n{CVXPY}```"
     code = INFEASIBLE if "合同" in text else FEASIBLE
+    if "切割资源共 15 单位" in text:
+        code = code.replace("<= 8", "<= 15")
     if "B 至少生产 3 件" in text:
         code = code.replace("    return m", '    m.minimum_b = pyo.Constraint(expr=m.x["B"] >= 3)\n    return m')
     return f"### Formulation\n{FORMULATION}\n\n```python\n{code}```"

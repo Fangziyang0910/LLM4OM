@@ -28,8 +28,8 @@ class SolveResult:
     variables: dict[str, float] = field(default_factory=dict)
     output: str = ""
     error: str | None = None
-    # For an infeasible model: {tool, items, total, error}, the constraints that conflict. Shown to people only;
-    # feedback() leaves it out, so no method gets help the original method did not have.
+    # For an infeasible model: {tool, items, total, error}. feedback() leaves it out; the platform explains it,
+    # and only the project's Feedback Repair opts in. Published methods keep their original feedback.
     diagnosis: dict[str, Any] | None = None
     solver: str | None = None  # actual backend, also when the library selected it automatically
 

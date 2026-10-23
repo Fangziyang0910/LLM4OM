@@ -45,7 +45,7 @@ async def save_progress(store: BaseStore | None, thread_id: str | None, state: d
         artifacts = {key: step[key] for step in steps.values() for key in ("formulation", "code")
                      if step.get("type") == "artifact" and isinstance(step.get(key), str)}
         snapshot = {key: state[key] for key in ("description", "data", "spec", "formulation", "code", "solve",
-                                               "revision", "explanation", "explanation_error") if key in state}
+                                               "revision", "explanation", "infeasibility", "explanation_error") if key in state}
         snapshot.update(artifacts, steps=list(steps.values()), usage=dict(recorder.usage),
                         timing=timing(state["timing"]["started_at"], finished=finished))
         await store.aput(NAMESPACE, thread_id, snapshot, index=False)

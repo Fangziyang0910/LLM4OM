@@ -335,10 +335,7 @@ export const en: Record<string, string> = {
     "The solver only guarantees that this solution is {status} for this model. Check in Formulation that the model expresses the whole problem.",
   "不能同时满足的约束": "Constraints that cannot all hold",
   "没有找到冲突：{error}": "No conflict found: {error}",
-  "这些约束和变量界限放在一起无解；去掉其中任意一条，其余的就能同时满足。请对照问题检查它们。":
-    "Together these constraints and variable bounds have no solution; drop any one and the rest can hold. Check them against the problem.",
   "只显示前 {shown} 条，共 {total} 条。": "Showing the first {shown} of {total}.",
-  "这项诊断只供查看，不会发给建模方法。": "This diagnosis is for reading only; the modeling method never sees it.",
   "{count} 个下标": "{count} indices",
   "标量": "scalar",
   "标量变量": "Scalar variables",
@@ -475,6 +472,19 @@ export const en: Record<string, string> = {
   "选中的数学模型": "Chosen formulation",
   "选择候选模型": "Choose a candidate",
   "逐条生成代码": "Code for each clause",
+  "解释无解原因": "Explain infeasibility",
+  "为什么无解": "Why there is no feasible plan",
+  "查看对应约束": "Show the related constraints",
+  "可以尝试的调整": "Changes to consider",
+  "建议尚未验证。选择后可编辑调整要求，再重新建模验证。": "These suggestions have not been verified. Select one to edit the requirements and solve a new model.",
+  "尝试这个调整": "Try this change",
+  "本次求解未提供具体冲突约束。可核对数学模型与原问题，或通过“调整条件”重新建模。": "This solve did not identify specific conflicting constraints. Check the mathematical model against your problem, or use Change requirements to build a new model.",
+  "求解器在这组约束和变量界限中定位到了冲突。请对照原问题核对它们。": "The solver located a conflict in these constraints and variable bounds. Check them against the original problem.",
+  "当前没有可导出的求解方案。": "There is no solution plan to export.",
+  "求解方案": "Solution plan",
+  "问题与条件": "Problem and requirements",
+  "导出 Excel": "Export Excel",
+  "调整条件会创建新方案，保留本次模型和结果。": "Changing requirements creates a new plan and preserves this model and result.",
 };
 
 /** Step titles with numbers in them. */

@@ -32,8 +32,8 @@
 The platform includes **13 LLM modeling methods**: its own Direct and Feedback Repair methods, plus eleven methods from public research. Enter a problem, run the modeling process and inspect the model and result without writing solver code yourself.
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Demo: explain a production plan, change conditions in plain language and compare the new plan with the original" width="100%">
-  <br><sub>A real run: production planning · Direct · Pyomo/HiGHS · DeepSeek. Change conditions, solve again and compare plans. Playback at 2× speed.</sub>
+  <img src="docs/assets/demo.gif" alt="Demo: export an Excel plan, explain infeasibility, select a requirement change and view the new plan" width="100%">
+  <br><sub>Replay of real runs: Direct · Pyomo/HiGHS and gurobipy · DeepSeek. Export Excel, inspect a conflict, select a change and compare the newly solved plan.</sub>
 </p>
 
 ## Highlights
@@ -45,10 +45,10 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
 | 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
 | ⚖️ **Compare methods** | Run up to 12 methods or models on one problem and compare objective, time and tokens |
 | 💬 **Explain and revise plans** | Read decisions in business terms, change conditions in plain language, and compare the new plan with the saved original |
-| 🧯 **Infeasibility diagnosis** | For an infeasible model, see a set of constraints that cannot hold together (Gurobi IIS / CPMpy MUS) |
+| 🧯 **Explain infeasibility** | Read business explanations grounded in actual conflicting constraints; select and edit a candidate change, then solve a new model to verify it (Gurobi IIS / CPMpy MUS) |
 | 🔒 **Isolated sandbox** | Generated code runs in a container with no network, a read-only file system and no root, removed after use |
 | 👥 **Team deployment** | One `docker compose up`; preset keys never leave the server; optional HTTPS and usage limits |
-| 🌗 **A workbench people like** | Notes and tags, Markdown reports, Excel import, 2,033 public problems, Chinese and English, dark mode |
+| 🌗 **A workbench people like** | Export Excel plans with business labels, units and all actual values; notes and tags, Markdown reports, Excel import, 2,033 public problems, Chinese and English, dark mode |
 
 ## Screenshots
 
