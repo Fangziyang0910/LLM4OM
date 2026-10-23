@@ -14,22 +14,32 @@ export type Solve = {
 };
 export type Usage = { llm_calls: number; solves: number; input_tokens: number; output_tokens: number };
 export type Timing = { started_at: number; elapsed: number; finished_at?: number };
+export type SourceRun = { thread_id: string; checkpoint_id: string };
+export type Explanation = {
+  summary: string; objective_label: string; objective_unit: string;
+  decisions: { variable: string; label: string; unit: string }[]; notes: string[]; total_variables: number;
+};
 export type RunSpec = {
   version: string; method: string; source: string | null; parameters: Record<string, unknown>; limits: Record<string, number>;
   language: string; solver: string; preset: string | null; preset_name?: string;
   llm: { provider: string; model: string; base_url: string; temperature: number | null; max_tokens: number | null;
     timeout: number; max_retries: number; extra_body: Record<string, unknown> };
   sandbox: string; worker_image: string | null;
+  explain?: boolean;
+  locale?: "zh" | "en";
 };
 export type RunValues = {
   description?: string; data?: Record<string, string>; formulation?: string | null; code?: string | null;
   solve?: Solve | null; failure?: string | null; steps?: Step[]; usage?: Usage; spec?: RunSpec | null; timing?: Timing;
+  revision?: { description: string; instruction: string } | null;
+  explanation?: Explanation | null; explanation_error?: string | null;
 };
 /** What the run is and with what it ran, kept as thread metadata; `group` joins the runs of one comparison. */
 export type RunMeta = {
   title: string; method: string; language: string; preset?: string | null; provider: string | null; model: string | null;
   solver?: string;
   group?: string | null; note?: string; tags?: string[];
+  parent?: SourceRun;
 };
 /** A run in the history list. */
 export type Entry = {

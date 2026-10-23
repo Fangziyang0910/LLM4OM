@@ -19,7 +19,7 @@ async function open(page: Page) {
 
 test("a run shows the solution, keeps a note and tags, and exports a report", async ({ page }) => {
   const errors = await open(page);
-  await page.getByRole("button", { name: /^生产计划/ }).click();
+  await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
   await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue(PRODUCTION);
   await page.getByRole("button", { name: "开始建模" }).click();
   await page.waitForURL(/\/run\//);
@@ -117,7 +117,7 @@ test("new methods expose supported solver choices and BIND runs through the work
   await expect(page.locator('[id^="language-"]')).toHaveCount(9);
   await page.locator('label[for="language-ortools"]').click();
   await page.locator('label[for="language-pyomo"]').click();
-  await page.getByRole("button", { name: /^生产计划/ }).click();
+  await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
   await page.getByRole("button", { name: "开始建模" }).click();
   await page.waitForURL(/\/run\//);
   await page.getByRole("button", { name: "查看解" }).waitFor({ timeout: 60_000 });
@@ -134,7 +134,7 @@ test("native APIs run without an interface setting and a library can use differe
   await expect(page.getByRole('combobox', { name: '建模接口', exact: true })).toHaveCount(0);
   await page.getByRole('combobox', { name: '求解后端', exact: true }).click();
   await page.getByRole('option', { name: 'CP_SAT', exact: true }).click();
-  await page.getByRole('button', { name: /^生产计划/ }).click();
+  await page.getByRole('main').getByRole('button', { name: /^生产计划/ }).click();
   await page.getByRole('button', { name: '开始建模' }).click();
   await page.waitForURL(/\/run\//);
   await page.getByRole('button', { name: '查看解' }).waitFor({ timeout: 60_000 });
@@ -197,7 +197,7 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
     Object.defineProperty(Navigator.prototype, "clipboard", { get: () => undefined });
   });
   const errors = await open(page);
-  await page.getByRole("button", { name: /^生产计划/ }).click();
+  await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
   await page.getByRole("switch", { name: "对比多个方法" }).click();
   await page.locator("#compare-feedback_repair").click();
   await page.getByRole("button", { name: "开始对比（2 个运行）" }).click();
@@ -208,6 +208,16 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
   await expect(rows.filter({ hasText: "Feedback Repair" })).toContainText("13");
   await rows.filter({ hasText: "Feedback Repair" }).click();
   await page.waitForURL(/\/run\//);
+  await page.setViewportSize({ width: 320, height: 740 });
+  await expect(page.getByRole("button", { name: "查看对比", exact: true })).toBeInViewport();
+  expect(await page.getByRole("main").evaluate(main => main.scrollWidth <= main.clientWidth)).toBe(true);
+  for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    const panel = page.getByRole("tabpanel");
+    await panel.scrollIntoViewIfNeeded();
+    await expect(panel).toBeInViewport();
+    expect((await panel.boundingBox())!.height).toBeGreaterThan(240);
+  }
   await page.getByRole("button", { name: "更多操作", exact: true }).click();
   await page.getByRole("menuitem", { name: "复制链接" }).click();
   await page.locator("[data-sonner-toast]").filter({ hasText: "已复制链接。" }).waitFor();

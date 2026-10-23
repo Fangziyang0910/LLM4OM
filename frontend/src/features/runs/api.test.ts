@@ -1,12 +1,12 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { deleteRun, history, runMeta, startComparison, startRun } from "@/features/runs/api";
+import { deleteRun, history, runMeta, startComparison, startRevision, startRun } from "@/features/runs/api";
 import { errorText } from "@/format";
 import { client } from "@/features/runs/sdk";
 import type { Draft } from "@/features/composer/types";
 import type { RunMeta, RunSpec } from "@/features/runs/types";
 
 vi.mock("@/features/runs/sdk", () => ({
-  client: { threads: { create: vi.fn(), delete: vi.fn(), search: vi.fn() }, runs: { create: vi.fn() } },
+  client: { threads: { create: vi.fn(), delete: vi.fn(), search: vi.fn(), get: vi.fn(), getState: vi.fn() }, runs: { create: vi.fn() } },
 }));
 
 const threads = vi.mocked(client.threads);
@@ -24,8 +24,33 @@ beforeEach(() => {
 test("library and backend reach the run independently", async () => {
   await startRun({ ...draft, language: "ortools", solver: "CP_SAT" }, undefined);
   expect(runs.create).toHaveBeenCalledWith("thread-1", "direct", expect.objectContaining({
-    context: { language: "ortools", solver: "CP_SAT", preset: null },
+    context: { language: "ortools", solver: "CP_SAT", preset: null, explain: true, locale: "zh" },
   }));
+});
+
+test("a revision pins the source checkpoint and inherits its recorded choices and files", async () => {
+  threads.get.mockResolvedValue({ status: "idle", metadata: { title: "生产计划", method: "old", language: "old", group: "method-comparison" } } as never);
+  threads.getState.mockResolvedValue({ checkpoint: { checkpoint_id: "saved-checkpoint" }, values: {
+    description: "原问题", data: { "data.csv": "a,b\n1,2" },
+    spec: { method: "feedback_repair", language: "ortools", solver: "CP_SAT", preset: null,
+      llm: { provider: "deepseek", model: "saved-model" } },
+  } } as never);
+  await startRevision("original-thread", " B 至少生产 3 件 ", []);
+  expect(threads.create).toHaveBeenCalledWith({ metadata: expect.objectContaining({ method: "feedback_repair", language: "ortools",
+    parent: { thread_id: "original-thread", checkpoint_id: "saved-checkpoint" } }) });
+  expect(threads.create.mock.calls[0][0]?.metadata).not.toHaveProperty("group");
+  expect(runs.create).toHaveBeenCalledWith("thread-1", "feedback_repair", expect.objectContaining({
+    input: { description: "原问题", data: { "data.csv": "a,b\n1,2" }, change: "B 至少生产 3 件" },
+    context: { language: "ortools", solver: "CP_SAT", preset: null, explain: true, locale: "zh" },
+  }));
+});
+
+test("a revision cannot silently replace a deleted model preset", async () => {
+  threads.get.mockResolvedValue({ status: "idle", metadata: { title: "原方案" } } as never);
+  threads.getState.mockResolvedValue({ checkpoint: { checkpoint_id: "saved" }, values: { description: "原问题",
+    spec: { method: "direct", language: "pyomo", preset: "deleted", llm: { provider: "deepseek", model: "old" } } } } as never);
+  await expect(startRevision("source", "改预算", [])).rejects.toThrow("原预设已删除");
+  expect(threads.create).not.toHaveBeenCalled();
 });
 
 test("a rejected run start leaves no empty run behind", async () => {

@@ -52,6 +52,14 @@ def build_model(data):
 
 def reply(messages: list[dict]) -> str:
     text = json.dumps(messages, ensure_ascii=False)
+    if "Explain a computed optimization solution" in text:
+        facts = json.loads(messages[-1]["content"])
+        return json.dumps({"summary": "按表中数量安排生产，满足题面要求。", "objective_label": "总利润", "objective_unit": "元",
+                           "decisions": [{"variable": name, "label": f"{name} 的生产数量", "unit": "件"}
+                                         for name in facts["variables"]], "notes": ["数量采用非负整数。"]}, ensure_ascii=False)
+    if "Revise an optimization problem according to the user's change request" in text:
+        request = json.loads(messages[-1]["content"])
+        return request["original_problem"] + "\n\n" + request["change_request"]
     if "Review an optimization formulation and its code" in text:
         return json.dumps({"action": "accept", "reason": "The model matches the test problem."})
     if "E2E_PAUSE_REPAIR" in text:
@@ -62,7 +70,10 @@ def reply(messages: list[dict]) -> str:
         return f"### Formulation\n{FORMULATION}\n\n```python\n{CP_SAT}```"
     if 'import cvxpy as cp' in text:
         return f"### Formulation\nMinimize squared distance to (1,2), with nonnegative x and sum(x)<=2.\n\n```python\n{CVXPY}```"
-    return f"### Formulation\n{FORMULATION}\n\n```python\n{INFEASIBLE if '合同' in text else FEASIBLE}```"
+    code = INFEASIBLE if "合同" in text else FEASIBLE
+    if "B 至少生产 3 件" in text:
+        code = code.replace("    return m", '    m.minimum_b = pyo.Constraint(expr=m.x["B"] >= 3)\n    return m')
+    return f"### Formulation\n{FORMULATION}\n\n```python\n{code}```"
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -19,10 +19,10 @@ hljs.registerLanguage("python", python);
 hljs.registerLanguage("json", json);
 
 // Convert LLM math delimiters outside code; use Markdown's parser to locate code spans and blocks.
-function normalizeMath(text: string): string {
+function normalizeMath(text: string, singleDollarMath: boolean): string {
   if (!/\\[[(]/.test(text)) return text;
   const replace = (part: string) => part.replace(/\\\[([\s\S]*?)\\\]/g, (_, body) => `$$${body}$$`)
-    .replace(/\\\(([\s\S]*?)\\\)/g, (_, body) => `$${body}$`);
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_, body) => singleDollarMath ? `$${body}$` : `$$${body}$$`);
   const parts: string[] = [];
   let offset = 0;
   function visit(node: Nodes) {
@@ -63,9 +63,12 @@ export function CopyButton({ text, label = t("复制"), className }: { text: str
   </Button>;
 }
 
-export const Markdown = memo(function Markdown({ text, className }: { text: string; className?: string }) {
+export const Markdown = memo(function Markdown({ text, className, singleDollarMath = true }: {
+  // Problems contain dollar prices; explicit math delimiters keep those views unambiguous.
+  text: string; className?: string; singleDollarMath?: boolean;
+}) {
   return <div className={cn("markdown", className)}>
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}
+    <ReactMarkdown remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: singleDollarMath }]]} rehypePlugins={[rehypeKatex]}
       components={{ code: ({ className, children }) => {
         const language = /language-(python|py|json)/.exec(className ?? "")?.[1];
         const source = String(children ?? "");
@@ -73,7 +76,7 @@ export const Markdown = memo(function Markdown({ text, className }: { text: stri
         return language ? <Code text={source.replace(/\n$/, "")} language={language === "json" ? "json" : "python"} className="not-prose" />
           : <Plain className="not-prose">{source.replace(/\n$/, "")}</Plain>;
       }, pre: ({ children }) => <>{children}</> }}>
-      {normalizeMath(text)}
+      {normalizeMath(text, singleDollarMath)}
     </ReactMarkdown>
   </div>;
 });

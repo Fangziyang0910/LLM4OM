@@ -1,25 +1,28 @@
 import { outcome } from "@/format";
-import { t } from "@/i18n";
+import { locale, t } from "@/i18n";
 import type { Draft } from "@/features/composer/types";
-import type { Entry, RunMeta, RunSpec, Usage } from "@/features/runs/types";
+import type { Entry, RunMeta, RunSpec, RunValues, SourceRun, Usage } from "@/features/runs/types";
 import type { Preset } from "@/types";
 
 /** The LangGraph SDK client, loaded on first use. */
 const sdk = () => import("@/features/runs/sdk").then(module => module.client);
 
 /** Create a thread for the draft and start its run in the background; returns the thread id. */
-export async function startRun(draft: Draft, preset: Preset | undefined, group: string | null = null): Promise<string> {
+export async function startRun(draft: Draft, preset: Preset | undefined, group: string | null = null,
+    revision?: { instruction: string; source: SourceRun }): Promise<string> {
   if (draft.preset && !preset) throw new Error(t("原预设已删除，请重新选择预设模型。"));
-  const title = draft.description.trim().split("\n")[0].slice(0, 120);
-  const meta: RunMeta = { title, method: draft.method, language: draft.language, preset: preset?.id ?? null,
+  const title = draft.description.trim().split("\n")[0].replace(/^#{1,6}\s+/, "").slice(0, 120);
+  const meta: RunMeta = { title: revision ? `${title} · ${revision.instruction.slice(0, 60)}` : title,
+    method: draft.method, language: draft.language, preset: preset?.id ?? null,
     ...(draft.solver ? { solver: draft.solver } : {}),
-    provider: preset?.provider ?? null, model: preset?.name || preset?.model || null, ...(group ? { group } : {}) };
+    provider: preset?.provider ?? null, model: preset?.name || preset?.model || null, ...(group ? { group } : {}),
+    ...(revision ? { parent: revision.source } : {}) };
   const client = await sdk();
   const thread = await client.threads.create({ metadata: meta });
   try {
     await client.runs.create(thread.thread_id, draft.method, {
-      input: { description: draft.description, data: draft.data },
-      context: { language: draft.language, solver: draft.solver, preset: preset?.id ?? null },
+      input: { description: draft.description, data: draft.data, ...(revision ? { change: revision.instruction } : {}) },
+      context: { language: draft.language, solver: draft.solver, preset: preset?.id ?? null, explain: true, locale },
       streamMode: ["custom"], streamResumable: true,
     });
   } catch (error) {
@@ -28,6 +31,21 @@ export async function startRun(draft: Draft, preset: Preset | undefined, group: 
     throw error;
   }
   return thread.thread_id;
+}
+
+/** Revise a saved checkpoint in a new thread; the source's problem, attachments and choices remain intact. */
+export async function startRevision(threadId: string, instruction: string, presets: Preset[]): Promise<string> {
+  if (!instruction.trim()) throw new Error(t("请描述要调整的条件。"));
+  const client = await sdk();
+  const [state, thread] = await Promise.all([client.threads.getState<RunValues>(threadId), client.threads.get(threadId)]);
+  if (thread.status === "busy") throw new Error(t("请等待当前运行结束后再调整条件。"));
+  const values = state.values as RunValues;
+  if (!values.description || !state.checkpoint.checkpoint_id) throw new Error(t("原问题尚未保存，请稍后重试。"));
+  const meta = runMeta(thread.metadata as RunMeta, values.spec);
+  const preset = meta.preset ? presets.find(item => item.id === meta.preset) : presets[0];
+  return startRun({ description: values.description, data: values.data ?? {}, method: meta.method,
+    language: meta.language, solver: meta.solver, preset: meta.preset ?? null }, preset, null,
+  { instruction: instruction.trim(), source: { thread_id: threadId, checkpoint_id: state.checkpoint.checkpoint_id } });
 }
 
 /** Start one run of the same problem for each method and preset, as one comparison. If a start fails after others

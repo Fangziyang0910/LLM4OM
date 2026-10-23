@@ -8,7 +8,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/api";
-import { deleteRun, history, startComparison, startRun } from "@/features/runs/api";
+import { deleteRun, history, startComparison, startRevision, startRun } from "@/features/runs/api";
 import { errorText } from "@/format";
 import { Composer, initialDraft } from "@/features/composer/Composer";
 import { Examples } from "@/features/composer/Examples";
@@ -19,7 +19,7 @@ import type { Draft } from "@/features/composer/types";
 import type { Entry } from "@/features/runs/types";
 import type { Options, Preset, Presets } from "@/types";
 
-// The run page carries Markdown, KaTeX and highlighting; the composer loads without them.
+// Load run pages on demand.
 const RunView = lazy(() => import("@/features/runs/RunView").then(module => ({ default: module.RunView })));
 const Compare = lazy(() => import("@/features/runs/Compare").then(module => ({ default: module.Compare })));
 
@@ -94,7 +94,7 @@ export default function App() {
     onExamples={() => { setExamplesOpen(true); setMenuOpen(false); }} onPresets={() => { setPresetsOpen(true); setMenuOpen(false); }} />;
 
   return <div className="flex h-dvh overflow-hidden">
-    <aside aria-label={t("导航")} className="hidden w-72 shrink-0 border-r border-sidebar-border md:block">{sidebar}</aside>
+    <aside aria-label={t("导航")} className="hidden w-64 shrink-0 border-r border-sidebar-border xl:block">{sidebar}</aside>
     <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
       <SheetContent side="left" className="w-72 gap-0 p-0" aria-describedby={undefined}>
         <SheetTitle className="sr-only">{t("导航")}</SheetTitle>
@@ -103,12 +103,12 @@ export default function App() {
     </Sheet>
 
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 md:hidden">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 xl:hidden">
         <Button variant="ghost" size="icon" aria-label={t("打开菜单")} onClick={() => setMenuOpen(true)}><Menu /></Button>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? t("新建建模") : "LLM4OM"}</span>
         {route.name !== "new" ? <Button variant="ghost" size="icon" aria-label={t("新建建模")} onClick={() => go({ name: "new" })}><Plus /></Button> : null}
       </header>
-      <main className="min-h-0 flex-1">
+      <main className="mx-auto min-h-0 w-full max-w-[1600px] flex-1">
         {optionsQuery.error ? <Empty className="h-full">
           <EmptyHeader>
             <EmptyMedia variant="icon"><ServerCrash /></EmptyMedia>
@@ -125,7 +125,10 @@ export default function App() {
               {route.name === "compare" ? <Compare key={route.id} group={route.id} options={options} onOpen={id => go({ name: "run", id })} />
                 : <RunView key={route.id} threadId={route.id} options={options} onFinished={() => void refresh()}
                   onEdit={next => { setDraft({ ...next, comparing: false, methods: draft.methods, presets: draft.presets }); go({ name: "new" }); }}
-                  onRerun={start} onDelete={meta => remove({ id: route.id, meta })}
+                  onRerun={start} onRevise={async instruction => {
+                    const id = await startRevision(route.id, instruction, presets);
+                    void refresh(); go({ name: "run", id });
+                  }} onDelete={meta => remove({ id: route.id, meta })}
                   onCompare={group => go({ name: "compare", id: group })} onMetaChange={() => void refresh()} />}
             </Suspense>}
       </main>

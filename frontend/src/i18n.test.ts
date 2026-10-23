@@ -10,7 +10,7 @@ const files = (directory: string): string[] => readdirSync(directory).flatMap(na
 
 describe("English text", () => {
   it("covers every Chinese text the page passes to t()", () => {
-    const keys = files("src").flatMap(path => [...readFileSync(path, "utf8").matchAll(/\bt\("((?:[^"\\]|\\.)*)"/g)].map(match => match[1]))
+    const keys = files("src").flatMap(path => [...readFileSync(path, "utf8").matchAll(/\bt\("((?:[^"\\]|\\.)*)"/g)].map(match => JSON.parse(`"${match[1]}"`) as string))
       .filter(key => /[㐀-鿿]/.test(key));
     expect(keys.length).toBeGreaterThan(200);
     expect(keys.filter(key => !(key in en))).toEqual([]);

@@ -28,6 +28,7 @@ import { copyText, download } from "@/components/Content";
 import { Outputs, type Tab } from "@/features/runs/Outputs";
 import { StatusBadge, TONE } from "@/features/runs/status";
 import { Timeline } from "@/features/runs/Timeline";
+import { RevisionDialog } from "@/features/runs/RevisionDialog";
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
@@ -48,14 +49,16 @@ function useWide(): boolean {
   }, () => matchMedia(WIDE).matches);
 }
 
-export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDelete, onCompare, onMetaChange }: {
+export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevise, onDelete, onCompare, onMetaChange }: {
   threadId: string; options: Options; onFinished: () => void;
   onEdit: (draft: Draft) => void; onRerun: (draft: Draft) => Promise<void>; onDelete: (meta: RunMeta) => void;
+  onRevise: (instruction: string) => Promise<void>;
   onCompare: (group: string) => void; onMetaChange: () => void;
 }) {
   const { meta: loaded, values, steps, live, run, streaming, error } = useRun(threadId, onFinished);
   const [changed, setChanged] = useState<Partial<RunMeta>>({});  // note and tags saved since the run was read
   const [noting, setNoting] = useState(false);
+  const [revising, setRevising] = useState(false);
   const meta = loaded ? { ...loaded, ...changed } : null;
   const [chosen, setTab] = useState<Tab | null>(null);  // null follows the run
   const [picked, setPicked] = useState<Partial<Record<"formulation" | "code", string>>>({});
@@ -79,7 +82,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDele
   const hasFormulation = !!values.formulation || steps.some(step => step.formulation);
   const hasCode = !!values.code || steps.some(step => step.code);
   const tab: Tab = chosen ?? (active ? (hasCode ? "code" : hasFormulation ? "formulation" : "problem")
-    : solve ? "solution" : hasFormulation ? "formulation" : hasCode ? "code" : "problem");
+    : meta.parent && values.revision ? "comparison" : solve ? "solution" : hasFormulation ? "formulation" : hasCode ? "code" : "problem");
   const elapsed = values.timing ? active ? Math.max(0, now / 1000 - values.timing.started_at) : values.timing.elapsed : null;
   const usage = values.usage;
   const calls = usage?.llm_calls ?? steps.filter(step => step.type === "llm").length;
@@ -101,7 +104,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDele
 
   const timeline = <Timeline steps={steps} live={live} active={active} onShow={show} />;
   const outputs = <Outputs values={values} steps={steps} active={active} tab={tab} setTab={setTab} picked={picked} language={language}
-    finished={finished} setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))} />;
+    finished={finished} source={meta.parent} setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))} />;
   const title = meta.title || (values.description ?? "").trim().split("\n")[0] || t("未命名运行");
   const facts: [React.ReactNode, React.ReactNode, string?][] = [
     [<Layers />, method?.name ?? meta.method, method?.description],
@@ -111,8 +114,8 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDele
   ];
   if (calls) facts.push([<Zap />, t("{count} 次调用", { count: calls }) + (tokens ? ` · ${formatTokens(tokens)} token` : "")]);
 
-  return <div className="flex h-full flex-col">
-    <header className="flex flex-col gap-3 border-b px-4 py-3 md:flex-row md:items-center md:px-6">
+  return <div className="flex h-full flex-col overflow-y-auto">
+    <header className="flex shrink-0 flex-col gap-3 border-b px-4 py-3 md:flex-row md:items-center md:px-6">
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <Tooltip>
           <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{title}</h1></TooltipTrigger>
@@ -125,19 +128,21 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDele
             <NotebookPen />{meta.note.split("\n")[0]}</button> : null}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         {meta.group ? <Button variant="ghost" size="sm" onClick={() => onCompare(meta.group!)} title={t("这次运行属于一组方法对比")}>
           <Columns3 />{t("查看对比")}</Button> : null}
         {active ? <Button variant="outline" size="sm" disabled={stopping} onClick={() => void stop()}>
           {stopping ? <Spinner /> : <Square className="fill-current" />}{stopping ? t("正在停止") : t("停止")}</Button> : <>
           <Button variant="outline" size="sm" disabled={busy || !values.description} onClick={() => void rerun()} title={t("用同样的问题和设置再运行一次")}>
             {busy ? <Spinner /> : <RefreshCw />}{t("再运行一次")}</Button>
-          <Button size="sm" disabled={!values.description} onClick={() => onEdit(draft())} title={t("把问题和设置带回编辑页")}>
-            <Pencil />{t("修改后运行")}</Button>
+          <Button size="sm" disabled={!values.description} onClick={() => setRevising(true)}>
+            <Pencil />{t("调整条件")}</Button>
         </>}
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={t("更多操作")}><MoreHorizontal /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={!values.description} onClick={() => onEdit(draft())}>
+              <Pencil />{t("修改后运行")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => void copyText(location.href).then(() => toast.success(t("已复制链接。")), () => toast.error(t("无法复制，请手动复制地址栏中的链接。")))}>
               <Link2 />{t("复制链接")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setNoting(true)}><NotebookPen />{t("备注与标签")}</DropdownMenuItem>
@@ -150,7 +155,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDele
       </div>
     </header>
 
-    <div className="px-4 pt-4 md:px-6">
+    <div className="shrink-0 px-4 pt-4 md:px-6">
       <Summary state={state} values={values} steps={steps} error={error} active={active} elapsed={elapsed} onTab={showTab} />
     </div>
 
@@ -158,7 +163,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDele
       <ResizablePanel defaultSize="40" minSize="25"><Pane>{timeline}</Pane></ResizablePanel>
       <ResizableHandle withHandle className="mx-2 bg-transparent" />
       <ResizablePanel defaultSize="60" minSize="30"><Pane>{outputs}</Pane></ResizablePanel>
-    </ResizablePanelGroup> : <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pt-3 pb-4">
+    </ResizablePanelGroup> : <div className="flex min-h-96 flex-1 shrink-0 flex-col gap-3 px-4 pt-3 pb-4">
       <Tabs value={view} onValueChange={value => setView(value as "outputs" | "process")}>
         <TabsList className="w-full">
           <TabsTrigger value="outputs">{t("结果")}</TabsTrigger>
@@ -172,6 +177,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onDele
       setChanged(current => ({ ...current, ...change }));
       onMetaChange();
     }} /> : null}
+    {revising ? <RevisionDialog onClose={() => setRevising(false)} onRevise={onRevise} /> : null}
   </div>;
 }
 

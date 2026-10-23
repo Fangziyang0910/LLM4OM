@@ -63,3 +63,10 @@ export function parseDelimited(text: string, delimiter = ","): string[][] | null
   if (table.length < 2 || table[0].length < 2 || table.some(cells => cells.length !== table[0].length)) return null;
   return table;
 }
+/** Added and removed variables stay distinct from variables whose actual value is zero. */
+export function variableChanges(before: Record<string, number>, after: Record<string, number>) {
+  return [...new Set([...Object.keys(before), ...Object.keys(after)])]
+    .map(name => ({ name, before: Object.hasOwn(before, name) ? before[name] : undefined,
+      after: Object.hasOwn(after, name) ? after[name] : undefined }))
+    .filter(item => item.before !== item.after);
+}

@@ -28,6 +28,10 @@ export function report(meta: RunMeta, values: RunValues, options: Options, link?
   if (meta.note) parts.push(`## ${t("备注")}\n\n${meta.note}`);
   if (values.spec) parts.push(`## ${t("运行配置")}\n\n${fence(JSON.stringify(values.spec, null, 2), "json")}`);
   parts.push(`## ${t("问题描述")}\n\n${(values.description ?? "").trim()}`);
+  if (values.revision) {
+    parts.push(`## ${t("调整要求")}\n\n${values.revision.instruction}`);
+    parts.push(`### ${t("原问题")}\n\n${values.revision.description}`);
+  }
   for (const [name, content] of Object.entries(values.data ?? {})) {
     const shown = content.length > MAX_DATA ? content.slice(0, MAX_DATA) + `\n… (${t("共 {count} 字符", { count: content.length })})` : content;
     parts.push(`### ${t("数据文件")} \`${name}\`\n\n${fence(shown)}`);
@@ -36,6 +40,13 @@ export function report(meta: RunMeta, values: RunValues, options: Options, link?
   if (values.formulation) parts.push(`## ${t("数学模型")}\n\n${values.formulation.trim()}`);
   if (values.code) parts.push(`## ${t("求解代码")}\n\n${fence(values.code, "python")}`);
   if (solve) {
+    if (values.explanation) {
+      const explanation = values.explanation;
+      const decisions = explanation.decisions.map(item => `- ${item.label}${COLON}${formatNumber(solve.variables[item.variable])} ${item.unit}`);
+      const objective = solve.objective == null ? "" : `${explanation.objective_label}${COLON}${formatNumber(solve.objective)} ${explanation.objective_unit}`;
+      parts.push([`## ${t("方案解读")}`, explanation.summary, objective, decisions.join("\n"),
+        explanation.notes.map(note => `- ${note}`).join("\n")].filter(Boolean).join("\n\n"));
+    }
     const lines = [`- ${t("求解状态")}${COLON}${(STATUS[solve.status] ?? solve.status)}`];
     if (solve.objective != null) lines.push(`- ${t("目标值")}${COLON}${formatNumber(solve.objective)}`);
     const nonzero = Object.entries(solve.variables).filter(([, value]) => value !== 0);

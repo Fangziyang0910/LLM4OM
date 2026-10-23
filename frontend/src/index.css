@@ -101,7 +101,7 @@
 
 @utility tabular { font-variant-numeric: tabular-nums; }
 
-/* Markdown written by LLMs: tables, formulas and code stay inside their column. */
+/* Markdown: tables, formulas and code stay inside their column. */
 .markdown { @apply prose prose-sm max-w-none dark:prose-invert prose-headings:font-semibold prose-headings:tracking-tight
   prose-h1:text-lg prose-h2:text-base prose-h3:text-sm prose-p:leading-relaxed prose-li:my-0.5 prose-code:before:content-none
   prose-code:after:content-none prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:font-normal
@@ -109,6 +109,9 @@
 .markdown table { @apply block w-full overflow-x-auto text-[13px]; }
 .markdown th, .markdown td { @apply border border-border align-top; }
 .markdown .katex-display { @apply my-3 overflow-x-auto overflow-y-hidden py-1; }
+.markdown { overflow-wrap: anywhere; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
 
 /* highlight.js tokens */
 .hljs-keyword, .hljs-built_in, .hljs-literal { color: oklch(0.5 0.2 300); }

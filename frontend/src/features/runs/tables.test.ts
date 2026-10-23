@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asMatrix, groupVariables, parseDelimited } from "@/features/runs/tables";
+import { asMatrix, groupVariables, parseDelimited, variableChanges } from "@/features/runs/tables";
 
 describe("groupVariables", () => {
   it("groups indexed variables by base name and lays two-index groups out as a matrix", () => {
@@ -27,4 +27,11 @@ describe("parseDelimited", () => {
     expect(parseDelimited("just a note")).toBeNull();
     expect(parseDelimited("a,b\n1,2,3\n")).toBeNull();
   });
+});
+it("compares actual variable values without turning missing values into zero", () => {
+  expect(variableChanges({ a: 3, b: 0, same: 2 }, { a: 2, c: 0, same: 2 })).toEqual([
+    { name: "a", before: 3, after: 2 }, { name: "b", before: 0, after: undefined },
+    { name: "c", before: undefined, after: 0 },
+  ]);
+  expect(variableChanges({}, { constructor: 0 })).toEqual([{ name: "constructor", before: undefined, after: 0 }]);
 });

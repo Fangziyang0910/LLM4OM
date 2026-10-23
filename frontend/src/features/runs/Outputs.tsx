@@ -12,20 +12,22 @@ import { Toggle } from "@/components/ui/toggle";
 import { versions, type Version } from "@/features/runs/steps";
 import { parseDelimited } from "@/features/runs/tables";
 import type { Language } from "@/types";
-import type { RunValues, Step } from "@/features/runs/types";
+import type { RunValues, SourceRun, Step } from "@/features/runs/types";
 import { Code, CopyButton, Diff, Markdown, Plain, download } from "@/components/Content";
 import { Solution } from "@/features/runs/Solution";
+import { Explanation } from "@/features/runs/Explanation";
+import { ScenarioComparison } from "@/features/runs/ScenarioComparison";
 
-export type Tab = "solution" | "formulation" | "code" | "problem";
+export type Tab = "solution" | "formulation" | "code" | "problem" | "comparison";
 const TABS: [Tab, string, LucideIcon][] = [
   ["solution", t("解"), Table2], ["formulation", t("数学模型"), Sigma], ["code", t("求解代码"), CodeXml], ["problem", t("问题与数据"), FileText],
 ];
 
 /** What the run produced: the solution, the formulation and the code (each in every version), and the problem. */
-export function Outputs({ values, steps, active, tab, setTab, picked, setPicked, language, finished }: {
+export function Outputs({ values, steps, active, tab, setTab, picked, setPicked, language, finished, source }: {
   values: RunValues; steps: Step[]; active: boolean; tab: Tab; setTab: (tab: Tab) => void;
   picked: Partial<Record<"formulation" | "code", string>>; setPicked: (key: "formulation" | "code", id: string | undefined) => void;
-  language?: Language; finished: boolean;
+  language?: Language; finished: boolean; source?: SourceRun;
 }) {
   const formulations = useMemo(() => versions(steps, "formulation", values.formulation), [steps, values.formulation]);
   const codes = useMemo(() => versions(steps, "code", values.code), [steps, values.code]);
@@ -34,7 +36,7 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
   return <div className="flex h-full min-h-0 flex-col">
     <Tabs value={tab} onValueChange={value => setTab(value as Tab)} className="shrink-0 gap-0">
       <TabsList variant="line" aria-label={t("运行产物")} className="h-11 w-full justify-start overflow-x-auto rounded-none border-b px-3">
-        {TABS.map(([id, label, TabIcon]) => <TabsTrigger key={id} value={id} className="flex-none px-2 sm:px-2.5 [&_svg]:hidden sm:[&_svg]:inline-block">
+        {[...TABS, ...(source ? [["comparison", t("方案对比"), Table2] as const] : [])].map(([id, label, TabIcon]) => <TabsTrigger key={id} value={id} className="flex-none px-2 sm:px-2.5 [&_svg]:hidden sm:[&_svg]:inline-block">
           <TabIcon />{label}
           {(counts[id] ?? 0) > 1 ? <span className="rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground tabular">{counts[id]}</span> : null}
           {active && (counts[id] ?? 0) > 0 ? <span className="size-1.5 animate-pulse rounded-full bg-primary" aria-label={t("正在更新")} /> : null}
@@ -42,7 +44,11 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
       </TabsList>
     </Tabs>
     <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
-      {tab === "solution" ? values.solve ? <Solution solve={values.solve} />
+      {tab === "solution" ? values.solve ? <div className="flex flex-col gap-4">
+        {values.explanation ? <Explanation explanation={values.explanation} solve={values.solve} /> : null}
+        {values.explanation_error ? <Alert><AlertDescription>{t("方案解读未完成，求解结果仍可正常查看。")}</AlertDescription></Alert> : null}
+        <Solution solve={values.solve} />
+      </div>
         : <Blank icon={Table2} text={active ? t("代码在沙箱中求解后，解会显示在这里。") : values.failure ? t("没有求解结果。") : finished ? t("没有求解结果。") : t("运行没有完成。")} />
         : null}
       {tab === "formulation" ? <Versioned key="formulation" items={formulations} picked={picked.formulation} pick={id => setPicked("formulation", id)}
@@ -54,6 +60,7 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
         empty={active ? t("方法写出代码后显示在这里。") : t("没有求解代码。")}
         render={text => <Code text={text} />} /> : null}
       {tab === "problem" ? <Problem values={values} /> : null}
+      {tab === "comparison" && source ? <ScenarioComparison source={source} values={values} /> : null}
     </div>
   </div>;
 }
@@ -111,7 +118,7 @@ function Problem({ values }: { values: RunValues }) {
         <CardTitle className="text-sm">{t("问题描述")}</CardTitle>
         <CopyButton text={values.description ?? ""} label={t("复制问题")} className="ml-auto" />
       </CardHeader>
-      <CardContent className="px-4 text-sm leading-relaxed whitespace-pre-wrap">{values.description}</CardContent>
+      <CardContent className="min-w-0 px-4"><Markdown text={values.description ?? ""} singleDollarMath={false} /></CardContent>
     </Card>
     {files.map(([name, content]) => <DataFile key={name} name={name} content={content} />)}
     {values.spec ? <details className="rounded-lg border p-4">

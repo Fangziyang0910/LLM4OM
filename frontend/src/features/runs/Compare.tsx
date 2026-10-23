@@ -37,10 +37,10 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
   const result = agreement(entries);
 
   return <div className="h-full overflow-y-auto">
-    <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-6 md:px-8 md:py-8">
+    <div className="flex min-w-0 flex-col gap-5 p-4 sm:p-6">
       <header className="flex flex-col gap-1.5">
         <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><Columns3 className="size-3.5" />{t("方法对比")}</span>
-        <h1 className="text-xl font-semibold tracking-tight">{entries[0].meta.title}</h1>
+        <h1 className="break-words text-xl font-semibold tracking-tight">{entries[0].meta.title}</h1>
         <p className="text-sm text-muted-foreground">
           {t("{count} 个运行", { count: entries.length })}
           {running ? <> · {t("{count} 个进行中", { count: running })}</> : null}

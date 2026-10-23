@@ -9,16 +9,19 @@ LLM4OM 只做三件事：建模、求解、记录过程。LLM 调用、重试和
 LangGraph 服务器（langgraph-api，内存运行时，数据在 <workspace>/.langgraph_api/）
    │  每个方法注册为一张平台图（server/graphs.py）；/api/* 由 server/app.py 提供
    ▼
-平台图：prepare ──► model ──► solve ──► finish
-          │           │           └─ 方法没有求解最终代码时，在沙箱中求解一次
-          │           └─ method.graph().astream(..., context=Context)
-          │                 ├─ runtime.context.llm(role)    → LangChain 聊天模型（流式；回调记录每次调用）
-          │                 ├─ runtime.context.solve(code)  → Docker Worker：构建 → 用该写法的求解器求解
-          │                 └─ Method.titles 中节点结束时的更新 → 中间产物步骤
-          └─ 校验请求：问题非空、写法存在且方法支持、LLM 已配置
+平台图：prepare ──► [revise] ──► model ──► solve ──► [explain] ──► finish
+
+prepare：校验问题、写法、方法支持和 LLM 配置
+model：method.graph().astream(..., context=Context)
+        ├─ runtime.context.llm(role)   → LangChain 聊天模型（流式；回调记录调用）
+        ├─ runtime.context.solve(code) → Docker Worker：构建 → 求解
+        └─ Method.titles 中节点结束时的更新 → 中间产物步骤
+solve：方法没有求解最终代码时，在沙箱中求解一次
 ```
 
 一次运行分两个阶段：数学建模和代码表达，都在方法图内完成；代码随后在沙箱中运行，得到结果。平台图把“方法”和“最终求解”分成两个节点，方法内部是否交错两个阶段、是否根据求解反馈回到建模，由方法自己决定。
+
+条件调整的 `revise` 和结果解读的 `explain` 位于方法图外。它们复用本次运行的 LLM、预算、步骤和持久化，不改变方法内部编排或提示。
 
 ## 模块
 
@@ -44,6 +47,7 @@ src/llm4om/
 │   ├── direct/          Direct 与 Feedback Repair 共用生成节点和提示，分别编译为图
 │   └── <method>/        复杂方法：__init__.py 导出入口，graph.py 编排，提示/解析/搜索各归其位
 ├── graph.py             平台图 platform_graph(method)、RunState、RunContext、Resources、进程内运行 run()
+├── followups.py         完整题面整理、业务解读结构和实际变量引用校验
 └── server/              Web 工作台
     ├── graphs.py        每个方法的平台图，供 LangGraph 服务器注册
     ├── app.py           服务器挂载的路由：选项、预设模型、模型列表、题库、前端页面
@@ -66,11 +70,15 @@ runtime → progress ───────────────────�
 
 | 键 | 内容 |
 |---|---|
-| 输入 | `description`（问题描述）、`data`（数据文件名到文本） |
-| 运行上下文 `RunContext` | `language`、`solver`、`preset`。只写预设模型的 id，不写密钥，也不能改模型；服务器按 id 读取预设。方法参数不随运行传入，固定在 `methods/presets.py` |
-| 输出 | `formulation`、`code`、`solve`、`failure`、`steps`、`usage`（LLM 调用、求解、token）、`spec`（配置快照）、`timing`（执行时间） |
+| 输入 | `description`（问题描述）、`data`（数据文件名到文本）、可选 `change`（条件调整要求） |
+| 运行上下文 `RunContext` | `language`、`solver`、`preset`、`explain`、`locale`。只写预设模型的 id，不写密钥，也不能改模型；服务器按 id 读取预设。方法参数固定在 `methods/presets.py` |
+| 输出 | `formulation`、`code`、`solve`、`failure`、`steps`、`usage`、`spec`、`timing`；条件调整保存 `revision`，结果解读保存 `explanation` 或 `explanation_error` |
 
-图的输入类型 `RunInput` 只开放问题与数据，内部结果不能通过输入注入。每次 `prepare` 都清空旧产物、步骤、计数和配置，再建立本次运行状态；同一线程再次运行也遵守这一规则。
+图的输入类型 `RunInput` 只开放问题、数据和调整要求，内部结果不能通过输入注入。每次 `prepare` 都清空旧产物、解读、步骤、计数和配置，再建立本次运行状态；同一线程再次运行也遵守这一规则。
+
+有 `change` 时先运行 `revise`，把原题和调整要求保存为 `revision`，整理新题面并交给原方法。调整要求只消费一次，再次运行同一线程不会重复应用。工作台创建独立新线程，元数据 `parent` 记录原线程和检查点 ID；读取基准通过 SDK 原生 `threads.getState(thread, checkpoint)`，不自建版本存储，也不把不同条件混入方法对比组。
+
+工作台设置 `explain=true`，有可用解且建模未失败时执行 `explain`。LLM 返回业务标签、单位、定性说明及对实际变量的引用；平台校验引用，展示和报告中的数值始终读取 `solve`。没有统一计算依据的资源剩余量和敏感性指标不补造。解读失败写入独立错误，保留原求解状态。进程内 `run()` / `run_problem()` 可传 `explain=True` 和 `change=...`；默认保留只建模与求解的调用行为。
 
 `prepare` 发现请求不可用时写入 `failure` 并结束运行，不调用 LLM；有效请求记录内部截止时间 `_deadline` 和不含密钥的 `spec`，包括平台版本、方法来源与参数、限制、LLM 设置、代码写法、求解器和沙箱镜像。`model` 和 `solve` 共享剩余时间，超时、超限或出错时写入一个错误步骤和 `failure`，保留已完成的数学模型和代码。失败后不再补跑最终求解。`finish` 固定 `timing`：从开始校验到结束，不含服务器排队时间，不随备注和标签变化。没有完成计时的记录在对比表中显示未知；中断运行的详情可读取进度快照中的时间。
 
@@ -201,7 +209,7 @@ frontend/src/
 ├── i18n.ts / locales/  中英文文本
 ├── format.ts          状态、数字和用时的展示
 ├── features/
-│   ├── composer/      Composer、Examples、Excel 导入、Draft 类型及测试
+│   ├── composer/      Composer、ProblemEditor、Examples、Excel 导入、Draft 类型及测试
 │   ├── presets/       PresetsDialog
 │   └── runs/          RunView、Compare、Outputs、Solution、Timeline、状态图标
 │                      api、sdk、useRun、types、steps、tables、report 及相邻测试
@@ -218,9 +226,15 @@ frontend/src/
 
 页面按用户的任务顺序组织：
 
-1. 编辑页左侧写问题、附数据；右侧固定显示建模方法、九个建模求解器及库内接口/后端、LLM，选择直接可见。
+1. 编辑页用 `ProblemEditor` 管理编辑、Markdown 预览和附件展示，`Composer` 管理草稿、文件读取及运行设置。左侧写问题，右侧选择建模方法、九个建模求解器、原生后端和 LLM；底部操作区常驻。
 2. 运行页先用结论卡回答“得到了什么”（目标值、状态或失败原因），再提供“核对数学模型”和“查看解”。
 3. 下方左栏是建模过程，右栏是产物。宽屏下两栏可拖动调整宽度；窄屏下用“结果 / 过程”切换。
+
+`Explanation` 将业务标签与实际求解数值组合。`RevisionDialog` 收集调整要求；`startRevision()` 从原生检查点读取题面、附件和固定配置，发起新线程。`ScenarioComparison` 读取该检查点，按实际数值比较目标和同名变量；变量缺失与零值保持区分。Markdown 报告同时包含解读、调整要求和原题。
+
+各页共用最大 1600 像素的内容宽度。导航在 1280 像素以上常驻；编辑页在 1024 像素以上并排显示等高卡片，窄屏上下排列。长题面、方法列表和短屏设置使用各自的滚动区域，不把开始按钮推到屏外。
+
+问题预览和运行题面共用 `Content.Markdown`，只渲染原文，不改变提交内容。题面关闭单美元符号公式，避免价格被当成数学表达式；显式公式分隔符继续支持。生成的数学模型和建模步骤保留原有公式语法。
 
 | 需要 | 使用 |
 |---|---|

@@ -1,4 +1,4 @@
-"""The platform graph of a method: prepare → model (the method's own graph) → solve → finish.
+"""The platform graph: prepare → optional revision → method → solve → optional explanation → finish.
 
 The LangGraph server registers one platform graph per method (`server/graphs.py`); `run()` executes one in process.
 A run's input is the problem description and its data files; its context names the code language and the LLM.
@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field
 from functools import cache
 from importlib.metadata import version
 from pathlib import Path
-from typing import Annotated, Any, Callable, TypedDict
+from typing import Annotated, Any, Callable, Literal, TypedDict
 from uuid import UUID
 
 from langchain_core.callbacks import BaseCallbackHandler
@@ -28,6 +28,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import Overwrite
 
 from llm4om.budget import TokenBudget
+from llm4om.followups import explain_result, revise_problem
 from llm4om.languages import CodeTarget
 from llm4om.llm import LLMSettings, chat_model
 from llm4om.llm_presets import LLMPresetStore
@@ -45,6 +46,7 @@ HIDDEN_KEYS = {"problem", "description", "solve", "messages", "failure"}  # and 
 class RunInput(TypedDict, total=False):
     description: str  # input: the problem description
     data: dict[str, str]  # input: data file name -> text; the code reads them as build_model(data)
+    change: str | None  # optional instruction to revise this problem before modeling
 
 
 class RunState(RunInput, total=False):
@@ -53,6 +55,9 @@ class RunState(RunInput, total=False):
     code: str | None
     solve: dict[str, Any] | None  # SolveResult as a dict
     failure: str | None  # why the run failed, possibly after producing code
+    revision: dict[str, str] | None  # original description and the user's change request
+    explanation: dict[str, Any] | None
+    explanation_error: str | None  # presentation failure does not invalidate a solved model
     steps: Annotated[list[dict[str, Any]], operator.add]  # every recorded step, in order
     usage: dict[str, int]  # LLM calls, solves and tokens
     spec: dict[str, Any] | None  # fixed method, LLM and solver settings; never credentials
@@ -67,6 +72,8 @@ class RunContext:
     language: str = "pyomo"  # code language, which decides the solver
     preset: str | None = None  # LLM preset id; None means the default preset
     solver: str | None = None
+    explain: bool = False  # the workbench enables business interpretation after a successful solve
+    locale: Literal["zh", "en"] = "zh"
 
 
 @dataclass
@@ -201,12 +208,15 @@ def platform_graph(method: Method) -> Any:
         resources = _resources()
         deadline = started + (method.limits or resources.limits).run_timeout
         fresh = {"formulation": None, "code": None, "solve": None, "spec": None, "usage": {},
-                 "steps": Overwrite([]), "timing": timing(started), "problem": ""}
+                 "steps": Overwrite([]), "timing": timing(started), "problem": "", "change": None,
+                 "revision": None, "explanation": None, "explanation_error": None}
         if runtime.store and (thread := thread_id()):
             await runtime.store.adelete(NAMESPACE, thread)
         try:
             if not (state.get("description") or "").strip():
                 raise ValueError("Describe the optimization problem first.")
+            if state.get("change") is not None and not state["change"].strip():
+                raise ValueError("Describe how you want to change the problem.")
             target = CodeTarget(choice.language, choice.solver)
             if method.languages is not None and target.language not in method.languages:
                 raise ValueError(f"{method.name} does not support {target.language}; "
@@ -224,8 +234,11 @@ def platform_graph(method: Method) -> Any:
                 "language": target.language, "solver": target.solver,
                 "preset": preset, "preset_name": preset_name,
                 "llm": settings.public(),
+                "explain": choice.explain,
+                "locale": choice.locale,
                 "sandbox": resources.sandbox.kind, "worker_image": resources.sandbox.image if resources.sandbox.kind == "docker" else None}
         return {**fresh, "problem": problem_text(state.get("description", ""), data), "failure": None, "_deadline": deadline,
+                "revision": {"description": state["description"], "instruction": state["change"].strip()} if state.get("change") else None,
                 "spec": spec, "timing": timing(started)}
 
     def failure(error: Exception, recorder: Recorder) -> dict[str, Any]:
@@ -233,16 +246,35 @@ def platform_graph(method: Method) -> Any:
         recorder.step("error", "运行失败", traceback.format_exc(limit=-8))
         return {"failure": message}
 
-    async def model(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
-        """Run the method's graph; each titled node update becomes a step."""
+    async def llm_context(state: RunState, runtime: Runtime[RunContext]) -> Context:
+        _, settings, _ = await asyncio.to_thread(_resources().resolve, state["spec"]["preset"])
+        if settings.public() != state["spec"]["llm"]:
+            raise ValueError("The LLM preset changed before the next platform step. Start a new run with the intended preset.")
+        return context(state, runtime, settings)
+
+    async def revise(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
         try:
-            _, settings, _ = await asyncio.to_thread(_resources().resolve, state["spec"]["preset"])
-            if settings.public() != state["spec"]["llm"]:
-                raise ValueError("The LLM preset changed before modeling started. Start a new run with the intended preset.")
+            run = await llm_context(state, runtime)
         except ValueError as error:
             recorder = context(state, runtime).recorder
             return {**failure(error, recorder), **recorder.update()}
-        run = context(state, runtime, settings)
+        async with save_progress(runtime.store, thread_id(), state, run.recorder):
+            try:
+                description = await asyncio.wait_for(revise_problem(run, state["description"], state["revision"]["instruction"]),
+                                                     state["_deadline"] - time.time())
+                run.recorder.step("artifact", "整理调整后的问题", description)
+                result = {"description": description, "problem": problem_text(description, run.data)}
+            except Exception as error:
+                result = failure(error, run.recorder)
+        return {**result, **run.recorder.update()}
+
+    async def model(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
+        """Run the method's graph; each titled node update becomes a step."""
+        try:
+            run = await llm_context(state, runtime)
+        except ValueError as error:
+            recorder = context(state, runtime).recorder
+            return {**failure(error, recorder), **recorder.update()}
         recorder = run.recorder
         graph = method.graph()
         graph.checkpointer = False  # the method's inner states are not checkpointed; the platform state is
@@ -278,21 +310,56 @@ def platform_graph(method: Method) -> Any:
                 result = failure(error, run.recorder)
         return {**result, **run.recorder.update()}
 
+    async def explain(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
+        run = context(state, runtime)
+        try:
+            run = await llm_context(state, runtime)
+            async with save_progress(runtime.store, thread_id(), state, run.recorder):
+                explanation = await asyncio.wait_for(explain_result(run, state["problem"], state.get("formulation"),
+                                                                   state.get("code"), state["solve"], state["spec"]["locale"]),
+                                                     state["_deadline"] - time.time())
+                run.recorder.step("artifact", "解读求解结果", explanation["summary"])
+            result = {"explanation": explanation, "explanation_error": None}
+        except Exception as error:
+            message = str(error) or type(error).__name__
+            run.recorder.step("error", "结果解读未完成", message)
+            result = {"explanation_error": message}
+        return {**result, **run.recorder.update()}
+
     async def finish(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
         if runtime.store and (thread := thread_id()):
             await runtime.store.adelete(NAMESPACE, thread)
         return {"timing": timing(state["timing"]["started_at"], finished=True)}
 
+    def after_prepare(state: RunState) -> str:
+        if state.get("failure"):
+            return "finish"
+        return "revise" if state.get("revision") else "model"
+
+    def after_model(state: RunState) -> str:
+        if state.get("code") and not state.get("solve") and not state.get("failure"):
+            return "solve"
+        return after_solve(state)
+
+    def after_solve(state: RunState) -> str:
+        solved = state.get("solve") or {}
+        interpret = ((state.get("spec") or {}).get("explain") and not state.get("failure") and not solved.get("error")
+                     and solved.get("status") in {"optimal", "feasible", "locally_optimal"})
+        return "explain" if interpret else "finish"
+
     builder = StateGraph(RunState, input_schema=RunInput, context_schema=RunContext)
     builder.add_node("prepare", prepare)
+    builder.add_node("revise", revise)
     builder.add_node("model", model)
     builder.add_node("solve", solve)
+    builder.add_node("explain", explain)
     builder.add_node("finish", finish)
     builder.add_edge(START, "prepare")
-    builder.add_conditional_edges("prepare", lambda state: "finish" if state.get("failure") else "model", ["model", "finish"])
-    builder.add_conditional_edges("model", lambda state: "solve" if state.get("code") and not state.get("solve") and not state.get("failure") else "finish",
-                                  ["solve", "finish"])
-    builder.add_edge("solve", "finish")
+    builder.add_conditional_edges("prepare", after_prepare, ["model", "revise", "finish"])
+    builder.add_conditional_edges("revise", lambda state: "finish" if state.get("failure") else "model", ["model", "finish"])
+    builder.add_conditional_edges("model", after_model, ["solve", "explain", "finish"])
+    builder.add_conditional_edges("solve", after_solve, ["explain", "finish"])
+    builder.add_edge("explain", "finish")
     builder.add_edge("finish", END)
     return builder.compile(name=method.id)
 
@@ -300,6 +367,7 @@ def platform_graph(method: Method) -> Any:
 async def run(description: str, *, method: str = "direct", language: str = "pyomo",
               solver: str | None = None, data: dict[str, str] | None = None,
               preset: str | None = None, resources: Resources | None = None,
+              change: str | None = None, explain: bool = False, locale: Literal["zh", "en"] = "zh",
               on_step: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
     """Run one method in process and return the final state. `on_step` receives each step as it is recorded."""
     available = methods()
@@ -308,8 +376,8 @@ async def run(description: str, *, method: str = "direct", language: str = "pyom
     final: dict[str, Any] = {}
     config: RunnableConfig = {"configurable": {"llm4om_resources": resources}} if resources else {}
     async for mode, chunk in platform_graph(available[method]).astream(
-            {"description": description, "data": data or {}}, config,
-            context=RunContext(language, preset, solver), stream_mode=["custom", "values"]):
+            {"description": description, "data": data or {}, "change": change}, config,
+            context=RunContext(language, preset, solver, explain, locale), stream_mode=["custom", "values"]):
         if mode == "values":
             final = chunk
         elif on_step and "step" in chunk:

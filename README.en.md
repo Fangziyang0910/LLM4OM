@@ -32,8 +32,8 @@
 The platform includes **13 LLM modeling methods**: its own Direct and Feedback Repair methods, plus eleven methods from public research. Enter a problem, run the modeling process and inspect the model and result without writing solver code yourself.
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Demo: production planning with Direct and OR-Tools; view the solution, formulation and code" width="100%">
-  <br><sub>A real run: production planning · Direct · OR-Tools/SCIP · DeepSeek. Playback at 2× speed.</sub>
+  <img src="docs/assets/demo.gif" alt="Demo: explain a production plan, change conditions in plain language and compare the new plan with the original" width="100%">
+  <br><sub>A real run: production planning · Direct · Pyomo/HiGHS · DeepSeek. Change conditions, solve again and compare plans. Playback at 2× speed.</sub>
 </p>
 
 ## Highlights
@@ -44,6 +44,7 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
 | 🧩 **9 modeling libraries** | Native modeling APIs, with backend discovery through each library’s own plugin registry |
 | 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
 | ⚖️ **Compare methods** | Run up to 12 methods or models on one problem and compare objective, time and tokens |
+| 💬 **Explain and revise plans** | Read decisions in business terms, change conditions in plain language, and compare the new plan with the saved original |
 | 🧯 **Infeasibility diagnosis** | For an infeasible model, see a set of constraints that cannot hold together (Gurobi IIS / CPMpy MUS) |
 | 🔒 **Isolated sandbox** | Generated code runs in a container with no network, a read-only file system and no root, removed after use |
 | 👥 **Team deployment** | One `docker compose up`; preset keys never leave the server; optional HTTPS and usage limits |
