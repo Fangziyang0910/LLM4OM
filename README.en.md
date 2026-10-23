@@ -32,8 +32,8 @@
 The platform includes **13 LLM modeling methods**: its own Direct and Feedback Repair methods, plus eleven methods from public research. Enter a problem, run the modeling process and inspect the model and result without writing solver code yourself.
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Demo: pick the transport problem and ORThought, start modeling, then see the solution, the formulation and the code" width="100%">
-  <br><sub>A real run: transport problem · ORThought · Pyomo/HiGHS · DeepSeek. The modeling phase plays at 2× speed.</sub>
+  <img src="docs/assets/demo.gif" alt="Demo: production planning with Direct and OR-Tools; view the solution, formulation and code" width="100%">
+  <br><sub>A real run: production planning · Direct · OR-Tools/SCIP · DeepSeek. Playback at 2× speed.</sub>
 </p>
 
 ## Highlights
@@ -86,7 +86,7 @@ You need Python 3.11–3.13, [uv](https://docs.astral.sh/uv/) and Docker:
 
 ```bash
 uv sync --all-extras
-uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:11
+uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:12
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
@@ -132,7 +132,7 @@ print(state["failure"] or state["solve"]["objective"])
 | BIND | Prompt with schemas; read full attachments in code; repair execution failures | [Paper](https://arxiv.org/abs/2605.21751) · [Adaptation](src/llm4om/methods/bind/README.md) |
 | OptiMind | Public class hints, modeling, execution feedback and iterative review | [Paper](https://arxiv.org/abs/2509.22979) · [Public scope](src/llm4om/methods/optimind/README.md) |
 
-Each method records its reference commit and adaptations. SAC-Opt is independently implemented; BIND uses no benchmark reference answers; OptiMind integrates the public inference workflow and the published TSP hint subset, not trained weights. Each method exposes its supported code targets. See [methods](docs/methods.md).
+Each method records its reference commit and adaptations. SAC-Opt is independently implemented; BIND uses no benchmark reference answers; OptiMind integrates the public inference workflow and the published TSP hint subset, not trained weights. All 13 methods accept the nine modeling libraries. Some methods retain an LP/MILP scope; the library and backend must support the problem. See [methods](docs/methods.md).
 
 ## Modeling libraries and backends
 

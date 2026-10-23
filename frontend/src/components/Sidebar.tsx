@@ -140,7 +140,7 @@ export function Sidebar({ entries, current, options, presets, hasMore, loading, 
           <span className="flex min-w-0 flex-col items-start leading-tight">
             <span>{t("预设模型")}</span>
             <span className={cn("truncate text-[11px]", preset ? "text-muted-foreground" : "text-destructive")}>
-              {preset ? presets.length > 1 ? t("{model} 等 {count} 个", { model: preset.model, count: presets.length }) : preset.model : t("未配置")}</span>
+              {preset ? presets.length > 1 ? t("{model} 等 {count} 个", { model: preset.name || preset.model, count: presets.length }) : preset.name || preset.model : t("未配置")}</span>
           </span>
         </Button>
         <ThemeMenu />

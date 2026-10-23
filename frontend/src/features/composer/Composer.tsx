@@ -227,7 +227,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
                       selected && "border-primary/50 bg-primary/5 hover:bg-primary/5", blocked && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
                     <Checkbox id={`compare-${item.id}`} checked={selected} disabled={blocked} onCheckedChange={on => toggle("methods", item.id, on === true)} />
                     <span className="text-sm font-medium">{item.name}</span>
-                    {item.languages ? <Badge variant="outline" className="ml-auto h-4.5 px-1.5 text-[10px] font-normal text-muted-foreground">LP / MILP</Badge> : null}
+                    {item.linear_only ? <Badge variant="outline" className="ml-auto h-4.5 px-1.5 text-[10px] font-normal text-muted-foreground">LP / MILP</Badge> : null}
                   </Label>;
                 })}
               </div> : <RadioGroup value={method.id} onValueChange={value => set({ method: value })} aria-label={t("建模方法")}
@@ -240,7 +240,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
                     <RadioGroupItem id={`method-${item.id}`} value={item.id} className="mt-0.5" />
                     <span className="flex min-w-0 flex-col gap-1">
                       <span className="flex items-center gap-2 text-sm font-medium">{item.name}
-                        {item.languages ? <Badge variant="outline" className="h-4.5 px-1.5 text-[10px] font-normal text-muted-foreground">LP / MILP</Badge> : null}</span>
+                        {item.linear_only ? <Badge variant="outline" className="h-4.5 px-1.5 text-[10px] font-normal text-muted-foreground">LP / MILP</Badge> : null}</span>
                       <span className={cn("text-xs leading-relaxed text-muted-foreground", !selected && "line-clamp-1")}>{t(item.description)}</span>
                     </span>
                   </Label>;
@@ -291,14 +291,14 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
                   className="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 font-normal hover:bg-accent/50">
                   <Checkbox id={`compare-preset-${item.id}`} checked={!!draft.presets?.includes(item.id)}
                     onCheckedChange={on => toggle("presets", item.id, on === true)} />
-                  <span className="min-w-0 truncate text-sm font-medium">{item.model}</span>
+                  <span className="min-w-0 truncate text-sm font-medium">{item.name || item.model}</span>
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">{providerLabel(item.provider)}</span>
                 </Label>)}
-                {!comparedPresets.length ? <p className="text-xs text-muted-foreground">{t("未选择时使用默认预设 {model}。", { model: preset.model })}</p> : null}
+                {!comparedPresets.length ? <p className="text-xs text-muted-foreground">{t("未选择时使用默认预设 {model}。", { model: preset.name || preset.model })}</p> : null}
               </div> : <Select value={preset.id} onValueChange={value => set({ preset: value })}>
                 <SelectTrigger aria-label={t("预设模型")} className="w-full min-w-0"><SelectValue /></SelectTrigger>
                 <SelectContent>{presets.map(item => <SelectItem key={item.id} value={item.id}>
-                  <span className="font-medium">{item.model}</span><span className="text-muted-foreground">{providerLabel(item.provider)}</span>
+                  <span className="font-medium">{item.name || item.model}</span><span className="text-muted-foreground">{providerLabel(item.provider)}</span>
                 </SelectItem>)}</SelectContent>
               </Select>}
             </fieldset>

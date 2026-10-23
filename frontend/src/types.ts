@@ -1,4 +1,4 @@
-export type Method = { id: string; name: string; description: string; source: string | null; languages: string[] | null };
+export type Method = { id: string; name: string; description: string; source: string | null; languages: string[] | null; linear_only?: boolean };
 export type Language = { id: string; name: string; solver: string };
 export type Backend = { id: string; available: boolean; detail: string };
 export type BackendCatalog = { libraries: Record<string, Backend[]> };
@@ -8,7 +8,7 @@ export type Options = { methods: Method[]; languages: Language[]; providers: Pro
 
 /** A fixed LLM configuration; the server never returns its key. `env` comes from the server's LLM4OM_LLM_* variables. */
 export type Preset = {
-  id: string; source: "env" | "saved"; provider: string; model: string; base_url: string;
+  id: string; source: "env" | "saved"; provider: string; model: string; name?: string; base_url: string;
   temperature: number | null; max_tokens: number | null; extra_body: Record<string, unknown>;
   tokens_today: number;
 };

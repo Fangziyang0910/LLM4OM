@@ -2,7 +2,7 @@
 
 固定参考：[Forrest-Stone/SAC-Opt@ec0ddb544ae6b70714181740ebbba16027df50e4](https://github.com/Forrest-Stone/SAC-Opt/tree/ec0ddb544ae6b70714181740ebbba16027df50e4)，[论文](https://proceedings.mlr.press/v306/zhang26cb.html)。上游该提交没有许可证声明。本目录根据公开算法独立实现，提示为本项目重新编写，不复制上游代码或提示，也不宣称逐字复现。
 
-LangGraph：`parameters → variables → objective → constraints → generate → backtranslate → compare → (repair → backtranslate)* → assemble → solve → (debug → solve)*`。只支持 gurobipy/Gurobi。
+LangGraph：`parameters → variables → objective → constraints → generate → backtranslate → compare → (repair → backtranslate)* → assemble → solve → (debug → solve)*`。通过共享 `ModelCode` 组件提示和原生组装支持九个建模库；保留 LP/MILP 建模范围。变量域与上下界必须忠实于问题，不能为迁就某个库而放松。
 
 保留参数、变量、目标、约束四类语义锚点。参数和变量置信评分大于 3 才保留；低置信约束再判断是否修正。代码按 setup、目标、各约束拆开。约束代码回译不读取原始约束；比较器检查回译与原约束是否等价。通过的约束冻结，只重写未通过的组件。与上游相同，回译循环检查约束，不把它描述成对目标的独立验证。温度 0；解析最多 5 次；语义比较最多 5 轮；执行最多 3 次。
 

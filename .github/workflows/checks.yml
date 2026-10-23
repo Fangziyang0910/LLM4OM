@@ -95,7 +95,7 @@ jobs:
         with:
           persist-credentials: false
       - run: docker compose build
-      - run: docker run --rm --network none --pull never llm4om-worker:11 python -c "import pyomo, highspy, ortools, cpmpy, gurobipy, pulp, cvxpy, clarabel, osqp, scs, pyscipopt, casadi, coptpy, mosek"
+      - run: docker run --rm --network none --pull never llm4om-worker:12 python -c "import pyomo, highspy, ortools, cpmpy, gurobipy, pulp, cvxpy, clarabel, osqp, scs, pyscipopt, casadi, coptpy, mosek"
       - run: docker run --rm --pull never --entrypoint llm4om llm4om --help
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:

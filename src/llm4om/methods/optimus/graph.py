@@ -3,11 +3,12 @@ and RAG off.
 
 Objective, constraints (with the redundancy check and a confidence check per constraint), constraint formulations,
 objective formulation, code for every constraint and the objective, deterministic assembly, then up to three
-execute-and-debug rounds. Prompts are verbatim (prompts.py); the parsing helpers are ported line by line (parsing.py).
+execute-and-debug rounds. The original prompts are in prompts.py; library instructions are injected at call sites.
+The parsing helpers are ported line by line (parsing.py).
 
 Adaptations:
-- Library. Upstream generates gurobipy code; the code prompts and the assembly take the selected language's dialect
-  (dialects.py). The gurobipy dialect is the upstream text.
+- Library. Upstream generates gurobipy code; native examples and shared ModelCode fragments adapt it to the
+  selected modeling library. Constraint reasoning, checks and debug rounds retain their original flow.
 - Parameters. Upstream reads them with their values from `params.json`. An attached `params.json` in that format is
   used the same way; otherwise the upstream parameter-extraction prompt runs with an added `value` field.
 - Assembly. The parameter values are embedded in the code and the assembled statements form `build_model`, which
@@ -26,10 +27,9 @@ from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from llm4om.languages import MILP_LANGUAGES
 from llm4om.methods import Method, presets
 from llm4om.methods.optimus import prompts as P
-from llm4om.methods.optimus.dialects import DIALECTS
+from llm4om.methods.optimus.dialects import constraint_prompt, objective_prompt
 from llm4om.methods.optimus.parsing import (
     extract_code_from_end,
     extract_debugged_code,
@@ -39,6 +39,7 @@ from llm4om.methods.optimus.parsing import (
     extract_objective,
     shape_string_to_list,
 )
+from llm4om.model_code import ModelCode
 from llm4om.runtime import Context, ModelingState
 
 PARAMS_PROMPT = P.PARAMETERS__PROMPT_PARAMS.replace(
@@ -170,7 +171,8 @@ async def formulate_constraints(state: State, runtime: Runtime[Context]) -> dict
     for c in state["constraints"]:
         c = dict(c)
         res = await _ask(runtime.context, "constraint_model", P.CONSTRAINT_MODEL__PROMPT_CONSTRAINTS_MODEL.format(
-            description=state["problem"], params=_dump(params), vars=_dump(variables), constraint=c, rag=""))
+            description=state["problem"], params=_dump(params), vars=_dump(variables), constraint=c, rag="")
+            + "\n" + ModelCode(runtime.context.target).variable_rules)
         formulation, new_variables, aux_constraints = extract_formulation_from_end(res)
         tmp_vars = variables.copy()
         for v in new_variables:
@@ -198,42 +200,33 @@ async def formulate_objective(state: State, runtime: Runtime[Context]) -> dict[s
 async def write_code(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """target_code.get_codes for the selected language's dialect."""
     context, desc, params, variables = runtime.context, state["problem"], state["parameters"], state["variables"]
-    dialect = DIALECTS[context.target.dialect]
+    code = ModelCode(context.target)
     coded = []
     for c in state["constraints"]:
-        res = await _ask(context, "constraint_code", dialect.constraint_prompt().format(
-            solver=dialect.solver, description=desc, params=_dump(params), vars=_dump(variables), constraint=_dump(c),
-            directions=dialect.directions))
+        res = await _ask(context, "constraint_code", constraint_prompt(code).format(
+            solver=context.target.library, description=desc, params=_dump(params), vars=_dump(variables), constraint=_dump(c),
+            directions=code.prompt))
         coded.append({**c, "code": extract_code_from_end(res)})
     objective = state["objective"]
-    res = await _ask(context, "objective_code", dialect.objective_prompt().format(
-        solver=dialect.solver, description=desc, params=_dump(params), vars=_dump(variables), objective=_dump(objective),
-        directions=dialect.directions))
+    res = await _ask(context, "objective_code", objective_prompt(code).format(
+        solver=context.target.library, description=desc, params=_dump(params), vars=_dump(variables), objective=_dump(objective),
+        directions=code.prompt))
     return {"constraints": coded, "objective": {**objective, "code": extract_code_from_end(res)}}
 
 
-def _indent(code: str) -> str:
-    return "".join("    " + line if line.strip() else line for line in code.splitlines(True)) + "\n"
-
 
 def assemble(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
-    """generate_code.generate_code as `build_model`; data.json is embedded as DATA."""
-    dialect = DIALECTS[runtime.context.target.dialect]
-    body = [dialect.setup + "\n", "data = DATA\n", "\n\n### Define the parameters\n"]
-    for symbol, v in state["parameters"].items():
-        body.append(f'{symbol} = data["{symbol}"] # shape: {v["shape"]}, definition: {v["definition"]}\n')
-    body.append("\n\n### Define the variables\n")
-    for symbol, v in state["variables"].items():
-        body.append(dialect.var_code(symbol, v["shape"], v["type"]))
-    body.append("\n\n### Define the constraints\n")
-    body += [c["code"] + "\n" for c in state["constraints"]]
-    body.append("\n\n### Define the objective\n")
-    body.append(state["objective"]["code"] + "\n")
-    body.append("\nreturn model\n")
-    code = (f"import os\nimport numpy as np\nimport json\n{dialect.imports}\n\n"
-            f"DATA = {pformat(state['_values'], width=110, sort_dicts=False)}\n\n\n"
-            "def build_model(files):\n" + _indent("".join(body)))
-    return {"code": code, "tries": 0}
+    """Assemble the method's parameters and code fragments using the selected library."""
+    code = ModelCode(runtime.context.target)
+    body = ["data = " + pformat(state['_values'], width=110, sort_dicts=False) + "\n"]
+    for symbol, value in state['parameters'].items():
+        body.append(f'{symbol} = data["{symbol}"]\n')
+    for symbol, value in state['variables'].items():
+        body.append(code.variables(symbol, [f'range({n})' for n in value['shape']], value['type'],
+                                   str(value.get('lower_bound', 0)), str(value.get('upper_bound'))))
+    body.extend(c['code'] for c in state['constraints'])
+    body.append(state['objective']['code'])
+    return {'code': code.assemble(body), 'tries': 0}
 
 
 async def execute(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
@@ -251,9 +244,8 @@ async def debug(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
 
 
 def after_execute(state: State) -> str:
-    # The assembled script reads model.objVal and writes the status only when it is optimal, so any non-optimal
-    # result counts as an error and is debugged.
-    return END if state["solve"] is not None and state["solve"].status == "optimal" else "debug"
+    # Local nonlinear backends report locally_optimal for a successful solve.
+    return END if state["solve"] is not None and state["solve"].status in ("optimal", "locally_optimal") else "debug"
 
 
 def after_debug(state: State) -> str:
@@ -295,5 +287,5 @@ OPTIMUS = Method("optimus", "OptiMUS 0.3",
                          "check_constraints": "约束（逐条检查后）", "formulate_constraints": "约束公式与变量",
                          "formulate_objective": "数学模型", "write_code": "逐条生成代码", "assemble": "组装代码",
                          "execute": "执行代码", "debug": "调试代码", "use_fix": "使用调试后的代码"},
-                 languages=MILP_LANGUAGES,
+                 linear_only=True,
                  parameters=lambda: asdict(presets.OPTIMUS))

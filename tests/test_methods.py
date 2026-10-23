@@ -12,6 +12,8 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMe
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from llm4om.graph import run
+from llm4om.languages import LANGUAGES, CodeTarget
+from llm4om.model_code import ModelCode
 from llm4om.runtime import Limits
 from tests.conftest import ACCEPT_REVIEW, FORMULATION, PRODUCTION_CODE, TWO_PART_REPLY, ScriptedChat, tool_call
 
@@ -202,10 +204,14 @@ def test_direct_writes_cpmpy_for_cp_sat(run_method: Any) -> None:
     assert "CPMpy reference" in prompts[0] and "CP-SAT" in prompts[0]
 
 
-def test_milp_methods_reject_cpmpy(run_method: Any) -> None:
-    for method in ("optimus", "coe", "optitree", "or_llm_agent", "autoformulation"):
-        record = run_method(method, by_role({}), language="cpmpy")
-        assert "does not support cpmpy" in record["failure"] and not record.get("steps")
+def test_builtin_methods_do_not_restrict_modeling_libraries() -> None:
+    from llm4om.methods import methods
+
+    assert len(methods()) == 13
+    assert all(method.languages is None for method in methods().values())
+    assert {method.id for method in methods().values() if method.linear_only} == {
+        "optimus", "coe", "optitree", "or_llm_agent", "autoformulation", "sac_opt",
+    }
 
 
 def test_or_llm_agent_fixes_code_in_the_conversation(run_method: Any) -> None:
@@ -291,15 +297,10 @@ def test_orthought_debugs_code_that_does_not_run(run_method: Any) -> None:
 GUROBIPY_PARAMS = {"Profit": {"shape": "[2]", "definition": "profit per unit", "type": "float", "value": [3, 2]},
                    "Capacity": {"shape": "[]", "definition": "units of each resource", "type": "float", "value": 8}}
 OPTIMUS_CODE = {
-    "gurobipy": {"constraints": ["model.addConstr(2 * x[0] + x[1] <= Capacity)", "model.addConstr(x[0] + 2 * x[1] <= Capacity)"],
-               "objective": "model.setObjective(quicksum(Profit[i] * x[i] for i in range(2)), GRB.MAXIMIZE)"},
-    "pyomo": {"constraints": ["model.constraints.add(2 * x[0] + x[1] <= Capacity)",
-                              "model.constraints.add(x[0] + 2 * x[1] <= Capacity)"],
-              "objective": "model.objective = Objective(expr=quicksum(Profit[i] * x[i] for i in range(2)), sense=maximize)"},
-    "pywraplp": {"constraints": ["model.Add(2 * x[0] + x[1] <= Capacity)", "model.Add(x[0] + 2 * x[1] <= Capacity)"],
-                "objective": "model.Maximize(sum(Profit[i] * x[i] for i in range(2)))"},
-    "pulp": {"constraints": ["model += 2 * x[0] + x[1] <= Capacity", "model += x[0] + 2 * x[1] <= Capacity"],
-             "objective": "model.sense = pulp.LpMaximize\nmodel.setObjective(pulp.lpSum(Profit[i] * x[i] for i in range(2)))"},
+    language: {"constraints": [code.constraint("2 * x[0] + x[1] <= Capacity"),
+                                code.constraint("x[0] + 2 * x[1] <= Capacity")],
+               "objective": code.objective("quicksum(Profit[i] * x[i] for i in range(2))", "max")}
+    for language in [*LANGUAGES, "pywraplp"] for code in [ModelCode(CodeTarget(language))]
 }
 GUROBIPY_CODE = """from gurobipy import Model, GRB, quicksum
 
@@ -319,7 +320,7 @@ def optimus_script(language: str, constraint_codes: list[str] | None = None, pro
         if prompts is not None:
             prompts[role] = messages[-1].text
         if role == "constraint_model":
-            new = '{"x": {"shape": "[2]", "type": "integer", "definition": "units"}}' if '"x"' not in messages[-1].text else "{}"
+            new = '{"x": {"shape": "[2]", "type": "integer", "definition": "units", "upper_bound": "Capacity"}}' if '"x"' not in messages[-1].text else "{}"
             return f'{{\n    "FORMULATION": "$a x[0] + b x[1] \\\\leq 8$",\n    "NEW VARIABLES": {new},\n    "AUXILIARY CONSTRAINTS": []\n}}'
         if role == "constraint_code":
             return f"CODE\n=====\n{codes.pop(0)}\n====="
@@ -337,7 +338,7 @@ def optimus_script(language: str, constraint_codes: list[str] | None = None, pro
 
 
 @pytest.mark.parametrize("language,library,add", [("pyomo", "Pyomo", "constraints.add"),
-    ("gurobipy", "gurobipy", "addConstr"), ("pywraplp", "OR-Tools", "model.Add("), ("pulp", "PuLP", "model +=")])
+    ("gurobipy", "gurobipy", "addConstr"), ("pywraplp", "OR-Tools", "model.Add("), ("pulp", "PuLP", "addConstraint")])
 def test_optimus_assembles_clause_code_for_each_language(run_method: Any, language: str, library: str, add: str) -> None:
     if language == "gurobipy":
         pytest.importorskip("gurobipy")
@@ -345,7 +346,7 @@ def test_optimus_assembles_clause_code_for_each_language(run_method: Any, langua
     record = run_method("optimus", optimus_script(language, prompts=prompts), language=language)
     assert not record.get("failure"), (language, record.get("failure"))
     assert record["solve"]["objective"] == 13
-    assert "def build_model(files)" in record["code"] and "'Profit': [3, 2]" in record["code"]
+    assert "def build_model(data)" in record["code"] and "'Profit': [3, 2]" in record["code"]
     assert "cutting capacity" in record["formulation"]
     assert library in prompts["constraint_code"] and library in prompts["objective_code"]
     assert add in prompts["constraint_code"]
@@ -373,7 +374,7 @@ def test_optimus_takes_the_last_markdown_code_block() -> None:
     assert extract_code_from_end(reply) == "model.setObjective(quicksum(c[i] * x[i] for i in I), GRB.MINIMIZE)"
 
 
-@pytest.mark.parametrize("fence", ["=====", "```python\n"])
+@pytest.mark.parametrize("fence", ["=====", "```python\n", "```\n"])
 def test_optimus_preserves_python_in_code(fence: str) -> None:
     from llm4om.methods.optimus.parsing import extract_code_from_end
     code = 'python_count = 1\nlabel = "python"'
@@ -404,6 +405,7 @@ def test_coe_reduces_expert_comments(run_method: Any) -> None:
     record = run_method("coe", script)
     assert_solved(record)
     assert "def build_model(data):" in prompts["Programming Expert"]  # the starter code
+    assert "ConcreteModel" in prompts["Programming Expert"] and "ConcreteModel" in prompts["reducer"]
     assert "Modeling Expert: ```" in prompts["reducer"]
     assert not any(role.endswith("(backward)") for role in prompts)  # reflection is off by default
 
@@ -475,7 +477,7 @@ def autoformulation_script(vtype: str, calls: list[tuple[str, str]]) -> Any:
             return AF_PARAMETERS
         if role == "generate.decision_variables":
             return ("formalization_dict['decision_variables'] = {'x': {'description': 'units of each product', "
-                    f"'type': '{vtype}', 'iteration_space': '[i for i in range(2)]'}}}}")
+                    f"'type': '{vtype}', 'upper_bound': 'cap', 'iteration_space': '[i for i in range(2)]'}}}}")
         if role == "generate.objective":
             return AF_OBJECTIVES[count % 2]
         if role == "generate.equality_constraints":
@@ -501,12 +503,12 @@ def test_autoformulation_searches_the_tree_and_ranks_leaves(run_method: Any, pre
     record = run_method("autoformulation", autoformulation_script("pyo.NonNegativeIntegers", calls))
     assert not record.get("failure"), record.get("failure")
     assert record["solve"]["objective"] == 13  # the preferred leaf, not the looser one (objective 16)
-    assert "def build_model(data):" in record["code"] and "pyo.Var(pyo.Any" in record["code"]
+    assert "def build_model(data):" in record["code"] and "_new_var(" in record["code"]
     roles = [role for role, _ in calls]
     assert roles.count("group_decision_variables") == 8 and roles.count("rank.objective") == 0  # equivalent objectives
     assert roles.count("compare") == 2 * 5  # the second leaf against the first, in both orders
     generate_dv = next(prompt for role, prompt in calls if role == "generate.decision_variables")
-    assert "Pyomo variable domain" in generate_dv and "GRB.INTEGER" not in generate_dv
+    assert "CONTINUOUS, INTEGER or BINARY" in generate_dv and "GRB.INTEGER" not in generate_dv
     assert "using Pyomo" in next(prompt for role, prompt in calls if role == "compare")
     objectives = sorted(e["objective"] for e in record["steps"] if e["type"] == "solve")
     assert objectives == [13, 16]
@@ -514,7 +516,7 @@ def test_autoformulation_searches_the_tree_and_ranks_leaves(run_method: Any, pre
     assert steps.count("扩展建模树") == 5 and steps.count("MCTS rollout") == 2 and "选中的数学模型" in steps
 
 
-@pytest.mark.parametrize("language,vtype,expected", [("gurobipy", "GRB.INTEGER", "gpy_model.addVar(vtype=GRB.INTEGER"),
+@pytest.mark.parametrize("language,vtype,expected", [("gurobipy", "GRB.INTEGER", "_new_var('GRB.INTEGER'"),
     ("pywraplp", "integer", "_new_var('integer'"), ("pulp", "Integer", "_new_var('Integer'")])
 def test_autoformulation_writes_each_languages_code(run_method: Any, preset: Any, language: str, vtype: str,
                                                    expected: str) -> None:
@@ -527,10 +529,11 @@ def test_autoformulation_writes_each_languages_code(run_method: Any, preset: Any
     assert expected in record["code"]
     assert record["solve"]["objective"] in (13, 16)
     prompt = next(prompt for role, prompt in calls if role == "generate.decision_variables")
-    assert ("GRB.INTEGER" in prompt) == (language == "gurobipy") and ("IntVar" in prompt) == (language == "pywraplp")
+    assert "CONTINUOUS, INTEGER or BINARY" in prompt and "lower_bound" in prompt
 
 
-def trival_script(code_reviews: list[dict[str, Any]], formulation_reviews: list[dict[str, Any]]) -> Any:
+def trival_script(code_reviews: list[dict[str, Any]], formulation_reviews: list[dict[str, Any]],
+                  code: str = PRODUCTION_CODE) -> Any:
     """Scripted TriVAL nodes; validators consume the given review lists in order."""
     def script(role: str, messages: list[BaseMessage], tools: list[str]) -> Any:
         node = role.removeprefix("trival.")
@@ -551,7 +554,7 @@ def trival_script(code_reviews: list[dict[str, Any]], formulation_reviews: list[
         if node == "revise_formulation":
             return tool_call("write_formulation", formulation=FORMULATION + " (revised)")
         if node == "code_agent":
-            return tool_call("write_code", code=PRODUCTION_CODE)
+            return tool_call("write_code", code=code)
         if node == "code_validator":
             return tool_call("CodeValidationOutput", **code_reviews.pop(0))
         raise AssertionError(f"unexpected role {role}")
@@ -573,6 +576,14 @@ def test_trival_runs_all_three_validation_stages(run_method: Any) -> None:
     order = [(event["type"], event["title"]) for event in record["steps"]]
     assert order.index(("artifact", "生成或修订代码")) < order.index(("solve", "执行代码（第 1 次）"))
     assert order.index(("artifact", "语义事实与歧义")) < order.index(("llm", "trival.semantic_validator"))
+
+
+def test_trival_uses_tools_even_when_a_model_advertises_native_json_schema(make_resources: Any) -> None:
+    script = trival_script([{"code_validation_passed": True, "code_validation_feedback": "faithful"}], [PASS_FORMULATION])
+    resources = make_resources(script)
+    resources.model_factory = lambda settings, **kwargs: ScriptedChat(script=script, profile={"structured_output": True}, **kwargs)
+    record = asyncio.run(run("Production planning", method="trival", resources=resources))
+    assert_solved(record)
 
 
 def test_trival_routes_formulation_defects_back(run_method: Any) -> None:

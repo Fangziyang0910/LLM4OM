@@ -72,7 +72,7 @@ Script = Callable[[str, list[BaseMessage], list[str]], Any]
 @pytest.fixture(autouse=True)
 def no_environment_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tests see no LLM4OM_LLM_* preset unless they set one: neither the shell's nor the repository's .env."""
-    for name in ("PROVIDER", "MODEL", "API_KEY", "BASE_URL", "EXTRA_BODY"):
+    for name in ("PROVIDER", "MODEL", "NAME", "API_KEY", "BASE_URL", "EXTRA_BODY"):
         monkeypatch.delenv(f"LLM4OM_LLM_{name}", raising=False)
     monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
 

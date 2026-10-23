@@ -16,7 +16,7 @@ export type Usage = { llm_calls: number; solves: number; input_tokens: number; o
 export type Timing = { started_at: number; elapsed: number; finished_at?: number };
 export type RunSpec = {
   version: string; method: string; source: string | null; parameters: Record<string, unknown>; limits: Record<string, number>;
-  language: string; solver: string; preset: string | null;
+  language: string; solver: string; preset: string | null; preset_name?: string;
   llm: { provider: string; model: string; base_url: string; temperature: number | null; max_tokens: number | null;
     timeout: number; max_retries: number; extra_body: Record<string, unknown> };
   sandbox: string; worker_image: string | null;

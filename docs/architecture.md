@@ -28,6 +28,7 @@ src/llm4om/
 ├── cli.py               命令行：serve、run、build-worker
 ├── languages.py         九个建模库、原生代码契约和 CodeTarget
 ├── code_prompts.py      官方建模接口的代码参考
+├── model_code.py        原生变量、约束、目标和函数组装，供组件式方法复用
 ├── llm.py               服务商列表、LLMSettings、chat_model()
 ├── llm_presets.py       预设读写、迁移和环境预设；同一事务内读取并原子替换
 ├── storage.py           私有 JSON 文件的原子写入，供预设和 token 预算共用
@@ -79,7 +80,7 @@ runtime → progress ───────────────────�
 
 进程内运行（命令行、测试、`run_problem`）通过 `config["configurable"]["llm4om_resources"]` 传入 `Resources`，替换预设模型、沙箱、上限或聊天模型工厂。服务器从环境变量 `LLM4OM_WORKSPACE`、`LLM4OM_SANDBOX` 读取默认资源。
 
-运行用哪个 LLM 只由 `LLMPresetStore` 决定（`Resources.llm` 给出时除外）。预设列表是 `LLM4OM_LLM_*` 环境变量给出的预设（id 为 `env`），加上 `<workspace>/.private/llm-presets.json` 中按添加顺序保存的预设；第一个是默认预设。`get(preset)` 按 id 取设置，id 不存在时报错并列出可选 id。`prepare` 记录配置，`model` 开始前校验配置仍一致，随后所有角色共享同一份已解析设置。建模过程中删除或替换同名预设不会切换该运行的 LLM。求解和预算扣费不再重新查询预设。
+运行用哪个 LLM 只由 `LLMPresetStore` 决定（`Resources.llm` 给出时除外）。预设列表是 `LLM4OM_LLM_*` 环境变量给出的预设（id 为 `env`），加上 `<workspace>/.private/llm-presets.json` 中按添加顺序保存的预设；第一个是默认预设。预设 `name` 是显示名称，API 始终使用 `settings.model`；旧预设未命名时显示模型 ID。环境预设通过 `LLM4OM_LLM_NAME` 命名，运行快照保存 `preset_name`。`get(preset)` 按 id 取设置，id 不存在时报错并列出可选 id。`prepare` 记录配置，`model` 开始前校验配置仍一致，随后所有角色共享同一份已解析设置。建模过程中删除或替换同名预设不会切换该运行的 LLM。求解和预算扣费不再重新查询预设。
 
 预设只能添加（`add`）和删除（`delete`），没有修改操作；`env` 预设不能删除。新增预设用随机 UUID，不按模型名复用 ID；已有预设保留原 ID。`public()` 返回的预设不含密钥。额外请求参数不能覆盖显式配置字段或调用记录回调。预设读改写由服务内共享锁串行化；先写权限为 600 的临时文件，再原子替换，写入失败保留旧文件。预算文件损坏时报告错误，不把已有用量当成零；后台落盘失败记录错误日志，`flush()` 也会抛出写入异常。一个工作区只供一个服务进程使用，与内存运行时一致。模型列表接口 `/api/models` 只使用请求中填写的密钥，从不补入已保存的密钥，因此密钥只会发往与它一起保存的接口地址。
 
@@ -107,6 +108,7 @@ class Method:
     titles: Mapping[str, str] = {}  # 节点名 → 步骤标题
     hidden: frozenset[str] = frozenset()
     languages: frozenset[str] | None = None  # 支持的代码写法；None 表示全部
+    linear_only: bool = False       # 数学问题范围，与库选择独立
     limits: Limits | None = None
     parameters: Callable[[], dict[str, Any]] = dict  # 返回可 JSON 序列化的固定参数快照
 ```
@@ -116,9 +118,8 @@ class Method:
 | `data` | 数据文件名到文本内容；问题全文在状态的 `problem` 中 |
 | `target.language` | 所选九个建模库之一；OR-Tools 的规范 ID 为 `ortools` |
 | `target.solver` | 原生后端标识，默认 AUTO |
-| `target.dialect` | 固定方言的内部键；OR-Tools 旧模板继续使用 `pywraplp`，不增加一级分类 |
 | `target.prompt` | 所选写法的代码契约，直接拼接到生成代码的提示中 |
-| `target.library` | 代码所用的库名（`Pyomo`、`Gurobi`、`OR-Tools`、`CPMpy`），用于替换原提示中写死的库名 |
+| `target.library` | 代码所用的库名（`Pyomo`、`Gurobi`、`OR-Tools` 等九个库），用于替换原提示中写死的库名 |
 | `target.starter` | 所选写法的空 `build_model` 模板，供需要代码示例的提示使用 |
 | `llm(role)` | 配置好的 LangChain 聊天模型。`role` 写入调用元数据，用于在过程列表中命名调用 |
 | `solve(code, title)` | 在沙箱中构建并求解，返回 `SolveResult`；`feedback()` 给出可交给 LLM 的文本 |
@@ -131,11 +132,12 @@ class Method:
 
 ## 可插拔的代码提示
 
-生成代码的提示按所选代码写法动态组装：
+生成代码的提示在方法调用处组装，13 个内置方法均可选择九个库：
 
-- 使用平台契约的方法（Direct、Feedback Repair、TriVAL、OptiTree、OR-LLM-Agent、CoE、ORThought、LLMOPT）把 `target.prompt` 拼进提示；原提示中写死的库名（“Gurobi”“Gurobipy”“Pyomo”）换成 `target.library`。
-- 原提示逐句针对某个库的方法（OptiMUS、AutoFormulation）为每种写法准备一个方言：gurobipy 方言就是上游原文，Pyomo、`pywraplp` 和 PuLP 方言只替换与库相关的句子、示例和变量代码。
-- 方法的建模范围只覆盖部分写法时，用 `Method.languages` 声明。服务端拒绝不支持的组合，前端只列出支持的写法。
+- `CodeTarget.prompt` 统一提供库的原生 API 参考、返回类型和可选后端要求。整段代码生成方法把它嵌入原提示，替换写死的库名，不改建模和修正流程。
+- OptiMUS、SAC-Opt、AutoFormulation 生成组件或表达式。`ModelCode` 提供同一套原生变量声明、约束、目标和 `build_model(data)` 组装；对应组件提示也由这些代码片段生成。它没有引入模型中间表示，也不在库之间翻译模型。
+- 索引变量使用标量或元组键的字典。变量类型、上下界保留数学含义；CPMpy/CP-SAT 的整数边界必须由问题推导，不补造大数，不把连续变量改成整数或把整数放松为连续变量。CasADi 整数域用 `set_domain` 和 Bonmin，最大化的符号在结果中恢复。
+- `Method.linear_only` 描述 LP/MILP 问题范围。它不限制建模库。`Method.languages` 留给外部方法声明确有必要的库限制；内置方法不使用该白名单。
 
 ## 代码契约
 
@@ -143,7 +145,7 @@ class Method:
 
 `build_model(data)` 只构建原生模型。需要端点、变量集合或底层符号/数值输入的接口返回规定的字典。Worker 调用所选原生后端，不跨库翻译数学模型。MPSolver 自身绑定后端，所以使用其原生 protobuf 在该接口内部转入指定引擎，并拒绝把整数模型交给 LP 引擎求连续松弛。
 
-`CodeTarget` 负责库和接口代码契约；后端名单由执行环境的原生注册表提供。`MILP_LANGUAGES` 仍表示既有方法的四种方言（Pyomo、gurobipy、OR-Tools、PuLP）。OptiMUS 和 AutoFormulation 的固定模板只开放对应接口，其他方法按明确声明的支持范围生成代码。
+`CodeTarget` 负责库与原生 API 代码契约；后端名单由执行环境的原生注册表提供。组件组装复用 `ModelCode`，不再按方法维护四种方言表。
 
 CPMpy 和原生 CP 接口允许无目标的可满足性模型，成功时保存变量但目标值为空。CVXPY AUTO 走原生 solver_path，并把真正使用的引擎写入 SolveResult.solver；显式后端不会自动替换。Routing 启发式结果是 feasible，非凸 NLP 的局部结果使用 locally_optimal/locally_infeasible。原生接口的安装、模型兼容性和商业许可分别对待。
 
@@ -151,7 +153,7 @@ CPMpy 和原生 CP 接口允许无目标的可满足性模型，成功时保存�
 
 `Sandbox.solve(code, data, language, time_limit, solver=...)` 构建并求解模型；`run_script` 运行方法的检查脚本；`catalog` 在同一执行环境读取并缓存后端能力。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。所有运行共享服务的 Sandbox，`solve` 和 `run_script` 共用并发额度，默认最多 4 个，由 `LLM4OM_SANDBOX_JOBS` 设置。排队仍计入运行总时限，单次沙箱超时从取得额度后开始。`--jobs` 单独控制并发运行数。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:11` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件；不挂载 COPT 整个目录。超时或取消时等待 `docker rm --force` 完成，确保容器已删除才释放并发额度。
+`Sandbox("docker")` 在镜像 `llm4om-worker:12` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件；不挂载 COPT 整个目录。超时或取消时等待 `docker rm --force` 完成，确保容器已删除才释放并发额度。
 
 求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CPMpy 模型用 CPMpy 的 MUS，CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。`feedback()` 不包含诊断，已移植的研究方法继续使用原反馈；本项目的 Feedback Repair 单独读取诊断，用于对照题面复核。Gurobi 预求解把模型判为“不可行或无界”时，Worker 关闭对偶约简（`DualReductions=0`）再求解一次，得到确定的状态。
 

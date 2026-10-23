@@ -44,7 +44,7 @@
 | OR-Tools 最小费用流 | SimpleMinCostFlow；最大流优先时返回 `{"model": model, "maximize_flow": True}` |
 | OR-Tools 背包 | `{"values": [...], "weights": [[...], ...], "capacities": [...]}`；Worker 创建所选原生 KnapsackSolver 并调用 init |
 | CasADi nlpsol/qpsol/conic | `{"problem": 原生符号问题或稀疏结构, "arguments": 原生数值参数, "solver": 可选插件名, "options": 可选插件配置}`；结果按原生向量顺序使用 `x[i]` |
-| CasADi Opti | Opti；Conic 模式返回 `{"model": opti, "solver": "qrqp"}`；可另带 options |
+| CasADi Opti | Opti；Conic 模式返回 `{"model": opti, "solver": "qrqp"}`；整数域使用 `set_domain` 并选择 Bonmin；可另带 options。最大化转为负目标时带 `objective_sign: -1`，恢复原目标值 |
 
 Routing 的短时启发式结果记为 feasible；只有原生状态证明最优时记为 optimal。NLP 的局部最优和局部不可行保留局部含义，不与全局证书混用。
 
@@ -54,11 +54,11 @@ Routing 的短时启发式结果记为 feasible；只有原生状态证明最优
 state = run_problem(problem, language="ortools", solver="CP_SAT")
 ```
 
-运行配置保存 language、solver；求解结果保存实际 solver。方法的 languages 声明库范围。旧 pywraplp 请求解析为 OR-Tools/SCIP，旧 cvxpy_osqp、cvxpy_scs、cvxpy_mosek 解析到同一个 CVXPY 库的对应后端。旧记录本身不迁移或改写。
+运行配置保存 language、solver；求解结果保存实际 solver。13 个内置方法均接受九个库；外部方法可用 languages 声明确有必要的库范围，linear_only 单独表示问题范围。旧 pywraplp 请求解析为 OR-Tools/SCIP，旧 cvxpy_osqp、cvxpy_scs、cvxpy_mosek 解析到同一个 CVXPY 库的对应后端。旧记录本身不迁移或改写。
 
 ## 安装与验证
 
-Worker 11 安装多个开放后端、商业 Python SDK，以及 CBC、GLPK、MiniZinc 和 Java 运行时。官方接口可调用、插件已安装、商业许可可用是不同条件；缺少程序、驱动或许可证的条目保留不可用原因。GPU 和需单独部署的商业运行时不会因为出现在注册表中就被标为已经验证。
+Worker 12 安装多个开放后端、商业 Python SDK，以及 CBC、GLPK、MiniZinc 和 Java 运行时。官方接口可调用、插件已安装、商业许可可用是不同条件；缺少程序、驱动或许可证的条目保留不可用原因。GPU 和需单独部署的商业运行时不会因为出现在注册表中就被标为已经验证。
 
 CVXPY 1.8 的 GLOP/PDLP 适配器要求 OR-Tools <9.15，而主 OR-Tools 9.15 与 HiGHS 1.12 的 ABI 需要保持匹配。因此 Worker 为这两个 CVXPY 后端单独安装 OR-Tools 9.14，仅对应进程使用它；不修改第三方版本检查。其余接口继续使用主版本。
 

@@ -166,8 +166,8 @@ def build_model(data):
     return model
 ```
 - This example returns ca.Opti. The native problem dictionaries described below are also supported. Do not call solve().
-- Ipopt finds a local solution; it does not establish global optimality for nonconvex problems. No integer variables.
-- Use smooth CasADi expressions. Maximize f by minimizing -f; state clearly that the reported objective is -f.
+- Ipopt finds a local solution; it does not establish global optimality for nonconvex problems. Integer variables require a compatible plugin such as Bonmin, not Ipopt.
+- Use smooth CasADi expressions. To maximize f minimize -f and return {"model": model, "objective_sign": -1}.
 - Opti assigns variable names automatically (e.g. opti0_x_1); explain their components in the formulation.
 - Set useful initial guesses and finite bounds when the problem gives them."""
 
@@ -247,7 +247,6 @@ LANGUAGES = {
     "coptpy": Language("coptpy", "coptpy", "copt", "COPT", COPT, "import coptpy as cp\nfrom coptpy import COPT",
                         "coptpy.Model", 'cp.Envr().createModel("model")'),
 }
-MILP_LANGUAGES = frozenset({"pyomo", "gurobipy", "ortools", "pulp"})
 LEGACY_TARGETS = {"pywraplp": ("ortools", "SCIP"),
                   **{"cvxpy_"+solver.lower(): ("cvxpy", solver) for solver in ("OSQP", "SCS", "MOSEK")}}
 
@@ -267,7 +266,9 @@ For maximum flow return {"model": SimpleMaxFlow, "source": int, "sink": int}.
 Return SimpleMinCostFlow (or {"model": model, "maximize_flow": True}) or SimpleLinearSumAssignment directly.
 For knapsack return {"values": [...], "weights": [[...], ...], "capacities": [...]}.
 The platform recognizes the returned model; there is no separate interface setting.""",
-    "casadi": """Opti and Opti('conic') are supported. For Opti('conic'), return {"model": opti, "solver": "qrqp"}; optional native options use "options".
+    "casadi": """Opti supports integer variables with set_domain(x, "integer") and a mixed-integer plugin such as Bonmin. Return {"model": opti, "solver": "bonmin"} for these models.
+For maximization minimize -f and include "objective_sign": -1 in the returned dictionary to report the original objective.
+Opti and Opti('conic') are supported. For Opti('conic'), return {"model": opti, "solver": "qrqp"}; optional native options use "options".
 For nlpsol/qpsol/conic return {"problem": the native symbolic problem or sparsity structure, "arguments": its native numerical arguments, "solver": the plugin name, "options": optional native options}.
 The platform uses the selected native plugin; do not call it to solve. Result variables follow native decision-vector order x[i].""",
 }
@@ -288,10 +289,6 @@ class CodeTarget:
         object.__setattr__(self, "solver", self.solver or "AUTO")
         if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:-]*", self.solver):
             raise ValueError("Use a native solver identifier, not a path or command.")
-
-    @property
-    def dialect(self) -> str:
-        return "pywraplp" if self.language == "ortools" else self.language
 
     @property
     def prompt(self) -> str:

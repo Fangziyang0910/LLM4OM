@@ -42,7 +42,8 @@ def test_options_list_methods_languages_and_providers(tmp_path: Path) -> None:
         "pyomo", "gurobipy", "ortools", "cpmpy", "pulp", "cvxpy", "pyscipopt", "casadi", "coptpy",
     }
     optimus = next(m for m in options["methods"] if m["id"] == "optimus")
-    assert optimus["languages"] == ["gurobipy", "ortools", "pulp", "pyomo"]
+    assert optimus["languages"] is None and optimus["linear_only"]
+    assert all(item["languages"] is None for item in options["methods"])
     assert all('interfaces' not in item and item['solver'] == 'AUTO' for item in options['languages'])
 
 
@@ -94,7 +95,9 @@ def test_runs_choose_a_preset_by_id_and_the_first_is_the_default(tmp_path: Path,
     monkeypatch.setenv("LLM4OM_LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("LLM4OM_LLM_MODEL", "env-model")
     monkeypatch.setenv("LLM4OM_LLM_API_KEY", "env-key")
+    monkeypatch.setenv("LLM4OM_LLM_NAME", "deepseek-v4.1 flash-1017")
     assert [preset.id for preset in store.presets()] == ["env", selected.id]
+    assert store.public()["presets"][0]["name"] == "deepseek-v4.1 flash-1017"
     assert (store.get().model, store.get(selected.id).model) == ("env-model", LLM.model)
     with pytest.raises(ValueError, match="No LLM preset 'nosuch'"):
         store.get("nosuch")
@@ -198,11 +201,25 @@ def test_a_run_streams_each_step_before_it_ends(make_resources: Any) -> None:
 
 def test_a_run_uses_the_chosen_preset(make_resources: Any) -> None:
     resources = make_resources(lambda *_: TWO_PART_REPLY, llm=None)
-    selected = resources.presets.add(LLM)
+    selected = resources.presets.add(LLM, "deepseek-v4.1 flash-1017")
     chosen = asyncio.run(run(PRODUCTION_PROBLEM, preset=selected.id, resources=resources))
     unknown = asyncio.run(run(PRODUCTION_PROBLEM, preset="nosuch", resources=resources))
     assert chosen["solve"]["objective"] == 13
+    assert chosen["spec"]["preset_name"] == "deepseek-v4.1 flash-1017"
+    assert chosen["spec"]["llm"]["model"] == LLM.model
     assert unknown["failure"].startswith("No LLM preset 'nosuch'")
+
+
+def test_preset_names_are_display_metadata_and_older_presets_still_load(tmp_path: Path) -> None:
+    store = LLMPresetStore(tmp_path)
+    with client(tmp_path) as api:
+        named = api.post("/api/presets", json={**PRESET, "name": " deepseek-v4.1 flash-1017 "}).json()["presets"][0]
+        assert named["name"] == "deepseek-v4.1 flash-1017" and named["model"] == LLM.model
+        assert store.get(named["id"]) == LLM
+    content = json.loads(store.path.read_text())
+    del content["presets"][0]["name"]
+    store.path.write_text(json.dumps(content))
+    assert store.public()["presets"][0]["name"] == LLM.model
 
 
 def test_a_request_config_cannot_replace_the_server_resources(monkeypatch: Any) -> None:

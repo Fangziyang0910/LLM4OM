@@ -33,7 +33,6 @@ from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from llm4om.languages import MILP_LANGUAGES
 from llm4om.methods import Method, presets
 from llm4om.methods.autoformulation import codegen
 from llm4om.methods.autoformulation.search import (
@@ -65,22 +64,15 @@ from llm4om.methods.autoformulation.upstream.utils_prompt import (
     obtain_new_prompt,
     update_rank,
 )
+from llm4om.model_code import ModelCode
 from llm4om.runtime import Context, ModelingState
 
 INSTRUCTIONS = {1: P.INST_PARAMETERS, 2: P.INST_DV, 3: P.INST_OBJ, 4: P.INST_EQ_CONST, 5: P.INST_INEQ_CONST}
 DEPTH_TERMINAL = 5
 EXECUTABLE_STEPS = ("objective", "equality_constraints", "inequality_constraints")
-ERROR_KEYWORDS = ("Error", "Exception", "Traceback", "fatal", "failed")  # utils_exec.check_script_output
 GUROBI_TYPE_RULE = ("Replace <type> with a string representing the Gurobi variable type (e.g., GRB.INTEGER), as this "
                     "will be used to create the variable via Gurobi's addVar function.")
-DV_TYPE_RULES = {
-    "pyomo": "Replace <type> with a string representing the Pyomo variable domain (e.g., pyo.NonNegativeIntegers), as "
-             "this will be used to create the variable via Pyomo's Var component.",
-    "pywraplp": "Replace <type> with a string representing the OR-Tools variable type ('integer', 'continuous' or "
-               "'binary'), as this will be used to create the variable via OR-Tools' IntVar, NumVar or BoolVar.",
-    "pulp": "Replace <type> with a string representing the PuLP variable category ('Integer', 'Continuous' or "
-            "'Binary'), as this will be used to create the variable via PuLP's LpVariable.",
-}
+
 
 
 class State(ModelingState, total=False):
@@ -109,8 +101,13 @@ async def _gather(*calls: Coroutine[Any, Any, Any]) -> list[Any]:
 
 
 def _instruction(context: Context, depth: int) -> str:
-    rule = DV_TYPE_RULES.get(context.target.dialect)
-    return INSTRUCTIONS[depth].replace(GUROBI_TYPE_RULE, rule) if rule else INSTRUCTIONS[depth]
+    instruction = INSTRUCTIONS[depth].replace(GUROBI_TYPE_RULE, ModelCode(context.target).variable_rules)
+    if depth in (4, 5):
+        instruction += ("\nFor an indexed constraint, put the expression first and the outer iteration after it, e.g. "
+                        "'sum(a[i,j]*x[j] for j in J) <= b[i] for i in I'. Do not use a leading 'for ...:' "
+                        "or enclose the expression in a list. When this stage has no constraints, return {None: None}, "
+                        "not an empty dictionary.")
+    return instruction
 
 
 async def _check(context: Context, node: Node) -> None:
@@ -128,7 +125,7 @@ async def _check(context: Context, node: Node) -> None:
     elif node.run_code and step == "objective" and not check_constraints_for_correctness_obj(value):
         not_empty = node.run_code = False
     if step in EXECUTABLE_STEPS and node.run_code:
-        language = context.target.dialect
+        language = context.target
         try:
             code = codegen.model_code(language, node.form_dict_eval) if step == "inequality_constraints" \
                 else codegen.check_script(language, node.form_dict_eval, step)
@@ -142,7 +139,7 @@ async def _check(context: Context, node: Node) -> None:
             else:
                 result = await context.run_script(code)
                 node.output = result.output
-                node.correct = result.executed and not any(keyword in result.output for keyword in ERROR_KEYWORDS)
+                node.correct = result.executed
     try:
         json.dumps(convert_tuple_keys_to_str(node.form_dict_eval))
     except Exception:
@@ -343,7 +340,7 @@ def select(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     ranked = [by_order[order] for order in search.ranking or [] if by_order[order] in solved]
     best = nodes[ranked[0] if ranked else solved[0]]
     formulation = "\n\n".join(f"### {step}\n```python\n{best.form_dict_str.get(step, '')}\n```" for step in STEPS.values())
-    return {"formulation": formulation, "code": codegen.model_code(runtime.context.target.dialect, best.form_dict_eval),
+    return {"formulation": formulation, "code": codegen.model_code(runtime.context.target, best.form_dict_eval),
             "solve": best.solve}
 
 
@@ -376,5 +373,5 @@ AUTOFORMULATION = Method("autoformulation", "AutoFormulation",
                          titles={"expand": "扩展建模树", "rollout": "MCTS rollout", "select": "选中的数学模型"},
                          hidden=frozenset({"solve"}),
                          limits=presets.AUTOFORMULATION.limits,
-                         languages=MILP_LANGUAGES,
+                         linear_only=True,
                          parameters=lambda: asdict(presets.AUTOFORMULATION))

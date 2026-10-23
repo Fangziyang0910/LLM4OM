@@ -31,6 +31,27 @@ def test_provider_routing_remains_a_valid_extra_request_parameter() -> None:
     assert model._get_request_payload("test")["extra_body"] == {"provider": routing}
 
 
+def test_deepseek_uses_the_native_client_and_keeps_tool_reasoning() -> None:
+    from langchain_deepseek import ChatDeepSeek
+    from openai.types.chat import ChatCompletion
+
+    settings = LLMSettings("deepseek", "deepseek-flash", api_key="dummy", base_url="http://localhost:9/v1",
+                           extra_body={"thinking": {"type": "disabled"}})
+    model = chat_model(settings)
+    assert isinstance(model, ChatDeepSeek)
+    reply = model._create_chat_result(ChatCompletion.model_validate({
+        "id": "test", "created": 1, "model": "deepseek-flash", "object": "chat.completion",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": "",
+        "reasoning_content": "check the constraints", "tool_calls": [{"id": "call1", "type": "function",
+        "function": {"name": "answer", "arguments": "{}"}}]}, "finish_reason": "tool_calls"}]}))
+    message = reply.generations[0].message
+    payload = model._get_request_payload([HumanMessage("test"), message, ToolMessage("ok", tool_call_id="call1")])
+    assert payload["model"] == "deepseek-flash"
+    assert message.additional_kwargs["reasoning_content"] == "check the constraints"
+    assert message.tool_calls[0]["name"] == "answer"
+    assert payload["extra_body"] == settings.extra_body
+
+
 def test_openrouter_preserves_reasoning_in_streamed_tool_conversations() -> None:
     requests = []
     details = [{"type": "reasoning.text", "text": "test thought", "index": 0, "format": "unknown"}]

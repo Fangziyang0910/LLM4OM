@@ -18,7 +18,6 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from llm4om.languages import MILP_LANGUAGES
 from llm4om.methods import Method, presets
 from llm4om.runtime import Context, ModelingState
 
@@ -132,5 +131,5 @@ OR_LLM_AGENT = Method("or_llm_agent", "OR-LLM-Agent",
                       "https://github.com/bwz96sco/or_llm_agent/tree/5dccdaab89ab91c3cb28066fe849423dc124d287",
                       titles={"math_model": "数学模型", "write_code": "生成代码", "execute": "执行代码",
                               "fix": "按错误修复代码", "end_round": "本轮结束"},
-                      languages=MILP_LANGUAGES,
+                      linear_only=True,
                       parameters=lambda: asdict(presets.OR_LLM_AGENT))

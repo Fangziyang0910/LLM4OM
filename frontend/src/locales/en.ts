@@ -1,5 +1,7 @@
 /** English for the page's Chinese text; keys are the Chinese exactly as written in t(...). */
 export const en: Record<string, string> = {
+  "预设名称": "Preset name",
+  "仅用于显示；留空时使用模型 ID。": "Display only; leave empty to use the model ID.",
   "建模求解器": "Modeling library",
   "求解后端": "Solver backend",
   "自动选择": "Automatic",

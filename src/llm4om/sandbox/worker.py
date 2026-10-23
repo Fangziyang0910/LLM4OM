@@ -479,6 +479,10 @@ def solve_graph(model, time_limit, interface, backend):
 def solve_casadi(model, time_limit, interface, backend):
     import casadi as ca
 
+    objective_sign = model.get('objective_sign', 1) if isinstance(model, dict) else 1
+    if objective_sign not in (-1, 1):
+        raise ModelError('CasADi objective_sign must be 1 or -1.')
+
     if interface in ("opti", "opti_conic"):
         custom = {}
         if isinstance(model, dict):
@@ -503,7 +507,7 @@ def solve_casadi(model, time_limit, interface, backend):
         for variable in ca.symvar(model.x):
             for i in range(variable.numel()):
                 values[f"{variable.name()}[{i}]"] = result.value(ca.vec(variable)[i])
-        return status, result.value(model.f), values
+        return status, objective_sign * result.value(model.f), values
     _expect(model, dict, "CasADi problem dictionary")
     options = dict(model.get("options") or {})
     if backend == "ipopt":
@@ -518,7 +522,7 @@ def solve_casadi(model, time_limit, interface, backend):
         return status, None, None
     x = result["x"].full().ravel()
     objective = result["cost"] if interface == "conic" else result["f"]
-    return ("locally_optimal" if interface == "nlpsol" else "optimal"), float(objective), {f"x[{i}]": value for i, value in enumerate(x)}
+    return ("locally_optimal" if interface == "nlpsol" else "optimal"), objective_sign * float(objective), {f"x[{i}]": value for i, value in enumerate(x)}
 
 
 def model_target(model, library, backend):

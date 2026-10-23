@@ -28,6 +28,7 @@ PAGES = ("/", "/run/{thread_id}", "/compare/{group}")  # the single-page app; no
 
 
 class PresetBody(BaseModel):
+    name: str = ""
     provider: str
     model: str = ""
     api_key: str = ""
@@ -59,7 +60,7 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
     def options() -> dict[str, Any]:
         return {
             "methods": [{"id": m.id, "name": m.name, "description": m.description, "source": m.source,
-                         "languages": sorted(m.languages) if m.languages is not None else None}
+                         "linear_only": m.linear_only, "languages": sorted(m.languages) if m.languages is not None else None}
                         for m in methods().values()],
             "languages": [{"id": item.id, "name": item.name, "solver": "AUTO"}
                           for item in LANGUAGES.values()],
@@ -87,7 +88,7 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
 
     @app.post("/api/presets")
     def add_preset(body: PresetBody) -> dict[str, Any]:
-        store.add(LLMSettings(**body.model_dump()))
+        store.add(LLMSettings(**body.model_dump(exclude={"name"})), name=body.name)
         return public()
 
     @app.delete("/api/presets/{preset}")
@@ -98,7 +99,7 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
     @app.post("/api/models")
     async def models(body: PresetBody) -> dict[str, Any]:
         """The provider's model list, read with the key in the request; saved keys are never used here."""
-        settings = LLMSettings(**body.model_dump())
+        settings = LLMSettings(**body.model_dump(exclude={"name"}))
         if settings.provider not in PROVIDERS:
             raise ValueError(f"Unknown LLM provider {settings.provider!r}.")
         if not settings.url:

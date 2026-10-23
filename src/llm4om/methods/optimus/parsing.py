@@ -4,6 +4,8 @@ import json
 import re
 from typing import Any
 
+from llm4om.methods.common import split_formulation_and_code
+
 # ---- upstream utils.py ----
 
 def _fences(text: str) -> str:
@@ -112,17 +114,13 @@ def extract_formulation_from_end(text: str) -> tuple[str, dict[str, Any], list[s
 
 
 def extract_code_from_end(text: str) -> str:
-    """llm4om: without "=====" fences, take the last ```python block. Upstream takes the first; models that answer
+    """llm4om: without "=====" fences, take the last Python block. Upstream takes the first; models that answer
     in Markdown often show a fragment first and the full statement last (a bare objective, then setObjective)."""
     text = _fences(text)
     if "=====" in text:
         code = extract_equal_sign_closed(text)
     else:
-        ind_1 = text.rfind("```python")
-        ind_2 = text.find("```", ind_1 + 1)
-        if ind_1 < 0 or ind_2 < 0:
-            raise ValueError("The reply needs a complete Python code block.")
-        code = text[ind_1 + len("```"): ind_2].strip()
+        _, code = split_formulation_and_code(text)
     if "```" in code:
         code = code.replace("```python", "").replace("```", "").strip()
     if code.startswith("====="):
@@ -135,5 +133,4 @@ def extract_code_from_end(text: str) -> str:
 
 def extract_debugged_code(text: str) -> str:
     """execute_code.extract_code."""
-    code = extract_equal_sign_closed(text)
-    return code.replace("```python", "").replace("```", "").strip()
+    return extract_code_from_end(text)

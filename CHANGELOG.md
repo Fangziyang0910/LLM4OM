@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 方法与建模库组合
+
+- 13 个内置方法均可选择九个建模库。完整代码生成共享库提示；OptiMUS、SAC-Opt、AutoFormulation 共享原生变量、约束、目标及函数组装。LP/MILP 问题范围单独标记，不再作为库白名单。
+- 保留变量域和显式上下界，支持按索引变化的边界；不为 CPMpy/CP-SAT 补造有限界或放松变量域。CasADi 整数域使用 Bonmin，最大化恢复原目标方向；Worker 升至 12。
+- CoE 专家、汇总和反思均收到完整库契约；OptiTree 保存数学模型；OptiMUS 接受原生局部最优状态和标准 Markdown 代码块；AutoFormulation 按退出状态判断脚本成功，并明确组件表达式格式。
+- DeepSeek 使用已集成的原生 `langchain-deepseek`。TriVAL 三个验证器统一使用工具调用，避免网关不支持 JSON Schema 时失败。
+- 预设支持独立显示名称（环境变量 `LLM4OM_LLM_NAME`），历史记录保留名称和实际 API 模型 ID；添加预设时可填写自定义 DeepSeek 地址，旧预设继续可用。
+
 ### 建模库与原生后端
 
 - 一级选项收拢为九个建模库；OR-Tools 只出现一次，CVXPY 的后端不再展开成多个库。支持各库原生 API，自动识别返回的模型；只保存库、可选后端与实际求解引擎，不增加接口选择层。

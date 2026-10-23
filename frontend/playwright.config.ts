@@ -22,6 +22,7 @@ export default defineConfig({
       command: `uv run llm4om serve --sandbox local --host 127.0.0.1 --port ${APP_PORT} --workspace ${workspace}`,
       url: `http://127.0.0.1:${APP_PORT}/api/options`, timeout: 120_000, reuseExistingServer: false,
       env: { LLM4OM_LLM_PROVIDER: "openai_compatible", LLM4OM_LLM_MODEL: "mock-model", LLM4OM_LLM_API_KEY: "e2e-not-a-key",
+             LLM4OM_LLM_NAME: "deepseek-v4.1 flash-1017",
              LLM4OM_LLM_EXTRA_BODY: "{}", LANGSMITH_TRACING: "false", LANGCHAIN_TRACING_V2: "false",
              LLM4OM_LLM_BASE_URL: `http://127.0.0.1:${LLM_PORT}/v1` },
     },

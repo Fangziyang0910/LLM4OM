@@ -7,7 +7,6 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from llm4om.languages import MILP_LANGUAGES
 from llm4om.methods import Method, presets
 from llm4om.methods.common import ask, split_formulation_and_code
 from llm4om.methods.optimind.prompts import FEEDBACK, SYSTEM, hint_bank, hints
@@ -87,6 +86,5 @@ OPTIMIND = Method(
     id="optimind", name="OptiMind", description="按问题类型选用公开建模提示，并结合求解结果迭代检查模型。",
     graph=graph, source="https://github.com/microsoft/OptiGuide/tree/419cf7b9eee20b6af036abf15152fa775b20c951/optimind",
     titles={"classify": "匹配建模提示", "generate": "OptiMind 建模与检查"}, hidden=frozenset({"reflection"}),
-    languages=MILP_LANGUAGES | {"pyscipopt", "coptpy", "cvxpy"},
     parameters=lambda: asdict(presets.OPTIMIND),
 )

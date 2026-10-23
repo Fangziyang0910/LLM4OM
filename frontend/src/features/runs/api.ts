@@ -13,7 +13,7 @@ export async function startRun(draft: Draft, preset: Preset | undefined, group: 
   const title = draft.description.trim().split("\n")[0].slice(0, 120);
   const meta: RunMeta = { title, method: draft.method, language: draft.language, preset: preset?.id ?? null,
     ...(draft.solver ? { solver: draft.solver } : {}),
-    provider: preset?.provider ?? null, model: preset?.model ?? null, ...(group ? { group } : {}) };
+    provider: preset?.provider ?? null, model: preset?.name || preset?.model || null, ...(group ? { group } : {}) };
   const client = await sdk();
   const thread = await client.threads.create({ metadata: meta });
   try {
@@ -54,7 +54,7 @@ export async function updateMeta(threadId: string, change: Partial<Pick<RunMeta,
 /** Recorded configuration owns these fields; thread metadata also holds editable notes and legacy records. */
 export function runMeta(metadata: RunMeta, spec?: RunSpec | null): RunMeta {
   return spec ? { ...metadata, method: spec.method, language: spec.language, solver: spec.solver, preset: spec.preset,
-    provider: spec.llm.provider, model: spec.llm.model } : metadata;
+    provider: spec.llm.provider, model: spec.preset_name || spec.llm.model } : metadata;
 }
 
 export async function deleteRun(threadId: string): Promise<void> {

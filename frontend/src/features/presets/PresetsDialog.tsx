@@ -15,10 +15,10 @@ import { errorText, formatTokens } from "@/format";
 import { t } from "@/i18n";
 import type { Preset, Presets, Provider } from "@/types";
 
-type Form = { provider: string; model: string; api_key: string; base_url: string; temperature: string; max_tokens: string; extra_body: string };
+type Form = { name: string; provider: string; model: string; api_key: string; base_url: string; temperature: string; max_tokens: string; extra_body: string };
 
 const emptyForm = (provider: Provider): Form =>
-  ({ provider: provider.id, model: "", api_key: "", base_url: provider.base_url, temperature: "", max_tokens: "", extra_body: "" });
+  ({ name: "", provider: provider.id, model: "", api_key: "", base_url: provider.base_url, temperature: "", max_tokens: "", extra_body: "" });
 
 function Field({ label, htmlFor, help, error, children }: { label: string; htmlFor: string; help?: string; error?: string | null; children: React.ReactNode }) {
   return <div className="flex flex-col gap-1.5">
@@ -53,8 +53,8 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
   let extraError: string | null = null;
   try { if (form.extra_body.trim()) JSON.parse(form.extra_body); } catch { extraError = t("不是有效的 JSON。"); }
   const body = () => ({
-    provider: form.provider, model: form.model.trim(), api_key: form.api_key.trim(),
-    base_url: provider.base_url ? "" : form.base_url.trim(),
+    name: form.name.trim(), provider: form.provider, model: form.model.trim(), api_key: form.api_key.trim(),
+    base_url: form.base_url.trim(),
     temperature: form.temperature === "" ? null : Number(form.temperature),
     max_tokens: form.max_tokens === "" ? null : Number(form.max_tokens),
     extra_body: form.extra_body.trim() ? JSON.parse(form.extra_body) : {},
@@ -65,13 +65,13 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
   };
   const add = () => act("add", async () => {
     const saved = await api<Presets>("/api/presets", body());
-    onChange(saved, t("已添加预设 {model}。", { model: form.model.trim() }));
+    onChange(saved, t("已添加预设 {model}。", { model: form.name.trim() || form.model.trim() }));
     setForm(emptyForm(provider)); setModels(null);
     show(saved.presets.at(-1)?.id ?? null);
   });
   const remove = (preset: Preset) => act("delete", async () => {
     const saved = await api<Presets>(`/api/presets/${encodeURIComponent(preset.id)}`, undefined, "DELETE");
-    onChange(saved, t("已删除预设 {model}。", { model: preset.model }));
+    onChange(saved, t("已删除预设 {model}。", { model: preset.name || preset.model }));
     show(saved.presets[0]?.id ?? null);
   });
   const listModels = () => act("models", async () => setModels((await api<{ models: string[] }>("/api/models", body())).models));
@@ -88,7 +88,7 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
           {presets.map((item, index) => <button key={item.id} onClick={() => show(item.id)}
             className={cn("flex shrink-0 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
               viewing === item.id && "bg-accent")}>
-            <span className="flex max-w-44 items-center gap-2 font-medium"><span className="truncate">{item.model}</span>
+            <span className="flex max-w-44 items-center gap-2 font-medium"><span className="truncate">{item.name || item.model}</span>
               {index === 0 ? <Badge className="h-4 shrink-0 px-1.5 text-[10px]">{t("默认")}</Badge> : null}</span>
             <span className="max-w-44 truncate text-[11px] text-muted-foreground">{label(item.provider)}{item.source === "env" ? t(" · 服务器") : ""}</span>
           </button>)}
@@ -99,8 +99,9 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
           {shown ? <>
-            <h3 className="text-base font-semibold break-all">{shown.model}</h3>
+            <h3 className="text-base font-semibold break-all">{shown.name || shown.model}</h3>
             <dl>
+              <Fact label={t("模型 ID")}>{shown.model}</Fact>
               <Fact label={t("服务商")}>{label(shown.provider)}</Fact>
               <Fact label={t("接口地址")}><span className="font-mono text-xs">{shown.base_url || providers.find(item => item.id === shown.provider)?.base_url}</span></Fact>
               <Fact label={t("API 密钥")}><span className="flex items-center gap-1.5 text-muted-foreground"><KeyRound className="size-3.5" />{t("已保存在服务器，不可查看")}</span></Fact>
@@ -121,12 +122,15 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
                 <SelectContent>{providers.map(item => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
-            <Field label={t("接口地址")} htmlFor="base-url" help={provider.base_url ? t("使用该服务商的官方地址。") : undefined}>
-              <Input id="base-url" value={provider.base_url || form.base_url} readOnly={!!provider.base_url} onChange={set("base_url")}
-                placeholder="https://example.com/v1" className={cn(provider.base_url && "bg-muted text-muted-foreground")} />
+            <Field label={t("接口地址")} htmlFor="base-url">
+              <Input id="base-url" value={form.base_url} onChange={set("base_url")}
+                placeholder="https://example.com/v1" />
             </Field>
             <Field label={t("API 密钥")} htmlFor="api-key" help={t("保存后不再显示。")}>
               <Input id="api-key" type="password" autoComplete="off" value={form.api_key} onChange={set("api_key")} placeholder={t("输入密钥")} />
+            </Field>
+            <Field label={t("预设名称")} htmlFor="preset-name" help={t("仅用于显示；留空时使用模型 ID。")}>
+              <Input id="preset-name" value={form.name} onChange={set("name")} />
             </Field>
             <Field label={t("模型 ID")} htmlFor="model-id">
               <div className="flex gap-2">

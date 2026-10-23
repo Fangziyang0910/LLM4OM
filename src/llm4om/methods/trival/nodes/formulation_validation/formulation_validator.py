@@ -1,6 +1,7 @@
 from typing import Any
 
 from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
 from langchain.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
@@ -86,7 +87,7 @@ async def formulation_validator(
         state_schema=State,
         context_schema=ContextSchema,
         system_prompt=FORMULATION_VALIDATOR_SYSTEM_PROMPT,
-        response_format=FormulationValidationOutput,
+        response_format=ToolStrategy(FormulationValidationOutput),
         name="formulation_validator",
     )
 

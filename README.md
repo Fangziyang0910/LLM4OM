@@ -32,8 +32,8 @@
 平台内置 **13 种 LLM 建模方法**，包括 Direct、Feedback Repair 两种自有方法，以及 11 种来自公开研究的方法。你不需要手写求解代码，可以直接输入问题、运行建模，再查看模型和结果。
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="演示：选择运输问题和 ORThought，开始建模，查看解、数学模型和代码" width="100%">
-  <br><sub>真实运行录屏：运输问题 · ORThought · Pyomo/HiGHS · DeepSeek。建模阶段已加速 2 倍。</sub>
+  <img src="docs/assets/demo.gif" alt="演示：生产计划、Direct 和 OR-Tools，查看解、数学模型和代码" width="100%">
+  <br><sub>真实运行录屏：生产计划 · Direct · OR-Tools/SCIP · DeepSeek。录屏加速 2 倍。</sub>
 </p>
 
 ## 亮点
@@ -86,7 +86,7 @@ docker compose up -d --build
 
 ```bash
 uv sync --all-extras
-uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:11
+uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:12
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
@@ -134,7 +134,7 @@ print(state["failure"] or state["solve"]["objective"])
 | BIND | 提示只读附件结构，代码读取完整数据，执行失败时修正 | [论文](https://arxiv.org/abs/2605.21751) · [适配说明](src/llm4om/methods/bind/README.md) |
 | OptiMind | 公开类型提示、建模、求解反馈与多轮检查 | [论文](https://arxiv.org/abs/2509.22979) · [公开范围](src/llm4om/methods/optimind/README.md) |
 
-各方法固定参考提交并记录差异。SAC-Opt 根据公开算法独立实现；BIND 不使用基准参考答案；OptiMind 接入公开推理流程，提示库目前只有旅行商问题。方法只开放实际支持的代码写法。详见[建模方法](docs/methods.md)。
+各方法固定参考提交并记录差异。SAC-Opt 根据公开算法独立实现；BIND 不使用基准参考答案；OptiMind 接入公开推理流程，提示库目前只有旅行商问题。13 种方法均可选择九个建模库；部分方法保留 LP/MILP 问题范围，库与后端须支持该数学问题。详见[建模方法](docs/methods.md)。
 
 ## 建模求解器与后端
 

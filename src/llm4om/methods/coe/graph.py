@@ -20,7 +20,6 @@ from langchain_core.prompts import PromptTemplate
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from llm4om.languages import MILP_LANGUAGES
 from llm4om.methods import Method, presets
 from llm4om.methods.coe.parsing import extract_code_from_string, parse_json_from_string
 from llm4om.methods.coe.prompts import CONDUCTOR, EXPERTS, EXPERTS_BY_NAME, REDUCER, Expert
@@ -108,7 +107,7 @@ async def expert(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     context = runtime.context
     chosen = EXPERTS_BY_NAME[state["expert"]]
     output = await _predict(context, chosen.name, _role(chosen, context) + '\n' + chosen.forward,
-                            problem_description=state["problem"], code_example=context.target.starter,
+                            problem_description=state["problem"], code_example=context.target.starter + '\n' + context.target.prompt,
                             comments_text=_comment_text(state["_comments"]), knowledge='None')
     if chosen.name == 'Terminology Interpreter':
         output = _terminology_answer(output)
@@ -119,8 +118,8 @@ async def expert(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
 
 
 async def reducer(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
-    answer = await _predict(runtime.context, "reducer", REDUCER, problem_description=state["problem"],
-                            comment_text=_comment_text(state["_comments"]))
+    answer = await _predict(runtime.context, "reducer", REDUCER + '\n\n{code_contract}', problem_description=state["problem"],
+                            comment_text=_comment_text(state["_comments"]), code_contract=runtime.context.target.prompt)
     return {"code": extract_code_from_string(answer)}
 
 
@@ -136,9 +135,9 @@ async def backward(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     stack, comments, pool = list(state["_stack"]), list(state["_comments"]), list(state["_feedback_pool"])
     previous = EXPERTS_BY_NAME[stack.pop()]
     previous_name, previous_comment = comments.pop()
-    reply = await _predict(context, f"{previous.name} (backward)", _role(previous, context) + '\n' + previous.backward,
+    reply = await _predict(context, f"{previous.name} (backward)", _role(previous, context) + '\n' + previous.backward + '\n\n{code_contract}',
                            problem_description=state["problem"], previous_answer=previous_comment,
-                           feedback=_comment_text(pool))
+                           feedback=_comment_text(pool), code_contract=context.target.prompt)
     try:
         result = parse_json_from_string(reply, expected_type=dict)
     except ValueError:
@@ -193,5 +192,5 @@ COE = Method("coe", "Chain-of-Experts",
              "https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43",
              titles={"start_trial": "开始一轮", "conductor": "协调者选择专家", "expert": "专家意见", "reducer": "汇总代码",
                      "evaluate": "测试代码", "backward": "反向反思", "finish": "数学模型"},
-             languages=MILP_LANGUAGES,
+             linear_only=True,
              parameters=lambda: asdict(presets.COE))

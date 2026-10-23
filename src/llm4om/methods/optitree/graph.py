@@ -27,8 +27,8 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from llm4om.languages import MILP_LANGUAGES
 from llm4om.methods import Method, presets
+from llm4om.methods.common import TWO_PARTS
 from llm4om.methods.optitree.prompts import CLASSIFY_PROMPT, INSPECTOR_PROMPT, MILP, REASON_PROMPT
 from llm4om.runtime import Context, ModelingState
 
@@ -114,8 +114,9 @@ async def reason(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     context = runtime.context
     prompt = REASON_PROMPT[1].replace("gurobi code", f"{context.target.library.lower()} code").format(
         user_input=MILP + state["problem"], thought_template=state["thought_template"])
-    reply = await _reply(context, "reasoner", REASON_PROMPT[0], prompt + "\n\n" + context.target.prompt)
-    return {"reply": reply, "code": extract_code(reply), "inspections": 0, "_inspector": []}
+    reply = await _reply(context, "reasoner", REASON_PROMPT[0], prompt + "\n\n" + context.target.prompt + "\n" + TWO_PARTS)
+    return {"reply": reply, "formulation": reply.split("```", 1)[0].strip() or None,
+            "code": extract_code(reply), "inspections": 0, "_inspector": []}
 
 
 async def execute(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
@@ -169,5 +170,5 @@ OPTITREE = Method("optitree", "OptiTree",
                   optitree_graph, "https://github.com/MIRALab-USTC/OptiTree/tree/2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9",
                   titles={"classify": "匹配问题类型", "retrieve": "建模思路模板", "reason": "按模板生成代码",
                           "inspect": "检查并修改代码"}, hidden=frozenset({"belongs", "node", "inspections"}),
-                  languages=MILP_LANGUAGES,
+                  linear_only=True,
                   parameters=lambda: asdict(presets.OPTITREE))

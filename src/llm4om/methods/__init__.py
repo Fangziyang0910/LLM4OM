@@ -25,6 +25,7 @@ class Method:
     languages: frozenset[str] | None = None  # code languages the method supports; None means all
     limits: Limits | None = None  # replaces the service limits for methods that need many more calls
     parameters: Callable[[], dict[str, Any]] = dict  # snapshot the parameters used by this method
+    linear_only: bool = False  # problem scope; independent of the modeling library
 
 
 def methods() -> dict[str, Method]:

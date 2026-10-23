@@ -19,12 +19,13 @@ class LLMPreset:
     id: str
     settings: LLMSettings
     source: str = "saved"
+    name: str = ""
 
     def public(self) -> dict[str, Any]:
         """The preset without its key: what the browser and run records may see."""
         values = asdict(self.settings)
         del values["api_key"], values["timeout"], values["max_retries"]
-        return {"id": self.id, "source": self.source, **values}
+        return {"id": self.id, "source": self.source, "name": self.name or self.settings.model, **values}
 
 
 ENV_PRESET = "env"
@@ -61,9 +62,12 @@ class LLMPresetStore:
     def presets(self) -> list[LLMPreset]:
         """The environment preset first, then the saved ones in the order they were added."""
         with self._lock:
-            saved = [LLMPreset(values.pop("id"), LLMSettings(**values)) for values in self._saved()]
+            saved = []
+            for values in self._saved():
+                identity, name = values.pop("id"), values.pop("name", "")
+                saved.append(LLMPreset(identity, LLMSettings(**values), name=name))
         environment = settings_from_env()
-        return ([LLMPreset(ENV_PRESET, environment, "env")] if environment else []) + saved
+        return ([LLMPreset(ENV_PRESET, environment, "env", os.environ.get("LLM4OM_LLM_NAME", ""))] if environment else []) + saved
 
     def find(self, preset: str | None = None) -> LLMPreset:
         """The preset `preset`, or the default preset."""
@@ -81,13 +85,13 @@ class LLMPresetStore:
         """The settings of `preset`, or of the default preset."""
         return self.find(preset).settings
 
-    def add(self, settings: LLMSettings) -> LLMPreset:
+    def add(self, settings: LLMSettings, name: str = "") -> LLMPreset:
         """Save a new preset with an identity that is never reused after deletion."""
         settings.validate()
-        preset = LLMPreset(uuid4().hex, settings)
+        preset = LLMPreset(uuid4().hex, settings, name=name.strip())
         with self._lock:
             saved = self._saved()
-            self._write(saved + [{"id": preset.id, **asdict(settings)}])
+            self._write(saved + [{"id": preset.id, "name": preset.name, **asdict(settings)}])
         return preset
 
     def delete(self, preset: str) -> None:

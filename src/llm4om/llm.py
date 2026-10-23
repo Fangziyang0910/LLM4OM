@@ -90,7 +90,7 @@ def chat_model(settings: LLMSettings, *, callbacks: list[BaseCallbackHandler] | 
     openai_options = {"timeout": settings.timeout, "max_tokens": settings.max_tokens,
                       "extra_body": settings.extra_body or None, "stream_usage": True}
     if protocol == "deepseek":
-        # ChatDeepSeek keeps reasoning_content across turns, which DeepSeek requires for tool calls in thinking mode.
+        # The native client exposes DeepSeek reasoning_content and tool/structured output support.
         from langchain_deepseek import ChatDeepSeek
 
         return ChatDeepSeek(**common, api_base=settings.url, **openai_options)

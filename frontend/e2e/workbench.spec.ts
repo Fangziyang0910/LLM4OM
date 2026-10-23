@@ -79,14 +79,38 @@ test("a cancelled method keeps its draft after reloading without an event stream
   expect(errors).toEqual([]);
 });
 
+test("a named DeepSeek preset keeps its native provider, custom endpoint and actual model ID", async ({ page }) => {
+  const errors = await open(page);
+  await page.getByRole('button', { name: /预设模型/ }).click();
+  const dialog = page.getByRole('dialog', { name: '预设模型', exact: true });
+  await expect(dialog.getByRole('heading', { name: 'deepseek-v4.1 flash-1017' })).toBeVisible();
+  await expect(dialog.getByText('mock-model', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '添加预设', exact: true }).click();
+  await dialog.getByRole('combobox', { name: '服务商', exact: true }).click();
+  await page.getByRole('option', { name: 'DeepSeek', exact: true }).click();
+  await dialog.getByLabel('接口地址', { exact: true }).fill('http://127.0.0.1:8796/v1');
+  await dialog.getByLabel('API 密钥', { exact: true }).fill('e2e-not-a-key');
+  await dialog.getByLabel('预设名称', { exact: true }).fill('DeepSeek native test');
+  await dialog.getByLabel('模型 ID', { exact: true }).fill('mock-model');
+  await dialog.getByRole('button', { name: '添加预设', exact: true }).last().click();
+  await expect(dialog.getByRole('heading', { name: 'DeepSeek native test' })).toBeVisible();
+  const saved = (await (await page.request.get('/api/presets')).json()).presets.at(-1);
+  expect(saved).toMatchObject({ name: 'DeepSeek native test', model: 'mock-model', provider: 'deepseek', base_url: 'http://127.0.0.1:8796/v1' });
+  expect(saved.api_key).toBeUndefined();
+  await dialog.getByRole('button', { name: '删除这个预设' }).click();
+  await dialog.getByRole('button', { name: '确认删除？' }).click();
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  expect(errors).toEqual([]);
+});
+
 test("new methods expose supported solver choices and BIND runs through the workbench", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#method-sac_opt").click();
-  await expect(page.locator("#language-gurobipy")).toBeChecked();
-  await expect(page.locator("#language-pyomo")).toBeDisabled();
+  await expect(page.locator("#language-pyomo")).toBeChecked();
+  await expect(page.locator("#language-gurobipy")).toBeEnabled();
   await page.locator("#method-optimind").click();
   await expect(page.locator("#language-pyscipopt")).toBeEnabled();
-  await expect(page.locator("#language-cpmpy")).toBeDisabled();
+  await expect(page.locator("#language-cpmpy")).toBeEnabled();
   await page.locator("#method-bind").click();
   await expect(page.locator("#language-casadi")).toBeEnabled();
   await expect(page.locator("#language-cvxpy")).toBeEnabled();

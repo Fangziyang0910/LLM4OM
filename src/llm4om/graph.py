@@ -84,12 +84,12 @@ class Resources:
     llm: LLMSettings | None = None
     budget: TokenBudget | None = None  # each preset's daily tokens
 
-    def resolve(self, preset: str | None = None) -> tuple[str | None, LLMSettings]:
-        """Resolve the preset once per modeling node; the returned settings stay private."""
+    def resolve(self, preset: str | None = None) -> tuple[str | None, LLMSettings, str]:
+        """Resolve the preset's identity, private settings and display name together."""
         selected = self.presets.find(preset) if self.llm is None else None
         settings = self.llm if self.llm is not None else selected.settings
         settings.validate()
-        return selected.id if selected else None, settings
+        return selected.id if selected else None, settings, (selected.name if selected else "") or settings.model
 
     def charge(self, preset: str | None) -> Callable[[int], None] | None:
         if self.llm or not self.budget or preset is None:
@@ -214,7 +214,7 @@ def platform_graph(method: Method) -> Any:
             for name in data:
                 if not re.fullmatch(DATA_NAME, name):
                     raise ValueError(f"Invalid data file name {name!r}; use letters, digits, '-', '_', '.' and spaces.")
-            preset, settings = await asyncio.to_thread(resources.resolve, choice.preset)
+            preset, settings, preset_name = await asyncio.to_thread(resources.resolve, choice.preset)
             if charge := resources.charge(preset):
                 charge(0)  # raises when the preset's daily budget is spent
         except (ValueError, LimitExceeded) as error:
@@ -222,7 +222,8 @@ def platform_graph(method: Method) -> Any:
         spec = {"version": version("llm4om"), "method": method.id, "source": method.source,
                 "parameters": method.parameters(), "limits": asdict(method.limits or resources.limits),
                 "language": target.language, "solver": target.solver,
-                "preset": preset, "llm": settings.public(),
+                "preset": preset, "preset_name": preset_name,
+                "llm": settings.public(),
                 "sandbox": resources.sandbox.kind, "worker_image": resources.sandbox.image if resources.sandbox.kind == "docker" else None}
         return {**fresh, "problem": problem_text(state.get("description", ""), data), "failure": None, "_deadline": deadline,
                 "spec": spec, "timing": timing(started)}
@@ -235,7 +236,7 @@ def platform_graph(method: Method) -> Any:
     async def model(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
         """Run the method's graph; each titled node update becomes a step."""
         try:
-            _, settings = await asyncio.to_thread(_resources().resolve, state["spec"]["preset"])
+            _, settings, _ = await asyncio.to_thread(_resources().resolve, state["spec"]["preset"])
             if settings.public() != state["spec"]["llm"]:
                 raise ValueError("The LLM preset changed before modeling started. Start a new run with the intended preset.")
         except ValueError as error:

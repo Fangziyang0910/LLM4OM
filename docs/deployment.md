@@ -18,7 +18,7 @@ docker compose up -d --build
 |---|---|
 | `LLM4OM_PORT` | 对外端口，默认 `8767`。写成 `127.0.0.1:8767` 时只在本机监听 |
 | `DOCKER_SOCKET` | Docker socket 路径。使用 rootless Docker 时设置 |
-| `LLM4OM_LLM_*` | 默认预设：服务商、接口地址、模型、密钥和额外请求参数。见 [.env.example](../.env.example) |
+| `LLM4OM_LLM_*` | 默认预设：服务商、接口地址、模型、密钥和额外请求参数；可用 `LLM4OM_LLM_NAME` 设置显示名称，API 模型 ID 仍由 `LLM4OM_LLM_MODEL` 指定。见 [.env.example](../.env.example) |
 
 ### 组成
 
@@ -26,7 +26,7 @@ docker compose up -d --build
 浏览器 ──HTTP(S)──► app 容器（工作台 + LangGraph 服务器，用户 llm4om）
                       │  通过宿主机的 Docker socket，每次求解启动一个沙箱
                       ▼
-                    沙箱容器 llm4om-worker:11（无网络、只读、非 root，用完即删）
+                    沙箱容器 llm4om-worker:12（无网络、只读、非 root，用完即删）
 
 数据卷 llm4om-data：预设模型（含密钥）和全部运行记录
 ```
@@ -34,7 +34,7 @@ docker compose up -d --build
 | 组成 | 说明 |
 |---|---|
 | `app` 容器（镜像 `llm4om`） | 工作台和 LangGraph 服务器。启动脚本读取 Docker socket 的用户组，整理 `/data` 的属主，然后以用户 `llm4om`（uid 10001）运行服务，不保留任何 capability。根文件系统只读，日志自动轮转，崩溃或服务器重启后自动恢复 |
-| 沙箱镜像 `llm4om-worker:11` | 由 `worker` 服务构建。每次求解，`app` 通过宿主机的 Docker 启动一个沙箱容器 |
+| 沙箱镜像 `llm4om-worker:12` | 由 `worker` 服务构建。每次求解，`app` 通过宿主机的 Docker 启动一个沙箱容器 |
 | 数据卷 `llm4om-data` | 预设模型（含密钥）和全部运行记录。`docker compose down` 不会删除它 |
 
 `app` 容器挂载了宿主机的 Docker socket，相当于拥有宿主机的 root 权限。生成代码只在沙箱容器中运行，不在 `app` 中运行。不要把这台服务器放在需要保护的内网中。取舍见 [ADR 0011](adr/0011-docker-compose-deployment.md)。
@@ -165,7 +165,7 @@ uv run llm4om serve --workspace /srv/llm4om --port 8767 --jobs 4
 | 现象 | 检查 |
 |---|---|
 | 其他机器打不开页面 | 防火墙和安全组是否放行端口；`LLM4OM_PORT` 是否写成了 `127.0.0.1:…` |
-| 运行失败，提示找不到镜像 | `docker compose up -d --build` 会构建 `llm4om-worker:11`；直接运行时执行 `uv run llm4om build-worker` |
+| 运行失败，提示找不到镜像 | `docker compose up -d --build` 会构建 `llm4om-worker:12`；直接运行时执行 `uv run llm4om build-worker` |
 | 运行失败，提示无法连接 Docker | rootless Docker 需要设置 `DOCKER_SOCKET`；查看 `docker compose logs app` |
 | 预设模型报 401 或 404 | 密钥、接口地址或模型 ID 有误。删掉预设，重新添加 |
 | HTTPS 证书申请失败 | 域名是否解析到本机；80 和 443 端口是否放行；查看 `docker compose logs https` |

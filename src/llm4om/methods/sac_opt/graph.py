@@ -16,6 +16,7 @@ from pydantic import AfterValidator, BaseModel, Field
 
 from llm4om.methods import Method, presets
 from llm4om.methods.common import TWO_PARTS, split_formulation_and_code
+from llm4om.model_code import ModelCode
 from llm4om.runtime import Context, ModelingState
 
 
@@ -169,19 +170,16 @@ def anchors(state: State) -> dict:
     return {key: state[key] for key in ("problem", "parameters", "variables", "objective", "constraints")}
 
 
-COMPONENT_RULES = """Use gurobipy with gp, GRB, json, csv, io, itertools and numpy as np available. A model named \
-`model` already exists inside build_model(data). The setup and code fields contain plain Python function-body \
-fragments without Markdown fences, not build_model or another model. \
-The setup declares parameters and all variables; the objective calls model.setObjective; each constraint component \
-adds exactly its anchor's condition/family to model. Do not optimize or return. `data` maps attached FILE NAMES to \
-raw CSV/JSON TEXT, not parameter names to values. Parse attachments when present. If data_files is empty, data is \
-empty: assign the numeric values from the problem description directly. Never invent or truncate values. \
-Use explicit variable domains and bounds. Include a Markdown formulation with $...$ or $$...$$ math delimiters \
-for the objective and each constraint. Keep the component list in the same order as the supplied anchors."""
+COMPONENT_RULES = """The setup and code fields contain plain Python function-body fragments without Markdown fences.
+Setup declares parameters and variables; the objective sets the optimization goal. Each constraint component adds
+exactly its anchor's condition/family. Do not optimize or return. `data` maps attached FILE NAMES, not parameter names, to raw CSV/JSON
+TEXT. Parse attachments when present; otherwise use the problem's numeric values. Never invent or truncate data.
+Include a Markdown formulation for each objective and constraint, with $...$ or $$...$$ delimiters.
+Keep the component list in the same order as its anchors."""
 
 
 async def generate(state: State, runtime: Runtime[Context]) -> dict:
-    result = await structured(runtime.context, "sac_generate", COMPONENT_RULES,
+    result = await structured(runtime.context, "sac_generate", COMPONENT_RULES + "\n" + ModelCode(runtime.context.target).prompt,
                               {**anchors(state), "data_files": list(runtime.context.data)}, Components,
                               length=("constraints", len(state["constraints"])))
     return {"components": result.model_dump(), "accepted": [False] * len(result.constraints), "semantic_rounds": 0}
@@ -218,7 +216,7 @@ async def repair(state: State, runtime: Runtime[Context]) -> dict:
     feedback = {i: {"reconstructed": text, **decision} for i, text, decision in
                 zip(state["_pending"], state["reconstructed"], state["comparisons"], strict=True)}
     components = state["components"]
-    result = await structured(runtime.context, "sac_repair", COMPONENT_RULES +
+    result = await structured(runtime.context, "sac_repair", COMPONENT_RULES + "\n" + ModelCode(runtime.context.target).prompt +
                               "\nReplace only the mismatched constraint components below. Keep setup, symbols and other constraints fixed.",
                               {"problem": state["problem"], "data_files": list(runtime.context.data),
                                "setup": components["setup"], "constraints": [
@@ -231,12 +229,10 @@ async def repair(state: State, runtime: Runtime[Context]) -> dict:
     return {"components": {**components, "constraints": updated}}
 
 
-def assemble(state: State) -> dict:
+def assemble(state: State, runtime: Runtime[Context]) -> dict:
     components = state["components"]
     pieces = [components["objective"], *components["constraints"]]
-    body = "\n\n".join(["model = gp.Model('sac_opt')", components["setup"], *[p["code"] for p in pieces], "return model"])
-    code = ("import csv\nimport io\nimport itertools\nimport json\nimport numpy as np\n"
-            "import gurobipy as gp\nfrom gurobipy import GRB\n\ndef build_model(data):\n" + textwrap.indent(body, "    ") + "\n")
+    code = ModelCode(runtime.context.target).assemble([components['setup'], *[p['code'] for p in pieces]])
     formulation = ("## Parameters\n" + "\n".join(state["parameters"]) + "\n\n## Variables\n" + "\n".join(state["variables"])
                    + "\n\n## Objective and constraints\n" + "\n\n".join(p["formulation"] for p in pieces))
     failure = None if all(state["accepted"]) else "SAC-Opt exhausted semantic checks with unresolved constraint mismatches."
@@ -289,5 +285,5 @@ SAC_OPT = Method(
     titles={"parameters": "参数锚点", "variables": "变量锚点", "objective": "目标锚点", "constraints": "约束锚点",
             "generate": "分项建模", "backtranslate": "约束回译", "compare": "语义比较", "repair": "修正约束",
             "assemble": "组装模型", "debug": "修正执行错误"},
-    languages=frozenset({"gurobipy"}), parameters=lambda: asdict(presets.SAC_OPT),
+    linear_only=True, parameters=lambda: asdict(presets.SAC_OPT),
 )
