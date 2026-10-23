@@ -11,14 +11,32 @@ from langgraph.checkpoint.memory import InMemorySaver
 from llm4om.budget import TokenBudget
 from llm4om.graph import run
 from llm4om.requirements import RequirementsContext, requirements_graph
+from llm4om.runtime import Limits
 from tests.conftest import LLM, PRODUCTION_PROBLEM, TWO_PART_REPLY, tool_call
+
+
+def test_a_draft_update_finishes_the_turn_instead_of_repeating_forever(make_resources: Any) -> None:
+    def reply(role: str, messages: list, tools: list) -> Any:
+        if "update_draft" in tools:
+            return tool_call("update_draft", description="按周计算成本。价格来源待确认。")
+        assert "按周计算成本。价格来源待确认。" in messages[0].text
+        assert "Web search is disabled" in messages[0].text
+        return "已按周整理成本要求。若需查询实时价格，请开启联网搜索。"
+
+    result = asyncio.run(requirements_graph().ainvoke(
+        {"messages": [("human", "常见的价格和来源你联网搜索得到，成本按每周算。")], "description": "原稿：成本周期待确认。"},
+        {"configurable": {"llm4om_resources": make_resources(reply, Limits(max_llm_calls=4))}}))
+    assert result["failure"] is None, result["failure"]
+    assert result["usage"]["llm_calls"] == 2
+    assert result["messages"][-1].text.startswith("已按周整理")
 
 
 def test_conversation_restores_history_and_respects_an_edited_draft(make_resources: Any) -> None:
     seen = []
 
     def reply(role: str, messages: list, tools: list) -> str:
-        assert role == "requirements" and tools == ["update_draft"]
+        assert role == "requirements"
+        assert tools == ([] if messages[-1].type == "tool" else ["update_draft"])
         seen.append(messages)
         if messages[-1].type == "tool":
             return "每个时段需要几人？" if len(seen) == 2 else "可以检查需求稿并用于建模。"

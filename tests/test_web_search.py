@@ -59,7 +59,8 @@ def test_agent_searches_updates_draft_and_keeps_actual_sources(make_resources: A
         lambda _: httpx.Response(200, json={"results": [{"title": "Reference", "url": "https://example.org/guide"}]})), **kwargs))
 
     def reply(role, messages, tools):
-        assert role == "requirements" and set(tools) == {"update_draft", "web_search"}
+        assert role == "requirements" and "web_search" in tools
+        assert ("update_draft" in tools) == (messages[-1].name != "update_draft")
         if messages[-1].type == "human":
             return tool_call("web_search", query="staff scheduling public guide")
         if messages[-1].name == "web_search":

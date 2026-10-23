@@ -178,7 +178,7 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
               <span title={canSearch ? t("搜索公开资料，并在回复中展示来源。") : t("选择 DeepSeek 预设或由管理员配置搜索服务。")}>
                 <Button type="button" variant="ghost" size="sm" aria-label={t("联网搜索")} aria-pressed={searchOn} disabled={busy || !canSearch}
                   className={cn("h-8 gap-1.5 px-2 text-xs", searchOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
-                  onClick={() => setSearch(!searchOn)}><Globe /><span className="hidden md:inline">{t("联网搜索")}</span></Button>
+                  onClick={() => setSearch(!searchOn)}><Globe /><span className="hidden md:inline">{searchOn ? t("联网搜索已开启") : t("联网搜索未开启")}</span></Button>
               </span>
               {stream.isLoading ? <Button type="button" variant="secondary" size="icon-sm" className="ml-auto rounded-full" aria-label={t("停止")}
                 onClick={() => void stream.stop().catch(error => toast.error(errorText(error)))}><Square className="size-3 fill-current" /></Button>

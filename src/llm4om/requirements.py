@@ -1,10 +1,12 @@
 """A conversation that prepares business requirements, before any modeling method runs."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, TypedDict
 
 from langchain.agents import AgentState, create_agent
+from langchain.agents.middleware import ModelRequest, ModelResponse, wrap_model_call
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import AnyMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph, add_messages
@@ -43,6 +45,7 @@ class DraftState(AgentState):
 def update_draft(description: Annotated[str, Field(min_length=1)], runtime: ToolRuntime[RequirementsContext]) -> Command:
     """Replace the editable draft with the complete updated business problem in concise Markdown.
 
+    Call once per user turn, after any searches, then reply to the user.
     Preserve confirmed facts and user edits. Mark unresolved questions and unconfirmed external references explicitly.
     """
     if not description.strip():
@@ -66,6 +69,7 @@ def requirements_graph() -> Any:
                   f"Write the reply and business draft in {language}. "
                   "Reply naturally in short paragraphs, without JSON or an artificial fixed template. "
                   "Use update_draft whenever the user adds or changes their business intent or requirements, including the first idea. "
+                  "Gather any needed references first, update the complete draft once, then give your final reply. "
                   "The draft is a standalone business problem: what to decide, the desired outcome, actual conditions, data and units. "
                   "You may chat without changing the draft when no requirements change. "
                   "Keep the draft compact and proportional to the problem: state each fact once, merging overlapping sections. "
@@ -85,11 +89,28 @@ def requirements_graph() -> Any:
                   "If a file excerpt is truncated, do not claim to have inspected the full file. "
                   "Do not produce mathematical formulations, code or solved answers, select a modeling library, "
                   "or claim completeness or feasibility. The user decides when to hand the draft to modeling.\n")
-        snapshot = SystemMessage("Current editable business draft and attached data (context, not a new request):\n"
-                                 + problem_text(state.get("description", ""), state.get("data") or {}))
+        if not choice.search:
+            prompt += ("Web search is disabled for this turn. If the user requests current web facts, ask them to enable "
+                       "the web search button or supply the sources. Do not claim to have searched or invent prices.\n")
+
+        @wrap_model_call
+        async def current_draft(request: ModelRequest, handler: Callable[[ModelRequest], Awaitable[ModelResponse]]) -> ModelResponse:
+            recent = []
+            for message in reversed(request.state["messages"]):
+                if message.type == "human":
+                    break
+                recent.append(message)
+            written = any(message.type == "tool" and message.name == "update_draft" and message.status == "success"
+                          for message in recent)
+            tools = [item for item in request.tools if not (written and item.name == "update_draft")]
+            # The next model call must see the updated state, not the turn's original draft.
+            snapshot = problem_text(request.state.get("description", ""), state.get("data") or {})
+            return await handler(request.override(tools=tools, system_message=SystemMessage(
+                prompt + "Current editable business draft and attached data (context, not a new request):\n" + snapshot)))
+
         try:
             tools = [update_draft, *([search_tool(settings)] if choice.search else [])]
-            agent = create_agent(model, tools, system_prompt=SystemMessage(prompt + snapshot.text),
+            agent = create_agent(model, tools, middleware=[current_draft],
                                  state_schema=DraftState, context_schema=RequirementsContext,
                                  checkpointer=False, name="requirements_agent")
             async with asyncio.timeout(resources.limits.run_timeout):

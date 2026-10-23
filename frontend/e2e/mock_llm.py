@@ -55,7 +55,7 @@ REQUIREMENTS = ("工厂生产 A、B 两种产品，数量必须是非负整数�
 CHAT_FAILURES: set[str] = set()
 
 
-def reply(messages: list[dict]) -> str | dict:
+def reply(messages: list[dict], tools: list[dict]) -> str | dict:
     text = json.dumps(messages, ensure_ascii=False)
     if "Help an ordinary user turn an idea into a business problem" in text:
         latest = next(message["content"] for message in reversed(messages) if message["role"] == "user")
@@ -65,6 +65,11 @@ def reply(messages: list[dict]) -> str | dict:
             CHAT_FAILURES.add(latest)
             return ""
         complete = "各有 8" in latest or "E2E_CHAT_RETRY" in latest
+        if "E2E_LOOP_DRAFT" in latest:
+            if not any(tool.get("function", {}).get("name") == "update_draft" for tool in tools):
+                return "已按周整理成本要求。联网搜索未开启，请开启后再查询实时价格。"
+            return {"role": "assistant", "content": "", "tool_calls": [{"id": "call_" + uuid.uuid4().hex[:8], "type": "function",
+                    "function": {"name": "update_draft", "arguments": json.dumps({"description": "按周计算成本。价格和来源待确认。"}, ensure_ascii=False)}}]}
         if messages[-1]["role"] == "tool" and messages[-1]["content"] == "The business draft was updated.":
             if "E2E_STREAM" in latest:
                 return "这是逐字显示的回复。我们可以先确定生产目标，再补充实际资源和数量。流式回复已经完整输出。"
@@ -122,7 +127,7 @@ class Handler(BaseHTTPRequestHandler):
             self.answer(200, {"results": [{"title": "排班参考", "url": "https://example.org/shift-guide",
                                          "snippet": "可以参考的排班建议，仍需用户确认。", "date": "2026-10-20"}]})
             return
-        content = reply(request["messages"])
+        content = reply(request["messages"], request.get("tools", []))
         message = content if isinstance(content, dict) else {"role": "assistant", "content": content}
         finish = "tool_calls" if message.get("tool_calls") else "stop"
         usage = {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}

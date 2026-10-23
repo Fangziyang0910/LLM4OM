@@ -528,6 +528,8 @@ export const en: Record<string, string> = {
   "添加附件": "Attach files",
   "管理预设模型": "Manage model presets",
   "联网搜索": "Web search",
+  "联网搜索已开启": "Web search on",
+  "联网搜索未开启": "Web search off",
   "搜索公开资料，并在回复中展示来源。": "Search public information and show the sources.",
   "选择 DeepSeek 预设或由管理员配置搜索服务。": "Select a DeepSeek preset or ask the administrator to configure search.",
   "Enter 发送，Shift+Enter 换行": "Enter to send, Shift+Enter for a new line",
