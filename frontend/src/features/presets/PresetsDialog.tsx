@@ -84,11 +84,11 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
         <DialogDescription>{t("选择用于对话和建模的模型，密钥仅保存在服务器。")}</DialogDescription>
       </DialogHeader>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <nav aria-label={t("预设列表")} className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-56 md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
+        <nav aria-label={t("预设列表")} className="flex min-h-0 shrink-0 gap-1 overflow-auto border-b p-2 md:w-56 md:flex-col md:border-r md:border-b-0">
           {presets.map((item, index) => <button key={item.id} disabled={!!busy} aria-current={viewing === item.id} onClick={() => show(item.id)}
-            className={cn("flex shrink-0 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
+            className={cn("flex min-w-0 shrink-0 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent md:w-full",
               viewing === item.id && "bg-accent")}>
-            <span className="flex max-w-44 items-center gap-2 font-medium"><span className="truncate">{item.name || item.model}</span>
+            <span className="flex max-w-44 items-center gap-2 font-medium"><span className="min-w-0 truncate">{item.name || item.model}</span>
               {index === 0 ? <Badge className="h-4 shrink-0 px-1.5 text-[10px]">{t("默认")}</Badge> : null}</span>
             <span className="max-w-44 truncate text-[11px] text-muted-foreground">{label(item.provider)}{item.source === "env" ? t(" · 服务器") : ""}</span>
           </button>)}
@@ -143,7 +143,7 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
               </div>
               {models ? <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pt-1">
                 {filtered.slice(0, 60).map(item => <Button key={item} type="button" size="xs" variant={item === form.model ? "default" : "secondary"}
-                  className="font-mono font-normal" onClick={() => setForm({ ...form, model: item })}>{item}</Button>)}
+                  className="h-auto max-w-full font-mono font-normal whitespace-normal break-all" onClick={() => setForm({ ...form, model: item })}>{item}</Button>)}
                 {!filtered.length ? <p className="text-xs text-muted-foreground">{models.length ? t("没有匹配的模型。") : t("服务没有返回模型列表，请直接填写。")}</p> : null}
               </div> : null}
             </Field>

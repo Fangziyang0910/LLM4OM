@@ -80,7 +80,7 @@ export function Solution({ solve }: { solve: Solve }) {
     {solve.output.trim() ? <Collapsible className="group/output">
       <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
         <ChevronDown className="size-3.5 -rotate-90 transition-transform group-data-[state=open]/output:rotate-0" />{t("代码输出")}</CollapsibleTrigger>
-      <CollapsibleContent className="pt-2"><Plain className="max-h-80 overflow-y-auto">{solve.output}</Plain></CollapsibleContent>
+      <CollapsibleContent className="pt-2"><Plain>{solve.output}</Plain></CollapsibleContent>
     </Collapsible> : null}
     {tone(solve.status) === "good" ? <p className="text-xs leading-relaxed text-muted-foreground">
       {t("求解器只保证这个数学模型的解是{status}。模型是否完整表达了问题，请在“数学模型”中核对。", { status: STATUS[solve.status] })}</p> : null}

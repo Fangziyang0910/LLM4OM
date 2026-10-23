@@ -15,15 +15,13 @@ export function Explanation({ explanation, solve }: { explanation: ExplanationDa
     <CardContent className="flex min-w-0 flex-col gap-3 px-4">
       {solve.objective != null ? <p className="text-sm font-medium">{explanation.objective_label || t("目标值")}：
         <span className="tabular">{formatNumber(solve.objective)}</span> {explanation.objective_unit}</p> : null}
-      {decisions.length ? <div className="overflow-x-auto rounded-lg border">
-        <Table className="text-[13px]"><TableHeader><TableRow>
+      {decisions.length ? <Table className="text-[13px]" containerClassName="rounded-lg border"><TableHeader><TableRow>
           <TableHead>{t("决策")}</TableHead><TableHead className="text-right">{t("取值")}</TableHead><TableHead>{t("单位")}</TableHead>
         </TableRow></TableHeader><TableBody>{decisions.map(item => <TableRow key={item.variable}>
-          <TableCell title={item.variable}>{item.label}</TableCell>
+          <TableCell title={item.variable} className="min-w-32 whitespace-normal [overflow-wrap:anywhere]">{item.label}</TableCell>
           <TableCell className="text-right font-mono tabular">{formatNumber(solve.variables[item.variable])}</TableCell>
           <TableCell>{item.unit || "—"}</TableCell>
-        </TableRow>)}</TableBody></Table>
-      </div> : null}
+        </TableRow>)}</TableBody></Table> : null}
       {explanation.notes.length ? <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-muted-foreground">
         {explanation.notes.map((note, index) => <li key={index}>{note}</li>)}
       </ul> : null}

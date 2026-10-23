@@ -135,8 +135,8 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
   ];
   if (calls) facts.push([<Zap />, t("{count} 次调用", { count: calls }) + (tokens ? ` · ${formatTokens(tokens)} token` : "")]);
 
-  return <div className="flex h-full flex-col overflow-y-auto">
-    <header className="flex shrink-0 flex-col gap-3 border-b px-4 py-3 md:flex-row md:items-center md:px-6">
+  return <div className="flex h-full min-h-0 min-w-0 flex-col overflow-y-auto">
+    <header className="flex shrink-0 flex-col gap-3 border-b px-4 py-3 md:flex-row md:items-center">
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <Tooltip>
           <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{title}</h1></TooltipTrigger>
@@ -152,7 +152,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
           </div>
         </details>
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5 empty:hidden">
-          {meta.tags?.map(tag => <Badge key={tag} variant="secondary" className="h-5 gap-1 font-normal"><Tag className="size-3" />{tag}</Badge>)}
+          {meta.tags?.map(tag => <Badge key={tag} variant="secondary" title={tag} className="h-5 max-w-48 gap-1 font-normal"><Tag className="size-3" /><span className="truncate">{tag}</span></Badge>)}
           {meta.note ? <button className="flex max-w-80 items-center gap-1.5 truncate hover:text-foreground" title={meta.note} onClick={() => setNoting(true)}>
             <NotebookPen />{meta.note.split("\n")[0]}</button> : null}
         </div>
@@ -187,11 +187,11 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
       </div>
     </header>
 
-    <div className="shrink-0 px-4 pt-4 md:px-6">
+    <div className="shrink-0 px-4 pt-3">
       <Summary state={state} values={values} steps={steps} error={error} active={active} elapsed={elapsed} onTab={showTab} />
     </div>
 
-    {!active && !embedded ? <div role="group" aria-label={t("运行操作")} className="flex shrink-0 items-center gap-1 overflow-x-auto px-4 pt-3 md:px-6 [&>button]:shrink-0">
+    {!active && !embedded ? <div role="group" aria-label={t("运行操作")} className="flex shrink-0 flex-wrap items-center gap-1 px-4 pt-2 [&>button]:shrink-0">
       <span className="mr-2 hidden text-xs text-muted-foreground sm:block">{t("继续调整")}</span>
       <Button variant="outline" size="sm" disabled={busy || !values.description} onClick={() => setRevision("")}><Pencil />{t("调整条件")}</Button>
       <Button variant="ghost" size="sm" disabled={busy || !values.spec} onClick={() => setScenarios(true)}><Columns3 />{t("业务场景对比")}</Button>
@@ -201,11 +201,11 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
           }}>{busy ? <Spinner /> : <MessageSquare />}{t(assistantOpen ? "收起方案助手" : "讨论方案")}</Button>
     </div> : null}
 
-    {wide && !assistantOpen && withProcess ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1 px-6 pt-4 pb-6">
+    {wide && !assistantOpen && withProcess ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1 p-4 pt-3">
       <ResizablePanel id="process" defaultSize="32%" minSize="25%"><Pane>{timeline}</Pane></ResizablePanel>
       <ResizableHandle withHandle aria-label={t("调整过程与结果的宽度")} className="mx-2 bg-transparent" />
       <ResizablePanel id="outputs" defaultSize="68%" minSize="30%"><Pane>{outputs}</Pane></ResizablePanel>
-    </ResizablePanelGroup> : <div className="flex min-h-96 flex-1 shrink-0 flex-col gap-3 px-4 pt-4 pb-4 md:px-6 md:pb-6 lg:min-h-0 lg:shrink">
+    </ResizablePanelGroup> : <div className="flex min-h-96 flex-1 shrink-0 flex-col gap-3 p-4 pt-3 lg:min-h-0 lg:shrink">
       {!wide && !embedded ? <Tabs value={view} onValueChange={value => setView(value as "outputs" | "process")}>
         <TabsList className="w-full">
           <TabsTrigger value="outputs">{t("结果")}</TabsTrigger>
@@ -238,15 +238,15 @@ function NoteDialog({ meta, onClose, onSave }: { meta: RunMeta; onClose: () => v
     catch (reason) { toast.error(errorText(reason)); setBusy(false); }
   };
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className="sm:max-w-lg">
+    <DialogContent className="flex min-h-0 flex-col sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>{t("备注与标签")}</DialogTitle>
         <DialogDescription>{t("记录这次运行的结论或问题。能打开工作台的人都能看到和修改。")}</DialogDescription>
       </DialogHeader>
-      <div className="flex flex-col gap-4">
+      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="run-note" className="text-xs">{t("备注")}</Label>
-          <Textarea id="run-note" value={note} onChange={event => setNote(event.target.value.slice(0, 2000))} className="min-h-28"
+          <Textarea id="run-note" value={note} onChange={event => setNote(event.target.value.slice(0, 2000))} className="h-32 min-h-20 field-sizing-fixed resize-none"
             placeholder={t("例如：漏了整数约束，目标值偏大")} />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -264,7 +264,7 @@ function NoteDialog({ meta, onClose, onSave }: { meta: RunMeta; onClose: () => v
 }
 
 function Pane({ children }: { children: React.ReactNode }) {
-  return <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-xs">{children}</section>;
+  return <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-xs">{children}</section>;
 }
 
 /** The answer to "what came of this run?" with the next thing to look at. */
@@ -273,7 +273,7 @@ function Summary({ state, values, steps, error, active, elapsed, onTab }: {
 }) {
   const solve = values.solve;
   const frame = (kind: keyof typeof TONE, icon: React.ReactNode, body: React.ReactNode, side?: React.ReactNode) =>
-    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-3 rounded-xl border bg-card p-3 shadow-xs sm:gap-x-4 sm:p-4", TONE[kind].border)}>
+    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-card p-3 shadow-xs sm:gap-x-4", TONE[kind].border)}>
       <span className={cn("grid size-10 shrink-0 place-items-center rounded-full [&_svg]:size-5", TONE[kind].soft)}>{icon}</span>
       <div className="min-w-0 flex-1 basis-40">{body}</div>
       {side ? <div className="flex flex-wrap gap-2">{side}</div> : null}

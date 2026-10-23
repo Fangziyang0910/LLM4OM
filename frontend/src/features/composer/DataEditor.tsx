@@ -46,12 +46,11 @@ export function DataEditor({ name, content, onSave, onClose }: {
         <DialogTitle className="break-all">{t("编辑数据：{name}", { name })}</DialogTitle>
         <DialogDescription>{t("检查数据后再建模。可在列名中补充含义和单位，例如“单价（元）”。保存后使用修改后的附件。")}</DialogDescription>
       </DialogHeader>
-      <Tabs defaultValue={grid ? "table" : "text"} className="min-h-0 gap-3">
+      <Tabs defaultValue={grid ? "table" : "text"} className="min-h-0 flex-1 gap-3">
         <TabsList className="shrink-0 self-start"><TabsTrigger value="table" disabled={!grid}>{t("表格")}</TabsTrigger><TabsTrigger value="text">{t("原文")}</TabsTrigger></TabsList>
-        <TabsContent value="table" className="mt-0 min-h-0">
+        <TabsContent value="table" className="mt-0 flex min-h-0 flex-col data-[state=inactive]:hidden">
           {grid && rows ? <>
-            <div className="max-h-[50dvh] overflow-auto rounded-lg border">
-              <Table><TableHeader className="sticky top-0 z-10 bg-muted"><TableRow>
+              <Table containerClassName="min-h-0 max-h-[50dvh] flex-1 rounded-lg border"><TableHeader className="sticky top-0 z-10 bg-muted"><TableRow>
                 <TableHead className="w-10 text-center">#</TableHead>
                 {Array.from({ length: columns }, (_, column) => <TableHead key={column} className="p-1">
                   <Input aria-label={t("第 {column} 列列名", { column: column + 1 })} disabled={busy} value={rows[0][column] ?? ""}
@@ -63,23 +62,22 @@ export function DataEditor({ name, content, onSave, onClose }: {
                   return <TableRow key={row}><TableCell className="text-center text-xs text-muted-foreground">{row}</TableCell>
                     {Array.from({ length: columns }, (_, column) => <TableCell key={column} className="p-1">
                       <Textarea rows={1} aria-label={t("第 {row} 行，第 {column} 列", { row, column: column + 1 })} value={cells[column] ?? ""} disabled={busy}
-                        onChange={event => changeCell(row, column, event.target.value)} className="max-h-24 min-h-8 min-w-32 border-transparent py-1.5 font-mono text-xs field-sizing-content" />
+                        onChange={event => changeCell(row, column, event.target.value)} className="max-h-24 min-h-8 min-w-32 resize-none border-transparent py-1.5 font-mono text-xs field-sizing-content" />
                     </TableCell>)}
                   </TableRow>;
                 })}
               </TableBody></Table>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div className="mt-2 flex shrink-0 items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>{t("{count} 行数据 · 第 {page}/{pages} 页", { count: rows.length - 1, page: current + 1, pages })}</span>
               <div className="flex gap-1"><Button variant="ghost" size="icon-sm" aria-label={t("上一页")} disabled={!current} onClick={() => setPage(current - 1)}><ChevronLeft /></Button>
                 <Button variant="ghost" size="icon-sm" aria-label={t("下一页")} disabled={current === pages - 1} onClick={() => setPage(current + 1)}><ChevronRight /></Button></div>
             </div>
           </> : null}
         </TabsContent>
-        <TabsContent value="text" className="mt-0 min-h-0">
+        <TabsContent value="text" className="mt-0 flex min-h-0 flex-col data-[state=inactive]:hidden">
           {columns > 50 ? <p className="mb-2 text-xs text-muted-foreground">{t("列数较多，请在原文中编辑；数据会完整保留。")}</p> : null}
           <Textarea aria-label={t("数据文件原文")} value={text} disabled={busy} onChange={event => setText(event.target.value)}
-            className="h-[45dvh] min-h-32 resize-none font-mono text-xs" />
+            className="h-[50dvh] min-h-0 flex-1 field-sizing-fixed resize-none font-mono text-xs" />
         </TabsContent>
       </Tabs>
       {error || parsed.error ? <p role="alert" className="text-sm text-destructive">{error || parsed.error}</p> : null}

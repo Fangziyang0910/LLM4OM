@@ -150,7 +150,7 @@ function Call({ call, live }: { call: Step; live?: Live[string] }) {
         <ChevronDown className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]/call:rotate-180" />
       </CollapsibleTrigger>
       <CollapsibleContent className="border-t p-2">
-        {call.content ? <Plain className="max-h-96 overflow-y-auto border-0 bg-transparent p-0">{call.content}</Plain>
+        {call.content ? <Plain className="border-0 bg-transparent p-0">{call.content}</Plain>
           : <p className="text-xs text-muted-foreground">{t("（没有文本输出）")}</p>}
       </CollapsibleContent>
     </Collapsible>

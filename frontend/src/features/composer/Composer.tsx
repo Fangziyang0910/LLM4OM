@@ -64,7 +64,7 @@ const unsupported = (method: Method, language: string) => !!method.languages && 
 
 function revealMethod(list: HTMLElement | null) {
   const selected = list?.querySelector<HTMLElement>('[data-state="checked"]')?.closest("label");
-  if (list && selected) list.scrollTop += selected.getBoundingClientRect().top - list.getBoundingClientRect().top - (list.clientHeight - selected.clientHeight) / 2;
+  selected?.scrollIntoView({ block: "nearest" });
 }
 
 export type ComposerProps = {
@@ -146,7 +146,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
     set({ [key]: on ? [...(draft[key] ?? []).filter(item => item !== id), id] : (draft[key] ?? []).filter(item => item !== id) });
   const label = reading ? t("正在读取数据……") : busy ? t("正在启动") : comparing ? t("开始对比（{count} 个运行）", { count: runs.length }) : t("开始建模");
 
-  const choiceClass = "flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-sm font-normal transition-colors hover:bg-accent/50 sm:min-h-9 sm:py-1.5";
+  const choiceClass = "relative flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-sm font-normal transition-colors hover:bg-accent/50 has-focus-visible:border-ring has-focus-visible:ring-2 has-focus-visible:ring-ring/50 sm:min-h-9 sm:py-1.5";
   const methodChoices = options.methods.map(item => {
     const blocked = unsupported(item, language.id);
     const selected = comparing ? !blocked && !!draft.methods?.includes(item.id) : item.id === method.id;
@@ -159,7 +159,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
       {item.linear_only ? <Badge variant="outline" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-muted-foreground">LP / MILP</Badge> : null}
     </Label>;
   });
-  const methodListClass = "grid max-h-40 grid-cols-1 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2";
+  const methodListClass = "grid grid-cols-1 gap-1.5 sm:grid-cols-2";
 
   const settingsPanel = <aside aria-label={t("运行设置")} className="min-h-0 min-w-0 h-full">
     <Card className="h-full min-h-0 gap-0 overflow-hidden border-0 py-0 shadow-none">
@@ -177,7 +177,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
           {comparing ? <div ref={methodList} role="group" aria-label={t("建模方法")} className={methodListClass}>{methodChoices}</div>
             : <RadioGroup ref={methodList} value={method.id} onValueChange={value => set({ method: value })} aria-label={t("建模方法")}
               aria-describedby="method-description" className={methodListClass}>{methodChoices}</RadioGroup>}
-          <p id="method-description" title={comparing ? undefined : t(method.description)} className="mt-3 line-clamp-2 min-h-8 text-xs leading-relaxed text-muted-foreground">
+          <p id="method-description" title={comparing ? undefined : t(method.description)} className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
             {t(comparing ? "同一问题同时用多个方法或预设运行，并排比较结果" : method.description)}</p>
         </section>
 
@@ -250,7 +250,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
 
   return <div className="flex h-full flex-col">
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className={cn("mx-auto flex min-h-full max-w-6xl flex-col gap-4 p-4 sm:p-6 lg:h-full", assistant && assistantOpen && "h-full")}>
+      <div className={cn("mx-auto flex min-h-full max-w-6xl flex-col gap-3 p-4 lg:h-full", assistant && assistantOpen && "h-full")}>
         <header className="flex shrink-0 flex-col gap-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("描述一个优化问题")}</h1>
@@ -276,7 +276,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
           {assistant && assistantOpen ? <TabsList className="grid shrink-0 grid-cols-2 lg:hidden" aria-label={t("问题与助手")}>
             <TabsTrigger value="problem">{t("问题与数据")}</TabsTrigger><TabsTrigger value="assistant">{t("需求助手")}</TabsTrigger>
           </TabsList> : null}
-        <div className={cn("grid min-h-0 flex-1 grid-cols-1 items-stretch gap-5", assistant && assistantOpen && "lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]")}>
+        <div className={cn("grid min-h-0 flex-1 grid-cols-1 items-stretch gap-4", assistant && assistantOpen && "lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]")}>
           <TabsContent value="problem" forceMount className="mt-0 flex min-h-0 min-w-0 flex-col gap-4 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
             {editor ?? <ProblemEditor autoFocus value={draft.description} data={draft.data} reading={reading} onChange={description => set({ description })}
               onFiles={list => void attach(list)} onExamples={openExamples} onClear={() => {

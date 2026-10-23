@@ -65,18 +65,18 @@ export function ScenarioComparison({ source, values }: { source: SourceRun; valu
     <Card className="gap-3 py-4 shadow-none">
       <CardHeader className="px-4"><CardTitle className="text-sm">{t("决策变化（{count} 项）", { count: changes.length })}</CardTitle></CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-3 px-4">
-        {changes.length ? <div className="overflow-x-auto rounded-lg border"><Table className="text-[13px]">
+        {changes.length ? <Table className="text-[13px]" containerClassName="rounded-lg border">
           <TableHeader><TableRow><TableHead>{t("决策")}</TableHead><TableHead className="text-right">{t("原值")}</TableHead>
             <TableHead className="text-right">{t("新值")}</TableHead><TableHead className="text-right">{t("差值")}</TableHead>
           </TableRow></TableHeader>
           <TableBody>{changes.slice(0, limit).map(item => <TableRow key={item.name}>
-            <TableCell className="max-w-64 break-all"><span>{labels.get(item.name) ?? item.name}</span>
+            <TableCell className="min-w-32 max-w-64 whitespace-normal [overflow-wrap:anywhere]"><span>{labels.get(item.name) ?? item.name}</span>
               {labels.has(item.name) ? <span className="mt-0.5 block text-xs text-muted-foreground">{item.name}</span> : null}</TableCell>
             <TableCell className="text-right font-mono tabular">{number(item.before)}</TableCell>
             <TableCell className="text-right font-mono tabular">{number(item.after)}</TableCell>
             <TableCell className="text-right font-mono tabular">{number(item.before != null && item.after != null ? item.after - item.before : null)}</TableCell>
           </TableRow>)}</TableBody>
-        </Table></div> : <p className="text-sm text-muted-foreground">{t("没有同名决策变量的取值变化。")}</p>}
+        </Table> : <p className="text-sm text-muted-foreground">{t("没有同名决策变量的取值变化。")}</p>}
         {changes.length > limit ? <Button variant="link" size="sm" onClick={() => setLimit(limit + 200)}>{t("显示更多")}</Button> : null}
         <p className="text-xs leading-relaxed text-muted-foreground">{t("变量按名称对应；新增或移除的变量显示为“—”，不当作零值。")}</p>
       </CardContent>

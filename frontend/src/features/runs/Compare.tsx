@@ -52,8 +52,7 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
         </p>
       </header>
 
-      <div className="overflow-x-auto rounded-xl border bg-card shadow-xs">
-        <Table className="text-[13px]">
+        <Table className="text-[13px]" containerClassName="rounded-xl border bg-card shadow-xs">
           <TableHeader className="bg-muted/50"><TableRow>
             <TableHead>{t("建模方法")}</TableHead><TableHead>{t("代码写法")}</TableHead><TableHead>{t("预设模型")}</TableHead>
             <TableHead>{t("结果")}</TableHead><TableHead className="text-right">{t("目标值")}</TableHead>
@@ -79,7 +78,6 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
             </TableRow>;
           })}</TableBody>
         </Table>
-      </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
         {t("目标值相同不代表模型都对：几个方法可能犯同样的错。点击一行查看它的数学模型、代码和过程。")}
       </p>

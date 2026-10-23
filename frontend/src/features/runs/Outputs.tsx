@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toggle } from "@/components/ui/toggle";
 import { versions, type Version } from "@/features/runs/steps";
 import { parseDelimited } from "@/features/runs/tables";
@@ -35,14 +35,20 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
   useEffect(() => {
     const list = tabs.current;
     const selected = list?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (list && selected) list.scrollLeft += selected.getBoundingClientRect().left - list.getBoundingClientRect().left - (list.clientWidth - selected.clientWidth) / 2;
+    if (!list || !selected) return;
+    const reveal = () => {
+      list.scrollLeft += selected.getBoundingClientRect().left - list.getBoundingClientRect().left - (list.clientWidth - selected.clientWidth) / 2;
+    };
+    reveal();
+    const observer = new ResizeObserver(reveal);
+    observer.observe(list);
+    return () => observer.disconnect();
   }, [tab]);
   const formulations = useMemo(() => versions(steps, "formulation", values.formulation), [steps, values.formulation]);
   const codes = useMemo(() => versions(steps, "code", values.code), [steps, values.code]);
   const counts: Partial<Record<Tab, number>> = { formulation: formulations.length, code: codes.length };
 
-  return <div className="flex h-full min-h-0 flex-col">
-    <Tabs value={tab} onValueChange={value => setTab(value as Tab)} className="shrink-0 gap-0">
+  return <Tabs value={tab} onValueChange={value => setTab(value as Tab)} className="h-full min-h-0 min-w-0 gap-0">
       <TabsList ref={tabs} variant="line" aria-label={t("运行产物")} className="h-11 w-full justify-start overflow-x-auto rounded-none border-b px-3">
         {[...TABS, ...(source ? [["comparison", t("方案对比"), Table2] as const] : [])].map(([id, label, TabIcon]) => <TabsTrigger key={id} value={id} className="flex-none px-2 sm:px-2.5 [&_svg]:hidden sm:[&_svg]:inline-block">
           <TabIcon />{label}
@@ -50,15 +56,14 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
           {active && (counts[id] ?? 0) > 0 ? <span className="size-1.5 animate-pulse rounded-full bg-primary" aria-label={t("正在更新")} /> : null}
         </TabsTrigger>)}
       </TabsList>
-    </Tabs>
-    <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
+    <TabsContent key={tab} value={tab} className="min-h-0 overflow-y-auto p-4">
       {tab === "solution" ? values.solve ? <div className="flex flex-col gap-4">
         {values.explanation ? <Explanation explanation={values.explanation} solve={values.solve} /> : null}
         {values.infeasibility ? <Infeasibility explanation={values.infeasibility} onAdjust={active ? undefined : onAdjust} /> : null}
         {values.explanation_error ? <Alert><AlertDescription>{t("方案解读未完成，求解结果仍可正常查看。")}</AlertDescription></Alert> : null}
         {values.explanation ? <details className="rounded-lg border p-3">
           <summary className="cursor-pointer text-sm font-medium">{t("完整变量取值（{count} 个）", { count: Object.keys(values.solve.variables).length })}</summary>
-          <div className="mt-4"><Solution solve={values.solve} /></div>
+          <div className="mt-3"><Solution solve={values.solve} /></div>
         </details> : <Solution solve={values.solve} />}
       </div>
         : <Blank icon={Table2} text={active ? t("代码在沙箱中求解后，解会显示在这里。") : values.failure ? t("没有求解结果。") : finished ? t("没有求解结果。") : t("运行没有完成。")} />
@@ -73,8 +78,8 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
         render={text => <Code text={text} />} /> : null}
       {tab === "problem" ? <Problem values={values} /> : null}
       {tab === "comparison" && source ? <ScenarioComparison source={source} values={values} /> : null}
-    </div>
-  </div>;
+    </TabsContent>
+  </Tabs>;
 }
 
 function Blank({ icon: BlankIcon, text }: { icon: LucideIcon; text: string }) {
@@ -150,16 +155,14 @@ function DataFile({ name, content }: { name: string; content: string }) {
       <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={t("下载 {name}", { name })} onClick={() => download(name, content)}><Download /></Button>
     </CardHeader>
     <CardContent className="px-4">
-      {table ? <div className="max-h-96 overflow-auto rounded-lg border">
-        <Table className="text-[13px]">
-          <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur"><TableRow>
+      {table ? <Table className="text-[13px]" containerClassName="max-h-96 rounded-lg border">
+          <TableHeader className="sticky top-0 z-10 bg-muted"><TableRow>
             {table[0].map((cell, index) => <TableHead key={index} className="h-8 font-mono text-xs">{cell}</TableHead>)}
           </TableRow></TableHeader>
           <TableBody>{table.slice(1, 501).map((row, index) => <TableRow key={index}>
             {row.map((cell, column) => <TableCell key={column} className={column ? "py-1.5 text-right font-mono tabular" : "py-1.5 font-mono font-medium"}>{cell}</TableCell>)}
           </TableRow>)}</TableBody>
-        </Table>
-      </div> : <Plain className="max-h-96 overflow-y-auto">{content}</Plain>}
+        </Table> : <Plain className="max-h-96 overflow-y-auto">{content}</Plain>}
       {table && table.length > 501 ? <p className="mt-2 text-xs text-muted-foreground">{t("仅预览前 500 行，下载可查看完整数据。")}</p> : null}
     </CardContent>
   </Card>;

@@ -121,7 +121,7 @@ export function Sidebar({ entries, current, options, presets, query, onQuery, ha
         {tags.map(tag => {
           const on = query.split(/\s+/).includes(`#${tag}`);
           return <button key={tag} onClick={() => onQuery(on ? query.split(/\s+/).filter(word => word !== `#${tag}`).join(" ")
-            : `${query.trim()} #${tag}`.trim())} className={cn("rounded-full border px-2 py-0.5 text-[11px] transition-colors hover:bg-sidebar-accent",
+            : `${query.trim()} #${tag}`.trim())} title={`#${tag}`} className={cn("max-w-full truncate rounded-full border px-2 py-0.5 text-[11px] transition-colors hover:bg-sidebar-accent",
             on ? "border-primary/40 bg-primary/10 text-primary" : "text-muted-foreground")}>#{tag}</button>;
         })}
       </div> : null}

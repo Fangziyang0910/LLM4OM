@@ -37,17 +37,17 @@ export function Examples({ open, onClose, datasets, onUse }: {
         <DialogDescription>{t("公开 Benchmark 的题面，不含答案。选一道题带回编辑页。")}</DialogDescription>
       </DialogHeader>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <nav aria-label={t("题库")} className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-56 md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
+        <nav aria-label={t("题库")} className="flex min-h-0 shrink-0 gap-1 overflow-auto border-b p-2 md:w-56 md:flex-col md:border-r md:border-b-0">
           {datasets.map(item => <button key={item.id} aria-current={item.id === dataset?.id} onClick={() => choose(item)}
-            className={cn("flex shrink-0 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
+            className={cn("flex min-w-0 shrink-0 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent md:w-full",
               item.id === dataset?.id && "bg-accent")}>
-            <span className="font-medium">{item.title}</span>
-            <span className="text-[11px] text-muted-foreground">{t("{count} 题", { count: item.count })} · {item.license}</span>
+            <span className="max-w-full font-medium [overflow-wrap:anywhere]">{item.title}</span>
+            <span className="max-w-full text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{t("{count} 题", { count: item.count })} · {item.license}</span>
           </button>)}
         </nav>
-        <div ref={list} className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+        <div ref={list} className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4">
           {dataset ? <div className="mb-4 flex items-start gap-3 text-sm text-muted-foreground">
-            <p className="flex-1 leading-relaxed">{dataset.description}</p>
+            <p className="min-w-0 flex-1 leading-relaxed break-words">{dataset.description}</p>
             <Button variant="link" size="sm" asChild className="h-auto shrink-0 p-0">
               <a href={dataset.source_url} target="_blank" rel="noreferrer">{t("来源")}<ExternalLink /></a></Button>
           </div> : null}
