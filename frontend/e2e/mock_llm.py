@@ -84,6 +84,8 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
         latest = next(message["content"] for message in reversed(messages) if message["role"] == "user")
         if "E2E_PAUSE_CHAT" in latest and messages[-1]["role"] == "user":
             time.sleep(3)
+        if "E2E_HOLD_CHAT" in latest and messages[-1]["role"] == "user":
+            time.sleep(15)
         if "E2E_CHAT_RETRY" in latest and latest not in CHAT_FAILURES:
             CHAT_FAILURES.add(latest)
             return ""

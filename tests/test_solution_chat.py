@@ -61,6 +61,36 @@ def test_a_result_question_reads_actual_values_without_running_a_model(make_reso
     assert snapshots[source["thread_id"]]["values"] == original
 
 
+def test_comparing_another_plan_reads_its_objective_conditions_and_status(make_resources: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    original = asyncio.run(run(PRODUCTION_PROBLEM, resources=make_resources(lambda *_: TWO_PART_REPLY)))
+    client, snapshots, source = checkpoint_client(monkeypatch, original)
+    current = {"thread_id": str(uuid4()), "checkpoint_id": str(uuid4())}
+    snapshots[current["thread_id"]] = {"values": {**original, "description": PRODUCTION_PROBLEM + " B 至少生产 3 件。",
+        "solve": {**original["solve"], "objective": 12, "variables": {"x[A]": 2, "x[B]": 3}}},
+        "checkpoint": {"checkpoint_id": current["checkpoint_id"]}}
+
+    def reply(role: str, messages: list, tools: list) -> Any:
+        assert '"objective": 12' in messages[0].text
+        if messages[-1].type == "human":
+            return tool_call("lookup_variables", query="B", plan_id=source["thread_id"])
+        facts = json.loads(messages[-1].text)
+        assert facts["objective"] == 13 and facts["status"] == "optimal"
+        assert facts["description"] == PRODUCTION_PROBLEM and facts["variables"] == {"x[B]": 2}
+        return "新方案利润是 12，原方案是 13，减少 1。"
+
+    async def check() -> dict:
+        graph = solution_graph()
+        graph.checkpointer = InMemorySaver()
+        config = {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}
+        await graph.aupdate_state(config, {"source": source, "current": current, "messages": []}, as_node="discuss")
+        return await graph.ainvoke({"messages": [("human", "比原方案改善了吗？")]}, config)
+
+    result = asyncio.run(check())
+    assert result["failure"] is None, result["failure"]
+    assert result["current"] == current and result["usage"]["solves"] == 0
+    client.threads.create.assert_not_called()
+
+
 @pytest.mark.parametrize("multiple", [False, True])
 def test_changes_use_the_existing_pipeline_and_save_real_results(make_resources: Any, monkeypatch: pytest.MonkeyPatch, multiple: bool) -> None:
     scenarios = [{"name": "B 至少 3 件", "instruction": "B 至少生产 3 件"}]
@@ -165,6 +195,65 @@ def test_retrying_a_failed_explanation_keeps_the_calculation_without_repeating_i
     asyncio.run(check())
 
 
+@pytest.mark.parametrize("resume", [True, False])
+def test_a_partly_saved_batch_keeps_its_base_and_can_be_resumed_or_left_behind(make_resources: Any, monkeypatch: pytest.MonkeyPatch, resume: bool) -> None:
+    scenarios = [{"name": f"B 至少 {n} 件", "instruction": f"B 至少生产 {n} 件"} for n in (3, 4)]
+    revised = []
+
+    def reply(role: str, messages: list, tools: list) -> Any:
+        if role == "solution_chat":
+            if messages[-1].type == "human":
+                if "只解释当前方案" in messages[-1].text:
+                    assert '"unfinished_scenarios":' not in messages[0].text
+                    assert '"objective": 13' in messages[0].text
+                    return "当前方案仍为原方案，实际目标值 13。"
+                assert "solve_scenarios" in tools
+                request = [{**item, "name": item["name"] + "（重试改名）"} for item in scenarios] if '"unfinished_scenarios":' in messages[0].text else scenarios
+                return tool_call("solve_scenarios", scenarios=request)
+            return "两个方案的实际目标值分别是 12 和 8。"
+        if role == "revise_problem":
+            request = json.loads(messages[-1].text)
+            revised.append(request["change_request"])
+            return request["original_problem"] + "\n" + request["change_request"]
+        if role == "explain_result":
+            return EXPLANATION
+        return REVISED_REPLY.replace('>= 3)', '>= 4)') if "B 至少生产 4 件" in str(messages) else REVISED_REPLY
+
+    original = asyncio.run(run(PRODUCTION_PROBLEM, resources=make_resources(lambda *_: TWO_PART_REPLY)))
+    client, snapshots, source = checkpoint_client(monkeypatch, original)
+    save = client.threads.create.side_effect
+
+    async def fail_second_save(**kwargs: Any) -> dict:
+        if client.threads.create.await_count == 2:
+            raise RuntimeError("temporary storage failure")
+        return await save(**kwargs)
+
+    client.threads.create.side_effect = fail_second_save
+
+    async def check() -> None:
+        graph = solution_graph()
+        graph.checkpointer = InMemorySaver()
+        config = {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}
+        failed = await graph.ainvoke({"source": source, "messages": [("human", "分别计算 B 至少生产 3 件和至少生产 4 件")]}, config)
+        assert failed["failure"] and len(failed["plans"]) == 1
+        assert failed["current"] == source
+        if not resume:
+            result = await graph.ainvoke({"messages": [("human", "只解释当前方案，不要继续计算")]}, config)
+            assert result["failure"] is None and result["pending"] is None
+            assert result["current"] == source and len(result["plans"]) == 1
+            assert client.threads.create.await_count == 2
+            return
+        result = await graph.ainvoke({"messages": [failed["messages"][-1]]}, config)
+        assert result["failure"] is None, result["failure"]
+        assert result["current"] == source and len(result["plans"]) == 2
+        assert [snapshots[plan["source"]["thread_id"]]["values"]["solve"]["objective"] for plan in result["plans"]] == [12, 8]
+        assert revised.count("B 至少生产 3 件") == 1
+        assert all(snapshots[plan["source"]["thread_id"]]["metadata"]["parent"] == source for plan in result["plans"])
+        assert len([message for message in result["messages"] if message.type == "human"]) == 1
+
+    asyncio.run(check())
+
+
 def test_modeling_messages_do_not_leak_into_the_conversation_stream(make_resources: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     def reply(role: str, messages: list, tools: list) -> Any:
         if role == "solution_chat":
@@ -181,13 +270,21 @@ def test_modeling_messages_do_not_leak_into_the_conversation_stream(make_resourc
 
     async def check() -> None:
         roles = []
-        async for _, (message, metadata) in solution_graph().astream(
+        progress = []
+        async for _, mode, data in solution_graph().astream(
                 {"source": source, "messages": [("human", "请按新条件计算")]},
                 {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": resources}},
-                stream_mode="messages", subgraphs=True):
-            if message.type != "tool":
-                roles.append(metadata.get("llm4om_role"))
-                assert "build_model" not in message.text
+                stream_mode=["messages", "custom"], subgraphs=True):
+            if mode == "custom":
+                progress.append(data)
+            else:
+                message, metadata = data
+                if message.type != "tool":
+                    roles.append(metadata.get("llm4om_role"))
+                    assert "build_model" not in message.text
         assert roles and set(roles) == {"solution_chat"}
+        assert {item["stage"] for item in progress} == {"revise", "model", "solve", "explain"}
+        assert all(item["index"] == item["total"] == 1 and item["tool_call_id"] for item in progress)
+        assert "build_model" not in str(progress) and "test-key" not in str(progress)
 
     asyncio.run(check())

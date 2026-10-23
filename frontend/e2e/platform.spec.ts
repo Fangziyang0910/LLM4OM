@@ -81,6 +81,11 @@ test("a plan conversation explains actual values, computes changes and continues
   await expect(page.getByRole("log")).toContainText("目标值 12", { timeout: 60_000 });
   await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
   await expect(page.getByRole("log")).not.toContainText("def build_model");
+  const calculated = page.getByRole("complementary", { name: "本轮计算结果" });
+  await expect(calculated).toContainText("12");
+  await expect(calculated).toContainText("最优");
+  await calculated.getByRole("button", { name: "查看计算方案" }).click();
+  await expect(page).toHaveURL(chatUrl);
   const state = (await (await page.request.get(`/threads/${id}`)).json()).values;
   expect(state.plans).toHaveLength(1);
   const derived = (await (await page.request.get(`/threads/${state.plans[0].source.thread_id}`)).json()).values;

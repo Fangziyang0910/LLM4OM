@@ -5,7 +5,7 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from llm4om.budget import TokenBudget
@@ -109,6 +109,33 @@ def test_requirements_use_the_selected_presets_daily_budget(make_resources: Any,
         assert failed["usage"]["llm_calls"] == 2
 
     asyncio.run(check())
+
+
+def test_long_conversations_clear_old_tool_payloads_only_for_the_model(make_resources: Any) -> None:
+    history = []
+    for index in range(6):
+        history.extend([HumanMessage(f"保留第 {index} 项要求"),
+            AIMessage("", tool_calls=[{"name": "update_draft", "id": f"draft_{index}",
+                                       "args": {"description": "old business draft " * 5_000}}]),
+            ToolMessage("The business draft was updated.", name="update_draft", tool_call_id=f"draft_{index}"),
+            AIMessage("已记录。")])
+
+    def reply(role: str, messages: list, tools: list) -> str:
+        assert "人工确认：晚班至少 3 人。" in messages[0].text
+        assert "Alice,8" in messages[0].text
+        calls = [message for message in messages if message.type == "ai" and message.tool_calls]
+        assert calls[0].tool_calls[0]["args"] == {}
+        assert calls[-1].tool_calls[0]["args"]["description"].startswith("old business draft")
+        assert any(message.text == "保留第 0 项要求" for message in messages)
+        return "按你人工确认的需求稿继续。"
+
+    result = asyncio.run(requirements_graph().ainvoke({"description": "人工确认：晚班至少 3 人。",
+        "data": {"staff.csv": "name,hours\nAlice,8"}, "messages": [*history, HumanMessage("确认以上要求")]},
+        {"configurable": {"llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+    assert result["messages"][1].tool_calls[0]["args"]["description"] == "old business draft " * 5_000
+    assert result["description"] == "人工确认：晚班至少 3 人。"
+    assert len(result["messages"]) == len(history) + 2
 
 
 @pytest.mark.parametrize("method,language", [("direct", "pyomo"), ("feedback_repair", "ortools")])

@@ -42,11 +42,11 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
 |---|---|
 | 🧠 **13 modeling methods** | Direct, Feedback Repair, TriVAL, SAC-Opt, BIND, OptiMind and more; each has its own LangGraph |
 | 🧩 **9 modeling libraries** | Native modeling APIs, with backend discovery through each library’s own plugin registry |
-| 📝 **Requirements chat** | Multi-turn streaming chat with optional DeepSeek web search and source links; review the editable draft, then hand it to any modeling method |
+| 📝 **Requirements chat** | Multi-turn streaming chat with expandable search sources and retry after stopping or failure; review the editable draft, then hand it to any modeling method |
 | 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
 | ⚖️ **Compare methods** | Run up to 12 methods or models on one problem and compare objective, time and tokens |
 | 💬 **Explain and revise plans** | Read decisions in business terms, change conditions in plain language, and compare the new plan with the saved original |
-| 🔄 **Plan chat and business scenarios** | Ask follow-up questions about actual results; explicit changes trigger real modeling and solving, with a fixed baseline for several alternatives |
+| 🔄 **Plan chat and business scenarios** | Ask about actual results; condition changes show real modeling progress and result cards, with a fixed baseline for several alternatives |
 | 📊 **Review data before modeling** | Edit CSV, TSV, JSON and text attachments, including converted Excel sheets; clarify column names and units before saving |
 | 🧯 **Explain infeasibility** | Read business explanations grounded in actual conflicting constraints; select and edit a candidate change, then solve a new model to verify it (Gurobi IIS / CPMpy MUS) |
 | 🔒 **Isolated sandbox** | Generated code runs in a container with no network, a read-only file system and no root, removed after use |

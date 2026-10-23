@@ -23,13 +23,15 @@ solve：方法没有求解最终代码时，在沙箱中求解一次
 
 条件调整的 `revise` 和结果解读的 `explain` 位于方法图外。它们复用本次运行的 LLM、预算、步骤和持久化，不改变方法内部编排或提示。
 
-需求对话独立注册为 `requirements` 图（`START → discuss → END`），不计入建模方法。每轮通过 LangChain `create_agent` 运行原生模型／工具循环，复用预设、`Resources`、`Recorder` 和 token 预算。回复直接流式输出自然文本，`update_draft` 通过 `Command` 更新完整需求稿；原生模型中间件每次读取最新稿件，本轮更新完成后移除该工具并转入回复，可选 `web_search` 调用 DeepSeek 独立 Search API。搜索结果和来源放在原生 `ToolMessage.artifact`，凭据仅在工具闭包中。独立搜索密钥绑定独立地址，否则仅 DeepSeek 预设在自身地址使用自身密钥。调用失败保留上一份需求稿、用户消息和已计量用量，重试复用原消息 ID。状态由原生线程和检查点保存。前端用 SDK `useStream` 的原生消息流继续对话（含子图 token）、`threads.updateState` 保存人工改稿；新建空对话用 `threads.create` 的 `graphId` 与 `supersteps` 保存初稿，不调用 LLM。
+需求对话独立注册为 `requirements` 图（`START → discuss → END`），不计入建模方法。每轮通过 LangChain `create_agent` 运行原生模型／工具循环，复用预设、`Resources`、`Recorder` 和 token 预算。回复直接流式输出自然文本，`update_draft` 通过 `Command` 更新完整需求稿；原生模型中间件每次读取最新稿件，本轮更新完成后移除工具并转入回复，可选 `web_search` 调用 DeepSeek 独立 Search API。搜索结果和来源放在原生 `ToolMessage.artifact`，凭据仅在工具闭包中。独立搜索密钥绑定独立地址，否则仅 DeepSeek 预设在自身地址使用自身密钥。调用失败保留上一份需求稿、用户消息和已计量用量，重试复用原消息 ID。状态由原生线程和检查点保存。前端用 SDK `useStream` 的原生消息流继续对话（含子图 token）、`threads.updateState` 保存人工改稿；新建空对话用 `threads.create` 的 `graphId` 与 `supersteps` 保存初稿，不调用 LLM。
 
 用户点击“用于建模”后，将 `description + data` 填入现有 Composer，再由用户选择方法并启动新运行。聊天记录、追问和助手判断不作为额外指令注入方法；需求稿没有强制“完整”门槛。边界见 [ADR 0014](adr/0014-requirements-conversation.md)。
 
-方案对话独立注册为 `solution_chat` 图，通过原生检查点固定 `source`、`current` 和已生成方案引用。LangChain Agent 的模型中间件每次加载当前方案的实际题面、模型、代码及结果；`lookup_variables` 查询未完整放入提示的变量。明确修改条件时，`solve_scenarios` 调用进程内 `graph.run(change=...)`，复用原方法、预设、建模库、后端和附件，完成后用原生 `threads.create(supersteps)` 将完整状态保存为独立方案。单个新方案成为当前方案，多个场景共享基准；工具本轮完成后移除，避免反复求解。
+方案对话独立注册为 `solution_chat` 图，通过原生检查点固定 `source`、`current` 和已生成方案引用。LangChain Agent 的模型中间件每次加载当前方案的实际题面、模型、代码及结果；`lookup_variables` 查询未完整放入提示的变量，也能读取指定已保存方案的题面、模型、代码、状态、目标和解读，供原方案比较使用。明确修改条件时，`solve_scenarios` 调用进程内 `graph.run(change=...)`，复用原方法、预设、建模库、后端和附件，完成后用原生 `threads.create(supersteps)` 将完整状态保存为独立方案。单个新方案成为当前方案，多个场景共享基准；工具本轮完成后移除，避免反复求解。`run(on_step=...)` 只将实际阶段变化通过工具的原生 `stream_writer` 转成进度，携带工具调用 ID 和场景序号，不推送代码或模型推理。
 
 进程内平台图不继承对话检查点、进度键或消息流，建模代码不会作为聊天回复推送。计算属于父对话的原生 Run，不在同一任务队列中创建并等待子 Run；仅有一个执行槽时也能完成。派生方案没有单独的 Run 行，页面从已保存的完成时间识别结果。最终回复失败时保存已完成方案引用；重试按原消息 ID 读取本轮已算好的结果。取舍见 [ADR 0015](adr/0015-plan-conversation.md)。
+
+批量计算失败时，`pending` 在原生状态中保留本轮消息 ID、固定基准和完整场景请求；部分完成不改变当前方案。重试使用原请求生成相同方案 ID，复用已保存结果并补完剩余场景。新消息不会被旧请求劫持。两类 Agent 均使用 `ContextEditingMiddleware(ClearToolUsesEdit)`：工具历史超过约 16,000 token 时清理旧工具输入和结果，保留最近三次工具结果；只改写模型请求，线程中的原始消息、来源和稿件不变。当前业务稿或实际方案每次单独注入。
 
 ## 模块
 
@@ -253,7 +255,9 @@ frontend/src/
 
 历史的 `groupHistory()` 只根据原生元数据的 `parent`、`group` 和 `origin` 归并记录，不按题名猜测关联。`origin` 是需求稿交接、复制编辑或重复运行的来源线程 ID，仅用于追踪，不进入建模输入。原记录不迁移，各线程仍独立保存和删除；历史分页未加载来源时仍可展示关联子记录。
 
-两类对话共用 `ChatInput` 和 `useChatDraft`：未发送文字只存入标签页的 `sessionStorage`，按线程区分；服务器接收消息时仅清除对应提交的文本，保留后来起草的文字。回复期间允许起草，但下一次发送仍受原生运行状态限制。导航搜索状态由 App 持有，抽屉关闭或布局变化不重置。懒加载页面失败由 React 错误边界保留导航并提供重载；服务数据失败就地重试，不创建额外运行。
+两类对话共用 `ChatInput` 和 `useChatDraft`：未发送文字只存入标签页的 `sessionStorage`，按线程区分。消息使用 LangChain 自带的 UUID v7，通过 `getRandomValues` 兼容 HTTP；浏览器暂存提交标记，收到根图的原生输入检查点后才清除对应文本，保留后来起草的文字。刷新时也可用原生线程快照确认保存，不能用乐观消息作为持久化依据。回复期间允许起草，但下一次发送仍受原生运行状态限制。导航搜索状态由 App 持有，抽屉关闭或布局变化不重置。懒加载页面失败由 React 错误边界保留导航并提供重载；服务数据失败就地重试，不创建额外运行。
+
+`ChatMessages` 统一呈现工具执行、取消与失败重试。搜索来源与计算卡片仅读取实际 `ToolMessage.artifact`；来源按需展开，计算卡片跳转到已保存方案。停止通过 SDK `runs.cancel(wait=true)` 等待服务端中断，若尚未确认输入检查点，先通过 `threads.updateState` 按原消息 ID 保存已提交问题，再停止本地流；重试复用原用户消息，未发送草稿保持不变。刷新通过 SDK 的原生可恢复流重连，不创建另一个运行。
 
 依赖锁文件合并同版本的 Radix 内部包，使抽屉、菜单和选择器共用焦点与弹层状态；不通过重置页面样式或取消焦点管理来绕过嵌套弹窗问题。
 

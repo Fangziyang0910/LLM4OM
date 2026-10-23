@@ -31,6 +31,7 @@ test("Enter sends a streamed reply, Shift+Enter adds a line, and composition doe
   await expect(input).toHaveValue(/\n$/);
   await input.press("Enter");
   await expect(page.getByRole("log")).toContainText("这是逐字显示的回复。");
+  await expect(input).toHaveValue("");
   await expect(input).toBeEditable();
   await expect(page.getByRole("button", { name: "停止", exact: true })).toBeVisible();
   await input.fill("下一条还没有发送的消息");
@@ -55,10 +56,13 @@ test("web search shows actual tool sources and preserves them on reload without 
   await page.getByLabel("发送给需求助手").press("Enter");
   await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
   const sources = page.getByRole("complementary", { name: "搜索来源" });
+  await expect(sources.locator("details")).not.toHaveAttribute("open");
+  await sources.locator("summary").click();
   await expect(sources.getByRole("link", { name: "排班参考" })).toHaveAttribute("href", "https://example.org/shift-guide");
   await expect(sources).toContainText("1 个来源");
   await expect(page.getByRole("log")).toContainText("请确认是否把这些建议用于你的门店");
   await page.reload();
+  await sources.locator("summary").click();
   await expect(sources).toContainText("example.org");
   await expect(page.getByRole("button", { name: "联网搜索", exact: true })).toHaveAttribute("aria-pressed", "true");
   const state = (await (await page.request.get(`/threads/${id}`)).json()).values;
@@ -205,8 +209,64 @@ test("stopping a requirements turn keeps the question and draft available after 
   await page.reload();
   await expect(page.getByLabel("问题描述")).toHaveValue("原需求稿：整数生产计划");
   await expect(page.getByRole("log")).toContainText("E2E_PAUSE_CHAT：继续整理");
-  await page.getByLabel("发送给需求助手").fill("两种资源各有 8 单位，继续整理");
-  await page.getByRole("button", { name: "发送", exact: true }).click();
-  await expect(page.getByRole("log")).toContainText("可以检查需求稿并用于建模");
-  expect((await (await page.request.get(`/threads/${id}`)).json()).values.messages).toHaveLength(5);
+  await expect(page.getByRole("log")).toContainText("这轮回复已停止，可以重新回答。");
+  const input = page.getByLabel("发送给需求助手");
+  await input.fill("下一轮尚未发送的想法");
+  await page.getByRole("button", { name: "重试这一轮", exact: true }).click();
+  await expect(page.getByRole("log")).toContainText("每件产品的利润和资源消耗是多少");
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
+  await expect(input).toHaveValue("下一轮尚未发送的想法");
+  const state = (await (await page.request.get(`/threads/${id}`)).json()).values;
+  expect(state.messages).toHaveLength(4);
+  expect(state.messages.filter((message: { type: string }) => message.type === "human")).toHaveLength(1);
+  await expect(page.getByRole("button", { name: "重试这一轮", exact: true })).toHaveCount(0);
+});
+
+test("refreshing during a reply reconnects the same run and keeps the next unsent message", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "通过对话整理需求" }).click();
+  await page.waitForURL(/\/chat\//);
+  const id = page.url().split("/").at(-1)!;
+  const input = page.getByLabel("发送给需求助手");
+  await input.fill("E2E_STREAM：帮我整理生产计划"); await input.press("Enter");
+  await expect(page.getByRole("log")).toContainText("这是逐字显示的回复。");
+  await input.fill("刷新时也要保留这条草稿");
+  await page.reload();
+  await expect(input).toHaveValue("刷新时也要保留这条草稿");
+  await expect(page.getByRole("log")).toContainText("流式回复已经完整输出");
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
+  expect((await (await page.request.get(`/threads/${id}/runs`)).json()).length).toBe(1);
+  const state = (await (await page.request.get(`/threads/${id}`)).json()).values;
+  expect(state.messages).toHaveLength(4);
+});
+
+test("stopping a queued conversation keeps the question before its first input checkpoint", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "通过对话整理需求" }).click();
+  await page.waitForURL(/\/chat\//);
+  const id = page.url().split("/").at(-1)!;
+  const blocker = await (await page.request.post("/threads", { data: {} })).json();
+  const run = await (await page.request.post(`/threads/${blocker.thread_id}/runs`, { data: {
+    assistant_id: "requirements", input: { description: "", messages: [{ type: "human", content: "E2E_HOLD_CHAT：占用一个执行槽" }] },
+    context: { preset: "env", locale: "zh" },
+  } })).json();
+  try {
+    await expect.poll(async () => (await (await page.request.get(`/threads/${blocker.thread_id}/runs/${run.run_id}`)).json()).status).toBe("running");
+    const input = page.getByLabel("发送给需求助手");
+    const question = "这条排队中的问题还没有保存，不应该被清空。";
+    await input.fill(question); await input.press("Enter");
+    await expect.poll(async () => (await (await page.request.get(`/threads/${id}/runs`)).json())[0]?.status).toBe("pending");
+    await expect(input).toHaveValue(question);
+    await page.getByRole("button", { name: "停止", exact: true }).click();
+    await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible({ timeout: 30_000 });
+    await page.reload();
+    await expect(input).toHaveValue("");
+    await expect(page.getByRole("button", { name: "重试这一轮", exact: true })).toBeVisible();
+    const messages = (await (await page.request.get(`/threads/${id}`)).json()).values.messages;
+    expect(messages).toHaveLength(1);
+    expect(messages[0].content).toBe(question);
+  } finally {
+    await page.request.post(`/threads/${blocker.thread_id}/runs/${run.run_id}/cancel?wait=true`);
+    await page.request.delete(`/threads/${blocker.thread_id}`);
+  }
 });

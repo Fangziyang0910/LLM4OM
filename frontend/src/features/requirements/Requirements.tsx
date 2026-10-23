@@ -4,7 +4,6 @@ import { useStream } from "@langchain/langgraph-sdk/react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { ArrowDown, ArrowRight, CalendarDays, Check, Factory, Globe, Paperclip, RefreshCw, Save, Sparkles, Truck } from "lucide-react";
 import { toast } from "sonner";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Composer, type ComposerProps } from "@/features/composer/Composer";
@@ -36,9 +35,10 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const meta = thread.data?.metadata as RequirementsMeta | undefined;
   const [selected, setSelected] = useState<string>();
   const [search, setSearch] = useState<boolean>();
-  const [input, setInput] = useChatDraft(threadId);
+  const { value: input, setValue: setInput, prepare, acknowledge, savePending } = useChatDraft(threadId);
   const [edited, setEdited] = useState<RequirementsDraft | null>(null);
   const [action, setAction] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedDraft, setSavedDraft] = useState<RequirementsDraft | null>(null);
@@ -48,10 +48,12 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const saveQueue = useRef(Promise.resolve());
   const log = useRef<HTMLDivElement>(null);
   const inputArea = useRef<HTMLTextAreaElement>(null);
-  const sending = useRef<string | null>(null);
+  const runId = useRef<string | null>(null);
   const stream = useStream<Values>({ client, assistantId: "requirements", threadId, reconnectOnMount: true,
     fetchStateHistory: false, throttle: 50,
-    onCreated: () => { if (sending.current !== null) setInput(value => value === sending.current ? "" : value); onFinished(); },
+    onMetadataEvent: event => { runId.current = event.run_id; },
+    onCreated: event => { runId.current = event.run_id; onFinished(); },
+    onCheckpointEvent: (event, { namespace }) => { if (!namespace?.length) acknowledge(event.values.messages); },
     onFinish: state => {
       if (!state.values.failure && !state.tasks?.some(task => task.error)) setEdited(null);
       onFinished();
@@ -64,12 +66,13 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const preset = presets.find(item => item.id === presetId);
   const canSearch = searchConfigured || preset?.provider === "deepseek";
   const searchOn = !!canSearch && (search ?? meta?.search ?? false);
-  const busy = action || reading || thread.isPending || stream.isLoading || stream.isThreadLoading;
-  const failure = stream.values.failure || stream.error;
+  const busy = action || stopping || reading || thread.isPending || stream.isLoading || stream.isThreadLoading;
+  const failure = stream.error || stream.values.failure;
+  useEffect(() => { acknowledge((thread.data?.values as Values | undefined)?.messages); }, [thread.data?.values, acknowledge]);
 
   useEffect(() => {
     if (follow && log.current) log.current.scrollTop = log.current.scrollHeight;
-  }, [messages, stream.isLoading, follow]);
+  }, [messages, stream.isLoading, failure, follow]);
 
   const save = (snapshot = edited) => {
     // Serialize a blur-save with Send/Use so an edit cannot land after a new turn has started.
@@ -97,11 +100,12 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
       await client.threads.update(threadId, { metadata: { preset: preset.id, provider: preset.provider,
         model: preset.name || preset.model, search: searchOn, ...(!messages.length ? { title: input.trim().slice(0, 120) } : {}) } });
       const last = [...messages].reverse().find(message => message.type === "human");
-      sending.current = retry ? null : input;
-      await stream.submit({ ...draft, messages: retry && last?.type === "human" ? [last] : [{ type: "human", content: input.trim() }] }, {
+      const question = retry && last?.type === "human" ? last : prepare(input);
+      runId.current = null;
+      await stream.submit({ ...draft, messages: [question] }, {
         context: { preset: preset.id, locale, search: searchOn }, multitaskStrategy: "reject", streamResumable: true, streamSubgraphs: true,
         optimisticValues: retry ? undefined : current => ({ ...draft,
-          messages: [...(current.messages ?? []), { type: "human", content: input.trim() }] }),
+          messages: [...(current.messages ?? []), question] }),
       });
     } catch (error) { toast.error(errorText(error)); }
     finally { setAction(false); }
@@ -116,6 +120,16 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
     } catch (error) { toast.error(errorText(error)); }
     finally { setReading(false); }
   };
+  const stop = async () => {
+    setStopping(true);
+    try {
+      if (runId.current) await client.runs.cancel(threadId, runId.current, true);
+      await savePending();
+      await stream.stop();
+      onFinished();
+    } catch (error) { toast.error(errorText(error)); }
+    finally { setStopping(false); }
+  };
 
   if (thread.error) return <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-destructive">
     <p>{errorText(thread.error)}</p><Button variant="outline" onClick={() => void thread.refetch()}><RefreshCw />{t("重试")}</Button></div>;
@@ -129,9 +143,9 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
       }}>{t("用于建模")}<ArrowRight /></Button>
     </div>
           <div className="relative flex min-h-0 flex-1 flex-col">
-            <div ref={log} role="log" aria-label={t("对话记录")} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 sm:px-3"
+            <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={stream.isLoading} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 sm:px-3"
               onScroll={event => { const node = event.currentTarget; setFollow(node.scrollHeight - node.scrollTop - node.clientHeight < 80); }}>
-              {!messages.length ? <div className="mx-auto flex min-h-full flex-col justify-center gap-5 py-6">
+              {!messages.length && !failure ? <div className="mx-auto flex min-h-full flex-col justify-center gap-5 py-6">
                 <span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
                 <div><h2 className="text-base font-semibold">{t("先说说，你想安排什么？")}</h2>
                   <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">{t("一个大概的想法就够了。我们边聊边把目标、条件和数据整理清楚。")}</p></div>
@@ -139,17 +153,15 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
                   disabled={busy} onClick={() => { setInput(t(item.text)); inputArea.current?.focus(); }}
                   className="flex items-center gap-3 rounded-xl border bg-card p-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ">
                   <item.icon className="size-4 text-primary" /><span>{t(item.title)}</span></button>)}</div>
-              </div> : <ChatMessages messages={messages} loading={stream.isLoading} label={t("需求助手")} />}
+              </div> : <ChatMessages messages={messages} loading={stream.isLoading} label={t("需求助手")}
+                failure={failure} disabled={busy} onRetry={() => void submit(true)} />}
             </div>
             {!follow ? <Button type="button" variant="outline" size="icon-sm" aria-label={t("回到最新消息")}
               className="absolute right-3 bottom-3 rounded-full bg-background shadow-sm" onClick={() => setFollow(true)}><ArrowDown /></Button> : null}
           </div>
-          {failure && !stream.isLoading ? <Alert variant="destructive" className="mx-auto w-full max-w-3xl">
-            <AlertDescription>{errorText(failure)}<Button variant="outline" size="sm" disabled={busy} onClick={() => void submit(true)}><RefreshCw />{t("重试这一轮")}</Button></AlertDescription>
-          </Alert> : null}
-          <ChatInput value={input} onChange={setInput} disabled={busy} loading={stream.isLoading} label={t("发送给需求助手")}
+          <ChatInput value={input} onChange={setInput} disabled={busy} loading={stream.isLoading} stopping={stopping} label={t("发送给需求助手")}
             inputRef={inputArea} presets={presets} presetId={presetId} onPreset={setSelected} openPresets={openPresets}
-            onSend={() => void submit()} onStop={() => void stream.stop().catch(error => toast.error(errorText(error)))}>
+            onSend={() => void submit()} onStop={() => void stop()}>
               <Button asChild type="button" variant="ghost" size="icon-sm" title={Object.keys(draft.data).join(", ") || t("添加附件")}>
                 <label className={cn("relative cursor-pointer", busy && "pointer-events-none opacity-50")}><Paperclip />
                   {Object.keys(draft.data).length ? <span className="absolute -top-0.5 -right-0.5 rounded-full bg-primary px-1 text-[9px] text-primary-foreground">{Object.keys(draft.data).length}</span> : null}

@@ -9,7 +9,13 @@ from uuid import NAMESPACE_URL, uuid5
 
 from httpx import HTTPStatusError
 from langchain.agents import AgentState, create_agent
-from langchain.agents.middleware import ModelRequest, ModelResponse, wrap_model_call
+from langchain.agents.middleware import (
+    ClearToolUsesEdit,
+    ContextEditingMiddleware,
+    ModelRequest,
+    ModelResponse,
+    wrap_model_call,
+)
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import AnyMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph, add_messages
@@ -35,6 +41,12 @@ class Plan(TypedDict):
     turn_id: str
 
 
+class PendingBatch(TypedDict):
+    base: SourceRun
+    scenarios: list[dict[str, str]]
+    turn_id: str
+
+
 class SolutionInput(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
     source: SourceRun
@@ -45,6 +57,7 @@ class SolutionState(SolutionInput, total=False):
     plans: list[Plan]
     usage: dict[str, int]
     failure: str | None
+    pending: PendingBatch | None
 
 
 @dataclass
@@ -75,6 +88,9 @@ def solution_graph() -> Any:
         completed: list[Plan] = []
         current = state.get("current") or state["source"]
         recovered = [plan for plan in state.get("plans", []) if plan["turn_id"] == messages[-1].id]
+        pending = state.get("pending")
+        if pending and pending["turn_id"] != messages[-1].id:
+            pending = None
 
         async def load(source: SourceRun) -> dict[str, Any]:
             key = (source["thread_id"], source["checkpoint_id"])
@@ -101,14 +117,22 @@ def solution_graph() -> Any:
 
         @tool
         async def lookup_variables(query: str, runtime: ToolRuntime[SolutionContext], plan_id: str | None = None) -> dict[str, Any]:
-            """Read actual decision values whose original variable names contain query (empty means all).
+            """Inspect a saved plan's problem, solver status, objective and actual decision values.
 
-            Returns up to 100 values with the total matched count. Query specific names when a result is truncated.
+            Use plan_id to inspect the original or another known plan before comparing results.
+            Query matches original variable names (empty means all), returning up to 100 values and the matched count.
             """
-            values = await load(selected_source(plan_id, runtime.state["current"]))
-            variables = (values.get("solve") or {}).get("variables") or {}
+            source = selected_source(plan_id, runtime.state["current"])
+            values = await load(source)
+            solved = values.get("solve") or {}
+            variables = solved.get("variables") or {}
             found = {name: value for name, value in variables.items() if query.casefold() in name.casefold()}
-            return {"variables": dict(list(found.items())[:100]), "total_matches": len(found)}
+            return {"source": source, "description": values["description"],
+                    "formulation": values.get("formulation"), "code": values.get("code"),
+                    "status": solved.get("status"), "objective": solved.get("objective"),
+                    "variables": dict(list(found.items())[:100]), "total_matches": len(found),
+                    "explanation": values.get("explanation"), "infeasibility": values.get("infeasibility"),
+                    "failure": values.get("failure")}
 
         @tool
         async def solve_scenarios(scenarios: Annotated[list[Scenario], Field(min_length=1, max_length=6)],
@@ -120,14 +144,32 @@ def solution_graph() -> Any:
             with the same method, preset, library and attachments.
             A single new plan becomes current; multiple alternatives keep the original current plan.
             """
-            base = selected_source(base_plan_id, runtime.state["current"])
+            nonlocal pending
+            # Rephrasing a retry's tool call must not change the saved batch's IDs or baseline.
+            base = pending["base"] if pending else selected_source(base_plan_id, runtime.state["current"])
+            if pending:
+                scenarios = [Scenario.model_validate(item) for item in pending["scenarios"]]
             values = await load(base)
             spec = values["spec"]
             turn = next(message.id for message in reversed(runtime.state["messages"]) if message.type == "human")
+            pending = {"base": base, "scenarios": [item.model_dump() for item in scenarios], "turn_id": turn}
             identity = json.dumps({"base": base, "turn": turn, "scenarios": [item.model_dump() for item in scenarios]}, sort_keys=True, ensure_ascii=False)
             group = uuid5(NAMESPACE_URL, identity).hex if len(scenarios) > 1 else None
             results = []
             for index, scenario in enumerate(scenarios):
+                stage = None
+
+                def progress(step: dict[str, Any]) -> None:
+                    nonlocal stage
+                    current_stage = ("revise" if step["title"] == "revise_problem" else
+                                     "explain" if step["title"] in ("explain_result", "explain_infeasibility") else
+                                     "solve" if step["type"] == "solve" else "model")
+                    if step["type"] not in ("llm", "solve") or current_stage == stage:
+                        return
+                    stage = current_stage
+                    runtime.stream_writer({"type": "scenario_progress", "tool_call_id": runtime.tool_call_id,
+                        "name": scenario.name, "index": index + 1, "total": len(scenarios), "stage": stage})
+
                 identifier = str(uuid5(NAMESPACE_URL, f"{identity}:{index}"))
                 # Stable IDs let a replay reuse completed calculations without running them again.
                 try:
@@ -139,7 +181,7 @@ def solution_graph() -> Any:
                 if existing is None:
                     calculated = await run(values["description"], method=spec["method"], language=spec["language"],
                         solver=spec["solver"], preset=spec.get("preset"), data=values.get("data"),
-                        change=scenario.instruction, explain=True, locale=choice.locale, resources=resources)
+                        change=scenario.instruction, explain=True, locale=choice.locale, resources=resources, on_step=progress)
                     await client.threads.create(thread_id=identifier, graph_id=spec["method"], metadata={
                         "title": scenario.name, "method": spec["method"], "language": spec["language"],
                         "solver": spec["solver"], "preset": spec.get("preset"), "provider": spec["llm"]["provider"],
@@ -158,6 +200,7 @@ def solution_graph() -> Any:
                     "objective": solved.get("objective"), "variables": dict(list((solved.get("variables") or {}).items())[:100]),
                     "total_variables": len(solved.get("variables") or {}), "failure": result.get("failure"),
                     "explanation": result.get("explanation"), "infeasibility": result.get("infeasibility")})
+            pending = None
             update = {"messages": [ToolMessage(json.dumps(results, ensure_ascii=False), tool_call_id=runtime.tool_call_id,
                                                 name="solve_scenarios", artifact={"plans": results})]}
             if len(completed) == 1 and result.get("spec"):
@@ -175,7 +218,7 @@ def solution_graph() -> Any:
                 if message.type == "human":
                     break
                 recent.append(message)
-            calculated = bool(recovered) or any(message.type == "tool" and message.name == "solve_scenarios" for message in recent)
+            calculated = (bool(recovered) and pending is None) or any(message.type == "tool" and message.name == "solve_scenarios" for message in recent)
             tools = [item for item in request.tools if not (calculated and item.name == "solve_scenarios")]
             facts = {key: values.get(key) for key in ("description", "formulation", "code", "explanation", "infeasibility", "failure")}
             facts["description"] = problem_text(values["description"], values.get("data") or {})
@@ -184,7 +227,9 @@ def solution_graph() -> Any:
             facts["solve"] = {**{key: solved.get(key) for key in ("status", "objective", "diagnosis", "error")},
                               "variables": dict(list((solved.get("variables") or {}).items())[:100]),
                               "total_variables": len(solved.get("variables") or {})}
-            if recovered:
+            if pending:
+                facts["unfinished_scenarios"] = pending
+            elif recovered:
                 facts["already_computed_scenarios"] = []
                 for plan in recovered:
                     saved = await load(plan["source"])
@@ -195,6 +240,9 @@ def solution_graph() -> Any:
             prompt = (f"Discuss an optimization plan with an ordinary user in {language}. Reply naturally and concisely. "
                 "Use only the supplied problem, mathematical model, code and ACTUAL solver results. "
                 "Use lookup_variables for decision values omitted from the snapshot. Preserve exact variable identities. "
+                "To compare with the original or another saved plan, use lookup_variables with that plan's ID "
+                "to read its actual objective, status and conditions first. Compare objective values only when "
+                "their meaning and units match; do not infer improvement from a number alone. "
                 "Explain what the computed numbers mean. Do not invent missing values, utilization, constraints, causes "
                 "or optimality proofs. Distinguish what the model expresses from what the solver actually established. "
                 "If the user explicitly asks what happens under concrete new conditions, call solve_scenarios once "
@@ -207,12 +255,15 @@ def solution_graph() -> Any:
                 "as base_plan_id for calculations or plan_id for value lookups. Never use an unknown ID. "
                 "If already_computed_scenarios is supplied, these changes were calculated before a reply failure: explain "
                 "their actual results now without repeating the calculations. Treat truncated file excerpts as partial data. "
+                "If unfinished_scenarios is supplied, call solve_scenarios to finish that saved batch from its fixed "
+                "base and exact scenarios. Completed calculations will be reused; do not treat a partial batch as finished. "
                 "Original plans and attachments remain intact. Do not generate or execute substitute solver code yourself.\n"
                 "Current frozen plan:\n" + json.dumps(facts, ensure_ascii=False))
             return await handler(request.override(tools=tools, system_message=SystemMessage(prompt)))
 
         try:
-            agent = create_agent(model, [lookup_variables, solve_scenarios], middleware=[actual_plan],
+            agent = create_agent(model, [lookup_variables, solve_scenarios], middleware=[actual_plan, ContextEditingMiddleware(
+                edits=[ClearToolUsesEdit(trigger=16_000, keep=3, clear_tool_inputs=True)])],
                 state_schema=AgentPlanState, context_schema=SolutionContext, checkpointer=False, name="solution_agent")
             async with asyncio.timeout(resources.limits.run_timeout):
                 result = await agent.ainvoke({"messages": messages, "current": current})
@@ -220,12 +271,12 @@ def solution_graph() -> Any:
                 raise ValueError("The assistant did not return a reply.")
             update = {"messages": result["messages"], "current": result["current"], "failure": None}
         except Exception as error:
-            advanced = completed[0]["source"] if len(completed) == 1 else None
+            advanced = completed[0]["source"] if len(completed) == 1 and pending is None else None
             update = {"current": advanced if advanced and cache[(advanced["thread_id"], advanced["checkpoint_id"])].get("spec") else current,
                       "failure": f"{type(error).__name__}: {error}"}
         plans = {item["source"]["thread_id"]: item for item in [*(state.get("plans") or []), *completed]}
         usage = {key: state.get("usage", {}).get(key, 0) + value for key, value in recorder.usage.items()}
-        return {**update, "plans": list(plans.values()), "usage": usage}
+        return {**update, "plans": list(plans.values()), "pending": pending, "usage": usage}
 
     graph = StateGraph(SolutionState, input_schema=SolutionInput, context_schema=SolutionContext)
     graph.add_node("discuss", discuss)
