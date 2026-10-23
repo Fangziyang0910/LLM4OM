@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Composer, type ComposerProps } from "@/features/composer/Composer";
 import { ProblemEditor } from "@/features/composer/ProblemEditor";
 import { DATA_FILE_ACCEPT, readDataFiles } from "@/features/composer/files";
 import { client } from "@/features/runs/sdk";
@@ -15,7 +15,6 @@ import { errorText } from "@/format";
 import { locale, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 import type { RequirementsMeta, Usage } from "@/features/runs/types";
-import type { Preset } from "@/types";
 import type { RequirementsDraft } from "./api";
 import { ChatMessages } from "@/features/chat/Messages";
 import { ChatInput } from "@/features/chat/ChatInput";
@@ -29,10 +28,10 @@ const STARTERS = [
 ];
 
 /** Conversation state and checkpoints belong to LangGraph; only unsaved editing lives in React. */
-export function Requirements({ threadId, presets, searchConfigured, openPresets, onFinished, onUse }: {
-  threadId: string; presets: Preset[]; searchConfigured: boolean; openPresets: () => void; onFinished: () => void;
-  onUse: (draft: RequirementsDraft) => void;
+export function Requirements({ threadId, searchConfigured, onFinished, onUse, ...composer }: Omit<ComposerProps, "editor" | "assistant" | "disabled" | "onDiscuss"> & {
+  threadId: string; searchConfigured: boolean; onFinished: () => void; onUse: (draft: RequirementsDraft) => void;
 }) {
+  const { presets, openPresets, draft: configuration, setDraft: configure } = composer;
   const thread = useQuery({ queryKey: ["requirements", threadId], queryFn: () => client.threads.get(threadId) });
   const meta = thread.data?.metadata as RequirementsMeta | undefined;
   const [selected, setSelected] = useState<string>();
@@ -59,7 +58,7 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
     },
     onError: () => onFinished(),
   });
-  const draft = edited ?? { description: stream.values.description ?? "", data: stream.values.data ?? {} };
+  const draft = edited ?? { description: stream.values.description ?? configuration.description, data: stream.values.data ?? configuration.data };
   const messages = stream.messages;
   const presetId = selected ?? meta?.preset ?? presets[0]?.id;
   const preset = presets.find(item => item.id === presetId);
@@ -121,32 +120,24 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
   if (thread.error) return <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-destructive">
     <p>{errorText(thread.error)}</p><Button variant="outline" onClick={() => void thread.refetch()}><RefreshCw />{t("重试")}</Button></div>;
 
-  return <div className="flex h-full flex-col gap-4 p-4 sm:gap-5 sm:p-6">
-    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5">
-      <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight"><Sparkles className="size-5 text-primary" />{t("需求对话")}</h1>
-      <Button size="sm" disabled={busy || !draft.description.trim()} onClick={async () => {
+  const assistant = <div className="flex h-full min-h-0 flex-col gap-2 p-3">
+    <div className="flex shrink-0 items-center justify-between gap-2 border-b pb-3">
+      <h2 className="flex items-center gap-2 text-sm font-medium"><Sparkles className="size-4 text-muted-foreground" />{t("需求助手")}</h2>
+      <Button variant="ghost" size="xs" disabled={busy || !draft.description.trim()} onClick={async () => {
         setAction(true);
         try { await save(); onUse(draft); } catch (error) { toast.error(errorText(error)); } finally { setAction(false); }
       }}>{t("用于建模")}<ArrowRight /></Button>
-      <p className="col-span-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">{t("聊清目标与条件，确认需求稿后开始建模。")}</p>
-    </header>
-
-    <Tabs defaultValue="conversation" className="min-h-0 flex-1 gap-3">
-      <TabsList className="grid w-full shrink-0 grid-cols-2 lg:hidden" aria-label={t("需求对话视图")}>
-        <TabsTrigger value="conversation">{t("对话")}</TabsTrigger><TabsTrigger value="draft">{t("需求稿")}</TabsTrigger>
-      </TabsList>
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
-        <TabsContent value="conversation" forceMount className="mt-0 flex min-h-0 min-w-0 flex-col gap-3 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
+    </div>
           <div className="relative flex min-h-0 flex-1 flex-col">
             <div ref={log} role="log" aria-label={t("对话记录")} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 sm:px-3"
               onScroll={event => { const node = event.currentTarget; setFollow(node.scrollHeight - node.scrollTop - node.clientHeight < 80); }}>
-              {!messages.length ? <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center gap-5 py-6">
-                <span className="grid size-11 place-items-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
-                <div><h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("先说说，你想安排什么？")}</h2>
+              {!messages.length ? <div className="mx-auto flex min-h-full flex-col justify-center gap-5 py-6">
+                <span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
+                <div><h2 className="text-base font-semibold">{t("先说说，你想安排什么？")}</h2>
                   <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">{t("一个大概的想法就够了。我们边聊边把目标、条件和数据整理清楚。")}</p></div>
-                <div className="grid gap-2 sm:grid-cols-3">{STARTERS.map(item => <button key={item.title} type="button"
+                <div className="grid gap-2 ">{STARTERS.map(item => <button key={item.title} type="button"
                   disabled={busy} onClick={() => { setInput(t(item.text)); inputArea.current?.focus(); }}
-                  className="flex items-center gap-3 rounded-xl border bg-card p-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 sm:flex-col sm:items-start sm:gap-4 sm:p-4">
+                  className="flex items-center gap-3 rounded-xl border bg-card p-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ">
                   <item.icon className="size-4 text-primary" /><span>{t(item.title)}</span></button>)}</div>
               </div> : <ChatMessages messages={messages} loading={stream.isLoading} label={t("需求助手")} />}
             </div>
@@ -169,13 +160,12 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
               <span title={canSearch ? t("搜索公开资料，并在回复中展示来源。") : t("选择 DeepSeek 预设或由管理员配置搜索服务。")}>
                 <Button type="button" variant="ghost" size="sm" aria-label={t("联网搜索")} aria-pressed={searchOn} disabled={busy || !canSearch}
                   className={cn("h-8 gap-1.5 px-2 text-xs", searchOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
-                  onClick={() => setSearch(!searchOn)}><Globe /><span className="hidden md:inline">{searchOn ? t("联网搜索已开启") : t("联网搜索未开启")}</span></Button>
+                  onClick={() => setSearch(!searchOn)}><Globe /><span className="hidden @lg:inline">{searchOn ? t("联网搜索已开启") : t("联网搜索未开启")}</span></Button>
               </span>
           </ChatInput>
           <p className="shrink-0 text-center text-[11px] text-muted-foreground">{t(stream.isLoading ? "回复期间可继续输入，完成后发送。" : "Enter 发送，Shift+Enter 换行")}</p>
-        </TabsContent>
-
-        <TabsContent value="draft" forceMount className="mt-0 flex min-h-0 min-w-0 flex-col gap-3 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
+  </div>;
+  const editor = <>
           {saveError ? <p role="alert" className="text-xs text-destructive">{t("需求稿未保存：{error}", { error: saveError })}</p> : null}
           <div className="flex min-h-0 flex-1 flex-col [&>div]:h-auto [&>div]:min-h-0 [&>div]:flex-1"
             onBlur={event => {
@@ -193,8 +183,13 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
               }} onClear={() => setEdited({ description: "", data: {} })}
               onRemove={name => { const data = { ...draft.data }; delete data[name]; setEdited({ ...draft, data }); }} />
           </div>
-        </TabsContent>
-      </div>
-    </Tabs>
-  </div>;
+  </>;
+  return <Composer {...composer} draft={{ ...configuration, ...draft, origin: threadId }} disabled={busy} editor={editor} assistant={assistant}
+    setDraft={change => {
+      const next = typeof change === "function" ? change({ ...configuration, ...draft, origin: threadId }) : change;
+      if (next.description !== draft.description || next.data !== draft.data) setEdited({ description: next.description, data: next.data });
+      configure(next);
+    }}
+    onStart={async request => { await save(); configure(request); await composer.onStart(request); }}
+    onCompare={async (request, runs) => { await save(); configure(request); await composer.onCompare(request, runs); }} />;
 }

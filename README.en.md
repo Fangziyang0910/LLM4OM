@@ -53,7 +53,7 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
 | 👥 **Team deployment** | One `docker compose up`; preset keys never leave the server; optional HTTPS and usage limits |
 | 🌗 **A workbench people like** | Export Excel plans with business labels, units and all actual values; notes and tags, Markdown reports, Excel import, 2,033 public problems, Chinese and English, dark mode |
 
-The workbench prioritizes desktop use. Results get more space by default, and panel widths are remembered after mouse or keyboard resizing. Common actions stay visible; reruns and scenario comparisons are in **More actions**. Draft the next message during a reply, keep unsent text when switching conversations, and return from problem preview without losing the editing position.
+The desktop workbench centers on modeling: describe the problem, configure the method and modeling library, then inspect the mathematical model, code and computed results. A compact configuration summary opens the full settings. The process stays visible during execution; completed results occupy the main area. Requirements and plan assistants open beside the work when needed. Related history is grouped by problem, with each run saved independently.
 
 ## Screenshots
 
@@ -117,7 +117,7 @@ The repository includes the built frontend, so Node.js is not needed.
 
 3. Click **Start modeling**. In a few seconds the page shows the optimum A=3, B=2 with profit 13.
 
-Click an uploaded file name to review and edit its data. After solving, use **Discuss the plan** to ask questions or request explicit changes, or **More actions → Business scenario comparison** to calculate several alternatives from one baseline. Each new outcome comes from real modeling and solving; original records remain intact.
+Click an uploaded file name to review and edit its data. After solving, use **Discuss the plan** to ask questions or request explicit changes, or **Business scenario comparison** below the results to calculate several alternatives from one baseline. Each new outcome comes from real modeling and solving; original records remain intact.
 
 If you have only an idea, click **Discuss your requirements**. The assistant updates an editable draft as you talk. Add data and review the text, then click **Use for modeling** to return to the existing settings. You choose when to click **Start modeling**. Saved conversations can be continued from history. Press Enter to send, or Shift+Enter for a new line. Enable **Web search** to find public references and inspect their sources. DeepSeek presets use their own search endpoint; other models can use a separate server-side search key (see `.env.example`).
 

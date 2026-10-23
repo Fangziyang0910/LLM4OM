@@ -9,9 +9,9 @@ async function production(page: Page) {
   return page.url();
 }
 
-test("phone results keep primary actions on one row and put less frequent actions in the menu", async ({ page }) => {
+test("desktop results keep modeling central and present adjustment actions together", async ({ page }) => {
   await production(page);
-  for (const width of [320, 375, 768, 1440]) {
+  for (const width of [1024, 1366, 1440, 1920]) {
     await page.setViewportSize({ width, height: 812 });
     const actions = page.getByRole("group", { name: "运行操作", exact: true });
     const buttons = await actions.getByRole("button").all();
@@ -24,13 +24,13 @@ test("phone results keep primary actions on one row and put less frequent action
   await expect(page.locator("main header")).toContainText("deepseek-v4.1 flash-1017");
   await page.getByText("完整变量取值（2 个）", { exact: true }).click();
   await expect(page.getByLabel("筛选变量")).toBeVisible();
+  await expect(page.getByRole("button", { name: "业务场景对比", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "更多操作", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: "业务场景对比", exact: true })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "再运行一次", exact: true })).toBeVisible();
 });
 
-test("phone settings are reachable from the footer and the remembered method stays in view", async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
+test("desktop configuration is compact by default and retains the selected method", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   await expect(page.getByRole("button", { name: "查看运行设置", exact: true })).toBeInViewport();
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
@@ -76,6 +76,7 @@ test("desktop editing retains the cursor through preview and respects compositio
 test("desktop panel widths can be adjusted with the keyboard and survive reopening a run", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const url = await production(page);
+  await page.getByRole("button", { name: "建模过程", exact: true }).click();
   const panels = page.locator('[data-slot="resizable-panel"]');
   const before = (await panels.first().boundingBox())!.width;
   expect((await panels.last().boundingBox())!.width).toBeGreaterThan(before);
@@ -87,6 +88,7 @@ test("desktop panel widths can be adjusted with the keyboard and survive reopeni
   const resized = (await panels.first().boundingBox())!.width;
   await page.goto("/");
   await page.goto(url);
+  await page.getByRole("button", { name: "建模过程", exact: true }).click();
   await expect.poll(async () => Math.abs((await panels.first().boundingBox())!.width - resized)).toBeLessThan(2);
 });
 
@@ -128,6 +130,7 @@ test("example navigation stays visible without scrolling through the whole page"
 
 test("a preset can be added with Enter and its submission cannot be interrupted or duplicated", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   await page.getByRole("button", { name: "管理", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "预设模型", exact: true });
   await dialog.getByRole("button", { name: "添加预设", exact: true }).click();
@@ -161,7 +164,7 @@ test("a preset loading error can be retried without opening an empty configurati
   failed = false;
   await page.getByRole("alert").getByRole("button", { name: "重试", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(page.getByRole("combobox", { name: "预设模型", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "查看运行设置", exact: true })).toContainText("deepseek-v4.1 flash-1017");
 });
 
 test.describe("windowed desktop navigation", () => {
@@ -199,4 +202,36 @@ test("a failed page chunk offers a reload and preserves the saved problem", asyn
   await page.unroute("**/assets/Requirements-*.js");
   await page.getByRole("button", { name: "重新加载", exact: true }).click();
   await expect(page.getByLabel("问题描述")).toHaveValue("已经写好的需求不能因为页面加载失败而丢失");
+});
+
+test("the requirements draft runs in the modeling workbench and related history retains its source", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "通过对话整理需求", exact: true }).click();
+  await page.waitForURL(/\/chat\//);
+  const chat = page.url().split("/").at(-1)!;
+  const input = page.getByLabel("发送给需求助手");
+  await input.fill("两种资源各有 8 单位，A、B 利润 3 和 2，产量是整数。CHAT_WORKSPACE_ONLY");
+  await input.press("Control+Enter");
+  await expect(page.getByRole("log")).toContainText("可以检查需求稿并用于建模");
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/chat/${chat}$`));
+  expect((await (await page.request.get(`/threads/${chat}/runs`)).json()).length).toBe(1);
+  await page.getByRole("button", { name: "收起需求助手", exact: true }).click();
+  const problem = "# 工作区关联验证\n\n" + await page.getByLabel("问题描述").inputValue();
+  await page.getByLabel("问题描述").fill(problem);
+  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.waitForURL(/\/run\//);
+  await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible({ timeout: 60_000 });
+  const saved = await (await page.request.get(`/threads/${page.url().split("/").at(-1)}`)).json();
+  expect(saved.metadata.origin).toBe(chat);
+  expect(saved.values.description).toBe(problem);
+  expect(saved.values.solve.objective).toBe(13);
+  expect(JSON.stringify(saved.values)).not.toContain("CHAT_WORKSPACE_ONLY");
+  const navigation = page.getByRole("navigation", { name: "运行记录", exact: true });
+  const related = navigation.getByRole("button", { name: "相关记录：工作区关联验证", exact: true });
+  await expect(related).toHaveAttribute("aria-expanded", "false");
+  await related.click();
+  await expect(navigation.getByRole("button", { name: /CHAT_WORKSPACE_ONLY.*需求对话/ })).toBeVisible();
+  await related.click();
+  await expect(navigation.getByRole("button", { name: /CHAT_WORKSPACE_ONLY.*需求对话/ })).toHaveCount(0);
 });

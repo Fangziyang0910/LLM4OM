@@ -28,6 +28,12 @@ test("library and backend reach the run independently", async () => {
   }));
 });
 
+test("problem provenance is recorded as metadata and never enters modeling input", async () => {
+  await startRun({ ...draft, origin: "requirements-thread" }, undefined);
+  expect(threads.create).toHaveBeenCalledWith({ metadata: expect.objectContaining({ origin: "requirements-thread" }) });
+  expect(runs.create.mock.calls[0][2]?.input).toEqual({ description: draft.description, data: draft.data });
+});
+
 test("a revision pins the source checkpoint and inherits its recorded choices and files", async () => {
   threads.get.mockResolvedValue({ status: "idle", metadata: { title: "生产计划", method: "old", language: "old", group: "method-comparison" } } as never);
   threads.getState.mockResolvedValue({ checkpoint: { checkpoint_id: "saved-checkpoint" }, values: {

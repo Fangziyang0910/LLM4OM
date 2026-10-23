@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 const problem = "工厂生产 A、B 两种产品，产量是非负整数。每件 A 利润 3 元，B 利润 2 元。A 消耗切割 2、加工 1；B 消耗切割 1、加工 2。两种资源各有 8 单位。最大化总利润。";
 
@@ -89,9 +90,21 @@ test("a plan conversation explains actual values, computes changes and continues
   expect((await (await page.request.get(`/threads/${sourceId}`)).json()).values).toEqual(original);
   await page.reload();
   await expect(page.getByRole("log")).toContainText("目标值 12");
+  const assistant = page.getByRole("complementary", { name: "方案助手", exact: true });
+  await assistant.getByText("相关方案 · 2", { exact: true }).click();
+  await assistant.getByRole("button", { name: "打开原运行", exact: true }).click();
+  await expect(page).toHaveURL(chatUrl);
+  await expect(page.getByText("总利润", { exact: true }).locator("..")).toContainText("13");
+  await expect(page.getByLabel("当前讨论方案", { exact: true })).toContainText("12");
   await input.fill("请查询现在的实际决策值"); await input.press("Enter");
   await expect(page.getByRole("log")).toContainText("x[B] = 3");
-  await page.getByRole("button", { name: "查看完整方案", exact: true }).click();
+  await expect(page.getByLabel("当前讨论方案", { exact: true })).toContainText("12");
+  await page.getByRole("button", { name: "更多操作", exact: true }).click();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: "导出报告（Markdown）", exact: true }).click()]);
+  const report = await readFile((await download.path())!, "utf8");
+  expect(report).toContain(`/run/${state.plans[0].source.thread_id}`);
+  expect(report).not.toContain(`/discussion/${id}`);
+  await page.getByRole("complementary", { name: "方案助手", exact: true }).getByRole("button", { name: "收起方案助手", exact: true }).click();
   await page.waitForURL(/\/run\//);
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "更多操作", exact: true }).click();
@@ -103,8 +116,7 @@ test("a plan conversation explains actual values, computes changes and continues
 test("a business scenario comparison keeps one frozen baseline and shows actual decisions", async ({ page }) => {
   const sourceId = await production(page);
   const original = (await (await page.request.get(`/threads/${sourceId}`)).json()).values;
-  await page.getByRole("button", { name: "更多操作", exact: true }).click();
-  await page.getByRole("menuitem", { name: "业务场景对比", exact: true }).click();
+  await page.getByRole("button", { name: "业务场景对比", exact: true }).click();
   await page.getByLabel("场景 1 名称", { exact: true }).fill("B 至少 3 件");
   await page.getByLabel("场景 1 调整要求", { exact: true }).fill("B 至少生产 3 件");
   await page.getByLabel("场景 2 名称", { exact: true }).fill("B 至少 4 件");
@@ -130,6 +142,7 @@ test("several scenarios can also be calculated from chat and remain available af
   await page.getByLabel("发送给方案助手").fill("E2E_SOLUTION_BATCH：计算 B 至少生产 3 件和至少生产 4 件两个方案");
   await page.getByLabel("发送给方案助手").press("Enter");
   await expect(page.getByRole("log")).toContainText("目标值 8", { timeout: 60_000 });
+  await page.getByText("相关方案 · 3", { exact: true }).click();
   await expect(page.getByRole("button", { name: "查看场景对比 1", exact: true })).toBeVisible();
   const state = (await (await page.request.get(`/threads/${id}`)).json()).values;
   expect(state.plans).toHaveLength(2);

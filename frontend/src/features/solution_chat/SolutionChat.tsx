@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { ArrowDown, ArrowUpRight, Columns3, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Columns3, RefreshCw, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChatMessages } from "@/features/chat/Messages";
@@ -22,14 +21,15 @@ import type { Preset } from "@/types";
 type Plan = { name: string; instruction: string; source: SourceRun; group: string | null };
 type Values = { messages?: Message[]; source?: SourceRun; current?: SourceRun; plans?: Plan[]; usage?: Usage; failure?: string | null };
 
-export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpen, onCompare }: {
+export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpen, onCompare, renderRun }: {
   threadId: string; presets: Preset[]; openPresets: () => void; onFinished: () => void;
-  onOpen: (id: string) => void; onCompare: (group: string) => void;
+  onOpen: (id: string) => void; onCompare: (group: string) => void; renderRun: (id: string) => ReactNode;
 }) {
   const thread = useQuery({ queryKey: ["solution-chat", threadId], queryFn: () => client.threads.get(threadId) });
   const meta = thread.data?.metadata as SolutionChatMeta | undefined;
   const [input, setInput] = useChatDraft(threadId);
   const [selected, setSelected] = useState<string>();
+  const [viewed, setViewed] = useState<string>();
   const [action, setAction] = useState(false);
   const [follow, setFollow] = useState(true);
   const log = useRef<HTMLDivElement>(null);
@@ -55,7 +55,7 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
   const submit = async (retry = false) => {
     if (busy || (!retry && !input.trim())) return;
     if (!preset) { toast.error(t("先选择一个可用的预设模型。")); openPresets(); return; }
-    setAction(true); setFollow(true);
+    setAction(true); setFollow(true); setViewed(undefined);
     try {
       await client.threads.update(threadId, { metadata: { preset: preset.id, provider: preset.provider, model: preset.name || preset.model } });
       const last = [...messages].reverse().find(message => message.type === "human");
@@ -69,23 +69,39 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
   };
   if (thread.error) return <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-destructive">
     <p>{errorText(thread.error)}</p><Button variant="outline" onClick={() => void thread.refetch()}><RefreshCw />{t("重试")}</Button></div>;
-  return <div className="flex h-full flex-col gap-4 p-4 sm:gap-5 sm:p-6">
-    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-      <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight"><Sparkles className="size-5 text-primary" />{t("方案对话")}</h1>
-      <Button variant="outline" size="sm" disabled={!meta?.parent} onClick={() => onOpen(meta!.parent.thread_id)}>{t("打开原运行")}<ArrowUpRight /></Button>
-      <p className="col-span-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">{t("围绕实际结果提问，提出具体条件后可重新计算。")}</p>
-    </header>
-    <Tabs defaultValue="conversation" className="min-h-0 flex-1 gap-3">
-      <TabsList className="grid w-full shrink-0 grid-cols-2 lg:hidden"><TabsTrigger value="conversation">{t("对话")}</TabsTrigger><TabsTrigger value="plans">{t("方案")}</TabsTrigger></TabsList>
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <TabsContent value="conversation" forceMount className="mt-0 flex min-h-0 min-w-0 flex-col gap-3 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
+  const shown = viewed ?? source?.thread_id;
+  return <Tabs defaultValue="plan" className="h-full min-h-0 gap-0">
+    <TabsList className="mx-4 my-2 grid shrink-0 grid-cols-2 lg:hidden">
+      <TabsTrigger value="plan">{t("建模结果")}</TabsTrigger><TabsTrigger value="conversation">{t("方案助手")}</TabsTrigger>
+    </TabsList>
+    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
+      <TabsContent value="plan" forceMount className="mt-0 min-h-0 min-w-0 data-[state=inactive]:hidden lg:data-[state=inactive]:block">
+        {shown ? renderRun(shown) : <div className="grid h-full place-items-center"><Spinner /></div>}
+      </TabsContent>
+      <TabsContent value="conversation" forceMount className="mt-0 min-h-0 min-w-0 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
+        <aside aria-label={t("方案助手")} className="flex h-full min-h-0 w-full flex-col gap-3 border-l bg-card p-3">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b pb-3">
+            <h2 className="flex items-center gap-2 text-sm font-medium"><Sparkles className="size-4 text-muted-foreground" />{t("方案助手")}</h2>
+            <Button variant="ghost" size="icon-xs" disabled={!shown} aria-label={t("收起方案助手")} onClick={() => onOpen(shown!)}><X /></Button>
+          </div>
+          <div className="shrink-0 rounded-lg border bg-muted/30 p-3 text-xs" aria-label={t("当前讨论方案")}>
+            <p className="mb-1 text-muted-foreground">{t("当前讨论方案")}</p>
+            {current.error ? <p role="alert" className="text-destructive">{errorText(current.error)}</p> : !values ? <Spinner /> : <>
+              <p className="truncate font-medium" title={values.description}>{values.description?.trim().split("\n")[0].replace(/^#{1,6}\s+/, "")}</p>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span>{values.explanation?.objective_label || t("目标值")} <strong>{values.solve?.objective == null ? "—" : formatNumber(values.solve.objective)}</strong> {values.explanation?.objective_unit}</span>
+                <StatusBadge status={values.failure ? "failed" : values.solve?.status ?? "unknown"} />
+              </div>
+            </>}
+            {viewed && viewed !== source?.thread_id ? <Button variant="link" size="xs" className="mt-2 h-auto p-0" onClick={() => setViewed(undefined)}>{t("查看讨论中的方案")}</Button> : null}
+          </div>
           <div className="relative flex min-h-0 flex-1 flex-col">
             <div ref={log} role="log" aria-label={t("对话记录")} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 sm:px-3"
               onScroll={event => { const node = event.currentTarget; setFollow(node.scrollHeight - node.scrollTop - node.clientHeight < 80); }}>
               {messages.length ? <ChatMessages messages={messages} loading={stream.isLoading} label={t("方案助手")} />
-                : <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center gap-4 py-6">
-                  <span className="grid size-11 place-items-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
-                  <h2 className="text-xl font-semibold">{t("接下来，想了解或调整什么？")}</h2>
+                : <div className="mx-auto flex min-h-full max-w-md flex-col justify-center gap-4 py-6">
+                  <span className="grid size-8 place-items-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
+                  <h2 className="text-base font-semibold">{t("接下来，想了解或调整什么？")}</h2>
                   <p className="text-sm leading-6 text-muted-foreground">{t("可以询问决策值的含义，也可以给出新的条件。新方案会实际建模求解，并单独保存。")}</p>
                   <Button variant="outline" className="self-start" onClick={() => { setInput(t("请用通俗的话解释这个方案的主要决策。")); inputArea.current?.focus(); }}>{t("解释主要决策")}</Button>
                 </div>}
@@ -99,29 +115,18 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
             presets={presets} presetId={presetId} onPreset={setSelected} openPresets={openPresets} onSend={() => void submit()}
             onStop={() => void stream.stop().catch(error => toast.error(errorText(error)))} />
           <p className="shrink-0 text-center text-[11px] text-muted-foreground">{t(stream.isLoading ? "回复期间可继续输入，完成后发送。" : "Enter 发送，Shift+Enter 换行")}</p>
-        </TabsContent>
-        <TabsContent value="plans" forceMount className="mt-0 min-h-0 min-w-0 overflow-y-auto data-[state=inactive]:hidden lg:data-[state=inactive]:block">
-          <Card className="gap-3 py-4 shadow-sm"><CardHeader><CardTitle className="text-sm">{t("当前方案")}</CardTitle></CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              {current.error ? <p role="alert" className="text-sm text-destructive">{errorText(current.error)}</p>
-                : !values ? <Spinner /> : <>
-                  <StatusBadge status={values.failure ? "failed" : values.solve?.status ?? "unknown"} />
-                  <div><p className="text-xs text-muted-foreground">{values.explanation?.objective_label || t("目标值")}</p>
-                    <p className="mt-1 text-2xl font-semibold tabular">{values.solve?.objective == null ? "—" : formatNumber(values.solve.objective)}
-                      <span className="ml-1 text-xs font-normal text-muted-foreground">{values.explanation?.objective_unit}</span></p></div>
-                  <p className="line-clamp-6 text-xs leading-5 whitespace-pre-wrap text-muted-foreground">{values.description}</p>
-                  <Button variant="outline" size="sm" onClick={() => onOpen(source!.thread_id)}>{t("查看完整方案")}<ArrowUpRight /></Button>
-                </>}
-            </CardContent>
-          </Card>
-          {plans.length ? <section className="mt-5 flex flex-col gap-2" aria-label={t("已生成的方案")}>
-            <h2 className="text-sm font-medium">{t("已生成的方案")}</h2>
-            {plans.map(plan => <Button key={plan.source.thread_id} variant="outline" className="h-auto justify-between gap-2 py-3 text-left whitespace-normal" onClick={() => onOpen(plan.source.thread_id)}>
-              <span className="min-w-0"><span className="block text-sm font-medium">{plan.name}</span><span className="mt-1 line-clamp-2 block text-xs font-normal text-muted-foreground">{plan.instruction}</span></span><ArrowUpRight className="shrink-0" /></Button>)}
-            {groups.map((group, i) => <Button key={group} variant="secondary" size="sm" onClick={() => onCompare(group)}><Columns3 />{t("查看场景对比 {number}", { number: i + 1 })}</Button>)}
-          </section> : null}
-        </TabsContent>
-      </div>
-    </Tabs>
-  </div>;
+
+          <details className="max-h-48 shrink-0 overflow-y-auto border-t pt-2 text-xs" aria-label={t("已生成的方案")}>
+            <summary className="cursor-pointer font-medium text-muted-foreground">{t("相关方案")} · {plans.length + 1}</summary>
+            <div className="mt-2 flex flex-col gap-1">
+              <Button variant="ghost" size="sm" className="justify-between text-xs" disabled={!meta?.parent} onClick={() => setViewed(meta!.parent.thread_id)}>{t("打开原运行")}<ArrowUpRight /></Button>
+              {plans.map(plan => <Button key={plan.source.thread_id} variant="ghost" className="h-auto justify-between py-2 text-left text-xs whitespace-normal"
+                onClick={() => setViewed(plan.source.thread_id)} title={plan.instruction}><span>{plan.name}</span><ArrowUpRight className="shrink-0" /></Button>)}
+              {groups.map((group, i) => <Button key={group} variant="ghost" size="sm" onClick={() => onCompare(group)}><Columns3 />{t("查看场景对比 {number}", { number: i + 1 })}</Button>)}
+            </div>
+          </details>
+        </aside>
+      </TabsContent>
+    </div>
+  </Tabs>;
 }

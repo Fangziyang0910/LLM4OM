@@ -2,5 +2,6 @@
 export type Draft = {
   description: string; data: Record<string, string>; method: string; language: string; preset: string | null;
   solver?: string;
+  origin?: string;
   comparing?: boolean; methods?: string[]; presets?: string[];  // a comparison runs every method with every preset
 };

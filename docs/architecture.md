@@ -231,7 +231,7 @@ frontend/src/
 │   ├── solution_chat/ 方案对话、固定方案读取与独立方案导航
 │   └── runs/          RunView、Compare、Outputs、Solution、Timeline、状态图标
 │                      Explanation、Infeasibility、RevisionDialog、ScenarioComparison、ScenariosDialog、ScenarioResults
-│                      api、sdk、useRun、types、steps、tables、report、workbook 及相邻测试
+│                      api、sdk、useRun、history、types、steps、tables、report、workbook 及相邻测试
 ├── components/        Sidebar、Content、PageErrorBoundary、theme 等共享界面
 │   └── ui/            shadcn/ui 组件
 └── lib/                utils.ts 合并 Tailwind 类名；csv.ts 统一 CSV/TSV 无损文本解析与转义
@@ -245,11 +245,13 @@ frontend/src/
 
 页面按用户的任务顺序组织：
 
-1. 编辑页用 `ProblemEditor` 管理编辑、Markdown 预览和附件展示，`Composer` 管理草稿、文件读取及运行设置。左侧写问题，右侧选择建模方法、九个建模求解器、原生后端和 LLM；底部操作区常驻。
+1. 编辑页用 `ProblemEditor` 管理编辑、Markdown 预览和附件展示，`Composer` 管理草稿、文件读取及运行设置。问题占据主区域，配置摘要打开原有完整设置；底部建模操作常驻。`Requirements` 通过编辑器和助手插槽复用同一个 `Composer`，提交建模前等待原生需求稿保存队列。
 2. 运行页先用结论卡回答“得到了什么”（目标值、状态或失败原因），再提供“核对数学模型”和“查看解”。
-3. 下方左栏是建模过程，右栏是产物。宽屏下两栏可拖动调整宽度；窄屏下用“结果 / 过程”切换。
+3. 运行中展开建模过程与产物分栏；完成后默认收起过程，保留显式展开入口。`SolutionChat` 在结果旁显示对话，通过 `renderRun` 插槽复用完整 `RunView`；查看其他方案与对话的当前基准分开保存，不改写原生图状态。
 
-电脑端结果区默认占较大宽度。分栏保存与恢复直接使用 `react-resizable-panels.useDefaultLayout`，只保存用户操作造成的变化；不另外维护布局格式。运行头部收拢低频操作和技术信息，业务解读下折叠完整变量，避免重复统计。流式文字只在读者停留底部时跟随。问题编辑区在 Markdown 预览期间保留 textarea，保留选区和滚动位置；隐藏的预览不持续渲染。
+电脑端以数学模型、代码和求解结果为主要内容。分栏保存与恢复直接使用 `react-resizable-panels.useDefaultLayout`，只保存用户操作造成的变化；不另外维护布局格式。运行头部收拢低频操作和技术信息，结果下方集中放置条件调整、业务场景和可选对话；业务解读下折叠完整变量，避免重复统计。流式文字只在读者停留底部时跟随。问题编辑区在 Markdown 预览期间保留 textarea，保留选区和滚动位置；隐藏的预览不持续渲染。
+
+历史的 `groupHistory()` 只根据原生元数据的 `parent`、`group` 和 `origin` 归并记录，不按题名猜测关联。`origin` 是需求稿交接、复制编辑或重复运行的来源线程 ID，仅用于追踪，不进入建模输入。原记录不迁移，各线程仍独立保存和删除；历史分页未加载来源时仍可展示关联子记录。
 
 两类对话共用 `ChatInput` 和 `useChatDraft`：未发送文字只存入标签页的 `sessionStorage`，按线程区分；服务器接收消息时仅清除对应提交的文本，保留后来起草的文字。回复期间允许起草，但下一次发送仍受原生运行状态限制。导航搜索状态由 App 持有，抽屉关闭或布局变化不重置。懒加载页面失败由 React 错误边界保留导航并提供重载；服务数据失败就地重试，不创建额外运行。
 
@@ -261,7 +263,7 @@ frontend/src/
 
 `DataEditor` 在本地保留未保存文本，CSV/TSV 每页 50 行、超过 50 列用原文编辑；不把字符串转换为数值。保存校验文件大小、CSV 引号和 JSON 语法，成功后才更新附件；需求稿通过原生 `threads.updateState` 保存。需求稿自动保存只处理实际编辑区的失焦，忽略 React portal 弹窗的焦点事件。已经运行的附件快照不随草稿编辑变化。
 
-各页共用最大 1600 像素的内容宽度。导航在 1280 像素以上常驻；编辑页在 1024 像素以上并排显示等高卡片，窄屏上下排列。长题面、方法列表和短屏设置使用各自的滚动区域，不把开始按钮推到屏外。
+各页共用最大 1600 像素的内容宽度。导航在 1280 像素以上常驻；编辑页在 1024 像素以上按需并排显示主要内容与助手，窄窗口使用页签。长题面、方法列表和短屏设置使用各自的滚动区域，不把开始按钮推到屏外。
 
 问题预览和运行题面共用 `Content.Markdown`，只渲染原文，不改变提交内容。题面关闭单美元符号公式，避免价格被当成数学表达式；显式公式分隔符继续支持。生成的数学模型和建模步骤保留原有公式语法。
 

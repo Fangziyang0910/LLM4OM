@@ -52,8 +52,8 @@ function useWide(): boolean {
   }, () => matchMedia(WIDE).matches);
 }
 
-export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevise, onDelete, onCompare, onMetaChange, onDiscuss, onScenarios, onConversation }: {
-  threadId: string; options: Options; onFinished: () => void;
+export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevise, onDelete, onCompare, onMetaChange, onDiscuss, onScenarios, onConversation, assistantOpen = false }: {
+  threadId: string; options: Options; onFinished: () => void; assistantOpen?: boolean;
   onEdit: (draft: Draft) => void; onRerun: (draft: Draft) => Promise<void>; onDelete: (meta: RunMeta) => void;
   onRevise: (instruction: string) => Promise<void>;
   onDiscuss: () => Promise<void>; onScenarios: (scenarios: { name: string; instruction: string }[]) => Promise<void>;
@@ -68,6 +68,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
   const meta = loaded ? { ...loaded, ...changed } : null;
   const [chosen, setTab] = useState<Tab | null>(null);  // null follows the run
   const [picked, setPicked] = useState<Partial<Record<"formulation" | "code", string>>>({});
+  const [processVisible, setProcessVisible] = useState<boolean | null>(null);
   const [view, setView] = useState<"outputs" | "process">("outputs");  // narrow screens show one pane at a time
   const [stopping, setStopping] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -76,6 +77,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
   const layout = useDefaultLayout({ id: "llm4om-run", panelIds: ["process", "outputs"], onlySaveAfterUserInteractions: true });
   const active = streaming || run?.status === "pending" || run?.status === "running";
   const now = useNow(active);
+  const withProcess = processVisible ?? active;
 
   if (!meta) return error ? <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm">
     <TriangleAlert className="size-6 text-destructive" /><p>{error}</p>
@@ -99,7 +101,8 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
   const tokens = usage ? usage.input_tokens + usage.output_tokens : null;
 
   const draft = (): Draft => ({ description: values.description ?? "", data: values.data ?? {}, method: meta.method,
-    language: meta.language, solver: meta.solver, preset: meta.preset ?? null });
+    language: meta.language, solver: meta.solver, preset: meta.preset ?? null, origin: threadId });
+  const link = new URL(`/run/${threadId}`, location.href).href;
   const stop = async () => {
     if (!run) return;
     setStopping(true);
@@ -113,7 +116,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
     setExporting(true);
     try {
       download(`${(meta.title || "solution").slice(0, 40).replace(/[\\/:*?"<>|]/g, "_")}.xlsx`,
-        await exportSolution(meta, values, options, location.href));
+        await exportSolution(meta, values, options, link));
     } catch (reason) { toast.error(errorText(reason)); }
     finally { setExporting(false); }
   };
@@ -154,15 +157,12 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
             <NotebookPen />{meta.note.split("\n")[0]}</button> : null}
         </div>
       </div>
-      <div role="group" aria-label={t("运行操作")} className="flex shrink-0 flex-wrap items-center gap-1.5 sm:gap-2">
+      <div className="flex shrink-0 items-center gap-2">
+        <Button variant="ghost" size="sm" aria-expanded={wide && !assistantOpen ? withProcess : view === "process"}
+          onClick={() => { if (wide && !assistantOpen) setProcessVisible(!withProcess); else setView(view === "process" ? "outputs" : "process"); }}>
+          <Layers />{t("建模过程")}</Button>
         {active ? <Button variant="outline" size="sm" disabled={stopping} onClick={() => void stop()}>
           {stopping ? <Spinner /> : <Square className="fill-current" />}{stopping ? t("正在停止") : t("停止")}</Button> : <>
-          <Button variant="outline" size="sm" className="px-2 sm:px-3" disabled={busy || !values.spec} onClick={async () => {
-            setBusy(true);
-            try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
-          }}>{busy ? <Spinner /> : <MessageSquare />}{t("讨论方案")}</Button>
-          <Button size="sm" className="px-2 sm:px-3" disabled={busy || !values.description} onClick={() => setRevision("")}>
-            <Pencil />{t("调整条件")}</Button>
           {hasSolution(solve) ? <Button variant="outline" size="sm" className="size-8 p-0 sm:w-auto sm:px-3" aria-label={t("导出 Excel")}
             title={t("导出 Excel")} disabled={exporting} onClick={() => void exportExcel()}>
             {exporting ? <Spinner /> : <FileDown />}<span className="hidden sm:inline">{t("导出 Excel")}</span></Button> : null}
@@ -172,15 +172,14 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
           <DropdownMenuContent align="end">
             {meta.group ? <DropdownMenuItem onClick={() => onCompare(meta.group!)}><Columns3 />{t("查看对比")}</DropdownMenuItem> : null}
             {meta.conversation ? <DropdownMenuItem onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回方案对话")}</DropdownMenuItem> : null}
-            <DropdownMenuItem disabled={active || !values.spec} onClick={() => setScenarios(true)}><Columns3 />{t("业务场景对比")}</DropdownMenuItem>
             <DropdownMenuItem disabled={active || busy || !values.description} onClick={() => void rerun()}><RefreshCw />{t("再运行一次")}</DropdownMenuItem>
             <DropdownMenuItem disabled={!values.description} onClick={() => onEdit(draft())}>
               <Pencil />{t("修改后运行")}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void copyText(location.href).then(() => toast.success(t("已复制链接。")), () => toast.error(t("无法复制，请手动复制地址栏中的链接。")))}>
+            <DropdownMenuItem onClick={() => void copyText(link).then(() => toast.success(t("已复制链接。")), () => toast.error(t("无法复制，请手动复制地址栏中的链接。")))}>
               <Link2 />{t("复制链接")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setNoting(true)}><NotebookPen />{t("备注与标签")}</DropdownMenuItem>
             <DropdownMenuItem disabled={!values.description} onClick={() => download(`${(meta.title || "run").slice(0, 40).replace(/[\\/:*?"<>|]/g, "_")}.md`,
-              report(meta, values, options, location.href))}><FileDown />{t("导出报告（Markdown）")}</DropdownMenuItem>
+              report(meta, values, options, link))}><FileDown />{t("导出报告（Markdown）")}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={() => onDelete(meta)}><Trash2 />{t("删除这次运行")}</DropdownMenuItem>
           </DropdownMenuContent>
@@ -192,17 +191,27 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
       <Summary state={state} values={values} steps={steps} error={error} active={active} elapsed={elapsed} onTab={showTab} />
     </div>
 
-    {wide ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1 px-6 pt-4 pb-6">
+    {!active ? <div role="group" aria-label={t("运行操作")} className="flex shrink-0 items-center gap-1 overflow-x-auto px-4 pt-3 md:px-6 [&>button]:shrink-0">
+      <span className="mr-2 hidden text-xs text-muted-foreground sm:block">{t("继续调整")}</span>
+      <Button variant="outline" size="sm" disabled={busy || !values.description} onClick={() => setRevision("")}><Pencil />{t("调整条件")}</Button>
+      <Button variant="ghost" size="sm" disabled={busy || !values.spec} onClick={() => setScenarios(true)}><Columns3 />{t("业务场景对比")}</Button>
+          <Button variant="ghost" size="sm" className="px-2 sm:px-3" aria-pressed={assistantOpen} disabled={busy || !values.spec} onClick={async () => {
+            setBusy(true);
+            try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
+          }}>{busy ? <Spinner /> : <MessageSquare />}{t(assistantOpen ? "收起方案助手" : "讨论方案")}</Button>
+    </div> : null}
+
+    {wide && !assistantOpen && withProcess ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1 px-6 pt-4 pb-6">
       <ResizablePanel id="process" defaultSize="32%" minSize="25%"><Pane>{timeline}</Pane></ResizablePanel>
       <ResizableHandle withHandle aria-label={t("调整过程与结果的宽度")} className="mx-2 bg-transparent" />
       <ResizablePanel id="outputs" defaultSize="68%" minSize="30%"><Pane>{outputs}</Pane></ResizablePanel>
-    </ResizablePanelGroup> : <div className="flex min-h-96 flex-1 shrink-0 flex-col gap-3 px-4 pt-3 pb-4">
-      <Tabs value={view} onValueChange={value => setView(value as "outputs" | "process")}>
+    </ResizablePanelGroup> : <div className="flex min-h-96 flex-1 shrink-0 flex-col gap-3 px-4 pt-4 pb-4 md:px-6 md:pb-6 lg:min-h-0 lg:shrink">
+      {!wide ? <Tabs value={view} onValueChange={value => setView(value as "outputs" | "process")}>
         <TabsList className="w-full">
           <TabsTrigger value="outputs">{t("结果")}</TabsTrigger>
           <TabsTrigger value="process">{t("过程")}{active ? <span className="size-1.5 animate-pulse rounded-full bg-primary" /> : null}</TabsTrigger>
         </TabsList>
-      </Tabs>
+      </Tabs> : null}
       <Pane>{view === "outputs" ? outputs : timeline}</Pane>
     </div>}
     {noting ? <NoteDialog meta={meta} onClose={() => setNoting(false)} onSave={async change => {

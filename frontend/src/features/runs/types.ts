@@ -45,11 +45,12 @@ export type RunMeta = {
   title: string; method: string; language: string; preset?: string | null; provider: string | null; model: string | null;
   solver?: string;
   group?: string | null; note?: string; tags?: string[];
+  origin?: string;
   parent?: SourceRun;
   scenario?: { name: string; instruction: string };
   conversation?: string;
 };
-export type RequirementsMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags"> & { kind: "requirements"; search?: boolean };
+export type RequirementsMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags" | "origin"> & { kind: "requirements"; search?: boolean };
 export type SolutionChatMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags"> & { kind: "solution_chat"; parent: SourceRun };
 /** A run in the history list. */
 export type Entry<Meta = RunMeta | RequirementsMeta | SolutionChatMeta> = {

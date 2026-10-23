@@ -1,5 +1,18 @@
 /** English for the page's Chinese text; keys are the Chinese exactly as written in t(...). */
 export const en: Record<string, string> = {
+  "问题与助手": "Problem and assistant",
+  "调整配置": "Configure",
+  "完成": "Done",
+  "选择建模方法、建模求解器和预设模型。": "Choose the modeling method, modeling library and model preset.",
+  "生成数学模型与求解代码，运行后查看实际结果。": "Generate the mathematical model and solver code, then inspect the computed results.",
+  "收起需求助手": "Hide requirements assistant",
+  "收起方案助手": "Hide plan assistant",
+  "当前讨论方案": "Plan used in this conversation",
+  "查看讨论中的方案": "Show the plan being discussed",
+  "相关方案": "Related plans",
+  "相关记录：{title}": "Related records: {title}",
+  "{count} 条相关记录": "{count} related records",
+  "继续调整": "Continue refining",
   "通过对话整理需求": "Discuss your requirements",
   "新需求对话": "New requirements chat",
   "需求对话": "Requirements chat",

@@ -63,7 +63,9 @@ test("a run shows the solution, keeps a note and tags, and exports a report", as
 test("a cancelled method keeps its draft after reloading without an event stream", async ({ page }) => {
   const errors = await open(page);
   await page.getByRole("textbox", { name: "问题描述" }).fill("E2E_PAUSE_REPAIR 工厂生产计划");
+  await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   await page.locator("#method-feedback_repair").click();
+  await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole("button", { name: "开始建模" }).click();
   await page.waitForURL(/\/run\//);
   await expect(page.getByText(/LLM 正在处理：repair/)).toBeVisible({ timeout: 60_000 });
@@ -105,6 +107,7 @@ test("a named DeepSeek preset keeps its native provider, custom endpoint and act
 
 test("new methods expose supported solver choices and BIND runs through the workbench", async ({ page }) => {
   const errors = await open(page);
+  await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   await page.locator("#method-sac_opt").click();
   await expect(page.locator("#language-pyomo")).toBeChecked();
   await expect(page.locator("#language-gurobipy")).toBeEnabled();
@@ -117,6 +120,7 @@ test("new methods expose supported solver choices and BIND runs through the work
   await expect(page.locator('[id^="language-"]')).toHaveCount(9);
   await page.locator('label[for="language-ortools"]').click();
   await page.locator('label[for="language-pyomo"]').click();
+  await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
   await page.getByRole("button", { name: "开始建模" }).click();
   await page.waitForURL(/\/run\//);
@@ -130,10 +134,12 @@ test("new methods expose supported solver choices and BIND runs through the work
 
 test("native APIs run without an interface setting and a library can use different backends", async ({ page }) => {
   const errors = await open(page);
+  await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   await page.locator('label[for="language-ortools"]').click();
   await expect(page.getByRole('combobox', { name: '建模接口', exact: true })).toHaveCount(0);
   await page.getByRole('combobox', { name: '求解后端', exact: true }).click();
   await page.getByRole('option', { name: 'CP_SAT', exact: true }).click();
+  await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole('main').getByRole('button', { name: /^生产计划/ }).click();
   await page.getByRole('button', { name: '开始建模' }).click();
   await page.waitForURL(/\/run\//);
@@ -144,11 +150,13 @@ test("native APIs run without an interface setting and a library can use differe
 
   for (const solver of ['OSQP', 'SCS']) {
     await page.goto('/');
+    await page.getByRole('textbox', { name: '问题描述' }).fill('连续变量 x,y>=0，x+y<=2。最小化(x-1)^2+(y-2)^2。');
+    await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
     await page.locator('label[for="language-cvxpy"]').click();
     await expect(page.locator('[id^="language-"]')).toHaveCount(9);
-    await page.getByRole('textbox', { name: '问题描述' }).fill('连续变量 x,y>=0，x+y<=2。最小化(x-1)^2+(y-2)^2。');
     await page.getByRole('combobox', { name: '求解后端', exact: true }).click();
     await page.getByRole('option', { name: solver, exact: true }).click();
+    await page.getByRole("button", { name: "完成", exact: true }).click();
     await page.getByRole('button', { name: '开始建模' }).click();
     await page.waitForURL(/\/run\//);
     await page.getByRole('button', { name: '查看解' }).waitFor({ timeout: 60_000 });
@@ -198,8 +206,10 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
   });
   const errors = await open(page);
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
+  await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   await page.getByRole("switch", { name: "对比多个方法" }).click();
   await page.locator("#compare-feedback_repair").click();
+  await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole("button", { name: "开始对比（2 个运行）" }).click();
   await page.waitForURL(/\/compare\//);
   await expect(page.getByText("2 个有解的运行目标值一致")).toBeVisible({ timeout: 60_000 });

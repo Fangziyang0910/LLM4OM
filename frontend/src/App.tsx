@@ -63,6 +63,7 @@ export default function App() {
     setMenuOpen(false);
   }, []);
   const refresh = useCallback(() => queryClient.invalidateQueries({ queryKey: ["history"] }), [queryClient]);
+  const newProblem = () => { setDraft(current => ({ ...current, origin: undefined })); go({ name: "new" }); };
 
   useEffect(() => {
     const onPop = () => setRoute(routeFromUrl());
@@ -95,8 +96,28 @@ export default function App() {
     },
   });
 
+  const renderRun = (id: string, assistantOpen = false) => <RunView key={id} threadId={id} options={options!} assistantOpen={assistantOpen} onFinished={() => void refresh()}
+    onDiscuss={async () => {
+      if (assistantOpen) { go({ name: "run", id }); return; }
+      const chat = await createSolutionChat(id); void refresh(); go({ name: "discussion", id: chat });
+    }}
+    onConversation={id => go({ name: "discussion", id })} onScenarios={async scenarios => {
+      const result = await startScenarios(id, scenarios, presets);
+      void refresh(); go({ name: "compare", id: result.group });
+      if (result.error) toast.error(t("只启动了 {started}/{total} 个运行：{error}", { started: result.started, total: scenarios.length, error: errorText(result.error) }));
+    }}
+    onEdit={next => { setDraft({ ...next, comparing: false, methods: draft.methods, presets: draft.presets }); go({ name: "new" }); }}
+    onRerun={start} onRevise={async instruction => {
+      const revised = await startRevision(id, instruction, presets);
+      void refresh(); go({ name: "run", id: revised });
+    }} onDelete={meta => remove({ id, meta })}
+    onCompare={group => go({ name: "compare", id: group })} onMetaChange={() => void refresh()} />;
+  const modelingProps = (options: Options) => ({ options, presets, draft, setDraft, onStart: start, onCompare: compare,
+    presetsStatus: presetsQuery.data ? "ready" as const : presetsQuery.error ? "error" as const : "loading" as const,
+    openPresets: () => setPresetsOpen(true), openExamples: () => setExamplesOpen(true) });
+
   const current = route.name === "run" || route.name === "chat" || route.name === "discussion" ? route.id : null;
-  const sidebar = <Sidebar entries={entries} current={current} options={options} presets={presets} onNew={() => go({ name: "new" })}
+  const sidebar = <Sidebar entries={entries} current={current} options={options} presets={presets} onNew={newProblem}
     query={search} onQuery={setSearch}
     hasMore={historyQuery.hasNextPage} loading={historyQuery.isFetching} error={historyQuery.error ? errorText(historyQuery.error) : null}
     onLoadMore={() => void historyQuery.fetchNextPage()} onRetry={() => void historyQuery.refetch()}
@@ -118,7 +139,7 @@ export default function App() {
         <Button variant="ghost" size="icon" aria-label={t("打开菜单")} onClick={() => setMenuOpen(true)}><Menu /></Button>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? t("新建建模")
           : route.name === "chat" ? t("需求对话") : route.name === "discussion" ? t("方案对话") : route.name === "compare" ? t("对比") : t("建模结果")}</span>
-        {route.name !== "new" ? <Button variant="ghost" size="icon" aria-label={t("新建建模")} onClick={() => go({ name: "new" })}><Plus /></Button> : null}
+        {route.name !== "new" ? <Button variant="ghost" size="icon" aria-label={t("新建建模")} onClick={newProblem}><Plus /></Button> : null}
       </header>
       {presetsQuery.error ? <div role="alert" className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 border-b px-4 py-2 text-xs text-destructive sm:px-6">
         <span>{t("预设模型加载失败：{error}", { error: errorText(presetsQuery.error) })}</span>
@@ -135,41 +156,27 @@ export default function App() {
         </Empty>
           : !options ? <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载……")}</div>
           : route.name === "new"
-            ? <Composer options={options} presets={presets} draft={draft} setDraft={setDraft} onStart={start} onCompare={compare}
-              presetsStatus={presetsQuery.data ? "ready" : presetsQuery.error ? "error" : "loading"}
-              openPresets={() => setPresetsOpen(true)} openExamples={() => setExamplesOpen(true)} onDiscuss={async () => {
+            ? <Composer {...modelingProps(options)} onDiscuss={async () => {
                 const preset = presets.find(item => item.id === draft.preset) ?? presets[0];
-                const id = await createRequirements({ description: draft.description, data: draft.data }, preset);
+                const id = await createRequirements({ description: draft.description, data: draft.data }, preset, draft.origin);
                 void refresh(); go({ name: "chat", id });
               }} />
             : <PageErrorBoundary key={route.id}><Suspense fallback={<div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载……")}</div>}>
               {route.name === "compare" ? <Compare key={route.id} group={route.id} options={options} onOpen={id => go({ name: "run", id })} />
-                : route.name === "chat" ? <Requirements key={route.id} threadId={route.id} presets={presets} searchConfigured={!!options.search_configured}
-                  openPresets={() => setPresetsOpen(true)} onFinished={() => void refresh()}
-                  onUse={next => { setDraft({ ...draft, ...next }); go({ name: "new" }); }} />
+                : route.name === "chat" ? <Requirements key={route.id} threadId={route.id} {...modelingProps(options)} searchConfigured={!!options.search_configured}
+                  onFinished={() => void refresh()}
+                  onUse={next => { setDraft({ ...draft, ...next, origin: route.id }); go({ name: "new" }); }} />
                 : route.name === "discussion" ? <SolutionChat key={route.id} threadId={route.id} presets={presets}
                   openPresets={() => setPresetsOpen(true)} onFinished={() => void refresh()}
-                  onOpen={id => go({ name: "run", id })} onCompare={id => go({ name: "compare", id })} />
-                : <RunView key={route.id} threadId={route.id} options={options} onFinished={() => void refresh()}
-                  onDiscuss={async () => { const id = await createSolutionChat(route.id); void refresh(); go({ name: "discussion", id }); }}
-                  onConversation={id => go({ name: "discussion", id })} onScenarios={async scenarios => {
-                    const result = await startScenarios(route.id, scenarios, presets);
-                    void refresh(); go({ name: "compare", id: result.group });
-                    if (result.error) toast.error(t("只启动了 {started}/{total} 个运行：{error}", { started: result.started, total: scenarios.length, error: errorText(result.error) }));
-                  }}
-                  onEdit={next => { setDraft({ ...next, comparing: false, methods: draft.methods, presets: draft.presets }); go({ name: "new" }); }}
-                  onRerun={start} onRevise={async instruction => {
-                    const id = await startRevision(route.id, instruction, presets);
-                    void refresh(); go({ name: "run", id });
-                  }} onDelete={meta => remove({ id: route.id, meta })}
-                  onCompare={group => go({ name: "compare", id: group })} onMetaChange={() => void refresh()} />}
+                  onOpen={id => go({ name: "run", id })} onCompare={id => go({ name: "compare", id })} renderRun={id => renderRun(id, true)} />
+                : renderRun(route.id)}
             </Suspense></PageErrorBoundary>}
       </main>
     </div>
 
     {options ? <>
       <Examples open={examplesOpen} onClose={() => setExamplesOpen(false)} datasets={options.datasets}
-        onUse={description => { setDraft({ ...draft, description, data: {} }); setExamplesOpen(false); go({ name: "new" }); }} />
+        onUse={description => { setDraft({ ...draft, description, data: {}, origin: undefined }); setExamplesOpen(false); go({ name: "new" }); }} />
       {presetsOpen ? <PresetsDialog onClose={() => setPresetsOpen(false)} presets={presets} dailyTokens={presetsQuery.data?.daily_tokens ?? 0}
         providers={options.providers}
         onChange={(value, message) => { queryClient.setQueryData(["presets"], value); toast.success(message); }} /> : null}

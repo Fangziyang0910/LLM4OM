@@ -106,7 +106,9 @@ test("a requirements conversation persists its editable draft and hands only the
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByLabel("问题描述")).toHaveValue(edited);
   expect((await (await page.request.get(`/threads/${id}/runs`)).json()).length).toBe(2);
+  await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   await page.getByRole("radio", { name: "Feedback Repair", exact: true }).check();
+  await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole("button", { name: /^开始建模/ }).click();
   await page.waitForURL(/\/run\//);
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible({ timeout: 60_000 });
@@ -119,14 +121,15 @@ test("a requirements conversation persists its editable draft and hands only the
   expect(JSON.stringify(result)).not.toContain("CHAT_ONLY_MARKER");
   expect((await (await page.request.get(`/threads/${id}`)).json()).values).toEqual(saved);
 
+  await page.getByLabel("搜索运行").fill("CHAT_ONLY_MARKER");
   await page.getByRole("navigation").getByRole("button", { name: /^我想安排.*CHAT_ONLY_MARKER.*需求对话/ }).click();
   await expect(page).toHaveURL(chatUrl);
   await expect(page.getByLabel("问题描述")).toHaveValue(edited);
   expect(errors).toEqual([]);
 });
 
-test("phone chat can retry a failed turn and edit the draft without starting a solve", async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
+test("the requirements assistant retries a failed turn and keeps the editable problem without starting a solve", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   await page.getByLabel("问题描述").fill("保留原需求稿");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
@@ -144,7 +147,7 @@ test("phone chat can retry a failed turn and edit the draft without starting a s
   const result = (await (await page.request.get(`/threads/${id}`)).json()).values;
   expect(result.messages).toHaveLength(4);
   expect(result.usage.solves).toBe(0);
-  for (const [width, height] of [[320, 568], [375, 812], [768, 1024], [1024, 600], [1920, 1080], [3440, 1440]]) {
+  for (const [width, height] of [[1024, 768], [1366, 768], [1440, 900], [1920, 1080], [3440, 1440]]) {
     await page.setViewportSize({ width, height });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const send = await page.getByRole("button", { name: "发送", exact: true }).boundingBox();
@@ -152,11 +155,12 @@ test("phone chat can retry a failed turn and edit the draft without starting a s
     expect(send!.y + send!.height).toBeLessThanOrEqual(height);
   }
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.getByRole("tab", { name: "需求稿", exact: true }).click();
+  await page.getByRole("tab", { name: "问题与数据", exact: true }).click();
   await expect(page.getByLabel("问题描述")).toHaveValue(result.description);
   await page.getByRole("tab", { name: "预览", exact: true }).click();
   await expect(page.getByRole("tabpanel", { name: "预览", exact: true })).toContainText("总利润最大");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("tab", { name: "需求助手", exact: true }).click();
   await page.getByRole("button", { name: "用于建模", exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByLabel("问题描述")).toHaveValue(result.description);

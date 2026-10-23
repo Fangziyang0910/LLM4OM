@@ -15,6 +15,7 @@ export async function startRun(draft: Draft, preset: Preset | undefined, group: 
   const meta: RunMeta = { title: revision ? `${title} · ${revision.name || revision.instruction.slice(0, 60)}` : title,
     method: draft.method, language: draft.language, preset: preset?.id ?? null,
     ...(draft.solver ? { solver: draft.solver } : {}),
+    ...(draft.origin ? { origin: draft.origin } : {}),
     provider: preset?.provider ?? null, model: preset?.name || preset?.model || null, ...(group ? { group } : {}),
     ...(revision ? { parent: revision.source, ...(revision.name ? { scenario: { name: revision.name, instruction: revision.instruction } } : {}) } : {}) };
   const client = await sdk();

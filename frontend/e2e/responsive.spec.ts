@@ -13,7 +13,9 @@ for (const [width, height] of [[320, 568], [390, 844], [768, 1024], [1024, 768],
     await page.getByRole("tab", { name: "预览", exact: true }).click();
     await expect(page.getByRole("heading", { name: "生产计划", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /^开始建模/ })).toBeInViewport();
+    await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
     await page.getByRole("switch", { name: "对比多个方法" }).click();
+    await page.getByRole("button", { name: "完成", exact: true }).click();
     await expect(page.getByRole("button", { name: /^开始对比/ })).toBeInViewport();
     expect(await page.evaluate(() => {
       const main = document.querySelector("main")!;
@@ -21,12 +23,8 @@ for (const [width, height] of [[320, 568], [390, 844], [768, 1024], [1024, 768],
     })).toBe(true);
     const editor = await page.getByRole("tablist", { name: "问题显示方式" }).locator('xpath=ancestor::*[@data-slot="card"]').boundingBox();
     expect(editor).not.toBeNull();
-    if (width >= 1024) {
-      const settings = await page.getByRole("complementary", { name: "运行设置" }).boundingBox();
-      expect(settings).not.toBeNull();
-      expect(Math.abs(editor!.y - settings!.y)).toBeLessThan(2);
-      expect(Math.abs(editor!.height - settings!.height)).toBeLessThan(2);
-    } else expect(editor!.height).toBeLessThanOrEqual(Math.max(320, Math.min(height * 0.6, 512)) + 1);
+    if (width >= 1024) expect(editor!.width).toBeGreaterThan(Math.min(width - (width >= 1280 ? 256 : 0), 1152) * 0.9);
+    await expect(page.getByRole("dialog", { name: "运行设置", exact: true })).toBeHidden();
     const navigation = page.getByRole("complementary", { name: "导航", exact: true });
     if (width >= 1280) await expect(navigation).toBeVisible();
     else {
