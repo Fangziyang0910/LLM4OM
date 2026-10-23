@@ -13,3 +13,4 @@ ADR 保留改变成本较高、需要解释取舍的决定。当前行为见[架
 | [0012](0012-run-records.md) | 固定运行配置，用原生 Store 保留中断进度 | 有效 |
 | [0013](0013-modeling-libraries.md) | 九个建模库与原生求解后端 | 有效 |
 | [0014](0014-requirements-conversation.md) | 需求对话与建模方法通过问题文本交接 | 有效 |
+| [0015](0015-plan-conversation.md) | 方案对话读取固定结果，明确变更交回平台图 | 有效 |

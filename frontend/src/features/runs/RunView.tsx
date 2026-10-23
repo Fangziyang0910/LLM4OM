@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { ArrowRight, CircleCheck, Clock, CodeXml, Columns3, Cpu, FileDown, Layers, Link2, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sigma, Square, Tag, Trash2, TriangleAlert, Zap } from "lucide-react";
+import { ArrowRight, CircleCheck, Clock, CodeXml, Columns3, Cpu, FileDown, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sigma, Square, Tag, Trash2, TriangleAlert, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -30,6 +30,7 @@ import { Outputs, type Tab } from "@/features/runs/Outputs";
 import { StatusBadge, TONE } from "@/features/runs/status";
 import { Timeline } from "@/features/runs/Timeline";
 import { RevisionDialog } from "@/features/runs/RevisionDialog";
+import { ScenariosDialog } from "@/features/runs/ScenariosDialog";
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
@@ -50,16 +51,19 @@ function useWide(): boolean {
   }, () => matchMedia(WIDE).matches);
 }
 
-export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevise, onDelete, onCompare, onMetaChange }: {
+export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevise, onDelete, onCompare, onMetaChange, onDiscuss, onScenarios, onConversation }: {
   threadId: string; options: Options; onFinished: () => void;
   onEdit: (draft: Draft) => void; onRerun: (draft: Draft) => Promise<void>; onDelete: (meta: RunMeta) => void;
   onRevise: (instruction: string) => Promise<void>;
+  onDiscuss: () => Promise<void>; onScenarios: (scenarios: { name: string; instruction: string }[]) => Promise<void>;
+  onConversation: (id: string) => void;
   onCompare: (group: string) => void; onMetaChange: () => void;
 }) {
   const { meta: loaded, values, steps, live, run, streaming, error } = useRun(threadId, onFinished);
   const [changed, setChanged] = useState<Partial<RunMeta>>({});  // note and tags saved since the run was read
   const [noting, setNoting] = useState(false);
   const [revision, setRevision] = useState<string | null>(null);
+  const [scenarios, setScenarios] = useState(false);
   const meta = loaded ? { ...loaded, ...changed } : null;
   const [chosen, setTab] = useState<Tab | null>(null);  // null follows the run
   const [picked, setPicked] = useState<Partial<Record<"formulation" | "code", string>>>({});
@@ -79,8 +83,9 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
   const language = options.languages.find(item => item.id === meta.language);
   const provider = options.providers.find(item => item.id === meta.provider);
   const solve = values.solve ?? null;
-  const state = outcome(active, run?.status, values.failure, solve?.status);
-  const finished = !active && run?.status === "success";
+  const recordedStatus = run?.status ?? (values.timing?.finished_at ? "success" : undefined);
+  const state = outcome(active, recordedStatus, values.failure, solve?.status);
+  const finished = !active && recordedStatus === "success";
   const hasFormulation = !!values.formulation || steps.some(step => step.formulation);
   const hasCode = !!values.code || steps.some(step => step.code);
   const tab: Tab = chosen ?? (active ? (hasCode ? "code" : hasFormulation ? "formulation" : "problem")
@@ -139,12 +144,17 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        {meta.group ? <Button variant="ghost" size="sm" onClick={() => onCompare(meta.group!)} title={t("这次运行属于一组方法对比")}>
+        {meta.group ? <Button variant="ghost" size="sm" onClick={() => onCompare(meta.group!)} title={meta.scenario ? t("这次运行属于一组业务场景对比") : t("这次运行属于一组方法对比")}>
           <Columns3 />{t("查看对比")}</Button> : null}
         {active ? <Button variant="outline" size="sm" disabled={stopping} onClick={() => void stop()}>
           {stopping ? <Spinner /> : <Square className="fill-current" />}{stopping ? t("正在停止") : t("停止")}</Button> : <>
           {hasSolution(solve) ? <Button variant="outline" size="sm" disabled={exporting} onClick={() => void exportExcel()}>
             {exporting ? <Spinner /> : <FileDown />}{t("导出 Excel")}</Button> : null}
+          <Button variant="outline" size="sm" disabled={busy || !values.spec} onClick={async () => {
+            setBusy(true);
+            try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
+          }}><MessageSquare />{t("讨论方案")}</Button>
+          <Button variant="outline" size="sm" disabled={busy || !values.spec} onClick={() => setScenarios(true)}><Columns3 />{t("业务场景对比")}</Button>
           <Button variant="outline" size="sm" disabled={busy || !values.description} onClick={() => void rerun()} title={t("用同样的问题和设置再运行一次")}>
             {busy ? <Spinner /> : <RefreshCw />}{t("再运行一次")}</Button>
           <Button size="sm" disabled={!values.description} onClick={() => setRevision("")}>
@@ -153,6 +163,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={t("更多操作")}><MoreHorizontal /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {meta.conversation ? <DropdownMenuItem onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回方案对话")}</DropdownMenuItem> : null}
             <DropdownMenuItem disabled={!values.description} onClick={() => onEdit(draft())}>
               <Pencil />{t("修改后运行")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => void copyText(location.href).then(() => toast.success(t("已复制链接。")), () => toast.error(t("无法复制，请手动复制地址栏中的链接。")))}>
@@ -190,6 +201,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
       onMetaChange();
     }} /> : null}
     {revision !== null ? <RevisionDialog initialInstruction={revision} onClose={() => setRevision(null)} onRevise={onRevise} /> : null}
+    {scenarios ? <ScenariosDialog onClose={() => setScenarios(false)} onStart={onScenarios} /> : null}
   </div>;
 }
 

@@ -27,6 +27,10 @@ solve：方法没有求解最终代码时，在沙箱中求解一次
 
 用户点击“用于建模”后，将 `description + data` 填入现有 Composer，再由用户选择方法并启动新运行。聊天记录、追问和助手判断不作为额外指令注入方法；需求稿没有强制“完整”门槛。边界见 [ADR 0014](adr/0014-requirements-conversation.md)。
 
+方案对话独立注册为 `solution_chat` 图，通过原生检查点固定 `source`、`current` 和已生成方案引用。LangChain Agent 的模型中间件每次加载当前方案的实际题面、模型、代码及结果；`lookup_variables` 查询未完整放入提示的变量。明确修改条件时，`solve_scenarios` 调用进程内 `graph.run(change=...)`，复用原方法、预设、建模库、后端和附件，完成后用原生 `threads.create(supersteps)` 将完整状态保存为独立方案。单个新方案成为当前方案，多个场景共享基准；工具本轮完成后移除，避免反复求解。
+
+进程内平台图不继承对话检查点、进度键或消息流，建模代码不会作为聊天回复推送。计算属于父对话的原生 Run，不在同一任务队列中创建并等待子 Run；仅有一个执行槽时也能完成。派生方案没有单独的 Run 行，页面从已保存的完成时间识别结果。最终回复失败时保存已完成方案引用；重试按原消息 ID 读取本轮已算好的结果。取舍见 [ADR 0015](adr/0015-plan-conversation.md)。
+
 ## 模块
 
 ```text
@@ -53,9 +57,10 @@ src/llm4om/
 ├── graph.py             平台图 platform_graph(method)、RunState、RunContext、Resources、进程内运行 run()
 ├── followups.py         完整题面整理、方案与无解解释、实际变量及冲突证据引用校验
 ├── requirements.py      需求对话图、业务需求稿与 LangChain Agent
+├── solution_chat.py     方案对话图、实际结果查询与原建模流程委托
 ├── web_search.py        DeepSeek 搜索工具、来源与端点凭据绑定
 └── server/              Web 工作台
-    ├── graphs.py        各方法的平台图及独立需求对话图，供 LangGraph 服务器注册
+    ├── graphs.py        各方法的平台图及两种独立对话图，供 LangGraph 服务器注册
     ├── app.py           服务器挂载的路由：选项、预设模型、模型列表、题库、前端页面
     ├── middleware.py    请求格式、运行频率、线程删除及进度清理
     ├── examples.py      内置题库的只读浏览（数据在 examples_data/）
@@ -65,7 +70,7 @@ src/llm4om/
 依赖只朝一个方向：
 
 ```text
-languages · llm · sandbox  →  runtime  →  methods  →  graph  →  requirements · server · cli
+languages · llm · sandbox  →  runtime  →  methods  →  graph  →  requirements · solution_chat · server · cli
 storage → llm_presets · budget ──────────────────────┘
 runtime → progress ─────────────────────────────────┘
 ```
@@ -219,15 +224,17 @@ frontend/src/
 ├── i18n.ts / locales/  中英文文本
 ├── format.ts          状态、数字和用时的展示
 ├── features/
-│   ├── composer/      Composer、ProblemEditor、Examples、Excel 导入、Draft 类型及测试
+│   ├── composer/      Composer、ProblemEditor、DataEditor、Examples、Excel 导入、Draft 类型及测试
+│   ├── chat/          两种对话共用的消息渲染、输入与模型选择
 │   ├── presets/       PresetsDialog
 │   ├── requirements/  需求对话、可编辑需求稿、原生线程创建与交接
+│   ├── solution_chat/ 方案对话、固定方案读取与独立方案导航
 │   └── runs/          RunView、Compare、Outputs、Solution、Timeline、状态图标
-│                      Explanation、Infeasibility、RevisionDialog、ScenarioComparison
+│                      Explanation、Infeasibility、RevisionDialog、ScenarioComparison、ScenariosDialog、ScenarioResults
 │                      api、sdk、useRun、types、steps、tables、report、workbook 及相邻测试
 ├── components/        Sidebar、Content、theme 等共享界面
 │   └── ui/            shadcn/ui 组件
-└── lib/                utils.ts 合并 Tailwind 类名；csv.ts 统一 CSV 转义
+└── lib/                utils.ts 合并 Tailwind 类名；csv.ts 统一 CSV/TSV 无损文本解析与转义
 ```
 
 测试文件 `*.test.ts(x)` 放在被测模块旁边，由 Vitest 运行（界面使用 jsdom，Excel 写入与回读使用 Node）。`frontend/e2e/` 是浏览器测试（Playwright）：它启动脚本化的 OpenAI 兼容服务（`e2e/mock_llm.py`）和使用本机沙箱的 `llm4om serve`，在真实页面上跑运行、对比、无解解释及调整、备注与标签、报告导出、Excel 导入导出和英文界面，不需要密钥和 Docker。`tests/test_server_restart.py` 另验证真实服务正常退出后，重启仍能读取中断前的步骤与产物。
@@ -243,6 +250,10 @@ frontend/src/
 3. 下方左栏是建模过程，右栏是产物。宽屏下两栏可拖动调整宽度；窄屏下用“结果 / 过程”切换。
 
 `Explanation` 将业务标签与实际求解数值组合。`RevisionDialog` 收集调整要求；`startRevision()` 从原生检查点读取题面、附件和固定配置，发起新线程。`ScenarioComparison` 读取该检查点，按实际数值比较目标和同名变量；变量缺失与零值保持区分。Markdown 报告同时包含解读、调整要求和原题。
+
+`ScenariosDialog` 收集 2 至 6 项业务变化，`startScenarios()` 只读取一次基准检查点，创建独立原生运行并用 `group` 关联。`ScenarioResults` 读取实际状态，展示固定基准、目标与同名变量；不将业务条件差异解释为多方法不一致。部分启动失败时保留已启动记录。方案对话生成的多场景也使用同一元数据与展示。
+
+`DataEditor` 在本地保留未保存文本，CSV/TSV 每页 50 行、超过 50 列用原文编辑；不把字符串转换为数值。保存校验文件大小、CSV 引号和 JSON 语法，成功后才更新附件；需求稿通过原生 `threads.updateState` 保存。需求稿自动保存只处理实际编辑区的失焦，忽略 React portal 弹窗的焦点事件。已经运行的附件快照不随草稿编辑变化。
 
 各页共用最大 1600 像素的内容宽度。导航在 1280 像素以上常驻；编辑页在 1024 像素以上并排显示等高卡片，窄屏上下排列。长题面、方法列表和短屏设置使用各自的滚动区域，不把开始按钮推到屏外。
 

@@ -10,7 +10,7 @@ export function messageText(message: Message): string {
 }
 
 /** Tool results provide the sources; model-written links are never turned into source cards. */
-export function ChatMessages({ messages, loading }: { messages: Message[]; loading: boolean }) {
+export function ChatMessages({ messages, loading, label }: { messages: Message[]; loading: boolean; label: string }) {
   const completed = new Set(messages.filter(message => message.type === "tool").map(message => message.tool_call_id));
   return <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 py-4">
     {messages.map((message, index) => {
@@ -36,13 +36,14 @@ export function ChatMessages({ messages, loading }: { messages: Message[]; loadi
       const text = messageText(message);
       const pending = message.type === "ai" && loading && index === messages.length - 1 ? message.tool_calls?.filter(call => !completed.has(call.id ?? "")) ?? [] : [];
       if (!text && !pending.length) return null;
-      return <article key={message.id ?? index} aria-label={message.type === "human" ? t("你") : t("需求助手")}
+      return <article key={message.id ?? index} aria-label={message.type === "human" ? t("你") : label}
         className={message.type === "human" ? "group ml-auto max-w-[92%] rounded-2xl rounded-tr-sm bg-muted px-4 py-3 sm:max-w-[85%]" : "group min-w-0"}>
         {message.type === "ai" ? <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <span className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary"><Sparkles className="size-3.5" /></span>{t("需求助手")}</div> : null}
+          <span className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary"><Sparkles className="size-3.5" /></span>{label}</div> : null}
         {text ? <div className={message.type === "ai" ? "pl-9" : ""}><Markdown text={text} singleDollarMath={false} /></div> : null}
         {pending.map(call => <p key={call.id ?? call.name} role="status" className="mt-2 flex items-center gap-2 pl-9 text-xs text-muted-foreground">
-          <Spinner />{call.name === "web_search" ? t("正在联网搜索……") : t("正在更新需求稿……")}</p>)}
+          <Spinner />{call.name === "web_search" ? t("正在联网搜索……") : call.name === "solve_scenarios" ? t("正在重新建模求解……")
+            : call.name === "lookup_variables" ? t("正在查询实际决策值……") : t("正在更新需求稿……")}</p>)}
         {text && message.type === "ai" ? <div className="mt-1 pl-8 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
           <CopyButton text={text} label={t("复制回复")} />
         </div> : null}

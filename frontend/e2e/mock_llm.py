@@ -57,6 +57,29 @@ CHAT_FAILURES: set[str] = set()
 
 def reply(messages: list[dict], tools: list[dict]) -> str | dict:
     text = json.dumps(messages, ensure_ascii=False)
+    if "Discuss an optimization plan with an ordinary user" in text:
+        latest = next(message["content"] for message in reversed(messages) if message["role"] == "user")
+        snapshot = json.loads(messages[0]["content"].split("Current frozen plan:\n", 1)[1])
+        if snapshot.get("already_computed_scenarios"):
+            return "已完成的实际目标值是 12，没有重复计算。"
+        if messages[-1]["role"] == "tool":
+            facts = json.loads(messages[-1]["content"])
+            if isinstance(facts, list):
+                if "E2E_SOLUTION_REPLY_RETRY" in latest and latest not in CHAT_FAILURES:
+                    CHAT_FAILURES.add(latest)
+                    return ""
+                return "已实际重新建模求解：" + "；".join(f"{item['name']}，目标值 {item['objective']}" for item in facts)
+            return "实际决策值：" + "，".join(f"{name} = {value}" for name, value in facts["variables"].items())
+        if "E2E_SOLUTION_BATCH" in latest:
+            name, args = "solve_scenarios", {"scenarios": [{"name": "B 至少 3 件", "instruction": "B 至少生产 3 件"},
+                                                         {"name": "B 至少 4 件", "instruction": "B 至少生产 4 件"}]}
+        elif "B 至少生产 3 件" in latest or "B 至少生产 4 件" in latest:
+            number = 4 if "B 至少生产 4 件" in latest else 3
+            name, args = "solve_scenarios", {"scenarios": [{"name": f"B 至少 {number} 件", "instruction": f"B 至少生产 {number} 件"}]}
+        else:
+            name, args = "lookup_variables", {"query": ""}
+        return {"role": "assistant", "content": "", "tool_calls": [{"id": "call_" + uuid.uuid4().hex[:8], "type": "function",
+                "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)}}]}
     if "Help an ordinary user turn an idea into a business problem" in text:
         latest = next(message["content"] for message in reversed(messages) if message["role"] == "user")
         if "E2E_PAUSE_CHAT" in latest and messages[-1]["role"] == "user":
@@ -114,6 +137,10 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
         code = code.replace("<= 8", "<= 15")
     if "B 至少生产 3 件" in text:
         code = code.replace("    return m", '    m.minimum_b = pyo.Constraint(expr=m.x["B"] >= 3)\n    return m')
+    if "B 至少生产 4 件" in text:
+        code = code.replace('>= 3)', '>= 4)') if 'm.minimum_b' in code else code.replace("    return m", '    m.minimum_b = pyo.Constraint(expr=m.x["B"] >= 4)\n    return m')
+    if "A,5" in text:
+        code = code.replace('3 * m.x["A"]', '5 * m.x["A"]')
     return f"### Formulation\n{FORMULATION}\n\n```python\n{code}```"
 
 

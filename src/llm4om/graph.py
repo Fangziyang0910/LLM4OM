@@ -379,8 +379,11 @@ async def run(description: str, *, method: str = "direct", language: str = "pyom
     if method not in available:
         raise ValueError(f"Unknown method {method!r}; choose one of {sorted(available)}.")
     final: dict[str, Any] = {}
-    config: RunnableConfig = {"configurable": {"llm4om_resources": resources}} if resources else {}
-    async for mode, chunk in platform_graph(available[method]).astream(
+    # In-process execution must not inherit a calling conversation's checkpoints, progress key or message stream.
+    config: RunnableConfig = {"tags": ["nostream"], "configurable": {"thread_id": None, "llm4om_resources": resources}}
+    graph = platform_graph(available[method])
+    graph.checkpointer = False
+    async for mode, chunk in graph.astream(
             {"description": description, "data": data or {}, "change": change}, config,
             context=RunContext(language, preset, solver, explain, locale), stream_mode=["custom", "values"]):
         if mode == "values":

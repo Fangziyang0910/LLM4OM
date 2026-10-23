@@ -10,7 +10,7 @@ const source = "# 营养计划\n\n- 鸡肉 $4\n- 大米 $8\n\n| 食物 | 蛋白�
 function Editor() {
   const [value, setValue] = useState(source);
   return <ProblemEditor value={value} data={{}} onChange={setValue} onFiles={vi.fn()} onRemove={vi.fn()}
-    onClear={() => setValue("")} onExamples={vi.fn()} />;
+    onClear={() => setValue("")} onExamples={vi.fn()} onDataChange={vi.fn()} />;
 }
 
 test("Markdown preview renders the problem without changing its source or dollar prices", () => {

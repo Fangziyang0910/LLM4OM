@@ -19,7 +19,7 @@ export default defineConfig({
   webServer: [
     { command: `uv run python e2e/mock_llm.py ${LLM_PORT}`, url: `http://127.0.0.1:${LLM_PORT}/v1/models`, reuseExistingServer: false },
     {
-      command: `uv run llm4om serve --sandbox local --host 127.0.0.1 --port ${APP_PORT} --workspace ${workspace}`,
+      command: `uv run llm4om serve --sandbox local --jobs 1 --host 127.0.0.1 --port ${APP_PORT} --workspace ${workspace}`,
       url: `http://127.0.0.1:${APP_PORT}/api/options`, timeout: 120_000, reuseExistingServer: false,
       env: { LLM4OM_LLM_PROVIDER: "openai_compatible", LLM4OM_LLM_MODEL: "mock-model", LLM4OM_LLM_API_KEY: "e2e-not-a-key",
              LLM4OM_SEARCH_API_KEY: "e2e-search-key", LLM4OM_SEARCH_BASE_URL: `http://127.0.0.1:${LLM_PORT}/v1`,

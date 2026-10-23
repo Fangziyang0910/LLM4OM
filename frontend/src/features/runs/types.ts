@@ -46,10 +46,17 @@ export type RunMeta = {
   solver?: string;
   group?: string | null; note?: string; tags?: string[];
   parent?: SourceRun;
+  scenario?: { name: string; instruction: string };
+  conversation?: string;
 };
 export type RequirementsMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags"> & { kind: "requirements"; search?: boolean };
+export type SolutionChatMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags"> & { kind: "solution_chat"; parent: SourceRun };
 /** A run in the history list. */
-export type Entry<Meta = RunMeta | RequirementsMeta> = {
+export type Entry<Meta = RunMeta | RequirementsMeta | SolutionChatMeta> = {
   id: string; created: string; updated: string; meta: Meta; state: string; objective: number | null;
   failure: string | null; usage: Usage | null; elapsed: number | null;
 };
+
+export function isRunEntry(entry: Entry): entry is Entry<RunMeta> {
+  return entry.meta.kind == null || entry.meta.kind === "run";
+}

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { STATUS, formatNumber, tone } from "@/format";
 import { dateLocale, t } from "@/i18n";
-import type { Entry } from "@/features/runs/types";
+import { isRunEntry, type Entry } from "@/features/runs/types";
 import type { Options, Preset } from "@/types";
 import { StatusIcon, TONE } from "@/features/runs/status";
 import { ThemeMenu } from "@/components/theme";
@@ -30,6 +30,7 @@ function when(created: string): string {
 
 /** What came of a run, in a few characters: the objective when it solved, otherwise its state. */
 export function resultText(entry: Entry): string {
+  if (entry.meta.kind === "solution_chat") return entry.state === "running" ? t("正在讨论") : entry.failure ? t("讨论未完成") : t("方案对话");
   if (entry.meta.kind === "requirements") return entry.state === "running" ? t("正在整理")
     : entry.failure ? t("整理未完成") : t("需求对话");
   if (entry.state === "running") return t("建模中");
@@ -38,7 +39,7 @@ export function resultText(entry: Entry): string {
 
 /** Whether a run matches a search: every word is in its title, method, model, note or tags; `#tag` needs that tag. */
 export function matches(entry: Entry, query: string, methodName: (id: string) => string): boolean {
-  const text = [entry.meta.title, entry.meta.kind === "requirements" ? t("需求对话") : methodName(entry.meta.method),
+  const text = [entry.meta.title, isRunEntry(entry) ? methodName(entry.meta.method) : entry.meta.kind === "requirements" ? t("需求对话") : t("方案对话"),
     entry.meta.model ?? "", entry.meta.note ?? "", ...(entry.meta.tags ?? [])]
     .join("\n").toLowerCase();
   const tags = (entry.meta.tags ?? []).map(tag => tag.toLowerCase());
@@ -97,20 +98,20 @@ export function Sidebar({ entries, current, options, presets, hasMore, loading, 
           <h2 className="px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground">{label}</h2>
           <ul className="flex flex-col gap-0.5">{items.map(entry => {
             const selectedItem = entry.id === current;
-            const comparison = entry.meta.kind === "requirements" ? null : entry.meta.group;
+            const comparison = isRunEntry(entry) ? entry.meta.group : null;
             return <li key={entry.id} className="group/item relative">
               <button onClick={() => onOpen(entry)} aria-current={selectedItem ? "page" : undefined}
                 className={cn("flex w-full flex-col gap-1 rounded-md px-2.5 py-2 pr-8 text-left transition-colors hover:bg-sidebar-accent",
                   selectedItem && "bg-sidebar-accent")}>
                 <span className="flex items-center gap-2">
-                  {entry.meta.kind === "requirements" ? <MessageSquare className="size-3.5 shrink-0 text-muted-foreground" />
+                  {!isRunEntry(entry) ? <MessageSquare className="size-3.5 shrink-0 text-muted-foreground" />
                     : <StatusIcon status={entry.state} className="size-3.5 shrink-0" />}
                   <span className={cn("truncate text-[13px]", selectedItem ? "font-medium" : "text-foreground/90")}>{entry.meta.title}</span>
                 </span>
                 <span className="flex items-center gap-1.5 pl-5.5 text-[11px] text-muted-foreground">
                   <span className={cn("shrink-0 whitespace-nowrap tabular font-medium", TONE[tone(entry.state)].text)}>{resultText(entry)}</span>
-                  <span>·</span><span className="truncate">{entry.meta.kind === "requirements" ? entry.meta.model : methodName(entry.meta.method)}</span>
-                  {comparison ? <Columns3 className="size-3 shrink-0" aria-label={t("方法对比")} /> : null}
+                  <span>·</span><span className="truncate">{isRunEntry(entry) ? methodName(entry.meta.method) : entry.meta.model}</span>
+                  {comparison ? <Columns3 className="size-3 shrink-0" aria-label={isRunEntry(entry) && entry.meta.scenario ? t("业务场景对比") : t("方法对比")} /> : null}
                   <span className="ml-auto shrink-0 tabular">{when(entry.created)}</span>
                 </span>
               </button>

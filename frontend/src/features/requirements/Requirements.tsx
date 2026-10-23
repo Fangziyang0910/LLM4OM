@@ -2,14 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { ArrowDown, ArrowRight, ArrowUp, CalendarDays, Check, Factory, Globe, Paperclip, RefreshCw, Save, Settings2, Sparkles, Square, Truck } from "lucide-react";
+import { ArrowDown, ArrowRight, CalendarDays, Check, Factory, Globe, Paperclip, RefreshCw, Save, Sparkles, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { ProblemEditor } from "@/features/composer/ProblemEditor";
 import { DATA_FILE_ACCEPT, readDataFiles } from "@/features/composer/files";
 import { client } from "@/features/runs/sdk";
@@ -19,7 +17,8 @@ import { cn } from "@/lib/utils";
 import type { RequirementsMeta, Usage } from "@/features/runs/types";
 import type { Preset } from "@/types";
 import type { RequirementsDraft } from "./api";
-import { ChatMessages } from "./Messages";
+import { ChatMessages } from "@/features/chat/Messages";
+import { ChatInput } from "@/features/chat/ChatInput";
 
 type Values = Partial<RequirementsDraft> & { messages?: Message[]; usage?: Usage; failure?: string | null };
 const STARTERS = [
@@ -96,7 +95,7 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
       await save();
       await client.threads.update(threadId, { metadata: { preset: preset.id, provider: preset.provider,
         model: preset.name || preset.model, search: searchOn, ...(!messages.length ? { title: input.trim().slice(0, 120) } : {}) } });
-      const last = messages.at(-1);
+      const last = [...messages].reverse().find(message => message.type === "human");
       await stream.submit({ ...draft, messages: retry && last?.type === "human" ? [last] : [{ type: "human", content: input.trim() }] }, {
         context: { preset: preset.id, locale, search: searchOn }, multitaskStrategy: "reject", streamResumable: true, streamSubgraphs: true,
         optimisticValues: retry ? undefined : current => ({ ...draft,
@@ -145,7 +144,7 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
                   disabled={busy} onClick={() => { setInput(t(item.text)); inputArea.current?.focus(); }}
                   className="flex items-center gap-3 rounded-xl border bg-card p-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 sm:flex-col sm:items-start sm:gap-4 sm:p-4">
                   <item.icon className="size-4 text-primary" /><span>{t(item.title)}</span></button>)}</div>
-              </div> : <ChatMessages messages={messages} loading={stream.isLoading} />}
+              </div> : <ChatMessages messages={messages} loading={stream.isLoading} label={t("需求助手")} />}
             </div>
             {!follow ? <Button type="button" variant="outline" size="icon-sm" aria-label={t("回到最新消息")}
               className="absolute right-3 bottom-3 rounded-full bg-background shadow-sm" onClick={() => setFollow(true)}><ArrowDown /></Button> : null}
@@ -153,16 +152,9 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
           {failure && !stream.isLoading ? <Alert variant="destructive" className="mx-auto w-full max-w-3xl">
             <AlertDescription>{errorText(failure)}<Button variant="outline" size="sm" disabled={busy} onClick={() => void submit(true)}><RefreshCw />{t("重试这一轮")}</Button></AlertDescription>
           </Alert> : null}
-          <form className="mx-auto w-full max-w-3xl shrink-0 rounded-2xl border bg-card p-3 shadow-sm focus-within:ring-1 focus-within:ring-primary/30"
-            onSubmit={event => { event.preventDefault(); void submit(); }}>
-            <Textarea ref={inputArea} aria-label={t("发送给需求助手")} placeholder={t("说说你的想法，或回答上一个问题……")} value={input} disabled={busy}
-              onChange={event => setInput(event.target.value)} className="max-h-36 min-h-16 resize-none border-0 bg-transparent px-1 py-1 text-base shadow-none field-sizing-content focus-visible:ring-0 sm:text-sm dark:bg-transparent"
-              onKeyDown={event => {
-                if (event.key === "Enter" && (!event.shiftKey || event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
-                  event.preventDefault(); void submit();
-                }
-              }} />
-            <div className="mt-2 flex items-center gap-1">
+          <ChatInput value={input} onChange={setInput} disabled={busy} loading={stream.isLoading} label={t("发送给需求助手")}
+            inputRef={inputArea} presets={presets} presetId={presetId} onPreset={setSelected} openPresets={openPresets}
+            onSend={() => void submit()} onStop={() => void stream.stop().catch(error => toast.error(errorText(error)))}>
               <Button asChild type="button" variant="ghost" size="icon-sm" title={Object.keys(draft.data).join(", ") || t("添加附件")}>
                 <label className={cn("relative cursor-pointer", busy && "pointer-events-none opacity-50")}><Paperclip />
                   {Object.keys(draft.data).length ? <span className="absolute -top-0.5 -right-0.5 rounded-full bg-primary px-1 text-[9px] text-primary-foreground">{Object.keys(draft.data).length}</span> : null}
@@ -170,35 +162,31 @@ export function Requirements({ threadId, presets, searchConfigured, openPresets,
                     onChange={event => { void attach(event.target.files); event.target.value = ""; }} />
                 </label>
               </Button>
-              <Select value={presetId ?? ""} onValueChange={setSelected} disabled={busy}>
-                <SelectTrigger aria-label={t("对话模型")} className="h-8! w-32 border-0 bg-transparent px-2 text-xs shadow-none sm:w-44"><SelectValue placeholder={t("选择预设模型")} /></SelectTrigger>
-                <SelectContent>{presets.map(item => <SelectItem key={item.id} value={item.id}>{item.name || item.model}</SelectItem>)}</SelectContent>
-              </Select>
-              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("管理预设模型")} title={t("管理预设模型")} onClick={openPresets}><Settings2 /></Button>
               <span title={canSearch ? t("搜索公开资料，并在回复中展示来源。") : t("选择 DeepSeek 预设或由管理员配置搜索服务。")}>
                 <Button type="button" variant="ghost" size="sm" aria-label={t("联网搜索")} aria-pressed={searchOn} disabled={busy || !canSearch}
                   className={cn("h-8 gap-1.5 px-2 text-xs", searchOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
                   onClick={() => setSearch(!searchOn)}><Globe /><span className="hidden md:inline">{searchOn ? t("联网搜索已开启") : t("联网搜索未开启")}</span></Button>
               </span>
-              {stream.isLoading ? <Button type="button" variant="secondary" size="icon-sm" className="ml-auto rounded-full" aria-label={t("停止")}
-                onClick={() => void stream.stop().catch(error => toast.error(errorText(error)))}><Square className="size-3 fill-current" /></Button>
-                : <Button type="submit" size="icon-sm" className="ml-auto rounded-full" aria-label={t("发送")} disabled={busy || !input.trim()}><ArrowUp /></Button>}
-            </div>
-          </form>
+          </ChatInput>
           <p className="shrink-0 text-center text-[11px] text-muted-foreground">{t("Enter 发送，Shift+Enter 换行")}</p>
         </TabsContent>
 
         <TabsContent value="draft" forceMount className="mt-0 flex min-h-0 min-w-0 flex-col gap-3 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
           {saveError ? <p role="alert" className="text-xs text-destructive">{t("需求稿未保存：{error}", { error: saveError })}</p> : null}
           <div className="flex min-h-0 flex-1 flex-col [&>div]:h-auto [&>div]:min-h-0 [&>div]:flex-1"
-            onBlur={event => { if (!busy && !event.currentTarget.contains(event.relatedTarget)) void save().catch(() => undefined); }}>
+            onBlur={event => {
+              // Dialog focus events bubble through React portals; only the draft itself triggers autosave.
+              if (!busy && event.currentTarget.contains(event.target) && !event.currentTarget.contains(event.relatedTarget)) void save().catch(() => undefined);
+            }}>
             <ProblemEditor value={draft.description} data={draft.data} disabled={busy} onChange={description => setEdited({ ...draft, description })}
               label={t("当前需求稿")} placeholder={t("对话中确认的目标和条件会整理到这里，也可以直接编辑。")}
               actions={<Button variant="ghost" size="icon-sm" aria-label={t("保存需求稿")}
                 title={saving ? t("正在保存……") : t("保存需求稿")} disabled={busy || saving || !edited || edited === savedDraft}
                 onClick={() => void save().catch(() => undefined)}>
                 {saving ? <Spinner /> : edited && edited !== savedDraft ? <Save /> : <Check />}</Button>}
-              onFiles={files => void attach(files)} onClear={() => setEdited({ description: "", data: {} })}
+              onFiles={files => void attach(files)} onDataChange={async (name, content) => {
+                const next = { ...draft, data: { ...draft.data, [name]: content } }; await save(next); setEdited(next);
+              }} onClear={() => setEdited({ description: "", data: {} })}
               onRemove={name => { const data = { ...draft.data }; delete data[name]; setEdited({ ...draft, data }); }} />
           </div>
         </TabsContent>

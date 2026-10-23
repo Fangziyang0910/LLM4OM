@@ -32,8 +32,8 @@
 The platform includes **13 LLM modeling methods**: its own Direct and Feedback Repair methods, plus eleven methods from public research. Enter a problem, run the modeling process and inspect the model and result without writing solver code yourself.
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Demo: discuss requirements, review the draft, hand it to modeling and solve" width="100%">
-  <br><sub>A real run: DeepSeek searches public references and streams a business draft, then Feedback Repair · OR-Tools models and solves it.</sub>
+  <img src="docs/assets/demo.gif" alt="Demo: edit data, solve, discuss the plan and compare business scenarios" width="100%">
+  <br><sub>A real run: edit production data, solve with DeepSeek · Direct · Pyomo, then discuss changed conditions and compare business scenarios.</sub>
 </p>
 
 ## Highlights
@@ -46,6 +46,8 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
 | 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
 | ⚖️ **Compare methods** | Run up to 12 methods or models on one problem and compare objective, time and tokens |
 | 💬 **Explain and revise plans** | Read decisions in business terms, change conditions in plain language, and compare the new plan with the saved original |
+| 🔄 **Plan chat and business scenarios** | Ask follow-up questions about actual results; explicit changes trigger real modeling and solving, with a fixed baseline for several alternatives |
+| 📊 **Review data before modeling** | Edit CSV, TSV, JSON and text attachments, including converted Excel sheets; clarify column names and units before saving |
 | 🧯 **Explain infeasibility** | Read business explanations grounded in actual conflicting constraints; select and edit a candidate change, then solve a new model to verify it (Gurobi IIS / CPMpy MUS) |
 | 🔒 **Isolated sandbox** | Generated code runs in a container with no network, a read-only file system and no root, removed after use |
 | 👥 **Team deployment** | One `docker compose up`; preset keys never leave the server; optional HTTPS and usage limits |
@@ -60,6 +62,13 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
   </tr>
   <tr>
     <td colspan="2"><img src="docs/assets/requirements.png" alt="Requirements conversation and editable draft"><p align="center"><sub>Discuss business requirements, then review the draft before modeling</sub></p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/data-editor.png" alt="Edit attachment data"><p align="center"><sub>Review cells, column names and units before modeling</sub></p></td>
+    <td><img src="docs/assets/solution-chat.png" alt="Plan conversation"><p align="center"><sub>Discuss actual results; calculate a new plan after changing conditions</sub></p></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/assets/scenarios.png" alt="Business scenario comparison"><p align="center"><sub>Compare actual results under different conditions against one saved baseline</sub></p></td>
   </tr>
   <tr>
     <td><img src="docs/assets/formulation.png" alt="Formulation"><p align="center"><sub>Formulations render as LaTeX; each version can be diffed</sub></p></td>
@@ -105,6 +114,8 @@ The repository includes the built frontend, so Node.js is not needed.
    > A factory makes products A and B in non-negative integer quantities. Each A earns 3 and each B earns 2. A uses 2 units of cutting and 1 unit of machining; B uses 1 unit of cutting and 2 units of machining. Each resource has 8 units. Choose the quantities that maximize total profit.
 
 3. Click **Start modeling**. In a few seconds the page shows the optimum A=3, B=2 with profit 13.
+
+Click an uploaded file name to review and edit its data. After solving, use **Discuss the plan** to ask questions or request explicit changes, or **Business scenario comparison** to calculate several alternatives from one baseline. Each new outcome comes from real modeling and solving; original records remain intact.
 
 If you have only an idea, click **Discuss your requirements**. The assistant updates an editable draft as you talk. Add data and review the text, then click **Use for modeling** to return to the existing settings. You choose when to click **Start modeling**. Saved conversations can be continued from history. Press Enter to send, or Shift+Enter for a new line. Enable **Web search** to find public references and inspect their sources. DeepSeek presets use their own search endpoint; other models can use a separate server-side search key (see `.env.example`).
 

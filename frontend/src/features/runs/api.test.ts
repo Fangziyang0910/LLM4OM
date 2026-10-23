@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { deleteRun, history, runMeta, startComparison, startRevision, startRun } from "@/features/runs/api";
+import { deleteRun, history, runMeta, startComparison, startRevision, startRun, startScenarios } from "@/features/runs/api";
 import { errorText } from "@/format";
 import { client } from "@/features/runs/sdk";
 import type { Draft } from "@/features/composer/types";
@@ -51,6 +51,20 @@ test("a revision cannot silently replace a deleted model preset", async () => {
     spec: { method: "direct", language: "pyomo", preset: "deleted", llm: { provider: "deepseek", model: "old" } } } } as never);
   await expect(startRevision("source", "改预算", [])).rejects.toThrow("原预设已删除");
   expect(threads.create).not.toHaveBeenCalled();
+});
+
+test("a scenario batch freezes the baseline once and keeps successful starts when a later start is rejected", async () => {
+  threads.get.mockResolvedValue({ status: "idle", metadata: { title: "原方案" } } as never);
+  threads.getState.mockResolvedValue({ checkpoint: { checkpoint_id: "frozen" }, values: { description: "原问题", data: { "costs.csv": "a,b\n1,2" },
+    spec: { method: "direct", language: "pyomo", solver: "highs", preset: null, llm: { provider: "deepseek", model: "saved" } } } } as never);
+  runs.create.mockResolvedValueOnce({} as never).mockRejectedValueOnce(limited);
+  const result = await startScenarios("source", [{ name: "容量 10", instruction: "容量改为 10" }, { name: "容量 12", instruction: "容量改为 12" }], []);
+  expect(result).toMatchObject({ started: 1, error: limited });
+  expect(threads.getState).toHaveBeenCalledOnce();
+  expect(threads.create.mock.calls[0][0]?.metadata).toMatchObject({ parent: { thread_id: "source", checkpoint_id: "frozen" },
+    scenario: { name: "容量 10", instruction: "容量改为 10" }, group: result.group });
+  expect(runs.create.mock.calls[0][2]?.input).toEqual({ description: "原问题", data: { "costs.csv": "a,b\n1,2" }, change: "容量改为 10" });
+  expect(threads.delete).toHaveBeenCalledWith("thread-2");
 });
 
 test("a rejected run start leaves no empty run behind", async () => {

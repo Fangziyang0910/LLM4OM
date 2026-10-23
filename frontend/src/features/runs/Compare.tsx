@@ -9,9 +9,10 @@ import { history } from "@/features/runs/api";
 import { targetLabel } from "@/features/runs/target";
 import { STATUS, duration, errorText, formatNumber, formatTokens, tone } from "@/format";
 import { t } from "@/i18n";
-import type { Entry, RunMeta } from "@/features/runs/types";
+import { isRunEntry, type Entry } from "@/features/runs/types";
 import type { Options } from "@/types";
 import { StatusIcon, TONE } from "@/features/runs/status";
+import { ScenarioResults } from "./ScenarioResults";
 
 /** Whether the solved runs agree on the objective value, up to a relative 1e-6. */
 export function agreement(entries: Entry[]): { solved: number; same: boolean; low: number | null; high: number | null } {
@@ -25,13 +26,14 @@ export function agreement(entries: Entry[]): { solved: number; same: boolean; lo
 export function Compare({ group, options, onOpen }: { group: string; options: Options; onOpen: (id: string) => void }) {
   const query = useQuery({ queryKey: ["compare", group], queryFn: () => history({ group }),
     refetchInterval: current => current.state.data?.entries.some(entry => entry.state === "running") ? 3000 : false });
-  const entries = (query.data?.entries ?? []).filter((entry): entry is Entry<RunMeta> => entry.meta.kind !== "requirements")
+  const entries = (query.data?.entries ?? []).filter(isRunEntry)
     .reverse();  // in the order they started
 
   if (query.error) return <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm">
     <TriangleAlert className="size-6 text-destructive" /><p>{errorText(query.error)}</p></div>;
   if (!query.data) return <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在读取对比……")}</div>;
   if (!entries.length) return <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">{t("这个对比没有运行，可能已被删除。")}</div>;
+  if (entries[0].meta.scenario) return <ScenarioResults entries={entries} onOpen={onOpen} />;
 
   const methodName = (id: string) => options.methods.find(item => item.id === id)?.name ?? id;
   const running = entries.filter(entry => entry.state === "running").length;

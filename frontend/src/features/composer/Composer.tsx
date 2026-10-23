@@ -157,6 +157,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
           <section className="flex min-h-0 min-w-0 flex-col gap-4">
             <ProblemEditor value={draft.description} data={draft.data} onChange={description => set({ description })}
               onFiles={list => void attach(list)} onExamples={openExamples} onClear={() => set({ description: "", data: {} })}
+              onDataChange={(name, content) => setDraft(current => ({ ...current, data: { ...current.data, [name]: content } }))}
               onRemove={name => setDraft(current => {
                 const data = { ...current.data }; delete data[name]; return { ...current, data };
               })} />

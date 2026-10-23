@@ -186,10 +186,11 @@ def test_the_server_registers_one_graph_per_method() -> None:
 
     for method in methods():
         assert getattr(graphs, method).name == method
-    # Both entry points register the modeling methods and the separate requirements conversation.
+    # Both entry points register the modeling methods and the two separate conversation graphs.
     config = json.loads((Path(__file__).parents[1] / "langgraph.json").read_text(encoding="utf-8"))
     assert graphs.requirements.name == "requirements" and "requirements" not in methods()
-    assert config["graphs"] == {name: f"llm4om.server.graphs:{name}" for name in [*methods(), "requirements"]}
+    assert graphs.solution_chat.name == "solution_chat" and "solution_chat" not in methods()
+    assert config["graphs"] == {name: f"llm4om.server.graphs:{name}" for name in [*methods(), "requirements", "solution_chat"]}
 
 
 def test_a_run_streams_each_step_before_it_ends(make_resources: Any) -> None:

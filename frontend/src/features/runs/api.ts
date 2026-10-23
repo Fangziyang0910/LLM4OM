@@ -1,7 +1,7 @@
 import { outcome } from "@/format";
 import { locale, t } from "@/i18n";
 import type { Draft } from "@/features/composer/types";
-import type { Entry, RequirementsMeta, RunMeta, RunSpec, RunValues, SourceRun, Usage } from "@/features/runs/types";
+import type { Entry, RequirementsMeta, SolutionChatMeta, RunMeta, RunSpec, RunValues, SourceRun, Usage } from "@/features/runs/types";
 import type { Preset } from "@/types";
 
 /** The LangGraph SDK client, loaded on first use. */
@@ -9,14 +9,14 @@ const sdk = () => import("@/features/runs/sdk").then(module => module.client);
 
 /** Create a thread for the draft and start its run in the background; returns the thread id. */
 export async function startRun(draft: Draft, preset: Preset | undefined, group: string | null = null,
-    revision?: { instruction: string; source: SourceRun }): Promise<string> {
+    revision?: { instruction: string; source: SourceRun; name?: string }): Promise<string> {
   if (draft.preset && !preset) throw new Error(t("原预设已删除，请重新选择预设模型。"));
   const title = draft.description.trim().split("\n")[0].replace(/^#{1,6}\s+/, "").slice(0, 120);
-  const meta: RunMeta = { title: revision ? `${title} · ${revision.instruction.slice(0, 60)}` : title,
+  const meta: RunMeta = { title: revision ? `${title} · ${revision.name || revision.instruction.slice(0, 60)}` : title,
     method: draft.method, language: draft.language, preset: preset?.id ?? null,
     ...(draft.solver ? { solver: draft.solver } : {}),
     provider: preset?.provider ?? null, model: preset?.name || preset?.model || null, ...(group ? { group } : {}),
-    ...(revision ? { parent: revision.source } : {}) };
+    ...(revision ? { parent: revision.source, ...(revision.name ? { scenario: { name: revision.name, instruction: revision.instruction } } : {}) } : {}) };
   const client = await sdk();
   const thread = await client.threads.create({ metadata: meta });
   try {
@@ -36,6 +36,11 @@ export async function startRun(draft: Draft, preset: Preset | undefined, group: 
 /** Revise a saved checkpoint in a new thread; the source's problem, attachments and choices remain intact. */
 export async function startRevision(threadId: string, instruction: string, presets: Preset[]): Promise<string> {
   if (!instruction.trim()) throw new Error(t("请描述要调整的条件。"));
+  const source = await revisionSource(threadId, presets);
+  return startRun(source.draft, source.preset, null, { instruction: instruction.trim(), source: source.source });
+}
+
+async function revisionSource(threadId: string, presets: Preset[]) {
   const client = await sdk();
   const [state, thread] = await Promise.all([client.threads.getState<RunValues>(threadId), client.threads.get(threadId)]);
   if (thread.status === "busy") throw new Error(t("请等待当前运行结束后再调整条件。"));
@@ -43,9 +48,28 @@ export async function startRevision(threadId: string, instruction: string, prese
   if (!values.description || !state.checkpoint.checkpoint_id) throw new Error(t("原问题尚未保存，请稍后重试。"));
   const meta = runMeta(thread.metadata as RunMeta, values.spec);
   const preset = meta.preset ? presets.find(item => item.id === meta.preset) : presets[0];
-  return startRun({ description: values.description, data: values.data ?? {}, method: meta.method,
-    language: meta.language, solver: meta.solver, preset: meta.preset ?? null }, preset, null,
-  { instruction: instruction.trim(), source: { thread_id: threadId, checkpoint_id: state.checkpoint.checkpoint_id } });
+  return { draft: { description: values.description, data: values.data ?? {}, method: meta.method,
+    language: meta.language, solver: meta.solver, preset: meta.preset ?? null }, preset,
+    source: { thread_id: threadId, checkpoint_id: state.checkpoint.checkpoint_id } };
+}
+
+const comparisonId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, "0")).join("");
+
+/** Every alternative starts from one frozen source, including when the source is rerun during the batch. */
+export async function startScenarios(threadId: string, scenarios: { name: string; instruction: string }[], presets: Preset[]) {
+  if (scenarios.length < 2 || scenarios.length > 6 || scenarios.some(item => !item.name.trim() || !item.instruction.trim()))
+    throw new Error(t("请填写 2 至 6 个完整的场景。"));
+  const source = await revisionSource(threadId, presets), group = comparisonId();
+  let started = 0;
+  try {
+    for (const scenario of scenarios) {
+      await startRun(source.draft, source.preset, group, { ...scenario, source: source.source }); started++;
+    }
+  } catch (error) {
+    if (!started) throw error;
+    return { group, started, error };
+  }
+  return { group, started, error: null };
 }
 
 /** Start one run of the same problem for each method and preset, as one comparison. If a start fails after others
@@ -53,7 +77,7 @@ export async function startRevision(threadId: string, instruction: string, prese
 export async function startComparison(draft: Draft, runs: { method: string; preset: Preset | undefined }[]):
     Promise<{ group: string; started: number; error: unknown }> {
   // crypto.randomUUID needs HTTPS; the workbench is often opened over plain HTTP on the network.
-  const group = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, "0")).join("");
+  const group = comparisonId();
   let started = 0;
   try {
     for (const item of runs) { await startRun({ ...draft, method: item.method }, item.preset, group); started++; }
@@ -95,8 +119,9 @@ export async function history(metadata?: Record<string, unknown>, offset = 0): P
     const state = outcome(thread.status === "busy", thread.status === "idle" ? "success" : thread.status, extracted.failure,
       extracted.solved as string | undefined);
     const spec = extracted.spec as RunSpec | undefined;
-    const meta = thread.metadata?.kind === "requirements" ? thread.metadata as RequirementsMeta : runMeta(thread.metadata as RunMeta, spec);
-    if (meta.kind !== "requirements" && typeof extracted.actual_solver === "string") meta.solver = extracted.actual_solver;
+    const meta = thread.metadata?.kind === "requirements" || thread.metadata?.kind === "solution_chat"
+      ? thread.metadata as RequirementsMeta | SolutionChatMeta : runMeta(thread.metadata as RunMeta, spec);
+    if ("method" in meta && typeof extracted.actual_solver === "string") meta.solver = extracted.actual_solver;
     return { id: thread.thread_id, created: thread.created_at, updated: thread.updated_at, meta, state,
       objective: typeof extracted.objective === "number" ? extracted.objective : null,
       elapsed: extracted.finished_at && typeof extracted.elapsed === "number" ? extracted.elapsed : null,

@@ -1,5 +1,7 @@
 /** Tables the run page builds from solver output and data files. */
 
+import { parseCsv } from "@/lib/csv";
+
 const natural = new Intl.Collator("en", { numeric: true }).compare;
 
 /** One variable of a solution: `x[W1,C2]` has the base `x` and the indices `W1`, `C2`. */
@@ -43,26 +45,12 @@ export function asMatrix(group: VariableGroup, maxColumns = 24): Matrix | null {
 
 /** Rows of a CSV or TSV file, or null when it is not a rectangular table worth showing as one. */
 export function parseDelimited(text: string, delimiter = ","): string[][] | null {
-  const rows: string[][] = [];
-  let row: string[] = [], field = "", quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    if (quoted) {
-      if (char === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (char === '"') quoted = false;
-      else field += char;
-    } else if (char === '"' && field === "") quoted = true;
-    else if (char === delimiter) { row.push(field); field = ""; }
-    else if (char === "\n" || char === "\r") {
-      if (char === "\r" && text[i + 1] === "\n") i++;
-      row.push(field); rows.push(row); row = []; field = "";
-    } else field += char;
-  }
-  if (field || row.length) { row.push(field); rows.push(row); }
-  const table = rows.filter(cells => cells.some(cell => cell.trim()));
-  if (table.length < 2 || table[0].length < 2 || table.some(cells => cells.length !== table[0].length)) return null;
-  return table;
+  try {
+    const table = parseCsv(text, delimiter).filter(cells => cells.some(cell => cell.trim()));
+    return table.length >= 2 && table[0].length >= 2 && table.every(cells => cells.length === table[0].length) ? table : null;
+  } catch { return null; }
 }
+
 /** Added and removed variables stay distinct from variables whose actual value is zero. */
 export function variableChanges(before: Record<string, number>, after: Record<string, number>) {
   return [...new Set([...Object.keys(before), ...Object.keys(after)])]

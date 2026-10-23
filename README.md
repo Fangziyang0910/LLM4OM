@@ -32,8 +32,8 @@
 平台内置 **13 种 LLM 建模方法**，包括 Direct、Feedback Repair 两种自有方法，以及 11 种来自公开研究的方法。你不需要手写求解代码，可以直接输入问题、运行建模，再查看模型和结果。
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="演示：需求对话、确认需求稿、交给建模并求解" width="100%">
-  <br><sub>真实运行：DeepSeek 联网查阅公开资料，流式整理业务需求，再交给 Feedback Repair · OR-Tools 求解。</sub>
+  <img src="docs/assets/demo.gif" alt="演示：编辑数据、建模求解、方案对话和业务场景对比" width="100%">
+  <br><sub>真实运行：编辑生产数据，使用 DeepSeek · Direct · Pyomo 求解，再通过方案对话调整条件并比较多个业务场景。</sub>
 </p>
 
 ## 亮点
@@ -46,6 +46,8 @@
 | 🔍 **全过程可见** | 每次 LLM 调用实时显示；保留中断前已完成的步骤和产物；历史可分页，运行配置固定记录 |
 | ⚖️ **多方法对比** | 同一问题一次运行最多 12 个方法或模型，并排比较目标值、用时和 token |
 | 💬 **方案解读与条件调整** | 用业务名称展示实际决策数值；一句话修改条件，重新建模并与原方案对比，保留原运行 |
+| 🔄 **方案对话与业务场景** | 围绕实际结果多轮追问；明确改条件才重新求解，多个场景共用固定基准并排比较 |
+| 📊 **建模前检查数据** | 直接编辑 CSV、TSV、JSON 和文本；Excel 转换后可检查表格、补充列名及单位，保存后再建模 |
 | 🧯 **无解原因与调整** | 根据实际冲突约束解释业务矛盾；选择并编辑候选调整，再重新建模验证（Gurobi IIS / CPMpy MUS） |
 | 🔒 **隔离沙箱** | 生成代码在无网络、只读、非 root 的容器中运行，用完即删 |
 | 👥 **团队部署** | 一条 `docker compose up` 启动；预设模型的密钥不出服务器；可选 HTTPS 和用量上限 |
@@ -60,6 +62,13 @@
   </tr>
   <tr>
     <td colspan="2"><img src="docs/assets/requirements.png" alt="需求对话与可编辑需求稿"><p align="center"><sub>聊天整理业务要求，确认需求稿后再建模</sub></p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/data-editor.png" alt="附件数据编辑"><p align="center"><sub>检查表格、补充列名与单位，再建模</sub></p></td>
+    <td><img src="docs/assets/solution-chat.png" alt="方案对话"><p align="center"><sub>解释实际结果，改变条件后实际计算新方案</sub></p></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/assets/scenarios.png" alt="业务场景对比"><p align="center"><sub>同一份原方案，比较不同业务条件下的实际结果</sub></p></td>
   </tr>
   <tr>
     <td><img src="docs/assets/formulation.png" alt="数学模型"><p align="center"><sub>数学模型用 LaTeX 渲染，每一版都能对比</sub></p></td>
@@ -105,6 +114,8 @@ uv run llm4om serve --workspace runs/web --port 8767
    > 工厂生产 A、B 两种产品，数量必须是非负整数。每件 A 利润为 3，每件 B 利润为 2。A 消耗 2 单位切割资源和 1 单位加工资源，B 消耗 1 单位切割资源和 2 单位加工资源。两种资源各有 8 单位。请确定生产数量，使总利润最大。
 
 3. 点击“开始建模”。几秒后，页面给出最优解 A=3、B=2，总利润 13。
+
+附件上传后可点击文件名检查和编辑。求解结束后，点击“讨论方案”继续提问或明确改变条件；点击“业务场景对比”可从同一原方案计算多个场景。所有新结果都经过实际建模求解，原记录保留。
 
 如果还只有一个想法，点击“通过对话整理需求”。助手会边聊边整理需求稿；你可以修改文本、附上数据，再点击“用于建模”回到运行设置。建模仍由你点击“开始建模”启动。对话可从历史记录继续。Enter 发送，Shift+Enter 换行；可打开“联网搜索”查阅公开资料并核对来源。DeepSeek 预设直接使用自身搜索接口，其他模型可配合服务端独立搜索密钥（见 `.env.example`）。
 

@@ -9,17 +9,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 import { DATA_FILE_ACCEPT } from "./files";
+import { DataEditor } from "./DataEditor";
 
 /** Editing and preview share the original text; rendering never changes the submitted problem. */
-export function ProblemEditor({ value, data, onChange, onFiles, onRemove, onClear, onExamples, disabled = false,
+export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, onRemove, onClear, onExamples, disabled = false,
   label = t("问题描述"), actions, placeholder }: {
   value: string; data: Record<string, string>; onChange: (value: string) => void;
   onFiles: (files: FileList | null) => void; onRemove: (name: string) => void; onClear: () => void; onExamples?: () => void;
+  onDataChange: (name: string, content: string) => void | Promise<void>;
   disabled?: boolean;
   label?: string; actions?: ReactNode; placeholder?: string;
 }) {
   const [mode, setMode] = useState("edit");
   const [dragging, setDragging] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const files = Object.entries(data);
 
   return <Card className={cn("relative h-[min(60dvh,32rem)] min-h-80 min-w-0 flex-none gap-0 overflow-hidden py-0 lg:h-auto lg:min-h-0 lg:flex-1",
@@ -51,7 +54,10 @@ export function ProblemEditor({ value, data, onChange, onFiles, onRemove, onClea
     {files.length ? <ul aria-label={t("数据文件")} className="flex max-h-28 shrink-0 flex-wrap gap-2 overflow-y-auto border-t px-4 py-3">
       {files.map(([name, content]) => <li key={name} title={name}
         className="flex min-w-0 max-w-full items-center gap-1.5 rounded-md border bg-muted/50 py-1 pr-1 pl-2 text-xs">
-        <FileText className="size-3.5 shrink-0 text-muted-foreground" /><span className="max-w-48 truncate font-medium">{name}</span>
+        <button type="button" disabled={disabled} aria-label={t("编辑 {name}", { name })} onClick={() => setEditing(name)}
+          className="flex min-w-0 items-center gap-1.5 rounded-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
+          <FileText className="size-3.5 shrink-0 text-muted-foreground" /><span className="max-w-48 truncate font-medium">{name}</span>
+        </button>
         <span className="shrink-0 text-muted-foreground">{t("{count} 行", { count: content.split("\n").filter(Boolean).length })}</span>
         <Button variant="ghost" size="icon-xs" disabled={disabled} aria-label={t("移除 {name}", { name })} onClick={() => onRemove(name)}><X /></Button>
       </li>)}
@@ -70,5 +76,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onRemove, onClea
     </div>
     {dragging ? <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 bg-card/90 text-sm font-medium text-primary">
       <Upload className="size-4" />{t("松开以添加数据文件")}</div> : null}
+    {editing !== null && editing in data ? <DataEditor key={editing} name={editing} content={data[editing]}
+      onSave={content => onDataChange(editing, content)} onClose={() => setEditing(null)} /> : null}
   </Card>;
 }
