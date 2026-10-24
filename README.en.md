@@ -32,7 +32,7 @@
 The platform includes **13 LLM modeling methods**: its own Direct and Feedback Repair methods, plus eleven methods from public research. Enter a problem, run the modeling process and inspect the model and result without writing solver code yourself.
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Demo: the original workbench, independent optimization agent, modeling and changed conditions" width="100%">
+  <img src="docs/assets/demo.gif" alt="Demo: data review, modeling and solving, and the Agent workspace" width="100%">
   <br><sub>A real run: preserve the manual draft, solve through the independent agent with DeepSeek · Direct · Pyomo, then change conditions in the same conversation.</sub>
 </p>
 
@@ -58,6 +58,8 @@ The original workbench remains the desktop home page. A separate “Optimization
 
 ## Screenshots
 
+On desktop, drag the divider beside the Agent or plan assistant to resize the conversation and modeling panels. Layouts survive reload. Historical plans are marked, with a shortcut back to the plan being discussed; browsing does not change the calculation baseline. Run settings show methods, modeling libraries and models side by side.
+
 <table>
   <tr>
     <td width="50%"><img src="docs/assets/agent-home.png" alt="Independent optimization chat"><p align="center"><sub>A separate agent entry, starting from a problem</sub></p></td>
@@ -66,6 +68,9 @@ The original workbench remains the desktop home page. A separate “Optimization
   <tr>
     <td width="50%"><img src="docs/assets/home.png" alt="New problem"><p align="center"><sub>Write the problem; choose method, language and model</sub></p></td>
     <td width="50%"><img src="docs/assets/run.png" alt="Run result"><p align="center"><sub>The verdict first: objective, modeling process, solution matrix</sub></p></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/assets/settings.png" alt="Desktop run settings"><p align="center"><sub>Methods, modeling libraries and models visible together</sub></p></td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/assets/requirements.png" alt="Requirements conversation and editable draft"><p align="center"><sub>Discuss business requirements, then review the draft before modeling</sub></p></td>

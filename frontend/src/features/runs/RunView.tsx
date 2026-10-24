@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { ArrowRight, ChevronDown, CircleCheck, Clock, CodeXml, Columns3, Cpu, FileDown, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sigma, Square, Tag, Trash2, TriangleAlert, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useDesktop } from "@/lib/useDesktop";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -43,15 +44,6 @@ function useNow(active: boolean): number {
   return now;
 }
 
-const WIDE = "(min-width: 1024px)";
-function useWide(): boolean {
-  return useSyncExternalStore(change => {
-    const query = matchMedia(WIDE);
-    query.addEventListener("change", change);
-    return () => query.removeEventListener("change", change);
-  }, () => matchMedia(WIDE).matches);
-}
-
 export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevise, onDelete, onCompare, onMetaChange, onDiscuss, onScenarios, onConversation, assistantOpen = false, embedded = false }: {
   threadId: string; options: Options; onFinished: () => void; assistantOpen?: boolean; embedded?: boolean;
   onEdit: (draft: Draft) => void; onRerun: (draft: Draft) => Promise<void>; onDelete: (meta: RunMeta) => void;
@@ -73,7 +65,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
   const [stopping, setStopping] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const wide = useWide() && !embedded;
+  const wide = useDesktop() && !embedded;
   const layout = useDefaultLayout({ id: "llm4om-run", panelIds: ["process", "outputs"], onlySaveAfterUserInteractions: true });
   const active = streaming || run?.status === "pending" || run?.status === "running";
   const now = useNow(active);

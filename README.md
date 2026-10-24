@@ -32,7 +32,7 @@
 平台内置 **13 种 LLM 建模方法**，包括 Direct、Feedback Repair 两种自有方法，以及 11 种来自公开研究的方法。你不需要手写求解代码，可以直接输入问题、运行建模，再查看模型和结果。
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="演示：原工作台与独立优化 Agent、建模求解和条件调整" width="100%">
+  <img src="docs/assets/demo.gif" alt="演示：数据检查、建模求解与 Agent 工作区" width="100%">
   <br><sub>真实运行：保留原工作台草稿，从独立优化 Agent 使用 DeepSeek · Direct · Pyomo 求解，再通过对话调整条件。</sub>
 </p>
 
@@ -58,6 +58,8 @@
 
 ## 截图
 
+电脑端可拖动 Agent 和方案助手旁的分隔线，调整对话与建模内容的宽度，刷新后保留布局。查看历史方案时会明确提示，可一键返回当前讨论方案；浏览历史不改变后续计算的基准。运行设置并列展示方法、建模库和模型。
+
 <table>
   <tr>
     <td width="50%"><img src="docs/assets/agent-home.png" alt="独立优化对话入口"><p align="center"><sub>独立 Agent 入口，从一个问题开始</sub></p></td>
@@ -66,6 +68,9 @@
   <tr>
     <td width="50%"><img src="docs/assets/home.png" alt="新建页面"><p align="center"><sub>写问题，选择方法、写法和模型</sub></p></td>
     <td width="50%"><img src="docs/assets/run.png" alt="运行结果"><p align="center"><sub>结论先行：目标值、建模过程和解的矩阵</sub></p></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/assets/settings.png" alt="桌面运行设置"><p align="center"><sub>方法、建模库与模型同时可见</sub></p></td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/assets/requirements.png" alt="需求对话与可编辑需求稿"><p align="center"><sub>聊天整理业务要求，确认需求稿后再建模</sub></p></td>

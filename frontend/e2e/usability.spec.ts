@@ -46,6 +46,23 @@ test("desktop configuration is compact by default and retains the selected metho
   expect(box.y + box.height).toBeLessThanOrEqual(list.y + list.height);
 });
 
+test("desktop configuration keeps the method, library and model visible together", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "运行设置", exact: true });
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 1366, height: 768 }]) {
+    await page.setViewportSize(viewport);
+    const model = (await dialog.getByRole("combobox", { name: "预设模型", exact: true }).boundingBox())!;
+    const footer = (await dialog.getByRole("button", { name: "完成", exact: true }).boundingBox())!;
+    expect(model.y + model.height).toBeLessThan(footer.y);
+    expect(model.y).toBeGreaterThan((await dialog.boundingBox())!.y);
+    expect(await dialog.evaluate(node => [...node.querySelectorAll("*")].every(child => {
+      const style = getComputedStyle(child);
+      return style.overflowY !== "auto" || child.scrollHeight <= child.clientHeight + 1;
+    }))).toBe(true);
+  }
+});
+
 test("clearing the problem can be undone with its attachments", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("问题描述").fill("需要保留的生产计划");
@@ -90,6 +107,30 @@ test("desktop panel widths can be adjusted with the keyboard and survive reopeni
   await page.goto(url);
   await page.getByRole("button", { name: "建模过程", exact: true }).click();
   await expect.poll(async () => Math.abs((await panels.first().boundingBox())!.width - resized)).toBeLessThan(2);
+});
+
+test("the plan assistant can be widened and keeps that width after reload", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await production(page);
+  await page.getByRole("button", { name: "讨论方案", exact: true }).click();
+  const assistant = page.getByRole("complementary", { name: "方案助手", exact: true });
+  await expect(assistant).toBeVisible();
+  const before = (await assistant.boundingBox())!.width;
+  const divider = page.getByRole("separator", { name: "调整结果与方案助手的宽度", exact: true });
+  const box = (await divider.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 100, box.y + box.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(async () => (await assistant.boundingBox())!.width).toBeGreaterThan(before + 90);
+  const resized = (await assistant.boundingBox())!.width;
+  await page.reload();
+  await expect.poll(async () => Math.abs((await assistant.boundingBox())!.width - resized)).toBeLessThan(2);
+  for (const width of [1024, 1366, 1920, 2560]) {
+    await page.setViewportSize({ width, height: 768 });
+    await expect(page.getByRole("textbox", { name: "发送给方案助手", exact: true })).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
 });
 
 test("unsent messages survive navigation and reload and stay separate for each conversation", async ({ page }) => {

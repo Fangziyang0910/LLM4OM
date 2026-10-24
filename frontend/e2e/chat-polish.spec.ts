@@ -9,6 +9,32 @@ test.beforeAll(async ({ request }) => {
 });
 test.afterAll(async ({ request }) => { if (presetId) await request.delete(`/api/presets/${presetId}`); });
 
+test("the agent keeps following after the workspace changes the rendered message height", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/agent");
+  await page.getByRole("combobox", { name: "对话模型", exact: true }).click();
+  await page.getByRole("option", { name: "Polish DeepSeek", exact: true }).click();
+  const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  await input.fill("E2E_POLISH_STREAM：请解释生产计划的资源约束。");
+  await input.press("Enter");
+  const log = page.getByRole("log");
+  await expect(log).toContainText("流式公式回复已完成。");
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
+  for (const open of [true, false, true]) {
+    await page.getByRole("button", { name: open ? "建模工作区" : "收起建模工作区", exact: true }).click();
+    await expect.poll(() => log.evaluate(node => node.scrollHeight - node.scrollTop - node.clientHeight)).toBeLessThan(2);
+    await expect(page.getByRole("button", { name: "回到最新消息", exact: true })).toHaveCount(0);
+  }
+  await log.hover();
+  await page.mouse.wheel(0, -await log.evaluate(node => node.scrollHeight / 2));
+  await expect(page.getByRole("button", { name: "回到最新消息", exact: true })).toBeVisible();
+  for (const open of [false, true]) {
+    await page.getByRole("button", { name: open ? "建模工作区" : "收起建模工作区", exact: true }).click();
+    await expect.poll(() => log.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
+    await expect(page.getByRole("button", { name: "回到最新消息", exact: true })).toBeVisible();
+  }
+});
+
 for (const kind of ["optimization", "requirements", "solution_chat"]) {
   test(`${kind} streams formulas smoothly, respects scrolling, and sends the actual thinking choice`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -56,7 +82,8 @@ for (const kind of ["optimization", "requirements", "solution_chat"]) {
     await expect(assistant).toContainText("A costs $4 and B costs $8.");
     await assistant.getByText("思考过程", { exact: true }).click();
     await expect(assistant).toContainText("先核对实际资源。");
-    await latest.click();
+    if (await latest.isVisible()) await latest.click();
+    await expect.poll(() => log.evaluate(node => node.scrollHeight - node.scrollTop - node.clientHeight)).toBeLessThan(2);
     await page.setViewportSize({ width: 1440, height: 768 });
     await expect.poll(() => log.evaluate(node => node.scrollHeight - node.scrollTop - node.clientHeight)).toBeLessThan(2);
     await page.reload();

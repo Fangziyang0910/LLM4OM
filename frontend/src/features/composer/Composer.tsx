@@ -161,8 +161,8 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
   });
   const methodListClass = "grid grid-cols-1 gap-1.5 sm:grid-cols-2";
 
-  const settingsPanel = <aside aria-label={t("运行设置")} className="min-h-0 min-w-0 h-full">
-    <Card className="h-full min-h-0 gap-0 overflow-hidden border-0 py-0 shadow-none">
+  const settingsPanel = <aside aria-label={t("运行设置")} className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <Card className="min-h-0 flex-1 gap-0 overflow-hidden border-0 py-0 shadow-none">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b pr-12 pl-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><Settings2 className="size-4 text-muted-foreground" />{t("运行设置")}</h2>
         <Label className="ml-auto gap-2 text-xs font-normal text-muted-foreground" title={t("同一问题同时用多个方法或预设运行，并排比较结果")}>
@@ -171,8 +171,8 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
             methods: on && !draft.methods?.length ? [method.id] : draft.methods })} />
         </Label>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col divide-y overflow-y-auto">
-        <section aria-labelledby="methods-label" className="min-w-0 px-4 py-3">
+      <div className="grid min-h-0 flex-1 grid-cols-1 divide-y overflow-y-auto lg:grid-cols-[1.2fr_1fr] lg:divide-y-0">
+        <section aria-labelledby="methods-label" className="min-w-0 px-4 py-4 lg:row-span-2 lg:border-r">
           <h3 id="methods-label" className="mb-3 text-xs font-medium text-muted-foreground">{comparing ? t("建模方法（可多选）") : t("建模方法")}</h3>
           {comparing ? <div ref={methodList} role="group" aria-label={t("建模方法")} className={methodListClass}>{methodChoices}</div>
             : <RadioGroup ref={methodList} value={method.id} onValueChange={value => set({ method: value })} aria-label={t("建模方法")}
@@ -181,7 +181,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
             {t(comparing ? "同一问题同时用多个方法或预设运行，并排比较结果" : method.description)}</p>
         </section>
 
-        <section aria-labelledby="libraries-label" className="min-w-0 px-4 py-3">
+        <section aria-labelledby="libraries-label" className="min-w-0 px-4 py-4">
           <h3 id="libraries-label" className="mb-3 text-xs font-medium text-muted-foreground">{t("建模求解器")}</h3>
           <RadioGroup value={language.id} onValueChange={value => set({ language: value, solver: undefined })} aria-label={t("建模求解器")}
             className="grid grid-cols-3 gap-1.5">
@@ -213,7 +213,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
           </div>
         </section>
 
-        <section aria-labelledby="presets-label" className="min-w-0 px-4 py-3">
+        <section aria-labelledby="presets-label" className="min-w-0 px-4 py-4 lg:border-t">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3 id="presets-label" className="text-xs font-medium text-muted-foreground">{comparing ? t("预设模型（可多选）") : t("预设模型")}</h3>
             <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => { setSettingsOpen(false); openPresets(); }}>{t("管理")}</Button>
@@ -316,7 +316,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
       </div>
     </div>
     <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-      <DialogContent onOpenAutoFocus={() => revealMethod(methodList.current)} className="flex h-[min(800px,90dvh)] flex-col gap-0 p-0 sm:max-w-2xl">
+      <DialogContent onOpenAutoFocus={() => revealMethod(methodList.current)} className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-2xl lg:max-w-5xl">
         <DialogTitle className="sr-only">{t("运行设置")}</DialogTitle>
         <DialogDescription className="sr-only">{t("选择建模方法、建模求解器和预设模型。")}</DialogDescription>
         {settingsPanel}

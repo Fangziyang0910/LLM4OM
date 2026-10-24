@@ -71,3 +71,7 @@ web_assets/licenses/ (source: frontend/public/licenses/).
 The web workbench also bundles write-excel-file 4.1.1, Copyright (c) 2018
 gitlab.com/catamphetamine, under the MIT license. Its original license is
 retained in web_assets/licenses/write-excel-file-MIT.txt.
+
+Chat scrolling uses use-stick-to-bottom 1.1.6, Copyright (c) StackBlitz,
+under the MIT license. The original license is retained in
+web_assets/licenses/use-stick-to-bottom-MIT.txt.
