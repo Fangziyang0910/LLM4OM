@@ -29,8 +29,8 @@ usage: array[array[number]], 2 rows
 capacity: array[number], length 2</code></pre></div><div class="step-panel" data-nodes="Data Solve"><strong>3. 执行绑定</strong><p>代码通过 data 中的文件文本解析全部数据，并据此构建目标和约束。</p><pre><code>payload = json.loads(data[&#39;production.json&#39;])
 profit = payload[&#39;profit&#39;]
 usage = payload[&#39;usage&#39;]
-capacity = payload[&#39;capacity&#39;]</code></pre></div><div class="step-panel" data-nodes="Finish"><strong>4. 核对与修复</strong><p>格式或执行错误可反馈重试。真实不可行按有效求解状态保存。</p><pre><code>最多 3 次生成/执行尝试。
-检查行列含义和单位，不只检查文件是否成功解析。</code></pre></div></div><p class="learning-note">教学案例：用示例输入和中间产物逐步说明流程。</p></section></div></div>
+capacity = payload[&#39;capacity&#39;]</code></pre></div><div class="step-panel" data-nodes="LLM Solve Finish"><strong>4. 核对与修复</strong><p>格式与执行错误进入重试反馈。结果同时保留求解状态和读取数据的代码。</p><pre><code>最多 3 次生成/执行尝试。
+在保存的代码中查看文件名、行列对应与单位。</code></pre></div></div><p class="learning-note">教学案例：用示例输入和中间产物逐步说明流程。</p></section></div></div>
 
 <h2 id="section-3">一个可直接使用的数据样例<a href="#section-3" class="heading-anchor" aria-label="一个可直接使用的数据样例 — 章节链接">#</a></h2>
 <pre><code class="language-json"><span class="hljs-punctuation">{</span>
