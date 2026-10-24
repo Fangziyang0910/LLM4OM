@@ -17,6 +17,7 @@
 <p align="center">
   <b>中文</b> · <a href="README.en.md">English</a>
   <br>
+  <a href="https://fangziyang0910.github.io/LLM4OM/docs/zh/introduction/">在线文档</a> ·
   <a href="#快速开始">快速开始</a> ·
   <a href="#建模方法">建模方法</a> ·
   <a href="docs/user-guide.md">使用指南</a> ·
