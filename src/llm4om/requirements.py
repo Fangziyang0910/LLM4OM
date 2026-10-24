@@ -59,7 +59,8 @@ def update_draft(description: Annotated[str, Field(min_length=1)], runtime: Tool
     if not description.strip():
         raise ValueError("The business draft cannot be blank.")
     return Command(update={"description": description.strip(),
-                           "messages": [ToolMessage("The business draft was updated.", tool_call_id=runtime.tool_call_id)]})
+                           "messages": [ToolMessage("The business draft was updated.", tool_call_id=runtime.tool_call_id,
+                                                    artifact={"type": "draft"})]})
 
 
 def requirements_graph() -> Any:

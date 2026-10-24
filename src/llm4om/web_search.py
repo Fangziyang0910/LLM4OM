@@ -55,6 +55,6 @@ def search_tool(settings: LLMSettings) -> BaseTool:
             artifact["error"] = "Could not reach DeepSeek Search."
         except ValueError:
             artifact["error"] = "DeepSeek Search returned an unreadable result."
-        return json.dumps(artifact, ensure_ascii=False), artifact
+        return json.dumps(artifact, ensure_ascii=False), {"type": "search", **artifact}
 
     return web_search

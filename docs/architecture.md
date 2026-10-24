@@ -47,6 +47,10 @@ LangChain 工具中间件在每轮允许一次方案变更调用（建模、场�
 
 ## 模块
 
+`agent.py` 只负责会话图、模型与预算、执行期限，以及将本轮结果写回原生状态。`capabilities.assemble_capabilities()` 按既有对话模式组合原生 LangChain 工具和中间件：方案、计算、建模能力各自维护工具、对应指令和工具可用条件。扩展能力可直接提供 `BaseTool` 或 `AgentMiddleware`，不需要修改会话图。搜索继续使用 `web_search.search_tool()`。
+
+`capabilities.session.Conversation` 只保存本轮共享的方案缓存、已完成操作和待恢复请求。方案操作与首次建模共用每轮一次修改的限制。跨轮数据仍使用原有 LangGraph 状态与检查点；历史状态字段、运行引用和图名称不变。
+
 ```text
 src/llm4om/
 ├── __init__.py          公共入口：run、run_problem 及常用类型
@@ -71,8 +75,14 @@ src/llm4om/
 ├── graph.py             平台图 platform_graph(method)、RunState、RunContext、Resources、进程内运行 run()
 ├── followups.py         完整题面整理、方案与无解解释、实际变量及冲突证据引用校验
 ├── requirements.py      需求对话图、业务需求稿与 LangChain Agent
-├── agent.py             统一优化 Agent、方案对话、实际结果查询与原建模流程委托
-├── chat_prompts.py      三类对话共享的表达准则、实际方案规则和建模工具职责
+├── agent.py             优化与方案对话图、模型和预算、本轮状态提交
+├── capabilities/        原生 LangChain 能力装配
+│   ├── __init__.py      按对话模式组合工具和中间件
+│   ├── session.py       原有会话状态、方案引用、本轮缓存与恢复请求
+│   ├── plans.py         方案读取、选择、场景求解及其指令
+│   ├── calculation.py   数值计算与可恢复输入错误
+│   └── modeling.py      首次建模、能力查询及其指令
+├── chat_prompts.py      三类对话共享的表达准则
 ├── web_search.py        DeepSeek 搜索工具、来源与端点凭据绑定
 └── server/              Web 工作台
     ├── graphs.py        各方法的平台图及两种独立对话图，供 LangGraph 服务器注册
@@ -85,7 +95,7 @@ src/llm4om/
 依赖只朝一个方向：
 
 ```text
-languages · llm · sandbox  →  runtime  →  methods  →  graph  →  requirements · agent · server · cli
+languages · llm · sandbox  →  runtime  →  methods  →  graph  →  capabilities · requirements  →  agent · server · cli
 storage → llm_presets · budget ──────────────────────┘
 runtime → progress ─────────────────────────────────┘
 ```
@@ -253,6 +263,8 @@ frontend/src/
 ```
 
 测试文件 `*.test.ts(x)` 放在被测模块旁边，由 Vitest 运行（界面使用 jsdom，Excel 写入与回读使用 Node）。`frontend/e2e/` 是浏览器测试（Playwright）：它启动脚本化的 OpenAI 兼容服务（`e2e/mock_llm.py`）和使用本机沙箱的 `llm4om serve`，在真实页面上跑运行、对比、无解解释及调整、备注与标签、报告导出、Excel 导入导出和英文界面，不需要密钥和 Docker。`tests/test_server_restart.py` 另验证真实服务正常退出后，重启仍能读取中断前的步骤与产物。
+
+聊天消息中的工具结果由 `features/chat/results.tsx` 按 `ToolMessage.artifact.type` 注册展示，支持 `draft`、`selected_plan`、`calculation`、`plans` 和 `search`。新工具返回已有产物类型即可复用相同展示。产物保留原字段，历史消息缺少类型时按原工具名匹配；未知类型不误用其他展示。错误仍由通用消息层呈现，方案数值与来源链接继续取自实际工具产物。
 
 历史列表使用 TanStack `useInfiniteQuery` 和原生 `threads.search(offset, limit)`，每页 100 条，可加载更早的记录。文字搜索作用于已加载记录，尚有未加载记录时明确显示范围。对比最多 12 次运行；耗时来自 `values.timing.elapsed`，不用可修改的线程更新时间。历史和详情共用 `runMeta()`：实际执行配置取 `spec`，备注和标签取线程元数据；旧记录没有 `spec` 时继续使用元数据。
 

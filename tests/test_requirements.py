@@ -29,6 +29,7 @@ def test_a_draft_update_finishes_the_turn_instead_of_repeating_forever(make_reso
     assert result["failure"] is None, result["failure"]
     assert result["usage"]["llm_calls"] == 2
     assert result["messages"][-1].text.startswith("已按周整理")
+    assert result["messages"][-2].artifact == {"type": "draft"}
 
 
 def test_conversation_restores_history_and_respects_an_edited_draft(make_resources: Any) -> None:

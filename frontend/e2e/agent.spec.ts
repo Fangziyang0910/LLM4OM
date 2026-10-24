@@ -17,6 +17,7 @@ test("the independent agent discusses an idea, models it, and calculates changes
   let saved = await (await page.request.get(`/threads/${chat}`)).json();
   expect(saved.metadata.kind).toBe("optimization");
   expect(saved.values.plans).toHaveLength(1);
+  expect(saved.values.messages.find((message: { name?: string }) => message.name === "model_and_solve").artifact.type).toBe("plans");
   const first = saved.values.source;
   const original = await (await page.request.get(`/threads/${first.thread_id}`)).json();
   expect(original.values.solve.objective).toBe(13);
@@ -45,11 +46,11 @@ test("the independent agent discusses an idea, models it, and calculates changes
   await divider.focus();
   await divider.press("ArrowRight");
   await divider.press("ArrowRight");
-  await expect.poll(async () => (await conversation.boundingBox())!.width).toBeGreaterThan(before + 20);
+  await expect.poll(async () => (await conversation.boundingBox())?.width ?? 0).toBeGreaterThan(before + 20);
   const resized = (await conversation.boundingBox())!.width;
   await page.reload();
   await expect(conversation).toBeVisible();
-  await expect.poll(async () => Math.abs((await conversation.boundingBox())!.width - resized)).toBeLessThan(2);
+  await expect.poll(async () => Math.abs(((await conversation.boundingBox())?.width ?? 0) - resized)).toBeLessThan(2);
   await input.fill("E2E_AGENT_BATCH 从原方案比较两种条件");
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "对比本轮方案" })).toBeVisible({ timeout: 60_000 });

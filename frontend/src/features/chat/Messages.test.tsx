@@ -6,6 +6,25 @@ import { ChatMessages, type ChatProgress } from "./Messages";
 afterEach(cleanup);
 const question: Message = { type: "human", id: "question", content: "帮我看一下方案" };
 
+test.each([
+  ["calculation", { calculation: { expression: "2 - 2", result: 0, matched_variables: 0 } }, "计算核对"],
+  ["selected_plan", { selected_plan: { name: "原方案", source: { thread_id: "original" } } }, "已选择：原方案"],
+  ["plans", { plans: [{ name: "已求解方案", source: { thread_id: "saved" }, instruction: "原问题", status: "optimal", objective: 0 }] }, "已求解方案"],
+  ["search", { query: "公开资料", results: [{ title: "实际来源", url: "https://example.org/reference" }] }, "实际来源"],
+  ["draft", {}, "需求稿已整理"],
+])("a typed %s artifact renders independently of the tool's name", (type, artifact, text) => {
+  render(<ChatMessages messages={[question, { type: "tool", name: "another_capability", tool_call_id: "result", content: "",
+    artifact: { ...artifact, type } }]} loading={false} label="优化助手" onRetry={vi.fn()} />);
+  expect(screen.getByText(text)).toBeTruthy();
+});
+
+test("an unknown artifact type does not fall back to an unrelated legacy renderer", () => {
+  render(<ChatMessages messages={[question, { type: "tool", name: "calculate", tool_call_id: "result", content: "",
+    artifact: { type: "unknown", calculation: { expression: "1 + 1", result: 2, matched_variables: 0 } } }]}
+    loading={false} label="优化助手" onRetry={vi.fn()} />);
+  expect(screen.queryByLabelText("计算核对")).toBeNull();
+});
+
 test("chat formulas render as math while user-entered prices remain literal", () => {
   const { container } = render(<ChatMessages messages={[{...question, content: "单价 $4，另一项 $8。数量为 $x_A$。"},
     { type: "ai", content: String.raw`令 $x_A$ 为产量，约束为 \(2x_A + x_B \le 8\)。` }]}

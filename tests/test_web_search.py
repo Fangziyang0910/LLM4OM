@@ -37,6 +37,7 @@ def test_search_uses_the_correct_credential_and_returns_sources(monkeypatch: pyt
     assert json.loads(seen[0].content) == {"query": "staff scheduling", "count": 5, "need_content": False}
     assert message.artifact["results"][0]["url"] == "https://example.org/scheduling"
     assert message.artifact["error"] is None
+    assert message.artifact["type"] == "search"
     assert "secret" not in str(message)
 
 

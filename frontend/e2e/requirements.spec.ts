@@ -69,6 +69,8 @@ test("web search shows actual tool sources and preserves them on reload without 
   expect(state.usage.solves).toBe(0);
   expect(state.messages.filter((message: { type: string }) => message.type === "human")).toHaveLength(1);
   expect(state.messages.find((message: { name?: string }) => message.name === "web_search").artifact.results).toHaveLength(1);
+  expect(state.messages.find((message: { name?: string }) => message.name === "web_search").artifact.type).toBe("search");
+  expect(state.messages.find((message: { name?: string }) => message.name === "update_draft").artifact.type).toBe("draft");
   expect(JSON.stringify(state)).not.toContain("e2e-search-key");
 });
 
