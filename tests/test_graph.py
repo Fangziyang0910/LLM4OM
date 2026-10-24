@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import replace
 from typing import Any
 
+import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 
 from llm4om.graph import RunContext, platform_graph, run
@@ -13,6 +14,20 @@ from llm4om.sandbox import Sandbox
 from tests.conftest import ACCEPT_REVIEW, PRODUCTION_CODE, TWO_PART_REPLY
 
 BROKEN_CODE = PRODUCTION_CODE.replace("return m", "return m.missing")
+
+
+@pytest.mark.parametrize("name", ["需求（周）.csv", "prices (2026)+tax.json", "费用￥.csv"])
+def test_attached_file_names_preserve_normal_punctuation(make_resources: Any, name: str) -> None:
+    code = TWO_PART_REPLY.replace("    m =", f"    assert data[{name!r}] == 'actual data'\n    m =")
+    result = asyncio.run(run("test", data={name: "actual data"}, resources=make_resources(lambda *_: code)))
+    assert result["failure"] is None, result["failure"]
+    assert result["solve"]["objective"] == 13
+
+
+@pytest.mark.parametrize("name", ["../prices.csv", "folder/prices.csv", "folder\\prices.csv", "bad\x00.csv", "bad\n.csv", " ", ".", ".."])
+def test_attachment_names_must_be_single_file_names(make_resources: Any, name: str) -> None:
+    result = asyncio.run(run("test", data={name: "data"}, resources=make_resources(lambda *_: TWO_PART_REPLY)))
+    assert result["failure"] and result["usage"] == {}
 
 
 def test_a_node_update_is_recorded_before_the_next_node_starts(run_method: Any) -> None:

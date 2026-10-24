@@ -6,19 +6,20 @@ import type { Draft } from "@/features/composer/types";
 import type { RunMeta, RunSpec } from "@/features/runs/types";
 
 vi.mock("@/features/runs/sdk", () => ({
-  client: { threads: { create: vi.fn(), delete: vi.fn(), search: vi.fn(), get: vi.fn(), getState: vi.fn() }, runs: { create: vi.fn() } },
+  client: { threads: { create: vi.fn(), delete: vi.fn(), search: vi.fn(), get: vi.fn(), getState: vi.fn() }, runs: { create: vi.fn(), list: vi.fn() } },
 }));
 
 const threads = vi.mocked(client.threads);
 const runs = vi.mocked(client.runs);
 const draft = { description: "生产计划", data: {}, method: "direct", language: "pyomo", preset: null } as unknown as Draft;
-const limited = new Error("This address started 3 runs in the last hour.");
+const limited = Object.assign(new Error("This address started 3 runs in the last hour."), { status: 429 });
 
 beforeEach(() => {
   vi.resetAllMocks();
   let count = 0;
   threads.create.mockImplementation(async () => ({ thread_id: `thread-${++count}` }) as never);
   threads.delete.mockResolvedValue(undefined as never);
+  runs.list.mockResolvedValue([]);
 });
 
 test("library and backend reach the run independently", async () => {
@@ -77,6 +78,28 @@ test("a rejected run start leaves no empty run behind", async () => {
   runs.create.mockRejectedValue(limited);
   await expect(startRun(draft, undefined)).rejects.toBe(limited);
   expect(threads.delete).toHaveBeenCalledWith("thread-1");
+});
+
+test.each([new TypeError("Failed to fetch"), Object.assign(new Error("Gateway timeout"), { status: 504 })])(
+  "an uncertain start keeps the thread because the server may already be running it: %s", async error => {
+    runs.create.mockRejectedValue(error);
+    await expect(startRun(draft, undefined)).rejects.toBe(error);
+    expect(threads.delete).not.toHaveBeenCalled();
+  });
+
+test.each([new TypeError("Failed to fetch"), Object.assign(new Error("Already running"), { status: 409 })])(
+  "a lost response recovers the run that the server already accepted: %s", async error => {
+    runs.create.mockRejectedValue(error);
+    runs.list.mockResolvedValue([{ run_id: "accepted", status: "running" }] as never);
+    await expect(startRun(draft, undefined)).resolves.toBe("thread-1");
+    expect(threads.delete).not.toHaveBeenCalled();
+  });
+
+test("a failed status check does not turn an uncertain start into a thread deletion", async () => {
+  runs.create.mockRejectedValue(limited);
+  runs.list.mockRejectedValue(new TypeError("Network unavailable"));
+  await expect(startRun(draft, undefined)).rejects.toBe(limited);
+  expect(threads.delete).not.toHaveBeenCalled();
 });
 
 test("a deleted preset cannot silently become the default on rerun", async () => {

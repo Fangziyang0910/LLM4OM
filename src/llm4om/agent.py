@@ -4,6 +4,7 @@ import asyncio
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from itertools import islice
 from typing import Annotated, Any, Literal, TypedDict
 from uuid import NAMESPACE_URL, uuid5
 
@@ -14,7 +15,9 @@ from langchain.agents.middleware import (
     ContextEditingMiddleware,
     ModelRequest,
     ModelResponse,
+    ToolCallRequest,
     wrap_model_call,
+    wrap_tool_call,
 )
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import AnyMessage, SystemMessage, ToolMessage
@@ -29,6 +32,8 @@ from llm4om.languages import LANGUAGES, CodeTarget
 from llm4om.methods import methods
 from llm4om.runtime import Recorder
 from llm4om.web_search import search_tool
+
+CALCULATION_TOOLS = {"model_and_solve", "solve_scenarios"}
 
 
 class SourceRun(TypedDict):
@@ -95,6 +100,16 @@ def configuration(values: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def plan_result(plan: Plan, values: dict[str, Any]) -> dict[str, Any]:
+    solved = values.get("solve") or {}
+    variables = solved.get("variables") or {}
+    return {**plan, "description": values["description"], "configuration": configuration(values),
+            "status": solved.get("status"), "objective": solved.get("objective"),
+            "variables": dict(islice(variables.items(), 100)), "total_variables": len(variables),
+            "failure": values.get("failure"), "explanation": values.get("explanation"),
+            "infeasibility": values.get("infeasibility")}
+
+
 def _conversation_graph(*, optimization: bool) -> Any:
     async def discuss(state: ConversationState, runtime: Runtime[AgentContext]) -> dict[str, Any]:
         messages = state.get("messages") or []
@@ -113,6 +128,19 @@ def _conversation_graph(*, optimization: bool) -> Any:
         pending_model = state.get("pending_model")
         if pending_model and pending_model["turn_id"] != messages[-1].id:
             pending_model = None
+        calculation_started = False
+
+        @wrap_tool_call
+        async def one_calculation(request: ToolCallRequest,
+                                  handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command]]) -> ToolMessage | Command:
+            nonlocal calculation_started
+            if request.tool_call["name"] in CALCULATION_TOOLS:
+                if calculation_started:
+                    return ToolMessage("A calculation is already running in this turn. Use its result; "
+                                       "send multiple business scenarios in one solve_scenarios call.",
+                                       name=request.tool_call["name"], tool_call_id=request.tool_call["id"], status="error")
+                calculation_started = True
+            return await handler(request)
 
         async def load(source: SourceRun) -> dict[str, Any]:
             key = (source["thread_id"], source["checkpoint_id"])
@@ -214,12 +242,7 @@ def _conversation_graph(*, optimization: bool) -> Any:
                           "group": None, "turn_id": messages[-1].id}
             completed.append(plan)
             pending_model = None
-            solved = result.get("solve") or {}
-            facts = {**plan, "description": result["description"], "method": request["method"], "language": request["language"],
-                "configuration": configuration(result),
-                "status": solved.get("status"), "objective": solved.get("objective"), "variables": dict(list((solved.get("variables") or {}).items())[:100]),
-                "total_variables": len(solved.get("variables") or {}), "failure": result.get("failure"),
-                "explanation": result.get("explanation"), "infeasibility": result.get("infeasibility")}
+            facts = {**plan_result(plan, result), "method": request["method"], "language": request["language"]}
             return Command(update={**({"current": source} if result.get("spec") else {}),
                 "messages": [ToolMessage(json.dumps(facts, ensure_ascii=False), tool_call_id=runtime.tool_call_id,
                     name="model_and_solve", artifact={"plans": [facts]})]})
@@ -239,7 +262,7 @@ def _conversation_graph(*, optimization: bool) -> Any:
             return {"source": source, "description": values["description"], "configuration": configuration(values),
                     "formulation": values.get("formulation"), "code": values.get("code"),
                     "status": solved.get("status"), "objective": solved.get("objective"),
-                    "variables": dict(list(found.items())[:100]), "total_matches": len(found),
+                    "variables": dict(islice(found.items(), 100)), "total_matches": len(found),
                     "explanation": values.get("explanation"), "infeasibility": values.get("infeasibility"),
                     "failure": values.get("failure")}
 
@@ -261,7 +284,8 @@ def _conversation_graph(*, optimization: bool) -> Any:
             values = await load(base)
             spec = values["spec"]
             if optimization and ((choice.method and choice.method != spec["method"])
-                                 or (choice.language and choice.language != spec["language"])):
+                                 or (choice.language and choice.language != spec["language"])
+                                 or (choice.solver and choice.solver != spec["solver"])):
                 raise ValueError("Pinned configuration changed; use model_and_solve with the complete revised problem.")
             turn = next(message.id for message in reversed(runtime.state["messages"]) if message.type == "human")
             pending = {"base": base, "scenarios": [item.model_dump() for item in scenarios], "turn_id": turn}
@@ -308,12 +332,7 @@ def _conversation_graph(*, optimization: bool) -> Any:
                 cache[(source["thread_id"], source["checkpoint_id"])] = result
                 plan: Plan = {"name": scenario.name, "instruction": scenario.instruction, "source": source, "group": group, "turn_id": turn}
                 completed.append(plan)
-                solved = result.get("solve") or {}
-                results.append({**plan, "description": result["description"], "status": solved.get("status"),
-                    "configuration": configuration(result),
-                    "objective": solved.get("objective"), "variables": dict(list((solved.get("variables") or {}).items())[:100]),
-                    "total_variables": len(solved.get("variables") or {}), "failure": result.get("failure"),
-                    "explanation": result.get("explanation"), "infeasibility": result.get("infeasibility")})
+                results.append(plan_result(plan, result))
             pending = None
             update = {"messages": [ToolMessage(json.dumps(results, ensure_ascii=False), tool_call_id=runtime.tool_call_id,
                                                 name="solve_scenarios", artifact={"plans": results})]}
@@ -334,7 +353,7 @@ def _conversation_graph(*, optimization: bool) -> Any:
                 recent.append(message)
             calculated = (bool(recovered) and pending is None) or any(message.type == "tool" and message.name == "solve_scenarios" for message in recent)
             calculated = calculated or any(message.type == "tool" and message.name == "model_and_solve" for message in recent)
-            tools = [item for item in request.tools if not (calculated and item.name in {"solve_scenarios", "model_and_solve"})
+            tools = [item for item in request.tools if not (calculated and item.name in CALCULATION_TOOLS)
                      and not (item.name in {"lookup_variables", "solve_scenarios"} and not request.state["current"])]
             facts = {key: values.get(key) for key in ("description", "formulation", "code", "explanation", "infeasibility", "failure")}
             facts["description"] = problem_text(values.get("description") or "", values.get("data") or {})
@@ -342,7 +361,7 @@ def _conversation_graph(*, optimization: bool) -> Any:
             facts["available_plans"] = [*([{"name": "Original plan", "id": state["source"]["thread_id"]}] if state.get("source") else []),
                 *({"name": plan["name"], "id": plan["source"]["thread_id"]} for plan in [*state.get("plans", []), *completed])]
             facts["solve"] = {**{key: solved.get(key) for key in ("status", "objective", "diagnosis", "error")},
-                              "variables": dict(list((solved.get("variables") or {}).items())[:100]),
+                              "variables": dict(islice((solved.get("variables") or {}).items(), 100)),
                               "total_variables": len(solved.get("variables") or {})}
             if pending:
                 facts["unfinished_scenarios"] = pending
@@ -355,7 +374,7 @@ def _conversation_graph(*, optimization: bool) -> Any:
                     result = saved.get("solve") or {}
                     facts["already_computed_scenarios"].append({"name": plan["name"], "instruction": plan["instruction"],
                         "status": result.get("status"), "objective": result.get("objective"), "failure": saved.get("failure"),
-                        "variables": dict(list((result.get("variables") or {}).items())[:100])})
+                        "variables": dict(islice((result.get("variables") or {}).items(), 100))})
             prompt = (f"Discuss an optimization plan with an ordinary user in {language}. Reply naturally and concisely. "
                 "Use only the supplied problem, mathematical model, code and ACTUAL solver results. "
                 "Use lookup_variables for decision values omitted from the snapshot. Preserve exact variable identities. "
@@ -416,7 +435,7 @@ def _conversation_graph(*, optimization: bool) -> Any:
             tools = [lookup_variables, solve_scenarios]
             if optimization:
                 tools += [model_and_solve, modeling_capabilities, *([search_tool(settings)] if choice.search else [])]
-            agent = create_agent(model, tools, middleware=[actual_plan, ContextEditingMiddleware(
+            agent = create_agent(model, tools, middleware=[actual_plan, one_calculation, ContextEditingMiddleware(
                 edits=[ClearToolUsesEdit(trigger=16_000, keep=3, clear_tool_inputs=True)])],
                 state_schema=AgentPlanState, context_schema=AgentContext, checkpointer=False, name=f"{kind}_agent")
             async with asyncio.timeout(resources.limits.run_timeout):

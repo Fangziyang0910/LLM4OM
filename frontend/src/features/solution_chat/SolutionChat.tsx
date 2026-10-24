@@ -15,10 +15,9 @@ import { client } from "@/features/runs/sdk";
 import { StatusBadge } from "@/features/runs/status";
 import { errorText, formatNumber } from "@/format";
 import { locale, t } from "@/i18n";
-import type { RunValues, SolutionChatMeta, SourceRun, Usage } from "@/features/runs/types";
+import type { Plan, RunValues, SolutionChatMeta, SourceRun, Usage } from "@/features/runs/types";
 import type { Preset } from "@/types";
 
-type Plan = { name: string; instruction: string; source: SourceRun; group: string | null };
 type Values = { messages?: Message[]; source?: SourceRun; current?: SourceRun; plans?: Plan[]; usage?: Usage; failure?: string | null };
 
 export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpen, onCompare, renderRun }: {

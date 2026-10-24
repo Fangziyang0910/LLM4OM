@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from llm4om.agent import AgentContext, optimization_graph
@@ -49,6 +50,60 @@ def test_an_initial_idea_can_be_discussed_without_creating_a_run(make_resources,
         "data": {"staff.csv": "name\nA"}}, {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
     assert result["failure"] is None and result["plans"] == []
     saved_plans[1].threads.create.assert_not_called()
+
+
+@pytest.mark.parametrize("tool_name", ["model_and_solve", "solve_scenarios"])
+def test_parallel_calculation_calls_run_only_once_per_turn(make_resources, saved_plans, monkeypatch, tool_name):
+    snapshots, client = saved_plans
+    original = {"description": PRODUCTION_PROBLEM, "spec": {"method": "direct", "language": "pyomo", "solver": None,
+        "preset": None, "llm": {"provider": "openai_compatible", "model": "scripted"}},
+        "solve": {"status": "optimal", "objective": 13, "variables": {f"x[{i}]": i for i in range(125)}}}
+    source = {"thread_id": str(uuid4()), "checkpoint_id": str(uuid4())}
+    snapshots[source["thread_id"]] = {"values": original, "checkpoint": {"checkpoint_id": source["checkpoint_id"]}}
+
+    async def calculate(*args, **kwargs):
+        await asyncio.sleep(0.01)
+        return deepcopy(original)
+
+    calculate = AsyncMock(side_effect=calculate)
+    monkeypatch.setattr("llm4om.agent.run", calculate)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            calls = [tool_call(tool_name, **({"description": PRODUCTION_PROBLEM, "name": name}
+                if tool_name == "model_and_solve" else {"scenarios": [{"name": name, "instruction": "B 至少生产 3 件"}]}))
+                .tool_calls[0] for name in ("first", "duplicate")]
+            return AIMessage("", tool_calls=calls)
+        assert "model_and_solve" not in tools and "solve_scenarios" not in tools
+        assert any(message.type == "tool" and message.status == "error" for message in messages)
+        result = next(message.artifact["plans"][0] for message in messages
+                      if message.type == "tool" and message.artifact and "plans" in message.artifact)
+        assert result["total_variables"] == 125 and len(result["variables"]) == 100
+        return "本轮计算已完成。"
+
+    result = asyncio.run(optimization_graph().ainvoke({"source": source, "messages": [("human", "计算方案")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+    calculate.assert_awaited_once()
+    client.threads.create.assert_awaited_once()
+    assert len(result["plans"]) == 1 and result["current"] == result["plans"][0]["source"]
+
+
+def test_scenario_reuse_cannot_ignore_a_changed_pinned_backend(make_resources, saved_plans, monkeypatch):
+    snapshots, client = saved_plans
+    source = {"thread_id": str(uuid4()), "checkpoint_id": str(uuid4())}
+    snapshots[source["thread_id"]] = {"values": {"description": PRODUCTION_PROBLEM,
+        "spec": {"method": "direct", "language": "pyomo", "solver": "highs", "preset": None}},
+        "checkpoint": {"checkpoint_id": source["checkpoint_id"]}}
+    calculate = AsyncMock()
+    monkeypatch.setattr("llm4om.agent.run", calculate)
+    result = asyncio.run(optimization_graph().ainvoke({"source": source, "messages": [("human", "换后端重新计算")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(lambda *_:
+            tool_call("solve_scenarios", scenarios=[{"name": "new backend", "instruction": "B 至少生产 3 件"}]))}},
+        context=AgentContext(solver="gurobi")))
+    assert "Pinned configuration changed" in result["failure"]
+    calculate.assert_not_awaited()
+    client.threads.create.assert_not_awaited()
 
 
 @pytest.mark.parametrize("retry_reply", [False, True])

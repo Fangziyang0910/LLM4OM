@@ -7,9 +7,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/features/runs/status";
 import { errorText, formatNumber } from "@/format";
 import { t } from "@/i18n";
-import type { Explanation, SourceRun } from "@/features/runs/types";
+import type { Explanation, Plan, Step } from "@/features/runs/types";
 import { Timeline } from "@/features/runs/Timeline";
-import type { Step } from "@/features/runs/types";
 
 export type ModelingTask = { name: string; method: string; language: string; steps: Step[] };
 export type ModelingEvent = Omit<ModelingTask, "steps"> & { type: "modeling_step"; tool_call_id: string; step: Step };
@@ -19,8 +18,7 @@ export type ChatProgress = {
   stage: "revise" | "model" | "solve" | "explain";
 };
 
-type ComputedPlan = {
-  name: string; source: SourceRun; group?: string | null; instruction: string;
+type ComputedPlan = Plan & {
   status?: string | null; objective?: number | null; failure?: string | null; explanation?: Explanation | null;
   configuration?: { method?: string; language?: string; actual_solver?: string | null };
 };

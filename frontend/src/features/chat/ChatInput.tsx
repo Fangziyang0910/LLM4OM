@@ -32,7 +32,7 @@ export function ChatInput({ value, onChange, disabled, loading, stopping = false
       onChange={event => onChange(event.target.value)} className="max-h-36 min-h-16 resize-none border-0 bg-transparent px-1 py-1 text-base shadow-none field-sizing-content focus-visible:ring-0 sm:text-sm dark:bg-transparent"
       onKeyDown={event => {
         if (event.key === "Enter" && (!event.shiftKey || event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
-          event.preventDefault(); if (!disabled) onSend();
+          event.preventDefault(); if (!disabled && value.trim()) onSend();
         }
       }} />
     <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-border/60 pt-2">

@@ -9,7 +9,6 @@ import asyncio
 import json
 import operator
 import os
-import re
 import time
 import traceback
 from dataclasses import asdict, dataclass, field
@@ -38,7 +37,6 @@ from llm4om.runtime import Context, LimitExceeded, Limits, Recorder
 from llm4om.sandbox import Sandbox
 
 RECURSION_LIMIT = 1_000_000  # loops are bounded by each method and by Limits, not by LangGraph's step count
-DATA_NAME = r"[\w\-][\w\-. ]*"
 MAX_DATA_CHARS = 20000
 HIDDEN_KEYS = {"problem", "description", "solve", "messages", "failure"}  # and keys starting with "_"
 
@@ -223,8 +221,8 @@ def platform_graph(method: Method) -> Any:
                 raise ValueError(f"{method.name} does not support {target.language}; "
                                  "choose a supported modeling library.")
             for name in data:
-                if not re.fullmatch(DATA_NAME, name):
-                    raise ValueError(f"Invalid data file name {name!r}; use letters, digits, '-', '_', '.' and spaces.")
+                if not name.strip() or name in {".", ".."} or any(char in name for char in "/\\\0\r\n"):
+                    raise ValueError(f"Invalid data file name {name!r}; supply a single file name without path separators or line breaks.")
             preset, settings, preset_name = await asyncio.to_thread(resources.resolve, choice.preset)
             if charge := resources.charge(preset):
                 charge(0)  # raises when the preset's daily budget is spent

@@ -15,13 +15,12 @@ import { DATA_FILE_ACCEPT, readDataFiles } from "@/features/composer/files";
 import { DataEditor } from "@/features/composer/DataEditor";
 import { Outputs, type Tab } from "@/features/runs/Outputs";
 import { client } from "@/features/runs/sdk";
-import type { OptimizationMeta, RunValues, SourceRun, Usage } from "@/features/runs/types";
+import type { OptimizationMeta, Plan, RunValues, SourceRun, Usage } from "@/features/runs/types";
 import type { Options, Preset } from "@/types";
 import { errorText } from "@/format";
 import { locale, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 
-type Plan = { name: string; source: SourceRun; group: string | null };
 type Values = { messages?: Message[]; description?: string; data?: Record<string, string>; source?: SourceRun;
   current?: SourceRun; plans?: Plan[]; usage?: Usage; failure?: string | null };
 
@@ -106,10 +105,10 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   useEffect(() => { acknowledge((thread.data?.values as Values | undefined)?.messages); }, [thread.data?.values, acknowledge]);
 
   const submit = async (retry = false) => {
-    if (busy || (!retry && !input.trim() && !initial.description.trim())) return;
+    if (busy || (!retry && !input.trim())) return;
     if (!preset) { toast.error(t("先选择一个可用的预设模型。")); openPresets(); return; }
-    setAction(true); followLatest(); setViewed(undefined); setLiveTask(undefined); setProgress(undefined);
-    const question = retry ? [...messages].reverse().find(message => message.type === "human") : prepare(input || initial.description);
+    setAction(true); followLatest(); setViewed(undefined); setLiveTask(undefined); setProgress(undefined); setTasks({});
+    const question = retry ? [...messages].reverse().find(message => message.type === "human") : prepare(input);
     if (!question) { setAction(false); return; }
     const context = { preset: preset.id, locale, search: searching && canSearch, thinking: thinkingMode,
       method: chosenMethod === "auto" ? null : chosenMethod, language: chosenLanguage === "auto" ? null : chosenLanguage };

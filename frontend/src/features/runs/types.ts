@@ -15,6 +15,7 @@ export type Solve = {
 export type Usage = { llm_calls: number; solves: number; input_tokens: number; output_tokens: number };
 export type Timing = { started_at: number; elapsed: number; finished_at?: number };
 export type SourceRun = { thread_id: string; checkpoint_id: string };
+export type Plan = { name: string; instruction: string; source: SourceRun; group: string | null };
 export type Explanation = {
   summary: string; objective_label: string; objective_unit: string;
   decisions: { variable: string; label: string; unit: string }[]; notes: string[]; total_variables: number;

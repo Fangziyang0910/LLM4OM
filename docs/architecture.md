@@ -25,6 +25,8 @@ solve：方法没有求解最终代码时，在沙箱中求解一次
 
 优化对话注册为 `optimization` 图，与 `solution_chat` 共用 `agent.py` 的 LangChain Agent 编排。它允许无原方案启动，使用 `model_and_solve` 把完整题面和当前附件交给任意已注册方法的平台图。`modeling_capabilities` 从既有方法注册表、九个建模库及沙箱原生后端目录读取能力；固定配置优先于工具参数。未指定时为 Direct、Pyomo 和自动后端。后续通过既有查询和场景工具继续讨论。首次建模与条件调整均独立保存结果并在原生会话状态中记录引用；`pending_model` 固定重试请求，已保存方案在最终回复失败后继续可读。
 
+LangChain 工具中间件在每轮允许一次计算调用，避免模型同时发出多个调用时重复求解或冲突写入当前方案；查询工具不受这项限制。多个业务场景仍在一次 `solve_scenarios` 调用内计算。首次建模和场景重算共用方案结果整理，完整变量保留在独立运行中，对话仅截取前 100 项。
+
 优化对话的实际步骤通过 `modeling_step` custom 事件推送，包含工具调用 ID、方法、建模库和公开步骤。LLM 步骤仅发送状态，产物携带实际模型与代码；它们在任务卡片与建模工作区显示，不混入 Agent 的回复消息。首个运行在导航前由原生 SDK 创建，新页面及刷新时查询活动 Run 并用 `useStream.joinStream` 连接。入口与产物呈现见 [ADR 0016](adr/0016-optimization-agent.md)。
 
 需求对话独立注册为 `requirements` 图（`START → discuss → END`），不计入建模方法。每轮通过 LangChain `create_agent` 运行原生模型／工具循环，复用预设、`Resources`、`Recorder` 和 token 预算。回复直接流式输出自然文本，`update_draft` 通过 `Command` 更新完整需求稿；原生模型中间件每次读取最新稿件，本轮更新完成后移除工具并转入回复，可选 `web_search` 调用 DeepSeek 独立 Search API。搜索结果和来源放在原生 `ToolMessage.artifact`，凭据仅在工具闭包中。独立搜索密钥绑定独立地址，否则仅 DeepSeek 预设在自身地址使用自身密钥。调用失败保留上一份需求稿、用户消息和已计量用量，重试复用原消息 ID。状态由原生线程和检查点保存。前端用 SDK `useStream` 的原生消息流继续对话（含子图 token）、`threads.updateState` 保存人工改稿；新建空对话用 `threads.create` 的 `graphId` 与 `supersteps` 保存初稿，不调用 LLM。

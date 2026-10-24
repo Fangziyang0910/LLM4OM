@@ -27,8 +27,12 @@ export async function startRun(draft: Draft, preset: Preset | undefined, group: 
       streamMode: ["custom"], streamResumable: true,
     });
   } catch (error) {
-    // A rejected start (for example the hourly run limit) must not leave an empty run in the history.
-    await client.threads.delete(thread.thread_id).catch(() => undefined);
+    // A lost response can hide an accepted run, including a retry rejected because that run is now active.
+    const accepted = await client.runs.list(thread.thread_id, { limit: 1 }).catch(() => null);
+    if (accepted?.length) return thread.thread_id;
+    if (accepted && error instanceof Error && "status" in error && typeof error.status === "number"
+        && error.status >= 400 && error.status < 500)
+      await client.threads.delete(thread.thread_id).catch(() => undefined);
     throw error;
   }
   return thread.thread_id;

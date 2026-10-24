@@ -17,6 +17,27 @@ async function open(page: Page) {
   return errors;
 }
 
+test("an accepted run survives a lost start response and an ordinary attachment name", async ({ page }) => {
+  await open(page);
+  await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
+  await page.locator('input[type="file"]').setInputFiles({ name: "需求（周）.csv", mimeType: "text/csv", buffer: Buffer.from("capacity\n8\n") });
+  let accepted = "";
+  await page.route(/\/threads\/[^/]+\/runs$/, async route => {
+    if (route.request().method() !== "POST") { await route.continue(); return; }
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    accepted = route.request().url().split("/").at(-2)!;
+    await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ detail: "The run is already active." }) });
+  });
+  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.waitForURL(/\/run\//);
+  expect(page.url().endsWith(accepted)).toBe(true);
+  await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible({ timeout: 60_000 });
+  const thread = await (await page.request.get(`/threads/${accepted}`)).json();
+  expect(thread.values.solve.objective).toBe(13);
+  expect(thread.values.data["需求（周）.csv"]).toBe("capacity\n8\n");
+});
+
 test("a run shows the solution, keeps a note and tags, and exports a report", async ({ page }) => {
   const errors = await open(page);
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
