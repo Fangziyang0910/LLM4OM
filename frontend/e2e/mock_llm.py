@@ -64,9 +64,9 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
     text = json.dumps(messages, ensure_ascii=False)
     if "E2E_POLISH_STREAM" in messages[-1].get("content", "") and messages[-1]["role"] == "user":
         return POLISH_REPLY
-    if "You are the optimization agent for LLM4OM" in text:
+    if "Pinned configuration:" in messages[0].get("content", ""):
         latest = next(message["content"] for message in reversed(messages) if message["role"] == "user")
-        snapshot = json.loads(messages[0]["content"].split("Current frozen plan:\n", 1)[1])
+        snapshot = json.JSONDecoder().raw_decode(messages[0]["content"].split("Current frozen plan:\n", 1)[1])[0]
         if snapshot.get("already_computed_scenarios"):
             return "已经计算完成，实际目标值为 13，没有重复求解。"
         if messages[-1]["role"] == "tool":
@@ -76,14 +76,26 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
                 return ""
             if isinstance(facts, list):
                 return "已实际计算：" + "；".join(f"{item['name']}，目标值 {item['objective']}" for item in facts)
+            if "result" in facts:
+                return "计算结果：" + str(facts["result"])
+            if messages[-1].get("name") == "select_plan":
+                return "接下来按已选择的方案继续讨论。"
             if "methods" in facts:
                 return "实际注册了十三种建模方法和九个建模库。"
             if "E2E_AGENT_SEARCH" in latest:
                 return "找到了[公开排班参考](https://example.org/shift-guide)，请确认是否采用其中的业务条件。"
             return "实际求解结果：" + str(facts.get("objective"))
-        if "E2E_AGENT_IDEA" in latest:
+        if "E2E_GENERAL" in latest:
+            return "列表可以修改，元组创建后不能修改。"
+        if "E2E_ARITHMETIC" in latest:
+            name, args = "calculate", {"expression": "23789 * 47 - 18635"}
+        elif "E2E_SELECT_ORIGINAL" in latest:
+            name, args = "select_plan", {"plan_id": next(plan["id"] for plan in snapshot["available_plans"] if plan["original"])}
+        elif "E2E_CHECK_CAPACITY" in latest:
+            name, args = "calculate", {"expression": "8 - (2 * v['x[A]'] + v['x[B]'])"}
+        elif "E2E_AGENT_IDEA" in latest:
             return "每班至少需要几个人？每个人最多工作几天？"
-        if "E2E_AGENT_CAPABILITIES" in latest:
+        elif "E2E_AGENT_CAPABILITIES" in latest:
             name, args = "modeling_capabilities", {}
         elif "E2E_AGENT_SEARCH" in latest:
             name, args = "web_search", {"query": "门店排班 公开参考"}
@@ -101,9 +113,9 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
                 "name": "生产计划", "method": "direct", "language": "pyomo"}
         return {"role": "assistant", "content": "", "tool_calls": [{"id": "call_" + uuid.uuid4().hex[:8], "type": "function",
                 "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)}}]}
-    if "Discuss an optimization plan with an ordinary user" in text:
+    if "Current frozen plan:" in messages[0].get("content", ""):
         latest = next(message["content"] for message in reversed(messages) if message["role"] == "user")
-        snapshot = json.loads(messages[0]["content"].split("Current frozen plan:\n", 1)[1])
+        snapshot = json.JSONDecoder().raw_decode(messages[0]["content"].split("Current frozen plan:\n", 1)[1])[0]
         if snapshot.get("already_computed_scenarios"):
             return "已完成的实际目标值是 12，没有重复计算。"
         if messages[-1]["role"] == "tool":
@@ -113,6 +125,10 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
                     CHAT_FAILURES.add(latest)
                     return ""
                 return "已实际重新建模求解：" + "；".join(f"{item['name']}，目标值 {item['objective']}" for item in facts)
+            if "result" in facts:
+                return "计算结果：" + str(facts["result"])
+            if messages[-1].get("name") == "select_plan":
+                return "接下来按已选择的方案继续讨论。"
             return "实际决策值：" + "，".join(f"{name} = {value}" for name, value in facts["variables"].items())
         if "E2E_SOLUTION_BATCH" in latest:
             name, args = "solve_scenarios", {"scenarios": [{"name": "B 至少 3 件", "instruction": "B 至少生产 3 件"},

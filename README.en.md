@@ -32,8 +32,8 @@
 The platform includes **13 LLM modeling methods**: its own Direct and Feedback Repair methods, plus eleven methods from public research. Enter a problem, run the modeling process and inspect the model and result without writing solver code yourself.
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Demo: data review, modeling and solving, and the Agent workspace" width="100%">
-  <br><sub>A real run: preserve the manual draft, solve through the independent agent with DeepSeek · Direct · Pyomo, then change conditions in the same conversation.</sub>
+  <img src="docs/assets/demo.gif" alt="Demo: ordinary chat, arithmetic and the Agent modeling workspace" width="100%">
+  <br><sub>A real run: move from ordinary chat and arithmetic to production modeling with DeepSeek · Direct · Pyomo, revise conditions, then return to the original plan.</sub>
 </p>
 
 ## Highlights
@@ -55,6 +55,8 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
 | 🌗 **A workbench people like** | Export Excel plans with business labels, units and all actual values; notes and tags, Markdown reports, Excel import, 2,033 public problems, Chinese and English, dark mode |
 
 The original workbench remains the desktop home page. A separate “Optimization chat” entry opens `/agent`. Describe a problem or attach data; the assistant asks focused questions when needed and calls a complete modeling workflow. Defaults are Direct, Pyomo and automatic backend selection. Specify alternatives in chat or pin them under modeling preferences. Actual steps stream to a task card; the modeling workspace shows the mathematical model, code and results. Each plan is saved independently. Both interfaces remain available and share the same modeling methods and independently saved runs.
+
+The agent also handles ordinary questions, writing, code explanations, supplied material and arithmetic without starting a modeling run. For plan discussions, a calculator reads all saved decision values to check costs, remaining capacity and ratios. Say “use the second plan” or “return to the original” to change the baseline for later discussion without solving again. Browsing a historical plan still only changes the view.
 
 ## Screenshots
 

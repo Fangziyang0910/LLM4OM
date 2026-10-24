@@ -48,15 +48,49 @@ test("the independent agent discusses an idea, models it, and calculates changes
   await expect.poll(async () => (await conversation.boundingBox())!.width).toBeGreaterThan(before + 20);
   const resized = (await conversation.boundingBox())!.width;
   await page.reload();
+  await expect(conversation).toBeVisible();
   await expect.poll(async () => Math.abs((await conversation.boundingBox())!.width - resized)).toBeLessThan(2);
   await input.fill("E2E_AGENT_BATCH 从原方案比较两种条件");
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "对比本轮方案" })).toBeVisible({ timeout: 60_000 });
   await page.reload();
   await expect(page.getByRole("log")).toContainText("目标值 12");
+  await input.fill("E2E_SELECT_ORIGINAL 回到原方案，先不重新计算");
+  await input.press("Enter");
+  await expect(page.getByRole("button", { name: "已选择：生产计划", exact: true })).toBeVisible();
+  expect((await (await page.request.get(`/threads/${chat}`)).json()).values.current).toEqual(first);
+  await input.fill("E2E_CHECK_CAPACITY 核对原方案的剩余切割能力");
+  await input.press("Enter");
+  const calculation = page.getByLabel("计算核对", { exact: true });
+  await expect(calculation.locator("strong")).toHaveText("0");
+  await calculation.locator("summary").click();
+  await expect(calculation.locator("code")).toContainText("v['x[A]']");
+  await page.reload();
+  await expect(calculation.locator("strong")).toHaveText("0");
+  expect((await (await page.request.get(`/threads/${chat}`)).json()).values.current).toEqual(first);
   await page.getByRole("button", { name: "对比本轮方案" }).click();
   await page.waitForURL(/\/compare\//);
   expect(errors).toEqual([]);
+});
+
+test("ordinary questions and arithmetic work without creating a modeling plan", async ({ page }) => {
+  await page.goto("/agent");
+  const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  await input.fill("E2E_GENERAL 列表和元组有什么区别？");
+  await input.press("Enter");
+  await page.waitForURL(/\/agent\//);
+  await expect(page.getByRole("log")).toContainText("列表可以修改");
+  const id = page.url().split("/").at(-1)!;
+  await input.fill("E2E_ARITHMETIC 计算 23789 * 47 - 18635");
+  await input.press("Enter");
+  const calculation = page.getByLabel("计算核对", { exact: true });
+  await expect(calculation.locator("strong")).toHaveText("1,099,448");
+  await page.reload();
+  await expect(calculation.locator("strong")).toHaveText("1,099,448");
+  const saved = await (await page.request.get(`/threads/${id}`)).json();
+  expect(saved.values.plans).toEqual([]);
+  expect(saved.values.current).toBeNull();
+  await expect(page.getByRole("complementary", { name: "建模工作区", exact: true })).toHaveCount(0);
 });
 
 test("pinned choices, data edits, retries and saved plans survive reload", async ({ page }) => {

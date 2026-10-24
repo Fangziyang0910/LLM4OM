@@ -1,6 +1,6 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import { memo, useState } from "react";
-import { ArrowUpRight, Brain, Check, ChevronRight, Globe, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowUpRight, Brain, Calculator, Check, ChevronRight, Globe, RefreshCw, Sparkles, TriangleAlert } from "lucide-react";
 import { CopyButton, Markdown } from "@/components/Content";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -51,15 +51,39 @@ const Reasoning = memo(function Reasoning({ text, active }: { text: string; acti
 
 function activity(name: string) {
   return name === "web_search" ? t("正在联网搜索……") : name === "model_and_solve" ? t("正在建模求解……") : name === "modeling_capabilities" ? t("正在查看可用建模能力……") : name === "solve_scenarios" ? t("正在重新建模求解……")
-    : name === "lookup_variables" ? t("正在读取实际方案……") : name === "update_draft" ? t("正在更新需求稿……") : t("正在执行工具……");
+    : name === "lookup_variables" ? t("正在读取实际方案……") : name === "calculate" ? t("正在计算核对……") : name === "select_plan" ? t("正在切换讨论方案……")
+    : name === "update_draft" ? t("正在更新需求稿……") : t("正在执行工具……");
 }
 
 /** Source and plan cards come from tool artifacts, never from model-written links or numbers. */
 function ToolResult({ message, onOpenPlan, onCompare }: {
   message: Extract<Message, { type: "tool" }>; onOpenPlan?: (id: string) => void; onCompare?: (group: string) => void;
 }) {
-  if (message.status === "error") return <p className="ml-9 break-words rounded-lg border border-destructive/20 p-3 text-xs text-destructive">{messageText(message)}</p>;
+  if (message.status === "error") return <details className="ml-9 rounded-lg border border-destructive/20 p-3 text-xs">
+    <summary className="flex cursor-pointer items-center gap-2 text-muted-foreground"><TriangleAlert className="size-3.5 text-destructive" />{t("这一步未完成")}</summary>
+    <p className="mt-2 whitespace-pre-wrap break-words text-destructive">{messageText(message)}</p>
+  </details>;
   if (message.name === "update_draft") return <p className="flex items-center gap-1.5 pl-9 text-xs text-muted-foreground"><Check className="size-3.5 text-success" />{t("需求稿已整理")}</p>;
+  if (message.name === "select_plan") {
+    const plan = (message.artifact as { selected_plan?: { name: string; source: { thread_id: string } } } | undefined)?.selected_plan;
+    return plan ? <div className="ml-9 flex items-center gap-2 text-xs text-muted-foreground"><Check className="size-3.5 shrink-0 text-success" />
+      {onOpenPlan ? <Button variant="link" size="xs" className="h-auto min-w-0 justify-start p-0 text-left whitespace-normal" onClick={() => onOpenPlan(plan.source.thread_id)}>{t("已选择：{name}", { name: plan.name })}</Button>
+        : <span>{t("已选择：{name}", { name: plan.name })}</span>}
+    </div> : null;
+  }
+  if (message.name === "calculate") {
+    const calculation = (message.artifact as { calculation?: { expression: string; result: number; matched_variables: number } } | undefined)?.calculation;
+    return calculation ? <details className="group/calculation ml-9 rounded-xl border bg-card text-xs" aria-label={t("计算核对")}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl px-3 py-2.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <Calculator className="size-3.5 shrink-0" /><span>{t("计算核对")}</span><strong className="ml-auto break-all font-medium text-foreground tabular-nums">{formatNumber(calculation.result)}</strong>
+        <ChevronRight className="size-3.5 shrink-0 transition-transform group-open/calculation:rotate-90" />
+      </summary>
+      <div className="space-y-2 border-t p-3"><code className="block whitespace-pre-wrap break-all">{calculation.expression}</code>
+        <p className="break-all font-mono tabular-nums">= {String(calculation.result)}</p>
+        {calculation.matched_variables ? <p className="text-muted-foreground">{t("读取 {count} 个实际决策值", { count: calculation.matched_variables })}</p> : null}
+      </div>
+    </details> : null;
+  }
   if (message.name === "solve_scenarios" || message.name === "model_and_solve") {
     const artifact = message.artifact as { plans?: ComputedPlan[] } | undefined;
     const plans = artifact?.plans ?? [];

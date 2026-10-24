@@ -165,7 +165,7 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
             : <div className="mx-auto flex min-h-full max-w-2xl flex-col justify-center gap-4 py-8">
               <span className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-6" /></span>
               <h2 className="text-2xl font-semibold tracking-tight">{t("说说你想优化什么")}</h2>
-              <p className="text-sm leading-7 text-muted-foreground">{t("描述问题或上传数据，助手会按需追问，并调用建模方法计算方案。你可以继续解释、比较或调整条件。")}</p>
+              <p className="text-sm leading-7 text-muted-foreground">{t("可以先提问、聊想法或整理资料，也可以直接描述要优化的问题。需要计算时，助手会调用建模方法，和你一起把方案做出来。")}</p>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => { setInput(t("我想给门店安排下周的班次，应该先提供哪些信息？")); inputArea.current?.focus(); }}>{t("聊聊排班需求")}</Button>
                 <Button variant="outline" onClick={onExamples}><BookOpen />{t("从示例开始")}</Button>
@@ -194,14 +194,14 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
       <ChatInput label={t("发送给优化助手")} value={input} onChange={setInput}
         disabled={busy} loading={stream.isLoading} stopping={stopping} inputRef={inputArea}
         presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets}
-        onSend={() => void submit()} onStop={() => void stop()} placeholder={t("描述你的问题，或继续调整当前方案……")}>
+        onSend={() => void submit()} onStop={() => void stop()} placeholder={t("提问、聊聊想法，或继续调整当前方案……")}>
         <Button type="button" variant="ghost" size="icon-sm" disabled={busy} aria-label={t("添加数据文件")} onClick={() => upload.current?.click()}><Paperclip /></Button>
         <Toggle size="sm" pressed={searching} disabled={busy || !canSearch} aria-label={t("联网搜索")} onPressedChange={setSearch}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Toggle>
         <Button type="button" variant={settings ? "secondary" : "ghost"} size="icon-sm" aria-label={t("建模偏好")} aria-expanded={settings} onClick={() => setSettings(!settings)}><SlidersHorizontal /></Button>
       </ChatInput>
       <p className="text-center text-[11px] text-muted-foreground">{chosenMethod !== "auto" || chosenLanguage !== "auto"
         ? `${options.methods.find(item => item.id === chosenMethod)?.name || t("自动选择")} · ${options.languages.find(item => item.id === chosenLanguage)?.name || t("自动选择")}`
-        : t("默认 Direct · Pyomo，可直接在对话中指定方法或建模求解器。")}</p>
+          : t("Enter 发送，Shift+Enter 换行")}</p>
       <input ref={upload} type="file" multiple accept={DATA_FILE_ACCEPT} className="hidden" aria-label={t("数据文件")} onChange={async event => {
         const field = event.currentTarget;
         try {

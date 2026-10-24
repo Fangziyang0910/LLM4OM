@@ -68,7 +68,7 @@ async def explain_result(context: Context, problem: str, formulation: str | None
     nonzero = {name: value for name, value in variables.items() if value != 0}
     shown = dict(list((nonzero or variables).items())[:MAX_EXPLAINED_VARIABLES])
     parser = PydanticOutputParser(pydantic_object=Explanation)
-    language = "简体中文" if locale == "zh" else "English"
+    language = "Simplified Chinese" if locale == "zh" else "English"
     reply = await context.llm("explain_result").ainvoke([
         SystemMessage("Explain a computed optimization solution for an ordinary user. "
                       f"Write ALL user-facing strings (summary, labels, units and notes) in {language}, "
@@ -100,7 +100,7 @@ async def explain_infeasibility(context: Context, problem: str, formulation: str
     diagnosis = solve["diagnosis"]
     items = diagnosis["items"]
     parser = PydanticOutputParser(pydantic_object=InfeasibilityExplanation)
-    language = "简体中文" if locale == "zh" else "English"
+    language = "Simplified Chinese" if locale == "zh" else "English"
     reply = await context.llm("explain_infeasibility").ainvoke([
         SystemMessage("Explain an infeasible optimization model for an ordinary user using the actual solver diagnosis. "
                       f"Write all user-facing strings in {language}. Explain the conflicting business requirements "

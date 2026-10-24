@@ -87,7 +87,7 @@ def test_business_explanation_references_the_actual_solved_model(make_resources:
     def reply(role: str, messages: Any, tools: Any) -> str:
         roles.append(role)
         if role == "explain_result":
-            assert "简体中文" in messages[0].content
+            assert "Simplified Chinese" in messages[0].content
             facts = json.loads(messages[-1].content)
             assert facts["objective"] == 13
             assert facts["variables"] == {"x[A]": 3, "x[B]": 2}

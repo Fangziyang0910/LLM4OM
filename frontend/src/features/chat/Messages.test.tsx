@@ -42,6 +42,35 @@ test("a first calculation's result card uses the stored objective and opens its 
   expect(open).toHaveBeenCalledWith("calculated");
 });
 
+test("arithmetic shows actual tool output with its expression available on demand", () => {
+  render(<ChatMessages messages={[question, { type: "tool", name: "calculate", tool_call_id: "math", content: "",
+    artifact: { calculation: { expression: "sum(values)", result: 0, matched_variables: 250 } } }]}
+    loading={false} label="优化助手" onRetry={vi.fn()} />);
+  const calculation = screen.getByLabelText("计算核对");
+  expect(calculation.textContent).toContain("250 个实际决策值");
+  expect(calculation.querySelector("strong")!.textContent).toBe("0");
+  expect(calculation.querySelector("code")!.textContent).toBe("sum(values)");
+  expect((calculation as HTMLDetailsElement).open).toBe(false);
+});
+
+test("choosing a saved plan has a compact receipt that opens that plan", () => {
+  const open = vi.fn();
+  render(<ChatMessages messages={[question, { type: "tool", name: "select_plan", tool_call_id: "choose", content: "",
+    artifact: { selected_plan: { name: "第二个方案", source: { thread_id: "second" } } } }]}
+    loading={false} label="优化助手" onRetry={vi.fn()} onOpenPlan={open} />);
+  fireEvent.click(screen.getByRole("button", { name: "已选择：第二个方案" }));
+  expect(open).toHaveBeenCalledWith("second");
+});
+
+test("recoverable tool errors keep details folded without hiding them", () => {
+  render(<ChatMessages messages={[question, { type: "tool", name: "calculate", tool_call_id: "math", content: "division by zero", status: "error" }]}
+    loading={false} label="优化助手" onRetry={vi.fn()} />);
+  const details = screen.getByText("这一步未完成").closest("details")!;
+  expect(details.open).toBe(false);
+  expect(details.textContent).toContain("division by zero");
+  expect(screen.queryByRole("button", { name: "重试这一轮" })).toBeNull();
+});
+
 test("only an unfinished turn offers retry, and error details stay available without filling the log", () => {
   const retry = vi.fn();
   const { rerender } = render(<ChatMessages messages={[question]} loading={false} label="方案助手" onRetry={retry} />);

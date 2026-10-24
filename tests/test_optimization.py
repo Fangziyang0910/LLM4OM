@@ -52,6 +52,30 @@ def test_an_initial_idea_can_be_discussed_without_creating_a_run(make_resources,
     saved_plans[1].threads.create.assert_not_called()
 
 
+def test_general_chat_and_arithmetic_do_not_require_a_modeling_problem(make_resources, saved_plans):
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            if "通知" in messages[-1].text:
+                return "请大家于明天下午三点到会议室参加讨论。"
+            return tool_call("calculate", expression="23789 * 47 - 18635")
+        facts = json.loads(messages[-1].text)
+        assert facts["result"] == 1099448 and facts["source"] is None
+        return "计算结果是 1,099,448。"
+
+    async def check():
+        graph = optimization_graph()
+        graph.checkpointer = InMemorySaver()
+        config = {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}
+        first = await graph.ainvoke({"messages": [("human", "帮我写一句简短的会议通知")]}, config)
+        assert first["failure"] is None and first["current"] is None and not first["plans"]
+        second = await graph.ainvoke({"messages": [("human", "再帮我算一下 23789 * 47 - 18635")]}, config)
+        assert second["failure"] is None, second["failure"]
+        assert second["current"] is None and not second["plans"] and second["usage"]["solves"] == 0
+
+    asyncio.run(check())
+    saved_plans[1].threads.create.assert_not_called()
+
+
 @pytest.mark.parametrize("tool_name", ["model_and_solve", "solve_scenarios"])
 def test_parallel_calculation_calls_run_only_once_per_turn(make_resources, saved_plans, monkeypatch, tool_name):
     snapshots, client = saved_plans

@@ -125,6 +125,7 @@ test("the plan assistant can be widened and keeps that width after reload", asyn
   await expect.poll(async () => (await assistant.boundingBox())!.width).toBeGreaterThan(before + 90);
   const resized = (await assistant.boundingBox())!.width;
   await page.reload();
+  await expect(assistant).toBeVisible();
   await expect.poll(async () => Math.abs((await assistant.boundingBox())!.width - resized)).toBeLessThan(2);
   for (const width of [1024, 1366, 1920, 2560]) {
     await page.setViewportSize({ width, height: 768 });

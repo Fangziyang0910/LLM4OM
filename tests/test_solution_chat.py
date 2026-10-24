@@ -45,7 +45,12 @@ def checkpoint_client(monkeypatch: pytest.MonkeyPatch, original: dict) -> tuple[
 
 @pytest.mark.parametrize("kind", ["requirements", "optimization", "solution_chat"])
 def test_each_conversation_applies_thinking_only_to_its_own_model(make_resources, monkeypatch, kind):
-    resources = make_resources(lambda *_: "确认了，可以继续讨论。", llm=LLMSettings(
+    def reply(role, messages, tools):
+        assert "Simplified Chinese" in messages[0].text
+        assert "简体中文" not in messages[0].text
+        return "确认了，可以继续讨论。"
+
+    resources = make_resources(reply, llm=LLMSettings(
         "deepseek", "deepseek-flash", api_key="test-key", extra_body={"thinking": {"type": "disabled"}}))
     _, _, source = checkpoint_client(monkeypatch, {"description": "原问题", "spec": {"preset": None}})
     seen = []
@@ -81,6 +86,155 @@ def test_a_result_question_reads_actual_values_without_running_a_model(make_reso
         {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": resources}}, context=AgentContext()))
     assert result["failure"] is None and not result["plans"]
     assert result["usage"]["llm_calls"] == 2 and result["usage"]["solves"] == 0
+    client.threads.create.assert_not_called()
+    assert snapshots[source["thread_id"]]["values"] == original
+
+
+@pytest.mark.parametrize("factory", [optimization_graph, solution_graph])
+def test_choosing_a_saved_plan_changes_the_next_turn_without_recalculating(make_resources, monkeypatch, factory):
+    original = {"description": "原生产计划", "spec": {"preset": None},
+                "solve": {"status": "optimal", "objective": 13, "variables": {"x[B]": 2}}}
+    client, snapshots, source = checkpoint_client(monkeypatch, original)
+    selected = {"thread_id": str(uuid4()), "checkpoint_id": str(uuid4())}
+    snapshots[selected["thread_id"]] = {"values": {**original, "description": "B 至少生产 3 件",
+        "solve": {"status": "optimal", "objective": 12, "variables": {"x[B]": 3}}},
+        "checkpoint": {"checkpoint_id": selected["checkpoint_id"]}}
+
+    def reply(role, messages, tools):
+        facts = json.JSONDecoder().raw_decode(messages[0].text.split("Current frozen plan:\n", 1)[1])[0]
+        assert len(facts["available_plans"]) == 2
+        assert [plan["id"] for plan in facts["available_plans"]] == [source["thread_id"], selected["thread_id"]]
+        assert facts["available_plans"][0]["original"]
+        if messages[-1].type == "human" and "就用" in messages[-1].text:
+            return tool_call("select_plan", plan_id=selected["thread_id"])
+        assert '"objective": 12' in messages[0].text
+        return "接下来就按 B 至少生产 3 件的方案继续。"
+
+    async def check():
+        graph = factory()
+        graph.checkpointer = InMemorySaver()
+        config = {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}
+        await graph.aupdate_state(config, {"source": source, "current": source, "messages": [], "plans": [
+            {"name": "原方案", "instruction": "原生产计划", "source": source, "group": None, "turn_id": "first"},
+            {"name": "方案二", "instruction": "B 至少生产 3 件", "source": selected, "group": None, "turn_id": "earlier"}]}, as_node="discuss")
+        chosen = await graph.ainvoke({"messages": [("human", "就用方案二，先别重新算")]}, config)
+        assert chosen["failure"] is None, chosen["failure"]
+        assert chosen["current"] == selected
+        later = await graph.ainvoke({"messages": [("human", "我们现在讨论的条件是什么？")]}, config)
+        assert later["failure"] is None and later["current"] == selected
+        assert len(later["plans"]) == 2 and later["usage"]["solves"] == 0
+        assert later["source"] == source
+
+    asyncio.run(check())
+    client.threads.create.assert_not_called()
+    assert snapshots[source["thread_id"]]["values"] == original
+
+
+def test_a_reply_failure_keeps_an_explicit_plan_selection(make_resources, monkeypatch):
+    original = {"description": "原方案", "spec": {"preset": None}, "solve": {"status": "optimal", "objective": 13}}
+    client, snapshots, source = checkpoint_client(monkeypatch, original)
+    selected = {"thread_id": str(uuid4()), "checkpoint_id": str(uuid4())}
+    snapshots[selected["thread_id"]] = {"values": {**original, "description": "选中的方案"},
+        "checkpoint": {"checkpoint_id": selected["checkpoint_id"]}}
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            return tool_call("select_plan", plan_id=selected["thread_id"])
+        raise RuntimeError("reply unavailable")
+
+    async def check():
+        graph = solution_graph()
+        graph.checkpointer = InMemorySaver()
+        config = {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}
+        await graph.aupdate_state(config, {"source": source, "current": source, "messages": [], "plans": [{
+            "name": "方案二", "instruction": "已算好的方案", "source": selected, "group": None, "turn_id": "earlier"}]}, as_node="discuss")
+        result = await graph.ainvoke({"messages": [("human", "接下来就用方案二")]}, config)
+        assert "reply unavailable" in result["failure"]
+        assert result["current"] == selected and result["source"] == source
+
+    asyncio.run(check())
+    client.threads.create.assert_not_called()
+
+
+@pytest.mark.parametrize("expression", ["__import__('os')", "v.clear()", "v['x[0]'] = 9", "1 / 0", "v['missing']", "True", "1e999"])
+def test_calculator_input_errors_can_be_corrected_within_the_same_reply(make_resources, monkeypatch, expression):
+    original = {"description": "实际零值", "spec": {"preset": None},
+        "solve": {"status": "optimal", "objective": 0, "variables": {"x[0]": 0}}}
+    client, snapshots, source = checkpoint_client(monkeypatch, original)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            return tool_call("calculate", expression=expression)
+        if messages[-1].status == "error":
+            return tool_call("calculate", expression="v['x[0]']")
+        assert json.loads(messages[-1].text)["result"] == 0
+        return "该决策的实际值是 0。"
+
+    result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [("human", "核对实际决策")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+    assert len([m for m in result["messages"] if m.type == "tool" and m.status == "error"]) == 1
+    assert result["current"] == source and not result["plans"]
+    assert snapshots[source["thread_id"]]["values"] == original
+    client.threads.create.assert_not_called()
+
+
+def test_variable_pages_can_reach_values_beyond_the_initial_snapshot(make_resources, monkeypatch):
+    original = {"description": "250 项决策", "spec": {"preset": None},
+        "solve": {"status": "optimal", "objective": 0, "variables": {f"x[{i}]": i for i in range(250)}}}
+    _, snapshots, source = checkpoint_client(monkeypatch, original)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            return tool_call("lookup_variables", query="")
+        facts = json.loads(messages[-1].text)
+        if facts["next_offset"] is not None:
+            return tool_call("lookup_variables", query="", offset=facts["next_offset"])
+        assert len(facts["variables"]) == 50 and facts["variables"]["x[249]"] == 249
+        return "最后一项的实际值是 249。"
+
+    result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [("human", "最后一项的值是多少？")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+    assert snapshots[source["thread_id"]]["values"] == original
+
+
+def test_unrelated_arithmetic_does_not_read_or_switch_the_saved_plan(make_resources, monkeypatch):
+    original = {"description": "原方案", "spec": {"preset": None},
+        "solve": {"status": "optimal", "objective": 13, "variables": {"x[B]": 2}}}
+    client, snapshots, source = checkpoint_client(monkeypatch, original)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            return tool_call("calculate", expression="19 * 23")
+        facts = json.loads(messages[-1].text)
+        assert facts["result"] == 437 and facts["source"] is None and facts["matched_variables"] == 0
+        return "19 × 23 = 437。"
+
+    result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [("human", "题外话，19乘23是多少？")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+    assert result["current"] == source and not result["plans"]
+    assert snapshots[source["thread_id"]]["values"] == original
+    client.threads.create.assert_not_called()
+
+
+def test_plan_arithmetic_uses_all_frozen_variables_and_does_not_solve(make_resources, monkeypatch):
+    original = {"description": "250 项实际决策", "data": {}, "spec": {"preset": None},
+        "solve": {"status": "optimal", "objective": 31125, "variables": {f"x[{i}]": i for i in range(250)}}}
+    client, snapshots, source = checkpoint_client(monkeypatch, original)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            return tool_call("calculate", expression="sum(values)")
+        result = json.loads(messages[-1].text)
+        assert result["result"] == 31125 and result["matched_variables"] == 250
+        return "250 项决策合计为 31,125。"
+
+    result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [("human", "合计是多少？")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+    assert result["current"] == source and result["usage"]["solves"] == 0
     client.threads.create.assert_not_called()
     assert snapshots[source["thread_id"]]["values"] == original
 

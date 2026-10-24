@@ -40,6 +40,7 @@ dependencies = [
     # AutoFormulation ranks candidates with numpy and scikit-learn.
     "numpy>=2,<3",
     "scikit-learn>=1.5,<2",
+    "simpleeval==1.0.8",
 ]
 
 [project.optional-dependencies]
