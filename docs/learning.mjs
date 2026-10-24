@@ -27,11 +27,6 @@ for (const walkthrough of document.querySelectorAll("[data-walkthrough]")) {
     walkthrough.querySelector('[data-action="next"]').disabled = index === panels.length - 1;
     diagram?.querySelectorAll(".node").forEach(node => node.classList.remove("is-current"));
     for (const id of panels[index].dataset.nodes.split(" ")) diagram?.querySelectorAll(`[id*="-flowchart-${CSS.escape(id)}-"]`).forEach(node => node.classList.add("is-current"));
-    const active = diagram?.querySelector(".is-current");
-    if (active) {
-      const scroll = diagram.querySelector(".diagram-scroll"), box = active.getBoundingClientRect(), frame = scroll.getBoundingClientRect();
-      scroll.scrollTo({ top: scroll.scrollTop + box.y - frame.y - (frame.height - box.height) / 2, left: scroll.scrollLeft + box.x - frame.x - (frame.width - box.width) / 2, behavior: "instant" });
-    }
     pulse(panels[index]);
   };
   walkthrough.dataset.ready = "true";
@@ -68,16 +63,19 @@ for (const demo of document.querySelectorAll("[data-demo]")) {
       const center = vertices.length ? vertices.reduce((a, p) => [a[0] + p[0] / vertices.length, a[1] + p[1] / vertices.length], [0, 0]) : [0, 0];
       vertices.sort((a, b) => Math.atan2(a[1] - center[1], a[0] - center[0]) - Math.atan2(b[1] - center[1], b[0] - center[0]));
       demo.querySelector('[data-value="cutting"]').textContent = cutting;
+      demo.querySelector('[data-model-cutting]').textContent = cutting;
+      demo.querySelector('[data-model-minimum]').textContent = minimumB;
+      demo.querySelector('[data-model-domain]').textContent = integer ? t("A、B 为非负整数", "A and B are nonnegative integers") : t("A、B 为非负连续量", "A and B are nonnegative continuous quantities");
       chart.innerHTML = axis() + `<polygon class="chart-region" points="${vertices.map(point).join(" ")}"/><path d="M${point([0, cutting])}L${point([cutting / 2, 0])}" class="chart-line"/><path d="M${point([0, 4])}L${point([8, 0])}" class="chart-line secondary"/>` + (integer ? result.points.map(p => `<circle cx="${44 + p[0] * 56}" cy="${280 - p[1] * 40}" r="3" class="chart-point"/>`).join("") : "") + (result.best ? `<circle cx="${44 + result.best[0] * 56}" cy="${280 - result.best[1] * 40}" r="7" class="chart-best"/>` : "");
       const download = demo.querySelector('[data-action="download"]');
       download.disabled = !result.best;
       if (!result.best) {
         output.textContent = t("无可行方案", "No feasible plan");
-        demo.querySelector(".demo-explanation").textContent = t("B ≥ 5 已经需要至少 10 小时装配，但只有 8 小时。增加切割工时不能消除这个冲突。", "B ≥ 5 requires at least 10 finishing hours, but only 8 are available. More cutting capacity cannot remove this conflict.");
+        demo.querySelector(".demo-explanation").textContent = t("B 至少 5 件需要装配 10 小时，超过可用的 8 小时。", "At least 5 units of B require 10 finishing hours; 8 hours are available.");
       } else {
         const [a, b] = result.best;
-        output.textContent = `A = ${number(a)}, B = ${number(b)} · ${t("收益", "Objective")} ${number(result.objective)}`;
-        demo.querySelector(".demo-explanation").textContent = t(`切割用 ${number(2 * a + b)} / ${cutting} 小时；装配用 ${number(a + 2 * b)} / 8 小时。${integer ? "点表示可行的整数方案；填色表示连续可行域。" : "数量允许分割，最优点可能位于两个整数点之间。"}`, `Cutting: ${number(2 * a + b)} / ${cutting} hours. Finishing: ${number(a + 2 * b)} / 8 hours. ${integer ? "Dots are feasible integer plans; shading is the continuous feasible region." : "Divisible quantities can place the optimum between integer points."}`);
+        output.textContent = `A = ${number(a)}, B = ${number(b)} · ${t(`利润 ${number(result.objective)} 元`, `Profit CNY ${number(result.objective)}`)}`;
+        demo.querySelector(".demo-explanation").textContent = t(`切割使用 ${number(2 * a + b)} / ${cutting} 小时；装配使用 ${number(a + 2 * b)} / 8 小时。${integer ? "小圆点表示可行的整数产量组合。" : "当前按连续产量计算。"}`, `Cutting: ${number(2 * a + b)} / ${cutting} hours. Finishing: ${number(a + 2 * b)} / 8 hours. ${integer ? "Small dots show feasible whole-unit combinations." : "Quantities are currently continuous."}`);
       }
       chart.setAttribute("aria-label", output.textContent);
       pulse(output);
@@ -99,46 +97,71 @@ for (const demo of document.querySelectorAll("[data-demo]")) {
     const plans = new Map([[0, production()]]);
     const label = n => n === 0 ? t("原方案", "Original") : `B ≥ ${n}`;
     const update = () => {
-      current.textContent = `${label(minimum)} · ${number(plans.get(minimum).objective)}`;
-      saved.textContent = t("已保存：", "Saved: ") + [...plans].map(([n, p]) => `${label(n)} (${number(p.objective)})`).join(" · ");
+      const result = plans.get(minimum);
+      current.textContent = `${label(minimum)} · A = ${result.best[0]}, B = ${result.best[1]} · ${t(`利润 ${result.objective} 元`, `Profit CNY ${result.objective}`)}`;
+      for (const [n, p] of plans) {
+        let button = saved.querySelector(`[data-plan="${n}"]`);
+        if (!button) { button = document.createElement("button"); button.type = "button"; button.dataset.plan = n; saved.append(button); }
+        button.textContent = `${label(n)} · ${t(`${p.objective} 元`, `CNY ${p.objective}`)}`;
+        button.setAttribute("aria-pressed", String(n === minimum));
+      }
     };
     demo.addEventListener("click", event => {
-      const action = event.target.closest("button")?.dataset.action;
-      if (!action) return;
+      const button = event.target.closest("button");
+      const action = button?.dataset.action;
       let message;
-      if (action === "reset") { minimum = 0; plans.clear(); plans.set(0, production()); log.replaceChildren(); message = t("已恢复原方案：A = 3，B = 2，收益 13。", "Original restored: A = 3, B = 2, objective 13."); }
+      if (button?.dataset.plan !== undefined) {
+        minimum = Number(button.dataset.plan);
+        message = t(`已选择 ${label(minimum)}，后续查询和调整以此为基准。`, `Selected ${label(minimum)} for subsequent questions and revisions.`);
+      }
+      if (action === "reset") { minimum = 0; plans.clear(); plans.set(0, production()); saved.replaceChildren(); log.replaceChildren(); message = t("已恢复原方案：A = 3，B = 2，利润 13 元。", "Original restored: A = 3, B = 2, profit CNY 13."); }
       if (action === "explain") {
         const [a, b] = plans.get(minimum).best;
-        message = t(`查询 ${label(minimum)}：切割用 ${2 * a + b}/8，装配用 ${a + 2 * b}/8。余量分别是 ${8 - 2 * a - b} 和 ${8 - a - 2 * b}。读取已保存结果，没有重算。`, `Query ${label(minimum)}: cutting ${2 * a + b}/8, finishing ${a + 2 * b}/8; slack ${8 - 2 * a - b} and ${8 - a - 2 * b}. Read saved values; no solve.`);
+        message = t(`${label(minimum)}：A = ${a}，B = ${b}。切割使用 ${2 * a + b}/8 小时，装配使用 ${a + 2 * b}/8 小时。`, `${label(minimum)}: A = ${a}, B = ${b}. Cutting: ${2 * a + b}/8 hours. Finishing: ${a + 2 * b}/8 hours.`);
       }
-      if (action === "revise") { minimum = 3; plans.set(3, production({ minimumB: 3 })); message = t("新增约束 B ≥ 3 并重算：A = 2，B = 3，收益 12。新方案成为当前基准，原方案仍保留。", "Add B ≥ 3 and solve: A = 2, B = 3, objective 12. The new plan is current; the original is kept."); }
+      if (action === "revise") { minimum = 3; plans.set(3, production({ minimumB: 3 })); message = t("将最低产量设为 B ≥ 3 并重算：A = 2，B = 3，利润 12 元。已选为当前讨论方案。", "Set minimum demand to B ≥ 3 and solve: A = 2, B = 3, profit CNY 12. This is now the discussion plan."); }
       if (action === "scenarios") {
         for (const n of [3, 4]) plans.set(n, production({ minimumB: n }));
-        message = t(`从 ${label(minimum)} 这个固定基准分别计算：B ≥ 3 → 12；B ≥ 4 → 8。两个场景互不叠加，当前基准仍是 ${label(minimum)}。`, `Solve separately from the fixed ${label(minimum)} baseline: B ≥ 3 → 12; B ≥ 4 → 8. Scenarios do not accumulate. Current baseline stays ${label(minimum)}.`);
+        message = t(`以 ${label(minimum)} 为基准，分别设置 B 的最低产量：B ≥ 3 → 利润 12 元；B ≥ 4 → 利润 8 元。点击下方方案可继续讨论。`, `From ${label(minimum)}, compare two minimum orders: B ≥ 3 → profit CNY 12; B ≥ 4 → profit CNY 8. Select a saved plan below to discuss it.`);
       }
-      if (action === "original") { minimum = 0; message = t("已选原方案作为当前基准：收益 13。只切换引用，没有重新建模或求解。", "Selected the original as current: objective 13. Changed the reference without modeling or solving again."); }
+      if (action === "original") { minimum = 0; message = t("已选择原方案：A = 3，B = 2，利润 13 元。后续查询和调整以此为基准。", "Selected the original: A = 3, B = 2, profit CNY 13. Subsequent questions and revisions use this plan."); }
       if (message) { const entry = document.createElement("p"); entry.textContent = message; log.append(entry); while (log.children.length > 5) log.firstElementChild.remove(); update(); pulse(entry); }
     });
+    update();
   } else if (kind === "data") {
     let saved = { cutting: 8, finishing: 8 };
+    const run = demo.querySelector('[data-action="run"]'), save = demo.querySelector('[data-action="save"]'), cancel = demo.querySelector('[data-action="cancel"]');
+    const update = () => {
+      const dirty = Object.keys(saved).some(name => input(name).value !== String(saved[name]));
+      run.disabled = dirty; save.disabled = !dirty; cancel.disabled = !dirty;
+      demo.querySelector('[data-data-status]').textContent = dirty ? t("有未保存修改。保存数据后可开始建模；取消编辑可恢复已保存数值。", "You have unsaved edits. Save data to start modeling, or cancel to restore saved values.") : t(`已保存附件：切割 ${saved.cutting} 小时，装配 ${saved.finishing} 小时。点击“开始建模”使用这份数据。`, `Saved data: ${saved.cutting} cutting hours and ${saved.finishing} finishing hours. Start modeling to use these values.`);
+    };
+    demo.addEventListener("input", update);
     demo.addEventListener("click", event => {
       const action = event.target.closest("button")?.dataset.action;
-      if (action === "cancel") for (const name of Object.keys(saved)) input(name).value = saved[name];
-      if (action !== "save") return;
-      for (const name of Object.keys(saved)) if (!input(name).reportValidity()) return;
-      saved = { cutting: Number(input("cutting").value), finishing: Number(input("finishing").value) };
-      const result = production(saved);
-      output.textContent = t(`新方案：${saved.cutting} / ${saved.finishing} 小时 → A = ${result.best[0]}，B = ${result.best[1]}，收益 ${result.objective}。原方案未改变。`, `New plan: ${saved.cutting} / ${saved.finishing} hours → A = ${result.best[0]}, B = ${result.best[1]}, objective ${result.objective}. Original unchanged.`);
-      pulse(output);
+      if (action === "cancel") { for (const name of Object.keys(saved)) input(name).value = saved[name]; update(); }
+      if (action === "save") {
+        for (const name of Object.keys(saved)) if (!input(name).reportValidity()) return;
+        saved = { cutting: Number(input("cutting").value), finishing: Number(input("finishing").value) };
+        for (const name of Object.keys(saved)) input(name).value = saved[name];
+        update();
+      }
+      if (action === "run" && !run.disabled) {
+        const result = production(saved);
+        output.textContent = t(`运行结果（${saved.cutting} / ${saved.finishing} 小时）：A = ${result.best[0]}，B = ${result.best[1]}，利润 ${result.objective} 元。`, `Run result (${saved.cutting} / ${saved.finishing} hours): A = ${result.best[0]}, B = ${result.best[1]}, profit CNY ${result.objective}.`);
+        pulse(output);
+      }
     });
+    update();
   } else if (kind === "convex") {
     const redraw = () => {
       const limit = Number(input("limit").value), p = projection(limit);
       demo.querySelector('[data-value="limit"]').textContent = number(limit);
+      demo.querySelector('[data-model-limit]').textContent = number(limit);
       const xy = (x, y) => `${44 + x * 84},${280 - y * 60}`;
-      chart.innerHTML = `<path d="M44 16V280H420" class="chart-axis"/><text x="405" y="306">x</text><text x="15" y="24">y</text><polygon points="${xy(0, 0)} ${xy(limit, 0)} ${xy(0, limit)}" class="chart-region"/><ellipse cx="128" cy="160" rx="${Math.sqrt(p.objective) * 84}" ry="${Math.sqrt(p.objective) * 60}" class="chart-contour"/><path d="M128 160L${xy(p.x, p.y)}" class="chart-line secondary"/><circle cx="128" cy="160" r="5" class="chart-point"/><text x="140" y="149">(1, 2)</text><circle cx="${44 + p.x * 84}" cy="${280 - p.y * 60}" r="7" class="chart-best"/><text x="${Math.min(350, 54 + limit * 84)}" y="268">${number(limit)}</text>`;
+      chart.innerHTML = `<path d="M44 16V280H420" class="chart-axis"/>${[0, 1, 2, 3, 4].map(i => `<text x="${40 + i * 84}" y="300">${i}</text><text x="24" y="${284 - i * 60}">${i}</text>`).join("")}<text x="420" y="306">x</text><text x="15" y="24">y</text><polygon points="${xy(0, 0)} ${xy(limit, 0)} ${xy(0, limit)}" class="chart-region"/><ellipse cx="128" cy="160" rx="${Math.sqrt(p.objective) * 84}" ry="${Math.sqrt(p.objective) * 60}" class="chart-contour"/><path d="M128 160L${xy(p.x, p.y)}" class="chart-line secondary"/><circle cx="128" cy="160" r="5" class="chart-point"/><text x="140" y="149">(1, 2)</text><circle cx="${44 + p.x * 84}" cy="${280 - p.y * 60}" r="7" class="chart-best"/>`;
       output.textContent = `x = ${number(p.x)}, y = ${number(p.y)} · ${t("目标值", "Objective")} ${number(p.objective)}`;
-      demo.querySelector(".demo-explanation").textContent = limit >= 3 ? t("目标点 (1, 2) 已可行，增加资源不会继续降低目标值。", "The target (1, 2) is feasible. More resources cannot reduce the objective further.") : t("最优点是目标到可行域的投影。这里变量连续，0.5 是合法数量。", "The optimum is the projection of the target onto the feasible set. Variables are continuous, so 0.5 is valid.");
+      demo.querySelector(".demo-explanation").textContent = t(`资源使用 ${number(p.x + p.y)} / ${number(limit)}。最优点到目标 (1, 2) 的距离平方为 ${number(p.objective)}。`, `Resource use: ${number(p.x + p.y)} / ${number(limit)}. The squared distance from the optimum to target (1, 2) is ${number(p.objective)}.`);
       chart.setAttribute("aria-label", output.textContent);
     };
     demo.addEventListener("input", redraw); redraw();
@@ -146,10 +169,11 @@ for (const demo of document.querySelectorAll("[data-demo]")) {
     let path, iteration = 0, timer;
     const play = demo.querySelector('[data-action="play"]');
     const stop = () => { clearInterval(timer); timer = undefined; play.textContent = t("播放迭代", "Play iterations"); play.setAttribute("aria-pressed", "false"); };
-    const xy = x => `${44 + (x + 2) * 90},${260 - nonconvex(x) * 35}`;
+    const y = value => 270 - (value + .5) * 25;
+    const xy = x => `${44 + (x + 2) * 90},${y(nonconvex(x))}`;
     const show = () => {
       const x = path[iteration];
-      chart.innerHTML = `<path d="M44 15V280H420M44 260H420" class="chart-axis"/><text x="401" y="304">x</text><text x="12" y="25">f(x)</text><text x="33" y="302">−2</text><text x="218" y="302">0</text><text x="399" y="302">2</text><path d="${Array.from({ length: 161 }, (_, i) => `${i ? "L" : "M"}${xy(-2 + i / 40)}`).join("")}" class="chart-line"/><path d="M${path.slice(0, iteration + 1).map(xy).join("L")}" class="chart-trail"/><circle cx="${44 + (x + 2) * 90}" cy="${260 - nonconvex(x) * 35}" r="7" class="chart-best"/>`;
+      chart.innerHTML = `<path d="M44 15V280H420M44 ${y(0)}H420" class="chart-axis"/><text x="420" y="304">x</text><text x="12" y="25">f(x)</text><text x="33" y="302">−2</text><text x="218" y="302">0</text><text x="399" y="302">2</text>${[0, 4, 8].map(i => `<text x="24" y="${y(i) + 4}">${i}</text>`).join("")}<path d="${Array.from({ length: 161 }, (_, i) => `${i ? "L" : "M"}${xy(-2 + i / 40)}`).join("")}" class="chart-line"/><path d="M${path.slice(0, iteration + 1).map(xy).join("L")}" class="chart-trail"/><circle cx="${44 + (x + 2) * 90}" cy="${y(nonconvex(x))}" r="7" class="chart-best"/>`;
       output.textContent = `${t("迭代", "Iteration")} ${iteration} · x = ${number(x)} · f(x) = ${number(nonconvex(x))}`;
       chart.setAttribute("aria-label", output.textContent);
     };
@@ -169,6 +193,23 @@ for (const demo of document.querySelectorAll("[data-demo]")) {
   }
 }
 document.addEventListener("visibilitychange", () => { if (document.hidden) pauses.forEach(pause => pause()); });
+
+for (const recording of document.querySelectorAll(".doc-recording")) {
+  const video = recording.querySelector("video"), status = recording.querySelector(".recording-status");
+  let requestedTime;
+  recording.dataset.ready = "true";
+  video.addEventListener("loadedmetadata", () => { if (requestedTime !== undefined) video.currentTime = requestedTime; });
+  recording.addEventListener("click", async event => {
+    const button = event.target.closest("[data-seek]");
+    if (!button) return;
+    requestedTime = Number(button.dataset.seek);
+    if (video.readyState >= 1) video.currentTime = requestedTime;
+    status.hidden = true;
+    try { await video.play(); }
+    catch { status.hidden = false; status.textContent = t("片段暂时无法播放，请使用播放器控件重试。", "The chapter could not play. Use the video controls to retry."); }
+  });
+  pauses.push(() => video.pause());
+}
 
 for (const figure of document.querySelectorAll(".doc-diagram")) {
   const button = document.createElement("button");

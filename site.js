@@ -200,7 +200,7 @@ function renderExample(animate = false) {
   }
   if (kind === "delivery") renderRoutes(animate);
   const quantities = result?.quantities ?? [0, 0];
-  $("#result-description").textContent = result ? t(`${kind}Result`, { a: quantities[0], b: quantities[1] }) : t("conflictExplanation");
+  $("#result-description").textContent = result ? t(`${kind}Result`, { a: quantities[0], b: quantities[1], cutting: conditions.cutting, cuttingUsed: 2 * quantities[0] + quantities[1], finishingUsed: quantities[0] + 2 * quantities[1] }) : t("conflictExplanation");
   $("#model-intro").textContent = t(`${kind}ModelIntro`);
   $("#example-model").textContent = t(`${kind}Model`, {
     cutting: conditions.cutting,
@@ -272,6 +272,7 @@ bindTabs("[data-view]", button => {
   view = button.dataset.view; selectTabs("[data-view]", button);
   $("#plan-content").hidden = view !== "plan"; $("#model-content").hidden = view !== "model";
 });
+$("#demo-data").addEventListener("click", () => { complete(); $("#view-model").click(); $("#view-model").focus(); });
 
 $("#language-toggle").addEventListener("click", () => {
   language = language === "zh" ? "en" : "zh";
