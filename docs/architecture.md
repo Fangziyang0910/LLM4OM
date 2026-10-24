@@ -54,7 +54,9 @@ LangChain 工具中间件在每轮允许一次方案变更调用（建模、场�
 ```text
 src/llm4om/
 ├── __init__.py          公共入口：run、run_problem 及常用类型
-├── cli.py               命令行：serve、run、build-worker
+├── cli.py               命令行：host、solve、methods、target、backends；可选 serve、run 与 build-worker
+├── host/                宿主模型适配、本地方法会话与执行记录，不连接平台 LLM 或 Web 服务
+├── method_steps.py      平台与宿主模式共用的方法产物记录
 ├── languages.py         九个建模库、原生代码契约和 CodeTarget
 ├── code_prompts.py      官方建模接口的代码参考
 ├── model_code.py        原生变量、约束、目标和函数组装，供组件式方法复用
@@ -122,7 +124,7 @@ Excel 导出由 `frontend/src/features/runs/workbook.ts` 完成。工作簿从�
 
 `prepare` 发现请求不可用时写入 `failure` 并结束运行，不调用 LLM；有效请求记录内部截止时间 `_deadline` 和不含密钥的 `spec`，包括平台版本、方法来源与参数、限制、LLM 设置、代码写法、求解器和沙箱镜像。`model` 和 `solve` 共享剩余时间，超时、超限或出错时写入一个错误步骤和 `failure`，保留已完成的数学模型和代码。失败后不再补跑最终求解。`finish` 固定 `timing`：从开始校验到结束，不含服务器排队时间，不随备注和标签变化。没有完成计时的记录在对比表中显示未知；中断运行的详情可读取进度快照中的时间。
 
-方法图在 `model` 节点内运行，平台不为它保存检查点（`checkpointer = False`）：AutoFormulation 这类方法的内部状态很大，逐步保存的代价高于收益。平台图本身由服务器保存检查点。`progress.save_progress` 在方法执行期间合并公开步骤和产物，每秒至多一次写入原生 Store，取消时立即刷新；不保存内部搜索树或密钥。正常完成后删除临时进度，最终状态成为唯一结果。
+Web/API 模式的方法图在 `model` 节点内运行，平台不为它保存检查点（`checkpointer = False`）：AutoFormulation 这类方法的内部状态很大，逐步保存的代价高于收益。平台图本身由服务器保存检查点。`progress.save_progress` 在方法执行期间合并公开步骤和产物，每秒至多一次写入原生 Store，取消时立即刷新；不保存内部搜索树或密钥。正常完成后删除临时进度，最终状态成为唯一结果。
 
 方法返回的 `failure` 即使已有代码也会保留，例如 Feedback Repair 达到修正上限但仍有建模问题。后续节点抛出异常时，平台保留已完成的数学模型、代码和对应求解结果。
 
@@ -133,6 +135,8 @@ Excel 导出由 `frontend/src/features/runs/workbook.ts` 完成。工作簿从�
 预设只能添加（`add`）和删除（`delete`），没有修改操作；`env` 预设不能删除。新增预设用随机 UUID，不按模型名复用 ID；已有预设保留原 ID。`public()` 返回的预设不含密钥。额外请求参数不能覆盖显式配置字段或调用记录回调。预设读改写由服务内共享锁串行化；先写权限为 600 的临时文件，再原子替换，写入失败保留旧文件。预算文件损坏时报告错误，不把已有用量当成零；后台落盘失败记录错误日志，`flush()` 也会抛出写入异常。一个工作区只供一个服务进程使用，与内存运行时一致。模型列表接口 `/api/models` 只使用请求中填写的密钥，从不补入已保存的密钥，因此密钥只会发往与它一起保存的接口地址。
 
 ## 方法接口
+
+宿主模型模式由 `host/` 提供独立执行入口，不经过平台预设解析。`HostChatModel` 通过原生 `interrupt` 把任务交给当前 Agent；回答后原方法图继续解析、路由和执行工具。模型任务、求解与检查脚本以原生 `task` 保存已完成结果。本地 SQLite 检查点保存方法内部状态，执行记录恢复计数、步骤及精确代码对应的求解结果。与 Web 模式相比，逐次交接需要额外保存方法内部状态，取舍见 [0017](adr/0017-host-model-skills.md)。CLI 用法见[宿主建模](host-modeling.md)。
 
 LangGraph 就是平台的方法抽象。每个方法是一张编译好的 LangGraph 图，即使只有一个节点（Direct）。平台不另设阶段、产物或插件接口。
 

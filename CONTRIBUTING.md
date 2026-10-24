@@ -75,6 +75,8 @@ npm --prefix frontend run build     # 输出到 src/llm4om/server/web_assets/，
 
 Python 测试不调用真实 LLM，也不需要 Docker。方法使用脚本化聊天模型，求解使用本机 Worker（需要 `solve` 可选依赖）。AutoFormulation 的等价判断测试需要 `autoformulation` 可选依赖。
 
+`tests/test_host.py` 通过公开宿主接口逐次打开本地检查点，覆盖 13 种方法与 9 种建模库、复杂搜索、工具循环、重试和预算。CLI 的跨进程回归验证无需 Web 与平台模型配置。基础包只安装宿主 CLI 依赖；开发依赖包含 `web`，原有服务与模型测试仍可直接运行。单独使用宿主模式时可执行 `uv tool install .`。
+
 浏览器测试使用构建好的页面，并需要 `solve` 和 `gurobi` 可选依赖（`uv sync --all-extras` 已包含）。第一次运行前安装浏览器：
 
 ```bash

@@ -4,10 +4,29 @@
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-10-24
+
+### 宿主模型与 Skills
+
+- 增加 Codex / Claude Code 通用 Skill，由宿主当前模型承担建模、审查及工具决策，不调用平台 LLM，不需要部署 Web。
+- CLI 增加 `host start/resume/status`、纯代码 `solve`、方法与后端发现、建模库契约。原生 LangGraph SQLite 检查点保存方法状态，保留原流程及已完成的回答、求解和检查结果。
+- 模型供应商和 Web 依赖分别移入 `llm`、`web` 可选安装；Web Docker 镜像显式安装对应依赖，开发环境继续包含现有检查所需依赖。
+- OptiMUS 解析重试正确传递原生图暂停，不改变其提示、重试次数或建模规则。
+- 提供固定版本的远程安装、首次使用、环境核对、升级和卸载说明；Release 附带 Python wheel、源码包与独立 Skill 压缩包。
+
 ### 架构
 
 - Agent 按方案操作、计算和建模能力装配原生 LangChain 工具与中间件，各自维护对应指令；会话图继续负责预算、流式执行和状态提交，保留现有恢复与每轮一次方案修改的语义。
 - 聊天结果按工具产物类型选择展示模块，兼容已有历史消息；现有页面、工具名称和交互保持不变。
+
+### 文档与官网
+
+- 扩充中英文方法、建模库、求解后端、交互演示和使用指南；官网与 Docs 支持浅色、深色和系统主题。
+
+### 升级
+
+- 单独安装基础包时，`llm4om run` 需要 `llm` 可选依赖，`llm4om serve` 需要 `web`。原有 Docker 和开发环境已显式安装所需依赖。
+- CLI 与 Skill 应使用相同发布版本；升级后创建新的宿主建模会话。求解镜像继续使用 `llm4om-worker:12`。
 
 ## [0.42.0] - 2026-10-24
 
@@ -117,7 +136,8 @@
 - 工作台用 Tailwind v4 和 shadcn/ui 重新设计：结论卡片、建模过程、解的矩阵视图、版本对比。
 - 全部方法参数集中在 `methods/presets.py`。
 
-[Unreleased]: https://github.com/Fangziyang0910/LLM4OM/compare/v0.42.0...HEAD
+[Unreleased]: https://github.com/Fangziyang0910/LLM4OM/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/Fangziyang0910/LLM4OM/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/Fangziyang0910/LLM4OM/compare/v0.41.1...v0.42.0
 [0.41.1]: https://github.com/Fangziyang0910/LLM4OM/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/Fangziyang0910/LLM4OM/compare/v0.40.0...v0.41.0

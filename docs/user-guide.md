@@ -253,6 +253,8 @@ Direct 用一次 LLM 调用生成模型和代码，适合快速运行。Feedback
 
 ## 命令行
 
+使用 Codex、Claude Code 当前模型建模，或只运行已有求解代码时，见[宿主模型与 Skills](host-modeling.md)。这条路径不需要平台 LLM 或 Web 服务。下面的 `run` 命令仍使用平台预设模型，需要 `llm` 可选依赖。
+
 ```bash
 uv run llm4om run --problem "……" --method trival --language pyomo
 uv run llm4om run --file problem.txt --data demand.csv --method coe

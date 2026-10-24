@@ -6,6 +6,7 @@
 |---|---|
 | 了解平台、快速启动 | [README](../README.md) · [English](../README.en.md) |
 | 用工作台、命令行或 Python 求解问题 | [使用指南](user-guide.md) |
+| 在 Codex / Claude Code 中用当前模型建模，无需 Web | [宿主模型与 Skills](host-modeling.md) |
 | 部署给课题组或团队使用 | [部署指南](deployment.md) |
 | 修改代码、接入新方法、发布版本 | [开发指南](../CONTRIBUTING.md) · [开发规范](../CODING_STANDARDS.md) |
 | 理解模块、方法接口、沙箱和运行记录 | [架构](architecture.md) |

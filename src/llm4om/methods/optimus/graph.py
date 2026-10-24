@@ -24,6 +24,7 @@ from pprint import pformat
 from typing import Any
 
 from langchain_core.messages import HumanMessage
+from langgraph.errors import GraphBubbleUp
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
@@ -84,6 +85,8 @@ async def parameters(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
             try:
                 params = extract_json_from_end(await _ask(context, "parameters", PARAMS_PROMPT.format(description=state["problem"])))
                 break
+            except GraphBubbleUp:
+                raise  # Host-model pauses are graph control flow, not malformed model replies.
             except Exception:
                 k -= 1
                 if k == 0:
@@ -112,6 +115,8 @@ async def constraints(state: State, runtime: Runtime[Context]) -> dict[str, Any]
                 description=desc, params=_dump(params), constraints=_dump(found)))
             found = extract_json_from_end(x, list)
             break
+        except GraphBubbleUp:
+            raise
         except Exception:
             k -= 1
             if k == 0:

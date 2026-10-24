@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/Fangziyang0910/LLM4OM/actions/workflows/checks.yml"><img src="https://github.com/Fangziyang0910/LLM4OM/actions/workflows/checks.yml/badge.svg" alt="Checks"></a>
-  <img src="https://img.shields.io/badge/version-0.42.0-4f39f6" alt="Version 0.42.0">
+  <img src="https://img.shields.io/badge/version-0.43.0-4f39f6" alt="Version 0.43.0">
   <img src="https://img.shields.io/badge/python-3.11%E2%80%933.13-3776ab?logo=python&logoColor=white" alt="Python 3.11–3.13">
   <img src="https://img.shields.io/badge/LangGraph-server-1c3c3c?logo=langchain&logoColor=white" alt="LangGraph">
   <img src="https://img.shields.io/badge/deploy-Docker%20Compose-2496ed?logo=docker&logoColor=white" alt="Docker Compose">
@@ -96,6 +96,24 @@ On desktop, drag the divider beside the Agent or plan assistant to resize the co
 </table>
 
 ## Quick start
+
+### Use the current model in Codex / Claude Code
+
+The skill lets your current coding-agent model handle conversation, modeling, code generation, review, and explanation. The CLI reuses all 13 method graphs and the existing solver runtime. It calls no platform LLM and needs no Web server.
+
+No checkout is needed. Prepare [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, a running Docker installation, and Node.js 22.20 or newer. These commands pin both components to v0.43.0 and select Python 3.12:
+
+```bash
+uv tool install --python 3.12 git+https://github.com/Fangziyang0910/LLM4OM@v0.43.0
+llm4om build-worker
+npx skills add https://github.com/Fangziyang0910/LLM4OM/tree/v0.43.0/skills/llm4om --skill llm4om -g -a codex -a claude-code
+```
+
+Run `llm4om --version` to confirm the version and `llm4om backends` to inspect the solver environment. Open a new host session, invoke `$llm4om` in Codex or `/llm4om` in Claude Code, and describe your problem, method, library, and attachments. To install for one host, remove the other `-a` option.
+
+The host answers the original method's tasks with its current model. The CLI executes the method stages, tools, checks, and solvers, then returns real feedback. Local checkpoints support continuation across commands. See the [skill](skills/llm4om/SKILL.md) and [CLI guide](docs/host-modeling.md). The `npx` command installs skill files; the CLI and solver environment are separate prerequisites.
+
+The base package excludes model-provider clients and the Web server. Install `llm4om[llm]` for API-model runs or `llm4om[web]` for the existing workbench; Docker deployment below keeps its original behavior. Host mode preserves method control flow. Sampling temperature and context isolation remain host-controlled, so this is not an identical reproduction of the original API experiment.
 
 ### Option 1: Docker (recommended)
 
@@ -221,7 +239,7 @@ If you use LLM4OM in research, please cite this repository (see [CITATION.cff](C
   author  = {Fang, Ziyang},
   title   = {{LLM4OM}: A Platform for Automated Optimization Modeling with Large Language Models},
   year    = {2026},
-  version = {0.42.0},
+  version = {0.43.0},
   url     = {https://github.com/Fangziyang0910/LLM4OM}
 }
 ```

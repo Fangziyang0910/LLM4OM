@@ -1,4 +1,4 @@
-CLI and Python execute the same modeling graphs as the workbench. Use them for batches, saved states and integration. Prepare dependencies and Worker using [installation](../installation/), then select an LLM preset.
+CLI and Python execute the same modeling graphs as the workbench. To use your current Codex or Claude Code model without a platform API key, install the Host Skill using [installation](../installation/). The `run` and Python examples below use a platform model preset and need the `llm` optional dependencies; the repository development setup already includes them.
 
 ## Run one problem from the CLI
 

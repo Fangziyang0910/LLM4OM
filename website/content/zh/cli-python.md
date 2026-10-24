@@ -1,4 +1,4 @@
-命令行和Python调用与工作台相同的建模图，适合批处理、保存运行状态和接入已有程序。先按[安装指南](../installation/)准备环境与Worker，再选择模型预设。
+命令行和 Python 调用与工作台相同的建模图。使用当前 Codex、Claude Code 模型且不配置平台 API Key 时，按[安装指南](../installation/)安装宿主 Skill。下方的 `run` 和 Python 示例使用平台模型预设，需要 `llm` 可选依赖；仓库开发环境已包含这些依赖。
 
 ## 命令行运行一题
 

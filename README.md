@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/Fangziyang0910/LLM4OM/actions/workflows/checks.yml"><img src="https://github.com/Fangziyang0910/LLM4OM/actions/workflows/checks.yml/badge.svg" alt="Checks"></a>
-  <img src="https://img.shields.io/badge/version-0.42.0-4f39f6" alt="版本 0.42.0">
+  <img src="https://img.shields.io/badge/version-0.43.0-4f39f6" alt="版本 0.43.0">
   <img src="https://img.shields.io/badge/python-3.11%E2%80%933.13-3776ab?logo=python&logoColor=white" alt="Python 3.11–3.13">
   <img src="https://img.shields.io/badge/LangGraph-server-1c3c3c?logo=langchain&logoColor=white" alt="LangGraph">
   <img src="https://img.shields.io/badge/deploy-Docker%20Compose-2496ed?logo=docker&logoColor=white" alt="Docker Compose">
@@ -96,6 +96,24 @@ Agent 也可以回答普通问题、帮助写作、解释代码、整理资料�
 </table>
 
 ## 快速开始
+
+### 在 Codex / Claude Code 中使用当前模型
+
+Skill 将对话、建模、代码生成和结果解读交给当前宿主模型。CLI 复用现有 13 种方法图及求解环境，不调用平台 LLM，不需要启动 Web 服务。
+
+无需克隆仓库。准备好 [uv](https://docs.astral.sh/uv/getting-started/installation/)、Git、已启动的 Docker，以及 Node.js 22.20 或更新版本。以下命令固定安装 v0.43.0，uv 使用 Python 3.12：
+
+```bash
+uv tool install --python 3.12 git+https://github.com/Fangziyang0910/LLM4OM@v0.43.0
+llm4om build-worker
+npx skills add https://github.com/Fangziyang0910/LLM4OM/tree/v0.43.0/skills/llm4om --skill llm4om -g -a codex -a claude-code
+```
+
+运行 `llm4om --version` 确认版本，运行 `llm4om backends` 检查实际求解环境。安装后开启新会话，在 Codex 中使用 `$llm4om`，或在 Claude Code 中使用 `/llm4om`，描述问题并指定方法、建模库或附件。只用一个宿主时，删除另一项 `-a` 参数即可。
+
+宿主读取方法任务、用当前模型作答；CLI 执行原有阶段、工具、检查与求解，将真实反馈交回宿主。会话在本地保存，支持跨命令恢复。完整安装与协议见 [Skill](skills/llm4om/SKILL.md) 和[命令行使用指南](docs/host-modeling.md)。`npx` 安装技能文件，CLI 与求解环境需要分别准备。
+
+基础安装不包含模型供应商客户端和 Web 服务。API 模型运行可安装 `llm4om[llm]`，原有工作台安装 `llm4om[web]`；下方 Docker 部署保持原用法。宿主模式保留方法流程；采样温度和上下文隔离由宿主控制，不能视为原 API 实验的完全复现。
 
 ### 方式一：Docker（推荐）
 
@@ -225,7 +243,7 @@ print(state["failure"] or state["solve"]["objective"])
   author  = {Fang, Ziyang},
   title   = {{LLM4OM}: A Platform for Automated Optimization Modeling with Large Language Models},
   year    = {2026},
-  version = {0.42.0},
+  version = {0.43.0},
   url     = {https://github.com/Fangziyang0910/LLM4OM}
 }
 ```
