@@ -1,9 +1,9 @@
 """TriVAL: semantic, formulation and code validation, each a construct-validate-revise loop.
 
-Ported from the TriVAL repository (graph, nodes, prompts and loop limits unchanged) with these adaptations:
+Ported from the TriVAL repository (stage routing, prompts and loop limits unchanged) with these adaptations:
 the platform context supplies the LLM, `code_executor` solves through the platform sandbox, the code agent's
 solver-selection and syntax sections are replaced by the platform code target, and an entry node maps the
-platform's `problem` to `problem_description`. See README.md here.
+platform's `problem` to `problem_description`. An exit node reports unresolved validation. See README.md here.
 """
 
 from dataclasses import asdict

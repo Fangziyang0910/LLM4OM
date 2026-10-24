@@ -6,7 +6,7 @@ comments so far; the reducer writes the final code. With reflection on, the code
 asked, from the last to the first, whether they caused it, and the first one that says yes refines its comment.
 Every trial starts with an empty comment pool, as upstream does: each trial is an independent run.
 
-Adaptations: the starter `code_example` is the platform's empty `build_model` for the selected language instead of a
+Adaptations: the starter `code_example` is the platform's native reference and code contract instead of a
 dataset's `prob_*` function; "Gurobi" in the programmer role names the selected language's library; the test runs that
 code in the platform sandbox instead of calling the function on an LLM-generated input (so the evaluator's
 test-input prompt is not used).
@@ -107,7 +107,7 @@ async def expert(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     context = runtime.context
     chosen = EXPERTS_BY_NAME[state["expert"]]
     output = await _predict(context, chosen.name, _role(chosen, context) + '\n' + chosen.forward,
-                            problem_description=state["problem"], code_example=context.target.starter + '\n' + context.target.prompt,
+                            problem_description=state["problem"], code_example=context.target.prompt,
                             comments_text=_comment_text(state["_comments"]), knowledge='None')
     if chosen.name == 'Terminology Interpreter':
         output = _terminology_answer(output)

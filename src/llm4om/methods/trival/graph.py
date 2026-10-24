@@ -335,6 +335,20 @@ def receive_problem(state: State) -> dict:
     }
 
 
+def finish(state: State) -> dict:
+    """llm4om: report unresolved validation without changing the upstream stage transitions."""
+    if not state.get("code"):
+        return {}
+    checks = (
+        ("semantic", all(state.get(key) for key in ("facts_faithful", "ambiguities_relevant", "resolutions_consistent")),
+         state.get("semantic_validation_feedback")),
+        ("formulation", state.get("formulation_validation_passed"), state.get("formulation_validation_feedback")),
+        ("code", state.get("code_validation_passed"), state.get("code_validation_feedback")),
+    )
+    unresolved = [f"{stage}: {feedback or 'validation did not pass'}" for stage, passed, feedback in checks if not passed]
+    return {"failure": "TriVAL ended with unresolved validation: " + "; ".join(unresolved) if unresolved else None}
+
+
 def create_trival_graph():
     """Build semantic, formulation, and code stages with feedback routing."""
     semantic_validation = create_semantic_validation_subgraph()
@@ -347,23 +361,25 @@ def create_trival_graph():
     graph.add_node("semantic_validation", semantic_validation)
     graph.add_node("formulation_validation", formulation_validation)
     graph.add_node("code_validation", code_validation)
+    graph.add_node("finish", finish)
 
     graph.add_edge(START, "receive_problem")
     graph.add_edge("receive_problem", "semantic_validation")
     graph.add_conditional_edges(
         "semantic_validation",
         route_after_semantic_validation,
-        {"formulation_validation": "formulation_validation", END: END},
+        {"formulation_validation": "formulation_validation", END: "finish"},
     )
     graph.add_conditional_edges(
         "formulation_validation",
         route_after_formulation_validation,
-        {"code_validation": "code_validation", END: END},
+        {"code_validation": "code_validation", END: "finish"},
     )
     graph.add_conditional_edges(
         "code_validation",
         route_after_code_validation,
-        {"formulation_validation": "formulation_validation", END: END},
+        {"formulation_validation": "formulation_validation", END: "finish"},
     )
+    graph.add_edge("finish", END)
 
     return graph.compile(name="trival")

@@ -75,6 +75,20 @@ def test_final_solve_limit_is_recorded(make_resources: Any) -> None:
     assert result["steps"][-1]["type"] == "error" and result["usage"]["solves"] == 0
 
 
+@pytest.mark.parametrize("changed", [False, True])
+def test_an_interrupted_resolve_cannot_attach_an_old_solution_to_new_code(run_method: Any, changed: bool) -> None:
+    from tests.test_methods import FIVE_ELEMENT, JUDGED, by_role
+
+    revised = PRODUCTION_CODE.replace('3 * m.x["A"]', '6 * m.x["A"]') if changed else PRODUCTION_CODE
+    record = run_method("llmopt", by_role({"five_element": FIVE_ELEMENT,
+        "code": [f"```python\n{PRODUCTION_CODE}```", f"```python\n{revised}```"],
+        "self_correction": JUDGED.format(five="True", code="False")}), limits=Limits(max_solves=1))
+    assert "limit of 1 solves" in record["failure"]
+    assert record["code"].strip() == revised.strip()
+    assert record["solve"] is None if changed else record["solve"]["objective"] == 13
+    assert any(step.get("objective") == 13 for step in record["steps"])
+
+
 def test_method_provides_parameters_without_a_platform_naming_convention(make_resources: Any) -> None:
     async def check() -> None:
         method = replace(methods()["direct"], id="external-method", parameters=lambda: {"samples": 7})

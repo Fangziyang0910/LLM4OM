@@ -194,21 +194,6 @@ def cvxpy_reference(solver: str, capability: str) -> str:
     return CVXPY.format(solver=solver, capability=capability)
 
 
-STARTER = '''{imports}
-
-def build_model(data):
-    """
-    Args:
-        data: dict, maps each attached data file name to its text content (CSV or JSON); empty when no file is attached
-    Returns:
-        model: {model_type}. Do not solve it; the platform solves it with {solver}.
-    """
-    model = {constructor}
-    # To be implemented
-    return model
-'''
-
-
 ONE_OBJECTIVE = "The model has exactly one objective."
 CP_OBJECTIVE = "The model has at most one objective; without one it is a satisfaction problem."
 
@@ -220,32 +205,23 @@ class Language:
     solver: str  # the default engine when code does not select one
     library: str
     reference: str
-    imports: str
     model_type: str
-    constructor: str
     objective: str = ONE_OBJECTIVE
 
 
 LANGUAGES = {
-    "pyomo": Language("pyomo", "Pyomo", "highs", "Pyomo", PYOMO, "import pyomo.environ as pyo",
-                      "instantiated Pyomo model or kernel block", "pyo.ConcreteModel()"),
-    "gurobipy": Language("gurobipy", "gurobipy", "gurobi", "Gurobi", GUROBIPY,
-                         "import gurobipy as gp\nfrom gurobipy import GRB", "gp.Model", 'gp.Model("model")'),
+    "pyomo": Language("pyomo", "Pyomo", "highs", "Pyomo", PYOMO, "instantiated Pyomo model or kernel block"),
+    "gurobipy": Language("gurobipy", "gurobipy", "gurobi", "Gurobi", GUROBIPY, "gp.Model"),
     "ortools": Language("ortools", "OR-Tools", "SCIP", "OR-Tools", ORTOOLS,
-                        "from ortools.linear_solver import pywraplp", "native OR-Tools model (with search arguments when needed)",
-                        'pywraplp.Solver.CreateSolver("SCIP")', CP_OBJECTIVE),
-    "cpmpy": Language("cpmpy", "CPMpy", "ortools", "CPMpy", CPMPY, "import cpmpy as cp",
-                      "cp.Model or native CPMpy SolverInterface", "cp.Model()", CP_OBJECTIVE),
-    "pulp": Language("pulp", "PuLP", "PULP_CBC_CMD", "PuLP", PULP, "import pulp", "pulp.LpProblem",
-                     'pulp.LpProblem("model", pulp.LpMinimize)'),
-    "cvxpy": Language("cvxpy", "CVXPY", "AUTO", "CVXPY", CVXPY, "import cvxpy as cp\nimport numpy as np",
-                      "cp.Problem", "cp.Problem(cp.Minimize(0))"),
+                        "native OR-Tools model (with search arguments when needed)", CP_OBJECTIVE),
+    "cpmpy": Language("cpmpy", "CPMpy", "ortools", "CPMpy", CPMPY,
+                      "cp.Model or native CPMpy SolverInterface", CP_OBJECTIVE),
+    "pulp": Language("pulp", "PuLP", "PULP_CBC_CMD", "PuLP", PULP, "pulp.LpProblem"),
+    "cvxpy": Language("cvxpy", "CVXPY", "AUTO", "CVXPY", CVXPY, "cp.Problem"),
     "pyscipopt": Language("pyscipopt", "PySCIPOpt", "scip", "PySCIPOpt", PYSCIPOPT,
-                          "from pyscipopt import Model, quicksum", "pyscipopt.Model", 'Model("model")'),
-    "casadi": Language("casadi", "CasADi", "ipopt", "CasADi", CASADI, "import casadi as ca",
-                       "ca.Opti or a native solver dictionary", "ca.Opti()"),
-    "coptpy": Language("coptpy", "coptpy", "copt", "COPT", COPT, "import coptpy as cp\nfrom coptpy import COPT",
-                        "coptpy.Model", 'cp.Envr().createModel("model")'),
+                          "pyscipopt.Model"),
+    "casadi": Language("casadi", "CasADi", "ipopt", "CasADi", CASADI, "ca.Opti or a native solver dictionary"),
+    "coptpy": Language("coptpy", "coptpy", "copt", "COPT", COPT, "coptpy.Model"),
 }
 LEGACY_TARGETS = {"pywraplp": ("ortools", "SCIP"),
                   **{"cvxpy_"+solver.lower(): ("cvxpy", solver) for solver in ("OSQP", "SCS", "MOSEK")}}
@@ -320,9 +296,3 @@ class CodeTarget:
     @property
     def library(self) -> str:
         return LANGUAGES[self.language].library
-
-    @property
-    def starter(self) -> str:
-        definition = LANGUAGES[self.language]
-        return STARTER.format(imports=definition.imports, model_type=definition.model_type, solver=self.solver,
-                              constructor=definition.constructor)

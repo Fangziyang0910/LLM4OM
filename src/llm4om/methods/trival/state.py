@@ -3,7 +3,7 @@ from langchain.agents import AgentState
 
 class State(AgentState):
     problem: str  # llm4om: the platform's input
-    failure: str | None  # llm4om: reported when the graph ends without code
+    failure: str | None  # llm4om: no code or unresolved validation when the graph ends
     problem_description: str
     formulation: str
     selected_formulation_expert: str | None

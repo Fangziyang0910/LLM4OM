@@ -1,10 +1,12 @@
 """Every method graph, with scripted LLM replies, must assemble and execute all nine native libraries."""
 
+import asyncio
 import json
 from typing import Any
 
 import pytest
 
+from llm4om.graph import run
 from llm4om.languages import LANGUAGES, CodeTarget
 from llm4om.methods import methods
 from llm4om.model_code import ModelCode
@@ -73,3 +75,45 @@ def test_every_method_can_use_every_modeling_library(run_method: Any, preset: An
     assert record['formulation'] and record['code']
     assert {'llm', 'artifact', 'solve'} <= {step['type'] for step in record['steps']}
     assert all(abs(value - round(value)) < 1e-5 for value in record['solve']['variables'].values())
+
+
+@pytest.mark.parametrize('library', list(LANGUAGES))
+def test_optimus_repair_keeps_the_selected_library_contract(run_method: Any, library: str) -> None:
+    base = method_script('optimus', library)
+    fixed = method_script('direct', library)('generate', [], [])
+    failed = False
+
+    def script(role: str, messages: list, tools: list) -> str:
+        nonlocal failed
+        if role == 'debug':
+            assert CodeTarget(library).prompt in messages[-1].text
+            return fixed
+        reply = base(role, messages, tools)
+        if role == 'constraint_code' and not failed:
+            failed = True
+            return "CODE\n=====\nraise ValueError('repair this execution error')\n====="
+        return reply
+
+    record = run_method('optimus', script, language=library)
+    assert not record.get('failure'), record.get('failure')
+    assert record['solve']['objective'] == pytest.approx(13)
+    assert record['usage']['solves'] == 2
+
+
+def test_coe_code_example_does_not_conflict_with_the_selected_native_api(make_resources: Any) -> None:
+    target = CodeTarget('ortools', 'CP_SAT')
+    native = ModelCode(target)
+    source = native.assemble([native.variables('x', [], 'INTEGER', '0', '8'), native.constraint('2*x<=3'),
+                              native.objective('x', 'max')])
+    base = method_script('coe', 'ortools')
+
+    def script(role: str, messages: list, tools: list) -> str:
+        if role == 'Programming Expert':
+            assert 'cp_model.CpModel()' in messages[-1].text
+            assert 'pywraplp.Solver.CreateSolver' not in messages[-1].text
+        return f'```python\n{source}```' if role in {'Programming Expert', 'reducer'} else base(role, messages, tools)
+
+    record = asyncio.run(run('Maximize integer x with 0<=x<=8 and 2*x<=3.', method='coe', language='ortools',
+                              solver='CP_SAT', resources=make_resources(script)))
+    assert not record['failure'], record['failure']
+    assert record['solve']['objective'] == 1 and record['solve']['solver'] == 'CP_SAT'

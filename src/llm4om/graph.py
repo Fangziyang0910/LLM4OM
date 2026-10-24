@@ -293,7 +293,8 @@ def platform_graph(method: Method) -> Any:
             except Exception as error:  # Preserve completed artifacts when a later method step fails.
                 result = failure(error, recorder)
             code = final.get("code")
-            solved = final.get("solve") or (run.solved.get(code) if code else None)
+            # A replacement can be interrupted before execution; only attach a result for this exact code.
+            solved = run.solved.get(code) if code else None
             result.update(formulation=final.get("formulation"), code=code, solve=asdict(solved) if solved else None)
         return {**result, **recorder.update()}
 

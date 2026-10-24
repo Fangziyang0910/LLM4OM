@@ -578,6 +578,26 @@ def test_trival_runs_all_three_validation_stages(run_method: Any) -> None:
     assert order.index(("artifact", "语义事实与歧义")) < order.index(("llm", "trival.semantic_validator"))
 
 
+@pytest.mark.parametrize("stage", ["semantic", "formulation", "code"])
+def test_trival_reports_exhausted_validation_even_when_the_code_runs(run_method: Any, preset: Any, stage: str) -> None:
+    preset("TRIVAL", max_validations=1)
+    feedback = "The model still omits a required restriction."
+    base = trival_script([{"code_validation_passed": stage != "code", "code_validation_feedback": feedback}],
+        [{"formulation_validation_passed": stage != "formulation", "formulation_validation_feedback": feedback,
+          "formulation_revision_action": "partial_revise" if stage == "formulation" else None}])
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> Any:
+        if stage == "semantic" and role == "trival.semantic_validator" and not isinstance(messages[-1], ToolMessage):
+            return tool_call("SemanticValidationOutput", facts_faithful=False, ambiguities_relevant=True,
+                             resolutions_consistent=True, feedback=feedback)
+        return base(role, messages, tools)
+
+    record = run_method("trival", script)
+    assert record["failure"] and stage in record["failure"] and feedback in record["failure"]
+    assert record["solve"]["objective"] == 13 and record["code"].strip() == PRODUCTION_CODE.strip()
+    assert record["usage"]["solves"] == 1
+
+
 def test_trival_uses_tools_even_when_a_model_advertises_native_json_schema(make_resources: Any) -> None:
     script = trival_script([{"code_validation_passed": True, "code_validation_feedback": "faithful"}], [PASS_FORMULATION])
     resources = make_resources(script)

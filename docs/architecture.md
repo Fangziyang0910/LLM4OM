@@ -151,13 +151,12 @@ class Method:
 | `target.solver` | 原生后端标识，默认 AUTO |
 | `target.prompt` | 所选写法的代码契约，直接拼接到生成代码的提示中 |
 | `target.library` | 代码所用的库名（`Pyomo`、`Gurobi`、`OR-Tools` 等九个库），用于替换原提示中写死的库名 |
-| `target.starter` | 所选写法的空 `build_model` 模板，供需要代码示例的提示使用 |
 | `llm(role)` | 配置好的 LangChain 聊天模型。`role` 写入调用元数据，用于在过程列表中命名调用 |
 | `solve(code, title)` | 在沙箱中构建并求解，返回 `SolveResult`；`feedback()` 给出可交给 LLM 的文本 |
 | `run_script(script)` | 在沙箱中把脚本作为 `__main__` 运行，返回标准输出和异常栈。不计入求解次数，但共用沙箱并发额度。供原方法自己的检查脚本使用 |
 | `solves` | 本次运行到目前为止的求解次数 |
 
-方法图结束后，平台图取最终状态的代码。方法已求解过的代码复用结果；否则 `solve` 节点求解一次。
+方法图结束后，平台图取最终状态的代码，只从 `Context.solved` 读取这份代码实际执行过的结果。新版代码尚未执行就中断时，不关联上一版的解；旧结果仍在过程步骤中。没有失败且最终代码尚未执行时，`solve` 节点求解一次。
 
 新方法放在 `methods/` 并加入 `methods()`，或在其他包中注册 `llm4om.methods` 入口点。简单方法保留单文件；复杂方法的包入口只导出方法对象与图工厂。AutoFormulation 的候选节点、UCT 和排名归入 `search.py`；CoE 的专家提示和输出解析分别放在 `prompts.py`、`parsing.py`。图节点只组织执行，上游提示与研究流程不变。平台在准备运行时调用 `Method.parameters()` 记录参数，不根据方法 ID 猜测 `presets.py` 中的变量名；无参数的方法默认返回空字典。
 
@@ -166,6 +165,7 @@ class Method:
 生成代码的提示在方法调用处组装，13 个内置方法均可选择九个库：
 
 - `CodeTarget.prompt` 统一提供库的原生 API 参考、返回类型和可选后端要求。整段代码生成方法把它嵌入原提示，替换写死的库名，不改建模和修正流程。
+- CoE 的代码示例直接使用同一份原生参考，不另建空模型模板；避免指定 CP-SAT 时，示例仍初始化 MPSolver。OptiMUS 的整段调试也嵌入完整契约。
 - OptiMUS、SAC-Opt、AutoFormulation 生成组件或表达式。`ModelCode` 提供同一套原生变量声明、约束、目标和 `build_model(data)` 组装；对应组件提示也由这些代码片段生成。它没有引入模型中间表示，也不在库之间翻译模型。
 - 索引变量使用标量或元组键的字典。变量类型、上下界保留数学含义；CPMpy/CP-SAT 的整数边界必须由问题推导，不补造大数，不把连续变量改成整数或把整数放松为连续变量。CasADi 整数域用 `set_domain` 和 Bonmin，最大化的符号在结果中恢复。
 - `Method.linear_only` 描述 LP/MILP 问题范围。它不限制建模库。`Method.languages` 留给外部方法声明确有必要的库限制；内置方法不使用该白名单。
@@ -200,7 +200,7 @@ CPMpy 和原生 CP 接口允许无目标的可满足性模型，成功时保存�
 
 方法图中 `Method.titles` 列出的节点结束时，回调（`graph._NodeSteps`）立即把该节点的更新记为一个 `artifact` 步骤。回调在下一个节点开始前触发，所以步骤顺序与执行顺序一致：一次代码生成的产物总在它的求解之前。
 
-LLM 调用由聊天模型上的回调记录，包括子图和 `create_agent` 智能体中的调用。回调在调用开始时检查上限；模型流式输出时，每 0.25 秒推送一次新写出的文本 `{"delta": {"id", "text", "reasoning"}}`；调用结束时写入输出文本、工具调用、token 数和耗时。方法无需自己记录。
+LLM 调用由聊天模型上的回调记录，包括子图和 `create_agent` 智能体中的调用。回调在调用开始时检查上限；模型流式输出时，最多每 0.05 秒推送一次新写出的文本 `{"delta": {"id", "text", "reasoning"}}`；调用结束时写入输出文本、工具调用、token 数和耗时。方法无需自己记录。
 
 前端用 `runs.create` 创建后台运行，并设置 `streamResumable`。页面无论是刚创建运行还是稍后打开，都用 `runs.joinStream(..., lastEventId: "-1")` 从第一个事件重放，再接上实时事件。运行结束后，页面读取线程状态。
 

@@ -239,7 +239,8 @@ async def debug(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     result = state["solve"]
     assert result is not None
     response = await _ask(runtime.context, "debug", P.EXECUTE_CODE__DEBUG_TEMPLATE.format(
-        description=state["problem"], code=state["code"], error=result.error or result.feedback()))
+        description=state["problem"], code=state["code"], error=result.error or result.feedback())
+        + "\n\n" + runtime.context.target.prompt)  # llm4om: repairs keep the selected library and build-only contract.
     return {"fixed_code": extract_debugged_code(response) + "\n"}
 
 
