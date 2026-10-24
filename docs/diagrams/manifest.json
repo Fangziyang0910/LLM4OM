@@ -1,0 +1,342 @@
+{
+  "zh-attachments-1": {
+    "hash": "486841d594863a201a926f39baaaf378dace22a921342eaaca5f5ccf0e02446d",
+    "sourceHash": "8e7171f39d2baaf367d2553b6326b244e03062fd61ff0257e2248496aa295ce4",
+    "file": "zh-attachments-1.svg"
+  },
+  "zh-autoformulation-1": {
+    "hash": "f5f864906c20cc67af7b1612c09e52f1bcfb174fa6eb6d5e5fcde95d8984df12",
+    "sourceHash": "d87af242106f25a1d4f4d899e9aba52c4d253ea33df13b505909a00f2810a9a0",
+    "file": "zh-autoformulation-1.svg"
+  },
+  "zh-backends-1": {
+    "hash": "f3c43a2647cb0f292f020e4eb1c2dbf6887b526eca8494dfe9404f9c2ce35eaa",
+    "sourceHash": "1dbeb13458eea132221f43210c9bdffef294b122a86711594a9f3ce0896ca677",
+    "file": "zh-backends-1.svg"
+  },
+  "zh-bind-1": {
+    "hash": "c892fddce3a6b0f90eda84effb70e157109d945e4ef8f9eafaeea272d0a0be54",
+    "sourceHash": "daaadb60f8d911304cdf15fb39e85699feeedcede5d915589aa689f8ab4c37fd",
+    "file": "zh-bind-1.svg"
+  },
+  "zh-casadi-1": {
+    "hash": "f7d9a50a28bdf0b81753437c077a012d0c882cd830eba9a43d8d3dee148027ab",
+    "sourceHash": "0bf462c404ec21984bb673389748af12402248cc083506518357245cff14cb6f",
+    "file": "zh-casadi-1.svg"
+  },
+  "zh-chat-agent-1": {
+    "hash": "32c229ea9b7ad3bf75835058680070536e83c517c82d33327b80e94a1023d4ab",
+    "sourceHash": "1e0844f1a62e0d27d3b1f0c17142c0b573bcf7aa66da0a1186d01912b0788c30",
+    "file": "zh-chat-agent-1.svg"
+  },
+  "zh-coe-1": {
+    "hash": "8457500d1583d3e2d9c7def4f155b872a1a245fbe85469af595e7b6eb14b5555",
+    "sourceHash": "5d3a5fdffdc3f9c55c05b19a6446ef141aad129718aeb2db6d0933067e6d1fa8",
+    "file": "zh-coe-1.svg"
+  },
+  "zh-concepts-1": {
+    "hash": "5ce71589dccfc163a922f483d787048b2d3bed54f92f187e34e2f8d1ae7a639a",
+    "sourceHash": "16655f25829b967a2b2bbc0a35024c1ef59105c145fe63c6de3606b99a43c5ae",
+    "file": "zh-concepts-1.svg"
+  },
+  "zh-configuration-1": {
+    "hash": "c00506adb93baf28179b70cc64fda05fca0f701902fb1c2bd53792df3813343c",
+    "sourceHash": "37b1d9cfcf020478aa45fb7e2a071a93ab17ebb1ee6a66f66e29683bd1dbb51a",
+    "file": "zh-configuration-1.svg"
+  },
+  "zh-conflicts-1": {
+    "hash": "a40d7a8dc89b015ec1b6228a8b5f839230247421b5ab1a066427208f7b1d2926",
+    "sourceHash": "667ea5a744384416d2dbdf7d654ffa66f9957d864401659a4d77abef5e63ed2c",
+    "file": "zh-conflicts-1.svg"
+  },
+  "zh-cpmpy-1": {
+    "hash": "0cea0d37b5dcd1e5f236a72cce202aa79eb3fdc95c814cd3d7caca77c7e5381e",
+    "sourceHash": "387fbc20fd37d6fa8047ffa57dc9d5edd34f63b1aac31596605f66051b151cdf",
+    "file": "zh-cpmpy-1.svg"
+  },
+  "zh-cvxpy-1": {
+    "hash": "28b33cc176d68f8cfdf20c442a88d5d9b1e8d6985d60350a402e11a9b8f32ffb",
+    "sourceHash": "1d920eed533a820befe2a7f379aba5ebebfd2749485ea79a0c7611bca2222462",
+    "file": "zh-cvxpy-1.svg"
+  },
+  "zh-direct-1": {
+    "hash": "0fc007bdba8f447875f8b38a3ead4349258444b260128e6a835bcd287cce7e77",
+    "sourceHash": "82ef932c4e043c59175493d65229f2be098d2232d3c55cb820d12a1b932a2f2a",
+    "file": "zh-direct-1.svg"
+  },
+  "zh-feedback-repair-1": {
+    "hash": "cadd39dd38f485bcb7b0ef68cb125c588f50bc8f111cc35c99a363382afa2ceb",
+    "sourceHash": "14c2ffef9db253904da9593cc6e2b2fe58d75e56b03da30534dd7b4678a68cd4",
+    "file": "zh-feedback-repair-1.svg"
+  },
+  "zh-introduction-1": {
+    "hash": "2c6c8e238160c5e94980f85114e604683e7b93252dac0e6e8d9cf5d312264310",
+    "sourceHash": "ddcd4cf468db32c114777daa4ad673def0b4174a836f10a938924d99afc30067",
+    "file": "zh-introduction-1.svg"
+  },
+  "zh-llmopt-1": {
+    "hash": "a6a02dc5aedc2107ba192f0599a70253f1531cf9d1be79694c44e0dc2f1e9914",
+    "sourceHash": "9f00c14ab3b8bc59b6133d9736ed042b35af7aa817f16705e796520249df22d8",
+    "file": "zh-llmopt-1.svg"
+  },
+  "zh-methods-1": {
+    "hash": "f98a683a78b500fd524bc34833b862691efa0dcc09d790fcc7dbd128d635798d",
+    "sourceHash": "ef41942bd456e9e4414fb8233dd1fea8dcbda121405058dd3f9e9582e5103270",
+    "file": "zh-methods-1.svg"
+  },
+  "zh-optimind-1": {
+    "hash": "c591521502581c10ef5a65cc0d550063f77fc747b660a7b9c720d9325e9cd8f5",
+    "sourceHash": "0b84ffd308b993b12085136181a616bb9fe3b4acf181fe15493b8d88abafd909",
+    "file": "zh-optimind-1.svg"
+  },
+  "zh-optimus-1": {
+    "hash": "c0879ff7f9e07291a29f47d6533ae14ca294761bc4170fa9f7e536ab74a57577",
+    "sourceHash": "f274aa06fc29392f7b3ad613ebc793d2b590a9952d05508564b6591ae24bb20f",
+    "file": "zh-optimus-1.svg"
+  },
+  "zh-optitree-1": {
+    "hash": "472776149a3f7d24581bb83af77bc5d2464d4a64571164397d25530e9b6d8178",
+    "sourceHash": "1df05f68aad5f791a709153157783f8d9d1ec6bf9d6d1dd79216638127bb1b20",
+    "file": "zh-optitree-1.svg"
+  },
+  "zh-or-llm-agent-1": {
+    "hash": "955c9e88155225e93859d6b39d04ce9071e6c74fc08ee17393ce06498cd45b7e",
+    "sourceHash": "87a71f2bd2a0b7ec40ad6fd8d8ce665c3190ce09c97c5ef69dec19beda26e930",
+    "file": "zh-or-llm-agent-1.svg"
+  },
+  "zh-orthought-1": {
+    "hash": "cf3a6cc645888787404c4defae3ed44091e34a31971912a2fef8b5f4fca1fcb9",
+    "sourceHash": "2e90ca40651f491f7ae6431f3b3949fa93de9fcbfe006baa78ce80e5a7491887",
+    "file": "zh-orthought-1.svg"
+  },
+  "zh-ortools-1": {
+    "hash": "ba683220533bdc0b4b9957ee6afff17a1e8b8f34a5f7e93aafd45285f7f29b85",
+    "sourceHash": "c33dfb71ca0bb7feebf9359f19184034fe3ff2a3d40f778fd4e9e1ff54a8b5fc",
+    "file": "zh-ortools-1.svg"
+  },
+  "zh-plan-chat-1": {
+    "hash": "a51ec34e6cd67f2350ce53be99a04fd86c62326dcb34affa279b128fef03e0f9",
+    "sourceHash": "2297946461b877a83019bf134b520f3c3e615ebeb2453ea793568ad38dd2faf4",
+    "file": "zh-plan-chat-1.svg"
+  },
+  "zh-pyomo-1": {
+    "hash": "d63832b7bd5d258344bc0590e168f1bace00f250432dc24f170af3e78643fd1b",
+    "sourceHash": "d03477f303e4cb4498b02b69a39eb27dde0c37e99d1eab595127dbfdc182a5f1",
+    "file": "zh-pyomo-1.svg"
+  },
+  "zh-pyscipopt-1": {
+    "hash": "17c9adfc4247119393a60929bd4ac0078d7df5ff1b8f8ad50df67edf5a5ae6fa",
+    "sourceHash": "b0f8854f1bee2cbeb4de33fb2b156db6968cbfe1c6e91e193fbd0cf8fc6d72d0",
+    "file": "zh-pyscipopt-1.svg"
+  },
+  "zh-requirements-1": {
+    "hash": "f44608f35ea0737fc5ed7f7f9949a284db3a5f38cfb36c312ce3c6fb96ce9515",
+    "sourceHash": "903b8e8fa8d77a89e648f21fc889fa73d68a26790aaa7daa509efecf5c59b728",
+    "file": "zh-requirements-1.svg"
+  },
+  "zh-revisions-1": {
+    "hash": "a45b4131d4150f09382e39febde10d1c1606330e965789b03645a369f05bc279",
+    "sourceHash": "9031883cb44018da8d68f5d590fbfc126c7082653a9b747f98dc70c4fd61142d",
+    "file": "zh-revisions-1.svg"
+  },
+  "zh-run-settings-1": {
+    "hash": "f8426f8694693b9fd7b2b82fefd7eccc1ce0fff013185e8f861d85ab932fc2eb",
+    "sourceHash": "df2933a66219e7223a48389481e6eb15f2d7c8ae44a75dac546bd71457a0c394",
+    "file": "zh-run-settings-1.svg"
+  },
+  "zh-sac-opt-1": {
+    "hash": "5194dbf5fc0aede9723d277f6aae2bcf7e72b6f304ca82ed94f00c187916f8e3",
+    "sourceHash": "0a78e9570d9fb71e171732c95b2bcc002d36a6446cbaef007c8f110bc0c91a44",
+    "file": "zh-sac-opt-1.svg"
+  },
+  "zh-scenarios-1": {
+    "hash": "66994f1a688e754aeb5bd4ce57369978a01fe19e0ca99b0b231becd78d6f3442",
+    "sourceHash": "ca4268bd70fda3e47ffdf3b06a5204e3d4f433b733d83a5dc59ab0ccfcf16a60",
+    "file": "zh-scenarios-1.svg"
+  },
+  "zh-solvers-1": {
+    "hash": "cbc98be4cd612c9c43187dbf9bbf9e9fb19c5c50d5d13070642908b1c68ac45e",
+    "sourceHash": "0df07ff8a21b379591ff77a3bde4215209690807ebc6cfa6d7ad1033a52b4810",
+    "file": "zh-solvers-1.svg"
+  },
+  "zh-team-deployment-1": {
+    "hash": "6c78b8267d111522f104767b33177194e46490227e3fc58a411fbf0ad651086c",
+    "sourceHash": "7a348293278fb6c571009684a9726261cf4c6c6288ef1d77b35e410a9b6e10af",
+    "file": "zh-team-deployment-1.svg"
+  },
+  "zh-trival-1": {
+    "hash": "f171c4157621ab65f9a5fef6a54d52d90a434784c30bbde0a0079dbb171759e5",
+    "sourceHash": "19a5f444036f2b74de6aecaa8e9627ad0eeb1e6fa15fc5634073fea92911e44a",
+    "file": "zh-trival-1.svg"
+  },
+  "en-attachments-1": {
+    "hash": "5b6ac005d0dbbfa7a204dc893d5b5a079abb857b4b7105b3a4ee1c5d1f83c745",
+    "sourceHash": "06004c82ed725b05c2352100e69163dcf7617c2b75b0edaf09d7ff2b3d51ceda",
+    "file": "en-attachments-1.svg"
+  },
+  "en-autoformulation-1": {
+    "hash": "9e9b13a24c01ed14cc4a93bc580fef669d6ad03dce1d13d188fad4c0a0ea8ad5",
+    "sourceHash": "ad92cf4536881c5b225ec174ffe7f63cbbaeb296455f8cbfe7adc4ed61cfaf47",
+    "file": "en-autoformulation-1.svg"
+  },
+  "en-backends-1": {
+    "hash": "c076d926bd137a9121c4477f4830b05df848fd359a29a7237a088171fe0db081",
+    "sourceHash": "04e6d5f780f9b09af6c4345bd7d18d6cb0935825af0e5b6891c0234b80306b8e",
+    "file": "en-backends-1.svg"
+  },
+  "en-bind-1": {
+    "hash": "1263544da0082546955e3b7c59d30d647e6bdbb68b95dfb53783a91895c35b84",
+    "sourceHash": "41c78435ff9f0cc9154f68b0a9db76c4064e43e05a98937cc43ae2e4e4536953",
+    "file": "en-bind-1.svg"
+  },
+  "en-casadi-1": {
+    "hash": "2513ae83435ea0af7963d5da6e72b0253757a1539afc972f5c7e786c49f6ad68",
+    "sourceHash": "9ccfe5c8106491b7f2179ebcdf893343ecd0f863a0dbfed05dbd22680106fbfe",
+    "file": "en-casadi-1.svg"
+  },
+  "en-chat-agent-1": {
+    "hash": "f5b903b5a4a1cbee2f85eb196d1b8227d8c0ad65065f83b6e0b82c8f9c0a0dff",
+    "sourceHash": "05c74f8665e9144daafd2ffbe2d9b5295c35289bd28629a979f1325face5c68b",
+    "file": "en-chat-agent-1.svg"
+  },
+  "en-coe-1": {
+    "hash": "387ef569641b5ea119e0b9123c0331dbfb0c07011531f6dc6e8e7253a1ab2717",
+    "sourceHash": "8e38398dc864b55a016d5f82bec3f82d80095653d1e4c40dd58333606134c32d",
+    "file": "en-coe-1.svg"
+  },
+  "en-concepts-1": {
+    "hash": "8a7d288e3ef6dfcae154cd0d5010b0d2ca30a913154d94e3704e0db0d53569fd",
+    "sourceHash": "a2bf8ee43b81bd054877cb7fbc6953913cd09c5a23d99c73e8043285f6234141",
+    "file": "en-concepts-1.svg"
+  },
+  "en-configuration-1": {
+    "hash": "705aa72058f0d8993090274054874307f09cb0b1256b6af27a4903199bd294d0",
+    "sourceHash": "72a45b119f2ef8ce0ea4ec8e000d1ba480fea6e1d99d8c1431f78699f02bdd22",
+    "file": "en-configuration-1.svg"
+  },
+  "en-conflicts-1": {
+    "hash": "b0807ba176b1251aae95359673a76da00cab8277f5de962ffb0a24442bb30b87",
+    "sourceHash": "c09df816b5d0ad3858cd7090f0bdb7ce49d76838e3037597a5cbba70df0d5a5f",
+    "file": "en-conflicts-1.svg"
+  },
+  "en-cpmpy-1": {
+    "hash": "ec7ddae4c667cddb6206c7ab81ba5e2b0cde15c907f640d7f2badf895d3412a1",
+    "sourceHash": "1e08c8b1f4fcd7a24f56418cb59facae37b497d51704437a1630409fb3a3e65f",
+    "file": "en-cpmpy-1.svg"
+  },
+  "en-cvxpy-1": {
+    "hash": "3e2f56e328f3bfa46301ad47874f57dbeb8d4d94f6d0ef67ec5f7f232c89031c",
+    "sourceHash": "50fb02a14dc4a92a9e4f60ab98715e17dacb9d7bb09f836172e9a81ccd046a9b",
+    "file": "en-cvxpy-1.svg"
+  },
+  "en-direct-1": {
+    "hash": "902c4efeb7ec72310a41c79faa5b07ada56e53424309868b5125941511aa8d6d",
+    "sourceHash": "28285b71a00ea02f8864372bd5d1d89b4dbc6a991b6a1c274ee36f8030f9a6df",
+    "file": "en-direct-1.svg"
+  },
+  "en-feedback-repair-1": {
+    "hash": "90ba485c0b043a93c5a817f97d020853100c81963ff9170672c5e710a3d0f315",
+    "sourceHash": "62169a93c98d2df7662d9a7a4c8449cccb6c8575d56b975d6f931d9cf32d83bd",
+    "file": "en-feedback-repair-1.svg"
+  },
+  "en-introduction-1": {
+    "hash": "f03e1354e5dafb9fc581779f2d87c0e118081a7739c92448d032d48eb990b599",
+    "sourceHash": "9c4c196c894c6de4981d74da8c7ce082836d502ed9b2eec4f8f06fdc482fdafe",
+    "file": "en-introduction-1.svg"
+  },
+  "en-llmopt-1": {
+    "hash": "7e013be45927a3300c15ac11a275c6c06c6e6f65ed6fba5ff0cfc3a0f8b5561f",
+    "sourceHash": "70e28ae2311c23b986a6a0075dcd750cc7e72252e6aca9b1e8dd2edec551c593",
+    "file": "en-llmopt-1.svg"
+  },
+  "en-methods-1": {
+    "hash": "1788d4bcf70dc9553c67969ec171f8338afc30085071dad4eebefbcf54378a99",
+    "sourceHash": "7d5e5bb2be50b2fe9bf543036c3a134dcde78e5932476191375fdd7bad283b2b",
+    "file": "en-methods-1.svg"
+  },
+  "en-optimind-1": {
+    "hash": "55273c7a752fb2768c372ed4bb52b2f43f4fe38d333649ae0bf574c8efd71a55",
+    "sourceHash": "42d995c005e3a784681d75c3d41e5f27f78a25bb5b48d9a022a8864ed61b46de",
+    "file": "en-optimind-1.svg"
+  },
+  "en-optimus-1": {
+    "hash": "d1ecae5607c5d07a39a3b1ffaa1b7e6ca08b43f274e619a28fc67378e2915a52",
+    "sourceHash": "2a270e2f178e3bbfff201ed3a9cbfb2f23e45135cb796d983ad2ce82aee0b5e4",
+    "file": "en-optimus-1.svg"
+  },
+  "en-optitree-1": {
+    "hash": "adeee175158d83c98c5872b4bc335b9c2e21a330129ef290f577ecb920446d04",
+    "sourceHash": "d1a4dd27df15c0229aa70be60727516862ad3b681d3c9114ed057795b582ec30",
+    "file": "en-optitree-1.svg"
+  },
+  "en-or-llm-agent-1": {
+    "hash": "657f9779a395cf87eb49d7cdb783928ce5fe1e2ed0939b7d15ac13b45537f0da",
+    "sourceHash": "6c1bf67843cb52786cb399a519ecd8002b00459a24c19eb2574615c0448ba8bc",
+    "file": "en-or-llm-agent-1.svg"
+  },
+  "en-orthought-1": {
+    "hash": "089e892c2d96c6aa2ab42e90b2cbc334ce8870d602e3095843e6eab33b50a879",
+    "sourceHash": "997bf37f80f61ae2fe4adfd24a4bd1c6a57627da106065fabf3793cf1be25211",
+    "file": "en-orthought-1.svg"
+  },
+  "en-ortools-1": {
+    "hash": "1550ba61c93f543e0181bd83d83c92b4681f7c4ea7b65212d97818dcd50e7788",
+    "sourceHash": "a2d250748043f564e6a45b5099ecb37ed4f89cb883d9e3af14f60100f0eb03ff",
+    "file": "en-ortools-1.svg"
+  },
+  "en-plan-chat-1": {
+    "hash": "277580050faf404eb46df4669d3c8e9e6062ff26a208226a691df1f9fd66465d",
+    "sourceHash": "ae48c6bf3a2d9ebf01826b9d53a4395347865a33a7d688173fb545f38ef1ce22",
+    "file": "en-plan-chat-1.svg"
+  },
+  "en-pyomo-1": {
+    "hash": "ece9514dbdb833ef69dbf7d93ee7442fb4b77b4fc589ee304fa54ee0a520f534",
+    "sourceHash": "ae9379d612c97e7603e08046c92f93096889e4f91426c01b595d7c7aa8a89f0e",
+    "file": "en-pyomo-1.svg"
+  },
+  "en-pyscipopt-1": {
+    "hash": "bef0f6459a2258fd64ec6a614a909d400e58d1e52d4f52b74a06ac4e2301ab06",
+    "sourceHash": "ef4c6336154bcb1ec51023f87de02050bd0a27b2b24cad94bed14cf5043e4431",
+    "file": "en-pyscipopt-1.svg"
+  },
+  "en-requirements-1": {
+    "hash": "ff501c3eed2c1eec051cb4eed1d76c669ac4865a894ba5a46924b5ae39804349",
+    "sourceHash": "d646917b413336542fc0308741c5a9ad4d99c473298871a35ddd2d7711b94155",
+    "file": "en-requirements-1.svg"
+  },
+  "en-revisions-1": {
+    "hash": "4eef8f83ff4f0a2605d9136ddb79c12ba4b23695af9687786e3f5da12a1dddf9",
+    "sourceHash": "a8a5c03f8519b62cd96523ff6747e10699ab36ee315579d02ce9501078a55ca9",
+    "file": "en-revisions-1.svg"
+  },
+  "en-run-settings-1": {
+    "hash": "42926262dcbc57033495626857a2a2b936387e30e9947aca20f8b9432ddc4447",
+    "sourceHash": "afd8a563736b9f1a33e856c9e1f0d6166a5dfbfb5d00ee01e2b7c58f2639afe0",
+    "file": "en-run-settings-1.svg"
+  },
+  "en-sac-opt-1": {
+    "hash": "bfc64b8a4c2401d73958d98844bd4a3356253c7731d62874cf3f863f1e1b5a97",
+    "sourceHash": "516c6030bce28fa6537767eff99bbddeb4710eab1d9a22c3dda762aaf79ca3eb",
+    "file": "en-sac-opt-1.svg"
+  },
+  "en-scenarios-1": {
+    "hash": "50688ee29efb28c61ded3187f1055c499416a44289c4cb3a4762f0a17a0d9cf5",
+    "sourceHash": "1b73ad4d433d0ea32aebf27704cc4d3864dcd1c9ee256641994ca44f374dd5c0",
+    "file": "en-scenarios-1.svg"
+  },
+  "en-solvers-1": {
+    "hash": "8cae40432906d4df2dfdfdf670018ee22de546e6d1a0f7f377672e3d2680f3ad",
+    "sourceHash": "26142104ffff8196b0bccabb60eded18565ad7acbb98c6883f7f9c425ae95663",
+    "file": "en-solvers-1.svg"
+  },
+  "en-team-deployment-1": {
+    "hash": "64574df2b7d4aa5b4f6e3d81627c53b8547fde76310a26f99bc599502a8a142c",
+    "sourceHash": "933a057db0e6707480671295f0b8eb9e74c1f05576f43dd0e3f3b67ab8cfad62",
+    "file": "en-team-deployment-1.svg"
+  },
+  "en-trival-1": {
+    "hash": "d661fdb51798b724db4f9b382dd3e949b269148e4838c5144d4b07314aa66a3a",
+    "sourceHash": "31206ddd85654e9bcfe5bb66d8ffd2aaa1fa29a2a973590a8891c2d3dcd89c0f",
+    "file": "en-trival-1.svg"
+  }
+}

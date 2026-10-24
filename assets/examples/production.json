@@ -1,0 +1,6 @@
+{
+  "products": ["A", "B"],
+  "profit": [3, 2],
+  "usage": [[2, 1], [1, 2]],
+  "capacity": [8, 8]
+}
