@@ -9,7 +9,7 @@ Desktop keeps the problem and data beside the assistant. Narrow screens use tabs
 ## How a draft develops
 
 ```mermaid
-flowchart LR
+flowchart TB
   Idea["Initial idea"] --> Chat["Discuss goals, rules and data"]
   Chat --> Draft["Update editable draft"]
   Draft --> Edit["User edits and saves"]

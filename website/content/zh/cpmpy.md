@@ -24,7 +24,7 @@ def build_model(data):
 ## 表达、编译与计算
 
 ```mermaid
-flowchart LR
+flowchart TB
   Rules["整数域、逻辑、全局约束"] --> Model["CPMpy Model"]
   Model --> Native["原生后端转换"]
   Native --> Solver["CP / SAT / SMT / MIP 等路径"]

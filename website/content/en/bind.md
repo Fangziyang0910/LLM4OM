@@ -4,20 +4,22 @@ BIND separates understanding data structure from reading complete values. The LL
 
 Model structure often does not depend on every individual value. A transport model needs to know that costs form a warehouse-by-store matrix and demand is indexed by store. It need not copy every matrix entry into a prompt and back into code.
 
-Structure does not replace meaning. The problem must still explain whether `capacity` means hours, units or vehicle load. Field names alone cannot reliably specify all business rules.
+Describe field meanings in the problem: for example, whether `capacity` measures hours or units, and which objects index each matrix row and column.
 
 ## How data flows
 
 ```mermaid
-flowchart LR
-  File["Complete JSON / CSV"] --> Schema["Fields, types, lengths and row counts"]
-  Schema --> LLM["Generate formulation and data-reading code"]
-  File --> Data["Complete data at execution"]
-  LLM --> Solve["Read data and actually solve"]
+flowchart TB
+  File["Full JSON / CSV"]
+  Schema["Fields + types + sizes"]
+  LLM["Generate data-reading code"]
+  Data["Runtime data"]
+  Solve["Build + solve model"]
+  Finish["Plan + data snapshot"]
+  File --> Schema --> LLM --> Solve --> Finish
+  File -->|Full values| Data
   Data --> Solve
-  Solve -->|Format or runtime error, budget left| Feedback["Add feedback and regenerate"]
-  Feedback --> LLM
-  Solve -->|Status obtained or limit reached| Finish["Save actual result"]
+  Solve -.->|Error feedback| LLM
 ```
 
 ```walkthrough
@@ -25,7 +27,7 @@ flowchart LR
   {"title":"Prepare data","nodes":["File"],"body":"Upload structured data and explain units and index meanings in the problem.","artifact":"production.json\nprofit: profit per unit, indexed by product\nusage: resource-by-product hours per unit\ncapacity: available hours per resource"},
   {"title":"Provide structure","nodes":["Schema","LLM"],"body":"Generation receives field structure, including nested and irregular shapes.","artifact":"profit: array[number], length 2\nusage: array[array[number]], 2 rows\ncapacity: array[number], length 2"},
   {"title":"Bind at execution","nodes":["Data","Solve"],"body":"Code parses complete file text from data and constructs expressions from those values.","artifact":"payload = json.loads(data['production.json'])\nprofit = payload['profit']\nusage = payload['usage']\ncapacity = payload['capacity']"},
-  {"title":"Check and repair","nodes":["Feedback","Finish"],"body":"Format and execution errors can trigger retries. Genuine infeasibility is a valid status, not permission to relax requirements.","artifact":"At most 3 generation/execution attempts.\nCheck row/column meaning and units, not just successful parsing."}
+  {"title":"Check and repair","nodes":["Finish"],"body":"Format and execution errors trigger retries with feedback. The result retains the solver status and the data-reading code.","artifact":"At most 3 generation/execution attempts.\nInspect file names, row/column mappings and units in the saved code."}
 ]
 ```
 
@@ -44,7 +46,7 @@ Describe it as: “`usage[r][p]` gives hours of resource r per unit of product p
 
 ## Supported inputs and information boundaries
 
-JSON and CSV are supported; the frontend converts Excel to CSV. CSV headers and row widths are checked before LLM calls. Heterogeneous nested JSON is not presented as a rectangular matrix. Without attachments, the method uses the problem directly. It adds no PDF or image parser.
+JSON and CSV are supported; the frontend converts Excel to CSV. CSV headers and row widths are checked before LLM calls. JSON schemas describe the actual nesting and element types. With no attachment, generation uses the problem statement directly.
 
 Generation receives schema; execution reads complete attachments. Later feedback can include actual objectives and decision values.
 

@@ -20,7 +20,7 @@ Choose exact IDs from settings. The same engine can have different identifiers a
 ## Discovery, selection and execution
 
 ```mermaid
-flowchart LR
+flowchart TB
   Registry["Read native sandbox registry"] --> Options["Show IDs, availability and reasons"]
   Options --> Choice["AUTO or explicit selection"]
   Choice --> Load["Load compatible interface and license"]

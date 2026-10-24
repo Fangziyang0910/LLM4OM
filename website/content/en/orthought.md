@@ -2,20 +2,22 @@ ORThought asks the LLM to state a modeling path in an expert-like order, then pr
 
 ## What a useful modeling path explains
 
-Useful explanations name concrete choices: “whole products require integer quantities” or “processing hours add across products, so capacity is consumption times quantity.” Generic steps such as “analyze, model, optimize” do not explain these decisions.
+Useful explanations name concrete choices: “whole products require integer quantities” or “processing hours add across products, so capacity is consumption times quantity.” The path links each business rule to its variable domain or mathematical expression.
 
 The current workflow uses the upstream `formalized` mode and outputs a modeling path, formulation and code. The process view retains this explanation as a separate solution_path artifact.
 
 ## Workflow and modeling-path example
 
 ```mermaid
-flowchart LR
-  Path["State modeling path in order"] --> Form["Provide formulation and code"]
-  Form --> Execute{"Solver status obtained?"}
-  Execute -->|No, with budget left| Debug["Repair code from errors"]
+flowchart TB
+  Path["Explain modeling choices"]
+  Form["Formulation + code"]
+  Execute["Execute + solve"]
+  Debug["Read error + repair"]
+  Finish["Modeling path + result"]
+  Path --> Form --> Execute --> Finish
+  Execute -.->|Runtime error| Debug
   Debug --> Execute
-  Execute -->|Yes| Finish["Save path and actual result"]
-  Execute -->|Debug budget exhausted| Failed["Save errors and artifacts"]
 ```
 
 ```walkthrough
@@ -35,7 +37,7 @@ For explicit review against the problem see [Feedback Repair](../feedback-repair
 
 ## When to use it and how to read it
 
-Use it when a retained modeling explanation helps learning and inspection. The method is not uniformly limited to linear models, but the selected library and backend still constrain supported mathematics. The saved path, formulation, code and values can be read together.
+Use it when a retained modeling explanation helps learning and inspection. Choose the library and backend for your variable domains and expressions using the solver guide. The saved path, formulation, code and values can be read together.
 
 ## Source and platform adaptation
 

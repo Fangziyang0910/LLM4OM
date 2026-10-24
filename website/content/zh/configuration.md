@@ -32,7 +32,7 @@ LLM4OM_TRUST_PROXY=1
 ## 运行与沙箱的两层并发
 
 ```mermaid
-flowchart LR
+flowchart TB
   Requests["运行请求"] --> Queue["活动运行数：serve --jobs"]
   Queue --> Calls["模型调用与方法阶段"]
   Calls --> Sandbox["沙箱总并发：SANDBOX_JOBS"]

@@ -12,7 +12,7 @@ const output = path.join(directory, "public/docs/diagrams");
 const config = {
   startOnLoad: false, securityLevel: "strict", theme: "base", look: "classic", htmlLabels: false,
   fontFamily: "Inter, Arial, sans-serif", deterministicIds: true,
-  flowchart: { htmlLabels: false, curve: "basis", nodeSpacing: 25, rankSpacing: 38, padding: 16 },
+  flowchart: { htmlLabels: false, curve: "basis", nodeSpacing: 22, rankSpacing: 26, padding: 12 },
   themeVariables: {
     darkMode: true, background: "#19161f", primaryColor: "#282137", primaryTextColor: "#eee5fc",
     primaryBorderColor: "#82709f", lineColor: "#ae99ce", secondaryColor: "#20352f", tertiaryColor: "#35283c",

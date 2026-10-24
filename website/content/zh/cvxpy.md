@@ -30,7 +30,7 @@ convex
 ## 从表达式到后端
 
 ```mermaid
-flowchart LR
+flowchart TB
   Expr["变量属性与 CVXPY 算子"] --> Rules["识别 DCP / DGP / DQCP"]
   Rules --> Canon["转换为后端模型"]
   Canon --> Backend["兼容的 QP / 锥 / 整数引擎"]

@@ -10,32 +10,32 @@ Each expert uses its role prompt and current comment pool with the run's selecte
 
 ```mermaid
 flowchart TB
-  Start["New trial: clear comment pool"] --> Conductor["Conductor chooses expert"]
-  Conductor --> Expert["Expert reads problem and comments"]
-  Expert --> Count{"Collaboration count reached?"}
-  Count -->|No| Conductor
-  Count -->|Yes| Reduce["Reduce to formulation and code"]
-  Reduce --> Reflect{"Reflection enabled?"}
-  Reflect -->|Off by default| Return["Platform solves and saves"]
-  Reflect -->|On| Test["Check execution"]
-  Test -->|Executable| Return
-  Test -->|Failed with trials left| Back["Attribute backwards and reflect"]
-  Back --> Start
-  Test -->|Trial limit reached| Return
+  Conductor["Conductor selects expert"]
+  Expert["Expert adds comments"]
+  Reduce["Combine model + code"]
+  Return["Platform solves + saves"]
+  Reflect["Execute + reflect"]
+  Conductor --> Expert
+  Expert -->|Next expert| Conductor
+  Expert -->|Team complete| Reduce
+  Reduce -->|Default| Return
+  Reduce -.->|Reflection enabled| Reflect
+  Reflect -.->|Revise and retry| Conductor
+  Reflect -->|Complete| Return
 ```
 
 ```walkthrough
 [
   {"title":"Interpret","nodes":["Conductor","Expert"],"body":"This example follows useful comments into the pool, beginning with business terminology.","artifact":"Illustrative comment: unit profit differs from revenue; processing hours per unit differ from total hours."},
-  {"title":"Add modeling detail","nodes":["Expert","Count"],"body":"A later expert reads existing comments and adds domains, indices or resource constraints instead of repeating them.","artifact":"Illustrative comment: use nonnegative integers for whole products.\nCutting: 2A+B≤8; finishing: A+2B≤8."},
-  {"title":"Reduce","nodes":["Reduce"],"body":"The reducer must turn comments into one internally consistent model. Conflicting comments still require an explicit final choice.","artifact":"A cannot be both continuous and integer in the final interpretation.\nCheck which comments survive in the code."},
-  {"title":"Read the default path","nodes":["Reflect","Return"],"body":"Reflection is disabled by default. Do not interpret every run as repeated execution-failure attribution. The final model is still solved by the platform.","artifact":"Default: three experts → reduction → platform solve\nReflection is a deployment-preset branch."}
+  {"title":"Add modeling detail","nodes":["Expert"],"body":"A later expert reads existing comments and adds domains, indices or resource constraints.","artifact":"Illustrative comment: use nonnegative integers for whole products.\nCutting: 2A+B≤8; finishing: A+2B≤8."},
+  {"title":"Reduce","nodes":["Reduce"],"body":"The reducer must turn comments into one internally consistent model. Conflicting comments still require an explicit final choice.","artifact":"Combined model: nonnegative integer quantities, total profit and two resource constraints.\nFollow each expert comment to its final expression."},
+  {"title":"Read the default path","nodes":["Reflect","Return"],"body":"The default completes three expert contributions and reduction, then passes the model to the platform for solving.","artifact":"Default: three experts → reduction → platform solve\nReflection is a deployment-preset branch."}
 ]
 ```
 
 ## What reflection actually means
 
-When enabled, reflection is triggered by execution failure. Experts are questioned backwards from the latest speaker; the first accepting responsibility refines its comment. Each new trial clears the comment pool, so separate trials do not share an accumulating pool.
+When enabled, reflection is triggered by execution failure. Experts are questioned backwards from the latest speaker; the first accepting responsibility refines its comment. Each new trial starts with a fresh comment pool.
 
 `enable_reflection=false` is the default. `max_trials=3` matters when reflection is enabled. Execution checks use whether the code obtains a solver status.
 
@@ -47,4 +47,4 @@ Use CoE for LP/MILP collaboration workflows and method comparisons. For explicit
 
 ## Source and platform adaptation
 
-The [pinned Chain-of-Experts implementation](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) supplies the conductor, seven expert roles and reducer prompts. Native-library contracts replace original examples. Execution uses real attachments in the sandbox instead of LLM-invented test inputs.
+The [pinned Chain-of-Experts implementation](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) supplies the conductor, seven expert roles and reducer prompts. Native-library contracts replace original examples. Execution reads the attached data in the sandbox.

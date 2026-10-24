@@ -24,7 +24,7 @@ The default backend is OR-Tools CP-SAT. The optimum assigns vehicles 0, 1 and 2 
 ## Expressions, compilation and solving
 
 ```mermaid
-flowchart LR
+flowchart TB
   Rules["Integer domains, logic and global constraints"] --> Model["CPMpy Model"]
   Model --> Native["Native backend transformation"]
   Native --> Solver["CP / SAT / SMT / MIP paths"]

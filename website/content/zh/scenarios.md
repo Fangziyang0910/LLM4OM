@@ -15,10 +15,10 @@
 
 ```mermaid
 flowchart TB
-  Base["固定原方案：收益13"] --> First["场景一：B至少3件"]
+  Base["固定原方案：利润13"] --> First["场景一：B至少3件"]
   Base --> Second["场景二：B至少4件"]
-  First --> SolveOne["独立建模与求解：收益12"]
-  Second --> SolveTwo["独立建模与求解：收益8"]
+  First --> SolveOne["独立建模与求解：利润12"]
+  Second --> SolveTwo["独立建模与求解：利润8"]
   SolveOne --> Compare["与原方案并排比较"]
   SolveTwo --> Compare
   Base --> Compare
@@ -40,7 +40,7 @@ flowchart TB
 
 ## 试着生成并选择场景
 
-点击下面的“比较B≥3与B≥4”，可查看两个结果和当前基准；之后选择原方案或提出另一项变更。
+点击“比较 B ≥ 3 与 B ≥ 4”生成两个场景，再点击下方保存的“B ≥ 4”方案。顶部当前讨论方案随之更新；点击“查看资源使用”，会读取所选场景的产量与工时。
 
 ```demo
 plans

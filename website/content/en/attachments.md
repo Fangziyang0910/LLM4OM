@@ -1,8 +1,8 @@
-Attach CSV, JSON or Excel so generated code can use complete data. Click a file name to inspect fields, edit cells or raw text, and save the attachment to the current problem.
+Attach Excel, CSV, TSV, JSON or text files so generated code can use complete data. Click a file name to inspect fields, edit cells or raw text, and save the attachment to the current problem.
 
 ## Prepare files and descriptions
 
-CSV and JSON files support up to 2 MB each. Every Excel worksheet becomes a CSV. Common file-name characters are preserved. Describe file names, fields, units and index mappings in the problem.
+Each uploaded file supports up to 2 MB. Every Excel worksheet becomes a CSV. Common file-name characters are preserved. Describe file names, fields, units and index mappings in the problem.
 
 For `production.json`, explain that usage rows identify resources and columns identify products, measured in hours per unit, with nonnegative integer production quantities.
 
@@ -22,7 +22,7 @@ Tables display 50 rows per page while retaining the complete data. Use raw view 
 
 ## Try saving and cancelling
 
-Edit capacities below. “Save and calculate” creates a revised plan; “Cancel edits” restores saved values. The example retains its original snapshot.
+Change cutting capacity from 8 to 10 hours, choose “Save data,” then “Start modeling.” Profit changes from CNY 13 to 16. “Cancel edits” restores saved values; the original snapshot retains the first plan's inputs and profit.
 
 ```demo
 data
@@ -33,7 +33,7 @@ In the workbench, “Save data” applies attachment edits. Modeling uses the cu
 ## How data reaches the model
 
 ```mermaid
-flowchart LR
+flowchart TB
   Upload["Upload or import worksheets"] --> Edit["Inspect and edit"]
   Edit --> Save["Save current attachment"]
   Save --> Run["Run saves input snapshot"]
@@ -47,7 +47,7 @@ flowchart LR
 
 ![English data editor](../../../assets/screens/en/data.png)
 
-The recording ends by opening an attachment, editing unit profit and saving it. Watch the continuous workflow in [quickstart](../quickstart/) too.
+Choose “Edit data” below the recording to jump to opening an attachment, editing unit profit and saving it. See [quickstart](../quickstart/) for the complete workflow.
 
 ```video
 workbench

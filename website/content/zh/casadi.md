@@ -31,7 +31,7 @@ local
 ## 符号问题怎样求解
 
 ```mermaid
-flowchart LR
+flowchart TB
   Expr["光滑符号表达"] --> Derivatives["自动微分与稀疏结构"]
   Derivatives --> Plugin["原生 NLP / Conic 插件"]
   Plugin --> Iterate["从初值开始迭代"]

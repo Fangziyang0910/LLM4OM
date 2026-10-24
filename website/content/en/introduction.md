@@ -13,7 +13,7 @@ First-time users can complete the production [quickstart](../quickstart/). To ru
 ## From requirements to a usable plan
 
 ```mermaid
-flowchart LR
+flowchart TB
   Input["Describe requirements and add data"] --> Model["Generate formulation and code"]
   Model --> Solve["Actual solver computation"]
   Solve --> Result["Inspect plan and process"]

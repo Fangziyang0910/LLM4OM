@@ -32,7 +32,7 @@ The preset dialog shows usage. At the daily cap, the next model call shows a quo
 ## Two concurrency levels
 
 ```mermaid
-flowchart LR
+flowchart TB
   Requests["Run requests"] --> Queue["Active runs: serve --jobs"]
   Queue --> Calls["Model calls and method stages"]
   Calls --> Sandbox["Global sandbox slots: SANDBOX_JOBS"]

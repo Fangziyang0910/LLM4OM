@@ -20,7 +20,7 @@
 ## 发现、选择与执行
 
 ```mermaid
-flowchart LR
+flowchart TB
   Registry["读取沙箱原生注册表"] --> Options["显示ID、状态与原因"]
   Options --> Choice["AUTO或显式选择"]
   Choice --> Load["加载兼容接口与许可"]

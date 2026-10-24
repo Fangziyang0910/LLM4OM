@@ -40,7 +40,7 @@ Read status and objective, then changed decisions. The table prioritizes the fir
 
 ## Try creating and selecting scenarios
 
-Choose “Compare B≥3 and B≥4” below to see results and the current baseline. Then select the original or request another change.
+Choose “Compare B ≥ 3 and B ≥ 4,” then select the saved “B ≥ 4” plan below. The current discussion plan updates. “Check resource use” now reads that scenario's quantities and hours.
 
 ```demo
 plans

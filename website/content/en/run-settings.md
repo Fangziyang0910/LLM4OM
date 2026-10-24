@@ -14,7 +14,7 @@ Methods appear on the left; library, backend and preset appear on the right. Cho
 ## Configure one run
 
 ```mermaid
-flowchart LR
+flowchart TB
   Problem["Problem and attachments"] --> Method["Choose method"]
   Method --> Library["Choose modeling library"]
   Library --> Solver["Choose available backend"]

@@ -11,7 +11,7 @@ Linear-model diagnosis uses Gurobi IIS; CPMpy uses MUS. Original evidence is ret
 Add B≥5 to production with 8 finishing hours. The relevant expressions are `B≥5`, `A+2B≤8` and nonnegative quantities. The explanation maps these to minimum orders and finishing capacity.
 
 ```mermaid
-flowchart LR
+flowchart TB
   Model["Current model infeasible"] --> Evidence["IIS / MUS evidence"]
   Evidence --> Explain["Map to business requirements"]
   Explain --> Edit["Prepare candidate revision"]

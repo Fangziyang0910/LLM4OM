@@ -13,7 +13,7 @@ LLM4OM 将自然语言问题和数据转成优化模型，调用求解器计算�
 ## 从需求到可使用的方案
 
 ```mermaid
-flowchart LR
+flowchart TB
   Input["描述需求、添加数据"] --> Model["生成公式与代码"]
   Model --> Solve["求解器实际计算"]
   Solve --> Result["查看方案与过程"]

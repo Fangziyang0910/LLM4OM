@@ -10,25 +10,22 @@ In transport, establish warehouse supply limits, store demand and the cost objec
 
 ```mermaid
 flowchart TB
-  Form["Build mathematical formulation"] --> Code["Generate solver code"]
-  Code --> Execute["Execute code"]
-  Execute -->|Execution error with budget left| Fix["Repair in a copied conversation"]
-  Fix --> Attempt{"Execution attempts left?"}
-  Attempt -->|Yes| Execute
-  Attempt -->|No| Round["Inspect actual round result"]
-  Execute -->|Solver status obtained| Round
-  Round -->|Infeasibility check| Infeasible["Inspect infeasible formulation"]
-  Round -->|Model recheck| Recheck["Recheck mathematical model"]
-  Infeasible --> Finish["Save last actually executed result"]
-  Recheck --> Finish
+  Form["Build formulation first"]
+  Execute["Generate code + solve"]
+  Fix["Repair from feedback"]
+  Round["Infeasibility + recheck"]
+  Finish["Executed code + result"]
+  Form --> Execute --> Round --> Finish
+  Execute -.->|Runtime error| Fix
+  Fix --> Execute
 ```
 
 ```walkthrough
 [
   {"title":"State the rules","nodes":["Form"],"body":"Check supply and demand directions. Whether excess delivery is permitted must come from the problem.","artifact":"sum_j x[i,j] ≤ supply[i]\nsum_i x[i,j] ≥ demand[j]\nmin sum_i,j cost[i,j] × x[i,j]"},
-  {"title":"Locate runtime errors","nodes":["Code","Execute","Fix"],"body":"If cost[j][i] causes an index error, use the data orientation in execution feedback to repair indexing.","artifact":"Hypothetical error: costs indexed store-first.\nActual data: warehouse rows, store columns."},
-  {"title":"Interpret the result","nodes":["Round","Infeasible","Recheck"],"body":"Supply below hard demand can be genuinely infeasible. Distinguish a data conflict from a modeling error.","artifact":"Total supply 10, hard demand 12 → potentially genuine infeasibility.\nDo not invent permission for shortages merely to obtain a plan."},
-  {"title":"Check code versions","nodes":["Attempt","Finish"],"body":"Upstream round behavior can leave the final proposed repair unexecuted. Numerical results must stay attached to executed code.","artifact":"Intermediate artifact: latest repair proposal\nNumerical result: last actually executed model\nThese are not one verified result."}
+  {"title":"Locate runtime errors","nodes":["Execute","Fix"],"body":"If cost[j][i] causes an index error, use the data orientation in execution feedback to repair indexing.","artifact":"Hypothetical error: costs indexed store-first.\nActual data: warehouse rows, store columns."},
+  {"title":"Interpret the result","nodes":["Round"],"body":"Supply below hard demand can be genuinely infeasible. Distinguish a data conflict from a modeling error.","artifact":"Total supply 10, required demand 12 → shortfall 2.\nReview the supply limits, demand constraints and attached quantities."},
+  {"title":"Check code versions","nodes":["Finish"],"body":"Upstream round behavior can leave the final proposed repair unexecuted. Numerical results must stay attached to executed code.","artifact":"Intermediate artifact: latest repair proposal\nNumerical result: last actually executed model\nRun steps identify which code versions were executed."}
 ]
 ```
 
@@ -38,7 +35,7 @@ The preset assigns main 3, infeasibility 1 and recheck 2 attempts. Repairs use c
 
 ## Difference from Chat Agent
 
-“Agent” here names a fixed modeling method. [Chat Agent](../chat-agent/) is the user-facing optimization conversation. It can call Direct, TriVAL or other methods and handles explanations, plan selection and scenarios. Selecting OR-LLM-Agent does not itself open a persistent conversation.
+“Agent” here names a fixed modeling method. [Chat Agent](../chat-agent/) is the user-facing optimization conversation. It can call Direct, TriVAL or other methods and handles explanations, plan selection and scenarios. You can request OR-LLM-Agent as the modeling method within Optimization chat.
 
 ## When to use it and what to inspect
 

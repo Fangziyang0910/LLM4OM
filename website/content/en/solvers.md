@@ -1,4 +1,4 @@
-Choose the mathematics first, then the modeling library and backend. A library expresses a model; a backend computes it. Selecting a library does not make every problem compatible with every solver.
+Choose the mathematics first, then the modeling library and backend. A library expresses a model; a backend computes it.
 
 ## Start with variables and constraints
 
@@ -11,12 +11,12 @@ Choose the mathematics first, then the modeling library and backend. A library e
 | Smooth nonlinear continuous decisions | NLP | CasADi with Ipopt or another suitable native path |
 | Routing, flow, assignment or knapsack | Specialized combinatorial structure | The corresponding OR-Tools interface |
 
-Business names alone do not establish compatibility. Staffing can be MILP; production can include nonlinear losses. Domains and expression structure determine the mathematical requirements.
+Staffing can be MILP; production can include nonlinear losses. Domains and expression structure determine the mathematical requirements.
 
 ## The complete solving chain
 
 ```mermaid
-flowchart LR
+flowchart TB
   Problem["Business requirements"] --> Math["Domains and expressions"]
   Math --> Library["Library builds native model"]
   Library --> Check{"Compatible available backend?"}

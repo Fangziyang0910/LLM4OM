@@ -27,14 +27,14 @@ def build_model(data):
 ## 辅助变量如何进入求解
 
 ```mermaid
-flowchart LR
+flowchart TB
   Cost["非线性成本表达式"] --> Link["cost ≤ loss"]
   Link --> Obj["线性目标：min loss"]
   Obj --> SCIP["SCIP 原生模型求解"]
   SCIP --> Values["原决策与辅助变量"]
 ```
 
-最大化收益时，对应的 hypograph 方向为 `t≤reward(x)`，再最大化t。目标方向决定辅助约束的方向，代码中应使用有业务意义的变量名。
+最大化利润时，对应的 hypograph 方向为 `t≤reward(x)`，再最大化t。目标方向决定辅助约束的方向，代码中应使用有业务意义的变量名。
 
 ## 变量、索引与矩阵
 

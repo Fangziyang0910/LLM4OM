@@ -2,7 +2,7 @@ OptiTree searches a hierarchy of problem types before generating code. It makes 
 
 ## What the type tree provides
 
-Transportation, assignment and staffing descriptions can share variable and constraint structures. The tree provides reasoning templates, not complete answers. Costs, indices, capacities and special rules must still come from the current problem.
+Transportation, assignment and staffing descriptions can share variable and constraint structures. The tree supplies modeling templates. The generator combines a template with the current costs, indices, capacities and special rules.
 
 Matching starts at the Mixed Integer Programming root and selects only among the current node's children. The deepest matched node's full entry becomes context for generation. The process retains the matching path and retrieved entry.
 
@@ -10,23 +10,22 @@ Matching starts at the Mixed Integer Programming root and selects only among the
 
 ```mermaid
 flowchart TB
-  Root["Start at problem-type root"] --> Match{"Match a child type?"}
-  Match -->|Valid and not repeated| Descend["Descend to child"]
-  Descend --> Match
-  Match -->|No match, invalid or repeated| Retrieve["Retrieve deepest current entry"]
-  Retrieve --> Reason["Generate model and code for this problem"]
-  Reason --> Solve["Execute and solve"]
-  Solve -->|Execution failed and budget left| Inspect["Inspector repairs code"]
+  Root["Match in the type tree"]
+  Retrieve["Retrieve deepest match"]
+  Solve["Generate code + solve"]
+  Inspect["Inspect + repair code"]
+  Finish["Type path + result"]
+  Root --> Retrieve --> Solve --> Finish
+  Solve -.->|Runtime error| Inspect
   Inspect --> Solve
-  Solve -->|Completed or limit reached| Finish["Save actual result"]
 ```
 
 ```walkthrough
 [
-  {"title":"Recognize structure","nodes":["Root","Match"],"body":"For warehouse-to-store transport, recognize quantities, supply and demand. The actual matching path depends on the bundled tree and LLM decisions.","artifact":"Decisions: shipment quantities from warehouses to stores.\nInputs: unit costs, warehouse supply, store demand."},
-  {"title":"Use the template","nodes":["Descend","Retrieve"],"body":"A template can suggest indexed x[i,j], but the current wording determines whether supply and demand require equality or inequality.","artifact":"x[i,j] ≥ 0\nWarehouse: sum_j x[i,j] ≤ supply[i]\nStore: sum_i x[i,j] ≥ demand[j], if required by the problem"},
-  {"title":"Generate and execute","nodes":["Reason","Solve"],"body":"Use the retrieved entry together with current data. Template example values must not replace user data.","artifact":"Check warehouse/store indices and cost-matrix orientation.\nSpecial business rules still need explicit constraints."},
-  {"title":"Handle no match","nodes":["Match","Inspect","Finish"],"body":"Stop at the current node if no valid deeper type exists. Do not invent a classification. Inspection repairs execution failures.","artifact":"Unknown type / missing judgment / repeated path → stop descent\nAt most 4 code inspections."}
+  {"title":"Recognize structure","nodes":["Root"],"body":"For warehouse-to-store transport, recognize quantities, supply and demand. The actual matching path depends on the bundled tree and LLM decisions.","artifact":"Decisions: shipment quantities from warehouses to stores.\nInputs: unit costs, warehouse supply, store demand."},
+  {"title":"Use the template","nodes":["Retrieve"],"body":"A template can suggest indexed x[i,j], but the current wording determines whether supply and demand require equality or inequality.","artifact":"x[i,j] ≥ 0\nWarehouse: sum_j x[i,j] ≤ supply[i]\nStore: sum_i x[i,j] ≥ demand[j], if required by the problem"},
+  {"title":"Generate and execute","nodes":["Solve"],"body":"Use the retrieved entry to choose a structure, then bind its indices and coefficients to the current data.","artifact":"Check warehouse/store indices and cost-matrix orientation.\nSpecial business rules still need explicit constraints."},
+  {"title":"Handle no match","nodes":["Inspect","Finish"],"body":"Use the deepest valid entry when matching ends. An execution failure then routes code to the inspector for repair.","artifact":"Unknown type / missing judgment / repeated path → stop descent\nAt most 4 code inspections."}
 ]
 ```
 

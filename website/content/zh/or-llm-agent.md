@@ -10,25 +10,22 @@ OR-LLM-Agent 先独立建立数学模型，再生成和执行代码。它保留�
 
 ```mermaid
 flowchart TB
-  Form["建立数学模型"] --> Code["生成求解代码"]
-  Code --> Execute["执行代码"]
-  Execute -->|执行错误且有额度| Fix["在修复对话中改代码"]
-  Fix --> Attempt{"本轮还能执行？"}
-  Attempt -->|是| Execute
-  Attempt -->|否| Round["检查本轮实际结果"]
-  Execute -->|获得求解状态| Round
-  Round -->|不可行检查| Infeasible["核对不可行模型"]
-  Round -->|模型复查| Recheck["复查数学表达"]
-  Infeasible --> Finish["保存最后实际执行结果"]
-  Recheck --> Finish
+  Form["先建立数学模型"]
+  Execute["生成代码并执行求解"]
+  Fix["依据反馈修代码"]
+  Round["不可行检查与模型复查"]
+  Finish["保存执行版本与结果"]
+  Form --> Execute --> Round --> Finish
+  Execute -.->|执行错误| Fix
+  Fix --> Execute
 ```
 
 ```walkthrough
 [
   {"title":"先表达规则","nodes":["Form"],"body":"先检查运输模型的方向：仓库不能超供，门店不能少交。是否允许多交必须按题意决定。","artifact":"sum_j x[i,j] ≤ supply[i]\nsum_i x[i,j] ≥ demand[j]\nmin sum_i,j cost[i,j] × x[i,j]"},
-  {"title":"定位执行错误","nodes":["Code","Execute","Fix"],"body":"若代码访问 cost[j][i] 导致越界，反馈应推动索引修复。","artifact":"假设错误：运费矩阵按门店、仓库顺序读取。\n修复依据：实际数据为仓库行、门店列。"},
-  {"title":"复查结果含义","nodes":["Round","Infeasible","Recheck"],"body":"总供给小于总需求可能真实无解。复查应区分数据冲突与建模错误。","artifact":"供给合计 10，硬需求合计 12 → 可能真实不可行。\n复查记录会说明模型规则与供需数据。"},
-  {"title":"核对代码版本","nodes":["Attempt","Finish"],"body":"保留上游的轮次行为，最后一次修复可能尚未执行。数值只能关联真正执行过的代码。","artifact":"中间产物：最新修复建议\n最终数值：最后一次实际执行模型\n运行步骤标记各份代码的实际执行情况。"}
+  {"title":"定位执行错误","nodes":["Execute","Fix"],"body":"若代码访问 cost[j][i] 导致越界，反馈应推动索引修复。","artifact":"假设错误：运费矩阵按门店、仓库顺序读取。\n修复依据：实际数据为仓库行、门店列。"},
+  {"title":"复查结果含义","nodes":["Round"],"body":"总供给小于总需求可能真实无解。复查应区分数据冲突与建模错误。","artifact":"供给合计 10，硬需求合计 12 → 可能真实不可行。\n复查记录会说明模型规则与供需数据。"},
+  {"title":"核对代码版本","nodes":["Finish"],"body":"保留上游的轮次行为，最后一次修复可能尚未执行。数值只能关联真正执行过的代码。","artifact":"中间产物：最新修复建议\n最终数值：最后一次实际执行模型\n运行步骤标记各份代码的实际执行情况。"}
 ]
 ```
 
@@ -46,4 +43,4 @@ flowchart TB
 
 ## 来源与平台适配
 
-来自 [OR-LLM-Agent 固定提交](https://github.com/bwz96sco/or_llm_agent/tree/5dccdaab89ab91c3cb28066fe849423dc124d287)。平台保留提示与恢复路线，把原 Gurobi 请求替换为所选库的 `build_model(data)` 契约，并在沙箱执行。未执行的最后修复保留为中间产物，不伪装成已求解代码。
+来自 [OR-LLM-Agent 固定提交](https://github.com/bwz96sco/or_llm_agent/tree/5dccdaab89ab91c3cb28066fe849423dc124d287)。平台保留提示与恢复路线，把原 Gurobi 请求替换为所选库的 `build_model(data)` 契约，并在沙箱执行。修复建议保留为中间产物，数值结果关联对应的执行版本。

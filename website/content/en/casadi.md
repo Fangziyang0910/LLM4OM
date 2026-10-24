@@ -31,7 +31,7 @@ This interaction uses fixed-step gradient descent to display iterations on the f
 ## Solving symbolic problems
 
 ```mermaid
-flowchart LR
+flowchart TB
   Expr["Smooth symbolic expressions"] --> Derivatives["Automatic derivatives and sparsity"]
   Derivatives --> Plugin["Native NLP / Conic plugin"]
   Plugin --> Iterate["Iterate from initial values"]

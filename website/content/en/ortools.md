@@ -39,7 +39,7 @@ Choose `CP_SAT`. Employees 0 and 1 work Monday; 2 and 3 work Tuesday, for cost 6
 ## CP-SAT model structure
 
 ```mermaid
-flowchart LR
+flowchart TB
   Vars["Boolean and finite integer variables"] --> Rules["Linear, logical and scheduling constraints"]
   Rules --> CP["CpModel"]
   CP --> Search["CP-SAT search"]

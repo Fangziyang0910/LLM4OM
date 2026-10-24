@@ -1,4 +1,4 @@
-A modeling method controls how the LLM builds formulations and code, and when it checks, retries or compares candidates. It does not replace the solver: final numerical values must come from execution.
+A modeling method controls how the LLM builds formulations and code, and when it checks, retries or compares candidates. The generated model then goes to a solver, which computes decision values and the objective.
 
 ## Choose by the difficulty you face
 
@@ -33,7 +33,7 @@ flowchart TB
 
 Semantic checks interpret “each employee works at most five days.” Formulation checks require a sum for each employee. Code checks inspect indices and domains. The solver determines feasibility and optimality for the submitted model.
 
-Repair loops also differ. Some read only execution errors, others review the problem, and others backtranslate individual constraints. Compare trigger conditions and return points by inspecting their trigger conditions and return points.
+Repair loops also differ. Some read only execution errors, others review the problem, and others backtranslate individual constraints. Compare what triggers each check and which stage receives its feedback.
 
 ## Read different workflows on one example
 
@@ -45,16 +45,16 @@ For the production problem, Direct generates formulation and code before solving
 
 Direct uses one modeling call. Feedback Repair without repairs uses two calls and one solve. Component methods scale with rule count; validation methods scale with failed checks and returns. AutoFormulation's candidate sampling has a substantially larger default budget.
 
-There is no reliable universal time per problem. Provider latency, attachment size, output length and mathematical difficulty all matter. The platform records actual calls, usage and elapsed time; parameter tables come from current presets.
+Elapsed time depends on provider latency, attachment size, output length and solving difficulty. The platform records actual calls, usage and elapsed time; parameter tables come from current presets.
 
 ## Problem scope and combinations
 
 OptiMUS, CoE, OptiTree, OR-LLM-Agent, AutoFormulation and SAC-Opt currently target LP/MILP. Other methods run according to the chosen model, library and backend. All nine libraries can be selected, but actual mathematics must fit the library and backend.
 
-For example, CPMpy has no continuous variables, OSQP does not solve integer programs, and Ipopt does not certify global optimality for general nonconvex models. Method and [solver selection](../solvers/) must both fit.
+For example, CPMpy expresses finite-domain decisions, OSQP handles continuous convex quadratic programs, and Ipopt seeks local solutions for smooth nonlinear models. Use [solver selection](../solvers/) to match these structures.
 
 ## Make comparisons informative
 
 Fix the problem, attachments, LLM preset, library, backend and limits, then vary one factor. Record rule coverage, domains, actual solutions, solver status, validation status, call count and solve count.
 
-One run on one problem can reveal differences, not establish a stable ranking. Retain failures: they help decide whether to clarify requirements, improve data descriptions or change checking workflows. See [method and LLM comparison](../method-comparison/) for the UI workflow.
+Use differences and failed stages to decide whether to clarify requirements, improve data descriptions or change the checking workflow. See [method and LLM comparison](../method-comparison/) for the UI workflow.

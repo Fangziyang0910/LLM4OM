@@ -2,7 +2,7 @@ Direct sends the problem, data description and modeling-library contract to the 
 
 ## What the method does
 
-A solver cannot consume a business description directly. Direct translates the description into variables, an objective and constraints, then translates those expressions into code. Both translations happen in one reply. The formulation and code are followed by actual solver execution.
+Direct translates the description into variables, an objective and constraints, then writes the corresponding model code. One reply contains both outputs. The platform executes that code and solves the model.
 
 Consider two products. A and B earn 3 and 2 per unit. They use 2 and 1 cutting hours, and 1 and 2 finishing hours. Each resource has 8 hours available. Products must be whole units.
 
@@ -13,19 +13,19 @@ The critical choices are the integer domain, resource coefficients, units and ma
 ## Workflow and worked example
 
 ```mermaid
-flowchart LR
-  Read["Problem and data access"] --> Generate["Generate formulation and code"]
-  Generate --> Format{"Complete reply?"}
-  Format -->|Yes| Solve["Build and solve in sandbox"]
-  Format -->|No| Fail["Report format failure"]
-  Solve --> Result["Save status, values and artifacts"]
+flowchart TB
+  Read["Problem + data"]
+  Generate["Formulation + code"]
+  Solve["Build + solve"]
+  Result["Plan + process"]
+  Read --> Generate --> Solve --> Result
 ```
 
 ```walkthrough
 [
   {"title":"Read","nodes":["Read"],"body":"Separate decisions from inputs. Profits and processing times are parameters; quantities are decisions.","artifact":"Profit (3, 2); cutting (2, 1); finishing (1, 2); capacity (8, 8)\nQuantities must be nonnegative integers."},
-  {"title":"Generate","nodes":["Generate","Format"],"body":"One reply supplies the formulation and build_model(data). Code must read full attachments even when their preview is truncated.","artifact":"Variables: A, B are nonnegative integers\nObjective: max 3A + 2B\nConstraints: 2A + B ≤ 8; A + 2B ≤ 8"},
-  {"title":"Compute","nodes":["Solve"],"body":"Code returns a native model. The platform calls a compatible backend; the LLM does not invent numerical answers.","artifact":"Integer optimum: A = 3, B = 2, objective 13\nCutting: 8 / 8; finishing: 7 / 8"},
+  {"title":"Generate","nodes":["Generate"],"body":"One reply supplies the formulation and build_model(data). Code must read full attachments even when their preview is truncated.","artifact":"Variables: A, B are nonnegative integers\nObjective: max 3A + 2B\nConstraints: 2A + B ≤ 8; A + 2B ≤ 8"},
+  {"title":"Compute","nodes":["Solve"],"body":"The code returns a native model. A compatible backend computes the quantities, profit and resource use.","artifact":"Integer optimum: A = 3, B = 2, objective 13\nCutting: 8 / 8; finishing: 7 / 8"},
   {"title":"Check","nodes":["Result"],"body":"Results retain the model, code and computed plan together for export, discussion and revision.","artifact":"Result: A = 3, B = 2, objective 13\nNext: export CSV or revise cutting capacity to 10 hours."}
 ]
 ```
@@ -48,4 +48,4 @@ Start with Direct for a clear problem and a quick first model. Use [Feedback Rep
 
 ## Platform implementation and comparison
 
-This project maintains Direct and its shared Feedback Repair generator. It is not restricted to linear problems, although the library and backend must support the expressions used. Keep the problem, attachments, LLM preset and solver fixed when comparing workflows.
+This project maintains Direct and its shared Feedback Repair generator. For nonlinear or discrete models, choose the library and backend using the solver guide. Keep the problem, attachments, LLM preset and solver fixed when comparing workflows.

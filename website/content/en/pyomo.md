@@ -25,12 +25,12 @@ def build_model(data):
     return model
 ```
 
-There is no `solve()` call. The platform selects a backend, solves and reads named variables. For attachments, parse complete parameters with `json.loads(data['production.json'])`; see [BIND](../bind/).
+Return the built model; the platform selects a backend, solves and reads named variables. For attachments, parse complete parameters with `json.loads(data['production.json'])`; see [BIND](../bind/).
 
 ## From expressions to solving
 
 ```mermaid
-flowchart LR
+flowchart TB
   Sets["Sets, parameters and domains"] --> Expressions["Objective and constraints"]
   Expressions --> Model["Native Pyomo model"]
   Model --> Backend["Compatible backend, such as HiGHS"]

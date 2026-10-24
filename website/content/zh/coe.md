@@ -10,24 +10,24 @@ Chain-of-Experts（CoE）让协调者按顺序选择专家，后来的专家读�
 
 ```mermaid
 flowchart TB
-  Start["新一轮：清空评论池"] --> Conductor["协调者选择专家"]
-  Conductor --> Expert["专家读取题目与已有意见"]
-  Expert --> Count{"已达到协作人数？"}
-  Count -->|否| Conductor
-  Count -->|是| Reduce["汇总模型与代码"]
-  Reduce --> Reflect{"启用反思？"}
-  Reflect -->|默认关闭| Return["交平台求解并保存"]
-  Reflect -->|开启| Test["执行检查"]
-  Test -->|可执行| Return
-  Test -->|执行失败且仍可尝试| Back["从后向前归因与反思"]
-  Back --> Start
-  Test -->|试验次数用尽| Return
+  Conductor["协调者选择专家"]
+  Expert["专家补充评论池"]
+  Reduce["汇总模型与代码"]
+  Return["平台求解并保存"]
+  Reflect["执行检查与反思"]
+  Conductor --> Expert
+  Expert -->|继续协作| Conductor
+  Expert -->|完成协作| Reduce
+  Reduce -->|默认路径| Return
+  Reduce -.->|启用反思| Reflect
+  Reflect -.->|反思后重试| Conductor
+  Reflect -->|完成| Return
 ```
 
 ```walkthrough
 [
-  {"title":"解释问题","nodes":["Conductor","Expert"],"body":"这组示例展示专家意见怎样进入评论池，第一步先解释业务术语。","artifact":"示意意见：单件收益不同于销售额；每件工时不同于总工时。"},
-  {"title":"补充建模意见","nodes":["Expert","Count"],"body":"后续专家读取已有意见，补充变量域、索引和资源约束。","artifact":"示意意见：产量按整件计，使用非负整数。\n切割：2A+B≤8；装配：A+2B≤8。"},
+  {"title":"解释问题","nodes":["Conductor","Expert"],"body":"这组示例展示专家意见怎样进入评论池，第一步先解释业务术语。","artifact":"示意意见：单件利润不同于销售额；每件工时不同于总工时。"},
+  {"title":"补充建模意见","nodes":["Expert"],"body":"后续专家读取已有意见，补充变量域、索引和资源约束。","artifact":"示意意见：产量按整件计，使用非负整数。\n切割：2A+B≤8；装配：A+2B≤8。"},
   {"title":"汇总","nodes":["Reduce"],"body":"汇总器必须把评论变成一份内部一致的模型和代码。意见之间若有冲突，最终代码仍需明确选择。","artifact":"汇总产物：变量域、目标、资源约束与完整代码。\n每条关键意见可对应到最终表达。"},
   {"title":"理解默认路径","nodes":["Reflect","Return"],"body":"默认路径完成三位专家协作与汇总，随后由平台实际求解。","artifact":"默认：三位专家 → 汇总 → 平台求解\n执行反思是部署预设控制的可选分支。"}
 ]

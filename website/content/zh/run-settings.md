@@ -14,7 +14,7 @@
 ## 按问题配置一次运行
 
 ```mermaid
-flowchart LR
+flowchart TB
   Problem["题面与附件"] --> Method["选择方法"]
   Method --> Library["选择建模库"]
   Library --> Solver["选择可用后端"]
@@ -28,7 +28,7 @@ flowchart LR
 
 | 任务 | 方法 | 库与后端 | 查看什么 |
 |---|---|---|---|
-| 第一次跑生产案例 | Direct | Pyomo / AUTO | 数学模型、产量、收益 |
+| 第一次跑生产案例 | Direct | Pyomo / AUTO | 数学模型、产量、利润 |
 | 检查复杂业务规则 | TriVAL | 与数学类型匹配的库 / AUTO | 各阶段产物与验证反馈 |
 | 使用大份 JSON/CSV | BIND | Pyomo 等兼容库 / AUTO | schema 和数据读取代码 |
 

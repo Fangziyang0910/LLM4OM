@@ -16,7 +16,7 @@
 ## 一条完整的求解链
 
 ```mermaid
-flowchart LR
+flowchart TB
   Problem["业务要求"] --> Math["变量域与数学表达"]
   Math --> Library["建模库构建原生模型"]
   Library --> Check{"后端兼容且可用？"}

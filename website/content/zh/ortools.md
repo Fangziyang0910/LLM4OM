@@ -39,7 +39,7 @@ def build_model(data):
 ## CP-SAT 的模型结构
 
 ```mermaid
-flowchart LR
+flowchart TB
   Vars["布尔与有限整数变量"] --> Rules["线性、逻辑与排程约束"]
   Rules --> CP["CpModel"]
   CP --> Search["CP-SAT 搜索"]

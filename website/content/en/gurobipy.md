@@ -22,7 +22,7 @@ def build_model(data):
     return model
 ```
 
-Do not call `optimize()`. Platform execution should give A=3, B=2 and objective 13. Matrix modeling with `MVar` still needs clear names, dimensions and row/column meanings.
+Return the built model for platform execution: A=3, B=2 and profit CNY 13. Matrix modeling with `MVar` still needs clear names, dimensions and row/column meanings.
 
 ## Review and export a plan
 

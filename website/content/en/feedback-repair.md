@@ -10,24 +10,24 @@ The reviewer reads the problem, formulation, code, execution feedback and availa
 
 ```mermaid
 flowchart TB
-  Generate["Generate model and code"] --> Format{"Complete reply?"}
-  Format -->|Yes| Solve["Run the solver"]
-  Format -->|No| Budget{"Repair budget left?"}
-  Solve -->|Executed| Review["Review against original problem"]
-  Solve -->|Execution error| Budget
-  Review -->|Accept| Finish["Save final artifacts"]
-  Review -->|Specific model error| Budget
-  Budget -->|Yes| Repair["Repair from feedback"]
-  Repair --> Format
-  Budget -->|No| Failed["Keep artifacts and report unresolved issue"]
+  Generate["Formulation + code"]
+  Solve["Solve"]
+  Review["Review original rules"]
+  Repair["Repair from feedback"]
+  Finish["Save model + result"]
+  Generate --> Solve --> Review
+  Review -->|Accept| Finish
+  Review -.->|Model issue| Repair
+  Solve -.->|Runtime error| Repair
+  Repair --> Generate
 ```
 
 ```walkthrough
 [
   {"title":"First model","nodes":["Generate","Solve"],"body":"Assume generation reverses the demand constraint. The solver does not read the business description and can still report optimality.","artifact":"Required: B ≥ 3\nHypothetical error: B ≤ 3\nWrong-model optimum: A = 3, B = 2, objective 13"},
   {"title":"Review","nodes":["Review"],"body":"Name the mismatch. The mismatch becomes specific repair feedback.","artifact":"Decision: repair\nReason: a minimum became an upper bound; B = 2 violates B ≥ 3."},
-  {"title":"Repair and solve","nodes":["Budget","Repair","Solve"],"body":"Restore B ≥ 3, preserve the other requirements and execute the revised code.","artifact":"2A + B ≤ 8; A + 2B ≤ 8; B ≥ 3\nInteger optimum: A = 2, B = 3, objective 12"},
-  {"title":"Accept or report","nodes":["Review","Finish","Failed"],"body":"The lower objective is the cost of satisfying the requirement. Accept after review, or retain artifacts and report an unresolved error when the budget ends.","artifact":"Original objective: 13. With B ≥ 3: 12.\nBoth models and results remain available."}
+  {"title":"Repair and solve","nodes":["Repair","Solve"],"body":"Restore B ≥ 3, preserve the other requirements and execute the revised code.","artifact":"2A + B ≤ 8; A + 2B ≤ 8; B ≥ 3\nInteger optimum: A = 2, B = 3, objective 12"},
+  {"title":"Accept or report","nodes":["Review","Finish"],"body":"The lower objective is the cost of satisfying the requirement. Accept after review, or retain artifacts and report an unresolved error when the budget ends.","artifact":"Original objective: 13. With B ≥ 3: 12.\nBoth models and results remain available."}
 ]
 ```
 
@@ -45,7 +45,7 @@ flowchart TB
 
 At most three repairs are shared across format, execution and modeling errors. A run without repair uses two LLM calls and one solve. Later explanations can add calls.
 
-An incomplete later reply preserves the last formulation, code and result actually executed. The platform does not choose an earlier model for its attractive objective. A failed or unparseable review also preserves computation and records the failure.
+An incomplete later reply preserves the last formulation, code and result actually executed. A failed or unparseable review also preserves computation and records the failure.
 
 ## Using and reading the method
 

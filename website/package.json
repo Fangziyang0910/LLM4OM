@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "node ../frontend/node_modules/vite/bin/vite.js public --host 127.0.0.1 --port 8831 --strictPort",
     "build": "node render-diagrams.mjs && node build-docs.mjs"
   },
   "devDependencies": {

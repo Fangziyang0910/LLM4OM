@@ -16,13 +16,14 @@ The structure separates objects, known quantities, decisions, goals and requirem
 
 ```mermaid
 flowchart TB
-  Define["Q2F: five-part formulation"] --> Code["F2C: code from formulation"]
-  Code --> Solve["Execute and solve"]
-  Solve --> Judge{"Judge formulation and code separately"}
-  Judge -->|Formulation wrong, budget left| Define
-  Judge -->|Only code wrong, budget left| Code
-  Judge -->|Accepted| Finish["Save last executed result"]
-  Judge -->|Resolve limit reached| Finish
+  Define["Q2F: five-part model"]
+  Code["F2C: model to code"]
+  Solve["Execute + solve"]
+  Judge["Judge model and code"]
+  Finish["Results + judgments"]
+  Define --> Code --> Solve --> Judge --> Finish
+  Judge -.->|Model error| Define
+  Judge -.->|Code error| Code
 ```
 
 ```walkthrough
@@ -48,7 +49,7 @@ To use released weights, deploy them separately behind a compatible service and 
 
 ## When to use it and what to inspect
 
-Use it for a structured formulation checkpoint and stage-specific correction. The method is not uniformly restricted to linear models; library and backend capabilities still apply. Inspect indices and domains first, then whether correction returns to the right level.
+Use it for a structured formulation checkpoint and stage-specific correction. Choose the library and backend for the model using the solver guide. Inspect indices and domains first, then whether correction returns to the right level.
 
 ## Source and platform adaptation
 

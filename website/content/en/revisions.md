@@ -12,7 +12,7 @@ For a complete rewrite, use “More → Edit and run” to return inputs and set
 ## How a new plan is created
 
 ```mermaid
-flowchart LR
+flowchart TB
   Original["Original inputs and settings"] --> Request["Change request"]
   Request --> Problem["Prepare complete revised problem"]
   Problem --> Method["Run original modeling method"]

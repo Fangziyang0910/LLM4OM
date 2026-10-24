@@ -14,6 +14,7 @@ const React = require("../frontend/node_modules/react");
 const { renderToStaticMarkup } = require("../frontend/node_modules/react-dom/server");
 const hljs = require("../frontend/node_modules/highlight.js");
 const katex = require("../frontend/node_modules/katex");
+const { JSDOM } = require("../frontend/node_modules/jsdom");
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(directory);
 const output = path.join(directory, "public/docs");
@@ -57,6 +58,9 @@ for (const [index, locale] of ["zh", "en"].entries()) {
   const title = item => item.title[index];
   const summary = item => item.summary[index];
   const search = [];
+  const recordingText = await fs.readFile(path.join(directory, `public/assets/demos/workbench-${locale}.vtt`), "utf8");
+  const recordingCues = [...recordingText.matchAll(/^(\d{2}):(\d{2}):(\d{2}\.\d{3}) --> [^\n]+\n([^\n]+)/gm)].map(([, h, m, s, text]) => ({ seconds: Number(h) * 3600 + Number(m) * 60 + Number(s), text }));
+  if (recordingCues.length !== 6) throw new Error(`Check recording chapters: ${locale}`);
   const navigation = groups.map(group => `<details open class="nav-group"><summary>${escape(title(group))}<span>${articles.filter(a => a.group === group.id).length}</span></summary><ul>${articles.filter(a => a.group === group.id).map(a => `<li><a href="../${a.id}/" data-article="${a.id}">${escape(title(a))}</a></li>`).join("")}</ul></details>`).join("");
   for (const [position, article] of articles.entries()) {
     let markdown = await fs.readFile(path.join(directory, "content", locale, `${article.id}.md`), "utf8");
@@ -64,7 +68,7 @@ for (const [index, locale] of ["zh", "en"].entries()) {
     if (article.method) {
       const parameters = Object.entries(facts.methods[article.method].parameters);
       markdown += `\n## ${index ? "Current parameters" : "当前参数"}\n\n`;
-      markdown += index ? "Parameters come from the deployed method preset. They are saved with each run and cannot be changed per run in the UI, CLI or Python API.\n\n" : "参数来自部署时的方法预设，随每次运行记录保存。页面、命令行和 Python 接口均不提供单次运行的参数修改。\n\n";
+      markdown += index ? "These values come from the method preset and are saved with each run. Administrators can change the deployment preset to adjust budgets and retry counts.\n\n" : "以下取值来自方法预设，随每次运行保存。管理员可在部署预设中调整预算与重试次数。\n\n";
       markdown += parameters.length ? `| ${index ? "Parameter" : "参数"} | ${index ? "Value" : "取值"} |\n|---|---|\n${parameters.map(([key, value]) => `| \`${key}\` | \`${JSON.stringify(value).replaceAll("|", "\\|")}\` |`).join("\n")}\n` : index ? "Direct has no method-specific preset parameters.\n" : "Direct 没有方法专属的预设参数。\n";
       markdown += `\n[${index ? "Parameter definitions" : "查看参数定义"}](https://github.com/Fangziyang0910/LLM4OM/blob/main/src/llm4om/methods/presets.py)\n`;
     }
@@ -100,7 +104,7 @@ for (const [index, locale] of ["zh", "en"].entries()) {
             if (!Number.isFinite(width)) throw new Error("Invalid diagram viewBox");
             const figure = React.createElement("figure", { className: "doc-diagram", "data-src": graph.url, style: { "--diagram-width": `${width}px` } },
               React.createElement("div", { className: "diagram-scroll", tabIndex: 0, dangerouslySetInnerHTML: { __html: graph.svg } }),
-              React.createElement("figcaption", {}, index ? "Workflow: decisions, feedback and stopping paths" : "执行流程：阶段、反馈与停止路径"),
+              React.createElement("figcaption", {}, methodWalkthrough ? (index ? "Workflow overview · Choose an example stage to inspect its inputs and outputs." : "流程总览 · 点选案例阶段，查看对应输入与产物。") : (index ? "Workflow overview" : "流程总览")),
               React.createElement("div", { className: "diagram-actions" }, React.createElement("a", { href: graph.url, download: true }, index ? "Download SVG" : "下载 SVG")),
               React.createElement("details", { className: "diagram-source" }, React.createElement("summary", {}, index ? "Mermaid source" : "Mermaid 源码"), React.createElement("pre", {}, React.createElement("code", {}, source))));
             return methodWalkthrough ? React.createElement("div", { className: "workflow-explorer" }, figure, React.createElement("div", { dangerouslySetInnerHTML: { __html: walkthrough(methodWalkthrough, Boolean(index)) } })) : figure;
@@ -113,7 +117,10 @@ for (const [index, locale] of ["zh", "en"].entries()) {
               React.createElement("video", { controls: true, preload: "none", playsInline: true, poster: `../../../assets/screens/${locale}/plan.png`, "aria-label": index ? "Workbench demonstration: modeling, scenarios and data editing" : "工作台演示：建模、场景比较与数据编辑" },
                 React.createElement("source", { src: `../../../assets/demos/workbench-${locale}.mp4`, type: "video/mp4" }),
                 React.createElement("track", { kind: "captions", src: `../../../assets/demos/workbench-${locale}.vtt`, srcLang: index ? "en" : "zh", label: index ? "English" : "中文", default: true })),
-              React.createElement("figcaption", {}, index ? "Production example in the workbench: compute, compare scenarios, edit data. Captions available." : "生产案例工作台录屏：计算方案、比较场景、编辑数据，可开启字幕。"));
+              React.createElement("div", { className: "learning-controls recording-chapters", "aria-label": index ? "Play a chapter" : "播放指定片段" }, [0, 2, 4].map((cue, i) => React.createElement("button", { type: "button", "data-seek": recordingCues[cue].seconds, key: cue }, [index ? "Model a problem" : "建模求解", index ? "Compare scenarios" : "比较场景", index ? "Edit data" : "编辑数据"][i]))),
+              React.createElement("p", { className: "recording-status", role: "status", hidden: true }),
+              React.createElement("figcaption", {}, index ? "Production example in the workbench. Choose a chapter, or use captions and fullscreen controls." : "生产案例工作台录屏。可选择片段，也可开启字幕或全屏观看。"),
+              React.createElement("details", { className: "recording-transcript" }, React.createElement("summary", {}, index ? "Read the transcript" : "查看字幕文字"), React.createElement("ol", {}, recordingCues.map(cue => React.createElement("li", { key: cue.seconds }, cue.text)))));
           }
           if (language === "math") return React.createElement("div", { className: "doc-math", dangerouslySetInnerHTML: { __html: katex.renderToString(source, { displayMode: true, throwOnError: true, trust: false }) } });
           return React.createElement("pre", {}, children);
@@ -150,7 +157,10 @@ for (const [index, locale] of ["zh", "en"].entries()) {
 </body></html>\n`;
     await fs.mkdir(path.join(output, locale, article.id), { recursive: true });
     await fs.writeFile(path.join(output, locale, article.id, "index.html"), page);
-    search.push({ id: article.id, title: title(article), description: summary(article), group: title(group), text: html.replace(/<a[^>]*class="heading-anchor"[^>]*>.*?<\/a>/g, "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " "), headings });
+    const searchDocument = new JSDOM(html).window.document;
+    searchDocument.querySelectorAll("svg,style,script,.diagram-source,.heading-anchor").forEach(node => node.remove());
+    searchDocument.querySelectorAll("p,h2,h3,li,td,th,pre,summary,output,label").forEach(node => node.append(" "));
+    search.push({ id: article.id, title: title(article), description: summary(article), group: title(group), text: searchDocument.body.textContent.replace(/\s+/g, " ").trim(), headings });
   }
   await fs.writeFile(path.join(output, `search-${locale}.json`), JSON.stringify(search) + "\n");
 }

@@ -27,7 +27,7 @@ SCIP should return values near x=0.5, y=1.5 and loss=0.5, read with numerical to
 ## How the auxiliary variable works
 
 ```mermaid
-flowchart LR
+flowchart TB
   Cost["Nonlinear cost expression"] --> Link["cost ≤ loss"]
   Link --> Obj["Linear objective: min loss"]
   Obj --> SCIP["Solve native SCIP model"]

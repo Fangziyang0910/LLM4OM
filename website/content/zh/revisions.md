@@ -12,7 +12,7 @@
 ## 新方案怎样生成
 
 ```mermaid
-flowchart LR
+flowchart TB
   Original["原方案输入与配置"] --> Request["新增调整要求"]
   Request --> Problem["整理完整新题面"]
   Problem --> Method["原方法重新建模"]

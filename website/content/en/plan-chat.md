@@ -13,7 +13,7 @@ The assistant reads the current plan's problem, model and saved values. Variable
 ## From queries to calculations
 
 ```mermaid
-flowchart LR
+flowchart TB
   Question["Question about current plan"] --> Values["Look up relevant variables"]
   Values --> Calculate["Calculate costs, ratios or totals"]
   Calculate --> Card["Show expression and result"]
@@ -28,7 +28,7 @@ Calculation cards show the result. Expand one for its expression and number of v
 plans
 ```
 
-Query resources, then set minimum B to 3. Subsequent questions use the new plan. Selecting the original changes the baseline for later work.
+Check resource use, then set minimum B to 3. The new plan becomes current, and subsequent queries read its quantities and hours. Choose “Select original,” or click any saved plan, to change the baseline.
 
 ## Create a new plan in one message
 

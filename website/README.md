@@ -17,7 +17,7 @@ npm --prefix website run build
 
 文档源稿位于 `content/zh/` 和 `content/en/`，文章信息位于 `docs-manifest.json`。生成器复用 React Markdown、GFM、remark-math、KaTeX 和 highlight.js，生成静态 HTML 与搜索索引；方法参数直接读取当前注册表。Mermaid 为独立构建依赖，复用 Playwright 渲染 SVG，按源码和配置哈希缓存。构建校验图源、13 个方法与 9 个库覆盖；发布文件可直接静态托管。
 
-Markdown 中 `mermaid` 围栏生成可下载和放大的图；`walkthrough` 围栏使用 JSON 数组定义 title、nodes、body、artifact，nodes 对应 Mermaid 节点 ID。方法图与步骤并排呈现，点击或播放步骤会定位节点。`demo` 围栏可选 production、plans、data、convex、local；`video` 的 workbench 插入对应语言录屏与字幕。普通公式由 KaTeX 在构建时排版，字体和许可一起发布。交互不自动播放，支持暂停、键盘和减少动态效果。
+Markdown 中 `mermaid` 围栏生成可下载和放大的图；`walkthrough` 围栏使用 JSON 数组定义 title、nodes、body、artifact，nodes 对应 Mermaid 节点 ID。方法图完整展示主要流程，点击或播放步骤会高亮对应节点；宽屏并排呈现，窄屏上下排列。`demo` 围栏可选 production、plans、data、convex、local；`video` 的 workbench 插入对应语言录屏、片段跳转和字幕文字。普通公式由 KaTeX 在构建时排版，字体和许可一起发布。交互不自动播放，支持暂停、键盘和减少动态效果。
 
 只编辑源稿和生成器，再重新生成；不要手动编辑 `public/docs/{zh,en}/` 或搜索索引。`public/docs/docs.css` 和 `docs.js` 是文档的共享样式与交互源文件。网站仍可直接以静态文件发布。
 
@@ -26,10 +26,12 @@ Markdown 中 `mermaid` 围栏生成可下载和放大的图；`walkthrough` 围�
 在仓库根目录运行：
 
 ```bash
-python3 -m http.server 8831 --bind 127.0.0.1 --directory website/public
+npm --prefix website run dev
 ```
 
 打开 http://127.0.0.1:8831/。右上角切换语言；也可以用 `?lang=en` 直接分享英文版，或 `?lang=zh` 分享中文版。语言选择会在当前浏览器保存。
+
+预览复用前端已安装的 Vite，支持视频片段跳转所需的 HTTP Range 请求。
 
 文档入口为 `/docs/zh/introduction/` 与 `/docs/en/introduction/`；`/docs/` 会按链接参数或已保存偏好进入对应语言。更新内容时，先生成文档，再同步 `public/` 发布。
 
@@ -67,7 +69,7 @@ node website/check-learning.cjs http://127.0.0.1:8831/
 
 遍历全部 92 个页面，检查项目子路径下的内部链接与锚点、唯一 ID、双语章节对应、英文正文、全部方法／库覆盖；浏览器检查全文搜索、无结果与失败恢复、键盘操作、代码复制、语言记忆、同章节切换、手机目录、六种宽度和禁用 JavaScript 后的文章阅读。截图保存在 `artifacts/website/docs/`。把地址换成 GitHub Pages 地址可复测线上部署。
 
-学习材料检查另外覆盖全部方法的节点联动和字体大小、整数枚举与连续顶点解、凸投影和梯度下降、固定基准与独立场景、保存与取消数据、输入校验、CSV、视频元数据和字幕语言、流程图放大、播放暂停和无 JavaScript 内容。九个建模库文章中的首个完整 Python 示例已在本地 Worker 实际求解并核对目标值。
+学习材料检查另外覆盖全部方法各阶段的节点联动、完整图与字体大小、整数枚举与连续顶点解、凸投影和梯度下降、场景选择、数据保存后单独建模、取消与输入校验、CSV、视频片段跳转与字幕语言、流程图放大、播放暂停和无 JavaScript 内容。九个建模库文章中的首个完整 Python 示例已在本地 Worker 实际求解并核对目标值。
 
 这组检查验证宣传站，不调用真实 LLM 或平台后端。三个示例枚举各自的小型可行集合，显示实际最优解；它们用于介绍操作，不代表完整平台的运行性能。
 

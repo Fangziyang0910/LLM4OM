@@ -16,6 +16,7 @@ const output = path.join(__dirname, "../artifacts/website/docs");
   for (const [languageIndex, locale] of ["zh", "en"].entries()) {
     const search = JSON.parse(await fs.readFile(path.join(root, `docs/search-${locale}.json`), "utf8"));
     assert.equal(search.length, articles.length);
+    for (const entry of search) assert.doesNotMatch(entry.text, /stroke-dasharray|edge-animation|flowchart TB|&gt;|&amp;/, `Unreadable search text: ${locale}/${entry.id}`);
     for (const article of articles) {
       const relative = `docs/${locale}/${article.id}/`;
       const html = await fs.readFile(path.join(root, relative, "index.html"), "utf8");
@@ -70,18 +71,20 @@ const output = path.join(__dirname, "../artifacts/website/docs");
     await page.goto(`${base}docs/`);
     await expect(page).toHaveURL(/docs\/en\/introduction\/$/);
 
-    for (const [locale, query, id] of [["en", "BIND", "bind"], ["zh", "无解", "conflicts"], ["en", "CP-SAT", "ortools"]]) {
+    for (const [locale, query, id] of [["en", "BIND", "bind"], ["zh", "无解", "conflicts"], ["en", "CP-SAT", "ortools"], ["en", "Bradley", "autoformulation"], ["zh", "单件利润", "attachments"]]) {
       await page.goto(`${base}docs/${locale}/introduction/`);
       await page.keyboard.press("Control+k");
       await expect(page.locator("#docs-search")).toHaveJSProperty("open", true);
       await page.locator("#search-input").fill(query);
       await expect(page.locator("#search-results a").first()).toBeVisible();
       assert.ok((await page.locator("#search-results a").evaluateAll(links => links.map(a => a.href))).some(href => href.endsWith(`/${id}/`)));
+      assert.doesNotMatch(await page.locator("#search-results").innerText(), /stroke-dasharray|edge-animation|flowchart TB|&gt;/);
       await page.locator("#search-input").press("ArrowDown");
       assert.equal(await page.locator("#search-results a").first().evaluate(node => node === document.activeElement), true);
       await page.keyboard.press("Escape");
       await expect(page.locator("#docs-search")).toHaveJSProperty("open", false);
     }
+    await page.goto(`${base}docs/en/introduction/`);
     await page.locator("#search-open").click();
     await page.locator("#search-input").fill("zz-no-such-page-123");
     await expect(page.locator("#search-status")).toContainText("No pages found");

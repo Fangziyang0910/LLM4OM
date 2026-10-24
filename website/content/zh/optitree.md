@@ -10,23 +10,22 @@ OptiTree 先沿问题类型树寻找匹配的建模思路，再让模型生成�
 
 ```mermaid
 flowchart TB
-  Root["从类型树根节点开始"] --> Match{"匹配当前子类型？"}
-  Match -->|有效且未重复| Descend["进入更深节点"]
-  Descend --> Match
-  Match -->|无匹配、无效或重复| Retrieve["取当前最深类型条目"]
-  Retrieve --> Reason["结合题目生成模型与代码"]
-  Reason --> Solve["执行求解"]
-  Solve -->|执行失败且可检查| Inspect["检查员修复代码"]
+  Root["沿类型树匹配问题"]
+  Retrieve["检索最深匹配模板"]
+  Solve["生成模型代码并求解"]
+  Inspect["检查并修复代码"]
+  Finish["保存匹配路径与结果"]
+  Root --> Retrieve --> Solve --> Finish
+  Solve -.->|执行错误| Inspect
   Inspect --> Solve
-  Solve -->|完成或检查次数用尽| Finish["保存实际结果"]
 ```
 
 ```walkthrough
 [
-  {"title":"识别结构","nodes":["Root","Match"],"body":"以仓库到门店的运输问题为例，先识别流量分配、供给和需求结构。实际匹配路径由随包树和模型判断决定。","artifact":"题意：决定各仓库发往各门店的数量。\n输入：单位运费、仓库供给、门店需求。"},
-  {"title":"使用模板","nodes":["Descend","Retrieve"],"body":"模板提示 x[i,j] 这种索引结构；当前题目提供供需规则与数值。","artifact":"x[i,j] ≥ 0\n仓库：sum_j x[i,j] ≤ supply[i]\n门店：sum_i x[i,j] ≥ demand[j]（仅当题意如此）"},
-  {"title":"生成与执行","nodes":["Reason","Solve"],"body":"生成器结合最深匹配条目和当前数据写代码，平台实际执行。参数取值来自当前题目与附件。","artifact":"核对每个仓库、门店的索引及运费矩阵方向。\n特殊规则仍必须出现在最终约束中。"},
-  {"title":"处理不匹配","nodes":["Match","Inspect","Finish"],"body":"找不到更深的有效类型时停在当前节点，不强行编造分类。代码执行失败时才进入检查员修复。","artifact":"未知类型 / 缺失判断 / 重复路径 → 停止下行\n代码检查最多 4 次。"}
+  {"title":"识别结构","nodes":["Root"],"body":"以仓库到门店的运输问题为例，先识别流量分配、供给和需求结构。实际匹配路径由随包树和模型判断决定。","artifact":"题意：决定各仓库发往各门店的数量。\n输入：单位运费、仓库供给、门店需求。"},
+  {"title":"使用模板","nodes":["Retrieve"],"body":"模板提示 x[i,j] 这种索引结构；当前题目提供供需规则与数值。","artifact":"x[i,j] ≥ 0\n仓库：sum_j x[i,j] ≤ supply[i]\n门店：sum_i x[i,j] ≥ demand[j]（仅当题意如此）"},
+  {"title":"生成与执行","nodes":["Solve"],"body":"生成器结合最深匹配条目和当前数据写代码，平台实际执行。参数取值来自当前题目与附件。","artifact":"核对每个仓库、门店的索引及运费矩阵方向。\n特殊规则仍必须出现在最终约束中。"},
+  {"title":"处理不匹配","nodes":["Inspect","Finish"],"body":"匹配结束时使用当前最深的有效条目。代码执行失败后进入检查员修复。","artifact":"未知类型 / 缺失判断 / 重复路径 → 停止下行\n代码检查最多 4 次。"}
 ]
 ```
 

@@ -4,7 +4,7 @@ coptpy constructs native COPT models for LP, MILP, convex quadratic and supporte
 
 Use it when a team already works with COPT and wants consistent native models and execution.
 
-Different libraries can express the same production model. Keep domains, capacities and coefficients fixed when comparing. Differences in speed or objective cannot be attributed to engines if the business models differ.
+For indexed production models, use `addVars` to name quantities by product, then sum profits and resource use over that index. Matrix interfaces express the same coefficients as arrays.
 
 ## Complete production model
 
@@ -36,7 +36,7 @@ Changing the quantity domain changes the example's mathematics. The interaction 
 
 ## Licensing and deployment
 
-COPT has a restricted small-scale noncommercial path under applicable conditions. Larger models or commercial use require the appropriate license.
+Follow the [COPT installation guide](https://guide.coap.online/copt/en-doc/install.html) to obtain a license matching the installed major version. It provides `license.dat` and `license.key` for deployment.
 
 Deployment uses `COPT_LICENSE_DIR` with the specific `license.dat` and `license.key` files mounted read-only for the sandbox. Package installation, library loading and license validation are separate steps; see [backends and licenses](../backends/).
 

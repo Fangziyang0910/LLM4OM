@@ -10,24 +10,25 @@ SAC-Opt 先把业务含义保存为语义锚点，再把代码中的约束翻译
 
 ```mermaid
 flowchart TB
-  Anchors["参数、变量、目标与约束锚点"] --> Generate["生成分项代码"]
-  Generate --> Translate["盲回译待检查约束"]
-  Translate --> Compare{"与语义锚点一致？"}
-  Compare -->|通过| Freeze["冻结已通过约束"]
-  Compare -->|未通过且可重试| Repair["只修失败组件"]
-  Repair --> Translate
-  Freeze --> Assemble["组装完整模型"]
-  Compare -->|语义轮次用尽| Assemble
-  Assemble --> Solve["求解与执行调试"]
-  Solve --> Finish["保存结果及未解决验证"]
+  Anchors["提取语义锚点"]
+  Generate["生成代码并盲回译约束"]
+  Compare["与原锚点逐条比较"]
+  Repair["选择性修复"]
+  Assemble["组装模型并求解"]
+  Finish["保存结果与逐项验证"]
+  Anchors --> Generate --> Compare
+  Compare -->|冻结通过项| Assemble
+  Compare -.->|失败项| Repair
+  Repair --> Generate
+  Assemble --> Finish
 ```
 
 ```walkthrough
 [
   {"title":"保留锚点","nodes":["Anchors"],"body":"用员工 e、日期 d 定义二元变量 x[e,d]。把原要求固定成带索引含义的语义锚点。","artifact":"变量：x[e,d] = 1 表示员工 e 在日期 d 工作。\n锚点 C1：每位员工的工作天数 ≤ 5。\n锚点 C2：每天至少 3 人。"},
-  {"title":"盲回译","nodes":["Generate","Translate"],"body":"假设 C1 的代码错误地沿员工求和。回译会暴露它实际限制的是每日人数。","artifact":"假设错误代码：对每个 d，sum(x[e,d] for e in E) ≤ 5\n回译：每天最多安排 5 人。"},
-  {"title":"选择性修正","nodes":["Compare","Repair","Freeze"],"body":"C1 的量词和求和方向不一致，修它；C2 若已通过就冻结，避免无关改写引入新错。","artifact":"修正 C1：对每个 e，sum(x[e,d] for d in D) ≤ 5\n冻结 C2：对每个 d，sum(x[e,d] for e in E) ≥ 3"},
-  {"title":"组装并执行","nodes":["Assemble","Solve","Finish"],"body":"语义组件检查后组装代码，实际求解。若语义轮次用尽仍有失败，保留产物并明确报告。","artifact":"语义一致性：逐约束记录\n可执行性：由完整程序执行检查\n数值方案：由真实后端返回"}
+  {"title":"盲回译","nodes":["Generate"],"body":"假设 C1 的代码错误地沿员工求和。回译会暴露它实际限制的是每日人数。","artifact":"假设错误代码：对每个 d，sum(x[e,d] for e in E) ≤ 5\n回译：每天最多安排 5 人。"},
+  {"title":"选择性修正","nodes":["Compare","Repair"],"body":"C1 的量词和求和方向不一致，修它；C2 若已通过就冻结，避免无关改写引入新错。","artifact":"修正 C1：对每个 e，sum(x[e,d] for d in D) ≤ 5\n冻结 C2：对每个 d，sum(x[e,d] for e in E) ≥ 3"},
+  {"title":"组装并执行","nodes":["Assemble","Finish"],"body":"语义组件检查后组装代码，实际求解。若语义轮次用尽仍有失败，保留产物并明确报告。","artifact":"语义一致性：逐约束记录\n可执行性：由完整程序执行检查\n数值方案：由真实后端返回"}
 ]
 ```
 

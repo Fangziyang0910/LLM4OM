@@ -30,7 +30,7 @@ Increase the limit from 2 to 3 to move the solution toward the target. A line co
 ## From expressions to a backend
 
 ```mermaid
-flowchart LR
+flowchart TB
   Expr["Variable attributes and CVXPY atoms"] --> Rules["Identify DCP / DGP / DQCP"]
   Rules --> Canon["Canonicalize for backend"]
   Canon --> Backend["Compatible QP / conic / integer engine"]

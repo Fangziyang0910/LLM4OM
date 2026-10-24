@@ -2,7 +2,7 @@ Feedback Repair 在 Direct 的一次生成之后加入实际求解、对照原�
 
 ## 为什么求解成功之后还要检查
 
-如果题目要求 B 至少生产 3 件，而代码写成 `B <= 3`，生产案例仍会返回收益 13 的最优方案 `(3, 2)`。这个结果对错误模型是正确的，却违反原需求。只修复 Python 异常发现不了这种错误。
+如果题目要求 B 至少生产 3 件，而代码写成 `B <= 3`，生产案例仍会返回利润 13 的最优方案 `(3, 2)`。这个结果对错误模型是正确的，却违反原需求。只修复 Python 异常发现不了这种错误。
 
 复核节点读取原题、数学模型、代码、执行反馈和可用冲突诊断，检查目标系数、变量域、约束方向和数据绑定。它应指出具体不一致，再决定接受或修复。
 
@@ -10,24 +10,24 @@ Feedback Repair 在 Direct 的一次生成之后加入实际求解、对照原�
 
 ```mermaid
 flowchart TB
-  Generate["生成模型与代码"] --> Format{"格式完整？"}
-  Format -->|是| Solve["实际求解"]
-  Format -->|否| Budget{"仍有修复次数？"}
-  Solve -->|执行完成| Review["对照原题复核"]
-  Solve -->|执行错误| Budget
-  Review -->|接受| Finish["保存最终产物"]
-  Review -->|具体模型错误| Budget
-  Budget -->|是| Repair["按反馈修复"]
-  Repair --> Format
-  Budget -->|否| Failed["保留产物并报告未解决问题"]
+  Generate["生成模型与代码"]
+  Solve["实际求解"]
+  Review["对照原题复核"]
+  Repair["按反馈修复"]
+  Finish["保存模型与结果"]
+  Generate --> Solve --> Review
+  Review -->|接受| Finish
+  Review -.->|模型问题| Repair
+  Solve -.->|执行错误| Repair
+  Repair --> Generate
 ```
 
 ```walkthrough
 [
-  {"title":"初次建模","nodes":["Generate","Solve"],"body":"假设这次生成把最低需求的方向写反。求解器不读取题意，因此仍可能报告最优。","artifact":"原要求：B ≥ 3\n假设误写：B ≤ 3\n错误模型最优：A = 3，B = 2，收益 13"},
+  {"title":"初次建模","nodes":["Generate","Solve"],"body":"假设这次生成把最低需求的方向写反。求解器不读取题意，因此仍可能报告最优。","artifact":"原要求：B ≥ 3\n假设误写：B ≤ 3\n错误模型最优：A = 3，B = 2，利润 13"},
   {"title":"对照复核","nodes":["Review"],"body":"检查者指出原题与代码的具体差别，并将其写入修复反馈。","artifact":"判断：repair\n原因：最低产量要求写成上限，B = 2 违反 B ≥ 3。"},
-  {"title":"修复重算","nodes":["Budget","Repair","Solve"],"body":"改回 B ≥ 3，保留其他要求，再执行新代码。","artifact":"2A + B ≤ 8；A + 2B ≤ 8；B ≥ 3\n整数最优：A = 2，B = 3，收益 12"},
-  {"title":"接受或报告","nodes":["Review","Finish","Failed"],"body":"收益下降是满足要求的代价。通过后结束；次数用尽仍有具体错误，则保留结果并报告失败。","artifact":"原方案收益 13；满足 B ≥ 3 后收益 12。\n两份模型与结果可分别查看。"}
+  {"title":"修复重算","nodes":["Repair","Solve"],"body":"改回 B ≥ 3，保留其他要求，再执行新代码。","artifact":"2A + B ≤ 8；A + 2B ≤ 8；B ≥ 3\n整数最优：A = 2，B = 3，利润 12"},
+  {"title":"接受或报告","nodes":["Review","Finish"],"body":"利润下降是满足要求的代价。通过后结束；次数用尽仍有具体错误，则保留结果并报告失败。","artifact":"原方案利润 13；满足 B ≥ 3 后利润 12。\n两份模型与结果可分别查看。"}
 ]
 ```
 
