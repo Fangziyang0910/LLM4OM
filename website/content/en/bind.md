@@ -27,7 +27,7 @@ flowchart TB
   {"title":"Prepare data","nodes":["File"],"body":"Upload structured data and explain units and index meanings in the problem.","artifact":"production.json\nprofit: profit per unit, indexed by product\nusage: resource-by-product hours per unit\ncapacity: available hours per resource"},
   {"title":"Provide structure","nodes":["Schema","LLM"],"body":"Generation receives field structure, including nested and irregular shapes.","artifact":"profit: array[number], length 2\nusage: array[array[number]], 2 rows\ncapacity: array[number], length 2"},
   {"title":"Bind at execution","nodes":["Data","Solve"],"body":"Code parses complete file text from data and constructs expressions from those values.","artifact":"payload = json.loads(data['production.json'])\nprofit = payload['profit']\nusage = payload['usage']\ncapacity = payload['capacity']"},
-  {"title":"Check and repair","nodes":["Finish"],"body":"Format and execution errors trigger retries with feedback. The result retains the solver status and the data-reading code.","artifact":"At most 3 generation/execution attempts.\nInspect file names, row/column mappings and units in the saved code."}
+  {"title":"Check and repair","nodes":["LLM","Solve","Finish"],"body":"Format and execution errors trigger retries with feedback. The result retains the solver status and the data-reading code.","artifact":"At most 3 generation/execution attempts.\nInspect file names, row/column mappings and units in the saved code."}
 ]
 ```
 

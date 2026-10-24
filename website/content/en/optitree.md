@@ -25,7 +25,7 @@ flowchart TB
   {"title":"Recognize structure","nodes":["Root"],"body":"For warehouse-to-store transport, recognize quantities, supply and demand. The actual matching path depends on the bundled tree and LLM decisions.","artifact":"Decisions: shipment quantities from warehouses to stores.\nInputs: unit costs, warehouse supply, store demand."},
   {"title":"Use the template","nodes":["Retrieve"],"body":"A template can suggest indexed x[i,j], but the current wording determines whether supply and demand require equality or inequality.","artifact":"x[i,j] ≥ 0\nWarehouse: sum_j x[i,j] ≤ supply[i]\nStore: sum_i x[i,j] ≥ demand[j], if required by the problem"},
   {"title":"Generate and execute","nodes":["Solve"],"body":"Use the retrieved entry to choose a structure, then bind its indices and coefficients to the current data.","artifact":"Check warehouse/store indices and cost-matrix orientation.\nSpecial business rules still need explicit constraints."},
-  {"title":"Handle no match","nodes":["Inspect","Finish"],"body":"Use the deepest valid entry when matching ends. An execution failure then routes code to the inspector for repair.","artifact":"Unknown type / missing judgment / repeated path → stop descent\nAt most 4 code inspections."}
+  {"title":"Handle no match","nodes":["Root","Inspect","Finish"],"body":"Use the deepest valid entry when matching ends. An execution failure then routes code to the inspector for repair.","artifact":"Unknown type / missing judgment / repeated path → stop descent\nAt most 4 code inspections."}
 ]
 ```
 

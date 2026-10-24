@@ -27,7 +27,7 @@ flowchart TB
   {"title":"准备数据","nodes":["File"],"body":"上传结构化文件，同时在题面写清每个字段的单位和索引含义。","artifact":"production.json\nprofit: 按产品索引的单件利润\nusage: 资源×产品的小时/件矩阵\ncapacity: 每种资源可用小时"},
   {"title":"提供结构","nodes":["Schema","LLM"],"body":"模型读取结构描述，不把完整数值表展开到生成提示。嵌套与非矩形结构应如实保留。","artifact":"profit: array[number], length 2\nusage: array[array[number]], 2 rows\ncapacity: array[number], length 2"},
   {"title":"执行绑定","nodes":["Data","Solve"],"body":"代码通过 data 中的文件文本解析全部数据，并据此构建目标和约束。","artifact":"payload = json.loads(data['production.json'])\nprofit = payload['profit']\nusage = payload['usage']\ncapacity = payload['capacity']"},
-  {"title":"核对与修复","nodes":["Finish"],"body":"格式或执行错误可反馈重试。真实不可行按有效求解状态保存。","artifact":"最多 3 次生成/执行尝试。\n检查行列含义和单位，不只检查文件是否成功解析。"}
+  {"title":"核对与修复","nodes":["LLM","Solve","Finish"],"body":"格式与执行错误进入重试反馈。结果同时保留求解状态和读取数据的代码。","artifact":"最多 3 次生成/执行尝试。\n在保存的代码中查看文件名、行列对应与单位。"}
 ]
 ```
 

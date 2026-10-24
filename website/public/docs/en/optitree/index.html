@@ -23,7 +23,7 @@
 Inputs: unit costs, warehouse supply, store demand.</code></pre></div><div class="step-panel" data-nodes="Retrieve"><strong>2. Use the template</strong><p>A template can suggest indexed x[i,j], but the current wording determines whether supply and demand require equality or inequality.</p><pre><code>x[i,j] ≥ 0
 Warehouse: sum_j x[i,j] ≤ supply[i]
 Store: sum_i x[i,j] ≥ demand[j], if required by the problem</code></pre></div><div class="step-panel" data-nodes="Solve"><strong>3. Generate and execute</strong><p>Use the retrieved entry to choose a structure, then bind its indices and coefficients to the current data.</p><pre><code>Check warehouse/store indices and cost-matrix orientation.
-Special business rules still need explicit constraints.</code></pre></div><div class="step-panel" data-nodes="Inspect Finish"><strong>4. Handle no match</strong><p>Use the deepest valid entry when matching ends. An execution failure then routes code to the inspector for repair.</p><pre><code>Unknown type / missing judgment / repeated path → stop descent
+Special business rules still need explicit constraints.</code></pre></div><div class="step-panel" data-nodes="Root Inspect Finish"><strong>4. Handle no match</strong><p>Use the deepest valid entry when matching ends. An execution failure then routes code to the inspector for repair.</p><pre><code>Unknown type / missing judgment / repeated path → stop descent
 At most 4 code inspections.</code></pre></div></div><p class="learning-note">Worked example: illustrative inputs and intermediate artifacts.</p></section></div></div>
 
 <h2 id="section-3">Why a broader match can be useful<a href="#section-3" class="heading-anchor" aria-label="Why a broader match can be useful — link to section">#</a></h2>

@@ -23,7 +23,7 @@
 输入：单位运费、仓库供给、门店需求。</code></pre></div><div class="step-panel" data-nodes="Retrieve"><strong>2. 使用模板</strong><p>模板提示 x[i,j] 这种索引结构；当前题目提供供需规则与数值。</p><pre><code>x[i,j] ≥ 0
 仓库：sum_j x[i,j] ≤ supply[i]
 门店：sum_i x[i,j] ≥ demand[j]（仅当题意如此）</code></pre></div><div class="step-panel" data-nodes="Solve"><strong>3. 生成与执行</strong><p>生成器结合最深匹配条目和当前数据写代码，平台实际执行。参数取值来自当前题目与附件。</p><pre><code>核对每个仓库、门店的索引及运费矩阵方向。
-特殊规则仍必须出现在最终约束中。</code></pre></div><div class="step-panel" data-nodes="Inspect Finish"><strong>4. 处理不匹配</strong><p>匹配结束时使用当前最深的有效条目。代码执行失败后进入检查员修复。</p><pre><code>未知类型 / 缺失判断 / 重复路径 → 停止下行
+特殊规则仍必须出现在最终约束中。</code></pre></div><div class="step-panel" data-nodes="Root Inspect Finish"><strong>4. 处理不匹配</strong><p>匹配结束时使用当前最深的有效条目。代码执行失败后进入检查员修复。</p><pre><code>未知类型 / 缺失判断 / 重复路径 → 停止下行
 代码检查最多 4 次。</code></pre></div></div><p class="learning-note">教学案例：用示例输入和中间产物逐步说明流程。</p></section></div></div>
 
 <h2 id="section-3">为什么停止在较粗类型也有意义<a href="#section-3" class="heading-anchor" aria-label="为什么停止在较粗类型也有意义 — 章节链接">#</a></h2>

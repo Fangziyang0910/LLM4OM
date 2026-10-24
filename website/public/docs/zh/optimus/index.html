@@ -22,7 +22,7 @@
   Debug --&gt; Solve
 </code></pre></details></figure><div><section class="walkthrough" data-walkthrough aria-label="逐步查看案例"><div class="learning-toolbar"><span class="learning-eyebrow">跟着案例看流程</span><div class="learning-controls"><button type="button" data-action="previous" aria-label="上一步">←</button><button type="button" data-action="play">播放</button><button type="button" data-action="next" aria-label="下一步">→</button><output class="step-count"></output></div></div><div class="step-tabs learning-controls" role="group" aria-label="选择阶段"><button type="button" data-step="0">1. 参数与描述</button><button type="button" data-step="1">2. 组件检查</button><button type="button" data-step="2">3. 组装代码</button><button type="button" data-step="3">4. 执行调试</button></div><div class="step-panels"><div class="step-panel" data-nodes="Params"><strong>1. 参数与描述</strong><p>把利润、资源消耗和容量识别为参数。约束列表保留两种资源，分别记录各自的消耗系数。</p><pre><code>利润：A=3，B=2
 C1：切割容量 8，单耗 (2,1)
-C2：装配容量 8，单耗 (1,2)</code></pre></div><div class="step-panel" data-nodes="Check"><strong>2. 组件检查</strong><p>冗余检查去掉重复表述，保留切割与装配各自的系数和容量。</p><pre><code>C1 → 2A + B ≤ 8
+C2：装配容量 8，单耗 (1,2)</code></pre></div><div class="step-panel" data-nodes="Check Assemble"><strong>2. 组件检查</strong><p>冗余检查去掉重复表述，保留切割与装配各自的系数和容量。</p><pre><code>C1 → 2A + B ≤ 8
 C2 → A + 2B ≤ 8
 变量必须保留非负整数域。</code></pre></div><div class="step-panel" data-nodes="Assemble"><strong>3. 组装代码</strong><p>各组件的代码汇入同一个 build_model(data)。组件之间必须共享一致的变量名、索引和参数。</p><pre><code>setup + variables + C1 + C2 + objective + return model
 平台负责 solve，生成代码只负责构建。</code></pre></div><div class="step-panel" data-nodes="Solve Debug Finish"><strong>4. 执行调试</strong><p>正确模型得到 A=3、B=2、利润13。若反馈触发调试，阅读改动是否保持了原来的组件含义。</p><pre><code>最多 3 次执行/调试尝试

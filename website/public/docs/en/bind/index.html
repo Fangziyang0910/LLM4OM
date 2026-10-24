@@ -29,7 +29,7 @@ usage: array[array[number]], 2 rows
 capacity: array[number], length 2</code></pre></div><div class="step-panel" data-nodes="Data Solve"><strong>3. Bind at execution</strong><p>Code parses complete file text from data and constructs expressions from those values.</p><pre><code>payload = json.loads(data[&#39;production.json&#39;])
 profit = payload[&#39;profit&#39;]
 usage = payload[&#39;usage&#39;]
-capacity = payload[&#39;capacity&#39;]</code></pre></div><div class="step-panel" data-nodes="Finish"><strong>4. Check and repair</strong><p>Format and execution errors trigger retries with feedback. The result retains the solver status and the data-reading code.</p><pre><code>At most 3 generation/execution attempts.
+capacity = payload[&#39;capacity&#39;]</code></pre></div><div class="step-panel" data-nodes="LLM Solve Finish"><strong>4. Check and repair</strong><p>Format and execution errors trigger retries with feedback. The result retains the solver status and the data-reading code.</p><pre><code>At most 3 generation/execution attempts.
 Inspect file names, row/column mappings and units in the saved code.</code></pre></div></div><p class="learning-note">Worked example: illustrative inputs and intermediate artifacts.</p></section></div></div>
 
 <h2 id="section-3">A ready-to-use example<a href="#section-3" class="heading-anchor" aria-label="A ready-to-use example — link to section">#</a></h2>

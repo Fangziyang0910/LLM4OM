@@ -24,7 +24,7 @@ flowchart TB
 ```walkthrough
 [
   {"title":"参数与描述","nodes":["Params"],"body":"把利润、资源消耗和容量识别为参数。约束列表保留两种资源，分别记录各自的消耗系数。","artifact":"利润：A=3，B=2\nC1：切割容量 8，单耗 (2,1)\nC2：装配容量 8，单耗 (1,2)"},
-  {"title":"组件检查","nodes":["Check"],"body":"冗余检查去掉重复表述，保留切割与装配各自的系数和容量。","artifact":"C1 → 2A + B ≤ 8\nC2 → A + 2B ≤ 8\n变量必须保留非负整数域。"},
+  {"title":"组件检查","nodes":["Check","Assemble"],"body":"冗余检查去掉重复表述，保留切割与装配各自的系数和容量。","artifact":"C1 → 2A + B ≤ 8\nC2 → A + 2B ≤ 8\n变量必须保留非负整数域。"},
   {"title":"组装代码","nodes":["Assemble"],"body":"各组件的代码汇入同一个 build_model(data)。组件之间必须共享一致的变量名、索引和参数。","artifact":"setup + variables + C1 + C2 + objective + return model\n平台负责 solve，生成代码只负责构建。"},
   {"title":"执行调试","nodes":["Solve","Debug","Finish"],"body":"正确模型得到 A=3、B=2、利润13。若反馈触发调试，阅读改动是否保持了原来的组件含义。","artifact":"最多 3 次执行/调试尝试\n不可行或无界也可能进入这条调试路径。"}
 ]

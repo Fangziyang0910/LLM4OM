@@ -24,7 +24,7 @@ flowchart TB
 ```walkthrough
 [
   {"title":"Parameters and rules","nodes":["Params"],"body":"Identify profit, resource consumption and capacities as parameters. Keep the cutting and finishing coefficients in separate resource rows.","artifact":"Profit: A=3, B=2\nC1: cutting capacity 8, consumption (2,1)\nC2: finishing capacity 8, consumption (1,2)"},
-  {"title":"Check components","nodes":["Check"],"body":"Repeated wording can be removed. Cutting and finishing have different coefficients and remain separate constraints.","artifact":"C1 → 2A + B ≤ 8\nC2 → A + 2B ≤ 8\nPreserve nonnegative integer domains."},
+  {"title":"Check components","nodes":["Check","Assemble"],"body":"Repeated wording can be removed. Cutting and finishing have different coefficients and remain separate constraints.","artifact":"C1 → 2A + B ≤ 8\nC2 → A + 2B ≤ 8\nPreserve nonnegative integer domains."},
   {"title":"Assemble code","nodes":["Assemble"],"body":"Components enter one build_model(data). Names, indices and parameters must agree across components.","artifact":"setup + variables + C1 + C2 + objective + return model\nGenerated code builds; the platform solves."},
   {"title":"Execute and debug","nodes":["Solve","Debug","Finish"],"body":"The correct model gives A=3, B=2 and objective 13. If debugging occurs, check that changes preserve component meaning.","artifact":"At most 3 execution/debug attempts\nInfeasible or unbounded statuses can also trigger debugging."}
 ]
