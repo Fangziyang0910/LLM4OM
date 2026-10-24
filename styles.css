@@ -26,6 +26,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible,[
 .main-nav a,.text-link,.site-footer a { transition: color .2s; }
 .main-nav a:hover,.text-link:hover,.site-footer a:hover { color: var(--accent); }
 .header-actions { gap: 18px; }
+.docs-entry { font-size: 13px; color: #d0c2e2; padding-block: 8px; }.docs-entry:hover { color: var(--accent); }
 .language-button { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 4px; border: 0; background: none; font-size: 12px; }
 .button { display: inline-flex; justify-content: center; align-items: center; gap: 13px; min-height: 46px; padding: 11px 20px; border-radius: 6px; font-size: 14px; font-weight: 550; transition: transform .25s var(--ease),background .2s; }
 .button:hover { transform: translateY(-2px); }
@@ -180,3 +181,4 @@ dialog { width: min(1460px,calc(100% - 40px)); max-height: calc(100% - 40px); pa
 @media (prefers-reduced-motion:reduce) {
   html { scroll-behavior: auto; }*,*::before,*::after { animation: none !important; transition: none !important; }.motion-ready .reveal { opacity: 1; transform: none; }
 }
+@media (max-width:380px) { .header-actions > .button-small { display: none; } }

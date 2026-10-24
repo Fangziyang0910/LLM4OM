@@ -238,6 +238,7 @@ function applyLanguage() {
   document.documentElement.lang = language === "en" ? "en" : "zh-CN";
   for (const node of document.querySelectorAll("[data-i18n]")) node.textContent = t(node.dataset.i18n);
   for (const node of document.querySelectorAll("[data-i18n-label]")) node.setAttribute("aria-label", t(node.dataset.i18nLabel));
+  for (const node of document.querySelectorAll("[data-docs]")) node.href = `docs/${language}/${node.dataset.docs}/`;
   document.title = t("pageTitle");
   $("meta[name='description']").content = t("pageDescription");
   $("meta[property='og:title']").content = t("pageTitle");

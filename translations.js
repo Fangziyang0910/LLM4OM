@@ -2,7 +2,7 @@ export const copy = {
   pageTitle: ["LLM4OM — 用 AI 计算优化方案", "LLM4OM — Optimization, with AI"],
   pageDescription: ["用自然语言描述生产、排班或配送问题。LLM4OM 帮你建立优化模型、计算方案，并在条件变化后重新计算。EIPI 团队开发。", "Describe production, staffing or delivery needs. LLM4OM builds an optimization model, computes a plan, and recalculates when conditions change. Built by EIPI."],
   skip: ["跳到主要内容", "Skip to content"], homeLabel: ["LLM4OM 首页", "LLM4OM home"], navLabel: ["主导航", "Main navigation"],
-  navDemo: ["体验操作", "Try the demo"], navFeatures: ["功能介绍", "Features"], navHow: ["使用方式", "How to use it"], navStart: ["开始使用", "Get started"],
+  navDemo: ["体验操作", "Try the demo"], navFeatures: ["功能介绍", "Features"], navHow: ["使用方式", "How to use it"], navStart: ["开始使用", "Get started"], navDocs: ["文档", "Docs"],
   heroEyebrow: ["EIPI 团队开发 · AI 优化建模平台", "BUILT BY EIPI · AI OPTIMIZATION MODELING"],
   heroLine1: ["生产、排班、配送，", "Plan production, shifts"], heroLine2: ["用 AI 计算方案。", "and deliveries with AI."],
   heroDescription: ["描述目标，上传数据。LLM4OM 自动建立模型并求解，给出具体安排；需求变了，继续对话就能重新计算。", "Describe your goal and upload your data. LLM4OM builds a model and computes a plan. When requirements change, continue the conversation and recalculate."],
