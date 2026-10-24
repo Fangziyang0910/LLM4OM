@@ -1,8 +1,8 @@
 # LLM4OM 官网与文档中心
 
-面向大众的中英文宣传站，署名 EIPI 团队。第二版包括生产、排班、配送三个可操作示例，六张新采集的双语深色工作台截图、三步使用介绍和常见问题。示例支持播放、暂停、跳过、修改条件及下载 CSV。正文不展示方法清单、调用消耗或终端安装命令。
+面向大众的中英文宣传站，署名 EIPI 团队。包括生产、排班、配送三个可操作示例，十二张双语、深浅两种主题的工作台截图、三步使用介绍和常见问题。示例支持播放、暂停、跳过、修改条件及下载 CSV。
 
-Docs 沿用官网风格，提供 46 篇文章、92 个中英文页面：快速开始与基本概念、13 篇功能指南、13 种方法、9 个建模库、求解后端、部署、CLI / Python 和故障排查。文章包含机制、输入输出、完整代码与操作案例；68 张双语 Mermaid 图在构建时生成 SVG，方法图与逐步案例联动。五类交互案例包括生产、方案对话、数据编辑、凸优化和局部搜索，另有双语工作台录屏与字幕。侧栏、页内目录、全文搜索、代码复制、手机目录和同章节语言切换沿用现有框架。
+Docs 沿用官网风格，提供 46 篇文章、92 个中英文页面：快速开始与基本概念、13 篇功能指南、13 种方法、9 个建模库、求解后端、部署、CLI / Python 和故障排查。文章包含机制、输入输出、完整代码与操作案例；68 张双语 Mermaid 图在构建时生成深、浅两版 SVG，方法图与逐步案例联动。五类交互案例包括生产、方案对话、数据编辑、凸优化和局部搜索，另有双语、深浅两版工作台录屏与字幕。侧栏、页内目录、全文搜索、代码复制、手机目录和同章节语言切换沿用现有框架。
 
 ## 生成文档
 
@@ -30,6 +30,8 @@ npm --prefix website run dev
 ```
 
 打开 http://127.0.0.1:8831/。右上角切换语言；也可以用 `?lang=en` 直接分享英文版，或 `?lang=zh` 分享中文版。语言选择会在当前浏览器保存。
+
+右上角的太阳或月亮图标打开外观菜单，可选浅色、深色或跟随系统。首次访问跟随系统；偏好以 `llm4om-site-theme` 保存在浏览器，在首页、Docs、两种语言和同站点标签页之间共用。页面在加载样式前确定主题。切换会同步截图、SVG 下载与放大图、录屏及字幕，保留交互案例和播放位置。
 
 预览复用前端已安装的 Vite，支持视频片段跳转所需的 HTTP Range 请求。
 
@@ -65,11 +67,14 @@ node website/check.cjs http://127.0.0.1:8831/
 ```bash
 node website/check-docs.cjs http://127.0.0.1:8831/
 node website/check-learning.cjs http://127.0.0.1:8831/
+node website/check-theme.cjs http://127.0.0.1:8831/
 ```
 
 遍历全部 92 个页面，检查项目子路径下的内部链接与锚点、唯一 ID、双语章节对应、英文正文、全部方法／库覆盖；浏览器检查全文搜索、无结果与失败恢复、键盘操作、代码复制、语言记忆、同章节切换、手机目录、六种宽度和禁用 JavaScript 后的文章阅读。截图保存在 `artifacts/website/docs/`。把地址换成 GitHub Pages 地址可复测线上部署。
 
 学习材料检查另外覆盖全部方法各阶段的节点联动、完整图与字体大小、整数枚举与连续顶点解、凸投影和梯度下降、场景选择、数据保存后单独建模、取消与输入校验、CSV、视频片段跳转与字幕语言、流程图放大、播放暂停和无 JavaScript 内容。九个建模库文章中的首个完整 Python 示例已在本地 Worker 实际求解并核对目标值。
+
+主题检查遍历 92 个 Docs 页面的两种外观，核对浅色素材、图中文字大小、六种屏幕宽度、系统变化、偏好记忆、键盘切换、标签页同步、浏览器存储不可用，以及主题切换前后的示例参数、流程阶段和视频播放状态。截图保存在 `artifacts/website/themes/`。
 
 这组检查验证宣传站，不调用真实 LLM 或平台后端。三个示例枚举各自的小型可行集合，显示实际最优解；它们用于介绍操作，不代表完整平台的运行性能。
 
@@ -77,9 +82,10 @@ node website/check-learning.cjs http://127.0.0.1:8831/
 
 ```bash
 node website/capture.cjs
+node website/capture.cjs light
 ```
 
-复用已有前端、Python 环境、Playwright、ffmpeg 和 Pyomo / HiGHS。脚本启动隔离的本地平台与固定回复适配器，实际求解生产问题与两个变更场景，采集中文、英文深色截图，录制 MP4 并生成 WebVTT 字幕。截图位于 `public/assets/screens/{zh,en}/`，录屏位于 `public/assets/demos/`；日志、原始视频和隔离数据位于忽略提交的 `artifacts/website/`。完成后关闭脚本启动的服务。
+复用已有前端、Python 环境、Playwright、ffmpeg 和 Pyomo / HiGHS。脚本启动隔离的本地平台与固定回复适配器，实际求解生产问题与两个变更场景，采集中文、英文截图，录制 MP4 并生成 WebVTT 字幕。默认采集深色，参数 `light` 采集浅色并在文件名添加 `-light`。截图位于 `public/assets/screens/{zh,en}/`，录屏位于 `public/assets/demos/`；日志、原始视频和隔离数据位于忽略提交的 `artifacts/website/`。完成后关闭脚本启动的服务。
 
 ## 维护
 
@@ -88,6 +94,7 @@ node website/capture.cjs
 - 语言、截图、播放与示例交互：`public/site.js`。
 - 三个有限示例的计算：`public/examples.mjs`。
 - 响应式视觉：`public/styles.css`。
+- 共用主题切换与浅色样式：`public/theme.js`、`public/themes.css`。
 - 文档源稿与目录：`content/{zh,en}/`、`docs-manifest.json`；生成器：`build-docs.mjs`。
 - 文档框架与搜索：`public/docs/docs.css`、`docs.js`。
 - 学习材料渲染：`doc-components.mjs`、`render-diagrams.mjs`；客户端：`public/docs/learning.mjs`；纯数值计算：`learning-models.mjs`。

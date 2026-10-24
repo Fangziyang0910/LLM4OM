@@ -19,7 +19,12 @@ const config = {
     edgeLabelBackground: "#19161f", fontSize: "15px", clusterBkg: "#211c29", clusterBorder: "#635271"
   }
 };
-export const diagramHash = source => createHash("sha256").update(JSON.stringify(config) + "12.2.0" + source).digest("hex");
+const lightConfig = { ...config, themeVariables: {
+  ...config.themeVariables, darkMode: false, background: "#ffffff", primaryColor: "#f1e9fa", primaryTextColor: "#30203f",
+  primaryBorderColor: "#9b7fba", lineColor: "#7c6199", secondaryColor: "#e5f3ec", tertiaryColor: "#f6eafa",
+  edgeLabelBackground: "#ffffff", clusterBkg: "#f7f3fb", clusterBorder: "#c8b4dd"
+} };
+export const diagramHash = (source, theme = "dark") => createHash("sha256").update(JSON.stringify(theme === "light" ? lightConfig : config) + "12.2.0" + source).digest("hex");
 const server = http.createServer(async (request, response) => {
   const filename = path.resolve(directory, "." + new URL(request.url, "http://localhost").pathname);
   if (!filename.startsWith(directory + path.sep)) { response.writeHead(403).end(); return; }
@@ -52,16 +57,22 @@ try {
       const markdown = await fs.readFile(path.join(directory, "content", locale, name), "utf8");
       let number = 0;
       for (const match of markdown.matchAll(/^```mermaid\n([\s\S]*?)^```/gm)) {
-        const key = `${locale}-${name.slice(0, -3)}-${++number}`;
+        const diagram = `${locale}-${name.slice(0, -3)}-${++number}`;
         const source = match[1];
-        const hash = diagramHash(source);
-        const filename = `${key}.svg`;
-        manifest[key] = { hash, sourceHash: createHash("sha256").update(source).digest("hex"), file: filename };
-        if (previous[key]?.hash === hash && await fs.access(path.join(output, filename)).then(() => true, () => false)) continue;
-        const svg = await page.evaluate(async ({ key, source }) => (await window.mermaid.render(`diagram-${key}`, source)).svg, { key, source });
-        if (/<script\b|<foreignObject\b|\son\w+=/i.test(svg)) throw new Error(`Unexpected active SVG content: ${key}`);
-        await fs.writeFile(path.join(output, filename), svg + "\n");
-        rendered++;
+        for (const theme of ["dark", "light"]) {
+          const key = diagram + (theme === "light" ? "-light" : "");
+          const hash = diagramHash(source, theme);
+          const filename = `${key}.svg`;
+          manifest[key] = { hash, sourceHash: createHash("sha256").update(source).digest("hex"), file: filename };
+          if (previous[key]?.hash === hash && await fs.access(path.join(output, filename)).then(() => true, () => false)) continue;
+          const svg = await page.evaluate(async ({ key, source, config }) => {
+            window.mermaid.initialize(config);
+            return (await window.mermaid.render(`diagram-${key}`, source)).svg;
+          }, { key, source, config: theme === "light" ? lightConfig : config });
+          if (/<script\b|<foreignObject\b|\son\w+=/i.test(svg)) throw new Error(`Unexpected active SVG content: ${key}`);
+          await fs.writeFile(path.join(output, filename), svg + "\n");
+          rendered++;
+        }
       }
     }
   }

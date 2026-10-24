@@ -7,6 +7,9 @@ const { chromium, expect } = require("../frontend/node_modules/@playwright/test"
 const root = path.resolve(__dirname, "..");
 const base = "http://127.0.0.1:8859";
 const children = [];
+const theme = process.argv[2] || "dark";
+assert.ok(["dark", "light"].includes(theme), "Choose dark or light");
+const suffix = theme === "light" ? "-light" : "";
 const pauses = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function ready(url) {
@@ -40,8 +43,8 @@ async function ready(url) {
   try {
     for (const locale of ["zh", "en"]) {
       const en = locale === "en";
-      const context = await browser.newContext({ viewport: { width: 1360, height: 850 }, deviceScaleFactor: 2, locale: en ? "en-US" : "zh-CN", colorScheme: "dark", reducedMotion: "reduce", recordVideo: { dir: path.join(root, "artifacts/website/recordings"), size: { width: 1360, height: 850 } } });
-      await context.addInitScript(locale => { localStorage.setItem("theme", "dark"); localStorage.setItem("llm4om-locale", locale); }, locale);
+      const context = await browser.newContext({ viewport: { width: 1360, height: 850 }, deviceScaleFactor: 2, locale: en ? "en-US" : "zh-CN", colorScheme: theme, reducedMotion: "reduce", recordVideo: { dir: path.join(root, "artifacts/website/recordings"), size: { width: 1360, height: 850 } } });
+      await context.addInitScript(({ locale, theme }) => { localStorage.setItem("theme", theme); localStorage.setItem("llm4om-locale", locale); }, { locale, theme });
       const page = await context.newPage();
       const video = page.video();
       const started = Date.now();
@@ -56,7 +59,7 @@ async function ready(url) {
         : "A、B 两种产品的生产计划\n产量均为非负整数。A 每件利润 3 元，B 每件利润 2 元。每件 A 使用切割资源 2 单位、加工资源 1 单位；每件 B 使用切割资源 1 单位、加工资源 2 单位。两种资源各有 8 单位，求总利润最高的生产安排。";
       await page.goto(base);
       mark("填写生产需求，开始自动建模。", "Enter a production problem and start modeling.");
-      assert.equal(await page.locator("html").evaluate(node => node.classList.contains("dark")), true);
+      assert.equal(await page.locator("html").evaluate(node => node.classList.contains("dark")), theme === "dark");
       await page.getByLabel(en ? "Problem description" : "问题描述", { exact: true }).fill(problem);
       await pauses(1400);
       await page.getByRole("button", { name: en ? /^Start modeling/ : /^开始建模/ }).click();
@@ -69,7 +72,7 @@ async function ready(url) {
       await page.evaluate(() => document.fonts.ready);
       if (en) assert.doesNotMatch(await page.locator("body").innerText(), /[\u3400-\u9fff]/);
       const planBox = await page.getByRole("main").boundingBox();
-      await page.screenshot({ path: path.join(output, "plan.png"), clip: { x: planBox.x, y: 0, width: planBox.width, height: 625 } });
+      await page.screenshot({ path: path.join(output, `plan${suffix}.png`), clip: { x: planBox.x, y: 0, width: planBox.width, height: 625 } });
       await page.getByRole("button", { name: en ? "Business scenario comparison" : "业务场景对比", exact: true }).click();
       for (const [i, amount] of [3, 4].entries()) {
         await page.getByLabel(en ? `Scenario ${i + 1} name` : `场景 ${i + 1} 名称`, { exact: true }).fill(en ? `At least ${amount} of B` : `B 至少生产 ${amount} 件`);
@@ -88,7 +91,7 @@ async function ready(url) {
       if (en) assert.doesNotMatch(await page.locator("body").innerText(), /[\u3400-\u9fff]/);
       const scenarioBox = await page.getByRole("main").boundingBox();
       const tableBox = await page.getByRole("table").first().boundingBox();
-      await page.screenshot({ path: path.join(output, "scenarios.png"), clip: { x: scenarioBox.x, y: 0, width: scenarioBox.width, height: tableBox.y + tableBox.height + 26 } });
+      await page.screenshot({ path: path.join(output, `scenarios${suffix}.png`), clip: { x: scenarioBox.x, y: 0, width: scenarioBox.width, height: tableBox.y + tableBox.height + 26 } });
       await page.goto(base);
       const filename = en ? "production.csv" : "生产数据.csv";
       const data = en ? "Product,Profit (CNY),Cutting units,Processing units\nA,3,2,1\nB,2,1,2\n" : "产品,单件利润（元）,切割资源（单位）,加工资源（单位）\nA,3,2,1\nB,2,1,2\n";
@@ -99,7 +102,7 @@ async function ready(url) {
       mark("打开附件，检查字段和数据。", "Open an attachment and inspect its fields and values.");
       if (en) assert.doesNotMatch(await page.locator("body").innerText(), /[\u3400-\u9fff]/);
       const dataBox = await page.getByRole("dialog").boundingBox();
-      await page.screenshot({ path: path.join(output, "data.png"), clip: { x: dataBox.x - 18, y: dataBox.y - 18, width: dataBox.width + 36, height: dataBox.height + 36 } });
+      await page.screenshot({ path: path.join(output, `data${suffix}.png`), clip: { x: dataBox.x - 18, y: dataBox.y - 18, width: dataBox.width + 36, height: dataBox.height + 36 } });
       await pauses(1800);
       await page.getByLabel(en ? "Row 1, column 2" : "第 1 行，第 2 列", { exact: true }).fill("4");
       mark("修改 A 的单件利润并保存到需求稿。", "Edit A's unit profit and save the attachment to the draft.");
@@ -107,15 +110,15 @@ async function ready(url) {
       await page.getByRole("button", { name: en ? "Save data" : "保存数据", exact: true }).click();
       await pauses(1800);
       const finished = (Date.now() - started) / 1000;
-      console.log(`Captured ${locale}: dark workbench, computed plan (13), scenarios (12 / 8), editable data.`);
+      console.log(`Captured ${locale}: ${theme} workbench, computed plan (13), scenarios (12 / 8), editable data.`);
       await context.close();
       const media = path.join(__dirname, "public/assets/demos");
       await fs.mkdir(media, { recursive: true });
       const raw = await video.path();
-      execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", raw, "-vf", "fps=24,format=yuv420p", "-c:v", "libx264", "-crf", "27", "-preset", "fast", "-an", "-movflags", "+faststart", path.join(media, `workbench-${locale}.mp4`)]);
+      execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", raw, "-vf", "fps=24,format=yuv420p", "-c:v", "libx264", "-crf", "27", "-preset", "fast", "-an", "-movflags", "+faststart", path.join(media, `workbench-${locale}${suffix}.mp4`)]);
       const timestamp = seconds => new Date(Math.round(seconds * 1000)).toISOString().slice(11, 23);
       const subtitles = "WEBVTT\n\n" + cues.map((cue, i) => `${timestamp(cue.time)} --> ${timestamp(cues[i + 1]?.time ?? finished)}\n${cue.text}\n`).join("\n");
-      await fs.writeFile(path.join(media, `workbench-${locale}.vtt`), subtitles);
+      await fs.writeFile(path.join(media, `workbench-${locale}${suffix}.vtt`), subtitles);
     }
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {

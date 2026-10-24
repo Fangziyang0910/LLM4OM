@@ -219,7 +219,7 @@ function renderFeature() {
   $("#feature-description").dataset.i18n = `${feature}FeatureDescription`;
   $("#feature-description").textContent = t(`${feature}FeatureDescription`);
   const image = $("#feature-image");
-  const source = `assets/screens/${language}/${feature}.png`;
+  const source = `assets/screens/${language}/${feature}${document.documentElement.dataset.theme === "light" ? "-light" : ""}.png`;
   const stage = $(".photo-stage");
   image.alt = t(`${feature}Alt`);
   stage.dataset.loading = "true";
@@ -304,6 +304,7 @@ $("#download-plan").addEventListener("click", () => {
 });
 
 const dialog = $("#photo-dialog");
+document.addEventListener("llm4om:themechange", renderFeature);
 $("#enlarge-photo").addEventListener("click", () => dialog.showModal());
 $("#close-photo").addEventListener("click", () => dialog.close());
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });

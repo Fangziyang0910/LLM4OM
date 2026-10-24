@@ -58,9 +58,14 @@ for (const [index, locale] of ["zh", "en"].entries()) {
   const title = item => item.title[index];
   const summary = item => item.summary[index];
   const search = [];
-  const recordingText = await fs.readFile(path.join(directory, `public/assets/demos/workbench-${locale}.vtt`), "utf8");
-  const recordingCues = [...recordingText.matchAll(/^(\d{2}):(\d{2}):(\d{2}\.\d{3}) --> [^\n]+\n([^\n]+)/gm)].map(([, h, m, s, text]) => ({ seconds: Number(h) * 3600 + Number(m) * 60 + Number(s), text }));
-  if (recordingCues.length !== 6) throw new Error(`Check recording chapters: ${locale}`);
+  const recording = {};
+  for (const theme of ["dark", "light"]) {
+    const recordingText = await fs.readFile(path.join(directory, `public/assets/demos/workbench-${locale}${theme === "light" ? "-light" : ""}.vtt`), "utf8");
+    recording[theme] = [...recordingText.matchAll(/^(\d{2}):(\d{2}):(\d{2}\.\d{3}) --> [^\n]+\n([^\n]+)/gm)].map(([, h, m, s, text]) => ({ seconds: Number(h) * 3600 + Number(m) * 60 + Number(s), text }));
+    if (recording[theme].length !== 6) throw new Error(`Check recording chapters: ${locale}/${theme}`);
+  }
+  if (recording.dark.some((cue, i) => cue.text !== recording.light[i].text)) throw new Error(`Mismatched recording transcripts: ${locale}`);
+  const recordingCues = recording.dark;
   const navigation = groups.map(group => `<details open class="nav-group"><summary>${escape(title(group))}<span>${articles.filter(a => a.group === group.id).length}</span></summary><ul>${articles.filter(a => a.group === group.id).map(a => `<li><a href="../${a.id}/" data-article="${a.id}">${escape(title(a))}</a></li>`).join("")}</ul></details>`).join("");
   for (const [position, article] of articles.entries()) {
     let markdown = await fs.readFile(path.join(directory, "content", locale, `${article.id}.md`), "utf8");
@@ -83,9 +88,13 @@ for (const [index, locale] of ["zh", "en"].entries()) {
     const diagramMarkup = new Map();
     for (const match of markdown.matchAll(/^```mermaid\n([\s\S]*?)^```/gm)) {
       const key = `${locale}-${article.id}-${++diagramNumber}`;
-      const entry = diagrams[key];
-      if (!entry || entry.sourceHash !== createHash("sha256").update(match[1]).digest("hex")) throw new Error(`Run the diagram build for ${key}`);
-      diagramMarkup.set(match[1], { svg: await fs.readFile(path.join(output, "diagrams", entry.file), "utf8"), url: `../../diagrams/${entry.file}` });
+      const graph = {};
+      for (const theme of ["dark", "light"]) {
+        const entry = diagrams[key + (theme === "light" ? "-light" : "")];
+        if (!entry || entry.sourceHash !== createHash("sha256").update(match[1]).digest("hex")) throw new Error(`Run the diagram build for ${key}/${theme}`);
+        graph[theme] = { svg: (await fs.readFile(path.join(output, "diagrams", entry.file), "utf8")).replace("<svg ", `<svg data-diagram-theme="${theme}" `), url: `../../diagrams/${entry.file}` };
+      }
+      diagramMarkup.set(match[1], graph);
     }
     const methodWalkthrough = article.method ? markdown.match(/^```walkthrough\n([\s\S]*?)^```/m)?.[1] : undefined;
     const html = renderToStaticMarkup(React.createElement(ReactMarkdown, {
@@ -93,6 +102,7 @@ for (const [index, locale] of ["zh", "en"].entries()) {
       components: {
         h2: heading(2), h3: heading(3),
         table: ({ children }) => React.createElement("div", { className: "table-scroll", tabIndex: 0, role: "region", "aria-label": t("table") }, React.createElement("table", {}, children)),
+        img: ({ src, alt }) => React.createElement("img", { src, alt, ...(src?.includes("/assets/screens/") ? { "data-dark-src": src, "data-light-src": src.replace(/\.png$/, "-light.png") } : {}) }),
         pre: ({ children }) => {
           const code = React.Children.toArray(children)[0];
           const language = code?.props?.className?.replace("language-", "").split(" ")[0];
@@ -100,12 +110,12 @@ for (const [index, locale] of ["zh", "en"].entries()) {
           if (language === "mermaid") {
             const graph = diagramMarkup.get(source);
             if (!graph) throw new Error(`Missing diagram: ${locale}/${article.id}`);
-            const width = Number(graph.svg.match(/viewBox="[^"]*? ([\d.]+) [\d.]+"/)?.[1]);
+            const width = Number(graph.dark.svg.match(/viewBox="[^"]*? ([\d.]+) [\d.]+"/)?.[1]);
             if (!Number.isFinite(width)) throw new Error("Invalid diagram viewBox");
-            const figure = React.createElement("figure", { className: "doc-diagram", "data-src": graph.url, style: { "--diagram-width": `${width}px` } },
-              React.createElement("div", { className: "diagram-scroll", tabIndex: 0, dangerouslySetInnerHTML: { __html: graph.svg } }),
+            const figure = React.createElement("figure", { className: "doc-diagram", "data-src": graph.dark.url, "data-dark-src": graph.dark.url, "data-light-src": graph.light.url, style: { "--diagram-width": `${width}px` } },
+              React.createElement("div", { className: "diagram-scroll", tabIndex: 0, dangerouslySetInnerHTML: { __html: graph.dark.svg + graph.light.svg } }),
               React.createElement("figcaption", {}, methodWalkthrough ? (index ? "Workflow overview · Choose an example stage to inspect its inputs and outputs." : "流程总览 · 点选案例阶段，查看对应输入与产物。") : (index ? "Workflow overview" : "流程总览")),
-              React.createElement("div", { className: "diagram-actions" }, React.createElement("a", { href: graph.url, download: true }, index ? "Download SVG" : "下载 SVG")),
+              React.createElement("div", { className: "diagram-actions" }, React.createElement("a", { href: graph.dark.url, "data-dark-href": graph.dark.url, "data-light-href": graph.light.url, download: true }, index ? "Download SVG" : "下载 SVG")),
               React.createElement("details", { className: "diagram-source" }, React.createElement("summary", {}, index ? "Mermaid source" : "Mermaid 源码"), React.createElement("pre", {}, React.createElement("code", {}, source))));
             return methodWalkthrough ? React.createElement("div", { className: "workflow-explorer" }, figure, React.createElement("div", { dangerouslySetInnerHTML: { __html: walkthrough(methodWalkthrough, Boolean(index)) } })) : figure;
           }
@@ -114,10 +124,10 @@ for (const [index, locale] of ["zh", "en"].entries()) {
           if (language === "video") {
             if (source.trim() !== "workbench") throw new Error("Unknown recording");
             return React.createElement("figure", { className: "doc-recording" },
-              React.createElement("video", { controls: true, preload: "none", playsInline: true, poster: `../../../assets/screens/${locale}/plan.png`, "aria-label": index ? "Workbench demonstration: modeling, scenarios and data editing" : "工作台演示：建模、场景比较与数据编辑" },
+              React.createElement("video", { controls: true, preload: "none", playsInline: true, poster: `../../../assets/screens/${locale}/plan.png`, "data-dark-src": `../../../assets/demos/workbench-${locale}.mp4`, "data-light-src": `../../../assets/demos/workbench-${locale}-light.mp4`, "data-dark-poster": `../../../assets/screens/${locale}/plan.png`, "data-light-poster": `../../../assets/screens/${locale}/plan-light.png`, "aria-label": index ? "Workbench demonstration: modeling, scenarios and data editing" : "工作台演示：建模、场景比较与数据编辑" },
                 React.createElement("source", { src: `../../../assets/demos/workbench-${locale}.mp4`, type: "video/mp4" }),
-                React.createElement("track", { kind: "captions", src: `../../../assets/demos/workbench-${locale}.vtt`, srcLang: index ? "en" : "zh", label: index ? "English" : "中文", default: true })),
-              React.createElement("div", { className: "learning-controls recording-chapters", "aria-label": index ? "Play a chapter" : "播放指定片段" }, [0, 2, 4].map((cue, i) => React.createElement("button", { type: "button", "data-seek": recordingCues[cue].seconds, key: cue }, [index ? "Model a problem" : "建模求解", index ? "Compare scenarios" : "比较场景", index ? "Edit data" : "编辑数据"][i]))),
+                React.createElement("track", { kind: "captions", src: `../../../assets/demos/workbench-${locale}.vtt`, "data-dark-src": `../../../assets/demos/workbench-${locale}.vtt`, "data-light-src": `../../../assets/demos/workbench-${locale}-light.vtt`, srcLang: index ? "en" : "zh", label: index ? "English" : "中文", default: true })),
+              React.createElement("div", { className: "learning-controls recording-chapters", "aria-label": index ? "Play a chapter" : "播放指定片段" }, [0, 2, 4].map((cue, i) => React.createElement("button", { type: "button", "data-seek": recordingCues[cue].seconds, "data-dark-seek": recordingCues[cue].seconds, "data-light-seek": recording.light[cue].seconds, key: cue }, [index ? "Model a problem" : "建模求解", index ? "Compare scenarios" : "比较场景", index ? "Edit data" : "编辑数据"][i]))),
               React.createElement("p", { className: "recording-status", role: "status", hidden: true }),
               React.createElement("figcaption", {}, index ? "Production example in the workbench. Choose a chapter, or use captions and fullscreen controls." : "生产案例工作台录屏。可选择片段，也可开启字幕或全屏观看。"),
               React.createElement("details", { className: "recording-transcript" }, React.createElement("summary", {}, index ? "Read the transcript" : "查看字幕文字"), React.createElement("ol", {}, recordingCues.map(cue => React.createElement("li", { key: cue.seconds }, cue.text)))));
@@ -144,7 +154,7 @@ for (const [index, locale] of ["zh", "en"].entries()) {
     const counterpart = `../../${index ? "zh" : "en"}/${article.id}/`;
     const tocLinks = headings.map(h => `<a href="#${h.id}" class="toc-level-${h.level}">${escape(h.label)}</a>`).join("");
     const page = `<!doctype html>
-<html lang="${index ? "en" : "zh-CN"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101014"><meta name="description" content="${escape(summary(article))}"><title>${escape(title(article))} · LLM4OM Docs</title><meta property="og:title" content="${escape(title(article))} · LLM4OM Docs"><meta property="og:description" content="${escape(summary(article))}"><link rel="canonical" href="https://fangziyang0910.github.io/LLM4OM/docs/${locale}/${article.id}/"><link rel="alternate" hreflang="zh-CN" href="../../zh/${article.id}/"><link rel="alternate" hreflang="en" href="../../en/${article.id}/"><link rel="icon" href="../../../assets/llm4om.svg" type="image/svg+xml"><link rel="preload" href="../../../assets/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="../../../styles.css"><link rel="stylesheet" href="../../../assets/katex/katex.min.css"><link rel="stylesheet" href="../../docs.css"><script src="../../docs.js" type="module"></script></head>
+<html lang="${index ? "en" : "zh-CN"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101014"><script src="../../../theme.js"></script><meta name="description" content="${escape(summary(article))}"><title>${escape(title(article))} · LLM4OM Docs</title><meta property="og:title" content="${escape(title(article))} · LLM4OM Docs"><meta property="og:description" content="${escape(summary(article))}"><link rel="canonical" href="https://fangziyang0910.github.io/LLM4OM/docs/${locale}/${article.id}/"><link rel="alternate" hreflang="zh-CN" href="../../zh/${article.id}/"><link rel="alternate" hreflang="en" href="../../en/${article.id}/"><link rel="icon" href="../../../assets/llm4om.svg" type="image/svg+xml"><link rel="preload" href="../../../assets/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="../../../styles.css"><link rel="stylesheet" href="../../../assets/katex/katex.min.css"><link rel="stylesheet" href="../../docs.css"><link rel="stylesheet" href="../../../themes.css"><script src="../../docs.js" type="module"></script></head>
 <body class="docs-page" data-locale="${locale}"><a class="skip-link" href="#article">${t("skip")}</a>
 <header class="site-header docs-header"><div class="docs-header-inner"><a class="brand" href="../../../?lang=${locale}"><img src="../../../assets/llm4om.svg" width="29" height="29" alt=""><span>LLM4OM</span></a><a class="docs-wordmark" href="../introduction/">Docs</a><button class="docs-search-button" id="search-open" type="button" aria-haspopup="dialog"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/></svg><span>${t("search")}</span><kbd>⌘ K</kbd></button><nav class="docs-header-links" aria-label="${t("menu")}"><a class="docs-product-link" href="../../../?lang=${locale}">${t("home")}</a><a id="docs-language" class="language-button" href="${counterpart}" lang="${index ? "zh-CN" : "en"}" aria-label="${index ? "切换到中文" : "Switch to English"}">${index ? "中文" : "EN"}</a><a class="docs-github" href="https://github.com/Fangziyang0910/LLM4OM" aria-label="GitHub"><img src="../../../assets/github.svg" width="20" height="20" alt=""></a></nav></div></header>
 <div class="docs-mobile-bar"><button id="mobile-menu" type="button" aria-haspopup="dialog"><span aria-hidden="true">☰</span> ${t("menu")}</button><span>${escape(title(group))}</span></div>

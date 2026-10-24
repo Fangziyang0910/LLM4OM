@@ -48,7 +48,7 @@ const output = path.join(__dirname, "../artifacts/website/docs");
   const browser = await chromium.launch({ headless: true });
   const errors = [];
   try {
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce", permissions: ["clipboard-read", "clipboard-write"] });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce", colorScheme: "dark", permissions: ["clipboard-read", "clipboard-write"] });
     const page = await context.newPage();
     page.on("pageerror", error => errors.push(error.message));
     page.on("response", response => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });

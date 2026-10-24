@@ -23,7 +23,7 @@ const output = path.join(__dirname, "../artifacts/website/v2");
   const browser = await chromium.launch({ headless: true });
   const errors = [];
   try {
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce", colorScheme: "dark" });
     const page = await context.newPage();
     page.on("pageerror", error => errors.push(error.message));
     page.on("response", response => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
@@ -128,7 +128,7 @@ const output = path.join(__dirname, "../artifacts/website/v2");
     await page.screenshot({ path: path.join(output, "full-page-zh.png"), fullPage: true });
     await context.close();
 
-    const moving = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "no-preference" });
+    const moving = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "no-preference", colorScheme: "dark" });
     const motion = await moving.newPage();
     motion.on("pageerror", error => errors.push(error.message));
     await motion.goto(`${base}?lang=en`);

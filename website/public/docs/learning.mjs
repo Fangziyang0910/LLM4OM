@@ -206,7 +206,7 @@ for (const recording of document.querySelectorAll(".doc-recording")) {
     if (video.readyState >= 1) video.currentTime = requestedTime;
     status.hidden = true;
     try { await video.play(); }
-    catch { status.hidden = false; status.textContent = t("片段暂时无法播放，请使用播放器控件重试。", "The chapter could not play. Use the video controls to retry."); }
+    catch (error) { if (error.name !== "AbortError") { status.hidden = false; status.textContent = t("片段暂时无法播放，请使用播放器控件重试。", "The chapter could not play. Use the video controls to retry."); } }
   });
   pauses.push(() => video.pause());
 }
@@ -217,6 +217,7 @@ for (const figure of document.querySelectorAll(".doc-diagram")) {
   const dialog = document.querySelector("#diagram-dialog");
   button.addEventListener("click", () => {
     const image = dialog.querySelector("img");
+    image.dataset.darkSrc = figure.dataset.darkSrc; image.dataset.lightSrc = figure.dataset.lightSrc;
     image.src = figure.dataset.src; image.alt = figure.querySelector("figcaption").textContent;
     image.classList.remove("native-size");
     dialog.querySelector("[data-diagram-size]").textContent = t("原始尺寸", "Actual size");

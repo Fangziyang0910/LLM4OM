@@ -36,14 +36,14 @@ const output = path.resolve(__dirname, "../artifacts/website/docs");
   const errors = [];
   const browser = await chromium.launch();
   try {
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce", colorScheme: "dark" });
     const page = await context.newPage();
     page.on("pageerror", error => errors.push(error.message));
     page.on("response", response => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
     for (const locale of ["zh", "en"]) {
       for (const article of articles.filter(a => a.method)) {
         await page.goto(`${base}docs/${locale}/${article.id}/`);
-        await expect(page.locator(".doc-diagram svg")).toHaveCount(1);
+        await expect(page.locator(".doc-diagram svg:visible")).toHaveCount(1);
         await expect(page.locator('[data-walkthrough][data-ready="true"]')).toHaveCount(1);
         const panels = page.locator(".step-panel");
         await expect(panels.first()).toBeVisible();
@@ -55,7 +55,8 @@ const output = path.resolve(__dirname, "../artifacts/website/docs");
         }
         const frame = await page.locator(".diagram-scroll").evaluate(node => ({ height: node.clientHeight, content: node.scrollHeight }));
         assert.ok(frame.content <= frame.height + 1, `Vertically cropped overview: ${locale}/${article.id}`);
-        const labels = await page.locator(".doc-diagram .nodeLabel").evaluateAll(nodes => nodes.map(node => ({ size: parseFloat(getComputedStyle(node).fontSize), scale: node.getScreenCTM().a })));
+        const labels = await page.locator(".doc-diagram .node text:visible").evaluateAll(nodes => nodes.map(node => ({ size: parseFloat(getComputedStyle(node).fontSize), scale: node.getScreenCTM().a })));
+        assert.ok(labels.length, `Missing graph labels ${locale}/${article.id}`);
         assert.ok(labels.every(label => label.size * label.scale >= 13), `Unreadable graph ${locale}/${article.id}`);
       }
       await page.goto(`${base}docs/${locale}/quickstart/`);
@@ -195,7 +196,7 @@ const output = path.resolve(__dirname, "../artifacts/website/docs");
     const staticPage = await staticContext.newPage();
     await staticPage.goto(`${base}docs/en/trival/`);
     assert.equal(await staticPage.locator(".step-panel:visible").count(), 4);
-    await expect(staticPage.locator(".doc-diagram svg")).toBeVisible();
+    await expect(staticPage.locator(".doc-diagram svg:visible")).toHaveCount(1);
     await staticContext.close();
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
