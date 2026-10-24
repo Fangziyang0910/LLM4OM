@@ -1,33 +1,68 @@
-A modeling library expresses a mathematical model; a backend computes its solution. Start with the variables and constraints, then choose a combination that can express and solve them.
+Choose the mathematics first, then the modeling library and backend. A library expresses a model; a backend computes it. Selecting a library does not make every problem compatible with every solver.
 
-## Nine modeling libraries
+## Start with variables and constraints
 
-| Library | Typical use | Default or native engine |
+| Structure | Mathematics | Combinations to inspect |
 |---|---|---|
-| [Pyomo](../pyomo/) | Algebraic linear, integer and other optimization models | Usually HiGHS for algebraic models; CBC for Kernel |
-| [gurobipy](../gurobipy/) | Native Gurobi and matrix modeling | Gurobi |
-| [OR-Tools](../ortools/) | LP/MIP, CP-SAT, routing, network flows and more | Selected for the native interface |
-| [CPMpy](../cpmpy/) | Finite-domain integer, Boolean and global constraints | OR-Tools CP-SAT |
-| [PuLP](../pulp/) | Linear and mixed-integer programming | CBC |
-| [CVXPY](../cvxpy/) | Convex, conic, DGP and DQCP models | A native compatible solver path |
+| Divisible quantities and linear expressions | LP | Pyomo / PuLP with compatible HiGHS, CBC or other engines |
+| Whole units, switches or locations with linear constraints | MILP | Pyomo, PuLP, gurobipy, PySCIPOpt, coptpy or OR-Tools mathematical programming |
+| Scheduling, logic, exclusion and finite domains | CP / SAT-style discrete constraints | CPMpy with OR-Tools, or OR-Tools CP-SAT |
+| Convex quadratic losses, norms or cones | Convex QP / conic programming | CVXPY with compatible OSQP, Clarabel, SCS or other engines |
+| Smooth nonlinear continuous decisions | NLP | CasADi with Ipopt or another suitable native path |
+| Routing, flow, assignment or knapsack | Specialized combinatorial structure | The corresponding OR-Tools interface |
+
+Business names alone do not establish compatibility. Staffing can be MILP; production can include nonlinear losses. Domains and expression structure determine the mathematical requirements.
+
+## The complete solving chain
+
+```mermaid
+flowchart LR
+  Problem["Business requirements"] --> Math["Domains and expressions"]
+  Math --> Library["Library builds native model"]
+  Library --> Check{"Compatible available backend?"}
+  Check -->|Yes| Engine["Actual computation"]
+  Check -->|No| Error["Preserve specific error"]
+  Engine --> Result["Status, objective and variables"]
+```
+
+The method translates requirements; the library constructs a native object; the engine applies algorithms to it. OR-Tools CpModel and MathOpt are native APIs selected through model code.
+
+## Try the production model
+
+Change hours, minimum demand and quantity domain to inspect quantities, objective and resource use.
+
+```demo
+production
+```
+
+Run the same statement in the workbench to retain the model, code and complete result, then continue with revised conditions.
+
+## What the nine libraries express
+
+| Library | Expressions and interfaces | Default or native path |
+|---|---|---|
+| [Pyomo](../pyomo/) | Indexed algebraic models, Concrete/instantiated Abstract, Kernel | Algebraic HiGHS; Kernel CBC |
+| [gurobipy](../gurobipy/) | Native Gurobi scalar and matrix models | Gurobi |
+| [OR-Tools](../ortools/) | Mathematical programming, CP, Routing, graph algorithms | Interface-specific; MPSolver reference uses SCIP |
+| [CPMpy](../cpmpy/) | Finite-domain integer, Boolean and global constraints | OR-Tools CP-SAT by default |
+| [PuLP](../pulp/) | Linear objectives and constraints | CBC by default; other compatible native backends |
+| [CVXPY](../cvxpy/) | DCP, DGP, DQCP and conic expressions | Compatible installed solver path |
 | [PySCIPOpt](../pyscipopt/) | Native SCIP linear, integer and nonlinear constraints | SCIP |
-| [CasADi](../casadi/) | Smooth nonlinear models and other plugin-supported models | Ipopt for Opti NLP |
-| [coptpy](../coptpy/) | Native COPT linear, integer, convex quadratic and conic models | COPT |
+| [CasADi](../casadi/) | Symbolic differentiation, Opti and native problem dictionaries | Opti NLP defaults to Ipopt |
+| [coptpy](../coptpy/) | Native COPT LP/MIP, convex quadratic and conic models | COPT |
 
-## Choose a combination
+## AUTO versus explicit selection
 
-For production or transport LP/MILP, begin with Pyomo or PuLP and an open backend. For discrete scheduling and logic, examine CPMpy or OR-Tools CP-SAT. For convex quadratic or conic models, examine CVXPY; for smooth nonlinear models, examine CasADi. Method scope and the installed environment also matter.
+AUTO follows native library/model logic. CVXPY can try compatible installed solvers through `solver_path`; native solver libraries use their own engines. Results record the actual backend.
 
-Selecting CPMpy does not make a continuous decision an integer one. Selecting an LP backend does not relax integer domains. The platform reports incompatibility rather than silently solving a continuous relaxation.
+Explicit selection fixes the engine. Run information retains that selection and execution feedback. See [backends and licenses](../backends/) for dependencies and configuration.
 
-## AUTO and explicit backends
+## Reading solver status
 
-AUTO uses native selection for the library and model. Run settings list backend availability and reasons from the actual sandbox. An explicitly selected backend is not silently replaced after failure. Results record the actual engine.
+`optimal` establishes optimality for the submitted model. `feasible` provides a valid plan without the same optimality conclusion. `infeasible` means that model has no feasible solution. For `time_limit`, also inspect whether an incumbent exists.
 
-Generated code chooses a library's API, and the platform recognizes the returned native model. OR-Tools MPSolver, MathOpt, CP-SAT and Routing are not four additional library settings.
+Nonconvex NLP retains native local statuses. Routing records feasible or optimal according to its native result. The result view keeps status and actual decisions together.
 
-## How code reaches the platform
+## Returning code to the platform
 
-Usually, code defines `build_model(data)` and returns a native model. The platform solves it; generated code does not call solve or print the solution. Routing, network flows and some CasADi APIs also need managers, source/sink nodes or numerical arguments. See the individual pages and [native interface notes](https://github.com/Fangziyang0910/LLM4OM/blob/main/docs/references/modeling-libraries.md).
-
-A registered backend, a loadable plugin and a usable commercial license are different conditions. See [Backends and licenses](../backends/).
+Usually define `build_model(data)` and return a native model. Code builds without calling solve, printing results, reading files or accessing the network. The platform supplies complete attachment text and manages execution, limits, solving and persistence. Library pages show special returns for Routing managers, flow terminals and CasADi numerical arguments.

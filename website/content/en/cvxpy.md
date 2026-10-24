@@ -1,27 +1,57 @@
-CVXPY constructs optimization problems through expressions and mathematical rules. It supports convex quadratic and conic formulations; the platform also recognizes DGP and DQCP modes.
+CVXPY builds convex and related models with structured mathematical expressions. Native atoms for squared losses, norms, linear maps and cones suit fitting, allocation, portfolio weights and regularized optimization.
 
-## Modeling rules
+## A complete convex quadratic example
 
-Use DCP-compatible expressions for ordinary convex models. DGP needs its positive-domain and geometric structure, while DQCP needs the corresponding quasiconvex rules. The platform detects the mode from the returned `Problem` rather than bypassing these rules.
+Choose continuous `(x,y)` near target `(1,2)`, with nonnegative quantities and a total resource limit of 2:
 
-Common expressions include `sum_squares`, `norm`, `quad_form` and matrix multiplication `@`. Do not use Python `if`, `max` or control flow that depends on symbolic variable values.
+$$\min_{x,y\ge0}(x-1)^2+(y-2)^2\quad\text{s.t.}\quad x+y\le2.$$
+
+The optimum is `(0.5,1.5)`, objective 0.5.
+
+```python
+import cvxpy as cp
+
+def build_model(data):
+    x = cp.Variable(2, nonneg=True, name="allocation")
+    objective = cp.Minimize(cp.sum_squares(x - [1.0, 2.0]))
+    return cp.Problem(objective, [cp.sum(x) <= 2])
+```
+
+Select CVXPY. OSQP supports this continuous convex quadratic objective with linear constraints. Return `Problem`; the platform solves and reads its variable array.
+
+## Explore resource changes
+
+```demo
+convex
+```
+
+Increase the limit from 2 to 3 to move the solution toward the target. A line connects target and solution; the ellipse is an equal-objective contour around the target. Variable components map to x and y in array order.
+
+## From expressions to a backend
+
+```mermaid
+flowchart LR
+  Expr["Variable attributes and CVXPY atoms"] --> Rules["Identify DCP / DGP / DQCP"]
+  Rules --> Canon["Canonicalize for backend"]
+  Canon --> Backend["Compatible QP / conic / integer engine"]
+  Backend --> Result["Recover original values and objective"]
+```
+
+DCP describes disciplined convex expressions; DGP uses positive variables and geometric-programming structure; DQCP handles recognized quasiconvex structure. The platform detects the mode, using `gp=True` for DGP and `qcp=True` for DQCP.
 
 ## Select a backend
 
-AUTO follows CVXPY's native solver_path through installed compatible engines and records the one actually used. Explicit backend selection is not replaced after failure.
-
-| Example backend | What to check |
+| Model | Typical backend direction |
 |---|---|
-| OSQP | Continuous convex quadratic objectives and linear constraints; no other cones or integer domains |
-| Clarabel, SCS | Their respective continuous conic capabilities |
-| MOSEK and others | Problem capabilities, installation and license requirements |
+| Continuous convex quadratic objective, linear constraints | OSQP |
+| Supported continuous cones | Clarabel, SCS and others |
+| Integer or Boolean decisions | A mixed-integer backend supporting the model structure |
+| Native MOSEK capabilities | MOSEK with configured license |
 
-Integer and Boolean decisions need a compatible mixed-integer backend. Choosing CVXPY does not make a continuous solver valid for them.
+AUTO uses a compatible installed `solver_path` and records the actual engine. Explicit selection fixes the computation path. See [backends](../backends/) for installation and licenses.
 
-## Code and results
+## Expressions and further use
 
-`build_model(data)` returns `cvxpy.Problem` for platform solving. Results retain native status and numerical-accuracy meanings. The current platform does not provide IIS/MUS explanations for CVXPY.
+Use `@` for matrix multiplication, `cp.sum`, `cp.norm` and `cp.quad_form` for the corresponding expressions. Nonnegative, positive and integer variable attributes help structure recognition. Map business switches and selections to the appropriate domains.
 
-## Official references
-
-See [CVXPY solver features](https://www.cvxpy.org/tutorial/solvers/), [DGP](https://www.cvxpy.org/tutorial/dgp/) and [DQCP](https://www.cvxpy.org/tutorial/dqcp/). Actual availability is established by the sandbox backend list and a real solve.
+After reviewing complete values, use [plan conversation](../plan-chat/) for derived totals or revised budgets. See official documentation for [solvers](https://www.cvxpy.org/tutorial/solvers/), [DGP](https://www.cvxpy.org/tutorial/dgp/) and [DQCP](https://www.cvxpy.org/tutorial/dqcp/).

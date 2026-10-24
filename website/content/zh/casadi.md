@@ -1,25 +1,57 @@
-CasADi 用符号表达式与原生插件建立并求解优化问题。常见路径是 Opti 与 Ipopt，用于光滑连续非线性模型。
+CasADi 用符号表达和自动微分构建优化问题。Opti 提供便于组织变量、目标和约束的接口，常用 Ipopt 处理光滑连续非线性模型。
 
-## 支持的接口
+## 一个完整的非线性模型
 
-平台支持 Opti NLP、Opti Conic，以及 `nlpsol`、`qpsol`、`conic` 原生问题字典。Opti 返回模型；低层接口还需返回问题结构、数值参数、可选插件名和配置。结果变量按原生顺序解释。
+下面的单变量函数有两个谷底，可用于观察初始点与局部求解结果的关系：
 
-## 在平台中选择
+$$\min_{-2\le x\le2}\;(x^2-1)^2+0.2x.$$
 
-选择 CasADi，常用默认是 Ipopt。使用平滑表达式，按题面设置有意义的边界与初值。整数域需要 Bonmin 等兼容插件，Ipopt 不能代替整数求解。
+```python
+import casadi as ca
 
-平台从 CasADi 原生插件读取并检查加载情况。插件可以加载，不表示商业许可已验证；具体参数仍遵循插件原生 API。
+def build_model(data):
+    model = ca.Opti()
+    x = model.variable()
+    model.minimize((x*x - 1)**2 + 0.2*x)
+    model.subject_to(model.bounded(-2, x, 2))
+    model.set_initial(x, -1.8)
+    return model
+```
 
-## 最大化与状态
+选择 CasADi 和 Ipopt。模型中的初值、边界和光滑表达会进入求解；结果变量使用 CasADi 原生命名，公式中应说明各分量含义。
 
-CasADi 的最小化接口处理最大化时，需要最小化负目标，并在返回字典中带 `objective_sign: -1`，让平台恢复原目标值。例如：
+## 播放一个局部搜索示例
+
+```demo
+local
+```
+
+这个交互用固定步长梯度下降展示函数上的迭代。选择不同起点，查看路径、迭代次数与目标值。正式 CasADi 运行使用你在平台选择的原生插件。
+
+## 符号问题怎样求解
+
+```mermaid
+flowchart LR
+  Expr["光滑符号表达"] --> Derivatives["自动微分与稀疏结构"]
+  Derivatives --> Plugin["原生 NLP / Conic 插件"]
+  Plugin --> Iterate["从初值开始迭代"]
+  Iterate --> Result["变量、目标与原生状态"]
+```
+
+Opti NLP 常用 Ipopt；Opti Conic 可指定兼容插件，如 qrqp。整数变量使用 `set_domain` 并配合 Bonmin 等兼容插件。可用插件来自执行环境的原生注册表。
+
+## 最大化与低层接口
+
+最大化 f 时用最小化 `-f`，并返回目标符号，使结果恢复为业务目标：
 
 ```python
 return {"model": model, "objective_sign": -1}
 ```
 
-非凸问题中 Ipopt 通常给出局部结果。`locally_optimal` 不是全局最优证书，局部不可行也不证明整个问题不可行。结果页保留这些含义。
+低层 `nlpsol/qpsol/conic` 通过字典提供 `problem`、`arguments`，以及可选 `solver` 和 `options`。原生向量结果按 `x[i]` 顺序保存，适合明确控制数值参数、稀疏结构与插件配置的工作流。
 
-## 官方资料
+## 使用结果与继续计算
 
-参阅 [CasADi 官方文档](https://web.casadi.org/docs/)和[插件 API](https://web.casadi.org/python-api/)。如果需要全局结论，应选择适合模型的全局求解方式，并核对该插件在部署中的实际能力。
+非凸 NLP 结果保留局部求解状态。可以把不同初值、边界或业务条件作为独立场景运行，比较实际变量与目标，并在过程页查看每次配置。
+
+CasADi 适合光滑非线性连续模型、控制与轨迹类表达。凸二次与锥模型也可了解 [CVXPY](../cvxpy/)，离散组合结构可查看 [OR-Tools](../ortools/)。更多接口见 [CasADi 文档](https://web.casadi.org/docs/)和[插件 API](https://web.casadi.org/python-api/)。

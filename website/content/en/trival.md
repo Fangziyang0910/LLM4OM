@@ -1,25 +1,61 @@
-TriVAL separates validation into semantics, mathematical formulation and code. Each stage constructs, validates and revises its output. Code issues can send the process back to formulation.
+TriVAL separates three questions: was the problem understood correctly, does the formulation express that understanding, and does the code implement the formulation? Each level has construction, validation and revision. A code-stage finding can send the workflow back to the formulation.
 
-## Workflow
+## What each level checks
 
-```text
-Semantic facts and validation → formulation and validation → code, execution and validation
-                                        ↑                              ↓
-                                        └──── revise when needed ──────┘
+| Level | Artifacts | Example failure | Revision |
+|---|---|---|---|
+| Semantics | Facts, ambiguities and resolutions | Interpreting coverage per shift as a daily total | Extract facts again or revise ambiguity resolutions |
+| Formulation | Parameters, indices, variables, objective and constraints | Missing per-shift coverage or reversing a minimum | Revise locally or rebuild the formulation |
+| Code | Native model code and execution evidence | Wrong indices, domains or implementation | Repair code, or return to the formulation if that is the cause |
+
+This distinction puts repair where the error originated. Code that faithfully implements a wrong formulation will not improve through syntax fixes alone.
+
+## Workflow and worked example
+
+```mermaid
+flowchart TB
+  Facts["Extract facts and resolve ambiguities"] --> Sem{"Semantic validation"}
+  Sem -->|Failed and retry allowed| Facts
+  Sem -->|Passed or stage limit| Form["Four expert roles build formulation"]
+  Form --> FCheck{"Formulation validation"}
+  FCheck -->|Partial or full revision| Form
+  FCheck -->|Passed or stage limit| Code["Generate and execute code"]
+  Code -->|Execution failed and retry allowed| Code
+  Code -->|Executable| CCheck{"Code validation and attribution"}
+  CCheck -->|Code error and retry allowed| Code
+  CCheck -->|Formulation error| Form
+  CCheck -->|Passed or limit reached| Finish["Keep results and report unpassed stages"]
 ```
 
-The stages distinguish understanding the problem, expressing it mathematically and implementing it in code. Intermediate artifacts and feedback appear in the process view.
+```walkthrough
+[
+  {"title":"Semantic facts","nodes":["Facts","Sem"],"body":"Separate profits, processing times, resource limits and whole-unit requirements. An additional requirement of at least 3 units of B must remain a demand fact.","artifact":"Facts: whole products; 8 hours of each resource; B at least 3.\nCheck interpretation: unit net profit and processing hours per unit."},
+  {"title":"Formulation","nodes":["Form","FCheck"],"body":"Parameter/index, variable, objective and constraint experts construct in parallel. A selector assembles the formulation, which is checked against the facts.","artifact":"max 3A + 2B\n2A + B ≤ 8; A + 2B ≤ 8; B ≥ 3\nA, B are nonnegative integers"},
+  {"title":"Execute and attribute","nodes":["Code","CCheck"],"body":"If code omits B ≥ 3 but the formulation includes it, repair code. If the formulation also omits it, return to that level.","artifact":"Implementation omission → repair build_model(data)\nFormulation omission → revise formulation, then regenerate code\nThe routes address different causes."},
+  {"title":"Report separately","nodes":["Finish"],"body":"The correct integer optimum is 12. The final record shows numerical results and each stage's validation status.","artifact":"Solver evidence: A = 2, B = 3, objective 12\nRecord semantic / formulation / code validation separately\nStage feedback records the final validation decision."}
+]
+```
 
-## How to use it
+## How validation failures are routed
 
-Select TriVAL with a library and backend suitable for the problem. It supports workflows where you want to inspect stage-by-stage judgments as well as the final numbers.
+Semantic checks distinguish faithful facts, relevant ambiguities and consistent resolutions. Faulty facts or ambiguity identification cause extraction again; inconsistent resolutions return to ambiguity resolution. Formulation checks can request partial revision or a new construction by the experts.
 
-With DeepSeek, disable thinking in the run preset because structured output requires forced tool selection. See [LLM presets](../model-presets/).
+Code is executed before code validation. Attribution to the formulation sends the outer workflow back to that level. An upstream stage can proceed with its latest artifacts after reaching its limit. The platform reports each unpassed stage at exit.
 
-## What to inspect
+## Reading a run effectively
 
-Read the semantic facts, formulation, code and validation feedback. Reaching a validation limit does not mean a stage passed. The platform reports unresolved stages and keeps actual artifacts and solver results. An optimal solver status does not override method-validation failure.
+Choose a rule that is easy to misinterpret and follow it through facts, formulation and code. For “each employee works at most five days,” check for an employee index with a separate constraint for each employee. Then inspect whether later artifacts actually address the validator's finding.
 
-## Source and adaptation
+The run retains solver values and stage validation feedback. Comparisons can inspect status, failed stages, revisions and actual call usage.
 
-The core graph, nodes, prompts and loops come from the [pinned SCUT-EIPI/TriVAL source](https://github.com/SCUT-EIPI/TriVAL/tree/380a529). The platform supplies LLMs and sandboxes, adapting code to return native models through `build_model(data)`. Original documentation linked below records the detailed adaptations.
+## Requirements and budget
+
+Select TriVAL and a library/backend supporting the intended mathematics. Each stage allows at most five validations; code execution allows twenty attempts. Total LLM use depends on nodes and return paths.
+
+For DeepSeek, forced tool choice requires thinking mode to be disabled in the preset: `{"thinking":{"type":"disabled"}}`. See [LLM presets](../model-presets/).
+
+## Related methods and implementation
+
+[Feedback Repair](../feedback-repair/) reviews the model after solving; TriVAL moves checks into separate levels. [SAC-Opt](../sac-opt/) focuses on the consistency of backtranslated constraint code.
+
+The platform ports the [pinned SCUT-EIPI/TriVAL implementation](https://github.com/SCUT-EIPI/TriVAL/tree/380a529), retaining its graph, nodes, prompts and loops. It supplies the LLM and sandbox, maps input and reports unresolved validation at exit.

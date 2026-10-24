@@ -28,7 +28,7 @@ const output = path.join(__dirname, "../artifacts/website/docs");
       else assert.equal(headings, headingCounts.get(article.id), `Translation section mismatch: ${article.id}`);
       if (locale === "en") assert.doesNotMatch(document.querySelector("main").textContent, /[\u3400-\u9fff]/, `Chinese in English article: ${article.id}`);
       assert.ok(document.querySelector(".doc-prose").textContent.length > 400, `Thin content: ${relative}`);
-      for (const node of document.querySelectorAll("a[href],link[href],script[src],img[src]")) {
+      for (const node of document.querySelectorAll("a[href],link[href],script[src],img[src],source[src],track[src]")) {
         const url = new URL(node.getAttribute("href") || node.getAttribute("src"), `https://docs.test/LLM4OM/${relative}`);
         if (url.origin !== "https://docs.test") continue;
         assert.ok(url.pathname.startsWith("/LLM4OM/"), `Escapes GitHub project path: ${url}`);

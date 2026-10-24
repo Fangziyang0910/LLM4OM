@@ -1,28 +1,55 @@
-AutoFormulation searches multiple candidate models. It builds a component tree, uses Monte Carlo Tree Search (MCTS) to explore complete models, and ranks them with pairwise comparisons.
+AutoFormulation searches a tree of modeling components. It checks, deduplicates and ranks candidates, explores complete models with Monte Carlo tree search (MCTS), then selects a solved candidate through pairwise ranking.
 
-## Workflow
+## What is being searched
 
-```text
-Parameters → decision variables → objective → equalities → inequalities
-   Sample, check execution, remove equivalents and rank at each level
-                            ↓
-              MCTS rollouts → complete-model comparisons → select a solved model
+Tree levels are parameters, decision variables, objective, equality constraints and inequality constraints. A root-to-leaf path is a complete model. Integer versus continuous production quantities, for example, are different variable choices affecting all later components.
+
+The search concerns interpretations of the problem. It is not simply choosing the production plan with the largest profit. Objectives from models obeying different rules cannot directly establish which interpretation is correct.
+
+## Construction, search and ranking
+
+```mermaid
+flowchart TB
+  Sample["Sample component candidates"] --> Check["Execution checks and equivalence filtering"]
+  Check --> Rank["Rank and retain components"]
+  Rank --> Tree["Construct component tree"]
+  Tree --> Select["UCT selects a complete path"]
+  Select --> Solve["Assemble and actually solve"]
+  Solve --> Baseline{"Enough solved baselines?"}
+  Baseline -->|First solved models| Warmup["Add baseline, reward 0.5"]
+  Baseline -->|Yes| Compare["Compare with baselines in both orders"]
+  Compare --> Back["Backpropagate win-rate reward"]
+  Warmup --> More{"More rollouts?"}
+  Back --> More
+  More -->|Yes| Select
+  More -->|No| Final["Globally rank and select solved model"]
 ```
 
-Candidate components run check scripts. Equivalence uses LLM grouping or symbolic scripts. Relative comparisons between complete models produce search rewards that propagate through the tree.
+```walkthrough
+[
+  {"title":"Build candidates","nodes":["Sample","Check","Rank"],"body":"Equivalent notation should be deduplicated, while invalid components need checking. Different wording alone should not create distinct models.","artifact":"Candidate 1: nonnegative integer A, B\nCandidate 2: nonnegative integer x[p], p∈{A,B}\nThese may differ only in notation."},
+  {"title":"Select a path","nodes":["Tree","Select","Solve"],"body":"UCT balances promising and underexplored paths. A complete path must be assembled and solved before becoming a solved candidate.","artifact":"Parameters → variables → objective → equalities → inequalities\nEach complete candidate has its own code and execution result."},
+  {"title":"Establish comparisons","nodes":["Baseline","Warmup","Compare","Back"],"body":"The first 3 solved models become baselines with reward 0.5. Later candidates are compared against baselines in both orders.","artifact":"Compare each candidate with baselines in both orders.\nReturn comparison win rates as search rewards."},
+  {"title":"Select final model","nodes":["More","Final"],"body":"Bradley–Terry ranking selects the final solved model. Rankings are model judgments; readers still inspect domains and rules.","artifact":"Output: selected formulation, code and actual solver result.\nEquivalent candidates can leave one complete model, with no meaningful competition."}
+]
+```
 
-Initial solved models form comparison baselines. Later models are compared in both directions against them, with win rates as rewards. UCT balances established high-scoring paths against less-explored paths, and Bradley–Terry ranking selects a solved model at the end.
+## Equivalence and reward
 
-## How to use it
+Parameters use a mode, variable candidates use repeated LLM grouping, and other expressions use symbolic SymPy/Z3 scripts for equivalence. Generated checking scripts run in the sandbox, not the host process.
 
-Select AutoFormulation for LP/MILP research workflows where candidate search is useful to inspect. State parameters, indices, domains and units explicitly so component assembly remains consistent.
+UCT uses exploration weight `w_exp=1` and node-reward weight `lambda_cte=0.5`. Repeated judgments in both comparison orders reduce dependence on a single reply or order. These judgments produce relative candidate preferences.
 
-Its default budget is substantially larger than single-generation methods and can involve many LLM responses and sandbox checks. Inspect current parameters and deployment limits before a full run. Parameters are changed in deployment code, rather than per run.
+## Why the budget is much larger
 
-## Inspect the search
+Defaults sample 8 completions per node, retain 3 candidates, use 5 ranking completions and run 16 rollouts. Initial tree construction can need about 540 completions; a later comparison can need about 30. Pruning reduces actual use.
 
-Review retained and pruned candidates, whether complete models were actually solved, and their rankings. Equivalent candidates may leave a single complete model, without meaningful inter-model comparison. Check the selected model against the problem; LLM ranking does not certify business correctness.
+ Its default run limits reach 20,000 LLM calls, 1,000 solves and 6 hours. Check deployment limits first. Parameters are changed in deployment presets, not through a per-run UI control.
 
-## Source and adaptation
+## When it is useful
 
-See the [pinned AutoFormulator source](https://github.com/jumpynitro/AutoFormulator/tree/52148018d04de23dc2d36d4281eb6244c2a42ffc) and [ICML 2025 paper](https://proceedings.mlr.press/v267/astorga25a.html). The platform preserves search, uses shared library components and sandboxed scripts, and documents explicit fixes such as the two-candidate comparison direction. Your preset is used rather than automatically reproducing the paper's model and evaluation setup.
+Use it for LP/MILP candidate-modeling and search research, especially when inspecting structural alternatives. Explicit units, indices and field meanings reduce unhelpful candidates. For one inspectable first model with a smaller call budget, start with [Direct](../direct/) or [Feedback Repair](../feedback-repair/).
+
+## Source and platform adaptation
+
+Based on the [pinned AutoFormulator implementation](https://github.com/jumpynitro/AutoFormulator/tree/52148018d04de23dc2d36d4281eb6244c2a42ffc) and [ICML 2025 paper](https://proceedings.mlr.press/v267/astorga25a.html). The platform retains construction, MCTS and ranking, supplies sandboxed native-library code, bounds unparseable-comparison retries and fixes the reversed two-candidate comparison direction. Detailed differences are recorded in the source documentation.

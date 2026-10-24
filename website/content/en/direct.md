@@ -1,23 +1,51 @@
-Direct generates the formulation and complete solver code in one LLM call. The platform then executes the code and solves the model. It is the default method in Optimization chat.
+Direct sends the problem, data description and modeling-library contract to the LLM in one request. The reply contains a formulation and complete code. The platform executes the code and calls a real solver. This short workflow is useful for a first attempt and as a baseline for other methods.
 
-## Workflow
+## What the method does
 
-```text
-Problem and attachments → formulation and code → format check → solve
+A solver cannot consume a business description directly. Direct translates the description into variables, an objective and constraints, then translates those expressions into code. Both translations happen in one reply. The formulation and code are followed by actual solver execution.
+
+Consider two products. A and B earn 3 and 2 per unit. They use 2 and 1 cutting hours, and 1 and 2 finishing hours. Each resource has 8 hours available. Products must be whole units.
+
+$$\max\;3A+2B\quad\text{s.t.}\quad2A+B\le8,\;A+2B\le8,\;A,B\in\mathbb Z_{\ge0}.$$
+
+The critical choices are the integer domain, resource coefficients, units and maximization direction.
+
+## Workflow and worked example
+
+```mermaid
+flowchart LR
+  Read["Problem and data access"] --> Generate["Generate formulation and code"]
+  Generate --> Format{"Complete reply?"}
+  Format -->|Yes| Solve["Build and solve in sandbox"]
+  Format -->|No| Fail["Report format failure"]
+  Solve --> Result["Save status, values and artifacts"]
 ```
 
-The prompt asks for explicit variable domains, indices, units, objective direction, data sources and constraints. Missing formulation or code produces a failure rather than sending empty code to the solver.
+```walkthrough
+[
+  {"title":"Read","nodes":["Read"],"body":"Separate decisions from inputs. Profits and processing times are parameters; quantities are decisions.","artifact":"Profit (3, 2); cutting (2, 1); finishing (1, 2); capacity (8, 8)\nQuantities must be nonnegative integers."},
+  {"title":"Generate","nodes":["Generate","Format"],"body":"One reply supplies the formulation and build_model(data). Code must read full attachments even when their preview is truncated.","artifact":"Variables: A, B are nonnegative integers\nObjective: max 3A + 2B\nConstraints: 2A + B ≤ 8; A + 2B ≤ 8"},
+  {"title":"Compute","nodes":["Solve"],"body":"Code returns a native model. The platform calls a compatible backend; the LLM does not invent numerical answers.","artifact":"Integer optimum: A = 3, B = 2, objective 13\nCutting: 8 / 8; finishing: 7 / 8"},
+  {"title":"Check","nodes":["Result"],"body":"Results retain the model, code and computed plan together for export, discussion and revision.","artifact":"Result: A = 3, B = 2, objective 13\nNext: export CSV or revise cutting capacity to 10 hours."}
+]
+```
 
-## How to use it
+## How to assess a result
 
-Choose Direct in Run settings or use the default Optimization chat configuration. Select a library and backend that can express and solve the problem. Its short call sequence makes it a useful starting point for inspecting a formulation.
+Check problem to formulation, formulation to code, then the values. Here, `2×3+2=8`, `3+2×2=7` and `3×3+2×2=13`. The formulation, code and values remain available in one run.
 
-Attachment previews may omit rows. Generated code should read the complete attachment through `build_model(data)`. Consider [BIND](../bind/) for structured-data binding on longer inputs.
+Check that “at least” becomes `≥` and “at most” becomes `≤`. Check whether a rule applies per day, per product or across the whole plan. A weekly staffing total can be solved successfully even when the requirement was daily coverage.
 
-## What to inspect
+```demo
+production
+```
 
-Check domains, objective coefficients, capacities and actual decisions. Direct has no post-solve semantic review loop; choose [Feedback Repair](../feedback-repair/) for that stage. Valid infeasible or unbounded statuses are solver results, rather than evidence that execution never occurred.
+## Calls, stopping and when to use it
 
-## Implementation source
+The modeling stage uses one LLM call. Direct has no internal repair loop for reply format, execution or semantic errors. Incomplete replies fail before execution; execution failures retain feedback. Later platform explanations can make additional calls.
 
-Direct is maintained by LLM4OM. It shares generation prompts and a generation node with Feedback Repair, which adds solving, review and bounded repair.
+Start with Direct for a clear problem and a quick first model. Use [Feedback Repair](../feedback-repair/) for review after solving, [TriVAL](../trival/) for validation at several levels, or [BIND](../bind/) when binding large structured attachments is the central issue.
+
+## Platform implementation and comparison
+
+This project maintains Direct and its shared Feedback Repair generator. It is not restricted to linear problems, although the library and backend must support the expressions used. Keep the problem, attachments, LLM preset and solver fixed when comparing workflows.

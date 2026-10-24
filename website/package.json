@@ -1,0 +1,11 @@
+{
+  "name": "llm4om-docs-build",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node render-diagrams.mjs && node build-docs.mjs"
+  },
+  "devDependencies": {
+    "mermaid": "12.2.0"
+  }
+}

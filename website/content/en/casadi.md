@@ -1,25 +1,57 @@
-CasADi uses symbolic expressions and native plugins for optimization. A common path is Opti with Ipopt for smooth continuous nonlinear models.
+CasADi builds optimization problems with symbolic expressions and automatic differentiation. Opti organizes variables, objectives and constraints; Ipopt is a common path for smooth continuous nonlinear models.
 
-## Supported interfaces
+## A complete nonlinear model
 
-The platform supports Opti NLP, Opti Conic and native problem dictionaries for `nlpsol`, `qpsol` and `conic`. Opti returns a model; low-level APIs also need problem structure, numerical arguments, optional plugin and options. Variables follow native ordering.
+This single-variable objective has two wells, allowing exploration of starting points and local results:
 
-## Select it in the platform
+$$\min_{-2\le x\le2}\;(x^2-1)^2+0.2x.$$
 
-Choose CasADi, commonly with the Ipopt default. Use smooth expressions and meaningful bounds and initial guesses from the problem. Integer domains require a compatible plugin such as Bonmin; Ipopt is not an integer solver.
+```python
+import casadi as ca
 
-The platform discovers plugins and checks loading through native CasADi facilities. A loadable plugin does not validate a commercial license. Plugin-specific parameters still follow the native API.
+def build_model(data):
+    model = ca.Opti()
+    x = model.variable()
+    model.minimize((x*x - 1)**2 + 0.2*x)
+    model.subject_to(model.bounded(-2, x, 2))
+    model.set_initial(x, -1.8)
+    return model
+```
 
-## Maximization and statuses
+Select CasADi and Ipopt. Initial values, bounds and smooth expressions enter the solve. Results use native CasADi variable names; describe component meanings in the formulation.
 
-For maximization through CasADi's minimization interface, minimize the negative objective and return `objective_sign: -1` so the platform restores the original value:
+## Play a local-search illustration
+
+```demo
+local
+```
+
+This interaction uses fixed-step gradient descent to display iterations on the function. Choose a starting point and inspect the path, iteration count and objective. Platform CasADi runs use the selected native plugin.
+
+## Solving symbolic problems
+
+```mermaid
+flowchart LR
+  Expr["Smooth symbolic expressions"] --> Derivatives["Automatic derivatives and sparsity"]
+  Derivatives --> Plugin["Native NLP / Conic plugin"]
+  Plugin --> Iterate["Iterate from initial values"]
+  Iterate --> Result["Variables, objective and native status"]
+```
+
+Opti NLP commonly uses Ipopt. Opti Conic can specify a compatible plugin such as qrqp. Integer domains use `set_domain` with a compatible plugin such as Bonmin. Available plugins come from the execution environment's native registry.
+
+## Maximization and low-level interfaces
+
+For maximizing f, minimize `-f` and return the objective sign so reported values use the original objective:
 
 ```python
 return {"model": model, "objective_sign": -1}
 ```
 
-For nonconvex problems, Ipopt generally provides local conclusions. `locally_optimal` is not a global certificate, and local infeasibility does not prove the entire problem infeasible. The result page preserves these meanings.
+Low-level `nlpsol/qpsol/conic` returns provide `problem`, `arguments`, optional `solver` and `options`. Native decision vectors are recorded as `x[i]`, supporting explicit numerical arguments, sparse structure and plugin configuration.
 
-## Official references
+## Using results and continuing
 
-See the [CasADi documentation](https://web.casadi.org/docs/) and [plugin API](https://web.casadi.org/python-api/). If a global conclusion is required, select a suitable global solving approach and check the plugin's actual capabilities in the deployment.
+Nonconvex NLP results retain local status. Run different starts, bounds or requirements as separate scenarios and compare actual values and objectives with saved configurations.
+
+CasADi suits smooth nonlinear continuous, control and trajectory models. See [CVXPY](../cvxpy/) for convex quadratic/conic structure and [OR-Tools](../ortools/) for combinatorial tasks. Refer to the [CasADi documentation](https://web.casadi.org/docs/) and [plugin API](https://web.casadi.org/python-api/).

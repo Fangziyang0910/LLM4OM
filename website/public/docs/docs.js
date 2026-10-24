@@ -1,3 +1,5 @@
+import "./learning.mjs";
+
 const locale = document.body.dataset.locale;
 const english = locale === "en";
 const say = (zh, en) => english ? en : zh;

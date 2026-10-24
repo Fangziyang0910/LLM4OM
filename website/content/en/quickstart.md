@@ -1,33 +1,49 @@
-This example uses two products and two resources to walk through describing a problem, solving it, checking the plan and changing a requirement.
+Complete a production task from description through modeling, solving, export and revision. The example includes a statement, downloadable data and localized workbench recordings.
 
-## 1. Prepare the platform
+## 1. Prepare a service and preset
 
-Open your team's platform address, or [install and launch](../installation/) a local service. If the server has no default LLM, open LLM presets at the lower left and add a provider, model ID and key. See [Configure LLM presets](../model-presets/).
+Open your team service or [install one](../installation/). Choose an available LLM preset; see [preset setup](../model-presets/) to add one.
 
-## 2. Enter a complete problem
+Send the problem in Optimization chat or use manual modeling. This example uses Direct, Pyomo and AUTO to match the recording.
 
-Open Optimization chat and send this problem. You can also paste it into the manual workbench.
+## 2. Enter the problem
 
 ```text
-A factory makes products A and B in nonnegative integer quantities.
-Each A earns CNY 3 and uses 2 cutting units and 1 processing unit.
-Each B earns CNY 2 and uses 1 cutting unit and 2 processing units.
-There are 8 units of each resource.
-How much of each product should we make to maximize total profit?
+Produce nonnegative integer quantities of products A and B.
+A earns CNY 3 and uses 2 cutting hours and 1 finishing hour per unit.
+B earns CNY 2 and uses 1 cutting hour and 2 finishing hours per unit.
+There are 8 hours of each resource.
+Calculate the production plan with maximum total profit.
 ```
 
-In the manual workbench, select Direct, Pyomo and the AUTO backend, then click Start modeling. These are also the defaults in Optimization chat. Computation uses your configured LLM and an actual solver.
+Start modeling and follow formulation, code and solving. For a data-file version, download [JSON](../../../assets/examples/production.json) or [CSV](../../../assets/examples/production.csv), describe fields and capacities, then run.
 
-## 3. Check the plan
+## 3. Review and export
 
-The integer model has an optimum of **3 units of A, 2 units of B and CNY 13 profit**. It uses 8 cutting units and 7 processing units.
+The result is **A=3, B=2, total profit CNY 13**. Read quantities in Solution and expressions in Formulation/Code. “Export Excel” downloads solution and problem/conditions sheets.
 
-Check the integer domains, both resource constraints and the profit coefficients. Open Solution to inspect quantities and Formulation to inspect the model. Export Excel downloads the full result.
+![Actual production result](../../../assets/screens/en/plan.png)
 
-![Production plan in the dark English workbench](../../../assets/screens/en/plan.png)
+Run information retains method, LLM, actual backend, duration and usage. Open the process for individual stages.
 
-## 4. Change a requirement
+## 4. Revise and compare
 
-Send “Produce at least 3 units of B, keeping all other conditions unchanged. Recalculate.” You can also click Adjust conditions on the result page. The revised optimum is **CNY 12**. The original plan remains available for comparison.
+Request “B at least 3, with other conditions unchanged.” The new result is **A=2, B=3, profit 12**. Comparison shows changes from the original.
 
-Use [business scenario comparison](../scenarios/) to test several requirements together, or [discuss the plan](../plan-chat/) to understand a result.
+Use Business scenarios to calculate B≥3 and B≥4 together; profits are 12 and 8. See [scenario comparison](../scenarios/).
+
+## 5. Follow the recording
+
+```video
+workbench
+```
+
+Sequence: enter production requirements → inspect profit 13 → enter two scenarios → compare 13, 12 and 8 → open the data editor → edit and save unit profit. Pause, enable captions or use fullscreen.
+
+## 6. Try it in the docs
+
+Change capacity, minimum demand or quantity domain, inspect the plan and download CSV. For your own task, use the [requirements assistant](../requirements/) or [Optimization chat](../chat-agent/).
+
+```demo
+production
+```

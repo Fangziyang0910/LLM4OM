@@ -1,8 +1,15 @@
-If your team already provides a platform address, open it in your browser. To run your own service, Docker Compose provides the shortest setup.
+If you already have a team service address, open it in a browser. To run your own service, Docker Compose installs the workbench, server and solver environment.
 
-## Use Docker Compose
+## Prepare an environment
 
-Install Docker with Compose v2.24 or later. The server does not need a separate Python, uv or Node.js installation.
+| Setup | Requirements | Use |
+|---|---|---|
+| Docker Compose | Docker, Compose v2.24+, model-service configuration | Personal or team service |
+| Python service | Python 3.11–3.13, uv, Docker, model-service configuration | Development or existing Python setup |
+
+Data lives in a workspace or Compose volume. Choose a machine with persistent storage and access to the model service.
+
+## Start with Docker Compose
 
 ```bash
 git clone https://github.com/Fangziyang0910/LLM4OM.git
@@ -11,17 +18,24 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-Edit `.env` with the actual provider, endpoint, model ID and API key. See [Configure LLM presets](../model-presets/) for the fields. Then start the service:
+Edit `.env` with provider, endpoint, model ID and key; see [LLM presets](../model-presets/). Then run:
 
 ```bash
 docker compose up -d --build
+docker compose ps
 ```
 
-Open `http://localhost:8767`. The first build downloads dependencies and creates the solver sandbox image. Wait for the service to finish starting before opening the workbench.
+After building, open `http://localhost:8767`. Initial setup downloads dependencies and builds the Worker. Inspect startup with `docker compose logs -f app`.
 
-## Use a local Python environment
+## Confirm setup in the workbench
 
-Install Python 3.11–3.13, [uv](https://docs.astral.sh/uv/) and Docker. In your cloned repository, run:
+Check the default preset and backend options. Complete the production [quickstart](../quickstart/); the run should retain quantities, formulation, code and stages.
+
+Then add attachments or try Optimization chat. Other devices can use the server address. See [team deployment](../team-deployment/) for shared access and HTTPS.
+
+## Start from Python
+
+In the cloned repository:
 
 ```bash
 uv sync --all-extras
@@ -29,10 +43,20 @@ uv run llm4om build-worker
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
-The repository includes the built workbench, so regular use does not require Node.js. This Python service still solves in Docker sandboxes. The `--sandbox local` option executes generated code on the host and is intended for development.
+This uses bundled workbench build files and Docker solver sandboxes. `runs/web` retains history and presets; use `--workspace` for another location.
 
-## After launch
+## Maintenance commands
 
-Check that an LLM preset is available, then follow [Your first plan](../quickstart/) to test the complete workflow. Devices on the same network can use the server's IP address and port. See [Team deployment](../team-deployment/) for shared use, access controls and HTTPS.
+| Action | Command |
+|---|---|
+| Status | `docker compose ps` |
+| Logs | `docker compose logs -f app` |
+| Update | `git pull`, then `docker compose up -d --build` |
+| Apply environment changes | `docker compose up -d app` |
+| Stop, retaining data volume | `docker compose down` |
 
-GitHub Pages hosts the product website and this documentation. The full platform's LLM calls, Python service and solvers run separately.
+See [presets](../model-presets/) for connections, [backends](../backends/) for solver setup and [backups](../configuration/) for persistent data.
+
+## Website and platform addresses
+
+GitHub Pages serves the website and Docs. The complete platform runs Python and solver services on the configured machine. Team members calculate through that deployed service address.

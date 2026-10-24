@@ -1,8 +1,8 @@
-团队部署把工作台、模型服务配置和运行记录集中在一台服务器上，成员通过浏览器使用。推荐先完成[单机启动](../installation/)，再配置共享访问。
+团队部署将模型配置、运行记录和工作台集中在服务器上，成员通过浏览器访问。本文按启动、共享访问、HTTPS和维护的顺序完成部署。
 
-## 使用 Docker Compose
+## 启动服务
 
-服务器需要 Docker 和 Compose v2.24 或更新版本。克隆仓库、准备 `.env`，填写模型服务信息后启动：
+服务器准备Docker和Compose v2.24或更新版本，按[安装指南](../installation/)克隆仓库并填写 `.env`，然后执行：
 
 ```bash
 docker compose up -d --build
@@ -10,13 +10,31 @@ docker compose ps
 docker compose logs -f app
 ```
 
-工作台与 LangGraph 服务运行在 app 容器中，每次求解启动独立 Worker 沙箱。数据卷 `llm4om-data` 保存模型预设与全部运行记录。
+默认端口8767。局域网成员可使用 `http://服务器IP:8767`，端口映射通过 `LLM4OM_PORT` 配置。
 
-## 配置访问与 HTTPS
+## 服务组成
 
-工作台没有内置登录或用户级权限；能访问服务的人能使用共享额度并管理共享记录。限制团队 IP，或使用带登录的反向代理。
+```mermaid
+flowchart TB
+  Browser["团队浏览器"] --> Proxy["HTTPS代理与访问控制"]
+  Proxy --> App["app：工作台与LangGraph服务"]
+  App --> Model["配置的模型服务"]
+  App --> Volume["持久化工作区：预设与运行"]
+  App --> Docker["宿主机Docker"]
+  Docker --> Worker["每次求解的Worker沙箱"]
+```
 
-有域名时，可使用 Compose 自带的 Caddy 服务：
+app通过宿主机Docker socket创建Worker。Worker采用无网络、只读根文件系统、非root和运行限额，完成后删除。数据卷 `llm4om-data` 保存预设、历史和运行记录。
+
+## 共享访问配置
+
+工作台采用共享工作区：成员可以使用预设、查看运行、修改备注与管理记录。用团队IP范围或带登录的反向代理配置服务入口，访问控制在该入口完成。
+
+Docker socket使app具备创建宿主机容器的权限，部署机器按这一权限配置。服务默认预设、每日额度与并发见[配置指南](../configuration/)。
+
+## 配置域名与HTTPS
+
+将域名解析到服务器，开放80与443端口。在 `.env` 设置实际域名：
 
 ```dotenv
 LLM4OM_DOMAIN=llm4om.example.edu
@@ -24,23 +42,29 @@ LLM4OM_PORT=127.0.0.1:8767
 LLM4OM_TRUST_PROXY=1
 ```
 
-将域名解析到服务器并开放 80、443 端口，然后运行：
+然后运行：
 
 ```bash
 docker compose --profile https up -d --build
+docker compose logs -f https
 ```
 
-示例域名需要换成实际域名。没有域名时可以在受控网络中使用 HTTP。
+Caddy申请并保存证书，将页面和实时运行流转发到app。`LLM4OM_TRUST_PROXY=1`使运行额度按转发的客户端地址计数。
 
-## 理解求解隔离
+## 调整并发和资源
 
-生成代码在无网络、只读、非 root 的沙箱内执行，完成后删除沙箱。app 需要挂载宿主机 Docker socket；这赋予其很高的宿主机权限，应部署在适合该权限边界的机器上。`--sandbox local` 不提供这种代码隔离，只用于开发。
+在 `compose.override.yaml` 配置活动运行数，例如：
 
-## 更新与保留数据
-
-```bash
-git pull
-docker compose up -d --build
+```yaml
+services:
+  app:
+    command: ["llm4om", "serve", "--workspace", "/data", "--port", "8767", "--jobs", "8"]
 ```
 
-`docker compose down` 停止服务但保留数据卷。不要为了更新而删除数据卷。修改模型环境变量后，重新创建 app 使配置生效。并发、用量和备份见[配置指南](../configuration/)，商业后端见[许可证](../backends/)。
+沙箱总并发由 `.env` 的 `LLM4OM_SANDBOX_JOBS` 单独控制，涵盖求解和方法检查脚本。根据模型服务额度与机器资源选择数值。
+
+## 更新、迁移与备份
+
+更新执行 `git pull`，再运行 `docker compose up -d --build`。环境变量修改后执行 `docker compose up -d app`。停止服务使用 `docker compose down`，数据卷继续保留。
+
+从原Python服务迁移时，停止目标app，把旧工作区复制到 `/data/`，再启动。备份与恢复命令见[配置与备份](../configuration/)，商业许可挂载见[后端指南](../backends/)。

@@ -1,31 +1,54 @@
-Data and the problem statement together form the modeling input. Explain each field and its units, especially the relationships between costs, times, quantities and identifiers.
+Attach CSV, JSON or Excel so generated code can use complete data. Click a file name to inspect fields, edit cells or raw text, and save the attachment to the current problem.
 
-## Supported files
+## Prepare files and descriptions
 
-Upload CSV, TSV, JSON, text or Excel `.xlsx` workbooks. Each Excel worksheet becomes a separate CSV attachment. Ordinary attachments have a 2 MB per-file limit; converted worksheets are used as separate data files.
+CSV and JSON files support up to 2 MB each. Every Excel worksheet becomes a CSV. Common file-name characters are preserved. Describe file names, fields, units and index mappings in the problem.
 
-A production table could contain:
+For `production.json`, explain that usage rows identify resources and columns identify products, measured in hours per unit, with nonnegative integer production quantities.
 
-```csv
-Product,Profit (CNY),Cutting units,Processing units
-A,3,2,1
-B,2,1,2
+Download the ready-to-use [JSON example](../../../assets/examples/production.json) and [CSV example](../../../assets/examples/production.csv).
+
+## What to inspect in the editor
+
+| Data | Example action |
+|---|---|
+| Headers and units | Change “Price” to “Unit profit (CNY)” |
+| Identifiers | Preserve store IDs such as 001 as text |
+| Values | Edit costs, demands or available hours |
+| Matrix orientation | Match rows to warehouses and columns to stores |
+| Structure | Edit JSON as raw text; switch tables to raw view |
+
+Tables display 50 rows per page while retaining the complete data. Use raw view above 50 columns. Saving validates CSV quoting and JSON syntax so errors can be corrected in the editor.
+
+## Try saving and cancelling
+
+Edit capacities below. “Save and calculate” creates a revised plan; “Cancel edits” restores saved values. The example retains its original snapshot.
+
+```demo
+data
 ```
 
-State resource capacities and variable domains in the problem text. The table supplies parameters; the description explains how to use them.
+In the workbench, “Save data” applies attachment edits. Modeling uses the current saved inputs; existing runs retain their original data for comparison.
 
-## Inspect and edit
+## How data reaches the model
 
-Click an attachment name to open the editor. CSV and TSV support cell and column-name editing. JSON and text use the source editor. Tables show 50 rows per page while pagination and saving retain the entire dataset. Use source editing for more than 50 columns.
+```mermaid
+flowchart LR
+  Upload["Upload or import worksheets"] --> Edit["Inspect and edit"]
+  Edit --> Save["Save current attachment"]
+  Save --> Run["Run saves input snapshot"]
+  Run --> Parse["build_model parses complete data"]
+  Parse --> Model["Build and solve model"]
+```
 
-Values retain their original text, so identifier `001` does not silently become `1`. Fix incomplete CSV quotes or invalid JSON before saving. Save data applies edits; Cancel keeps the original attachment.
+`data` maps file names to text, parsed during execution. For large structured attachments see [BIND](../bind/): generation receives structure and execution reads full values.
 
-![Dark English data editor](../../../assets/screens/en/data.png)
+## Watch the actual workflow
 
-## How complete data reaches computation
+![English data editor](../../../assets/screens/en/data.png)
 
-Ordinary methods may see an attachment preview in their prompts. Generated code reads the full content through `build_model(data)`. [BIND](../bind/) passes JSON/CSV structure to the LLM and parses the complete data during execution, which is useful for long datasets.
+The recording ends by opening an attachment, editing unit profit and saving it. Watch the continuous workflow in [quickstart](../quickstart/) too.
 
-## After changing data
-
-Editing draft or chat attachments affects later computation. Saved plans retain their original inputs. Explicitly request a new model or start another run to use updated attachments, then check the files recorded with the new problem.
+```video
+workbench
+```

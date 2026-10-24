@@ -1,21 +1,56 @@
-CPMpy expresses discrete decisions through integer, Boolean and global constraints. It supports formulations for scheduling, assignment, logic and objective-free satisfaction problems.
+CPMpy expresses discrete decisions with finite-domain integers, Booleans and global constraints. Arrays fit employees, dates, machines and tasks; `AllDifferent`, `Element` and `Cumulative` express common rules directly.
 
-## Modeling scope
+## How global constraints simplify a model
 
-Variables are finite-domain integers or Booleans, not continuous variables. Fractional data can be scaled to integers when mathematical meaning is preserved; rounding is not a substitute for a continuous decision model.
+Three vehicles each serve one of three stores, with exactly one vehicle per store. Let `destination[i]` identify vehicle i's store. `AllDifferent(destination)` expresses distinct destinations; costs are indexed from each vehicle's cost row.
 
-Common global constraints include `AllDifferent`, Element, Table and Cumulative. Availability depends on native backend support or valid transformations.
+Each variable has domain 0 through 2, with each value identifying a store. CPMpy passes these finite-domain expressions to a native backend.
 
-## Select it in the platform
+## Complete assignment model
 
-Choose CPMpy. Its default is OR-Tools CP-SAT, with native ID `ortools`. The platform reads base backends and installed subsolvers from SolverLookup. Paths may include CP, SAT, SMT, MIP and MaxSAT, subject to actual deployment availability.
+```python
+import cpmpy as cp
 
-## Code and results
+def build_model(data):
+    cost = cp.cpm_array([[4, 8, 6], [7, 3, 9], [5, 6, 2]])
+    destination = cp.intvar(0, 2, shape=3, name="destination")
+    model = cp.Model(cp.AllDifferent(destination))
+    model.minimize(sum(cost[i, destination[i]] for i in range(3)))
+    return model
+```
 
-`build_model(data)` returns `cp.Model` or a native `SolverInterface`, without directly calling solve. A model may contain constraints without an objective. A valid assignment is then a satisfaction result and the objective can be empty.
+The default backend is OR-Tools CP-SAT. The optimum assigns vehicles 0, 1 and 2 to stores 0, 1 and 2, for `4+3+2=9`. Adding `destination[1] != 1` raises the optimum to 17.
 
-An infeasible model can provide MUS conflict constraints for explanation. Actual evidence is required; not every infeasible status automatically yields a business diagnosis.
+## Expressions, compilation and solving
 
-## Official references
+```mermaid
+flowchart LR
+  Rules["Integer domains, logic and global constraints"] --> Model["CPMpy Model"]
+  Model --> Native["Native backend transformation"]
+  Native --> Solver["CP / SAT / SMT / MIP paths"]
+  Solver --> Result["Assignments and status"]
+```
 
-See the [CPMpy solver documentation](https://cpmpy.readthedocs.io/en/latest/solvers.html). Check backend installation, domains and diagnosis separately. Registration as a known plugin does not establish that it can run in your environment.
+The platform accepts `cp.Model` and native SolverInterface. Backends come from `SolverLookup` and installed subsolvers. `ortools` is the default; run settings show the available alternatives.
+
+## Common rule patterns
+
+| Business rule | Expression pattern |
+|---|---|
+| Tasks use different machines | AllDifferent |
+| Selected index determines a cost | Variable array indexing / Element expressions |
+| A requires B | `a.implies(b)` |
+| Tasks share limited capacity | Cumulative |
+| Find any assignment satisfying rules | Model without an objective |
+
+Integer variables have finite bounds; Booleans represent selections. Consistent integer units keep quantities and logical relationships clear.
+
+## Conflict analysis and results
+
+The platform's CPMpy path supports MUS conflict evidence, connecting inconsistent constraints to requirements. Clear names and indices help in [infeasibility analysis](../conflicts/).
+
+Interpret `destination[0]` using the store-number mapping in the formulation. Export complete values, query a vehicle in plan conversation, or revise available destinations.
+
+## Selection and references
+
+Start here for finite domains, logic, exclusions and global constraints. See [Pyomo](../pyomo/) for continuous quantities and [OR-Tools](../ortools/) for Routing. The [official CPMpy solver guide](https://cpmpy.readthedocs.io/en/latest/solvers.html) describes native interfaces and backends.

@@ -1,0 +1,19 @@
+WEBVTT
+
+00:00:00.060 --> 00:00:02.863
+Enter a production problem and start modeling.
+
+00:00:02.863 --> 00:00:05.423
+Review the computed plan: A = 3, B = 2, total profit 13.
+
+00:00:05.423 --> 00:00:10.531
+Enter two scenarios: at least 3 units of B, and at least 4.
+
+00:00:10.531 --> 00:00:13.718
+Compare from one baseline: original profit 13; scenario profits 12 and 8.
+
+00:00:13.718 --> 00:00:15.600
+Open an attachment and inspect its fields and values.
+
+00:00:15.600 --> 00:00:19.226
+Edit A's unit profit and save the attachment to the draft.

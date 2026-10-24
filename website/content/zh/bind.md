@@ -1,25 +1,57 @@
-BIND 让大模型看到 JSON/CSV 的结构，由生成代码在执行时读取完整数据。它针对长附件中的数据抄写和预览截断问题。
+BIND 把“理解数据结构”和“读取完整数值”分开：大模型看到字段、类型和规模，生成代码在执行时读取完整 JSON/CSV。它针对附件预览截断、长表抄写和数据绑定错误。
 
-## 执行流程
+## 为什么只给结构也能建模
 
-```text
-附件结构 → 生成模型与代码 → 读取完整附件并求解
-                            ↓ 执行或格式错误
-                      带历史反馈重新生成
+许多优化模型的结构不依赖每一个具体数值。运输模型需要知道运费是仓库×门店矩阵，需求是按门店索引的数组；不必把矩阵中每个数字复制进提示，再让模型抄回代码。
+
+在题面中说明字段含义，例如 capacity 的单位、矩阵的行列对象以及需求的索引。
+
+## 数据怎样流动
+
+```mermaid
+flowchart LR
+  File["完整 JSON / CSV"] --> Schema["字段、类型、长度与行数"]
+  Schema --> LLM["生成模型与数据读取代码"]
+  File --> Data["执行时的完整 data"]
+  LLM --> Solve["读取 data 并实际求解"]
+  Data --> Solve
+  Solve -->|格式或执行错误且可重试| Feedback["反馈进入历史后重新生成"]
+  Feedback --> LLM
+  Solve -->|获得状态或次数用尽| Finish["保存真实结果"]
 ```
 
-提供给大模型的信息包括字段、类型、数组长度或 CSV 行数。嵌套、异构、非矩形 JSON 结构会如实描述；完整数据值留在求解环境中读取。
+```walkthrough
+[
+  {"title":"准备数据","nodes":["File"],"body":"上传结构化文件，同时在题面写清每个字段的单位和索引含义。","artifact":"production.json\nprofit: 按产品索引的单件收益\nusage: 资源×产品的小时/件矩阵\ncapacity: 每种资源可用小时"},
+  {"title":"提供结构","nodes":["Schema","LLM"],"body":"模型读取结构描述，不把完整数值表展开到生成提示。嵌套与非矩形结构应如实保留。","artifact":"profit: array[number], length 2\nusage: array[array[number]], 2 rows\ncapacity: array[number], length 2"},
+  {"title":"执行绑定","nodes":["Data","Solve"],"body":"代码通过 data 中的文件文本解析全部数据，并据此构建目标和约束。","artifact":"payload = json.loads(data['production.json'])\nprofit = payload['profit']\nusage = payload['usage']\ncapacity = payload['capacity']"},
+  {"title":"核对与修复","nodes":["Feedback","Finish"],"body":"格式或执行错误可反馈重试。真实不可行按有效求解状态保存。","artifact":"最多 3 次生成/执行尝试。\n检查行列含义和单位，不只检查文件是否成功解析。"}
+]
+```
 
-## 怎样准备输入
+## 一个可直接使用的数据样例
 
-在题面中写清字段含义、单位和规则。例如：“订单数组中的 quantity 是需求量，warehouse_costs 是仓库到门店的单位运费矩阵。”上传 JSON 或 CSV，选择 BIND 和兼容的建模库。
+```json
+{
+  "products": ["A", "B"],
+  "profit": [3, 2],
+  "usage": [[2, 1], [1, 2]],
+  "capacity": [8, 8]
+}
+```
 
-Excel 在页面转为 CSV 后使用。没有附件时，BIND 直接按题面建模；它没有增加 PDF 或图像解析入口。
+配套题面可写：“`usage[r][p]` 是生产一件产品 p 占用资源 r 的工时。`capacity[r]` 是可用工时。决定非负整数产量，最大化总收益，不得超过任何资源容量。”正确结果为 A=3、B=2、收益13。改变数值前，可先在[数据编辑示例](../attachments/)观察保存与结果快照的关系。
 
-## 怎样理解结果
+## 支持的输入与信息范围
 
-检查代码是否绑定正确字段、行列和单位。BIND 处理完整数据绑定，不替代业务模型核对。执行成功且得到求解状态即可结束；真实不可行是有效结果，不会为了匹配参考答案而放宽约束。
+当前支持 JSON 和 CSV；Excel 由前端转换成 CSV 后使用。CSV 表头、行宽会在调用模型前检查；嵌套、异构 JSON 不假装成规整矩阵。没有附件时直接按题面建模，没有增加 PDF 或图片解析。
+
+数据路径分为生成输入与执行反馈：生成阶段提供 schema，执行阶段读取完整附件；后续反馈可以包含实际目标值和变量值。
+
+## 何时使用与怎样检查
+
+适合规则相对明确、数据量大于方便人工抄写规模的结构化问题。检查代码是否读取正确文件、字段、行列，以及是否遍历完整记录。若目标是复核复杂规则的语义，结合 [Feedback Repair](../feedback-repair/) 或 [TriVAL](../trival/) 的流程比较更有意义。
 
 ## 来源与平台适配
 
-基于 [Text2Opt-Bench 固定提交](https://github.com/SprocketLab/Text2Opt-Bench/tree/1dac06be656c41d827ef20987cf8af0b48d382a2)的 schema offload 与默认 agentic 路径，[论文](https://arxiv.org/abs/2605.21751)。平台用用户附件替代基准数据，移除了参考最优值和模型规模评分依赖，输出数学模型及 `build_model(data)`，并保留有上限的执行修复。
+基于 [Text2Opt-Bench 固定提交](https://github.com/SprocketLab/Text2Opt-Bench/tree/1dac06be656c41d827ef20987cf8af0b48d382a2)的 schema offload 和默认 agentic 路径。平台使用用户附件，去掉基准参考最优值和模型规模评分依赖，输出公式与原生模型代码，按真实执行状态决定修复。

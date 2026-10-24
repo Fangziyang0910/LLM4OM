@@ -1,25 +1,55 @@
-LLMOPT builds a five-part formulation before generating code. Self-correction judges the formulation and code separately and routes repairs to the relevant stage.
+LLMOPT connects language and code through a five-part formulation: Sets, Parameters, Variables, Objective and Constraints. After execution, self-correction judges the formulation and code separately and returns to the affected stage.
 
-## Workflow
+## How five elements locate errors
 
-```text
-Sets, parameters, variables, objective, constraints → code → execute → self-correct
-                   ↑ formulation error                   ↓ code error
-                   └── redefine the model                 rewrite code
+The structure separates objects, known quantities, decisions, goals and requirements. Indices, units and domains have explicit places, making it easier to distinguish a modeling error from an implementation error.
+
+| Element | Production example |
+|---|---|
+| Sets | Products P={A,B}; resources R={cutting,finishing} |
+| Parameters | Profit p, consumption matrix a, capacity b |
+| Variables | Nonnegative integer quantities x[p] |
+| Objective | Maximize total profit |
+| Constraints | Resource use cannot exceed each capacity |
+
+## Workflow and correction example
+
+```mermaid
+flowchart TB
+  Define["Q2F: five-part formulation"] --> Code["F2C: code from formulation"]
+  Code --> Solve["Execute and solve"]
+  Solve --> Judge{"Judge formulation and code separately"}
+  Judge -->|Formulation wrong, budget left| Define
+  Judge -->|Only code wrong, budget left| Code
+  Judge -->|Accepted| Finish["Save last executed result"]
+  Judge -->|Resolve limit reached| Finish
 ```
 
-A formulation error returns to definition and then code generation. A code-only error returns to code generation. The result comes from actual execution, with re-solves limited by the preset.
+```walkthrough
+[
+  {"title":"State structure","nodes":["Define"],"body":"Preserve whole-unit requirements, resource dimensions and parameter values. F2C depends on this formulation, so omissions can propagate into code.","artifact":"Sets: P, R\nParameters: profit[P], usage[R,P], capacity[R]\nVariables: x[P] are nonnegative integers"},
+  {"title":"Translate to code","nodes":["Code","Solve"],"body":"Build the native model from the five elements, then execute. Check corresponding variables, objective and resource constraints.","artifact":"Objective: max Σ profit[p]x[p]\nFor each r: Σ usage[r,p]x[p] ≤ capacity[r]"},
+  {"title":"Choose the return point","nodes":["Judge","Define","Code"],"body":"If the formulation made quantities continuous, rebuild it and code. If only code uses the wrong domain, regenerate code alone.","artifact":"Wrong formulation → Q2F → F2C → solve\nOnly code wrong → F2C → solve"},
+  {"title":"Read final evidence","nodes":["Finish"],"body":"Use the last execution for numerical evidence. The run retains correction judgments alongside execution status.","artifact":"Up to 12 re-solves after the first execution.\nFinal result uses the last actual execution."}
+]
+```
 
-## How to use it
+## What self-correction reads
 
-Select LLMOPT when you want to inspect problem structure separately from its code mapping. Check all five sections, parameter sources and coverage of the original requirements.
+The judge receives the original problem, five-part formulation, code and actual feedback: status, errors, objective and decision values.
 
-The platform preserves correspondence between executed code and its result. New code that fails before execution does not inherit the previous version's solution.
+The platform routes a wrong formulation to Q2F first; otherwise wrong code returns to F2C. Upstream did not publish the complete loop code, so routing follows the paper's description. Missing judgments currently parse as correct, making inspection of the actual judgment text useful.
 
 ## Workflow versus trained model
 
-The research includes a fine-tuned and aligned model. The platform integrates the test-time five-part and self-correction workflow, using your selected preset. It does not automatically download the paper's model. To use released weights, deploy a compatible model service and add its preset.
+The paper also includes multi-instruction SFT and KTO alignment. This platform integrates the inference workflow using the selected LLM preset.
 
-## Source and adaptation
+To use released weights, deploy them separately behind a compatible service and add an `openai_compatible` preset. Changing orchestration and changing weights are separate experimental conditions.
 
-Prompts follow the [pinned LLMOPT source](https://github.com/antgroup/LLMOPT/tree/1492dd33e39ea13f1afe32a0adc13d4217334195); the correction loop follows the [paper](https://arxiv.org/abs/2410.13213). Upstream did not publish that loop's code, so routing decisions are documented in the original adaptation notes. Prompts use the chosen library and platform code contract. Research-reproduction license notes appear in the project NOTICE.
+## When to use it and what to inspect
+
+Use it for a structured formulation checkpoint and stage-specific correction. The method is not uniformly restricted to linear models; library and backend capabilities still apply. Inspect indices and domains first, then whether correction returns to the right level.
+
+## Source and platform adaptation
+
+Based on the [pinned LLMOPT implementation](https://github.com/antgroup/LLMOPT/tree/1492dd33e39ea13f1afe32a0adc13d4217334195) and [paper](https://arxiv.org/abs/2410.13213). It retains Q2F/F2C and correction prompts with native-model contracts. The loop follows the paper and returns the last execution.

@@ -1,21 +1,47 @@
-coptpy is COPT's native Python interface. It is one modeling-library choice, with scalar, expression and matrix APIs returning a COPT model.
+coptpy constructs native COPT models for LP, MILP, convex quadratic and supported conic optimization. Scalar and matrix APIs use the COPT engine.
 
-## Modeling scope
+## When native interfaces help
 
-Current generation guidance covers LP, MILP, convex quadratic and conic optimization. Solvability depends on native capabilities and the installed version. The selected modeling method must also support the problem scope.
+Use it when a team already works with COPT and wants consistent native models and execution.
 
-## Select it in the platform
+Different libraries can express the same production model. Keep domains, capacities and coefficients fixed when comparing. Differences in speed or objective cannot be attributed to engines if the business models differ.
 
-Choose coptpy with native engine COPT. Code creates a model through its environment, defines `build_model(data)` and returns the model without solving. The platform reads the actual objective, variables and native status.
+## Complete production model
 
-This path uses COPT's own model. Choosing COPT as a backend through CVXPY still uses CVXPY as the modeling library, rather than adding another library category.
+```python
+import coptpy as cp
+from coptpy import COPT
 
-## License configuration
+def build_model(data):
+    model = cp.Envr().createModel("production")
+    a = model.addVar(lb=0, vtype=COPT.INTEGER, name="A")
+    b = model.addVar(lb=0, vtype=COPT.INTEGER, name="B")
+    model.setObjective(3*a + 2*b, COPT.MAXIMIZE)
+    model.addConstr(2*a + b <= 8, name="cutting")
+    model.addConstr(a + 2*b <= 8, name="finishing")
+    return model
+```
 
-The current deployment can test examples within the runtime's small noncommercial mode; larger models and commercial deployments need a suitable license. Set `COPT_LICENSE_DIR`, usually containing `license.dat` and `license.key`. Compose also needs matching host-path mounts.
+Return the model; the platform solves it. The integer optimum is A=3, B=2, objective 13. Indexed models can use `addVars`; matrix APIs still require correct dimensions.
 
-The sandbox mounts the actual license files read-only and remains without network access. SDK installation, plugin loading and license validity are separate checks. Missing licenses do not trigger a silent substitute engine.
+## Convex quadratic structure and integer domains
 
-## Official references
+Validate a small linear case first. Adding quadratic costs requires checking convexity and backend support. Integer decisions also require the appropriate mixed-integer capability.
 
-See the [COPT Python interface](https://guide.coap.online/copt/en-doc/pythoninterface.html) and [installation and licensing](https://guide.coap.online/copt/en-doc/install.html). Platform mount examples appear in [Backends and licenses](../backends/).
+```demo
+production
+```
+
+Changing the quantity domain changes the example's mathematics. The interaction shows the corresponding values and objective.
+
+## Licensing and deployment
+
+COPT has a restricted small-scale noncommercial path under applicable conditions. Larger models or commercial use require the appropriate license.
+
+Deployment uses `COPT_LICENSE_DIR` with the specific `license.dat` and `license.key` files mounted read-only for the sandbox. Package installation, library loading and license validation are separate steps; see [backends and licenses](../backends/).
+
+## Checking results and references
+
+Inspect engine, status, objective direction and decision values. Distinguish a retained feasible incumbent from proven optimality after a limit. Use hand calculations for small resource models and retain full models and exports for larger reviews.
+
+See the [COPT Python documentation](https://guide.coap.online/copt/en-doc/pythoninterface.html) and [installation and licensing guide](https://guide.coap.online/copt/en-doc/install.html).

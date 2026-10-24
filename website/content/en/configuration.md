@@ -1,34 +1,49 @@
-Server configuration controls the default LLM, concurrency, shared usage and persistent storage. Run records retain the settings actually used, without keys.
+Configuration controls default models, concurrency, quotas and persistence. Compose uses `.env` and a data volume; Python services use environment variables and `--workspace`.
 
-## Common environment variables
+## Model and search settings
 
-| Variable | Purpose |
+| Field | Role |
 |---|---|
-| `LLM4OM_LLM_PROVIDER` | Default preset provider |
-| `LLM4OM_LLM_BASE_URL` | Model service endpoint |
-| `LLM4OM_LLM_MODEL` | Model ID actually used in API requests |
-| `LLM4OM_LLM_API_KEY` | Default preset key |
-| `LLM4OM_LLM_NAME` | Preset display name |
-| `LLM4OM_LLM_EXTRA_BODY` | Provider-specific request body as JSON |
-| `LLM4OM_DAILY_TOKENS` | Daily input-plus-output token limit per preset |
-| `LLM4OM_RUNS_PER_HOUR` | Runs per client address per hour |
-| `LLM4OM_SANDBOX_JOBS` | Concurrent solves and check scripts across the service; default 4 and must be positive |
-| `TZ` | Day boundary for usage accounting, for example `Asia/Shanghai` |
-| `LLM4OM_TRUST_PROXY` | Use the forwarded client address behind a trusted proxy |
-| `LLM4OM_SEARCH_API_KEY` | Independent search service key |
-| `LLM4OM_SEARCH_BASE_URL` | Independent search endpoint |
+| `LLM4OM_LLM_PROVIDER` | Default provider |
+| `LLM4OM_LLM_BASE_URL` | Service endpoint |
+| `LLM4OM_LLM_MODEL` | Actual model ID |
+| `LLM4OM_LLM_API_KEY` | Service credentials |
+| `LLM4OM_LLM_NAME` | Display name |
+| `LLM4OM_LLM_EXTRA_BODY` | Provider-specific JSON |
+| `LLM4OM_SEARCH_API_KEY` | Separate search credentials |
+| `LLM4OM_SEARCH_BASE_URL` | Search endpoint |
 
-Zero or unset daily-token and hourly-run limits mean unlimited. Exhausted daily usage stops before the next LLM call while retaining completed results. Consult `.env.example` for exact complete field names.
+DeepSeek presets can use their own search configuration; other providers use separate search credentials. See [presets](../model-presets/).
 
-## Concurrency and queues
+## Shared usage limits
 
-`llm4om serve --jobs` controls active runs, with a default of 4; additional runs queue. `LLM4OM_SANDBOX_JOBS` separately limits all solves and check scripts, including AutoFormulation's parallel checks. Sandbox waiting counts toward the run deadline.
+```dotenv
+LLM4OM_DAILY_TOKENS=2000000
+LLM4OM_RUNS_PER_HOUR=30
+LLM4OM_SANDBOX_JOBS=4
+TZ=Asia/Shanghai
+LLM4OM_TRUST_PROXY=1
+```
 
-Use one service process per workspace. Keep the same `--workspace` or Compose volume to retain history.
+Daily quotas count input plus output tokens per preset. Hourly limits count runs per client address. Zero or unset limits are unlimited. `TZ=Asia/Shanghai` resets daily usage at Beijing midnight.
 
-## Backup and restore
+The preset dialog shows usage. At the daily cap, the next model call shows a quota message; choose another available preset or continue the following day. Saved results remain readable.
 
-Storage includes preset keys, so restrict backup access. Stop the app, copy the complete workspace and restart:
+## Two concurrency levels
+
+```mermaid
+flowchart LR
+  Requests["Run requests"] --> Queue["Active runs: serve --jobs"]
+  Queue --> Calls["Model calls and method stages"]
+  Calls --> Sandbox["Global sandbox slots: SANDBOX_JOBS"]
+  Sandbox --> Work["Solves and check scripts"]
+```
+
+`serve --jobs` defaults to four active runs, with others queued. Four sandbox slots cover all solves and checks, including parallel AutoFormulation checks. Waiting counts toward run limits. One service process manages each workspace.
+
+## Back up the workspace
+
+The volume stores presets, credentials, history and runs. Stop app to finish persistence, then copy:
 
 ```bash
 docker compose stop app
@@ -37,8 +52,22 @@ chmod -R go-rwx ./llm4om-backup
 docker compose start app
 ```
 
-For restoration, stop the service before copying backup contents to `/data/` so shutdown writes cannot overwrite restored records. Normal saves occur periodically and at exit; forced termination may lose recent unsaved changes. See the [original deployment guide](https://github.com/Fangziyang0910/LLM4OM/blob/main/docs/deployment.md) for restoration commands.
+Keep backups in access-controlled storage. For Python services, back up the selected `--workspace` directory.
 
-## Optional tracing
+## Restore or migrate
 
-Enabling LangSmith sends problems, data and model replies to that service. Set `LANGSMITH_TRACING` and its credentials only when that transfer is permitted. Ordinary platform recording does not require external tracing.
+```bash
+docker compose stop app
+docker compose cp ./llm4om-backup/. app:/data/
+docker compose start app
+```
+
+To migrate Python history, substitute `runs/web/.` or the actual workspace. After startup, inspect presets and a historical run to confirm records and attachments.
+
+The service persists every ten seconds and at normal exit, writing a temporary file before renaming. Normal stop commands complete persistence of public steps and artifacts.
+
+## Optional call tracing
+
+Set `LANGSMITH_TRACING`, `LANGSMITH_API_KEY` and `LANGSMITH_PROJECT` for external tracing. Enabled tracing sends problems, data and model replies to LangSmith while retaining local run records.
+
+See the repository's [environment example](https://github.com/Fangziyang0910/LLM4OM/blob/main/.env.example) and [team deployment](../team-deployment/) for HTTPS and service access.

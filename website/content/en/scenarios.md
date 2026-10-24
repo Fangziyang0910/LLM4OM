@@ -1,26 +1,67 @@
-Business scenario comparison asks how one original plan changes under several independent conditions. Each scenario is generated and solved from the same baseline, so one scenario's change does not carry into the next.
+Business scenarios compute several explicit changes from one saved plan. Compare demand, budgets, capacities, availability or supply conditions.
 
-## Create scenarios
+## Create a scenario group
 
-Choose Business scenario comparison below the original run and enter 2–6 names and changes. For the production example:
+Choose “Business scenario comparison” below a result. Enter names and changes for 2–6 scenarios. Names identify results; changes become revised problem statements. Each run uses the common inputs and original configuration.
 
-| Scenario | Change |
+```text
+Scenario 1: regular order, at least 3 units of B.
+Scenario 2: larger B order, at least 4 units of B.
+```
+
+You can also request several scenarios in one plan-conversation message, then compare the batch.
+
+## Branching from one baseline
+
+```mermaid
+flowchart TB
+  Base["Fixed original: objective 13"] --> First["Scenario 1: B at least 3"]
+  Base --> Second["Scenario 2: B at least 4"]
+  First --> SolveOne["Independent modeling and solve: 12"]
+  Second --> SolveTwo["Independent modeling and solve: 8"]
+  SolveOne --> Compare["Compare alongside original"]
+  SolveTwo --> Compare
+  Base --> Compare
+```
+
+Every scenario saves its statement, code, execution and result. Scenario conversation retains the original current baseline; select a scenario explicitly to continue from it.
+
+## A complete comparison
+
+| Plan | A | B | Profit |
+|---|---:|---:|---:|
+| Original | 3 | 2 | 13 |
+| B≥3 | 2 | 3 | 12 |
+| B≥4 | 0 | 4 | 8 |
+
+![Actual scenario comparison](../../../assets/screens/en/scenarios.png)
+
+Read status and objective, then changed decisions. The table prioritizes the first 20 changed same-named variables. Open a run for complete values and inputs.
+
+## Try creating and selecting scenarios
+
+Choose “Compare B≥3 and B≥4” below to see results and the current baseline. Then select the original or request another change.
+
+```demo
+plans
+```
+
+## Useful scenario patterns
+
+| Business question | Changes |
 |---|---|
-| At least 3 of B | Produce at least 3 units of B; keep everything else unchanged |
-| At least 4 of B | Produce at least 4 units of B; keep everything else unchanged |
+| Demand growth | Raise product/store demand separately |
+| Staff absence | Make an employee unavailable on a date |
+| Budget negotiation | Compare total spending caps |
+| Maintenance | Reduce capacity on selected dates |
+| Supply disruption | Change warehouse supply or disable routes |
 
-Click Calculate and compare. Each scenario inherits the same original problem, attachments and settings. You can also request several explicit scenarios in Optimization chat or plan chat.
+Specify objects and values, keeping objective meanings and units aligned. For cumulative changes, apply [revisions](../revisions/) successively.
 
-## Read the actual differences
+## Recording and archiving
 
-The original example earns CNY 13. These two scenarios have optima of CNY 12 and CNY 8. The comparison shows actual statuses, objectives, units and key decisions. Open an individual plan to inspect its complete model and variables.
+The middle of the recording shows scenario entry and the comparison table. Each scenario has its own link and supports Excel export, tags and notes.
 
-![Business scenario comparison in the dark English workbench](../../../assets/screens/en/scenarios.png)
-
-The comparison prioritizes the first 20 changed variables with matching names; each run retains all values. Missing variables appear as `—`. Objectives with different meanings or units are not directly ranked.
-
-## Save and continue
-
-Each scenario is an independent run and the original remains a fixed baseline. Creating several scenarios in chat does not switch the current discussion plan. Explicitly select a scenario to continue from it.
-
-If some scenarios fail to start or save, completed runs remain available. Check which scenarios actually finished before retrying the remainder. A missing result does not mean infeasibility.
+```video
+workbench
+```

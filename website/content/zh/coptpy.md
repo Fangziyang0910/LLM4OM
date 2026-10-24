@@ -1,21 +1,47 @@
-coptpy 是 COPT 的原生 Python 接口。平台将它作为一个建模库，标量、表达式和矩阵写法都返回 COPT 模型。
+coptpy 构建 COPT 原生模型，适用于 LP、MILP、凸二次和相应锥模型。它同时提供标量表达与矩阵接口，实际引擎是 COPT。
 
-## 建模范围
+## 什么时候考虑原生接口
 
-当前代码指引覆盖 LP、MILP、凸二次和锥优化。模型是否可求解取决于原生能力与实际版本。选择建模方法时，也要同时满足方法本身的问题范围。
+当团队已经使用 COPT、希望沿用原生模型和求解环境时，coptpy 能保持代码与引擎的一致关系。
 
-## 在平台中选择
+同样的生产规则可以用不同库表达。比较时应固定整数域、容量和目标系数；换库不应改变业务模型。若表达不同，运行速度或目标值的差异不能直接归因于引擎。
 
-选择 coptpy，原生引擎为 COPT。代码通过环境创建模型，定义 `build_model(data)` 并返回模型，不直接调用 solve。平台读取实际目标、变量和原生状态。
+## 完整生产模型
 
-这条路径使用 COPT 模型本身；若在 CVXPY 等库选择 COPT 后端，建模库仍是 CVXPY，两种表达方式不会被重复计为额外库。
+```python
+import coptpy as cp
+from coptpy import COPT
 
-## 许可证配置
+def build_model(data):
+    model = cp.Envr().createModel("production")
+    a = model.addVar(lb=0, vtype=COPT.INTEGER, name="A")
+    b = model.addVar(lb=0, vtype=COPT.INTEGER, name="B")
+    model.setObjective(3*a + 2*b, COPT.MAXIMIZE)
+    model.addConstr(2*a + b <= 8, name="cutting")
+    model.addConstr(a + 2*b <= 8, name="finishing")
+    return model
+```
 
-当前部署可以在运行时允许的小规模非商业模式下检查示例；更大模型和商业部署需要合适许可。使用 `COPT_LICENSE_DIR` 指定许可证路径，通常包含 `license.dat` 和 `license.key`。Compose 部署还需挂载相同宿主机路径。
+代码返回模型，平台负责求解。正确整数结果为 A=3、B=2、收益13。索引模型可使用 `addVars`，大矩阵可使用原生矩阵写法，仍需核对维度。
 
-求解沙箱只读挂载实际许可文件，仍不访问网络。安装 SDK、插件加载与许可有效分别检查，缺许可时不会换其他引擎冒充成功。
+## 凸二次与整数域怎样影响选择
 
-## 官方资料
+线性生产模型可以先通过小样例核对。加入二次成本后，应检查目标的凸性和所选引擎支持范围；加入整数决策后，还需要支持相应混合整数问题。
 
-参阅 [COPT Python 接口](https://guide.coap.online/copt/en-doc/pythoninterface.html)和[安装与许可](https://guide.coap.online/copt/en-doc/install.html)。平台挂载示例见[后端与许可证](../backends/)。
+```demo
+production
+```
+
+将整数域切为连续域时，案例数值会变化。可在交互例中直接查看对应的变量和目标值。
+
+## 许可与部署
+
+COPT 在符合条件时有受限制的小规模非商业使用路径；更大规模或商业用途需要相应许可。
+
+部署使用 `COPT_LICENSE_DIR`，为沙箱只读挂载具体的 `license.dat` 和 `license.key`。实际可用性要看运行反馈，安装 Python 包、加载原生库和许可验证是不同步骤，见[后端与许可证](../backends/)。
+
+## 结果核对与资料
+
+核对实际引擎、状态、目标方向和所有非零变量。时限停止时区分已有可行方案与已证明最优。对线性案例可用手算资源核对，复杂问题则保留完整模型与导出结果供复查。
+
+原生表达和矩阵接口见 [COPT Python 文档](https://guide.coap.online/copt/en-doc/pythoninterface.html)，许可条件见 [安装指南](https://guide.coap.online/copt/en-doc/install.html)。

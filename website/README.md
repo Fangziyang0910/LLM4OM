@@ -2,7 +2,7 @@
 
 面向大众的中英文宣传站，署名 EIPI 团队。第二版包括生产、排班、配送三个可操作示例，六张新采集的双语深色工作台截图、三步使用介绍和常见问题。示例支持播放、暂停、跳过、修改条件及下载 CSV。正文不展示方法清单、调用消耗或终端安装命令。
 
-Docs 沿用官网风格，提供 46 篇完整文章、92 个中英文页面：快速开始与基本概念、13 篇功能指南、13 种方法的独立说明、9 个建模库的独立说明、求解后端、部署配置、CLI / Python 和故障排查。包括侧栏、页内目录、上一篇／下一篇、双语全文搜索、代码高亮与复制、手机目录，以及保持文章与章节位置的语言切换。
+Docs 沿用官网风格，提供 46 篇文章、92 个中英文页面：快速开始与基本概念、13 篇功能指南、13 种方法、9 个建模库、求解后端、部署、CLI / Python 和故障排查。文章包含机制、输入输出、完整代码与操作案例；68 张双语 Mermaid 图在构建时生成 SVG，方法图与逐步案例联动。五类交互案例包括生产、方案对话、数据编辑、凸优化和局部搜索，另有双语工作台录屏与字幕。侧栏、页内目录、全文搜索、代码复制、手机目录和同章节语言切换沿用现有框架。
 
 ## 生成文档
 
@@ -11,10 +11,13 @@ Docs 沿用官网风格，提供 46 篇完整文章、92 个中英文页面：�
 ```bash
 uv sync --all-extras
 npm --prefix frontend ci
-node website/build-docs.mjs
+npm --prefix website ci
+npm --prefix website run build
 ```
 
-文档源稿位于 `content/zh/` 和 `content/en/`，文章信息位于 `docs-manifest.json`。生成器复用已有 React Markdown、remark-gfm 和 highlight.js，把内容生成静态 HTML 和两份搜索索引；方法参数直接读取当前方法注册表。它校验 13 个方法与 9 个库均有对应文章，不调用 LLM 或求解器，不增加网站运行依赖。
+文档源稿位于 `content/zh/` 和 `content/en/`，文章信息位于 `docs-manifest.json`。生成器复用 React Markdown、GFM、remark-math、KaTeX 和 highlight.js，生成静态 HTML 与搜索索引；方法参数直接读取当前注册表。Mermaid 为独立构建依赖，复用 Playwright 渲染 SVG，按源码和配置哈希缓存。构建校验图源、13 个方法与 9 个库覆盖；发布文件可直接静态托管。
+
+Markdown 中 `mermaid` 围栏生成可下载和放大的图；`walkthrough` 围栏使用 JSON 数组定义 title、nodes、body、artifact，nodes 对应 Mermaid 节点 ID。方法图与步骤并排呈现，点击或播放步骤会定位节点。`demo` 围栏可选 production、plans、data、convex、local；`video` 的 workbench 插入对应语言录屏与字幕。普通公式由 KaTeX 在构建时排版，字体和许可一起发布。交互不自动播放，支持暂停、键盘和减少动态效果。
 
 只编辑源稿和生成器，再重新生成；不要手动编辑 `public/docs/{zh,en}/` 或搜索索引。`public/docs/docs.css` 和 `docs.js` 是文档的共享样式与交互源文件。网站仍可直接以静态文件发布。
 
@@ -39,7 +42,7 @@ python3 -m http.server 8831 --bind 127.0.0.1 --directory website/public
 3. **Settings → Pages → Build and deployment** 使用 **Deploy from a branch → gh-pages → / (root)**。GitHub 会在该分支更新后重新发布。
 4. 站点地址为 `https://fangziyang0910.github.io/LLM4OM/`。可以用 `?lang=en` 或 `?lang=zh` 分享指定语言。
 
-已于 2026-10-24 按用户授权将主仓库改为公开，并部署宣传站。发布分支为 `gh-pages`，提交为 `1f18620b2286688d079c864a57e945f017c8872d`；[Pages 构建成功](https://github.com/Fangziyang0910/LLM4OM/actions/runs/40060506135)。[中文页面](https://fangziyang0910.github.io/LLM4OM/?lang=zh)与[英文页面](https://fangziyang0910.github.io/LLM4OM/?lang=en)均已通过线上浏览器检查，部署文件与本地源文件一致。项目、使用指南、部署指南和许可证均已确认可匿名访问。本次没有推送本地未发布的平台提交。
+仓库已公开，发布分支为 `gh-pages`。[中文官网](https://fangziyang0910.github.io/LLM4OM/?lang=zh)、[英文官网](https://fangziyang0910.github.io/LLM4OM/?lang=en)、[中文Docs](https://fangziyang0910.github.io/LLM4OM/docs/zh/introduction/)和[英文Docs](https://fangziyang0910.github.io/LLM4OM/docs/en/introduction/)可公开访问。每次更新先通过本地检查，再推送发布分支并在线复测。
 
 GitHub Pages 承载官网与文档。完整建模服务仍需 Python、Docker 求解环境和模型服务配置，不能直接运行在 Pages 中。
 
@@ -59,9 +62,12 @@ node website/check.cjs http://127.0.0.1:8831/
 
 ```bash
 node website/check-docs.cjs http://127.0.0.1:8831/
+node website/check-learning.cjs http://127.0.0.1:8831/
 ```
 
 遍历全部 92 个页面，检查项目子路径下的内部链接与锚点、唯一 ID、双语章节对应、英文正文、全部方法／库覆盖；浏览器检查全文搜索、无结果与失败恢复、键盘操作、代码复制、语言记忆、同章节切换、手机目录、六种宽度和禁用 JavaScript 后的文章阅读。截图保存在 `artifacts/website/docs/`。把地址换成 GitHub Pages 地址可复测线上部署。
+
+学习材料检查另外覆盖全部方法的节点联动和字体大小、整数枚举与连续顶点解、凸投影和梯度下降、固定基准与独立场景、保存与取消数据、输入校验、CSV、视频元数据和字幕语言、流程图放大、播放暂停和无 JavaScript 内容。九个建模库文章中的首个完整 Python 示例已在本地 Worker 实际求解并核对目标值。
 
 这组检查验证宣传站，不调用真实 LLM 或平台后端。三个示例枚举各自的小型可行集合，显示实际最优解；它们用于介绍操作，不代表完整平台的运行性能。
 
@@ -71,7 +77,7 @@ node website/check-docs.cjs http://127.0.0.1:8831/
 node website/capture.cjs
 ```
 
-复用已有前端、Python 环境、Playwright 和 Pyomo / HiGHS。脚本启动隔离的本地平台与固定回复适配器，实际求解生产问题与两个变更场景，再分别采集中文、英文深色界面。它不调用外部大模型，也不能作为大模型效果证据。素材位于 `public/assets/screens/{zh,en}/`；日志与隔离数据位于忽略提交的 `artifacts/website/`。完成后关闭脚本启动的服务。
+复用已有前端、Python 环境、Playwright、ffmpeg 和 Pyomo / HiGHS。脚本启动隔离的本地平台与固定回复适配器，实际求解生产问题与两个变更场景，采集中文、英文深色截图，录制 MP4 并生成 WebVTT 字幕。截图位于 `public/assets/screens/{zh,en}/`，录屏位于 `public/assets/demos/`；日志、原始视频和隔离数据位于忽略提交的 `artifacts/website/`。完成后关闭脚本启动的服务。
 
 ## 维护
 
@@ -82,5 +88,6 @@ node website/capture.cjs
 - 响应式视觉：`public/styles.css`。
 - 文档源稿与目录：`content/{zh,en}/`、`docs-manifest.json`；生成器：`build-docs.mjs`。
 - 文档框架与搜索：`public/docs/docs.css`、`docs.js`。
+- 学习材料渲染：`doc-components.mjs`、`render-diagrams.mjs`；客户端：`public/docs/learning.mjs`；纯数值计算：`learning-models.mjs`。
 - 截图由 `capture.cjs` 新采集；团队标识来自 EIPI 现有官网。Inter 字体的 OFL 许可随站点保留。
 - 功能变化时核对主项目 README 和用户指南。不要添加未经核实的效果指标或在线平台地址。

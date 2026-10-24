@@ -1,34 +1,49 @@
-服务器配置决定默认模型、并发、共享用量和数据保存位置。页面里的运行配置记录实际采用的设置，不包含密钥。
+配置决定默认模型、运行并发、用量额度和数据保存。Compose使用 `.env` 与数据卷，Python启动使用环境变量和 `--workspace`。
 
-## 常用环境变量
+## 模型与搜索配置
 
-| 变量 | 作用 |
+| 字段 | 作用 |
 |---|---|
-| `LLM4OM_LLM_PROVIDER` | 默认预设的服务商 |
-| `LLM4OM_LLM_BASE_URL` | 模型服务接口地址 |
-| `LLM4OM_LLM_MODEL` | 实际请求使用的模型 ID |
-| `LLM4OM_LLM_API_KEY` | 默认预设密钥 |
-| `LLM4OM_LLM_NAME` | 预设的显示名称 |
-| `LLM4OM_LLM_EXTRA_BODY` | 服务商额外请求体，使用 JSON |
-| `LLM4OM_DAILY_TOKENS` | 每个预设每天的输入与输出 token 总上限 |
-| `LLM4OM_RUNS_PER_HOUR` | 每个客户端地址每小时的运行上限 |
-| `LLM4OM_SANDBOX_JOBS` | 服务中同时执行的求解和检查脚本上限，默认 4，必须大于 0 |
-| `TZ` | 每日用量的换日时区，例如 `Asia/Shanghai` |
-| `LLM4OM_TRUST_PROXY` | 可信反向代理后按转发客户端地址计数 |
+| `LLM4OM_LLM_PROVIDER` | 默认模型服务商 |
+| `LLM4OM_LLM_BASE_URL` | 服务地址 |
+| `LLM4OM_LLM_MODEL` | 实际模型ID |
+| `LLM4OM_LLM_API_KEY` | 模型服务密钥 |
+| `LLM4OM_LLM_NAME` | 预设显示名称 |
+| `LLM4OM_LLM_EXTRA_BODY` | 服务商额外JSON参数 |
 | `LLM4OM_SEARCH_API_KEY` | 独立搜索服务密钥 |
-| `LLM4OM_SEARCH_BASE_URL` | 独立搜索服务地址 |
+| `LLM4OM_SEARCH_BASE_URL` | 搜索服务地址 |
 
-每日 token 和每小时运行上限为 0 或未设置时不限制。每日额度用完会在下一次大模型调用前停止，已经完成的结果仍保留。完整字段以仓库 `.env.example` 为准。
+DeepSeek预设可使用自己的搜索配置；其他模型使用独立搜索密钥。字段示例和预设操作见[模型配置](../model-presets/)。
 
-## 并发与排队
+## 设置共享用量
 
-`llm4om serve --jobs` 控制同时活动的运行数，默认 4，其余排队。沙箱并发另由 `LLM4OM_SANDBOX_JOBS` 限制，覆盖所有运行，包括 AutoFormulation 的并行检查。等待沙箱仍计入运行总时限。
+```dotenv
+LLM4OM_DAILY_TOKENS=2000000
+LLM4OM_RUNS_PER_HOUR=30
+LLM4OM_SANDBOX_JOBS=4
+TZ=Asia/Shanghai
+LLM4OM_TRUST_PROXY=1
+```
 
-一个工作区供一个服务进程使用。要保留历史，持续使用同一个 `--workspace` 或 Compose 数据卷。
+每日额度按每个预设的输入加输出token累计；每小时运行额度按客户端地址计算。值为0或未设置时采用无上限配置。`TZ=Asia/Shanghai`将每日换日设为北京时间零点。
 
-## 备份与恢复
+预设窗口显示当天用量。每日额度达到上限后，下一次模型调用显示额度提示，可选择其他可用预设或次日继续。已经保存的计算结果可继续查看。
 
-数据包含预设密钥，应限制备份访问权限。先停止 app，复制完整工作区，再恢复服务：
+## 运行与沙箱的两层并发
+
+```mermaid
+flowchart LR
+  Requests["运行请求"] --> Queue["活动运行数：serve --jobs"]
+  Queue --> Calls["模型调用与方法阶段"]
+  Calls --> Sandbox["沙箱总并发：SANDBOX_JOBS"]
+  Sandbox --> Work["求解与检查脚本"]
+```
+
+`serve --jobs` 默认4，其他运行排队。沙箱并发默认4，覆盖所有运行以及AutoFormulation的并行检查；等待沙箱计入运行时限。每个工作区由一个服务进程管理。
+
+## 备份完整工作区
+
+Compose数据卷保存预设、密钥、历史和运行。先停止app，使保存完成，再复制：
 
 ```bash
 docker compose stop app
@@ -37,8 +52,22 @@ chmod -R go-rwx ./llm4om-backup
 docker compose start app
 ```
 
-恢复时先停服务，再复制备份内容到 `/data/`，避免退出写回覆盖恢复数据。正常保存按周期和退出时执行；强制终止可能丢失最近尚未落盘的变化。具体恢复命令见[原部署指南](https://github.com/Fangziyang0910/LLM4OM/blob/main/docs/deployment.md)。
+将备份保存在有访问控制的位置。Python服务备份指定的 `--workspace` 目录。
 
-## 可选追踪
+## 恢复与迁移
 
-启用 LangSmith 会把问题、数据和模型回答发送到追踪服务。仅在允许这类数据传输时设置 `LANGSMITH_TRACING` 与相关密钥。普通平台记录不需要开启外部追踪。
+```bash
+docker compose stop app
+docker compose cp ./llm4om-backup/. app:/data/
+docker compose start app
+```
+
+迁移已有Python工作区时，用 `runs/web/.` 或实际工作区替换备份路径。启动后检查预设和一条历史运行，确认记录与附件可读取。
+
+服务每10秒与正常退出时落盘，先写临时文件再改名。日常停止采用正常停止命令，可使当前公开步骤与中间产物保存完成。
+
+## 可选调用追踪
+
+需要外部调用追踪时配置 `LANGSMITH_TRACING`、`LANGSMITH_API_KEY` 与 `LANGSMITH_PROJECT`。开启后，问题、数据与模型回答发送至LangSmith。平台工作区同时保留本地运行记录。
+
+更多字段见仓库[环境变量示例](https://github.com/Fangziyang0910/LLM4OM/blob/main/.env.example)，服务入口与HTTPS见[团队部署](../team-deployment/)。

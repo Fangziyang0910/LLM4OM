@@ -1,27 +1,53 @@
-Choose Discuss plan on a result page to ask about that run's problem, formulation and actual values. The assistant reads a fixed result; ordinary explanation does not solve again.
+Click “Discuss plan” on a result to query decisions, calculate metrics, explain the model or create another plan. The assistant sits beside the saved result.
 
-## Questions to ask
+## Ask a concrete question
 
 ```text
-Explain the shipment quantities from each warehouse.
-Which resource limits further production? Point to the model evidence.
-Calculate total shipping cost and remaining inventory for this plan.
+List Tuesday's scheduled employees and their costs.
+Total the weekend cost and show the expression.
+Find product B's quantity and its resource use.
 ```
 
-Totals, resource balances and ratios can use actual decision values directly. A Calculation check card shows the computed value; expand it to inspect the expression and number of variables read. This tool can access complete variables beyond the text explanation's display range.
+The assistant reads the current plan's problem, model and saved values. Variable lookup supports names, groups and pagination over the complete result, useful for both individual decisions and larger totals.
 
-## When you need a new plan
+## From queries to calculations
 
-State the change explicitly: “Increase the budget to 1200, keep all other conditions and recalculate.” The assistant inherits the baseline's method, LLM preset, library, backend and attachments, prepares a new problem and executes the full workflow.
+```mermaid
+flowchart LR
+  Question["Question about current plan"] --> Values["Look up relevant variables"]
+  Values --> Calculate["Calculate costs, ratios or totals"]
+  Calculate --> Card["Show expression and result"]
+  Card --> Continue["Explain or revise requirements"]
+```
 
-The conversational reply can use a separately selected preset. This does not rewrite the baseline's saved modeling configuration. Each new plan is saved independently and can be opened for complete inspection and export.
+Calculation cards show the result. Expand one for its expression and number of values read. Ordinary arithmetic is also supported. The adjacent formulation and original variables identify the components used.
 
-## Current and historical plans
+## Try a sequence
 
-The assistant identifies the Current discussion plan. Viewing history changes what you see, rather than the baseline for later computation. Explicitly say “Return to the original plan” or identify another saved plan to switch it.
+```demo
+plans
+```
 
-A single new plan becomes current. Multiple scenarios are calculated from the same baseline, leaving the current plan unchanged.
+Query resources, then set minimum B to 3. Subsequent questions use the new plan. Selecting the original changes the baseline for later work.
 
-## Stop, refresh and retry
+## Create a new plan in one message
 
-Enter sends and Shift+Enter inserts a line break. Stop or retry as needed; conversations remain available after refresh. If the final reply fails, saved results can still be opened and retries read the completed plans. Deleting the conversation does not delete those independent runs.
+```text
+Require at least 3 units of B; keep other conditions and recalculate.
+Calculate B ≥ 3 and B ≥ 4 as two scenarios.
+Return to the original, then change cutting capacity to 10 hours.
+```
+
+A single new plan becomes current; multiple scenarios use one baseline. The conversation shows preparation, modeling, solving and explanation. Open each plan or compare the current batch.
+
+## Current and related plans
+
+The assistant header names the current discussion plan. Related plans can be browsed in the main area. “Use the second plan from now on” produces a selection receipt and sets it as the next baseline.
+
+Modeling inherits the baseline's method, LLM preset, library, backend and attachments. The conversation reply preset can be selected separately; each configuration remains visible in its own context.
+
+## Persistence and controls
+
+Resize the divider; refresh retains the layout. Scroll upward to pause following and use “Back to latest” to resume. Stop/retry preserves discussion context. Saved plans remain accessible through cards and history.
+
+See [results](../results/) for complete exports and [scenarios](../scenarios/) for batch conditions.

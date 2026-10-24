@@ -1,24 +1,42 @@
-ORThought writes a reasoning path, formulation and code in the order of an expert modeling workflow. If execution fails, it debugs using the problem, formulation and error.
+ORThought asks the LLM to state a modeling path in an expert-like order, then provide the formulation and code. The path is retained so readers can understand why variables, objectives and constraints were chosen.
 
-## Workflow
+## What a useful modeling path explains
 
-```text
-Understand objective, variables and constraints → reasoning path → formulation and code
-                                              → execute → debug code if needed
+Useful explanations name concrete choices: “whole products require integer quantities” or “processing hours add across products, so capacity is consumption times quantity.” Generic steps such as “analyze, model, optimize” do not explain these decisions.
+
+The current workflow uses the upstream `formalized` mode and outputs a modeling path, formulation and code. The process view retains this explanation as a separate solution_path artifact.
+
+## Workflow and modeling-path example
+
+```mermaid
+flowchart LR
+  Path["State modeling path in order"] --> Form["Provide formulation and code"]
+  Form --> Execute{"Solver status obtained?"}
+  Execute -->|No, with budget left| Debug["Repair code from errors"]
+  Debug --> Execute
+  Execute -->|Yes| Finish["Save path and actual result"]
+  Execute -->|Debug budget exhausted| Failed["Save errors and artifacts"]
 ```
 
-The reasoning path is saved as the `solution_path` artifact. It makes the interpretation and organization of the model visible for inspecting where constraints came from.
+```walkthrough
+[
+  {"title":"Identify decisions","nodes":["Path"],"body":"Separate production decisions from known inputs.","artifact":"Decide production quantities A and B.\nProfit, processing times and capacity are given parameters."},
+  {"title":"Explain expressions","nodes":["Path","Form"],"body":"Connect each expression to its business meaning instead of listing unexplained formulae.","artifact":"Whole units → nonnegative integer A, B\nAdditive hours → 2A+B≤8, A+2B≤8\nTotal profit → max 3A+2B"},
+  {"title":"Check execution","nodes":["Execute","Debug"],"body":"If code cannot obtain a solver status, debugging reads the problem, formulation, code and actual error.","artifact":"Execution error → at most 3 code-debug attempts\nValid infeasible status → no debugging solely for infeasibility"},
+  {"title":"Read back results","nodes":["Finish"],"body":"The correct integer optimum is 13. Substitute actual values into resource expressions to check the explanation.","artifact":"A=3, B=2\nCutting 8; finishing 7; profit 13\nExplanation must agree with these actual values."}
+]
+```
 
-## How to use it
+## Execution repair versus semantic checking
 
-Select ORThought with a library and backend suitable for the problem. Check whether the reasoning identifies the decisions, objective direction and requirements before inspecting expressions and code.
+Code that cannot obtain a solver status enters debugging, up to three times. Successfully executed code returning infeasibility does not trigger debugging simply for lacking a feasible solution. This differs from [OptiMUS](../optimus/).
 
-Execution errors trigger bounded debugging. Code that executes but produces an infeasible model does not automatically enter that debugging loop. Inspect platform evidence separately when you need to understand infeasibility.
+For explicit review against the problem see [Feedback Repair](../feedback-repair/); for layered validation see [TriVAL](../trival/).
 
-## Integrated scope
+## When to use it and how to read it
 
-The platform integrates the upstream formalized modeling mode and solve agent. It does not include the paper's multi-agent comparison or LogiOR dataset. Code extraction is adapted so a short valid `build_model(data)` function is not rejected by the upstream length threshold.
+Use it when a retained modeling explanation helps learning and inspection. The method is not uniformly limited to linear models, but the selected library and backend still constrain supported mathematics. The saved path, formulation, code and values can be read together.
 
-## Source
+## Source and platform adaptation
 
-See the [pinned ORThought source](https://github.com/BeinuoYang/ORThought/tree/5293e24861a65d1e4a2f61f4fad0a81de901ee38) and [paper](https://arxiv.org/abs/2508.14410). The source has no declared license; the project records the prompts for research reproduction in [NOTICE](https://github.com/Fangziyang0910/LLM4OM/blob/main/NOTICE).
+The platform ports the formalized workflow from the [pinned ORThought implementation](https://github.com/BeinuoYang/ORThought/tree/5293e24861a65d1e4a2f61f4fad0a81de901ee38). It returns native models, executes in the sandbox and retains `solution_path`.

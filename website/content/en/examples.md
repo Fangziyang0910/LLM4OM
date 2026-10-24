@@ -1,16 +1,30 @@
-Built-in examples support a first walkthrough. Public benchmarks help you explore problem descriptions and select modeling cases for further inspection.
+Homepage examples introduce the workflow; public problem collections expose different statements and structures. Load a problem into the editor, then run it with your configuration.
 
-## Begin with a small example
+## Three introductory tasks
 
-The home page offers sample problems that you can load into the editor and run with your chosen method and solver environment. Start with the [production plan](../quickstart/) to check integer domains, two resource constraints and the objective before using your own data.
+| Example | Decision | Changes to try |
+|---|---|---|
+| Production | Quantities per product | Hours and minimum orders |
+| Staffing | Employee-by-day assignments | Availability and coverage |
+| Delivery assignment | Vehicle-to-store matching | Disable a route or change costs |
 
-The product website's three interactive examples compute fixed small problems in the browser to explain the interaction. Runs in the full platform use your configured LLM and an actual solver.
+The homepage provides three interactive fixed cases. [Quickstart](../quickstart/) includes the production statement, recording and data. [OR-Tools](../ortools/) supplies staffing code; [CPMpy](../cpmpy/) supplies assignment code.
 
-## Public benchmark coverage
+## Download production data
 
-The example library contains 9 groups and 2,033 problem statements:
+Use [production.json](../../../assets/examples/production.json) or [production.csv](../../../assets/examples/production.csv). Explain products, time units and resource capacities before running.
 
-| Benchmark | Problems | Benchmark | Problems |
+```text
+Choose nonnegative integer quantities of A and B to maximize profit.
+Each resource has 8 hours. Processing data uses hours per unit.
+JSON usage rows identify resources and columns identify products.
+```
+
+## Public problem collections
+
+The library contains 2,033 statements across nine groups:
+
+| Collection | Count | Collection | Count |
 |---|---:|---|---:|
 | NL4Opt | 205 | IndustryOR | 99 |
 | NL4LP | 178 | ComplexOR | 18 |
@@ -18,8 +32,14 @@ The example library contains 9 groups and 2,033 problem statements:
 | MAMO Complex | 210 | OptMATH | 128 |
 | NL4COP | 150 | | |
 
-Open Example library, read a problem and load it into the editor. The statements come from the OPT-Agent collection and do not include answers. See the [source and license notes](https://github.com/Fangziyang0910/LLM4OM/blob/main/docs/references/benchmark-sources.md).
+Statements use the [OPT-Agent](https://github.com/Fangziyang0910/OPT-Agent) collection. Provenance and licenses are recorded in [benchmark sources](https://github.com/Fangziyang0910/LLM4OM/blob/main/docs/references/benchmark-sources.md).
 
-## Use benchmarks for checks
+## Use a problem
 
-Some problems exceed LP/MILP scope. Check the [method scope](../methods/) and [solver capabilities](../solvers/) first. Loading a problem does not provide a reference answer or automatic scoring. For evaluation, separately retain sources, reference solutions, run configurations and judgment criteria.
+Choose a group and statement, read it, and load it into the editor. Select method and solver according to domains, constraints and objective. After solving, tag the source and export the model, code and result.
+
+For comparison, fix the data and preset and use [method comparison](../method-comparison/). For tasks requiring additional data, develop fields and units in the [requirements assistant](../requirements/).
+
+## Build your own case library
+
+Prepare business attachments, record meanings and adopted rules in notes, and tag runs. Revisions and scenarios connect later changes, gradually forming reusable team cases.

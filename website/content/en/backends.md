@@ -1,31 +1,50 @@
-The backend list comes from native registries in the actual solver sandbox. First check model and interface compatibility, then dependencies, executables and licenses.
+A backend performs mathematical computation. Settings discover native IDs, availability and reasons in the solver environment; results retain the actual engine.
 
-## Common engine families
+## Common engines and tasks
 
-| Engine | Typical use and conditions |
-|---|---|
-| HiGHS, CBC, GLPK | Their supported LP/MIP models through compatible libraries |
-| SCIP | LP/MIP; native nonlinear constraints through PySCIPOpt |
-| CP-SAT | Integer, Boolean, logical and discrete scheduling models |
-| Gurobi, COPT | Native mathematical programming, subject to capabilities and licensing |
-| Clarabel, SCS | Compatible continuous conic models |
-| OSQP | Continuous convex quadratic programming with linear constraints |
-| MOSEK | Compatible mathematical programming models; requires a license |
-| Ipopt | Smooth continuous nonlinear optimization, usually with local conclusions |
-| Bonmin | Compatible mixed-integer nonlinear plugins through interfaces such as CasADi |
-| SAT, SMT, MiniZinc and others | Native CPMpy backends, subject to installation |
+| Engine | Model direction | Example platform entry |
+|---|---|---|
+| HiGHS, CBC, GLPK | Supported LP/MIP | Compatible Pyomo/PuLP interfaces |
+| SCIP | Linear, integer and native nonlinear constraints | PySCIPOpt, OR-Tools and others |
+| CP-SAT | Finite integers, Booleans and scheduling | OR-Tools, CPMpy |
+| Gurobi, COPT | Native mathematical programming | gurobipy, coptpy and compatible interfaces |
+| OSQP | Continuous convex quadratic objectives, linear constraints | CVXPY |
+| Clarabel, SCS | Continuous cones | CVXPY |
+| MOSEK | Supported native mathematics | CVXPY and compatible interfaces |
+| Ipopt | Smooth continuous NLP | CasADi and others |
+| Bonmin | Compatible mixed-integer nonlinear models | CasADi plugin |
+| SAT, SMT, MiniZinc families | Finite domains and logic | CPMpy native backends |
 
-This table describes families. Use the platform's current list for exact IDs and availability reasons. One engine may have different library and interface identifiers.
+Choose exact IDs from settings. The same engine can have different identifiers across libraries, including separate command-line and Python adapters.
 
-## AUTO, installation and errors
+## Discovery, selection and execution
 
-AUTO follows native selection for the library and returned model. Explicit selection is preserved and not replaced after failure. An LP-only backend rejects integer models.
+```mermaid
+flowchart LR
+  Registry["Read native sandbox registry"] --> Options["Show IDs, availability and reasons"]
+  Options --> Choice["AUTO or explicit selection"]
+  Choice --> Load["Load compatible interface and license"]
+  Load --> Solve["Execute actual model"]
+  Solve --> Record["Retain engine and result"]
+```
 
-Restart the service after changing backend dependencies or licenses to refresh its cache. A registered name does not establish a complete executable installation, and successful plugin loading does not establish commercial-license validity. GPU or separately deployed runtimes need their own environment.
+AUTO follows native library/model logic; CVXPY uses compatible installed paths. Explicit selection fixes the engine. Errors identify interface, dependency or license issues.
 
-## Mount licenses
+## After installation or updates
 
-Gurobi uses `GRB_LICENSE_FILE`, MOSEK uses `MOSEKLM_LICENSE_FILE`, and COPT uses `COPT_LICENSE_DIR`. Corresponding absolute host and app paths let the sandbox mount required files read-only. For example:
+Compose builds backend dependencies into the Worker. Python setups use `uv run llm4om build-worker`. For custom dependencies, update the Worker environment, rebuild and restart.
+
+The service caches its backend catalog. Restart after dependency or license changes to discover again. Run a complete small model from the library guide to check the selected path.
+
+## Configure commercial licenses
+
+| Engine | Environment variable | Example file |
+|---|---|---|
+| Gurobi | `GRB_LICENSE_FILE` | `/opt/gurobi/gurobi.lic` |
+| MOSEK | `MOSEKLM_LICENSE_FILE` | `/opt/mosek/mosek.lic` |
+| COPT | `COPT_LICENSE_DIR` | Directory with `license.dat` and `license.key` |
+
+Prepare an offline, container-compatible license on the host. Mount identical absolute paths into app. Example `compose.override.yaml`:
 
 ```yaml
 services:
@@ -33,10 +52,24 @@ services:
     volumes:
       - /opt/gurobi/gurobi.lic:/opt/gurobi/gurobi.lic:ro
       - /opt/mosek/mosek.lic:/opt/mosek/mosek.lic:ro
+      - /opt/copt/license.dat:/opt/copt/license.dat:ro
+      - /opt/copt/license.key:/opt/copt/license.key:ro
 ```
 
-Keep only mounts you actually use and set the corresponding `.env` variables. COPT mounts its individual `license.dat` and `license.key` files. The sandbox has no network, so this deployment path needs licenses suitable for offline, container and actual usage conditions.
+Set the corresponding `.env` variables and run `docker compose up -d app`. Workers mount the specified files read-only. Keep entries for the engines you use.
 
-## Official license references
+## Locate environment issues
 
-See [Gurobi documentation](https://docs.gurobi.com/projects/optimizer/en/current/), [MOSEK client setup](https://docs.mosek.com/latest/licensing/client-setup.html) and [COPT installation and licensing](https://guide.coap.online/copt/en-doc/install.html). Do not commit license files or keys. The [original deployment guide](https://github.com/Fangziyang0910/LLM4OM/blob/main/docs/deployment.md) has full container configuration.
+| Error | Inspect |
+|---|---|
+| Executable missing | Worker installation and PATH |
+| Plugin cannot load | Native libraries, drivers and dependencies |
+| License path/host mismatch | Paths, container compatibility and license contents |
+| Unsupported model type | Domains, expressions and engine capabilities |
+| Model-size restriction | License and intended model size |
+
+Retain complete errors with engine information for inspection. See [troubleshooting](../troubleshooting/).
+
+## Native references
+
+See [Gurobi documentation](https://docs.gurobi.com/projects/optimizer/en/current/), [MOSEK client setup](https://docs.mosek.com/latest/licensing/client-setup.html) and [COPT installation/licensing](https://guide.coap.online/copt/en-doc/install.html). Use [solver selection](../solvers/) for interfaces and mathematics.

@@ -1,29 +1,53 @@
-LLM4OM turns a business problem and its data into an optimization model, then uses a solver to compute a concrete plan. Describe requirements in natural language, inspect the model and actual values, and recalculate when conditions change.
+LLM4OM turns natural-language problems and data into optimization models and calls solvers to compute plans. Describe requirements, inspect decisions and the modeling process, then revise conditions, compare alternatives and export results.
 
-## Where to begin
+## Choose an entry point
 
-Follow [Your first plan](../quickstart/) for a complete example. If you do not have access to a running platform, use [Install and launch](../installation/) to start one on your computer or server. The product website uses fixed interactive examples; the full platform accepts your own problems and attachments.
+| Entry | Starting point | Next actions |
+|---|---|---|
+| [Optimization chat](../chat-agent/) | Send a problem or idea | Clarify, compute, query, revise and compare scenarios |
+| [Manual modeling](../run-settings/) | A prepared statement and data | Edit inputs, choose settings and follow execution |
+| [Requirements assistant](../requirements/) | A developing business idea | Create an editable statement and attachments |
 
-There are two parallel entry points:
+First-time users can complete the production [quickstart](../quickstart/). To run a service, see [installation](../installation/).
 
-| Entry point | How it works |
+## From requirements to a usable plan
+
+```mermaid
+flowchart LR
+  Input["Describe requirements and add data"] --> Model["Generate formulation and code"]
+  Model --> Solve["Actual solver computation"]
+  Solve --> Result["Inspect plan and process"]
+  Result --> Use["Export, discuss and compare"]
+  Use -->|Revise| Input
+```
+
+A run retains statement, attachments, configuration, formulation, code, values and steps. Original and revised plans remain connected to their inputs.
+
+## Everyday features
+
+| Task | Guide |
 |---|---|
-| [Optimization chat](../chat-agent/) | Send a problem and data, then compute and revise plans through conversation |
-| [Manual modeling workbench](../run-settings/) | Edit the problem, select a configuration and click Start modeling |
+| Add tables and edit fields or values | [Upload and edit data](../attachments/) |
+| Read production, staffing or allocation decisions | [Results and exports](../results/) |
+| Query a decision or total costs | [Discuss a plan](../plan-chat/) |
+| Change a requirement and compute another plan | [Revisions](../revisions/) |
+| Compare budgets, demand or resources | [Scenarios](../scenarios/) |
+| Find past tasks and record decisions | [History, tags and reports](../history/) |
 
-If the problem is still unclear, use [requirements chat](../requirements/) to prepare an editable draft first.
+## Understand modeling and computation
 
-The workbench's lower-left controls switch Chinese/English and light, dark or system appearance. Smaller screens use tabs for the main content and assistant; desktop dividers resize the workspace.
+[Methods](../methods/) covers 13 workflows with mechanisms, Mermaid diagrams, step-by-step examples and current parameters: generation, feedback repair, layered validation, type retrieval, component search and data binding.
 
-## What a run produces
+[Libraries and solvers](../solvers/) covers nine libraries, native interfaces, backends and complete code. Production, staffing, assignment, convex quadratic and nonlinear examples help select a computation path.
 
-A run saves the problem, attachments, mathematical model, solver code, actual solver result and intermediate steps. Discuss the result, revise requirements, or export Excel, CSV and Markdown reports.
+## Watch and interact
 
-An optimal status applies to the mathematical model the solver actually computed. Before using a plan, check that its objective, constraints, data and variable meanings match the business problem. See [Review and export results](../results/).
+Docs include localized workbench recordings, screenshots and interactive examples. Download quickstart data, step through method artifacts, or change solver-example parameters and inspect computed results.
 
-## Continue by task
+The interface supports Chinese, English and light/dark/system themes. Desktop dividers resize work areas; narrow screens use tabs for main content and assistants.
 
-- For everyday use, follow the user guides from [data preparation](../attachments/) to [scenario comparison](../scenarios/).
-- For modeling strategies, read [Modeling methods](../methods/). Each method has its own workflow and current parameters.
-- For computation tools, read [Libraries and solvers](../solvers/) for capabilities, backends and license requirements.
-- For shared use, read [Team deployment](../team-deployment/) and [Configuration and backups](../configuration/).
+## Teams and scripts
+
+[Team deployment](../team-deployment/) covers shared services, HTTPS and access configuration. [Usage and backups](../configuration/) covers quotas, concurrency and data maintenance. [CLI and Python](../cli-python/) runs the same modeling workflows from existing programs.
+
+LLM4OM is developed by the [EIPI team](https://scut-eipi.github.io/), with publicly maintained source and documentation.

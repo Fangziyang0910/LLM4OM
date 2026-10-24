@@ -3,18 +3,27 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 import ReactMarkdown from "../frontend/node_modules/react-markdown/index.js";
 import remarkGfm from "../frontend/node_modules/remark-gfm/index.js";
+import remarkMath from "../frontend/node_modules/remark-math/index.js";
+import { walkthrough, demo } from "./doc-components.mjs";
 
 const require = createRequire(import.meta.url);
 const React = require("../frontend/node_modules/react");
 const { renderToStaticMarkup } = require("../frontend/node_modules/react-dom/server");
 const hljs = require("../frontend/node_modules/highlight.js");
+const katex = require("../frontend/node_modules/katex");
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(directory);
 const output = path.join(directory, "public/docs");
 const manifest = JSON.parse(await fs.readFile(path.join(directory, "docs-manifest.json"), "utf8"));
 const { groups, articles } = manifest;
+const diagrams = JSON.parse(await fs.readFile(path.join(output, "diagrams/manifest.json"), "utf8"));
+await fs.mkdir(path.join(directory, "public/assets/katex"), { recursive: true });
+await fs.copyFile(path.join(root, "frontend/node_modules/katex/dist/katex.min.css"), path.join(directory, "public/assets/katex/katex.min.css"));
+await fs.copyFile(path.join(root, "frontend/node_modules/katex/LICENSE"), path.join(directory, "public/assets/katex/LICENSE"));
+await fs.cp(path.join(root, "frontend/node_modules/katex/dist/fonts"), path.join(directory, "public/assets/katex/fonts"), { recursive: true });
 const facts = JSON.parse(execFileSync(path.join(root, ".venv/bin/python"), ["-c", `
 import json
 from llm4om.methods import methods
@@ -66,13 +75,52 @@ for (const [index, locale] of ["zh", "en"].entries()) {
       headings.push({ id, label, level });
       return React.createElement(`h${level}`, { id }, children, React.createElement("a", { href: `#${id}`, className: "heading-anchor", "aria-label": `${label} — ${index ? "link to section" : "章节链接"}` }, "#"));
     };
+    let diagramNumber = 0;
+    const diagramMarkup = new Map();
+    for (const match of markdown.matchAll(/^```mermaid\n([\s\S]*?)^```/gm)) {
+      const key = `${locale}-${article.id}-${++diagramNumber}`;
+      const entry = diagrams[key];
+      if (!entry || entry.sourceHash !== createHash("sha256").update(match[1]).digest("hex")) throw new Error(`Run the diagram build for ${key}`);
+      diagramMarkup.set(match[1], { svg: await fs.readFile(path.join(output, "diagrams", entry.file), "utf8"), url: `../../diagrams/${entry.file}` });
+    }
+    const methodWalkthrough = article.method ? markdown.match(/^```walkthrough\n([\s\S]*?)^```/m)?.[1] : undefined;
     const html = renderToStaticMarkup(React.createElement(ReactMarkdown, {
-      remarkPlugins: [remarkGfm], skipHtml: true,
+      remarkPlugins: [remarkGfm, remarkMath], skipHtml: true,
       components: {
         h2: heading(2), h3: heading(3),
         table: ({ children }) => React.createElement("div", { className: "table-scroll", tabIndex: 0, role: "region", "aria-label": t("table") }, React.createElement("table", {}, children)),
+        pre: ({ children }) => {
+          const code = React.Children.toArray(children)[0];
+          const language = code?.props?.className?.replace("language-", "").split(" ")[0];
+          const source = String(code?.props?.children ?? "");
+          if (language === "mermaid") {
+            const graph = diagramMarkup.get(source);
+            if (!graph) throw new Error(`Missing diagram: ${locale}/${article.id}`);
+            const width = Number(graph.svg.match(/viewBox="[^"]*? ([\d.]+) [\d.]+"/)?.[1]);
+            if (!Number.isFinite(width)) throw new Error("Invalid diagram viewBox");
+            const figure = React.createElement("figure", { className: "doc-diagram", "data-src": graph.url, style: { "--diagram-width": `${width}px` } },
+              React.createElement("div", { className: "diagram-scroll", tabIndex: 0, dangerouslySetInnerHTML: { __html: graph.svg } }),
+              React.createElement("figcaption", {}, index ? "Workflow: decisions, feedback and stopping paths" : "执行流程：阶段、反馈与停止路径"),
+              React.createElement("div", { className: "diagram-actions" }, React.createElement("a", { href: graph.url, download: true }, index ? "Download SVG" : "下载 SVG")),
+              React.createElement("details", { className: "diagram-source" }, React.createElement("summary", {}, index ? "Mermaid source" : "Mermaid 源码"), React.createElement("pre", {}, React.createElement("code", {}, source))));
+            return methodWalkthrough ? React.createElement("div", { className: "workflow-explorer" }, figure, React.createElement("div", { dangerouslySetInnerHTML: { __html: walkthrough(methodWalkthrough, Boolean(index)) } })) : figure;
+          }
+          if (language === "walkthrough" && methodWalkthrough) return null;
+          if (language === "walkthrough" || language === "demo") return React.createElement("div", { dangerouslySetInnerHTML: { __html: language === "walkthrough" ? walkthrough(source, Boolean(index)) : demo(source.trim(), Boolean(index)) } });
+          if (language === "video") {
+            if (source.trim() !== "workbench") throw new Error("Unknown recording");
+            return React.createElement("figure", { className: "doc-recording" },
+              React.createElement("video", { controls: true, preload: "none", playsInline: true, poster: `../../../assets/screens/${locale}/plan.png`, "aria-label": index ? "Workbench demonstration: modeling, scenarios and data editing" : "工作台演示：建模、场景比较与数据编辑" },
+                React.createElement("source", { src: `../../../assets/demos/workbench-${locale}.mp4`, type: "video/mp4" }),
+                React.createElement("track", { kind: "captions", src: `../../../assets/demos/workbench-${locale}.vtt`, srcLang: index ? "en" : "zh", label: index ? "English" : "中文", default: true })),
+              React.createElement("figcaption", {}, index ? "Production example in the workbench: compute, compare scenarios, edit data. Captions available." : "生产案例工作台录屏：计算方案、比较场景、编辑数据，可开启字幕。"));
+          }
+          if (language === "math") return React.createElement("div", { className: "doc-math", dangerouslySetInnerHTML: { __html: katex.renderToString(source, { displayMode: true, throwOnError: true, trust: false }) } });
+          return React.createElement("pre", {}, children);
+        },
         code: ({ children, className }) => {
           const language = className?.replace("language-", "");
+          if (className?.includes("math-inline")) return React.createElement("span", { dangerouslySetInnerHTML: { __html: katex.renderToString(String(children), { throwOnError: true, trust: false }) } });
           if (language && hljs.getLanguage(language)) return React.createElement("code", { className, dangerouslySetInnerHTML: { __html: hljs.highlight(String(children), { language }).value } });
           return React.createElement("code", { className }, children);
         }
@@ -89,7 +137,7 @@ for (const [index, locale] of ["zh", "en"].entries()) {
     const counterpart = `../../${index ? "zh" : "en"}/${article.id}/`;
     const tocLinks = headings.map(h => `<a href="#${h.id}" class="toc-level-${h.level}">${escape(h.label)}</a>`).join("");
     const page = `<!doctype html>
-<html lang="${index ? "en" : "zh-CN"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101014"><meta name="description" content="${escape(summary(article))}"><title>${escape(title(article))} · LLM4OM Docs</title><meta property="og:title" content="${escape(title(article))} · LLM4OM Docs"><meta property="og:description" content="${escape(summary(article))}"><link rel="canonical" href="https://fangziyang0910.github.io/LLM4OM/docs/${locale}/${article.id}/"><link rel="alternate" hreflang="zh-CN" href="../../zh/${article.id}/"><link rel="alternate" hreflang="en" href="../../en/${article.id}/"><link rel="icon" href="../../../assets/llm4om.svg" type="image/svg+xml"><link rel="preload" href="../../../assets/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="../../../styles.css"><link rel="stylesheet" href="../../docs.css"><script src="../../docs.js" defer></script></head>
+<html lang="${index ? "en" : "zh-CN"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101014"><meta name="description" content="${escape(summary(article))}"><title>${escape(title(article))} · LLM4OM Docs</title><meta property="og:title" content="${escape(title(article))} · LLM4OM Docs"><meta property="og:description" content="${escape(summary(article))}"><link rel="canonical" href="https://fangziyang0910.github.io/LLM4OM/docs/${locale}/${article.id}/"><link rel="alternate" hreflang="zh-CN" href="../../zh/${article.id}/"><link rel="alternate" hreflang="en" href="../../en/${article.id}/"><link rel="icon" href="../../../assets/llm4om.svg" type="image/svg+xml"><link rel="preload" href="../../../assets/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="../../../styles.css"><link rel="stylesheet" href="../../../assets/katex/katex.min.css"><link rel="stylesheet" href="../../docs.css"><script src="../../docs.js" type="module"></script></head>
 <body class="docs-page" data-locale="${locale}"><a class="skip-link" href="#article">${t("skip")}</a>
 <header class="site-header docs-header"><div class="docs-header-inner"><a class="brand" href="../../../?lang=${locale}"><img src="../../../assets/llm4om.svg" width="29" height="29" alt=""><span>LLM4OM</span></a><a class="docs-wordmark" href="../introduction/">Docs</a><button class="docs-search-button" id="search-open" type="button" aria-haspopup="dialog"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/></svg><span>${t("search")}</span><kbd>⌘ K</kbd></button><nav class="docs-header-links" aria-label="${t("menu")}"><a class="docs-product-link" href="../../../?lang=${locale}">${t("home")}</a><a id="docs-language" class="language-button" href="${counterpart}" lang="${index ? "zh-CN" : "en"}" aria-label="${index ? "切换到中文" : "Switch to English"}">${index ? "中文" : "EN"}</a><a class="docs-github" href="https://github.com/Fangziyang0910/LLM4OM" aria-label="GitHub"><img src="../../../assets/github.svg" width="20" height="20" alt=""></a></nav></div></header>
 <div class="docs-mobile-bar"><button id="mobile-menu" type="button" aria-haspopup="dialog"><span aria-hidden="true">☰</span> ${t("menu")}</button><span>${escape(title(group))}</span></div>
@@ -98,6 +146,7 @@ for (const [index, locale] of ["zh", "en"].entries()) {
 <aside class="docs-toc"><p>${t("toc")}</p><nav aria-label="${t("toc")}">${tocLinks}</nav><a class="toc-top" href="#article">${index ? "Back to top ↑" : "回到顶部 ↑"}</a></aside></div>
 <dialog id="mobile-nav" class="docs-nav-dialog"><div class="dialog-header"><span>${t("docs")}</span><button type="button" data-close="mobile-nav" aria-label="${t("close")}">×</button></div><nav aria-label="${t("docs")}">${nav}</nav></dialog>
 <dialog id="docs-search" class="docs-search-dialog" aria-labelledby="search-title"><div class="search-field"><label id="search-title" class="sr-only" for="search-input">${t("search")}</label><input id="search-input" type="search" autocomplete="off" placeholder="${t("searchHint")}"><button type="button" data-close="docs-search" aria-label="${t("close")}">Esc</button></div><p id="search-status" role="status">${t("searchEmpty")}</p><ol id="search-results"></ol><div class="search-help">${t("searchHelp")}</div></dialog>
+<dialog id="diagram-dialog" class="diagram-dialog" aria-labelledby="diagram-dialog-title"><div class="dialog-header"><span id="diagram-dialog-title">${index ? "Workflow diagram" : "流程图"}</span><button type="button" data-diagram-size>${index ? "Actual size" : "原始尺寸"}</button><button type="button" data-close="diagram-dialog" aria-label="${t("close")}">×</button></div><div class="diagram-dialog-body"><img alt=""></div></dialog>
 </body></html>\n`;
     await fs.mkdir(path.join(output, locale, article.id), { recursive: true });
     await fs.writeFile(path.join(output, locale, article.id, "index.html"), page);

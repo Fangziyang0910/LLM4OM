@@ -1,23 +1,58 @@
-Pyomo expresses algebraic models with sets, parameters, variables, objectives and constraints. It connects to multiple native backends, keeping model expression separate from the engine.
+Pyomo expresses optimization in a form close to mathematical notation. Products, factories and dates become index sets; objectives and constraints use those indices, making business rules easier to map to code.
 
-## Supported interfaces
+## Start with the mathematics
 
-The platform recognizes `ConcreteModel`, instantiated `AbstractModel` and `pyomo.kernel` models. Components such as GDP and DAE remain part of algebraic modeling, rather than extra library settings. Solvability depends on transformations and the selected backend.
+Choose whole-unit quantities A and B, maximize `3A+2B`, and enforce cutting `2A+B≤8` and finishing `A+2B≤8`. The integer optimum is A=3, B=2, objective 13.
 
-## Select it in the platform
+If quantities are genuinely divisible, continuous domains give A=B=8/3 and objective 40/3. The selected domain is recorded in the model.
 
-Choose Pyomo with AUTO or a native ID from the available backend list. Algebraic models usually default to HiGHS; Kernel automatically uses CBC for its model type. Nonlinear models need a compatible installed backend.
+## Complete platform code
 
-```bash
-uv run llm4om run --problem "Your complete problem" --method direct --language pyomo --solver highs
+```python
+import pyomo.environ as pyo
+
+def build_model(data):
+    model = pyo.ConcreteModel()
+    model.products = pyo.Set(initialize=["A", "B"])
+    profit = {"A": 3, "B": 2}
+    model.x = pyo.Var(model.products, domain=pyo.NonNegativeIntegers)
+    model.profit = pyo.Objective(
+        expr=sum(profit[p] * model.x[p] for p in model.products),
+        sense=pyo.maximize,
+    )
+    model.cutting = pyo.Constraint(expr=2*model.x["A"] + model.x["B"] <= 8)
+    model.finishing = pyo.Constraint(expr=model.x["A"] + 2*model.x["B"] <= 8)
+    return model
 ```
 
-## Generated-code requirements
+There is no `solve()` call. The platform selects a backend, solves and reads named variables. For attachments, parse complete parameters with `json.loads(data['production.json'])`; see [BIND](../bind/).
 
-`build_model(data)` returns a constructed native model for the platform to solve. Specify domains and bounds explicitly. Nonnegative integers and continuous variables that may be negative are different decisions. Do not read unsolved variable values while constructing the model.
+## From expressions to solving
 
-Linear models can use Gurobi IIS evidence under the available diagnosis and license conditions. See [Infeasibility](../conflicts/).
+```mermaid
+flowchart LR
+  Sets["Sets, parameters and domains"] --> Expressions["Objective and constraints"]
+  Expressions --> Model["Native Pyomo model"]
+  Model --> Backend["Compatible backend, such as HiGHS"]
+  Backend --> Values["Named values and solver status"]
+```
 
-## Further reading
+Pyomo connects compatible engines through native adapters. The platform accepts ConcreteModel, instantiated AbstractModel and Kernel. Algebraic models normally default to HiGHS; Kernel defaults to compatible CBC.
 
-See [official Pyomo modeling documentation](https://pyomo.readthedocs.io/en/stable/explanation/modeling/index.html), the [Kernel API](https://pyomo.readthedocs.io/en/stable/api/pyomo.kernel.html) and [backend guide](../backends/). The service discovers actual execution engines from native registries rather than listing decomposition algorithms as engines.
+## Common expression mistakes
+
+Use binary variables or suitable logical formulations for decisions that activate constraints. Use native Pyomo expressions for relationships among unknown variables.
+
+Inspect index sets in indexed constraints. Use `pyo.Constraint.Skip` when an index should be omitted. Instantiate AbstractModel before returning it.
+
+## Checking results
+
+Read `x[A]` and `x[B]`, substitute them into both resources, and recompute profit with units. Confirm the actual backend and integer domain. Execution feedback identifies backend compatibility issues.
+
+```demo
+production
+```
+
+## Selection and references
+
+Start here for indexed algebraic rules and readable mathematical structure. [PuLP](../pulp/) also fits small linear models; [CPMpy](../cpmpy/) suits richer discrete logic; [CasADi](../casadi/) supports smooth nonlinear modeling. See the [official Pyomo modeling guide](https://pyomo.readthedocs.io/en/stable/explanation/modeling/index.html).

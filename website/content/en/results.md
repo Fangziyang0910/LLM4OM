@@ -1,31 +1,52 @@
-After a run, read the solver status, objective and concrete decisions, then check that the formulation represents the original problem. The result page retains the model, code, inputs, data and modeling process.
+The run page brings the plan, formulation, code and process together. Start with status and objective, then read the explanation, inspect complete variables or export the result.
 
-## Read the actual decisions
+## Navigate from summary to detail
 
-The result explanation adds business labels and units. Table values come directly from the solver; the LLM supplies labels and text. Explanation reads at most 100 nonzero variables, or the first 100 for an all-zero solution. The full variables remain available for expansion, search and export.
+| Area | Content | Action |
+|---|---|---|
+| Summary | Status, objective or failure | Jump to formulation or solution |
+| Plan explanation | Business labels, units and key rules | Understand main decisions |
+| Solution | Groups, lists and two-index matrices | Filter values and download CSV |
+| Formulation | Mathematical expressions | Read versions and differences |
+| Code | Native-library implementation | Inspect variables, objective and rules |
+| Problem and data | Saved statement and attachments | Review input snapshot |
+| Process | Stage calls and feedback | Inspect artifacts, errors and revisions |
 
-Two-dimensional variables can appear as matrices. When a method revises the model or code, inspect versions and compare with the previous one. Failure of the explanation call does not remove the solver result.
+![Computed production plan](../../../assets/screens/en/plan.png)
 
-## Interpret the status
+## Read a concrete result
 
-| Status or situation | How to read it |
-|---|---|
-| Optimal | Optimality applies to this model; still check its match to the problem |
-| Feasible, or timed out with a solution | Inspect the actual solution; optimality may be unproven |
-| Locally optimal | Retain its local meaning; see [CasADi](../casadi/) |
-| Infeasible | See [Infeasibility](../conflicts/); this is not an executable plan |
-| Method validation failed | Read the failed stage and feedback even if the solver has a result |
+The production example has A=3, B=2 and profit 13. Labels connect quantities to products and units; complete variables retain original names for code inspection.
 
-If new code fails before execution, the page does not attach the preceding version's result to it. Earlier results remain visible in the process steps.
+Two-index variables form matrices, useful for employee-by-day or warehouse-by-store plans. List view exposes original names. Filtering helps locate a person, product or time period.
 
 ## Choose an export
 
-- **Excel**: the plan sheet includes business labels, all variable values and units. A problem sheet retains the statement, revisions, attachment names, configuration and links. Zero values are included, regardless of the page's display range.
-- **CSV**: download complete variable values for further computation or checks.
-- **Markdown report**: problem, settings, result, model, code and notes, with at most 500 nonzero variables and an explicit range notice.
+| Export | Contents | Use |
+|---|---|---|
+| Excel: solution sheet | Every variable including zeros, labels, units and original names | Execution and further analysis |
+| Excel: problem and conditions sheet | Statement, changes, original input, attachment names, settings and links | Trace inputs |
+| CSV | Complete variable values | Spreadsheet or script processing |
+| Markdown report | Problem, settings, result, formulation, code and notes | Reading, archiving and discussion |
 
-Optimal, feasible, locally optimal and timed-out runs with an actual solution can export Excel. Infeasible, unbounded and failed runs are not exported as executable plans. An export is a snapshot; editing Excel does not solve the model again.
+“Export Excel” downloads both sheets. “More → Export report (Markdown)” creates the report. Markdown displays up to 500 nonzero variables; Excel and CSV retain all values.
 
-## Continue with the plan
+## Explanation and complete values
 
-Use Discuss plan, Adjust conditions or Business scenario comparison below the result. Explain the existing result first, then specify requirements to change, keeping a clear computation baseline.
+The run preset produces labels, units and short explanations; numerical cells read solver values. Explanations use up to 100 nonzero variables. Use the full-variable panel and exports for all data. Explanation language follows the interface at run start.
+
+“Run information” shows preset, method, actual backend, time and usage. Find intermediate model executions and feedback in the process view.
+
+## Continue from a result
+
+“Revise requirements” creates a new plan and comparison. “Business scenarios” computes alternatives from the current plan. “Discuss plan” opens the assistant beside the result. Query a schedule first, then request changed conditions.
+
+Drag or keyboard-adjust dividers to resize process and assistant panels. Closing a side panel returns the main area to full width.
+
+## Watch the workflow
+
+The recording shows the production result, two minimum-demand scenarios and data editing. Use captions, pause and fullscreen controls.
+
+```video
+workbench
+```

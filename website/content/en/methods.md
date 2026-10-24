@@ -1,33 +1,60 @@
-A modeling method determines how the LLM builds the formulation and code, and when it validates, debugs or searches further. Configure it separately from the LLM preset, library and solver backend.
+A modeling method controls how the LLM builds formulations and code, and when it checks, retries or compares candidates. It does not replace the solver: final numerical values must come from execution.
 
-## Choose by workflow
+## Choose by the difficulty you face
 
-Start with Direct for a first run. Consider Feedback Repair when you want a post-solve review. Use the table to explore specific mechanisms; it groups workflows rather than ranking accuracy.
-
-| Method | Main workflow | Explicit problem scope |
+| Main difficulty | Start with | Inspect |
 |---|---|---|
-| [Direct](../direct/) | One generation of formulation and code | Determined jointly by prompts, library and backend |
-| [Feedback Repair](../feedback-repair/) | Generate, solve, review against the problem and repair | As above |
-| [TriVAL](../trival/) | Semantic, formulation and code validation | As above |
-| [OptiMUS 0.3](../optimus/) | Extract components, formulate, assemble and debug | LP/MILP |
-| [Chain-of-Experts](../coe/) | Sequential expert selection and reduction | LP/MILP |
-| [OptiTree](../optitree/) | Type-tree matching, guidance retrieval and code inspection | LP/MILP |
-| [OR-LLM-Agent](../or-llm-agent/) | Formulation, code, execution and rechecks | LP/MILP |
-| [ORThought](../orthought/) | Reasoning path, formulation, code and execution debugging | Determined jointly by prompts, library and backend |
-| [LLMOPT](../llmopt/) | Five-part formulation and self-correction | As above |
-| [AutoFormulation](../autoformulation/) | Component tree, MCTS and model ranking | LP/MILP |
-| [SAC-Opt](../sac-opt/) | Semantic anchors, backtranslation and selective repair | LP/MILP |
-| [BIND](../bind/) | Data structure, full-data binding and execution repair | Determined jointly by prompts, library and backend |
-| [OptiMind](../optimind/) | Public type hints and multi-turn feedback | As above |
+| Need a quick first model | [Direct](../direct/) | Domains, constraints and data binding |
+| Executable code may miss rules | [Feedback Repair](../feedback-repair/) | Specific review after solving |
+| Need to separate interpretation, formulation and code errors | [TriVAL](../trival/) | Layered checks and attribution |
+| Many rules need component inspection | [OptiMUS 0.3](../optimus/) | Constraint-to-formula-to-code mapping |
+| Want to inspect role collaboration | [Chain-of-Experts](../coe/) | Useful information added by later experts |
+| Want problem-type templates | [OptiTree](../optitree/) | Match path and template applicability |
+| Want formulation before code and rechecks | [OR-LLM-Agent](../or-llm-agent/) | Rounds and actually executed code versions |
+| Need a retained modeling explanation | [ORThought](../orthought/) | Reasons for concrete modeling choices |
+| Want five-element formulation and correction | [LLMOPT](../llmopt/) | Formulation errors versus code errors |
+| Want candidate-model search | [AutoFormulation](../autoformulation/) | Pruning, rewards and final ranking |
+| Need constraint-level meaning checks | [SAC-Opt](../sac-opt/) | Blind backtranslation and selective repair |
+| Large JSON/CSV cannot fit conveniently in prompts | [BIND](../bind/) | Schema and full-data execution binding |
+| Want public type hints and continuing feedback | [OptiMind](../optimind/) | Public hint scope and checks after success |
 
-## Configure and compare
+Each article expands the mechanism, example and current parameters.
 
-Select a method in Run settings or name it in a Chat Agent request. All 13 built-in methods accept nine libraries, but the library's expression capabilities, the backend's solving capabilities and the method's own scope must all fit the problem.
+## Four checks answer different questions
 
-Deployment presets fix method parameters. Each method page generates its parameter table from current code. The UI, CLI and Python API do not accept per-run parameter changes; actual snapshots are saved with the run. [Method comparison](../method-comparison/) helps inspect behavior while keeping inputs and environment fixed.
+```mermaid
+flowchart TB
+  Problem["Business problem"] --> Semantic["Interpretation and semantic checks"]
+  Semantic --> Form["Formulation checks"]
+  Form --> Code["Code and data-binding checks"]
+  Code --> Solver["Solver computation"]
+  Solver --> Review["Substitute actual results into business rules"]
+```
 
-## What a research method means here
+Semantic checks interpret “each employee works at most five days.” Formulation checks require a sum for each employee. Code checks inspect indices and domains. The solver determines feasibility and optimality for the submitted model.
 
-Ports retain core orchestration, prompts and stopping conditions, with documented code-contract and execution adaptations. SAC-Opt is independently implemented. BIND and OptiMind have explicit public-scope and deployment adaptations. Their individual pages explain these distinctions.
+Repair loops also differ. Some read only execution errors, others review the problem, and others backtranslate individual constraints. Compare trigger conditions and return points by inspecting their trigger conditions and return points.
 
-Methods use your configured LLM. Integrating an inference workflow does not automatically deploy a paper's trained model or reproduce its benchmark results. Inspect the actual model, parameters, steps and result for each run.
+## Read different workflows on one example
+
+For the production problem, Direct generates formulation and code before solving. Feedback Repair adds a review after solving. TriVAL creates semantic, formulation and code validation artifacts. Open the worked examples to follow the same rule through those stages.
+
+[Quickstart](../quickstart/) provides the statement, data and recording. [Method comparison](../method-comparison/) provides side-by-side runs.
+
+## What determines call cost
+
+Direct uses one modeling call. Feedback Repair without repairs uses two calls and one solve. Component methods scale with rule count; validation methods scale with failed checks and returns. AutoFormulation's candidate sampling has a substantially larger default budget.
+
+There is no reliable universal time per problem. Provider latency, attachment size, output length and mathematical difficulty all matter. The platform records actual calls, usage and elapsed time; parameter tables come from current presets.
+
+## Problem scope and combinations
+
+OptiMUS, CoE, OptiTree, OR-LLM-Agent, AutoFormulation and SAC-Opt currently target LP/MILP. Other methods run according to the chosen model, library and backend. All nine libraries can be selected, but actual mathematics must fit the library and backend.
+
+For example, CPMpy has no continuous variables, OSQP does not solve integer programs, and Ipopt does not certify global optimality for general nonconvex models. Method and [solver selection](../solvers/) must both fit.
+
+## Make comparisons informative
+
+Fix the problem, attachments, LLM preset, library, backend and limits, then vary one factor. Record rule coverage, domains, actual solutions, solver status, validation status, call count and solve count.
+
+One run on one problem can reveal differences, not establish a stable ranking. Retain failures: they help decide whether to clarify requirements, improve data descriptions or change checking workflows. See [method and LLM comparison](../method-comparison/) for the UI workflow.

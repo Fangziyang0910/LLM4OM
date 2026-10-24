@@ -1,21 +1,49 @@
-PySCIPOpt 是 SCIP 的原生 Python 接口。平台识别它返回的 Model，支持标量、表达式与矩阵写法。
-
-## 适合的模型
-
-SCIP 原生模型可以表达混合整数线性模型，以及其支持的非线性约束。与 OR-Tools 中的 SCIP 线性接口相比，直接使用 PySCIPOpt 可以表达更多 SCIP 原生结构。
-
-这种表达能力仍受实际版本和模型类型限制。选择一个只支持 LP/MILP 的建模方法，不会因为使用 PySCIPOpt 就自动得到非线性建模流程。
-
-## 在平台中选择
-
-选择 PySCIPOpt，原生后端为 SCIP。它的 Model 不会切到任意其他引擎。代码定义 `build_model(data)` 并返回模型，不调用 `optimize()`。
+PySCIPOpt 直接使用 SCIP 的原生模型，支持线性、整数以及非线性约束。它适合需要在同一个模型中组织离散决策与原生非线性表达的任务。
 
 ## 非线性目标怎样表达
 
-原生目标要求线性表达。非线性目标需要辅助变量和方向正确的 epigraph/hypograph 约束。例如最小化平方表达式时，可以用辅助变量承接该表达式上界，再最小化辅助变量。应核对这种转换是否保留原问题含义。
+当前原生接口使用线性目标。可引入辅助变量 t，把待最小化的非线性成本放到约束中：`cost(x)≤t`，再最小化 t。这种 epigraph 形式保留目标含义，也让模型符合接口。
 
-变量下界也要明确：允许负值的连续决策不能意外使用默认非负下界。求解状态与目标值由实际 SCIP 运行返回。
+下面用连续分配案例：最小化到目标 `(1,2)` 的平方距离，总资源为2。辅助变量 `loss` 对应目标成本。
 
-## 官方资料
+## 完整原生模型
 
-参阅 [PySCIPOpt Model API](https://pyscipopt.readthedocs.io/en/stable/api/model.html)、[非线性表达式](https://pyscipopt.readthedocs.io/en/stable/tutorials/expressions.html)和[矩阵接口](https://pyscipopt.readthedocs.io/en/stable/tutorials/matrix.html)。
+```python
+from pyscipopt import Model
+
+def build_model(data):
+    model = Model("allocation")
+    x = model.addVar(name="x", lb=0, vtype="C")
+    y = model.addVar(name="y", lb=0, vtype="C")
+    loss = model.addVar(name="loss", lb=0, vtype="C")
+    model.addCons(x + y <= 2, name="resource")
+    model.addCons((x-1)**2 + (y-2)**2 <= loss, name="loss_definition")
+    model.setObjective(loss, "minimize")
+    return model
+```
+
+平台使用 SCIP 求解，应得到接近 x=0.5、y=1.5、loss=0.5 的数值。误差按求解容差阅读。代码返回 Model，求解由平台完成。
+
+## 辅助变量如何进入求解
+
+```mermaid
+flowchart LR
+  Cost["非线性成本表达式"] --> Link["cost ≤ loss"]
+  Link --> Obj["线性目标：min loss"]
+  Obj --> SCIP["SCIP 原生模型求解"]
+  SCIP --> Values["原决策与辅助变量"]
+```
+
+最大化收益时，对应的 hypograph 方向为 `t≤reward(x)`，再最大化t。目标方向决定辅助约束的方向，代码中应使用有业务意义的变量名。
+
+## 变量、索引与矩阵
+
+`vtype="C"` 表示连续，`"I"` 表示整数，`"B"` 表示二元。标量表达和矩阵接口最终都返回 `pyscipopt.Model`。数据可从完整附件解析，再按产品、时间或网络索引建立变量。
+
+对离散和非线性混合问题，选择支持该问题范围的建模方法；实际运行设置记录库、后端与方法，便于回看完整组合。
+
+## 结果阅读与后续操作
+
+结果中辅助变量也属于模型的一部分。可导出全部变量，并在公式中说明哪些是业务决策、哪些是成本或逻辑辅助量。调整资源或固定某些离散决策后，通过[调整条件](../revisions/)建立新方案比较。
+
+同一个连续二次案例的几何解释和操作演示见 [CVXPY](../cvxpy/)。原生 API 与矩阵建模见 [PySCIPOpt Model](https://pyscipopt.readthedocs.io/en/stable/api/model.html)和[矩阵教程](https://pyscipopt.readthedocs.io/en/stable/tutorials/matrix.html)。

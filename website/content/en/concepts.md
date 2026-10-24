@@ -1,40 +1,55 @@
-A run depends on the problem, modeling method, LLM and solver environment. Their separate roles help explain both configuration choices and results.
+LLM4OM connects requirements, modeling, computation and plan management. These terms map to settings and artifacts in the workbench.
 
-## From problem to plan
+## Run data flow
 
-```text
-Natural-language problem + data
-             ↓
-A modeling method organizes LLM calls
-             ↓
-Mathematical model + Python code
-             ↓
-The sandbox executes code; a backend solves the model
-             ↓
-Status, objective, decisions and recorded steps
+```mermaid
+flowchart TB
+  Input["Problem and attachments"] --> Method["Method orchestrates LLM calls"]
+  Method --> Form["Formulation and native code"]
+  Form --> Sandbox["Execution builds model"]
+  Sandbox --> Engine["Backend solves"]
+  Engine --> Result["Status, objective and variables"]
+  Result --> Record["Record, explanation and exports"]
 ```
 
-## Four distinct choices
+Attachments map file names to complete text. `build_model(data)` parses inputs and returns a native model. The platform executes and retains results.
 
-| Choice | What it determines | Examples |
+## Four configuration objects
+
+| Term | Role | Example |
 |---|---|---|
-| Modeling method | How a model is generated, checked and repaired | Direct, TriVAL, BIND |
-| LLM preset | Which language model reasons and generates code | Your configured model service and model ID |
-| Modeling library | Which Python interface expresses the model | Pyomo, CPMpy, CVXPY |
-| Solver backend | Which engine computes the solution | HiGHS, CP-SAT, Gurobi, Ipopt |
+| Method | Generation, checking and repair orchestration | Direct, TriVAL, BIND |
+| LLM preset | Service and request configuration | Team endpoint and model ID |
+| Library | Variables, objective and constraints | Pyomo, CPMpy, CVXPY |
+| Backend | Mathematical computation | HiGHS, CP-SAT, Gurobi, Ipopt |
 
-Changing the LLM does not directly change the solver. Choosing another library does not automatically broaden a method's problem scope. See the [method guide](../methods/) and [solver guide](../solvers/).
+One configuration might be “Feedback Repair + team preset + Pyomo + HiGHS.” Run information retains selections and the actual engine.
 
-## What a run saves
+## Four types of model information
 
-Each run fixes its problem, attachments, configuration, steps, formulation, code and actual result. A revision creates a separate run for comparison. Deleting a preset or changing server configuration later does not rewrite saved runs.
+| Information | Meaning | Production example |
+|---|---|---|
+| Parameters | Known input values | Unit profit and capacity |
+| Variables | Quantities or choices to determine | A and B quantities |
+| Objective | Expression to minimize or maximize | Total profit |
+| Constraints | Relationships decisions must satisfy | Hours and minimum orders |
 
-## Read the status correctly
+Indices extend these objects across products, dates, employees and nodes. Units connect statements, data and result labels.
 
-- `optimal`: the solver established optimality for the current model.
-- `feasible`: a solution exists, possibly without proof of optimality.
-- `locally_optimal`: a local optimization conclusion, often for nonlinear models.
-- `infeasible`: the current model is infeasible; conflict evidence may be available.
-- Execution failure: code, dependencies, interfaces or limits prevented completion.
+## Runs and plans
 
-Solver status and business-model correctness are separate judgments. If method validation fails even though a solver reports optimality, read the failed stage and its feedback first.
+A run contains inputs, settings, steps, formulation, code and execution. A plan is its computed decision result. Revisions create new runs; scenarios connect runs to one baseline. The conversation's current plan determines the basis for questions and changes.
+
+## Common statuses
+
+| Status | Meaning |
+|---|---|
+| optimal | Optimal result for the current model |
+| feasible | A feasible plan is available |
+| locally_optimal | Local result from a native nonlinear path |
+| infeasible | Current requirements cannot hold together |
+| unbounded | Objective is unbounded along a feasible direction |
+| time_limit | Limit reached; inspect retained solution and feedback |
+| Execution or validation failure | Read the specific stage and feedback |
+
+Status, values and method validation remain in the run. See [results](../results/) for daily use and [methods](../methods/) or [solvers](../solvers/) for mechanisms and interfaces.

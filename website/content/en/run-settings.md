@@ -1,28 +1,47 @@
-The manual workbench lets you review a complete problem and configuration before starting computation. Optimization chat can also specify these choices; see [Chat Agent](../chat-agent/).
+Run settings select the modeling workflow, code library, computation engine and LLM. The homepage shows a configuration summary; open “View run settings” or “Adjust settings” for all options.
 
-## Select four settings
+## The four settings
 
-Open View run settings or Adjust configuration above the problem.
+| Setting | Role | Production example |
+|---|---|---|
+| Method | Generation, validation and revision workflow | Feedback Repair |
+| Modeling library | Native model expressed in code | Pyomo |
+| Backend | Computation engine | highs or AUTO |
+| LLM preset | Service used for generation and checking | Saved team preset |
 
-| Setting | What to consider |
-|---|---|
-| Modeling method | Generation, validation and repair workflow; see [Methods](../methods/) |
-| Modeling library | Its ability to express the variables, objective and constraints; see [Libraries and solvers](../solvers/) |
-| Solver backend | An installed engine compatible with the model; AUTO is the default |
-| LLM preset | The language model service called during the run |
+Methods appear on the left; library, backend and preset appear on the right. Choose options and click “Done.” The summary updates, and backend options show availability and reasons.
 
-Method parameters are fixed in deployment presets, rather than editable per-run form fields. The run records the actual parameter snapshot for later inspection.
+## Configure one run
 
-## Review the problem and start
+```mermaid
+flowchart LR
+  Problem["Problem and attachments"] --> Method["Choose method"]
+  Method --> Library["Choose modeling library"]
+  Library --> Solver["Choose available backend"]
+  Solver --> Preset["Choose LLM preset"]
+  Preset --> Start["Start and save configuration"]
+```
 
-Check decisions, objective direction, constraints, units, integer or continuous domains and attachment fields. Switch between Markdown editing and preview. Use `\(...\)`, `\[...\]` or `$$...$$` for formulas in a problem statement; a single `$` in a price remains text.
+For production/transport LP/MILP, start with compatible Pyomo or PuLP backends. Inspect CPMpy/OR-Tools for scheduling and logic, CVXPY for convex quadratic structure, and CasADi for smooth nonlinear models. See [solver selection](../solvers/).
 
-Click Done to close the settings, then Start modeling, or press Ctrl+Enter / Cmd+Enter. Wait for attachments to finish loading before starting.
+## Three configurations to try
 
-## Follow progress
+| Task | Method | Library / backend | Inspect |
+|---|---|---|---|
+| First production run | Direct | Pyomo / AUTO | Formulation, quantities and profit |
+| Inspect layered business-rule checks | TriVAL | Mathematically suitable library / AUTO | Stage artifacts and validation feedback |
+| Large JSON/CSV | BIND | Pyomo or another compatible library / AUTO | Schema and data-reading code |
 
-The server runs the computation while the page shows actual steps. Closing the browser does not cancel a background run. Reopening retrieves its process and current progress. Stopping preserves saved steps, but does not imply that a method can resume from the interrupted node.
+Each method article lists current preset parameters, which are saved with runs. Method-specific parameters are set in deployment presets. The UI selects the method and execution environment.
 
-## Handle incompatible settings
+## Start and follow progress
 
-A library's interfaces do not imply that every backend can solve every model. Integer variables, for example, require an integer-capable backend. An explicitly selected backend is not silently replaced after failure. Read the full error and adjust configuration or model expression rather than using a continuous relaxation by mistake.
+After attachments finish reading, click “Start modeling” or press Ctrl+Enter / Cmd+Enter. The run page displays stages and artifacts. Execution takes place on the server; reopen the link to see progress.
+
+Completed runs show status and objective. “Run information” includes actual preset, backend, elapsed time and usage. “Modeling process” expands the stages that used those settings.
+
+## Batch comparison and next steps
+
+Enable “Compare” and select methods or presets to start up to 12 runs. The comparison table aligns settings, results and usage; see [method and LLM comparison](../method-comparison/).
+
+After a run, [export](../results/), [revise](../revisions/) or [discuss the plan](../plan-chat/). Revisions inherit baseline settings; “Edit and run” returns the complete input to the editor.

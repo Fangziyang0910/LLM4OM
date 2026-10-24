@@ -1,26 +1,45 @@
-Infeasibility means the current model's requirements cannot all hold together. When concrete solver evidence is available, the platform maps conflicting constraints to business requirements so you can decide what to change.
+An infeasible result means the current requirements cannot hold together in the submitted model. When specific solver evidence is available, the platform connects conflicting constraints to business rules and provides a revision action.
 
-## When diagnosis is available
+## Where to inspect it
 
-Current paths include Gurobi IIS for linear models and MUS for CPMpy models. CVXPY does not provide this diagnosis here. An infeasible status does not necessarily include an explainable conflict set.
+Open “Solution” and “Why infeasible.” Expand the referenced constraints to inspect the expressions or bounds behind an explanation. Formulation and code remain in adjacent tabs.
 
-When evidence exists, the result page shows Why infeasible. Expand the corresponding constraints to inspect the model conditions behind each explanation.
+Linear-model diagnosis uses Gurobi IIS; CPMpy uses MUS. Original evidence is retained for tracing business rules to mathematical expressions.
 
-## A concrete example
+## A concrete conflict
 
-```text
-Each A uses 2 cutting units; total cutting capacity is 8.
-Additional requirement: produce at least 5 units of A.
+Add B≥5 to production with 8 finishing hours. The relevant expressions are `B≥5`, `A+2B≤8` and nonnegative quantities. The explanation maps these to minimum orders and finishing capacity.
+
+```mermaid
+flowchart LR
+  Model["Current model infeasible"] --> Evidence["IIS / MUS evidence"]
+  Evidence --> Explain["Map to business requirements"]
+  Explain --> Edit["Prepare candidate revision"]
+  Edit --> New["User confirms and creates new plan"]
+  New --> Compare["Review new result and original"]
 ```
 
-These requirements conflict: 5 units of A alone need 10 cutting units. First check that the model accurately reflects the business rules, then decide whether to add capacity or change the production requirement.
+## Try a revision from evidence
 
-## Try a revision
+The explanation can offer one evidence-based change. “Try this adjustment” fills the revision dialog. Edit the request and generate a new plan; the original remains saved.
 
-The platform offers at most one evidence-based candidate change. It has not been validated by another solve and does not directly alter the original constraints. Try this adjustment fills the revision text. Review or edit it, then compute a new plan to test it. The original problem and result remain saved.
+For example, increase finishing capacity to 10 while keeping B≥5. This gives A=0, B=5 and objective 10. Alternatively, revise minimum demand according to business requirements and compute again.
 
-Feedback Repair reads available diagnosis to check modeling errors. Research methods retain their own feedback workflows. Infeasibility can be a correct result; fixed requirements should not be relaxed merely to obtain a solution.
+## Explore infeasibility in the example
 
-## When no diagnosis is available
+Set minimum B to 5 and inspect the status and explanation. Change it to 3 or 4 to see the corresponding plans.
 
-The platform does not produce a definite conflict explanation when diagnosis fails, no evidence is supplied or the result is only locally infeasible. Read the original error and check units, bounds and configuration. Large-model Gurobi diagnosis also requires a suitable license. See [CasADi](../casadi/) for local-status semantics.
+```demo
+production
+```
+
+## Continue from run information
+
+| Information | Action |
+|---|---|
+| Specific conflict constraints | Map to business rules and choose a change |
+| Diagnosis execution error | Inspect error, license and model size |
+| Native local-infeasibility status | Inspect starts, bounds and native feedback |
+| Code execution error | Locate syntax, data or interface issues in process |
+
+Diagnosis follows interface capabilities. CVXPY retains native status and model; Gurobi linear diagnosis and CPMpy MUS provide conflict evidence. See [backends](../backends/) and [revisions](../revisions/).

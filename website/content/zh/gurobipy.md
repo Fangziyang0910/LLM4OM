@@ -1,21 +1,49 @@
-gurobipy 是 Gurobi 的原生 Python 建模接口。它支持标量表达式和矩阵写法，两者都返回同一种 Gurobi 模型。
+gurobipy 直接构建 Gurobi 原生模型。它适合希望使用原生变量、约束、矩阵表达与求解诊断的工作流；实际求解需要部署环境中可用的 Gurobi 许可。
 
-## 在平台中选择
+## 模型与引擎的关系
 
-选择建模库 gurobipy，原生引擎为 Gurobi。这个原生模型不会接到任意其他引擎后面。需要使用 HiGHS 或 CBC 时，应选择具有对应原生适配器的建模库。
+选择 gurobipy 就是在使用 Gurobi 的模型对象与原生引擎。标量表达和矩阵接口都属于同一个 `gp.Model`，可以按数据结构选择合适写法。
 
-Gurobi 的模型表达能力取决于安装版本与问题类型。平台保留原生约束和表达式；生成代码仍需正确表达变量域、目标与条件。
+生产、运输、选址等 LP/MILP 是常见起点。其他原生二次、锥或更复杂表达应同时核对安装版本、求解器能力和所用方法的问题范围，不因选择 SDK 就假设所有组合都成立。
 
-## 代码与结果
+## 完整生产模型
 
-代码定义 `build_model(data)`，返回 `gurobipy.Model`，不调用 `optimize()`。平台实际求解后读取目标、变量、状态和可用诊断。标量、矩阵接口可以在同一模型中使用。
+```python
+import gurobipy as gp
+from gurobipy import GRB
 
-当前模型不可行时，Gurobi IIS 可以提供一组冲突约束，供[无解解释](../conflicts/)使用。证据针对当前数学模型，仍需核对模型与业务要求的对应关系。
+def build_model(data):
+    model = gp.Model("production")
+    a = model.addVar(lb=0, vtype=GRB.INTEGER, name="A")
+    b = model.addVar(lb=0, vtype=GRB.INTEGER, name="B")
+    model.setObjective(3*a + 2*b, GRB.MAXIMIZE)
+    model.addConstr(2*a + b <= 8, name="cutting")
+    model.addConstr(a + 2*b <= 8, name="finishing")
+    return model
+```
 
-## 许可证
+代码不调用 `optimize()`。平台执行后应得到A=3、B=2、收益13。矩阵形式可以使用 `MVar`，但命名、维度和矩阵行列含义仍需保留。
 
-没有完整许可时，只能在运行时允许的规模范围内使用。大规模模型、团队共享和容器运行需要适合实际用途的许可。配置采用 `GRB_LICENSE_FILE`，宿主机、app 容器和求解沙箱中的挂载路径需要对应，详见[后端与许可证](../backends/)。
+## 查看与导出方案
 
-## 官方资料
+结果页展示命名变量、目标值、求解状态和实际后端。上例可以直接核对 A、B 的产量；使用矩阵变量时，可通过索引名称阅读各分量，导出完整方案后继续做业务分析。
 
-参阅 [Gurobi Python API](https://docs.gurobi.com/projects/optimizer/en/current/reference/python/overview.html)和[矩阵变量 MVar](https://docs.gurobi.com/projects/optimizer/en/current/reference/python/mvar.html)。安装成功或后端显示可用，不能代替实际求解时的许可证校验。
+```demo
+production
+```
+
+在交互例中调整容量与需求，可以查看条件变化后的生产方案。正式运行的过程、模型和结果会一并保存，便于复查和比较。
+
+## 无解时怎样利用 IIS
+
+在案例中加入 `B≥5`，仅装配约束 `A+2B≤8` 与非负域就已冲突。支持的线性 Gurobi 路径可生成 IIS，指出一组不能共同满足的约束或界。
+
+IIS 列出一组不可约冲突约束或界，供用户定位需要调整的业务条件。用命名约束能让证据更容易对应到题面，详见[无解与冲突](../conflicts/)。
+
+## 许可与常见失败
+
+检查实际错误是许可缺失、环境不匹配、规模限制还是模型问题。容器使用 `GRB_LICENSE_FILE` 指向可只读挂载的离线许可文件；路径与部署步骤见[后端与许可证](../backends/)。
+
+## 使用建议与资料
+
+已有合适 Gurobi 环境、希望保留原生接口和冲突证据时可选此库。尚无许可而先学习线性建模时，可从 [Pyomo](../pyomo/) 或 [PuLP](../pulp/) 的开放后端开始。参考 [Gurobi Python API](https://docs.gurobi.com/projects/optimizer/en/current/reference/python/overview.html)。
