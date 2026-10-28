@@ -273,6 +273,7 @@ def test_llmopt_stops_after_twelve_re_solves(run_method: Any) -> None:
                                            "self_correction": JUDGED.format(five="True", code="False")}))
     assert [e["status"] for e in record["steps"] if e["type"] == "solve"] == ["optimal"] * 13
     assert record["usage"]["llm_calls"] == 1 + 13 + 12
+    assert "self-correction" in record["failure"] and "12 re-solves" in record["failure"]
 
 
 ORTHOUGHT_REPLY = ("## 1. Solution Path\n<solution_path>\nMaximize profit.\n</solution_path>\n\n## 2. Summary\n"
