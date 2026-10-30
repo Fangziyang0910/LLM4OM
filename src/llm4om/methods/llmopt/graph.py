@@ -145,13 +145,15 @@ async def self_correct(state: State, runtime: Runtime[Context]) -> dict[str, Any
                "An optimal solver status does not prove that the code used the correct problem data.")
     reply = await _ask(context, "self_correction", prompt)
 
+    plain = re.sub(r"[*`]", "", reply)
+
     def correct(part: str) -> bool:
-        # The upstream template has a separate verdict line for each artifact. Do not infer acceptance from prose.
-        plain = re.sub(r"[*`]", "", reply)
-        matches = re.findall(rf"^\s*(?:[-+]\s+)?The {part} is\s*[\[(]?\s*(true|false)\s*[\])]?\s*[.!]?\s*$",
-                             plain, re.I | re.M)
+        # Require a template verdict line, but include verdicts with explanations when checking for conflicts.
+        pattern = rf"\bThe {part} is\s*[\[(]?\s*(true|false)\b"
+        matches = re.findall(pattern, plain, re.I)
         values = {value.lower() for value in matches}
-        if len(values) != 1:
+        verdict_line = re.search(rf"^\s*(?:[-+]\s+)?{pattern}\s*[\])]?\s*[.!]?\s*$", plain, re.I | re.M)
+        if verdict_line is None or len(values) != 1:
             raise ValueError(f"Missing or conflicting verdict for {part}.")
         return values == {"true"}
 

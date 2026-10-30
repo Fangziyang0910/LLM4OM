@@ -18,6 +18,8 @@ ACCEPT = "The five-element is True.\nThe code is True.\nAnalysis:\nBoth match th
     "I reviewed the model and code.",
     "The five-element is True.\nAnalysis:\nThe code has not been reviewed.",
     "The five-element is True.\nThe code is True.\nThe code is False.",
+    "The five-element is True.\nThe code is True because it matches the problem.",
+    "The five-element is True.\nThe code is True/False.",
 ])
 def test_llmopt_does_not_accept_missing_or_conflicting_verdicts(run_method: Any, reply: str) -> None:
     def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
@@ -27,6 +29,25 @@ def test_llmopt_does_not_accept_missing_or_conflicting_verdicts(run_method: Any,
     assert result["failure"] and "self-correction" in result["failure"].lower()
     assert result["solve"]["objective"] == 13
     assert result["usage"]["solves"] == 1
+
+
+@pytest.mark.parametrize("part", ["five-element", "code"])
+@pytest.mark.parametrize("denial_first", [True, False], ids=["denial-first", "denial-last"])
+def test_llmopt_rejects_conflicting_verdicts_with_inline_explanations(
+    run_method: Any, part: str, denial_first: bool,
+) -> None:
+    denial = f"The {part} is False. The profit coefficient for A should be 3, not 6."
+    review = f"{denial}\n{ACCEPT}" if denial_first else f"{ACCEPT}\n{denial}"
+    wrong_code = CODE.replace('3 * m.x["A"]', '6 * m.x["A"]')
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        return {"five_element": MODEL, "code": wrong_code, "self_correction": review}[role]
+
+    result = run_method("llmopt", script)
+    assert result["failure"] and f"conflicting verdict for {part}" in result["failure"]
+    assert result["solve"]["objective"] == 24
+    assert result["usage"]["solves"] == 1
+    assert any(review in step.get("content", "") for step in result["steps"] if step["type"] == "artifact")
 
 
 @pytest.mark.parametrize("rejected", ["five_element", "code"])
@@ -69,10 +90,13 @@ def test_llmopt_exhausted_review_is_a_failure_with_actual_result(run_method: Any
     assert result["usage"]["solves"] == 2
 
 
-def test_llmopt_accepts_markdown_verdicts_and_keeps_the_review_visible(run_method: Any) -> None:
+@pytest.mark.parametrize("review", [
+    "**The five-element is [True].**\n**The code is `True`.**\nAnalysis:\nREVIEW_VISIBLE",
+    ACCEPT + "\nThe code is True because both profit coefficients match. REVIEW_VISIBLE",
+], ids=["markdown", "consistent-explanation"])
+def test_llmopt_accepts_consistent_verdicts_and_keeps_the_review_visible(run_method: Any, review: str) -> None:
     def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
-        return {"five_element": MODEL, "code": CODE,
-                "self_correction": "**The five-element is [True].**\n**The code is `True`.**\nAnalysis:\nREVIEW_VISIBLE"}[role]
+        return {"five_element": MODEL, "code": CODE, "self_correction": review}[role]
 
     result = run_method("llmopt", script)
     assert result["failure"] is None
