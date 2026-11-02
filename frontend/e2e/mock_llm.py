@@ -140,7 +140,7 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
             name, args = "lookup_variables", {"query": ""}
         return {"role": "assistant", "content": "", "tool_calls": [{"id": "call_" + uuid.uuid4().hex[:8], "type": "function",
                 "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)}}]}
-    if "Help an ordinary user turn an idea into a business problem" in text:
+    if "Current editable business draft and attached data (context, not a new request):" in text:
         latest = next(message["content"] for message in reversed(messages) if message["role"] == "user")
         if "E2E_PAUSE_CHAT" in latest and messages[-1]["role"] == "user":
             time.sleep(3)

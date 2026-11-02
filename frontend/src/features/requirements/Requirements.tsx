@@ -115,7 +115,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
       }}>{t("用于建模")}<ArrowRight /></Button>
     </div>
           <div className="relative flex min-h-0 flex-1 flex-col">
-            <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain px-1 sm:px-3">
+            <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain">
               <div ref={content} className="grid min-h-full grid-cols-1">
                 {!messages.length && !failure ? <div className="mx-auto flex min-h-full flex-col justify-center gap-5 py-6">
                   <span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><Sparkles className="size-5" /></span>

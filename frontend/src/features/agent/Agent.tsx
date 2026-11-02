@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import type { Message } from "@langchain/langgraph-sdk";
-import { ArrowDown, ArrowUpRight, BookOpen, Columns2, Globe, Paperclip, RefreshCw, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { ArrowDown, ArrowUpRight, BookOpen, Columns2, Globe, Menu, Paperclip, RefreshCw, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -27,9 +27,9 @@ import { cn } from "@/lib/utils";
 type Values = { messages?: Message[]; description?: string; data?: Record<string, string>; source?: SourceRun;
   current?: SourceRun; plans?: Plan[]; usage?: Usage; failure?: string | null };
 
-export function Agent({ threadId, options, presets, initial, onThread, openPresets, onManual, onExamples, onFinished, onOpen, onCompare, renderRun }: {
+export function Agent({ threadId, options, presets, initial, onThread, openPresets, onManual, onMenu, onExamples, onFinished, onOpen, onCompare, renderRun }: {
   threadId?: string; options: Options; presets: Preset[]; initial: { description: string; data: Record<string, string> };
-  onThread: (id: string) => void; openPresets: () => void; onManual: () => void; onExamples: () => void;
+  onThread: (id: string) => void; openPresets: () => void; onManual: () => void; onMenu: () => void; onExamples: () => void;
   onFinished: () => void; onOpen: (source: SourceRun) => void; onCompare: (id: string) => void; renderRun: (source: SourceRun) => ReactNode;
 }) {
   const desktop = useDesktop();
@@ -121,18 +121,23 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
     if (threadId) await client.threads.updateState(threadId, { values: { data: next }, asNode: "discuss" });
     setFiles(next);
   };
-  if (conversation.thread.error) return <div role="alert" className="grid h-full place-content-center gap-3 p-6 text-sm text-destructive">
-    <p>{errorText(conversation.thread.error)}</p><Button variant="outline" onClick={conversation.thread.reload}><RefreshCw />{t("重试")}</Button></div>;
-  const chat = <section aria-label={t("优化对话")} className={cn("flex h-full min-h-0 min-w-0 flex-col", workspace && pane === "workspace" && "hidden lg:flex")}>
-    <div className="relative flex min-h-0 flex-1 flex-col">
-      <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain px-5 md:px-8">
+  if (conversation.thread.error) return <div className="flex h-full flex-col">
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 xl:hidden">
+      <Button variant="ghost" size="icon" aria-label={t("打开菜单")} onClick={onMenu}><Menu /></Button><span className="text-sm font-medium">{t("优化对话")}</span>
+    </header>
+    <div role="alert" className="grid flex-1 place-content-center gap-3 p-6 text-sm text-destructive">
+      <p>{errorText(conversation.thread.error)}</p><Button variant="outline" onClick={conversation.thread.reload}><RefreshCw />{t("重试")}</Button></div>
+  </div>;
+  const empty = !threadId && !messages.length && !failure && !busy && !settings && !Object.keys(data).length;
+  const chat = <section aria-label={t("优化对话")} className={cn("flex h-full min-h-0 min-w-0 flex-col", empty && "justify-center", workspace && pane === "workspace" && "hidden lg:flex")}>
+    <div className={cn("relative flex min-h-0 flex-col", !empty && "flex-1")}>
+      <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className={cn("min-h-0 chat-scroll overflow-y-auto overscroll-contain px-4 md:px-8", empty ? "max-h-[50vh]" : "flex-1")}>
         <div ref={content} className="grid min-h-full grid-cols-1">
           {messages.length || failure ? <ChatMessages messages={messages} loading={conversation.loading} label={t("优化助手")}
             failure={failure} disabled={busy} onRetry={() => void submit(true)} progress={progress} tasks={tasks}
             onShowTask={id => { setLiveTask(id); setWorkspace(true); setPane("workspace"); }}
             onOpenPlan={source => { setViewed(source); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} />
-            : <div className="mx-auto flex min-h-full max-w-2xl flex-col justify-center gap-4 py-8">
-              <span className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-6" /></span>
+            : <div className="mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-4 py-5">
               <h2 className="text-2xl font-semibold tracking-tight">{t("说说你想优化什么")}</h2>
               <p className="text-sm leading-7 text-muted-foreground">{t("可以先提问、聊想法或整理资料，也可以直接描述要优化的问题。需要计算时，助手会调用建模方法，和你一起把方案做出来。")}</p>
               <div className="flex flex-wrap gap-2">
@@ -144,15 +149,15 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
       </div>
       {!follow ? <Button variant="outline" size="icon-sm" aria-label={t("回到最新消息")} className="absolute right-5 bottom-3 rounded-full bg-background shadow-sm" onClick={followLatest}><ArrowDown /></Button> : null}
     </div>
-    <div className="shrink-0 space-y-2 px-4 pt-2 pb-3 md:px-6">
-      {Object.keys(data).length ? <div className="mx-auto flex max-w-3xl flex-wrap gap-1.5" aria-label={t("数据文件")}>
+    <div className="shrink-0 space-y-2 px-4 pt-2 pb-3 md:px-8">
+      {Object.keys(data).length ? <div className="mx-auto flex max-w-[46rem] flex-wrap gap-1.5" aria-label={t("数据文件")}>
         {Object.keys(data).map(name => <span key={name} className="inline-flex max-w-full items-center rounded-lg border bg-card text-xs">
           <button disabled={busy} className="min-w-0 truncate px-2 py-1.5 hover:text-primary" onClick={() => setEditing(name)}>{name}</button>
           <Button variant="ghost" size="icon-xs" disabled={busy} aria-label={t("移除 {name}", { name })} onClick={() => {
             const next = { ...data }; delete next[name]; void saveData(next).catch(error => toast.error(errorText(error)));
           }}><X /></Button></span>)}
       </div> : null}
-      {settings ? <div className="mx-auto grid max-w-3xl grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3">
+      {settings ? <div className="mx-auto grid max-w-[46rem] grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3">
         <label className="space-y-1 text-xs text-muted-foreground">{t("建模方法")}
           <Select value={chosenMethod} onValueChange={setMethod} disabled={busy}><SelectTrigger className="w-full" aria-label={t("固定建模方法")}><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="auto">{t("自动选择")}</SelectItem>{options.methods.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></label>
@@ -205,7 +210,8 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   </aside> : null;
   return <div className="flex h-full min-h-0 flex-col">
     <header className="flex h-13 shrink-0 items-center gap-2 border-b px-4">
-      <Sparkles className="size-4 text-primary" /><h1 className="min-w-0 flex-1 truncate text-sm font-medium">{meta?.title || t("优化对话")}</h1>
+      <Button variant="ghost" size="icon-sm" aria-label={t("打开菜单")} className="-ml-2 xl:hidden" onClick={onMenu}><Menu /></Button>
+      <Sparkles className="hidden size-4 text-muted-foreground sm:block" /><h1 className="min-w-0 flex-1 truncate text-sm font-medium">{meta?.title || t("优化对话")}</h1>
       <Button variant="ghost" size="sm" onClick={onManual}>{t("手动建模")}</Button>
       <Button variant={workspace ? "secondary" : "ghost"} size="sm" aria-pressed={workspace} onClick={() => { setWorkspace(!workspace); setPane("workspace"); }}>
         <Columns2 />{t("建模工作区")}</Button>

@@ -99,9 +99,9 @@ export function Sidebar({ entries, current, options, presets, query, onQuery, ha
   };
 
   return <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-    <div className="flex flex-col gap-3 p-3 pb-2">
+    <div className="flex flex-col gap-2 p-3 pb-2">
       <a className="flex items-center gap-2.5 rounded-md px-1.5 py-1" href="/" onClick={event => { event.preventDefault(); onNew(); }}>
-        <span className="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-primary to-violet-500 text-primary-foreground shadow-sm">
+        <span className="grid size-8 place-items-center rounded-lg border bg-background text-foreground">
           <ChartSpline className="size-4.5" />
         </span>
         <span className="flex flex-col leading-tight">
@@ -109,8 +109,8 @@ export function Sidebar({ entries, current, options, presets, query, onQuery, ha
           <span className="text-[11px] text-muted-foreground">{t("优化建模工作台")}</span>
         </span>
       </a>
-      <Button onClick={onNew} className="w-full justify-start"><Plus />{t("新建建模")}</Button>
-      <Button variant="outline" onClick={onAgent} className="w-full justify-start"><Sparkles />{t("优化对话")}</Button>
+      <Button variant="outline" onClick={onNew} className="w-full justify-start bg-background/70 font-normal"><Plus />{t("新建建模")}</Button>
+      <Button variant="ghost" onClick={onAgent} className="w-full justify-start font-normal"><Sparkles />{t("优化对话")}</Button>
       <div className="relative">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input aria-label={t("搜索运行")} placeholder={t("搜索问题或方法")} value={query} onChange={event => onQuery(event.target.value)}

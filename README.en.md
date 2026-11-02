@@ -34,7 +34,7 @@ The platform includes **13 LLM modeling methods**: its own Direct and Feedback R
 
 <p align="center">
   <img src="docs/assets/demo.gif" alt="Demo: ordinary chat, arithmetic and the Agent modeling workspace" width="100%">
-  <br><sub>A real run: move from ordinary chat and arithmetic to production modeling with DeepSeek · Direct · Pyomo, revise conditions, then return to the original plan.</sub>
+  <br><sub>A real run recorded before the interface update: move from ordinary chat and arithmetic to production modeling with DeepSeek · Direct · Pyomo, revise conditions, then return to the original plan.</sub>
 </p>
 
 ## Highlights
@@ -62,6 +62,8 @@ The agent also handles ordinary questions, writing, code explanations, supplied 
 ## Screenshots
 
 On desktop, drag the divider beside the Agent or plan assistant to resize the conversation and modeling panels. Layouts survive reload. Historical plans are marked, with a shortcut back to the plan being discussed; browsing does not change the calculation baseline. Run settings show methods, modeling libraries and models side by side.
+
+The conversation screenshots use scripted examples and locally solved results.
 
 <table>
   <tr>

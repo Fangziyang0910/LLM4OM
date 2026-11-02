@@ -85,8 +85,17 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
         </>}
         {viewed && !sameSource(viewed, currentPlan) ? <Button variant="link" size="xs" className="mt-2 h-auto p-0" onClick={() => setViewed(undefined)}>{t("查看讨论中的方案")}</Button> : null}
       </div>
+      <details className="max-h-48 shrink-0 overflow-y-auto text-xs" aria-label={t("已生成的方案")}>
+        <summary className="cursor-pointer font-medium text-muted-foreground">{t("相关方案")} · {plans.length + 1}</summary>
+        <div className="mt-2 flex flex-col gap-1">
+          <Button variant="ghost" size="sm" className="justify-between text-xs" disabled={!original} onClick={() => original && setViewed(original)}>{t("打开原运行")}<ArrowUpRight /></Button>
+          {plans.map(plan => <Button key={sourceKey(plan.source)} variant="ghost" className="h-auto justify-between py-2 text-left text-xs whitespace-normal"
+            onClick={() => setViewed(plan.source)} title={plan.instruction}><span>{plan.name}</span><ArrowUpRight className="shrink-0" /></Button>)}
+          {groups.map((group, i) => <Button key={group} variant="ghost" size="sm" onClick={() => onCompare(group)}><Columns3 />{t("查看场景对比 {number}", { number: i + 1 })}</Button>)}
+        </div>
+      </details>
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain px-1 sm:px-3">
+        <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain">
           <div ref={content} className="grid min-h-full grid-cols-1">
             {messages.length || failure ? <ChatMessages messages={messages} loading={conversation.loading} label={t("方案助手")}
               failure={failure} disabled={busy} onRetry={() => void submit(true)} progress={progress}
@@ -107,15 +116,6 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
         placeholder={t("追问方案，或说明你想调整的条件……")} onStop={() => void stop()} />
       <p className="shrink-0 text-center text-[11px] text-muted-foreground">{t(conversation.loading ? "回复期间可继续输入，完成后发送。" : "Enter 发送，Shift+Enter 换行")}</p>
 
-      <details className="max-h-48 shrink-0 overflow-y-auto border-t pt-2 text-xs" aria-label={t("已生成的方案")}>
-        <summary className="cursor-pointer font-medium text-muted-foreground">{t("相关方案")} · {plans.length + 1}</summary>
-        <div className="mt-2 flex flex-col gap-1">
-          <Button variant="ghost" size="sm" className="justify-between text-xs" disabled={!original} onClick={() => original && setViewed(original)}>{t("打开原运行")}<ArrowUpRight /></Button>
-          {plans.map(plan => <Button key={sourceKey(plan.source)} variant="ghost" className="h-auto justify-between py-2 text-left text-xs whitespace-normal"
-            onClick={() => setViewed(plan.source)} title={plan.instruction}><span>{plan.name}</span><ArrowUpRight className="shrink-0" /></Button>)}
-          {groups.map((group, i) => <Button key={group} variant="ghost" size="sm" onClick={() => onCompare(group)}><Columns3 />{t("查看场景对比 {number}", { number: i + 1 })}</Button>)}
-        </div>
-      </details>
     </aside>
   </TabsContent>;
   return <Tabs defaultValue="plan" className="h-full min-h-0 gap-0">

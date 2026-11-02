@@ -26,32 +26,43 @@ export function ChatInput({ value, onChange, disabled, loading, stopping = false
       field.current?.focus({ preventScroll: true });
     responding.current = loading;
   }, [loading]);
-  return <form className="@container mx-auto w-full max-w-3xl shrink-0 rounded-2xl border bg-card p-3 shadow-sm transition-[border-color,box-shadow] focus-within:border-primary/35 focus-within:ring-2 focus-within:ring-primary/10"
+  return <form className="@container mx-auto w-full min-w-0 max-w-[46rem] shrink-0"
     onSubmit={event => { event.preventDefault(); if (!disabled && value.trim()) onSend(); }}>
-    <Textarea ref={field} aria-label={label} placeholder={loading ? t("正在回复，可先写下一条消息……") : placeholder ?? t("说说你的想法，或回答上一个问题……")} value={value} disabled={disabled && !loading}
-      onChange={event => onChange(event.target.value)} className="max-h-36 min-h-16 resize-none border-0 bg-transparent px-1 py-1 text-base shadow-none field-sizing-content focus-visible:ring-0 sm:text-sm dark:bg-transparent"
-      onKeyDown={event => {
-        if (event.key === "Enter" && (!event.shiftKey || event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
-          event.preventDefault(); if (!disabled && value.trim()) onSend();
-        }
-      }} />
-    <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-border/60 pt-2">
-      {/* Radix's hidden form select can emit an empty value while saved options are loading. */}
-      <Select value={presetId ?? ""} onValueChange={id => { if (id) onPreset(id); }} disabled={disabled}>
-        <SelectTrigger aria-label={t("对话模型")} title={presets.find(item => item.id === presetId)?.name || presets.find(item => item.id === presetId)?.model}
-          className="h-8! min-w-0 w-32 border-0 bg-transparent px-2 text-xs shadow-none @lg:w-52"><SelectValue placeholder={t("选择预设模型")} /></SelectTrigger>
-        <SelectContent>{presets.map(item => <SelectItem key={item.id} value={item.id}>{item.name || item.model}</SelectItem>)}</SelectContent>
-      </Select>
-      <Button type="button" variant="ghost" size="icon-sm" aria-label={t("管理预设模型")} title={t("管理预设模型")} onClick={openPresets}><Settings2 /></Button>
-      {preset?.provider === "deepseek" ? <Button type="button" variant="ghost" size="sm" aria-label={t("深度思考")} aria-pressed={thinkingOn}
-        title={t("控制本轮对话的模型思考，建模流程沿用运行预设。")}
-        disabled={disabled} onClick={() => onThinking(!thinkingOn)}
-        className={cn("h-8 gap-1.5 rounded-lg px-2 text-xs text-muted-foreground", thinkingOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}>
-        <Brain /><span className="hidden @md:inline">{t("深度思考")}</span></Button> : null}
-      {children}
-      {loading || stopping ? <Button type="button" variant="secondary" size="icon-sm" className="ml-auto rounded-full" aria-label={t("停止")}
-        title={stopping ? t("正在停止……") : t("停止")} disabled={stopping} onClick={onStop}><Square className="size-3 fill-current" /></Button>
-        : <Button type="submit" size="icon-sm" className="ml-auto rounded-full" aria-label={t("发送")} disabled={disabled || !value.trim()}><ArrowUp /></Button>}
+    <div className="rounded-2xl border border-border/80 bg-card p-2.5 shadow-xs transition-[border-color,box-shadow] focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/10 sm:p-3">
+      <Textarea ref={field} aria-label={label} placeholder={loading ? t("正在回复，可先写下一条消息……") : placeholder ?? t("说说你的想法，或回答上一个问题……")} value={value} disabled={disabled && !loading}
+        onChange={event => onChange(event.target.value)} className="max-h-36 min-h-14 resize-none border-0 bg-transparent px-1 py-1 text-base shadow-none field-sizing-content focus-visible:border-0 focus-visible:ring-0 sm:text-sm dark:bg-transparent"
+        onKeyDown={event => {
+          if (event.key === "Enter" && (!event.shiftKey || event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
+            event.preventDefault(); if (!disabled && value.trim()) onSend();
+          }
+        }} />
+      <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
+        {/* Narrow sidebars scroll the controls instead of pushing Send or Stop out of reach. */}
+        <div className="-my-1 -ml-1 flex min-w-0 flex-1 items-center overflow-x-auto px-1 py-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1">
+          <div className="flex w-max items-center gap-1">
+            {/* Radix's hidden form select can emit an empty value while saved options are loading. */}
+            <Select value={presetId ?? ""} onValueChange={id => { if (id) onPreset(id); }} disabled={disabled}>
+              <SelectTrigger aria-label={t("对话模型")} title={preset?.name || preset?.model}
+                className="h-8! w-32 min-w-0 overflow-hidden border-0 bg-transparent px-2 text-xs shadow-none @lg:w-52 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:overflow-hidden">
+                <SelectValue placeholder={t("选择预设模型")} />
+              </SelectTrigger>
+              <SelectContent>{presets.map(item => <SelectItem key={item.id} value={item.id}>{item.name || item.model}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={t("管理预设模型")} title={t("管理预设模型")} onClick={openPresets}><Settings2 /></Button>
+            {preset?.provider === "deepseek" ? <Button type="button" variant="ghost" size="sm" aria-label={t("深度思考")} aria-pressed={thinkingOn}
+              title={t("控制本轮对话的模型思考，建模流程沿用运行预设。")}
+              disabled={disabled} onClick={() => onThinking(!thinkingOn)}
+              className={cn("h-8 shrink-0 gap-1.5 rounded-lg px-2 text-xs text-muted-foreground", thinkingOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}>
+              <Brain /><span className="hidden @md:inline">{t("深度思考")}</span></Button> : null}
+            {children}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center">
+          {loading || stopping ? <Button type="button" variant="secondary" size="icon-sm" className="rounded-full" aria-label={t("停止")}
+            title={stopping ? t("正在停止……") : t("停止")} disabled={stopping} onClick={onStop}><Square className="size-3 fill-current" /></Button>
+            : <Button type="submit" size="icon-sm" className="rounded-full" aria-label={t("发送")} title={t("发送")} disabled={disabled || !value.trim()}><ArrowUp /></Button>}
+        </div>
+      </div>
     </div>
   </form>;
 }

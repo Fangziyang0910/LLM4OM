@@ -161,12 +161,12 @@ export default function App() {
     </Sheet>
 
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 xl:hidden">
+      {(route.name !== "agent-new" && route.name !== "agent" || !options || optionsQuery.error) ? <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 xl:hidden">
         <Button variant="ghost" size="icon" aria-label={t("打开菜单")} onClick={() => setMenuOpen(true)}><Menu /></Button>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? t("新建建模")
           : route.name === "agent-new" || route.name === "agent" ? t("优化对话") : route.name === "chat" ? t("需求对话") : route.name === "discussion" ? t("方案对话") : route.name === "compare" ? t("对比") : t("建模结果")}</span>
         {route.name !== "new" ? <Button variant="ghost" size="icon" aria-label={t("新建建模")} onClick={newProblem}><Plus /></Button> : null}
-      </header>
+      </header> : null}
       {presetsQuery.error ? <div role="alert" className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 border-b px-4 py-2 text-xs text-destructive sm:px-6">
         <span>{t("预设模型加载失败：{error}", { error: errorText(presetsQuery.error) })}</span>
         <Button variant="outline" size="sm" disabled={presetsQuery.isFetching} onClick={() => void presetsQuery.refetch()}><RefreshCw />{t("重试")}</Button>
@@ -185,7 +185,7 @@ export default function App() {
             ? <PageErrorBoundary key={route.name === "agent" ? route.id : `new-${agentDraft.description}`}><Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
               <Agent key={route.name === "agent" ? route.id : `new-${agentDraft.description}`} threadId={route.name === "agent" ? route.id : undefined}
                 options={options} presets={presets} initial={agentDraft} onThread={id => go({ name: "agent", id })}
-                openPresets={() => setPresetsOpen(true)} onExamples={() => setExamplesOpen(true)} onManual={() => go({ name: "new" })}
+                openPresets={() => setPresetsOpen(true)} onExamples={() => setExamplesOpen(true)} onManual={() => go({ name: "new" })} onMenu={() => setMenuOpen(true)}
                 onFinished={() => void refresh()} onOpen={openRun} onCompare={id => go({ name: "compare", id })} renderRun={source => renderRun(source, false, true)} />
             </Suspense></PageErrorBoundary>
           : route.name === "new"

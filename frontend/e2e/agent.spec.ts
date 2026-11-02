@@ -1,5 +1,35 @@
 import { expect, test } from "@playwright/test";
 
+test("the mobile conversation keeps navigation, composer controls and keyboard sending accessible", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/agent");
+  await expect(page.getByRole("heading", { name: "优化对话", exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "打开菜单" }).click();
+  await expect(page.getByRole("dialog").getByRole("button", { name: "新建建模", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  await page.getByRole("button", { name: "建模偏好" }).click();
+  for (const size of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(size);
+    await expect(page.getByRole("combobox", { name: "固定建模方法" })).toBeInViewport();
+    await expect(input).toBeInViewport();
+  }
+  await page.getByRole("button", { name: "建模偏好" }).click();
+  await page.setViewportSize({ width: 320, height: 568 });
+  await input.fill("E2E_GENERAL 列表和元组有什么区别？");
+  await input.press("Shift+Enter");
+  await input.pressSequentially("谢谢");
+  await expect(input).toHaveValue("E2E_GENERAL 列表和元组有什么区别？\n谢谢");
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeInViewport();
+  await input.press("Control+Enter");
+  await expect(page.getByRole("log")).toContainText("列表可以修改");
+  for (const size of [{ width: 320, height: 568 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(size);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect(input).toBeInViewport();
+  }
+});
+
 test("the independent agent discusses an idea, models it, and calculates changes without leaving the conversation", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(String(error)));
