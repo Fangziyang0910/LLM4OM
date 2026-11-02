@@ -5,7 +5,7 @@ test("requesting prices with search off finishes instead of repeatedly updating 
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   await page.waitForURL(/\/chat\//);
   const id = page.url().split("/").at(-1)!;
-  await expect(page.getByRole("button", { name: "联网搜索", exact: true })).toContainText("联网搜索未开启");
+  await expect(page.getByRole("button", { name: "联网搜索", exact: true })).toHaveAttribute("aria-pressed", "false");
   await page.getByLabel("发送给需求助手").fill("E2E_LOOP_DRAFT：常见的价格和来源你联网搜索得到，成本按每周算。");
   await page.getByLabel("发送给需求助手").press("Enter");
   await expect(page.getByRole("log")).toContainText("联网搜索未开启，请开启后再查询实时价格");

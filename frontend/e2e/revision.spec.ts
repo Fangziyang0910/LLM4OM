@@ -7,7 +7,7 @@ test("business explanation and a revised plan preserve the original checkpoint",
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
   await page.getByRole("button", { name: /^开始建模/ }).click();
   await page.waitForURL(/\/run\//);
-  await page.getByRole("button", { name: "查看解", exact: true }).waitFor({ timeout: 60_000 });
+  await page.getByRole("button", { name: "导出 Excel", exact: true }).waitFor({ timeout: 60_000 });
   await expect(page.getByText("方案解读", { exact: true })).toBeVisible();
   const sourceId = page.url().split("/").at(-1)!;
   const original = (await (await page.request.get(`/threads/${sourceId}`)).json()).values;

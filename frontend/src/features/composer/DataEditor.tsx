@@ -44,7 +44,7 @@ export function DataEditor({ name, content, onSave, onClose }: {
       onKeyDown={event => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) event.stopPropagation(); }}>
       <DialogHeader>
         <DialogTitle className="break-all">{t("编辑数据：{name}", { name })}</DialogTitle>
-        <DialogDescription>{t("检查数据后再建模。可在列名中补充含义和单位，例如“单价（元）”。保存后使用修改后的附件。")}</DialogDescription>
+        <DialogDescription>{t("可在列名中补充含义和单位，例如“单价（元）”。")}</DialogDescription>
       </DialogHeader>
       <Tabs defaultValue={grid ? "table" : "text"} className="min-h-0 flex-1 gap-3">
         <TabsList className="shrink-0 self-start"><TabsTrigger value="table" disabled={!grid}>{t("表格")}</TabsTrigger><TabsTrigger value="text">{t("原文")}</TabsTrigger></TabsList>

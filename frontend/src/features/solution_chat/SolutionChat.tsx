@@ -17,6 +17,7 @@ import { client } from "@/features/runs/sdk";
 import { StatusBadge } from "@/features/runs/status";
 import { errorText, formatNumber } from "@/format";
 import { locale, t } from "@/i18n";
+import { cn } from "@/lib/utils";
 import type { Plan, RunValues, SolutionChatMeta, SourceRun, Usage } from "@/features/runs/types";
 import { sameSource, sourceKey } from "@/features/runs/types";
 import type { Preset } from "@/types";
@@ -76,7 +77,7 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
         <h2 className="flex items-center gap-2 text-sm font-medium"><Sparkles className="size-4 text-muted-foreground" />{t("方案助手")}</h2>
         <Button variant="ghost" size="icon-xs" disabled={!shown} aria-label={t("收起方案助手")} onClick={() => onOpen(shown!)}><X /></Button>
       </div>
-      <div className="shrink-0 rounded-lg border bg-muted/30 p-3 text-xs" aria-label={t("当前讨论方案")}>
+      <div className={cn("shrink-0 rounded-lg border bg-muted/30 p-3 text-xs", sameSource(shown, currentPlan) && "lg:hidden")} aria-label={t("当前讨论方案")}>
         <p className="mb-1 text-muted-foreground">{t("当前讨论方案")}</p>
         {summary.error ? <p role="alert" className="text-destructive">{errorText(summary.error)}</p> : !values ? <Spinner /> : <>
           <p className="truncate font-medium" title={values.description}>{values.description?.trim().split("\n")[0].replace(/^#{1,6}\s+/, "")}</p>
@@ -103,9 +104,7 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
               failure={failure} disabled={busy} onRetry={() => void submit(true)} progress={progress}
               onOpenPlan={openPlan} onCompare={onCompare} />
               : <div className="mx-auto flex min-h-full max-w-md flex-col justify-center gap-4 py-6">
-                <span className="grid size-8 place-items-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
                 <h2 className="text-base font-semibold">{t("接下来，想了解或调整什么？")}</h2>
-                <p className="text-sm leading-6 text-muted-foreground">{t("可以询问决策值的含义，也可以给出新的条件。新方案会实际建模求解，并单独保存。")}</p>
                 <Button variant="outline" className="self-start" onClick={() => { setInput(t("请用通俗的话解释这个方案的主要决策。")); inputArea.current?.focus(); }}>{t("解释主要决策")}</Button>
               </div>}
           </div>
@@ -116,7 +115,6 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
         inputRef={inputArea}
         presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets} onSend={() => void submit()}
         placeholder={t("追问方案，或说明你想调整的条件……")} onStop={() => void stop()} />
-      <p className="shrink-0 text-center text-[11px] text-muted-foreground">{t(conversation.loading ? "回复期间可继续输入，完成后发送。" : "Enter 发送，Shift+Enter 换行")}</p>
 
     </aside>
   </TabsContent>;

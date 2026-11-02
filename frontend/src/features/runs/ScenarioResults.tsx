@@ -29,7 +29,7 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
   return <div className="h-full overflow-y-auto"><div className="flex min-w-0 flex-col gap-5 p-4 sm:p-6">
     <header className="flex flex-col gap-2"><span className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><Columns3 className="size-4" />{t("业务场景对比")}</span>
       <h1 className="text-xl font-semibold">{t("比较不同条件下的实际方案")}</h1>
-      <p className="text-sm text-muted-foreground">{t("各场景独立重新建模，原方案作为固定基准。点击场景可查看完整题面、模型、数据和求解结果。")}</p>
+      <p className="text-sm text-muted-foreground">{t("各场景独立重新建模，原方案作为固定基准。")}</p>
     </header>
     {baseline.error ? <p role="alert" className="text-sm text-muted-foreground">{t("原方案暂不可读，已生成的场景仍可查看。")}</p> : null}
       <Table containerClassName="rounded-xl border bg-card"><TableHeader className="bg-muted/50"><TableRow><TableHead>{t("业务场景")}</TableHead><TableHead>{t("调整要求")}</TableHead>

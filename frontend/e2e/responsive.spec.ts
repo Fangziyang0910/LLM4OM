@@ -50,7 +50,7 @@ test("a phone can preview Markdown, submit its unchanged source and read the for
   await page.getByRole("tab", { name: "预览", exact: true }).click();
   await page.getByRole("button", { name: /^开始建模/ }).click();
   await page.waitForURL(/\/run\//);
-  await page.getByRole("button", { name: "查看解", exact: true }).waitFor({ timeout: 60_000 });
+  await page.getByRole("button", { name: "导出 Excel", exact: true }).waitFor({ timeout: 60_000 });
   const thread = (await (await page.request.get(`/threads/${page.url().split("/").at(-1)}`)).json()).values;
   expect(thread.description).toBe(problem);
   expect(thread.solve.objective).toBe(13);

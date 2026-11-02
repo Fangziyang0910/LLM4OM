@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -303,7 +302,6 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
               try { await onDiscuss?.(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
             }}><MessageSquare />{assistant && assistantOpen ? t("收起需求助手") : t("通过对话整理需求")}</Button>
           </div>
-          <p className={cn("max-w-3xl text-sm leading-relaxed text-muted-foreground", assistant && "hidden lg:block")}>{t("写清要安排什么、希望达到的目标，以及必须满足的条件。需要时附上数据。")}</p>
         </header>
 
         <button type="button" aria-label={t("查看运行设置")} aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}
@@ -334,15 +332,12 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
         <div className="flex shrink-0 justify-end border-t px-4 py-3"><Button onClick={() => setSettingsOpen(false)}>{t("完成")}</Button></div>
       </DialogContent>
     </Dialog>
-    <footer className="flex shrink-0 items-center justify-between gap-2 border-t bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-4 sm:px-6">
-      <p className="hidden text-xs text-muted-foreground sm:block">{t("生成数学模型与求解代码，运行后查看实际结果。")}</p>
+    <footer className="flex shrink-0 items-center justify-end gap-2 border-t bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-4 sm:px-6">
       <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:min-w-56">
         {comparing && runs.length > MAX_COMPARED ? <p className="text-xs text-destructive">
           {t("一次最多对比 {max} 个运行，当前为 {count} 个。", { max: MAX_COMPARED, count: runs.length })}</p> : null}
         <Button size="lg" className="w-full" disabled={busy || (reviewFirst ? disabled || reading || !draft.description.trim() : !ready)} onClick={() => void start()}>
           {busy || reading ? <Spinner /> : reviewFirst ? <ArrowRight /> : comparing ? <Columns3 /> : <Play />}{label}
-          {!busy ? <KbdGroup className="ml-1 hidden opacity-70 sm:inline-flex"><Kbd className="bg-primary-foreground/15 text-primary-foreground">Ctrl</Kbd>
-            <Kbd className="bg-primary-foreground/15 text-primary-foreground">↵</Kbd></KbdGroup> : null}
         </Button>
       </div>
     </footer>

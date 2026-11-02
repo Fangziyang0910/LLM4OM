@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
-import { ArrowRight, ChevronDown, CircleCheck, Clock, CodeXml, Columns3, Cpu, FileDown, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sigma, Square, Tag, Trash2, TriangleAlert, Zap } from "lucide-react";
+import { ArrowRight, ChevronDown, CircleCheck, Clock, CodeXml, Columns3, Cpu, FileDown, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Square, Tag, Trash2, TriangleAlert, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -190,13 +190,12 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
     </div>
 
     {!active && !embedded ? <div role="group" aria-label={t("运行操作")} className="flex shrink-0 flex-wrap items-center gap-1 px-4 pt-2 [&>button]:shrink-0">
-      <span className="mr-2 hidden text-xs text-muted-foreground sm:block">{t("继续调整")}</span>
       <Button variant="outline" size="sm" disabled={busy || !values.description} onClick={() => setRevision("")}><Pencil />{t("调整条件")}</Button>
       <Button variant="ghost" size="sm" disabled={busy || !values.spec} onClick={() => setScenarios(true)}><Columns3 />{t("业务场景对比")}</Button>
-          <Button variant="ghost" size="sm" className="px-2 sm:px-3" aria-pressed={assistantOpen} disabled={busy || !values.spec} onClick={async () => {
+          {!assistantOpen ? <Button variant="ghost" size="sm" className="px-2 sm:px-3" disabled={busy || !values.spec} onClick={async () => {
             setBusy(true);
             try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
-          }}>{busy ? <Spinner /> : <MessageSquare />}{t(assistantOpen ? "收起方案助手" : "讨论方案")}</Button>
+          }}>{busy ? <Spinner /> : <MessageSquare />}{t("讨论方案")}</Button> : null}
     </div> : null}
 
     {wide && !assistantOpen && withProcess ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1 p-4 pt-3">
@@ -304,9 +303,7 @@ function Summary({ state, values, steps, error, active, elapsed, onTab }: {
     <Button variant="outline" size="sm" onClick={() => onTab("solution")}>{t("查看详情")}<ArrowRight /></Button>);
 
   const kind = tone(solve.status);
-  const variables = Object.values(solve.variables);
-  const nonzero = variables.filter(value => value !== 0).length;
-  const explain = kind === "good" ? t("{nonzero} 个非零变量 · 共 {total} 个变量", { nonzero, total: variables.length })
+  const explain = kind === "good" ? null
     : solve.status === "infeasible" ? (solve.diagnosis?.items.length
       ? t("求解器判定模型不可行。{tool} 找到 {count} 条不能同时满足的约束，见“解”。", { tool: solve.diagnosis.tool, count: solve.diagnosis.total })
       : t("求解器判定模型不可行：约束之间互相矛盾。请检查数学模型的约束与数据。"))
@@ -319,9 +316,6 @@ function Summary({ state, values, steps, error, active, elapsed, onTab }: {
         {values.explanation?.objective_unit ? <span className="text-xs text-muted-foreground">{values.explanation.objective_unit}</span> : null}</span> : null}
       <StatusBadge status={solve.status} />
     </div>
-    <p className="text-sm text-muted-foreground">{explain}</p>
-  </div>, <>
-    <Button variant="outline" size="sm" onClick={() => onTab("formulation")}><Sigma />{t("核对数学模型")}</Button>
-    <Button variant="outline" size="sm" onClick={() => onTab("solution")}>{t("查看解")}<ArrowRight /></Button>
-  </>);
+    {explain ? <p className="text-sm text-muted-foreground">{explain}</p> : null}
+  </div>);
 }

@@ -139,7 +139,6 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
             onOpenPlan={source => { setViewed(source); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} />
             : <div className="mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-4 py-5">
               <h2 className="text-2xl font-semibold tracking-tight">{t("说说你想优化什么")}</h2>
-              <p className="text-sm leading-7 text-muted-foreground">{t("可以先提问、聊想法或整理资料，也可以直接描述要优化的问题。需要计算时，助手会调用建模方法，和你一起把方案做出来。")}</p>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => { setInput(t("我想给门店安排下周的班次，应该先提供哪些信息？")); inputArea.current?.focus(); }}>{t("聊聊排班需求")}</Button>
                 <Button variant="outline" onClick={onExamples}><BookOpen />{t("从示例开始")}</Button>
@@ -171,11 +170,10 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
         onSend={() => void submit()} onStop={() => void stop()} placeholder={t("提问、聊聊想法，或继续调整当前方案……")}>
         <Button type="button" variant="ghost" size="icon-sm" disabled={busy} aria-label={t("添加数据文件")} onClick={() => upload.current?.click()}><Paperclip /></Button>
         <Toggle size="sm" pressed={searching} disabled={busy || !canSearch} aria-label={t("联网搜索")} onPressedChange={setSearch}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Toggle>
-        <Button type="button" variant={settings ? "secondary" : "ghost"} size="icon-sm" aria-label={t("建模偏好")} aria-expanded={settings} onClick={() => setSettings(!settings)}><SlidersHorizontal /></Button>
+        <Button type="button" variant={settings || chosenMethod !== "auto" || chosenLanguage !== "auto" ? "secondary" : "ghost"} size="icon-sm" aria-label={t("建模偏好")}
+          title={`${options.methods.find(item => item.id === chosenMethod)?.name || t("自动选择")} · ${options.languages.find(item => item.id === chosenLanguage)?.name || t("自动选择")}`}
+          aria-expanded={settings} onClick={() => setSettings(!settings)}><SlidersHorizontal /></Button>
       </ChatInput>
-      <p className="text-center text-[11px] text-muted-foreground">{chosenMethod !== "auto" || chosenLanguage !== "auto"
-        ? `${options.methods.find(item => item.id === chosenMethod)?.name || t("自动选择")} · ${options.languages.find(item => item.id === chosenLanguage)?.name || t("自动选择")}`
-          : t("Enter 发送，Shift+Enter 换行")}</p>
       <input ref={upload} type="file" multiple accept={DATA_FILE_ACCEPT} className="hidden" aria-label={t("数据文件")} onChange={async event => {
         const field = event.currentTarget;
         try {
@@ -199,11 +197,9 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
       {shown && !task ? <Button variant="ghost" size="icon-xs" aria-label={t("打开完整运行")} onClick={() => onOpen(shown)}><ArrowUpRight /></Button> : null}
       <Button variant="ghost" size="icon-xs" aria-label={t("收起建模工作区")} onClick={() => { setWorkspace(false); setPane("chat"); }}><X /></Button>
     </div>
-    {!task && shown && currentPlan ? <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-xs" aria-label={t("方案上下文")}>
-      {sameSource(shown, currentPlan) ? <span className="text-muted-foreground">{t("后续对话将基于此方案继续。")}</span> : <>
+    {!task && shown && currentPlan && !sameSource(shown, currentPlan) ? <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-xs" aria-label={t("方案上下文")}>
         <Badge variant="outline">{t("正在查看历史方案")}</Badge>
         <Button variant="link" size="xs" className="h-auto p-0" onClick={() => setViewed(undefined)}>{t("查看讨论中的方案")}</Button>
-      </>}
     </div> : null}
     <div className="min-h-0 flex-1">{task ? <LiveWorkspace key={liveTask} task={task} data={data} options={options} /> : shown ? renderRun(shown)
       : <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">{t("开始计算后，在这里查看数学模型、代码和求解结果。")}</div>}</div>

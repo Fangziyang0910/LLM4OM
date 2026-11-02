@@ -69,7 +69,8 @@ test("the independent agent discusses an idea, models it, and calculates changes
   await expect(workspace.getByLabel("方案上下文", { exact: true })).toContainText("正在查看历史方案");
   expect((await (await page.request.get(`/threads/${chat}`)).json()).values.current).toEqual(saved.values.current);
   await workspace.getByRole("button", { name: "查看讨论中的方案", exact: true }).click();
-  await expect(workspace.getByLabel("方案上下文", { exact: true })).toContainText("后续对话将基于此方案继续。");
+  await expect(workspace.getByLabel("方案上下文", { exact: true })).toHaveCount(0);
+  await expect(workspace.getByRole("combobox", { name: "查看计算方案", exact: true })).toContainText("当前讨论方案");
   const conversation = page.locator('[data-slot="resizable-panel"][id="conversation"]');
   const before = (await conversation.boundingBox())!.width;
   const divider = page.getByRole("separator", { name: "调整对话与建模工作区的宽度", exact: true });

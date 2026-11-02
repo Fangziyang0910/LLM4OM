@@ -44,7 +44,7 @@ test("a run shows the solution, keeps a note and tags, and exports a report", as
   await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue(PRODUCTION);
   await page.getByRole("button", { name: "开始建模" }).click();
   await page.waitForURL(/\/run\//);
-  await page.getByRole("button", { name: "查看解" }).waitFor({ timeout: 60_000 });
+  await page.getByRole("button", { name: "导出 Excel" }).waitFor({ timeout: 60_000 });
   await expect(page.getByText("总利润", { exact: true }).locator("..")).toContainText("13");
   const threadId = page.url().split("/").at(-1)!;
   const before = (await (await page.request.get(`/threads/${threadId}`)).json()).values.timing;
@@ -60,7 +60,7 @@ test("a run shows the solution, keeps a note and tags, and exports a report", as
 
   // The tag filters the history after a reload, so the server kept it.
   await page.reload();
-  await page.getByRole("button", { name: "查看解" }).waitFor();
+  await page.getByRole("button", { name: "导出 Excel" }).waitFor();
   const after = (await (await page.request.get(`/threads/${threadId}`)).json()).values.timing;
   expect(after).toEqual(before);
   await page.getByRole("textbox", { name: "搜索运行" }).fill("#e2e");
@@ -145,7 +145,7 @@ test("new methods expose supported solver choices and BIND runs through the work
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
   await page.getByRole("button", { name: "开始建模" }).click();
   await page.waitForURL(/\/run\//);
-  await page.getByRole("button", { name: "查看解" }).waitFor({ timeout: 60_000 });
+  await page.getByRole("button", { name: "导出 Excel" }).waitFor({ timeout: 60_000 });
   await expect(page.getByText("总利润", { exact: true }).locator("..")).toContainText("13");
   const state = (await (await page.request.get(`/threads/${page.url().split("/").at(-1)}`)).json()).values;
   expect(state.spec.method).toBe("bind");
@@ -164,7 +164,7 @@ test("native APIs run without an interface setting and a library can use differe
   await page.getByRole('main').getByRole('button', { name: /^生产计划/ }).click();
   await page.getByRole('button', { name: '开始建模' }).click();
   await page.waitForURL(/\/run\//);
-  await page.getByRole('button', { name: '查看解' }).waitFor({ timeout: 60_000 });
+  await page.getByRole('button', { name: '导出 Excel' }).waitFor({ timeout: 60_000 });
   let state = (await (await page.request.get(`/threads/${page.url().split('/').at(-1)}`)).json()).values;
   expect(state.spec).toMatchObject({ language: 'ortools', solver: 'CP_SAT' });
   expect(state.solve.objective).toBe(13);
@@ -180,7 +180,7 @@ test("native APIs run without an interface setting and a library can use differe
     await page.getByRole("button", { name: "完成", exact: true }).click();
     await page.getByRole('button', { name: '开始建模' }).click();
     await page.waitForURL(/\/run\//);
-    await page.getByRole('button', { name: '查看解' }).waitFor({ timeout: 60_000 });
+    await page.getByRole('button', { name: '导出 Excel' }).waitFor({ timeout: 60_000 });
     state = (await (await page.request.get(`/threads/${page.url().split('/').at(-1)}`)).json()).values;
     expect(state.spec).toMatchObject({ language: 'cvxpy', solver });
     expect(state.solve.solver).toBe(solver);
@@ -264,7 +264,7 @@ test("an infeasible model shows the constraints that conflict", async ({ page })
   await page.getByRole("button", { name: "开始建模" }).click();
   await page.waitForURL(/\/run\//);
   await expect(page.getByText("求解器判定模型不可行", { exact: false })).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: /查看解|查看详情/ }).first().click();
+  await page.getByRole("tab", { name: "解", exact: true }).click();
   const conflict = page.getByRole("heading", { name: /不能同时满足的约束/ }).locator("..");
   await expect(conflict).toContainText("cutting");
   await expect(conflict).toContainText("contract");

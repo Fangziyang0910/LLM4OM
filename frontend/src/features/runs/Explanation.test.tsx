@@ -9,7 +9,7 @@ test("business values are taken from the solver, including zero decisions", () =
     decisions: [{ variable: "A", label: "生产 A", unit: "件" }, { variable: "B", label: "生产 B", unit: "件" }],
     notes: ["采用非负整数数量。"], total_variables: 2 }}
     solve={{ status: "optimal", objective: 13, variables: { A: 0, B: 2 }, output: "", error: null }} />);
-  expect(screen.getByText(/总利润/).textContent).toContain("13");
+  expect(screen.getByText("按表中数量生产。")).toBeTruthy();
   const rows = screen.getAllByRole("row");
   expect(rows[1].textContent).toBe("生产 A0件");
   expect(rows[2].textContent).toBe("生产 B2件");

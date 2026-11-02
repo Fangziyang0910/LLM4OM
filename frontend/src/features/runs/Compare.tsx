@@ -79,7 +79,7 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
           })}</TableBody>
         </Table>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        {t("目标值相同不代表模型都对：几个方法可能犯同样的错。点击一行查看它的数学模型、代码和过程。")}
+        {t("目标值相同不代表模型都对：几个方法可能犯同样的错。")}
       </p>
     </div>
   </div>;

@@ -118,9 +118,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
             <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain">
               <div ref={content} className="grid min-h-full grid-cols-1">
                 {!messages.length && !failure ? <div className="mx-auto flex min-h-full flex-col justify-center gap-5 py-6">
-                  <span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
-                  <div><h2 className="text-base font-semibold">{t("先说说，你想安排什么？")}</h2>
-                    <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">{t("一个大概的想法就够了。我们边聊边把目标、条件和数据整理清楚。")}</p></div>
+                  <h2 className="text-base font-semibold">{t("先说说，你想安排什么？")}</h2>
                   <div className="grid gap-2 ">{STARTERS.map(item => <button key={item.title} type="button"
                     disabled={busy} onClick={() => { setInput(t(item.text)); inputArea.current?.focus(); }}
                     className="flex items-center gap-3 rounded-xl border bg-card p-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ">
@@ -145,10 +143,9 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
               <span title={canSearch ? t("搜索公开资料，并在回复中展示来源。") : t("选择 DeepSeek 预设或由管理员配置搜索服务。")}>
                 <Button type="button" variant="ghost" size="sm" aria-label={t("联网搜索")} aria-pressed={searchOn} disabled={busy || !canSearch}
                   className={cn("h-8 gap-1.5 px-2 text-xs", searchOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
-                  onClick={() => setSearch(!searchOn)}><Globe /><span className="hidden @lg:inline">{searchOn ? t("联网搜索已开启") : t("联网搜索未开启")}</span></Button>
+                  onClick={() => setSearch(!searchOn)}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Button>
               </span>
           </ChatInput>
-          <p className="shrink-0 text-center text-[11px] text-muted-foreground">{t(conversation.loading ? "回复期间可继续输入，完成后发送。" : "Enter 发送，Shift+Enter 换行")}</p>
   </div>;
   const editor = <>
           {saveError ? <p role="alert" className="text-xs text-destructive">{t("需求稿未保存：{error}", { error: saveError })}</p> : null}
