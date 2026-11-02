@@ -70,6 +70,37 @@ def test_conversation_restores_history_and_respects_an_edited_draft(make_resourc
     asyncio.run(check())
 
 
+def test_discussion_can_be_captured_in_a_later_turn_without_losing_the_existing_draft(make_resources: Any) -> None:
+    original = "已确认：晚班至少 3 人。"
+    updated = "已确认：晚班至少 3 人；加班公平优先于成本。公平的衡量方式待确认。"
+
+    def reply(role: str, messages: list, tools: list) -> Any:
+        assert role == "requirements"
+        if messages[-1].type == "tool":
+            return "已将确认的优先级补充进需求稿。"
+        assert original in messages[0].text
+        if messages[-1].text == "先讨论，加班公平比成本重要，暂时不要改稿。":
+            return "可以先讨论；你希望按加班时长还是次数衡量公平？"
+        assert any(message.type == "human" and "暂时不要改稿" in message.text for message in messages)
+        return tool_call("update_draft", description=updated)
+
+    async def check() -> None:
+        graph = requirements_graph()
+        graph.checkpointer = InMemorySaver()
+        config = {"configurable": {"thread_id": "discussion", "llm4om_resources": make_resources(reply)}}
+        data = {"staff.csv": "name\nAlice"}
+        first = await graph.ainvoke({"description": original, "data": data,
+            "messages": [HumanMessage("先讨论，加班公平比成本重要，暂时不要改稿。")]}, config)
+        assert first["failure"] is None and first["description"] == original
+        assert [message.type for message in first["messages"]] == ["human", "ai"]
+        second = await graph.ainvoke({"messages": [HumanMessage("现在请整理刚才的讨论。")]}, config)
+        assert second["failure"] is None and second["description"] == updated
+        assert second["data"] == data and second["usage"]["solves"] == 0
+        assert [message.type for message in second["messages"]] == ["human", "ai", "human", "ai", "tool", "ai"]
+
+    asyncio.run(check())
+
+
 def test_a_failed_turn_preserves_the_draft_and_retries_without_a_duplicate_message(make_resources: Any) -> None:
     replies = iter([tool_call("update_draft", description="不应提交的中间稿"), "",
                     tool_call("update_draft", description="保留合同，每种产品至少 5 件。"), "已整理。"])

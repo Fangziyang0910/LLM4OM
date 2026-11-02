@@ -35,6 +35,8 @@ LangChain 工具中间件在每轮允许一次方案变更调用（建模、场�
 
 需求对话独立注册为 `requirements` 图（`START → discuss → END`），不计入建模方法。每轮通过 LangChain `create_agent` 运行原生模型／工具循环，复用预设、`Resources`、`Recorder` 和 token 预算。回复直接流式输出自然文本，`update_draft` 通过 `Command` 更新完整需求稿；原生模型中间件每次读取最新稿件，本轮更新完成后移除工具并转入回复，可选 `web_search` 调用 DeepSeek 独立 Search API。搜索结果和来源放在原生 `ToolMessage.artifact`，凭据仅在工具闭包中。独立搜索密钥绑定独立地址，否则仅 DeepSeek 预设在自身地址使用自身密钥。调用失败保留上一份需求稿、用户消息和已计量用量，重试复用原消息 ID。状态由原生线程和检查点保存。前端用 SDK `useStream` 的原生消息流继续对话（含子图 token）、`threads.updateState` 保存人工改稿；新建空对话用 `threads.create` 的 `graphId` 与 `supersteps` 保存初稿，不调用 LLM。
 
+业务提示优先澄清用户要做的决定、目标和边界，只追问会影响问题的未知点；明确的条件冲突保留为待确认事项，讨论中的建议不直接变成需求。用户可以先要求只讨论，再要求更新需求稿。语义判断仍由所选 LLM 完成，交接前由用户核对。
+
 用户点击“用于建模”后，将 `description + data` 填入现有 Composer，再由用户选择方法并启动新运行。聊天记录、追问和助手判断不作为额外指令注入方法；需求稿没有强制“完整”门槛。边界见 [ADR 0014](adr/0014-requirements-conversation.md)。
 
 方案对话独立注册为 `solution_chat` 图，通过原生检查点固定 `source`、`current` 和已生成方案引用。LangChain Agent 的模型中间件每次加载当前方案的实际题面、模型、代码及结果；`lookup_variables` 查询未完整放入提示的变量，也能读取指定已保存方案的题面、模型、代码、状态、目标和解读，供原方案比较使用。明确修改条件时，`solve_scenarios` 调用进程内 `graph.run(change=...)`，复用原方法、预设、建模库、后端和附件，完成后用原生 `threads.create(supersteps)` 将完整状态保存为独立方案。单个新方案成为当前方案，多个场景共享基准；工具本轮完成后移除，避免反复求解。`run(on_step=...)` 只将实际阶段变化通过工具的原生 `stream_writer` 转成进度，携带工具调用 ID 和场景序号，不推送代码或模型推理。
