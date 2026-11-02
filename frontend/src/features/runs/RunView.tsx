@@ -25,7 +25,7 @@ import { STATUS, duration, errorText, formatNumber, formatTokens, outcome, tone 
 import { phases, working } from "@/features/runs/steps";
 import type { Draft } from "@/features/composer/types";
 import type { Options } from "@/types";
-import type { RunMeta, RunValues, Step } from "@/features/runs/types";
+import type { RunMeta, RunValues, SourceRun, Step } from "@/features/runs/types";
 import { useRun } from "@/features/runs/useRun";
 import { copyText, download, Plain } from "@/components/Content";
 import { Outputs, type Tab } from "@/features/runs/Outputs";
@@ -44,15 +44,16 @@ function useNow(active: boolean): number {
   return now;
 }
 
-export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevise, onDelete, onCompare, onMetaChange, onDiscuss, onScenarios, onConversation, assistantOpen = false, embedded = false }: {
-  threadId: string; options: Options; onFinished: () => void; assistantOpen?: boolean; embedded?: boolean;
+export function RunView({ threadId: requested, source, options, onFinished, onEdit, onRerun, onRevise, onDelete, onCompare, onMetaChange, onDiscuss, onScenarios, onConversation, assistantOpen = false, embedded = false }: {
+  threadId: string; source?: SourceRun; options: Options; onFinished: () => void; assistantOpen?: boolean; embedded?: boolean;
   onEdit: (draft: Draft) => void; onRerun: (draft: Draft) => Promise<void>; onDelete: (meta: RunMeta) => void;
   onRevise: (instruction: string) => Promise<void>;
   onDiscuss: () => Promise<void>; onScenarios: (scenarios: { name: string; instruction: string }[]) => Promise<void>;
   onConversation: (id: string) => void;
   onCompare: (group: string) => void; onMetaChange: () => void;
 }) {
-  const { meta: loaded, values, steps, live, run, streaming, error } = useRun(threadId, onFinished);
+  const threadId = source?.thread_id ?? requested;
+  const { meta: loaded, values, steps, live, run, streaming, error } = useRun(source ?? threadId, onFinished);
   const [changed, setChanged] = useState<Partial<RunMeta>>({});  // note and tags saved since the run was read
   const [noting, setNoting] = useState(false);
   const [revision, setRevision] = useState<string | null>(null);
@@ -94,7 +95,9 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
 
   const draft = (): Draft => ({ description: values.description ?? "", data: values.data ?? {}, method: meta.method,
     language: meta.language, solver: meta.solver, preset: meta.preset ?? null, origin: threadId });
-  const link = new URL(`/run/${threadId}`, location.href).href;
+  const link = new URL(`/run/${threadId}`, location.href);
+  if (source?.checkpoint_id) link.searchParams.set("checkpoint", source.checkpoint_id);
+  const href = link.href;
   const stop = async () => {
     if (!run) return;
     setStopping(true);
@@ -108,7 +111,7 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
     setExporting(true);
     try {
       download(`${(meta.title || "solution").slice(0, 40).replace(/[\\/:*?"<>|]/g, "_")}.xlsx`,
-        await exportSolution(meta, values, options, link));
+        await exportSolution(meta, values, options, href));
     } catch (reason) { toast.error(errorText(reason)); }
     finally { setExporting(false); }
   };
@@ -167,13 +170,14 @@ export function RunView({ threadId, options, onFinished, onEdit, onRerun, onRevi
             <DropdownMenuItem disabled={active || busy || !values.description} onClick={() => void rerun()}><RefreshCw />{t("再运行一次")}</DropdownMenuItem>
             <DropdownMenuItem disabled={!values.description} onClick={() => onEdit(draft())}>
               <Pencil />{t("修改后运行")}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void copyText(link).then(() => toast.success(t("已复制链接。")), () => toast.error(t("无法复制，请手动复制地址栏中的链接。")))}>
+            <DropdownMenuItem onClick={() => void copyText(href).then(() => toast.success(t("已复制链接。")), () => toast.error(t("无法复制，请手动复制地址栏中的链接。")))}>
               <Link2 />{t("复制链接")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setNoting(true)}><NotebookPen />{t("备注与标签")}</DropdownMenuItem>
             <DropdownMenuItem disabled={!values.description} onClick={() => download(`${(meta.title || "run").slice(0, 40).replace(/[\\/:*?"<>|]/g, "_")}.md`,
-              report(meta, values, options, link))}><FileDown />{t("导出报告（Markdown）")}</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={() => onDelete(meta)}><Trash2 />{t("删除这次运行")}</DropdownMenuItem>
+              report(meta, values, options, href))}><FileDown />{t("导出报告（Markdown）")}</DropdownMenuItem>
+            {/* A saved plan's thread may hold later runs; deleting it from a fixed view would remove them too. */}
+            {source ? null : <><DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => onDelete(meta)}><Trash2 />{t("删除这次运行")}</DropdownMenuItem></>}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

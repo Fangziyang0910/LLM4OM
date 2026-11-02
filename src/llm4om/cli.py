@@ -211,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
 
             _json([{"id": method.id, "name": method.name, "source": method.source,
                     "linear_only": method.linear_only, "parameters": method.parameters(),
-                    "languages": sorted(method.languages or LANGUAGES)} for method in methods().values()])
+                    "languages": sorted(LANGUAGES if method.languages is None else method.languages)} for method in methods().values()])
             return 0
         if args.command == "target":
             print(CodeTarget(args.language, args.solver).prompt)

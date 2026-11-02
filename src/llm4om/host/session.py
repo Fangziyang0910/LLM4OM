@@ -15,13 +15,13 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime, get_runtime
 from langgraph.types import Command
 
-from llm4om.graph import RECURSION_LIMIT, problem_text
 from llm4om.host.model import HostChatModel, validate_responses
 from llm4om.host.records import Records, open_records
 from llm4om.languages import CodeTarget
 from llm4om.method_steps import NodeSteps
 from llm4om.methods import Method, methods
-from llm4om.runtime import Context, Limits, ModelingState
+from llm4om.problem import problem_text, validate_data_files, validate_description
+from llm4om.runtime import RECURSION_LIMIT, Context, Limits, ModelingState
 from llm4om.sandbox import Sandbox, SolveResult
 from llm4om.storage import write_private_json
 
@@ -166,16 +166,11 @@ async def start(directory: str | Path, description: str, *, method: str = "direc
     available = methods()
     if method not in available:
         raise ValueError(f"Unknown method {method!r}; choose one of {sorted(available)}.")
-    if not description.strip():
-        raise ValueError("Describe the optimization problem first.")
+    validate_description(description)
     selected = available[method]
-    target = CodeTarget(language, solver)
-    if selected.languages is not None and target.language not in selected.languages:
-        raise ValueError(f"{selected.name} does not support {target.language}.")
+    target = selected.code_target(language, solver)
     Sandbox(sandbox)
-    for name in data or {}:
-        if not name.strip() or name in {".", ".."} or any(c in name for c in "/\\\0\r\n"):
-            raise ValueError(f"Invalid data file name {name!r}.")
+    validate_data_files(data or {})
     overrides = {key: value for key, value in {"max_llm_calls": max_calls, "max_solves": max_solves,
                                              "solve_time_limit": time_limit}.items() if value is not None}
     if any(not math.isfinite(value) or value <= 0 for value in overrides.values()):

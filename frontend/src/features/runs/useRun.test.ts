@@ -72,3 +72,56 @@ test("leaving a run ignores its late state response", async () => {
   expect(result.current.run).toBeNull();
   expect(onFinished).not.toHaveBeenCalled();
 });
+
+test("a pinned plan reads its old result while the same thread's latest run stays independent", async () => {
+  const source = { thread_id: "thread", checkpoint_id: "old" };
+  threads.get.mockResolvedValue({ metadata: { title: "plan", method: "latest" },
+    values: { code: "new code", solve: { objective: 99 } } } as never);
+  threads.getState.mockResolvedValue({ values: { code: "old code", solve: { objective: 13 },
+    spec: { method: "direct", llm: {} }, steps: [{ id: "saved", type: "artifact", content: "old" }] } } as never);
+  runs.list.mockResolvedValue([{ run_id: "latest", status: "success" }] as never);
+  const onFinished = vi.fn();
+  const pinned = renderHook(() => useRun(source, onFinished));
+  await waitFor(() => expect(pinned.result.current.values.solve?.objective).toBe(13));
+  expect(threads.getState).toHaveBeenCalledWith("thread", "old");
+  expect(pinned.result.current.values.code).toBe("old code");
+  expect(pinned.result.current.meta?.method).toBe("direct");
+  expect(pinned.result.current.steps.map(step => step.id)).toEqual(["saved"]);
+  expect(pinned.result.current.run).toBeNull();
+  expect(runs.list).not.toHaveBeenCalled();
+  expect(runs.joinStream).not.toHaveBeenCalled();
+  expect(client.store.getItem).not.toHaveBeenCalled();
+  expect(onFinished).not.toHaveBeenCalled();
+  pinned.unmount();
+  const latest = renderHook(() => useRun("thread", onFinished));
+  await waitFor(() => expect(latest.result.current.values.solve?.objective).toBe(99));
+  expect(latest.result.current.values.code).toBe("new code");
+  latest.unmount();
+});
+
+test("switching checkpoints in the same thread ignores the previous checkpoint's late response", async () => {
+  let oldResponse!: (value: never) => void;
+  threads.get.mockResolvedValue({ metadata: {} } as never);
+  threads.getState.mockImplementation((_, checkpoint) => checkpoint === "old"
+    ? new Promise(resolve => { oldResponse = resolve; })
+    : Promise.resolve({ values: { solve: { objective: 42 } } } as never));
+  const { result, rerender, unmount } = renderHook(({ checkpoint }) =>
+    useRun({ thread_id: "thread", checkpoint_id: checkpoint }, vi.fn()), { initialProps: { checkpoint: "old" } });
+  rerender({ checkpoint: "other" });
+  await waitFor(() => expect(result.current.values.solve?.objective).toBe(42));
+  oldResponse({ values: { solve: { objective: 13 } } } as never);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(result.current.values.solve?.objective).toBe(42);
+  expect(runs.list).not.toHaveBeenCalled();
+  unmount();
+});
+
+test("an unavailable checkpoint reports failure instead of falling back to the thread's latest result", async () => {
+  threads.get.mockResolvedValue({ metadata: {}, values: { solve: { objective: 99 } } } as never);
+  threads.getState.mockRejectedValue(new Error("Checkpoint not found"));
+  const { result, unmount } = renderHook(() => useRun({ thread_id: "thread", checkpoint_id: "missing" }, vi.fn()));
+  await waitFor(() => expect(result.current.error).toBe("Checkpoint not found"));
+  expect(result.current.values.solve).toBeUndefined();
+  expect(runs.list).not.toHaveBeenCalled();
+  unmount();
+});

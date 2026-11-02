@@ -14,8 +14,15 @@ export type Solve = {
 };
 export type Usage = { llm_calls: number; solves: number; input_tokens: number; output_tokens: number };
 export type Timing = { started_at: number; elapsed: number; finished_at?: number };
+/** A saved plan pinned to the checkpoint that holds its problem, configuration, model, code and actual result. */
 export type SourceRun = { thread_id: string; checkpoint_id: string };
 export type Plan = { name: string; instruction: string; source: SourceRun; group: string | null };
+
+/** The stable identity of a saved plan. Thread IDs alone would follow later runs of the same thread. */
+export const sourceKey = (source: SourceRun) => source.checkpoint_id ? `${source.thread_id}:${source.checkpoint_id}` : source.thread_id;
+
+export const sameSource = (left?: SourceRun, right?: SourceRun) =>
+  left?.thread_id === right?.thread_id && left?.checkpoint_id === right?.checkpoint_id;
 export type Explanation = {
   summary: string; objective_label: string; objective_unit: string;
   decisions: { variable: string; label: string; unit: string }[]; notes: string[]; total_variables: number;

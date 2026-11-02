@@ -23,6 +23,7 @@ from llm4om.sandbox import Sandbox, SolveResult
 
 MAX_STEP_TEXT = 40000
 TEXT_INTERVAL = 0.05  # at most 20 live-text events per second, matching the chat UI's refresh interval
+RECURSION_LIMIT = 1_000_000  # loops are bounded by each method and by Limits, not by LangGraph's step count
 
 
 class LimitExceeded(Exception):

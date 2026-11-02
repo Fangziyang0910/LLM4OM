@@ -1,7 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
-import { useQuery } from "@tanstack/react-query";
-import { useStream } from "@langchain/langgraph-sdk/react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { ArrowDown, ArrowUpRight, BookOpen, Columns2, Globe, Paperclip, RefreshCw, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -13,13 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Toggle } from "@/components/ui/toggle";
 import { ChatInput } from "@/features/chat/ChatInput";
 import { ChatMessages, type ChatProgress, type ModelingEvent, type ModelingTask } from "@/features/chat/Messages";
-import { useChatDraft } from "@/features/chat/draft";
+import { useConversation } from "@/features/chat/conversation";
 import { useChatScroll } from "@/features/chat/scroll";
 import { DATA_FILE_ACCEPT, readDataFiles } from "@/features/composer/files";
 import { DataEditor } from "@/features/composer/DataEditor";
 import { Outputs, type Tab } from "@/features/runs/Outputs";
 import { client } from "@/features/runs/sdk";
 import type { OptimizationMeta, Plan, RunValues, SourceRun, Usage } from "@/features/runs/types";
+import { sameSource, sourceKey } from "@/features/runs/types";
 import type { Options, Preset } from "@/types";
 import { errorText } from "@/format";
 import { locale, t } from "@/i18n";
@@ -31,38 +30,30 @@ type Values = { messages?: Message[]; description?: string; data?: Record<string
 export function Agent({ threadId, options, presets, initial, onThread, openPresets, onManual, onExamples, onFinished, onOpen, onCompare, renderRun }: {
   threadId?: string; options: Options; presets: Preset[]; initial: { description: string; data: Record<string, string> };
   onThread: (id: string) => void; openPresets: () => void; onManual: () => void; onExamples: () => void;
-  onFinished: () => void; onOpen: (id: string) => void; onCompare: (id: string) => void; renderRun: (id: string) => ReactNode;
+  onFinished: () => void; onOpen: (source: SourceRun) => void; onCompare: (id: string) => void; renderRun: (source: SourceRun) => ReactNode;
 }) {
   const desktop = useDesktop();
   const layout = useDefaultLayout({ id: "llm4om-agent", panelIds: ["conversation", "workspace"], onlySaveAfterUserInteractions: true });
-  const thread = useQuery({ queryKey: ["optimization", threadId], enabled: !!threadId, queryFn: () => client.threads.get(threadId!) });
-  const meta = thread.data?.metadata as OptimizationMeta | undefined;
-  const { value: input, setValue: setInput, prepare, acknowledge, savePending } = useChatDraft(threadId ?? "optimization-new", threadId ? "" : initial.description);
   const [selected, setSelected] = useState<string>();
   const [thinking, setThinking] = useState<boolean>();
   const [method, setMethod] = useState<string>();
   const [language, setLanguage] = useState<string>();
   const [search, setSearch] = useState<boolean>();
   const [settings, setSettings] = useState(false);
-  const [action, setAction] = useState(false);
-  const [stopping, setStopping] = useState(false);
   const { log, content, follow, followLatest } = useChatScroll();
   const [files, setFiles] = useState<Record<string, string> | null>(null);
   const [editing, setEditing] = useState<string>();
   const [tasks, setTasks] = useState<Record<string, ModelingTask>>({});
   const [progress, setProgress] = useState<ChatProgress>();
-  const [viewed, setViewed] = useState<string>();
+  const [viewed, setViewed] = useState<SourceRun>();
   const [liveTask, setLiveTask] = useState<string>();
   const [workspaceOpen, setWorkspace] = useState<boolean>();
   const [pane, setPane] = useState<"chat" | "workspace">("chat");
   const inputArea = useRef<HTMLTextAreaElement>(null);
   const upload = useRef<HTMLInputElement>(null);
-  const runId = useRef<string | null>(null);
-  const stream = useStream<Values, { CustomEventType: ChatProgress | ModelingEvent }>({ client, assistantId: "optimization",
-    threadId: threadId ?? null, fetchStateHistory: false, throttle: 50,
-    onMetadataEvent: event => { runId.current = event.run_id; },
-    onCreated: event => { runId.current = event.run_id; onFinished(); },
-    onCheckpointEvent: (event, { namespace }) => { if (!namespace?.length) acknowledge(event.values.messages); },
+  const conversation = useConversation<Values, { CustomEventType: ChatProgress | ModelingEvent }>({
+    assistantId: "optimization", threadId, initialInput: initial.description, reconnectOnMount: false,
+    onCreated: onFinished,
     onCustomEvent: event => {
       if (event.type === "scenario_progress") setProgress(event);
       if (event.type === "modeling_step") {
@@ -74,11 +65,13 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
         setLiveTask(event.tool_call_id); setWorkspace(true);
       }
     },
-    onFinish: state => { acknowledge(state.values.messages); setLiveTask(undefined); onFinished(); },
+    onFinish: () => { setLiveTask(undefined); onFinished(); },
     onError: () => { setLiveTask(undefined); onFinished(); },
   });
-  const messages = stream.messages;
-  const data = files ?? stream.values.data ?? initial.data;
+  const meta = conversation.thread.metadata as OptimizationMeta | undefined;
+  const { input, setInput } = conversation;
+  const messages = conversation.messages;
+  const data = files ?? conversation.values.data ?? initial.data;
   const presetId = selected ?? meta?.preset ?? presets[0]?.id;
   const preset = presets.find(item => item.id === presetId);
   const thinkingMode = preset?.provider === "deepseek" ? thinking ?? meta?.thinking ?? null : null;
@@ -86,82 +79,58 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   const chosenLanguage = language ?? meta?.language ?? "auto";
   const searching = search ?? meta?.search ?? false;
   const canSearch = !!options.search_configured || preset?.provider === "deepseek";
-  const busy = action || stopping || stream.isLoading || (!!threadId && (thread.isPending || stream.isThreadLoading));
-  const failure = stream.error || stream.values.failure;
-  const plans = stream.values.plans ?? [];
-  const source = stream.values.current ?? stream.values.source;
-  const workspace = workspaceOpen ?? !!source;
-  const shown = viewed ?? source?.thread_id;
+  const busy = conversation.busy;
+  const failure = conversation.error || conversation.values.failure;
+  const plans = conversation.values.plans ?? [];
+  const original = conversation.values.source;
+  const currentPlan = conversation.values.current ?? original;
+  const workspace = workspaceOpen ?? !!currentPlan;
+  const shown = viewed ?? currentPlan;
+  const viewing = shown ?? plans.at(-1)?.source;
   const task = liveTask ? tasks[liveTask] : undefined;
-  const join = useRef(stream.joinStream);
-  useEffect(() => { join.current = stream.joinStream; }, [stream.joinStream]);
+  const reconnect = useRef(conversation.reconnect);
+  useEffect(() => { reconnect.current = conversation.reconnect; });
   useEffect(() => {
     if (!threadId) return;
     let disposed = false;
     // The first run is started before navigation, so attach through the SDK even without a tab-local receipt.
     void client.runs.list(threadId, { limit: 1 }).then(runs => {
       const active = runs[0];
-      if (!disposed && active && (active.status === "pending" || active.status === "running")) {
-        runId.current = active.run_id;
-        return join.current(active.run_id, "-1");
-      }
+      if (!disposed && active && (active.status === "pending" || active.status === "running")) return reconnect.current(active.run_id);
     }).catch(error => { if (!disposed) toast.error(errorText(error)); });
     return () => { disposed = true; };
   }, [threadId]);
-  useEffect(() => { acknowledge((thread.data?.values as Values | undefined)?.messages); }, [thread.data?.values, acknowledge]);
 
   const submit = async (retry = false) => {
     if (busy || (!retry && !input.trim())) return;
     if (!preset) { toast.error(t("先选择一个可用的预设模型。")); openPresets(); return; }
-    setAction(true); followLatest(); setViewed(undefined); setLiveTask(undefined); setProgress(undefined); setTasks({});
-    const question = retry ? [...messages].reverse().find(message => message.type === "human") : prepare(input);
-    if (!question) { setAction(false); return; }
+    followLatest(); setViewed(undefined); setLiveTask(undefined); setProgress(undefined); setTasks({});
     const context = { preset: preset.id, locale, search: searching && canSearch, thinking: thinkingMode,
       method: chosenMethod === "auto" ? null : chosenMethod, language: chosenLanguage === "auto" ? null : chosenLanguage };
     const metadata = { preset: preset.id, provider: preset.provider, model: preset.name || preset.model,
       method: context.method, language: context.language, search: context.search, thinking: thinkingMode };
-    try {
-      if (!threadId) {
-        const created = await client.threads.create({ graphId: "optimization", metadata: { ...metadata, kind: "optimization",
-          title: String(question.content).trim().split("\n")[0].slice(0, 120) },
-          supersteps: [{ updates: [{ asNode: "discuss", values: { messages: [question], description: initial.description, data } }] }] });
-        acknowledge([question]);
-        try {
-          await client.runs.create(created.thread_id, "optimization", { input: { messages: [question] }, context,
-            streamMode: ["messages", "custom", "values", "checkpoints"], streamSubgraphs: true, streamResumable: true });
-        } finally { onThread(created.thread_id); onFinished(); }
-      } else {
-        await client.threads.update(threadId, { metadata });
-        runId.current = null;
-        await stream.submit({ messages: [question], data }, { context, multitaskStrategy: "reject", streamResumable: true, streamSubgraphs: true,
-          optimisticValues: retry ? undefined : current => ({ ...current, data, messages: [...(current.messages ?? []), question] }) });
-        setFiles(null);
-      }
-    } catch (error) { toast.error(errorText(error)); }
-    finally { setAction(false); }
+    if (!threadId) {
+      // Persist the question with the native thread first, then start its run before navigating to the thread.
+      const created = await conversation.startThread({ context, metadata: { ...metadata, kind: "optimization",
+        title: input.trim().split("\n")[0].slice(0, 120) }, values: { description: initial.description, data } });
+      if (created) { onThread(created); onFinished(); }
+    } else if (await conversation.send({ retry, context, values: { data }, metadata })) setFiles(null);
   };
-  const stop = async () => {
-    setStopping(true);
-    try {
-      if (threadId && runId.current) await client.runs.cancel(threadId, runId.current, true);
-      await savePending(); await stream.stop(); onFinished();
-    } catch (error) { toast.error(errorText(error)); }
-    finally { setStopping(false); setLiveTask(undefined); }
-  };
+  const stop = async () => { if (await conversation.stop()) { setLiveTask(undefined); onFinished(); } };
   const saveData = async (next: Record<string, string>) => {
     if (threadId) await client.threads.updateState(threadId, { values: { data: next }, asNode: "discuss" });
     setFiles(next);
   };
-  if (thread.error) return <div role="alert" className="grid h-full place-content-center gap-3 p-6 text-sm text-destructive">
-    <p>{errorText(thread.error)}</p><Button variant="outline" onClick={() => void thread.refetch()}><RefreshCw />{t("重试")}</Button></div>;
-  const conversation = <section aria-label={t("优化对话")} className={cn("flex h-full min-h-0 min-w-0 flex-col", workspace && pane === "workspace" && "hidden lg:flex")}>
+  if (conversation.thread.error) return <div role="alert" className="grid h-full place-content-center gap-3 p-6 text-sm text-destructive">
+    <p>{errorText(conversation.thread.error)}</p><Button variant="outline" onClick={conversation.thread.reload}><RefreshCw />{t("重试")}</Button></div>;
+  const chat = <section aria-label={t("优化对话")} className={cn("flex h-full min-h-0 min-w-0 flex-col", workspace && pane === "workspace" && "hidden lg:flex")}>
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={stream.isLoading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain px-5 md:px-8">
+      <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain px-5 md:px-8">
         <div ref={content} className="grid min-h-full grid-cols-1">
-          {messages.length || failure ? <ChatMessages messages={messages} loading={stream.isLoading} label={t("优化助手")}
+          {messages.length || failure ? <ChatMessages messages={messages} loading={conversation.loading} label={t("优化助手")}
             failure={failure} disabled={busy} onRetry={() => void submit(true)} progress={progress} tasks={tasks}
             onShowTask={id => { setLiveTask(id); setWorkspace(true); setPane("workspace"); }}
-            onOpenPlan={id => { setViewed(id); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} />
+            onOpenPlan={source => { setViewed(source); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} />
             : <div className="mx-auto flex min-h-full max-w-2xl flex-col justify-center gap-4 py-8">
               <span className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-6" /></span>
               <h2 className="text-2xl font-semibold tracking-tight">{t("说说你想优化什么")}</h2>
@@ -192,7 +161,7 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
             <SelectContent><SelectItem value="auto">{t("自动选择")}</SelectItem>{options.languages.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></label>
       </div> : null}
       <ChatInput label={t("发送给优化助手")} value={input} onChange={setInput}
-        disabled={busy} loading={stream.isLoading} stopping={stopping} inputRef={inputArea}
+        disabled={busy} loading={conversation.loading} stopping={conversation.stopping} inputRef={inputArea}
         presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets}
         onSend={() => void submit()} onStop={() => void stop()} placeholder={t("提问、聊聊想法，或继续调整当前方案……")}>
         <Button type="button" variant="ghost" size="icon-sm" disabled={busy} aria-label={t("添加数据文件")} onClick={() => upload.current?.click()}><Paperclip /></Button>
@@ -215,15 +184,18 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   const workbench = workspace ? <aside aria-label={t("建模工作区")} className={cn("flex h-full min-h-0 min-w-0 flex-col bg-card", pane !== "workspace" && "hidden lg:flex")}>
     <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
       <h2 className="shrink-0 text-xs font-medium text-muted-foreground">{t("建模工作区")}</h2>
-      {plans.length ? <Select value={task ? "live" : shown ?? plans.at(-1)!.source.thread_id} onValueChange={id => { setViewed(id); setLiveTask(undefined); }}>
+      {plans.length ? <Select value={task ? "live" : viewing ? sourceKey(viewing) : ""} onValueChange={id => {
+        const chosen = plans.find(plan => sourceKey(plan.source) === id)?.source;
+        if (chosen) { setViewed(chosen); setLiveTask(undefined); }
+      }}>
         <SelectTrigger size="sm" aria-label={t("查看计算方案")} className="min-w-0 flex-1 border-0 shadow-none"><SelectValue /></SelectTrigger>
-        <SelectContent>{task ? <SelectItem value="live">{task.name}</SelectItem> : null}{plans.map(plan => <SelectItem key={plan.source.thread_id} value={plan.source.thread_id}>{plan.name}{plan.source.thread_id === source?.thread_id ? ` · ${t("当前讨论方案")}` : ""}</SelectItem>)}</SelectContent>
+        <SelectContent>{task ? <SelectItem value="live">{task.name}</SelectItem> : null}{plans.map(plan => <SelectItem key={sourceKey(plan.source)} value={sourceKey(plan.source)}>{plan.name}{sameSource(plan.source, currentPlan) ? ` · ${t("当前讨论方案")}` : ""}</SelectItem>)}</SelectContent>
       </Select> : <span className="min-w-0 flex-1 truncate text-xs">{task?.name}</span>}
       {shown && !task ? <Button variant="ghost" size="icon-xs" aria-label={t("打开完整运行")} onClick={() => onOpen(shown)}><ArrowUpRight /></Button> : null}
       <Button variant="ghost" size="icon-xs" aria-label={t("收起建模工作区")} onClick={() => { setWorkspace(false); setPane("chat"); }}><X /></Button>
     </div>
-    {!task && shown && source ? <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-xs" aria-label={t("方案上下文")}>
-      {shown === source.thread_id ? <span className="text-muted-foreground">{t("后续对话将基于此方案继续。")}</span> : <>
+    {!task && shown && currentPlan ? <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-xs" aria-label={t("方案上下文")}>
+      {sameSource(shown, currentPlan) ? <span className="text-muted-foreground">{t("后续对话将基于此方案继续。")}</span> : <>
         <Badge variant="outline">{t("正在查看历史方案")}</Badge>
         <Button variant="link" size="xs" className="h-auto p-0" onClick={() => setViewed(undefined)}>{t("查看讨论中的方案")}</Button>
       </>}
@@ -243,12 +215,12 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
       <Button variant={pane === "workspace" ? "secondary" : "ghost"} className="flex-1 rounded-none" onClick={() => setPane("workspace")}>{t("建模工作区")}</Button>
     </div> : null}
     {desktop ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1">
-      <ResizablePanel id="conversation" defaultSize="45%" minSize="350px">{conversation}</ResizablePanel>
+      <ResizablePanel id="conversation" defaultSize="45%" minSize="350px">{chat}</ResizablePanel>
       {workspace ? <>
         <ResizableHandle withHandle aria-label={t("调整对话与建模工作区的宽度")} />
         <ResizablePanel id="workspace" defaultSize="55%" minSize="35%">{workbench}</ResizablePanel>
       </> : null}
-    </ResizablePanelGroup> : <div className="grid min-h-0 flex-1 grid-cols-1">{conversation}{workbench}</div>}
+    </ResizablePanelGroup> : <div className="grid min-h-0 flex-1 grid-cols-1">{chat}{workbench}</div>}
     {editing && data[editing] != null ? <DataEditor key={editing} name={editing} content={data[editing]} onClose={() => setEditing(undefined)}
       onSave={content => saveData({ ...data, [editing]: content })} /> : null}
   </div>;

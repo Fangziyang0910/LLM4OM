@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { errorText } from "@/format";
 import { t } from "@/i18n";
-import type { Step } from "@/features/runs/types";
+import type { SourceRun, Step } from "@/features/runs/types";
 import { Timeline } from "@/features/runs/Timeline";
 import { activity, resultType, resultViews, type ToolArtifact } from "./results";
 
@@ -46,7 +46,7 @@ const Reasoning = memo(function Reasoning({ text, active }: { text: string; acti
 
 /** Source and plan cards come from tool artifacts, never from model-written links or numbers. */
 function ToolResult({ message, onOpenPlan, onCompare }: {
-  message: Extract<Message, { type: "tool" }>; onOpenPlan?: (id: string) => void; onCompare?: (group: string) => void;
+  message: Extract<Message, { type: "tool" }>; onOpenPlan?: (source: SourceRun) => void; onCompare?: (group: string) => void;
 }) {
   if (message.status === "error") return <details className="ml-9 rounded-lg border border-destructive/20 p-3 text-xs">
     <summary className="flex cursor-pointer items-center gap-2 text-muted-foreground"><TriangleAlert className="size-3.5 text-destructive" />{t("这一步未完成")}</summary>
@@ -60,7 +60,7 @@ function ToolResult({ message, onOpenPlan, onCompare }: {
 
 export function ChatMessages({ messages, loading, label, failure, disabled, onRetry, progress, onOpenPlan, onCompare, tasks, onShowTask }: {
   messages: Message[]; loading: boolean; label: string; failure?: unknown; disabled?: boolean; onRetry: () => void;
-  progress?: ChatProgress; onOpenPlan?: (id: string) => void; onCompare?: (group: string) => void;
+  progress?: ChatProgress; onOpenPlan?: (source: SourceRun) => void; onCompare?: (group: string) => void;
   tasks?: Record<string, ModelingTask>; onShowTask?: (id: string) => void;
 }) {
   const completed = new Set(messages.filter(message => message.type === "tool").map(message => message.tool_call_id));

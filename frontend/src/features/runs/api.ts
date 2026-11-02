@@ -39,36 +39,37 @@ export async function startRun(draft: Draft, preset: Preset | undefined, group: 
 }
 
 /** Revise a saved checkpoint in a new thread; the source's problem, attachments and choices remain intact. */
-export async function startRevision(threadId: string, instruction: string, presets: Preset[]): Promise<string> {
+export async function startRevision(threadId: string, instruction: string, presets: Preset[], source?: SourceRun): Promise<string> {
   if (!instruction.trim()) throw new Error(t("请描述要调整的条件。"));
-  const source = await revisionSource(threadId, presets);
-  return startRun(source.draft, source.preset, null, { instruction: instruction.trim(), source: source.source });
+  const base = await revisionSource(threadId, presets, source);
+  return startRun(base.draft, base.preset, null, { instruction: instruction.trim(), source: base.source });
 }
 
-async function revisionSource(threadId: string, presets: Preset[]) {
+async function revisionSource(threadId: string, presets: Preset[], source?: SourceRun) {
   const client = await sdk();
-  const [state, thread] = await Promise.all([client.threads.getState<RunValues>(threadId), client.threads.get(threadId)]);
-  if (thread.status === "busy") throw new Error(t("请等待当前运行结束后再调整条件。"));
+  const [state, thread] = await Promise.all([client.threads.getState<RunValues>(source?.thread_id ?? threadId, source?.checkpoint_id),
+    client.threads.get(source?.thread_id ?? threadId)]);
+  if (!source && thread.status === "busy") throw new Error(t("请等待当前运行结束后再调整条件。"));
   const values = state.values as RunValues;
   if (!values.description || !state.checkpoint.checkpoint_id) throw new Error(t("原问题尚未保存，请稍后重试。"));
   const meta = runMeta(thread.metadata as RunMeta, values.spec);
   const preset = meta.preset ? presets.find(item => item.id === meta.preset) : presets[0];
   return { draft: { description: values.description, data: values.data ?? {}, method: meta.method,
     language: meta.language, solver: meta.solver, preset: meta.preset ?? null }, preset,
-    source: { thread_id: threadId, checkpoint_id: state.checkpoint.checkpoint_id } };
+    source: source ?? { thread_id: threadId, checkpoint_id: state.checkpoint.checkpoint_id } };
 }
 
 const comparisonId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, "0")).join("");
 
 /** Every alternative starts from one frozen source, including when the source is rerun during the batch. */
-export async function startScenarios(threadId: string, scenarios: { name: string; instruction: string }[], presets: Preset[]) {
+export async function startScenarios(threadId: string, scenarios: { name: string; instruction: string }[], presets: Preset[], source?: SourceRun) {
   if (scenarios.length < 2 || scenarios.length > 6 || scenarios.some(item => !item.name.trim() || !item.instruction.trim()))
     throw new Error(t("请填写 2 至 6 个完整的场景。"));
-  const source = await revisionSource(threadId, presets), group = comparisonId();
+  const base = await revisionSource(threadId, presets, source), group = comparisonId();
   let started = 0;
   try {
     for (const scenario of scenarios) {
-      await startRun(source.draft, source.preset, group, { ...scenario, source: source.source }); started++;
+      await startRun(base.draft, base.preset, group, { ...scenario, source: base.source }); started++;
     }
   } catch (error) {
     if (!started) throw error;

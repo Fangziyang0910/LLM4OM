@@ -21,7 +21,8 @@ from langgraph.types import Command
 from pydantic import Field
 
 from llm4om.chat_prompts import CONVERSATION_STYLE
-from llm4om.graph import get_resources, problem_text
+from llm4om.graph import get_resources
+from llm4om.problem import problem_text
 from llm4om.runtime import Recorder
 from llm4om.web_search import search_tool
 

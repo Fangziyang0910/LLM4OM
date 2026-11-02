@@ -58,7 +58,7 @@ test("a first calculation's result card uses the stored objective and opens its 
   const result = screen.getByRole("complementary", { name: "本轮计算结果" });
   expect(result.textContent).toContain("目标值 0");
   fireEvent.click(within(result).getByRole("button", { name: "查看计算方案" }));
-  expect(open).toHaveBeenCalledWith("calculated");
+  expect(open).toHaveBeenCalledWith({ thread_id: "calculated", checkpoint_id: "saved" });
 });
 
 test("arithmetic shows actual tool output with its expression available on demand", () => {
@@ -75,10 +75,10 @@ test("arithmetic shows actual tool output with its expression available on deman
 test("choosing a saved plan has a compact receipt that opens that plan", () => {
   const open = vi.fn();
   render(<ChatMessages messages={[question, { type: "tool", name: "select_plan", tool_call_id: "choose", content: "",
-    artifact: { selected_plan: { name: "第二个方案", source: { thread_id: "second" } } } }]}
+    artifact: { selected_plan: { name: "第二个方案", source: { thread_id: "second", checkpoint_id: "chosen" } } } }]}
     loading={false} label="优化助手" onRetry={vi.fn()} onOpenPlan={open} />);
   fireEvent.click(screen.getByRole("button", { name: "已选择：第二个方案" }));
-  expect(open).toHaveBeenCalledWith("second");
+  expect(open).toHaveBeenCalledWith({ thread_id: "second", checkpoint_id: "chosen" });
 });
 
 test("recoverable tool errors keep details folded without hiding them", () => {
@@ -147,7 +147,7 @@ test("computed plan cards show solver facts including zero values and open the s
   expect(results.textContent).toContain("目标值 0");
   expect(results.textContent).toContain("不可行");
   fireEvent.click(within(results).getAllByRole("button", { name: "查看计算方案" })[0]);
-  expect(open).toHaveBeenCalledWith("zero");
+  expect(open).toHaveBeenCalledWith({ thread_id: "zero", checkpoint_id: "saved" });
   fireEvent.click(within(results).getByRole("button", { name: "对比本轮方案" }));
   expect(compare).toHaveBeenCalledWith("group");
 });

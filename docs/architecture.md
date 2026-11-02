@@ -49,7 +49,9 @@ LangChain 工具中间件在每轮允许一次方案变更调用（建模、场�
 
 `agent.py` 只负责会话图、模型与预算、执行期限，以及将本轮结果写回原生状态。`capabilities.assemble_capabilities()` 按既有对话模式组合原生 LangChain 工具和中间件：方案、计算、建模能力各自维护工具、对应指令和工具可用条件。扩展能力可直接提供 `BaseTool` 或 `AgentMiddleware`，不需要修改会话图。搜索继续使用 `web_search.search_tool()`。
 
-`capabilities.session.Conversation` 只保存本轮共享的方案缓存、已完成操作和待恢复请求。方案操作与首次建模共用每轮一次修改的限制。跨轮数据仍使用原有 LangGraph 状态与检查点；历史状态字段、运行引用和图名称不变。
+`capabilities.session.Conversation` 管理本轮共享的方案缓存、已完成操作和待恢复请求，并统一独立方案的保存与登记。方案操作与首次建模共用每轮一次修改的限制。跨轮数据仍使用原有 LangGraph 状态与检查点；历史状态字段、运行引用和图名称不变。
+
+首次建模与场景求解共用 `Conversation.save_plan`：按调用方的稳定线程 ID 复用或计算，再保存原生线程，读取检查点，先填缓存再登记方案。已登记的方案按原 `SourceRun` 读取；保存成功但响应丢失时，重试完成登记而不重复计算。首次请求冻结、场景批次恢复与当前方案选择仍由对应能力负责。
 
 ```text
 src/llm4om/
@@ -57,6 +59,7 @@ src/llm4om/
 ├── cli.py               命令行：host、solve、methods、target、backends；可选 serve、run 与 build-worker
 ├── host/                宿主模型适配、本地方法会话与执行记录，不连接平台 LLM 或 Web 服务
 ├── method_steps.py      平台与宿主模式共用的方法产物记录
+├── problem.py           题面判空、附件名校验与有限提示预览；附件原文独立传入 Context.data
 ├── languages.py         九个建模库、原生代码契约和 CodeTarget
 ├── code_prompts.py      官方建模接口的代码参考
 ├── model_code.py        原生变量、约束、目标和函数组装，供组件式方法复用
@@ -102,7 +105,7 @@ storage → llm_presets · budget ───────────────�
 runtime → progress ─────────────────────────────────┘
 ```
 
-`languages`、`llm`、`sandbox` 互不依赖。方法只依赖 `runtime`、`languages`、`sandbox` 和 `methods` 本身，不依赖平台图或服务器。`sandbox/worker.py` 在沙箱中独立运行，因此不导入任何平台模块；它按库调用原生接口与插件注册表。`languages.py` 只描述九个库和生成代码的契约，不复制后端插件名单。
+`languages`、`llm`、`sandbox` 互不依赖。问题校验与预览在 `problem` 共用，宿主执行不再为它们导入平台图。`Method.code_target` 集中处理建模库兼容与既有代码写法归一化；`languages=None` 表示全部，空集合表示均不支持。方法只依赖 `runtime`、`languages`、`sandbox` 和 `methods` 本身，不依赖平台图或服务器。`sandbox/worker.py` 在沙箱中独立运行，因此不导入任何平台模块；它按库调用原生接口与插件注册表。`languages.py` 只描述九个库和生成代码的契约，不复制后端插件名单。
 
 ## 平台图
 
@@ -133,6 +136,8 @@ Web/API 模式的方法图在 `model` 节点内运行，平台不为它保存检
 运行用哪个 LLM 只由 `LLMPresetStore` 决定（`Resources.llm` 给出时除外）。预设列表是 `LLM4OM_LLM_*` 环境变量给出的预设（id 为 `env`），加上 `<workspace>/.private/llm-presets.json` 中按添加顺序保存的预设；第一个是默认预设。预设 `name` 是显示名称，API 始终使用 `settings.model`；旧预设未命名时显示模型 ID。环境预设通过 `LLM4OM_LLM_NAME` 命名，运行快照保存 `preset_name`。`get(preset)` 按 id 取设置，id 不存在时报错并列出可选 id。`prepare` 记录配置，`model` 开始前校验配置仍一致，随后所有角色共享同一份已解析设置。建模过程中删除或替换同名预设不会切换该运行的 LLM。求解和预算扣费不再重新查询预设。
 
 预设只能添加（`add`）和删除（`delete`），没有修改操作；`env` 预设不能删除。新增预设用随机 UUID，不按模型名复用 ID；已有预设保留原 ID。`public()` 返回的预设不含密钥。额外请求参数不能覆盖显式配置字段或调用记录回调。预设读改写由服务内共享锁串行化；先写权限为 600 的临时文件，再原子替换，写入失败保留旧文件。预算文件损坏时报告错误，不把已有用量当成零；后台落盘失败记录错误日志，`flush()` 也会抛出写入异常。一个工作区只供一个服务进程使用，与内存运行时一致。模型列表接口 `/api/models` 只使用请求中填写的密钥，从不补入已保存的密钥，因此密钥只会发往与它一起保存的接口地址。
+
+`TokenBudget.charge()` 立即更新内存计数，仅在没有写入任务时安排一个后台任务。任务在锁外写入累计快照；写入期间的新计数合并成下一份最新快照，追平后退出，不为每次计费排队保存旧值。`flush()` 等待调用时已有计数落盘；未恢复的写入失败会抛出，后续计费可重新保存完整累计值。跨日重置与快照选择使用同一把状态锁；旧日写入完成后仍会保存新日快照，文件 I/O 和等待不占用状态锁。
 
 ## 方法接口
 
@@ -205,11 +210,13 @@ CPMpy 和原生 CP 接口允许无目标的可满足性模型，成功时保存�
 
 `Sandbox.solve(code, data, language, time_limit, solver=...)` 构建并求解模型；`run_script` 运行方法的检查脚本；`catalog` 在同一执行环境读取并缓存后端能力。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。所有运行共享服务的 Sandbox，`solve` 和 `run_script` 共用并发额度，默认最多 4 个，由 `LLM4OM_SANDBOX_JOBS` 设置。排队仍计入运行总时限，单次沙箱超时从取得额度后开始。`--jobs` 单独控制并发运行数。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:12` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件；不挂载 COPT 整个目录。超时或取消时等待 `docker rm --force` 完成，确保容器已删除才释放并发额度。
+`Sandbox("docker")` 在镜像 `llm4om-worker:13` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件；不挂载 COPT 整个目录。超时或取消时等待 `docker rm --force` 完成，确保容器已删除才释放并发额度。
 
 求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CPMpy 模型用 CPMpy 的 MUS，CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。`feedback()` 不包含诊断，已移植的研究方法继续使用原反馈；本项目的 Feedback Repair 单独读取诊断，用于对照题面复核。Gurobi 预求解把模型判为“不可行或无界”时，Worker 关闭对偶约简（`DualReductions=0`）再求解一次，得到确定的状态。
 
 `Sandbox("local")` 用本机子进程运行同一脚本，只用于开发和测试。子进程只继承路径、语言、临时目录和 Gurobi 许可证位置等必要环境变量，不继承 API 密钥。超时或取消后等待子进程退出。
+
+Worker 保留单脚本交付，九个原生库各自集中模型识别、默认后端、求解、后端探测和诊断。共同入口只执行代码、调用选中的求解动作并整理 JSON 结果；`Selection` 保存原生模型、实际后端、求解动作和可选冲突查找器。后端目录逐库查询原生插件注册表，不再另外维护模型识别与求解分发的中央表。
 
 求解结果保留所有变量；前端按需显示更多、按完整数据筛选和导出 CSV。给 LLM 的反馈仍只展示有限的非零变量，保持原方法的反馈格式。
 
@@ -254,7 +261,7 @@ frontend/src/
 ├── format.ts          状态、数字和用时的展示
 ├── features/
 │   ├── composer/      Composer、ProblemEditor、DataEditor、Examples、Excel 导入、Draft 类型及测试
-│   ├── chat/          三类对话共用的消息渲染、输入、模型选择、滚动跟随和标签页内的未发送草稿
+│   ├── chat/          三类对话共用的消息生命周期、渲染、输入、模型选择、滚动跟随和标签页内的未发送草稿
 │   ├── presets/       PresetsDialog
 │   ├── requirements/  需求对话、可编辑需求稿、原生线程创建与交接
 │   ├── solution_chat/ 方案对话、固定方案读取与独立方案导航
@@ -284,7 +291,9 @@ frontend/src/
 
 历史的 `groupHistory()` 只根据原生元数据的 `parent`、`group` 和 `origin` 归并记录，不按题名猜测关联。`origin` 是需求稿交接、复制编辑或重复运行的来源线程 ID，仅用于追踪，不进入建模输入。原记录不迁移，各线程仍独立保存和删除；历史分页未加载来源时仍可展示关联子记录。
 
-两类对话共用 `ChatInput` 和 `useChatDraft`：未发送文字只存入标签页的 `sessionStorage`，按线程区分。消息使用 LangChain 自带的 UUID v7，通过 `getRandomValues` 兼容 HTTP；浏览器暂存提交标记，收到根图的原生输入检查点后才清除对应文本，保留后来起草的文字。刷新时也可用原生线程快照确认保存，不能用乐观消息作为持久化依据。回复期间允许起草，但下一次发送仍受原生运行状态限制。导航搜索状态由 App 持有，抽屉关闭或布局变化不重置。懒加载页面失败由 React 错误边界保留导航并提供重载；服务数据失败就地重试，不创建额外运行。
+三类对话共用 `ChatInput` 与 `useConversation`。后者封装原生 SDK `useStream`、Run 引用、持久化确认、同消息重试与停止顺序；`useChatDraft` 只负责标签页内按线程保存的未发送草稿与待确认消息。消息使用 LangChain 自带的 UUID v7，通过 `getRandomValues` 兼容 HTTP；只有根检查点、最终持久化状态或原生线程快照能确认提交，乐观消息不能清除草稿。确认保留后来起草的文字。需求对话仍在发送前等待需求稿保存队列；优化对话仍在导航前创建原生线程与 Run，刷新时按活动 Run 重连。回复期间允许起草，下一次发送受原生运行状态限制。导航搜索状态由 App 持有，抽屉关闭或布局变化不重置。懒加载页面失败由 React 错误边界保留导航并提供重载；服务数据失败就地重试，不创建额外运行。
+
+方案展示传递完整的 `SourceRun`（线程 ID 与检查点 ID），浏览其他方案不改变当前讨论方案。`useRun` 在固定模式只读取指定原生检查点，不合并最新 Run 的流或临时进度；模型、数值、报告和 Excel 都取自该检查点。条件调整、业务场景与新建方案对话也继承显示的固定来源。普通 `/run/{thread}` 读取最新运行，显式 `?checkpoint={id}` 读取固定方案；固定视图隐藏会删除整个线程的操作。
 
 `ChatMessages` 统一呈现工具执行、取消与失败重试。搜索来源与计算卡片仅读取实际 `ToolMessage.artifact`；来源按需展开，计算卡片跳转到已保存方案。停止通过 SDK `runs.cancel(wait=true)` 等待服务端中断，若尚未确认输入检查点，先通过 `threads.updateState` 按原消息 ID 保存已提交问题，再停止本地流；重试复用原用户消息，未发送草稿保持不变。刷新通过 SDK 的原生可恢复流重连，不创建另一个运行。
 

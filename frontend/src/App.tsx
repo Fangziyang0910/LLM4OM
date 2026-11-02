@@ -19,7 +19,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { t } from "@/i18n";
 import type { Draft } from "@/features/composer/types";
-import type { Entry } from "@/features/runs/types";
+import type { Entry, SourceRun } from "@/features/runs/types";
+import { sourceKey } from "@/features/runs/types";
 import type { Options, Preset, Presets } from "@/types";
 
 // Load run pages on demand.
@@ -29,13 +30,17 @@ const Requirements = lazy(() => import("@/features/requirements/Requirements").t
 const SolutionChat = lazy(() => import("@/features/solution_chat/SolutionChat").then(module => ({ default: module.SolutionChat })));
 const Agent = lazy(() => import("@/features/agent/Agent").then(module => ({ default: module.Agent })));
 
-type Route = { name: "new" } | { name: "agent-new" } | { name: "run" | "compare" | "chat" | "discussion" | "agent"; id: string };
+type Route = { name: "new" } | { name: "agent-new" }
+  | { name: "run"; id: string; checkpoint?: string } | { name: "compare" | "chat" | "discussion" | "agent"; id: string };
 type Confirm = { title: string; text: string; action: string; run: () => Promise<void> };
 
 const routeFromUrl = (): Route => {
   const match = location.pathname.match(/^\/(run|compare|chat|discussion|agent)\/([\w-]+)/);
-  return match ? { name: match[1] as "run" | "compare" | "chat" | "discussion" | "agent", id: match[2] }
-    : { name: location.pathname === "/agent" ? "agent-new" : "new" };
+  if (!match) return { name: location.pathname === "/agent" ? "agent-new" : "new" };
+  const name = match[1] as "run" | "compare" | "chat" | "discussion" | "agent";
+  // A plain /run/{thread} keeps the latest-run meaning; only an explicit checkpoint selects a saved plan.
+  const checkpoint = name === "run" ? new URLSearchParams(location.search).get("checkpoint") ?? undefined : undefined;
+  return name === "run" ? { name, id: match[2], ...(checkpoint ? { checkpoint } : {}) } : { name, id: match[2] };
 };
 const NO_PRESETS: Preset[] = [];
 
@@ -60,8 +65,9 @@ export default function App() {
   const [confirm, setConfirm] = useState<Confirm | null>(null);
 
   const go = useCallback((next: Route) => {
-    const path = next.name === "new" ? "/" : next.name === "agent-new" ? "/agent" : `/${next.name}/${next.id}`;
-    if (location.pathname !== path) window.history.pushState(null, "", path);
+    const path = next.name === "new" ? "/" : next.name === "agent-new" ? "/agent"
+      : `/${next.name}/${next.id}${next.name === "run" && next.checkpoint ? `?checkpoint=${encodeURIComponent(next.checkpoint)}` : ""}`;
+    if (location.pathname + location.search !== path) window.history.pushState(null, "", path);
     setRoute(next);
     setMenuOpen(false);
   }, []);
@@ -100,10 +106,20 @@ export default function App() {
     },
   });
 
-  const renderRun = (id: string, assistantOpen = false, embedded = false) => <RunView key={id} threadId={id} options={options!} assistantOpen={assistantOpen} embedded={embedded} onFinished={() => void refresh()}
+  const openRun = (run: string | SourceRun) => {
+    const id = typeof run === "string" ? run : run.thread_id;
+    go(typeof run === "string" ? { name: "run", id } : { name: "run", id, checkpoint: run.checkpoint_id });
+  };
+  const renderRun = (run: string | SourceRun, assistantOpen = false, embedded = false) => {
+    // A saved plan keeps its checkpoint through its view and every action derived from it. A plain thread keeps
+    // the existing latest-run meaning.
+    const source = typeof run === "string" ? undefined : run;
+    const threadId = typeof run === "string" ? run : run.thread_id;
+    return <RunView key={typeof run === "string" ? run : sourceKey(run)} threadId={threadId} source={source} options={options!}
+      assistantOpen={assistantOpen} embedded={embedded} onFinished={() => void refresh()}
     onDiscuss={async () => {
-      if (assistantOpen) { go({ name: "run", id }); return; }
-      const chat = await createSolutionChat(id); void refresh(); go({ name: "discussion", id: chat });
+      if (assistantOpen) { openRun(source ?? threadId); return; }
+      const chat = await createSolutionChat(source ?? threadId); void refresh(); go({ name: "discussion", id: chat });
     }}
     onConversation={id => {
       void import("@/features/runs/sdk").then(async ({ client }) => {
@@ -111,16 +127,17 @@ export default function App() {
         go({ name: thread.metadata?.kind === "optimization" ? "agent" : "discussion", id });
       }).catch(error => toast.error(errorText(error)));
     }} onScenarios={async scenarios => {
-      const result = await startScenarios(id, scenarios, presets);
+      const result = await startScenarios(threadId, scenarios, presets, source);
       void refresh(); go({ name: "compare", id: result.group });
       if (result.error) toast.error(t("只启动了 {started}/{total} 个运行：{error}", { started: result.started, total: scenarios.length, error: errorText(result.error) }));
     }}
     onEdit={next => { setDraft({ ...next, comparing: false, methods: draft.methods, presets: draft.presets }); go({ name: "new" }); }}
     onRerun={start} onRevise={async instruction => {
-      const revised = await startRevision(id, instruction, presets);
+      const revised = await startRevision(threadId, instruction, presets, source);
       void refresh(); go({ name: "run", id: revised });
-    }} onDelete={meta => remove({ id, meta })}
+    }} onDelete={meta => remove({ id: threadId, meta })}
     onCompare={group => go({ name: "compare", id: group })} onMetaChange={() => void refresh()} />;
+  };
   const modelingProps = (options: Options) => ({ options, presets, draft, setDraft, onStart: start, onCompare: compare,
     presetsStatus: presetsQuery.data ? "ready" as const : presetsQuery.error ? "error" as const : "loading" as const,
     openPresets: () => setPresetsOpen(true), openExamples: () => setExamplesOpen(true) });
@@ -169,7 +186,7 @@ export default function App() {
               <Agent key={route.name === "agent" ? route.id : `new-${agentDraft.description}`} threadId={route.name === "agent" ? route.id : undefined}
                 options={options} presets={presets} initial={agentDraft} onThread={id => go({ name: "agent", id })}
                 openPresets={() => setPresetsOpen(true)} onExamples={() => setExamplesOpen(true)} onManual={() => go({ name: "new" })}
-                onFinished={() => void refresh()} onOpen={id => go({ name: "run", id })} onCompare={id => go({ name: "compare", id })} renderRun={id => renderRun(id, false, true)} />
+                onFinished={() => void refresh()} onOpen={openRun} onCompare={id => go({ name: "compare", id })} renderRun={source => renderRun(source, false, true)} />
             </Suspense></PageErrorBoundary>
           : route.name === "new"
             ? <Composer {...modelingProps(options)} onDiscuss={async () => {
@@ -184,8 +201,9 @@ export default function App() {
                   onUse={next => { setDraft({ ...draft, ...next, origin: route.id }); go({ name: "new" }); }} />
                 : route.name === "discussion" ? <SolutionChat key={route.id} threadId={route.id} presets={presets}
                   openPresets={() => setPresetsOpen(true)} onFinished={() => void refresh()}
-                  onOpen={id => go({ name: "run", id })} onCompare={id => go({ name: "compare", id })} renderRun={id => renderRun(id, true)} />
-                : renderRun(route.id)}
+                  onOpen={openRun} onCompare={id => go({ name: "compare", id })} renderRun={source => renderRun(source, true)} />
+                : route.name === "run" ? renderRun(route.checkpoint ? { thread_id: route.id, checkpoint_id: route.checkpoint } : route.id)
+                : null}
             </Suspense></PageErrorBoundary>}
       </main>
     </div>

@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from importlib.metadata import entry_points
 from typing import Any, Callable, Mapping
 
+from llm4om.languages import CodeTarget
 from llm4om.runtime import Limits
 
 
@@ -26,6 +27,13 @@ class Method:
     limits: Limits | None = None  # replaces the service limits for methods that need many more calls
     parameters: Callable[[], dict[str, Any]] = dict  # snapshot the parameters used by this method
     linear_only: bool = False  # problem scope; independent of the modeling library
+
+    def code_target(self, language: str, solver: str | None = None) -> CodeTarget:
+        """Build this method's code target, rejecting a library it does not support; None means all, an empty set none."""
+        target = CodeTarget(language, solver)
+        if self.languages is not None and target.language not in self.languages:
+            raise ValueError(f"{self.name} does not support {target.language}; choose a supported modeling library.")
+        return target
 
 
 def methods() -> dict[str, Method]:

@@ -5,7 +5,6 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
-from httpx import HTTPStatusError
 from langchain.agents.middleware import (
     AgentMiddleware,
     ModelRequest,
@@ -18,11 +17,11 @@ from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import SystemMessage, ToolMessage
 from langgraph.types import Command
 
-from llm4om.graph import problem_text
-from llm4om.languages import LANGUAGES, CodeTarget
+from llm4om.languages import LANGUAGES
 from llm4om.methods import methods
+from llm4om.problem import problem_text, validate_description
 
-from .session import AgentContext, Conversation, Plan, SourceRun, plan_result
+from .session import AgentContext, Conversation, PlanRun, plan_result
 
 OPTIMIZATION_TOOLS = """You are LLM4OM's conversational assistant. Your specialty is turning optimization questions into real plans,
 and you can also help with ordinary conversation and related tasks. Let the user steer the conversation.
@@ -47,7 +46,7 @@ def modeling(session: Conversation, preset: str | None) -> list[AgentMiddleware]
         Consult this before choosing a non-default method, library or explicit backend. A library is not a backend.
         """
         return {"methods": [{"id": item.id, "name": item.name, "description": item.description,
-            "linear_only": item.linear_only, "languages": sorted(item.languages) if item.languages else None}
+            "linear_only": item.linear_only, "languages": sorted(item.languages) if item.languages is not None else None}
             for item in methods().values()],
             "libraries": [{"id": key, "name": item.name} for key, item in LANGUAGES.items()],
             "backends": await session.resources.sandbox.catalog()}
@@ -63,8 +62,9 @@ def modeling(session: Conversation, preset: str | None) -> list[AgentMiddleware]
         Attached data comes from this conversation. Defaults are Direct, Pyomo and automatic backend.
         Do not call for ordinary conversation or when a missing business condition changes the answer.
         """
-        if not description.strip() or not name.strip():
-            raise ValueError("Supply the complete problem and a short name.")
+        validate_description(description)
+        if not name.strip():
+            raise ValueError("Supply a short name for this plan.")
         request = session.pending_model or {"turn_id": session.messages[-1].id, "description": description.strip(), "name": name.strip(),
             "method": session.choice.method or method or "direct", "language": session.choice.language or language or "pyomo",
             "solver": session.choice.solver or solver, "preset": preset, "data": session.state.get("data") or {}}
@@ -74,41 +74,34 @@ def modeling(session: Conversation, preset: str | None) -> list[AgentMiddleware]
             raise ValueError("Choose a registered method from modeling_capabilities.")
         library = next((item.id for item in LANGUAGES.values()
                         if request["language"].strip().casefold() in (item.id, item.name.casefold())), request["language"])
-        target = CodeTarget(library, request["solver"])
-        if selected.languages is not None and target.language not in selected.languages:
-            raise ValueError(f"{selected.name} does not support {target.language}.")
+        target = selected.code_target(library, request["solver"])
         request = {**request, "method": selected.id, "language": target.language}
         session.pending_model = request
         identity = json.dumps(request, sort_keys=True, ensure_ascii=False)
         identifier = str(uuid5(NAMESPACE_URL, f"{runtime.config['configurable']['thread_id']}:{identity}"))
-        try:
-            await session.client.threads.get(identifier)
-        except HTTPStatusError as error:
-            if error.response.status_code != 404:
-                raise
-            def progress(step: dict[str, Any]) -> None:
-                session.stream_step(step, runtime, request["name"], request["method"], request["language"])
 
+        def progress(step: dict[str, Any]) -> None:
+            session.stream_step(step, runtime, request["name"], request["method"], request["language"])
+
+        async def run_plan() -> PlanRun:
             calculated = await session.execute(request["description"], method=request["method"], language=request["language"],
                 solver=request["solver"], preset=request["preset"], data=request["data"],
                 explain=True, locale=session.choice.locale, resources=session.resources, on_step=progress)
             spec = calculated.get("spec") or {}
-            await session.client.threads.create(thread_id=identifier, graph_id=request["method"], metadata={
+            return PlanRun(request["method"], {
                 "title": request["name"], "method": request["method"], "language": request["language"],
                 "solver": request["solver"], "preset": request["preset"],
-                "provider": spec.get("llm", {}).get("provider"), "model": spec.get("preset_name") or spec.get("llm", {}).get("model"),
-                "origin": runtime.config["configurable"]["thread_id"], "conversation": runtime.config["configurable"]["thread_id"],
-            }, supersteps=[{"updates": [{"as_node": "finish", "values": calculated}]}])
-        snapshot = await session.client.threads.get_state(identifier)
-        result = snapshot["values"]
-        source: SourceRun = {"thread_id": identifier, "checkpoint_id": snapshot["checkpoint"]["checkpoint_id"]}
-        session.cache[(source["thread_id"], source["checkpoint_id"])] = result
-        plan: Plan = {"name": request["name"], "instruction": request["description"], "source": source,
-                      "group": None, "turn_id": session.messages[-1].id}
-        session.completed.append(plan)
+                "provider": spec.get("llm", {}).get("provider"),
+                "model": spec.get("preset_name") or spec.get("llm", {}).get("model"),
+                "origin": runtime.config["configurable"]["thread_id"],
+                "conversation": runtime.config["configurable"]["thread_id"],
+            }, calculated)
+
+        plan, result = await session.save_plan(identifier, {"name": request["name"], "instruction": request["description"],
+            "group": None, "turn_id": session.messages[-1].id}, run=run_plan)
         session.pending_model = None
         facts = {**plan_result(plan, result), "method": request["method"], "language": request["language"]}
-        return Command(update={**({"current": source} if result.get("spec") else {}),
+        return Command(update={**({"current": plan["source"]} if result.get("spec") else {}),
             "messages": [ToolMessage(json.dumps(facts, ensure_ascii=False), tool_call_id=runtime.tool_call_id,
                 name="model_and_solve", artifact={"type": "plans", "plans": [facts]})]})
 

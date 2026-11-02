@@ -2,7 +2,8 @@ import type { ComponentType } from "react";
 import { ArrowUpRight, Calculator, Check, ChevronRight, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/features/runs/status";
-import type { Explanation, Plan } from "@/features/runs/types";
+import type { Explanation, Plan, SourceRun } from "@/features/runs/types";
+import { sourceKey } from "@/features/runs/types";
 import { formatNumber } from "@/format";
 import { t } from "@/i18n";
 
@@ -14,13 +15,13 @@ type ComputedPlan = Plan & {
 export type ToolArtifact = {
   type?: string;
   calculation?: { expression: string; result: number; matched_variables: number };
-  selected_plan?: { name: string; source: { thread_id: string } };
+  selected_plan?: { name: string; source: SourceRun; status?: string | null; objective?: number | null; explanation?: Explanation | null };
   plans?: ComputedPlan[];
   query?: string; error?: string;
   results?: { title: string; url: string; snippet?: string; summary?: string; date?: string }[];
 };
 
-type ResultProps = { artifact?: ToolArtifact; onOpenPlan?: (id: string) => void; onCompare?: (group: string) => void };
+type ResultProps = { artifact?: ToolArtifact; onOpenPlan?: (source: SourceRun) => void; onCompare?: (group: string) => void };
 
 function DraftResult() {
   return <p className="flex items-center gap-1.5 pl-9 text-xs text-muted-foreground"><Check className="size-3.5 text-success" />{t("需求稿已整理")}</p>;
@@ -29,7 +30,7 @@ function DraftResult() {
 function SelectedPlan({ artifact, onOpenPlan }: ResultProps) {
   const plan = artifact?.selected_plan;
   return plan ? <div className="ml-9 flex items-center gap-2 text-xs text-muted-foreground"><Check className="size-3.5 shrink-0 text-success" />
-    {onOpenPlan ? <Button variant="link" size="xs" className="h-auto min-w-0 justify-start p-0 text-left whitespace-normal" onClick={() => onOpenPlan(plan.source.thread_id)}>{t("已选择：{name}", { name: plan.name })}</Button>
+    {onOpenPlan ? <Button variant="link" size="xs" className="h-auto min-w-0 justify-start p-0 text-left whitespace-normal" onClick={() => onOpenPlan(plan.source)}>{t("已选择：{name}", { name: plan.name })}</Button>
       : <span>{t("已选择：{name}", { name: plan.name })}</span>}
   </div> : null;
 }
@@ -52,13 +53,13 @@ function Plans({ artifact, onOpenPlan, onCompare }: ResultProps) {
   const plans = artifact?.plans ?? [];
   if (!plans.length) return null;
   return <aside aria-label={t("本轮计算结果")} className="ml-9 flex flex-col gap-2">
-    {plans.map(plan => <div key={plan.source.thread_id} className="rounded-xl border bg-card p-3 text-xs">
+    {plans.map(plan => <div key={sourceKey(plan.source)} className="rounded-xl border bg-card p-3 text-xs">
       <div className="flex items-start justify-between gap-2"><p className="min-w-0 break-words font-medium">{plan.name}</p>
         <StatusBadge status={plan.failure ? "failed" : plan.status ?? "unknown"} /></div>
       <p className="mt-1 line-clamp-2 break-words text-muted-foreground" title={plan.instruction}>{plan.instruction}</p>
       {plan.configuration ? <p className="mt-1 text-muted-foreground">{[plan.configuration.method, plan.configuration.language, plan.configuration.actual_solver].filter(Boolean).join(" · ")}</p> : null}
       {plan.objective != null ? <p className="mt-2">{plan.explanation?.objective_label || t("目标值")} <strong className="text-sm tabular-nums">{formatNumber(plan.objective)}</strong> {plan.explanation?.objective_unit}</p> : null}
-      {onOpenPlan ? <Button variant="link" size="xs" className="mt-2 h-auto p-0" onClick={() => onOpenPlan(plan.source.thread_id)}>{t("查看计算方案")}<ArrowUpRight /></Button> : null}
+      {onOpenPlan ? <Button variant="link" size="xs" className="mt-2 h-auto p-0" onClick={() => onOpenPlan(plan.source)}>{t("查看计算方案")}<ArrowUpRight /></Button> : null}
     </div>)}
     {plans.length > 1 && plans[0].group && onCompare ? <Button variant="outline" size="sm" onClick={() => onCompare(plans[0].group!)}>{t("对比本轮方案")}</Button> : null}
   </aside>;

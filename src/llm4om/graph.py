@@ -25,18 +25,15 @@ from langgraph.types import Overwrite
 
 from llm4om.budget import TokenBudget
 from llm4om.followups import explain_infeasibility, explain_result, revise_problem
-from llm4om.languages import CodeTarget
 from llm4om.llm import LLMSettings, chat_model
 from llm4om.llm_presets import LLMPresetStore
 from llm4om.method_steps import NodeSteps
 from llm4om.method_steps import render_update as render_update
 from llm4om.methods import Method, methods
+from llm4om.problem import problem_text, validate_data_files, validate_description
 from llm4om.progress import NAMESPACE, save_progress, timing
-from llm4om.runtime import Context, LimitExceeded, Limits, Recorder
+from llm4om.runtime import RECURSION_LIMIT, Context, LimitExceeded, Limits, Recorder
 from llm4om.sandbox import Sandbox
-
-RECURSION_LIMIT = 1_000_000  # loops are bounded by each method and by Limits, not by LangGraph's step count
-MAX_DATA_CHARS = 20000
 
 
 class RunInput(TypedDict, total=False):
@@ -115,15 +112,6 @@ def get_resources() -> Resources:
     return resources if isinstance(resources, Resources) else default_resources()
 
 
-def problem_text(description: str, data: dict[str, str]) -> str:
-    """The problem description followed by every attached data file."""
-    parts = ["## Problem description\n" + description.strip()]
-    for name, content in data.items():
-        shown = content if len(content) <= MAX_DATA_CHARS else content[:MAX_DATA_CHARS] + "\n... (truncated)"
-        parts.append(f"## Data file `{name}`\n```\n{shown}\n```")
-    return "\n\n".join(parts)
-
-
 def platform_graph(method: Method) -> Any:
     """The compiled platform graph that runs `method` and solves its final code."""
 
@@ -139,7 +127,8 @@ def platform_graph(method: Method) -> Any:
                 raise RuntimeError("The modeling node must resolve its LLM before calling it.")
             return resources.model_factory(settings, callbacks=[recorder.callback], metadata={"llm4om_role": role})
 
-        return Context(recorder, resources.sandbox, model, CodeTarget(choice.language, choice.solver), state.get("data") or {})
+        return Context(recorder, resources.sandbox, model, method.code_target(choice.language, choice.solver),
+                       state.get("data") or {})
 
     def thread_id() -> str | None:
         return get_config().get("configurable", {}).get("thread_id")
@@ -157,17 +146,11 @@ def platform_graph(method: Method) -> Any:
         if runtime.store and (thread := thread_id()):
             await runtime.store.adelete(NAMESPACE, thread)
         try:
-            if not (state.get("description") or "").strip():
-                raise ValueError("Describe the optimization problem first.")
+            validate_description(state.get("description") or "")
             if state.get("change") is not None and not state["change"].strip():
                 raise ValueError("Describe how you want to change the problem.")
-            target = CodeTarget(choice.language, choice.solver)
-            if method.languages is not None and target.language not in method.languages:
-                raise ValueError(f"{method.name} does not support {target.language}; "
-                                 "choose a supported modeling library.")
-            for name in data:
-                if not name.strip() or name in {".", ".."} or any(char in name for char in "/\\\0\r\n"):
-                    raise ValueError(f"Invalid data file name {name!r}; supply a single file name without path separators or line breaks.")
+            target = method.code_target(choice.language, choice.solver)
+            validate_data_files(data)
             preset, settings, preset_name = await asyncio.to_thread(resources.resolve, choice.preset)
             if charge := resources.charge(preset):
                 charge(0)  # raises when the preset's daily budget is spent

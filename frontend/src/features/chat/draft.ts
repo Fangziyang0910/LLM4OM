@@ -30,12 +30,13 @@ export function useChatDraft(threadId: string, initial = "") {
     pending.current = null;
     try { sessionStorage.removeItem(`${key}-pending`); } catch { /* storage may be unavailable */ }
   }, [key]);
-  const savePending = async () => {
+  /** Save the unconfirmed question; `target` covers a thread created just before navigation. */
+  const savePending = async (target = threadId) => {
     const sent = pending.current;
     if (!sent) return;
     const message: Message = { type: "human", id: sent.id, content: sent.text.trim() };
     // Immediate cancellation can precede the graph's first input checkpoint.
-    await client.threads.updateState(threadId, { values: { messages: [message] }, asNode: "discuss" });
+    await client.threads.updateState(target, { values: { messages: [message] }, asNode: "discuss" });
     acknowledge([message]);
   };
   return { value, setValue, prepare, acknowledge, savePending };

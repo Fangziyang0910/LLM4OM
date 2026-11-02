@@ -6,7 +6,6 @@ from itertools import islice
 from typing import Annotated, Any
 from uuid import NAMESPACE_URL, uuid5
 
-from httpx import HTTPStatusError
 from langchain.agents.middleware import (
     AgentMiddleware,
     ModelRequest,
@@ -20,15 +19,14 @@ from langchain_core.messages import SystemMessage, ToolMessage
 from langgraph.types import Command
 from pydantic import Field
 
-from llm4om.graph import problem_text
+from llm4om.problem import problem_text
 
 from .session import (
     TOOL_INPUT_ERRORS,
     AgentContext,
     Conversation,
-    Plan,
+    PlanRun,
     Scenario,
-    SourceRun,
     configuration,
     plan_result,
 )
@@ -151,31 +149,23 @@ def plans(session: Conversation) -> list[AgentMiddleware]:
                 runtime.stream_writer({"type": "scenario_progress", "tool_call_id": runtime.tool_call_id,
                     "name": scenario.name, "index": index + 1, "total": len(scenarios), "stage": stage})
 
-            identifier = str(uuid5(NAMESPACE_URL, f"{identity}:{index}"))
             # Stable IDs let a replay reuse completed calculations without running them again.
-            try:
-                existing = await session.client.threads.get(identifier)
-            except HTTPStatusError as error:
-                if error.response.status_code != 404:
-                    raise
-                existing = None
-            if existing is None:
+            identifier = str(uuid5(NAMESPACE_URL, f"{identity}:{index}"))
+
+            async def run_plan() -> PlanRun:
                 calculated = await session.execute(values["description"], method=spec["method"], language=spec["language"],
                     solver=spec["solver"], preset=spec.get("preset"), data=values.get("data"),
                     change=scenario.instruction, explain=True, locale=session.choice.locale, resources=session.resources, on_step=progress)
-                await session.client.threads.create(thread_id=identifier, graph_id=spec["method"], metadata={
+                return PlanRun(spec["method"], {
                     "title": scenario.name, "method": spec["method"], "language": spec["language"],
                     "solver": spec["solver"], "preset": spec.get("preset"), "provider": spec["llm"]["provider"],
                     "model": spec.get("preset_name") or spec["llm"]["model"], "parent": base,
                     "scenario": scenario.model_dump(), "conversation": runtime.config["configurable"]["thread_id"],
                     **({"group": group} if group else {}),
-                }, supersteps=[{"updates": [{"as_node": "finish", "values": calculated}]}])
-            snapshot = await session.client.threads.get_state(identifier)
-            result = snapshot["values"]
-            source: SourceRun = {"thread_id": identifier, "checkpoint_id": snapshot["checkpoint"]["checkpoint_id"]}
-            session.cache[(source["thread_id"], source["checkpoint_id"])] = result
-            plan: Plan = {"name": scenario.name, "instruction": scenario.instruction, "source": source, "group": group, "turn_id": turn}
-            session.completed.append(plan)
+                }, calculated)
+
+            plan, result = await session.save_plan(identifier, {"name": scenario.name, "instruction": scenario.instruction,
+                "group": group, "turn_id": turn}, run=run_plan)
             results.append(plan_result(plan, result))
         session.pending = None
         update = {"messages": [ToolMessage(json.dumps(results, ensure_ascii=False), tool_call_id=runtime.tool_call_id,

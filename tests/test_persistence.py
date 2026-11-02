@@ -1,10 +1,15 @@
 """Concurrent preset edits, immutable run settings and progress after cancellation."""
 
 import asyncio
+import datetime
 import json
+import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
+from threading import Event
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -17,7 +22,7 @@ from llm4om.graph import RunContext, platform_graph, run
 from llm4om.llm_presets import LLMPresetStore
 from llm4om.methods import Method, methods
 from llm4om.progress import NAMESPACE
-from llm4om.runtime import ModelingState
+from llm4om.runtime import LimitExceeded, ModelingState
 from llm4om.storage import write_private_json
 from tests.conftest import ACCEPT_REVIEW, LLM, PRODUCTION_CODE, TWO_PART_REPLY
 
@@ -89,6 +94,123 @@ def test_background_budget_write_failures_are_visible(tmp_path: Path, monkeypatc
         budget.flush()
     assert "Could not save token usage" in caplog.text and "disk full" in caplog.text
     assert budget.used() == {"preset": 10}
+    monkeypatch.setattr("llm4om.budget.write_private_json", write_private_json)
+    budget.charge("preset", 5)
+    budget.flush()
+    assert TokenBudget(tmp_path, daily_limit=100).used() == {"preset": 15}
+
+
+def test_token_burst_coalesces_and_flush_waits_for_the_latest_snapshot(tmp_path: Path, monkeypatch: Any) -> None:
+    entered = [Event(), Event()]
+    release = [Event(), Event()]
+    snapshots = []
+
+    def write(path: Path, saved: Any) -> None:
+        index = len(snapshots)
+        snapshots.append(saved)
+        entered[index].set()
+        assert release[index].wait(5)
+        write_private_json(path, saved)
+
+    monkeypatch.setattr("llm4om.budget.write_private_json", write)
+    budget = TokenBudget(tmp_path, daily_limit=20)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        try:
+            budget.charge("preset", 1)
+            assert entered[0].wait(5)
+            for _ in range(19):
+                budget.charge("preset", 1)
+            assert budget.used() == {"preset": 20}
+            with pytest.raises(LimitExceeded):
+                budget.charge("preset")
+            waiting = pool.submit(budget.flush)
+            release[0].set()
+            assert entered[1].wait(5)
+            assert json.loads(budget.path.read_text())["tokens"] == {"preset": 1}
+            assert not waiting.done()
+            release[1].set()
+            waiting.result(timeout=5)
+        finally:
+            for event in release:
+                event.set()
+    assert [saved["tokens"] for saved in snapshots] == [{"preset": 1}, {"preset": 20}]
+    assert TokenBudget(tmp_path, daily_limit=20).used() == {"preset": 20}
+    assert budget.path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize("error", [OSError("disk full"), ValueError("invalid snapshot")])
+def test_updates_during_a_failed_write_are_saved_without_another_charge(
+    tmp_path: Path, monkeypatch: Any, error: Exception,
+) -> None:
+    entered, release = Event(), Event()
+    snapshots = []
+
+    def write(path: Path, saved: Any) -> None:
+        snapshots.append(saved)
+        if len(snapshots) == 1:
+            entered.set()
+            assert release.wait(5)
+            raise error
+        write_private_json(path, saved)
+
+    monkeypatch.setattr("llm4om.budget.write_private_json", write)
+    budget = TokenBudget(tmp_path, daily_limit=0)
+    try:
+        budget.charge("preset", 1)
+        assert entered.wait(5)
+        budget.charge("preset", 19)
+    finally:
+        release.set()
+    budget.flush()
+    assert [saved["tokens"] for saved in snapshots] == [{"preset": 1}, {"preset": 20}]
+    assert TokenBudget(tmp_path, daily_limit=0).used() == {"preset": 20}
+
+
+def test_new_day_replaces_an_inflight_previous_day_snapshot(tmp_path: Path, monkeypatch: Any) -> None:
+    today = datetime.date(2026, 11, 2)
+
+    class Clock:
+        @staticmethod
+        def today() -> datetime.date:
+            return today
+
+    monkeypatch.setattr("llm4om.budget.datetime", SimpleNamespace(date=Clock))
+    entered, release = Event(), Event()
+    snapshots = []
+
+    def write(path: Path, saved: Any) -> None:
+        snapshots.append(saved)
+        if len(snapshots) == 1:
+            entered.set()
+            assert release.wait(5)
+        write_private_json(path, saved)
+
+    monkeypatch.setattr("llm4om.budget.write_private_json", write)
+    budget = TokenBudget(tmp_path, daily_limit=20)
+    try:
+        budget.charge("old-preset", 20)
+        assert entered.wait(5)
+        today += datetime.timedelta(days=1)
+        assert budget.used() == {}
+        budget.charge("old-preset")
+        budget.charge("new-preset", 3)
+    finally:
+        release.set()
+    budget.flush()
+    assert [saved["date"] for saved in snapshots] == ["2026-11-02", "2026-11-03"]
+    assert json.loads(budget.path.read_text()) == {"date": "2026-11-03", "tokens": {"new-preset": 3}}
+    assert TokenBudget(tmp_path, daily_limit=20).used() == {"new-preset": 3}
+
+
+def test_budget_writer_finishes_on_normal_process_exit(tmp_path: Path) -> None:
+    subprocess.run([
+        sys.executable, "-c",
+        "import sys; from pathlib import Path; from llm4om.budget import TokenBudget; "
+        "budget = TokenBudget(Path(sys.argv[1]), 0); "
+        "[budget.charge('preset', 1) for _ in range(20)]",
+        str(tmp_path),
+    ], check=True, timeout=10, capture_output=True, text=True)
+    assert TokenBudget(tmp_path, daily_limit=0).used() == {"preset": 20}
 
 
 def test_every_role_keeps_the_llm_selected_before_modeling(make_resources: Any) -> None:

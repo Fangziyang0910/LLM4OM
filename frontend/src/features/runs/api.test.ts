@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import { deleteRun, history, runMeta, startComparison, startRevision, startRun, startScenarios } from "@/features/runs/api";
 import { errorText } from "@/format";
+import { createSolutionChat } from "@/features/solution_chat/api";
 import { client } from "@/features/runs/sdk";
 import type { Draft } from "@/features/composer/types";
 import type { RunMeta, RunSpec } from "@/features/runs/types";
@@ -58,6 +59,27 @@ test("a revision cannot silently replace a deleted model preset", async () => {
     spec: { method: "direct", language: "pyomo", preset: "deleted", llm: { provider: "deepseek", model: "old" } } } } as never);
   await expect(startRevision("source", "改预算", [])).rejects.toThrow("原预设已删除");
   expect(threads.create).not.toHaveBeenCalled();
+});
+
+test("revisions, scenarios and discussions keep an explicit old checkpoint even during a later run", async () => {
+  const source = { thread_id: "source", checkpoint_id: "old-checkpoint" };
+  threads.get.mockResolvedValue({ status: "busy", metadata: { title: "new title", method: "new-method" } } as never);
+  threads.getState.mockImplementation(async (_, checkpoint) => ({ checkpoint: { checkpoint_id: checkpoint ?? "new-checkpoint" },
+    values: { description: checkpoint ? "old problem" : "new problem", data: { "source.csv": "original data" },
+      spec: { method: "direct", language: "pyomo", solver: "highs", preset: null, llm: { provider: "saved", model: "saved" } } },
+  }) as never);
+  threads.search.mockResolvedValue([]);
+  await startRevision("source", "change", [], source);
+  const scenarios = [{ name: "one", instruction: "first change" }, { name: "two", instruction: "second change" }];
+  await startScenarios("source", scenarios, [], source);
+  for (const call of runs.create.mock.calls) expect(call[2]?.input).toMatchObject({ description: "old problem", data: { "source.csv": "original data" } });
+  await createSolutionChat(source);
+  expect(threads.getState.mock.calls).toEqual([["source", "old-checkpoint"], ["source", "old-checkpoint"], ["source", "old-checkpoint"]]);
+  for (const call of threads.create.mock.calls) expect(call[0]?.metadata).toMatchObject({ parent: source });
+  expect(threads.create.mock.calls.at(-1)?.[0]?.supersteps).toEqual([
+    { updates: [{ asNode: "discuss", values: { source, current: source, messages: [], plans: [] } }] },
+  ]);
+  await expect(createSolutionChat("source")).rejects.toThrow("请等待当前运行结束后再讨论方案");
 });
 
 test("a scenario batch freezes the baseline once and keeps successful starts when a later start is rejected", async () => {

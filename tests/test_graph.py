@@ -1,6 +1,7 @@
 """The platform graph: steps in the order they happen, limits and the run deadline."""
 
 import asyncio
+import json
 from dataclasses import replace
 from typing import Any
 
@@ -8,6 +9,8 @@ import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 
 from llm4om.graph import RunContext, platform_graph, run
+from llm4om.host import resume as host_resume
+from llm4om.host import start as host_start
 from llm4om.methods import methods
 from llm4om.runtime import Limits
 from llm4om.sandbox import Sandbox
@@ -17,17 +20,64 @@ BROKEN_CODE = PRODUCTION_CODE.replace("return m", "return m.missing")
 
 
 @pytest.mark.parametrize("name", ["需求（周）.csv", "prices (2026)+tax.json", "费用￥.csv"])
-def test_attached_file_names_preserve_normal_punctuation(make_resources: Any, name: str) -> None:
+def test_attached_file_names_preserve_normal_punctuation(make_resources: Any, name: str, tmp_path: Any) -> None:
     code = TWO_PART_REPLY.replace("    m =", f"    assert data[{name!r}] == 'actual data'\n    m =")
     result = asyncio.run(run("test", data={name: "actual data"}, resources=make_resources(lambda *_: code)))
     assert result["failure"] is None, result["failure"]
     assert result["solve"]["objective"] == 13
+    directory = tmp_path / "host"
+    waiting = asyncio.run(host_start(directory, "test", data={name: "actual data"}, sandbox="local"))
+    completed = asyncio.run(host_resume(directory, {waiting["pending"][0]["id"]: {"content": code}}))
+    assert completed["solve"]["objective"] == 13
+    assert completed["spec"]["data_files"] == [name]
 
 
-@pytest.mark.parametrize("name", ["../prices.csv", "folder/prices.csv", "folder\\prices.csv", "bad\x00.csv", "bad\n.csv", " ", ".", ".."])
-def test_attachment_names_must_be_single_file_names(make_resources: Any, name: str) -> None:
+@pytest.mark.parametrize("name", ["../prices.csv", "folder/prices.csv", "folder\\prices.csv", "bad\x00.csv", "bad\n.csv", "bad\r.csv", " ", ".", ".."])
+def test_attachment_names_must_be_single_file_names(make_resources: Any, name: str, tmp_path: Any) -> None:
     result = asyncio.run(run("test", data={name: "data"}, resources=make_resources(lambda *_: TWO_PART_REPLY)))
     assert result["failure"] and result["usage"] == {}
+    directory = tmp_path / "host"
+    with pytest.raises(ValueError, match="Invalid data file name"):
+        asyncio.run(host_start(directory, "test", data={name: "data"}, sandbox="local"))
+    assert not directory.exists()
+
+
+def test_web_and_host_keep_the_same_bounded_preview_and_complete_data(make_resources, tmp_path):
+    description = "  preserve source whitespace  \n"
+    data = {"values.csv": "x" * 20000 + "COMPLETE_TAIL"}
+    preview = "## Problem description\npreserve source whitespace\n\n## Data file `values.csv`\n```\n" + "x" * 20000 + "\n... (truncated)\n```"
+    code = TWO_PART_REPLY.replace("    m =", "    assert data['values.csv'].endswith('COMPLETE_TAIL')\n    m =")
+
+    def reply(role, messages, tools):
+        assert messages[-1].text == preview
+        return code
+
+    web = asyncio.run(run(description, data=data, resources=make_resources(reply)))
+    assert web["description"] == description and web["data"] == data
+    assert web["solve"]["objective"] == 13
+    directory = tmp_path / "host"
+    waiting = asyncio.run(host_start(directory, description, data=data, sandbox="local"))
+    assert waiting["pending"][0]["messages"][-1]["content"] == preview
+    completed = asyncio.run(host_resume(directory, {waiting["pending"][0]["id"]: {"content": code}}))
+    assert completed["spec"]["description"] == description
+    assert completed["solve"]["objective"] == 13
+
+
+def test_an_empty_method_library_set_is_rejected_and_advertised_consistently(make_resources, monkeypatch, tmp_path, capsys):
+    from llm4om.cli import main
+
+    method = replace(methods()["direct"], id="restricted", languages=frozenset())
+    monkeypatch.setattr("llm4om.host.session.methods", lambda: {method.id: method})
+    monkeypatch.setattr("llm4om.methods.methods", lambda: {method.id: method})
+    result = asyncio.run(platform_graph(method).ainvoke({"description": "test"},
+        {"configurable": {"llm4om_resources": make_resources(lambda *_: pytest.fail("No model call expected"))}}))
+    assert "does not support pyomo" in result["failure"] and result["usage"] == {}
+    directory = tmp_path / "host"
+    with pytest.raises(ValueError, match="does not support pyomo"):
+        asyncio.run(host_start(directory, "test", method=method.id, sandbox="local"))
+    assert not directory.exists()
+    assert main(["methods"]) == 0
+    assert json.loads(capsys.readouterr().out)[0]["languages"] == []
 
 
 def test_a_node_update_is_recorded_before_the_next_node_starts(run_method: Any) -> None:

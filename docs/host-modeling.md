@@ -84,9 +84,9 @@ llm4om build-worker
 npx skills add https://github.com/Fangziyang0910/LLM4OM/tree/v0.43.0/skills/llm4om --skill llm4om -g -a codex -a claude-code
 ```
 
-Keep the CLI and skill on the same release. Start a new modeling session after changing the package version or method parameters; keep old session directories as records. The solver image stays `llm4om-worker:12` in this release.
+Keep the CLI and skill on the same release. Start a new modeling session after changing the package version or method parameters; keep old session directories as records. The current source checkout uses `llm4om-worker:13`; the published v0.43.0 release uses `:12`. Build the image with the CLI version you installed.
 
-CLI 和 Skill 使用同一版本。升级后创建新的建模会话，保留旧目录中的记录。当前版本的求解镜像仍为 `llm4om-worker:12`。
+CLI 和 Skill 使用同一版本。升级后创建新的建模会话，保留旧目录中的记录。当前源码使用 `llm4om-worker:13`，已发布的 v0.43.0 使用 `:12`；按所安装的 CLI 构建对应镜像。
 
 ```bash
 npx skills remove llm4om -g -a codex -a claude-code

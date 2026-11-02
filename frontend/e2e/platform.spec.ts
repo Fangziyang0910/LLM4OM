@@ -12,6 +12,43 @@ async function production(page: import("@playwright/test").Page) {
   return page.url().split("/").at(-1)!;
 }
 
+test("pinned plan pages and conversation exports keep their checkpoint after the source changes", async ({ page }) => {
+  const sourceId = await production(page);
+  await expect(page.getByRole("button", { name: "讨论方案", exact: true })).toBeEnabled();
+  const originalState = await (await page.request.get(`/threads/${sourceId}/state`)).json();
+  const checkpoint = originalState.checkpoint.checkpoint_id;
+  const original = originalState.values;
+  await page.getByRole("button", { name: "讨论方案", exact: true }).click();
+  await page.waitForURL(/\/discussion\//);
+  const discussion = page.url();
+  // A subsequent native checkpoint has intentionally different facts from the saved conversation source.
+  const changed = await page.request.post(`/threads/${sourceId}/state`, { data: { as_node: "finish", values: {
+    description: "后来保存的问题", formulation: "Later formulation", code: "# later code",
+    solve: { ...original.solve, objective: 99 }, explanation: null,
+  } } });
+  expect(changed.ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.getByLabel("当前讨论方案", { exact: true })).toContainText("13");
+  await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "更多操作", exact: true }).click();
+  const [download] = await Promise.all([page.waitForEvent("download"),
+    page.getByRole("menuitem", { name: "导出报告（Markdown）", exact: true }).click()]);
+  const savedReport = await readFile((await download.path())!, "utf8");
+  expect(savedReport).toContain(original.code.trim());
+  expect(savedReport).not.toContain("# later code");
+  expect(savedReport).toContain(`checkpoint=${checkpoint}`);
+  const assistant = page.getByRole("complementary", { name: "方案助手", exact: true });
+  await assistant.getByRole("button", { name: "收起方案助手", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/run/${sourceId}\\?checkpoint=${checkpoint}`));
+  await page.reload();
+  await expect(page.getByText(original.explanation?.objective_label || "目标值", { exact: true }).locator("..")).toContainText("13");
+  await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible();
+  await page.goto(`/run/${sourceId}`);
+  await expect(page.getByText("目标值", { exact: true }).locator("..")).toContainText("99");
+  await page.goto(discussion);
+  await expect(page.getByLabel("当前讨论方案", { exact: true })).toContainText("13");
+});
+
 test("data can be reviewed and edited before modeling, with cancel and immutable saved inputs", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/");

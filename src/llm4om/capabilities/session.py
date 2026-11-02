@@ -1,10 +1,11 @@
-"""Per-turn plan references and recovery, backed by the existing LangGraph state."""
+"""Per-turn plan saving, references and recovery, backed by native LangGraph threads and state."""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from itertools import islice
 from typing import Annotated, Any, Literal, TypedDict
 
+from httpx import HTTPStatusError
 from langchain.agents import AgentState
 from langchain.agents.middleware import ToolCallRequest
 from langchain.tools import ToolRuntime
@@ -24,12 +25,24 @@ class SourceRun(TypedDict):
     checkpoint_id: str
 
 
-class Plan(TypedDict):
+class PlanDraft(TypedDict):
     name: str
     instruction: str
-    source: SourceRun
     group: str | None
     turn_id: str
+
+
+class Plan(PlanDraft):
+    source: SourceRun
+
+
+@dataclass(frozen=True)
+class PlanRun:
+    """A finished platform calculation and the native thread metadata that describes it."""
+
+    graph_id: str
+    metadata: dict[str, Any]
+    values: dict[str, Any]
 
 
 class PendingBatch(TypedDict):
@@ -128,6 +141,42 @@ class Conversation:
             snapshot = await self.client.threads.get_state(source["thread_id"], checkpoint={"checkpoint_id": source["checkpoint_id"]})
             self.cache[key] = snapshot["values"]
         return self.cache[key]
+
+    async def save_plan(self, identifier: str, plan: PlanDraft, *,
+                        run: Callable[[], Awaitable[PlanRun]]) -> tuple[Plan, dict[str, Any]]:
+        """Reuse a saved plan's fixed checkpoint, or save the one calculation that backs a new plan.
+
+        `identifier` is the caller's stable native thread ID; a retry passes the same
+        value. `run` calculates through the platform graph and describes the native
+        thread. It is called only when no native thread exists. A registered plan keeps
+        its original checkpoint even when its thread has newer state. A thread without a
+        registered plan is read through the native checkpoint. Values enter the cache
+        before the plan becomes visible, so a later reply failure can still read them.
+        Cancellation and errors propagate before any plan is registered.
+        """
+        registered: Plan | None = next((item for item in [*self.completed, *(self.state.get("plans") or [])]
+                                        if item["source"]["thread_id"] == identifier), None)
+        if registered is not None:
+            values = await self.load(registered["source"])
+            if not any(item["source"]["thread_id"] == identifier for item in self.completed):
+                self.completed.append(registered)
+            return registered, values
+        try:
+            await self.client.threads.get(identifier)
+        except HTTPStatusError as error:
+            if error.response.status_code != 404:
+                raise
+            calculated = await run()
+            await self.client.threads.create(thread_id=identifier, graph_id=calculated.graph_id,
+                metadata=calculated.metadata, supersteps=[{"updates": [{"as_node": "finish", "values": calculated.values}]}])
+        snapshot = await self.client.threads.get_state(identifier)
+        values = snapshot["values"]
+        source: SourceRun = {"thread_id": identifier, "checkpoint_id": snapshot["checkpoint"]["checkpoint_id"]}
+        self.cache[(source["thread_id"], source["checkpoint_id"])] = values
+        saved: Plan = {"name": plan["name"], "instruction": plan["instruction"], "source": source,
+                       "group": plan["group"], "turn_id": plan["turn_id"]}
+        self.completed.append(saved)
+        return saved, values
 
     def selected_source(self, plan_id: str | None, active: SourceRun | None) -> SourceRun:
         sources = [self.state.get("source"), active,

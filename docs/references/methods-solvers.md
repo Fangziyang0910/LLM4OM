@@ -29,7 +29,7 @@ OptiMind 的“训练模型”和“推理流程”是不同部分。本轮没�
 | `cvxpy_osqp` / OSQP | 连续凸二次规划与线性约束 | OSQP 1.1.3，开放已有依赖的执行路径。[官方设置](https://osqp.org/docs/interfaces/solver_settings.html) |
 | `cvxpy_scs` / SCS | 连续凸锥优化，含 SDP、指数锥、幂锥 | SCS 3.3.1，开放已有依赖的执行路径。[CVXPY 求解器文档](https://www.cvxpy.org/tutorial/solvers/index.html) |
 
-当前配置为九个建模库加可选原生后端；`AUTO` 交给原生库选择。历史 `pywraplp` 和 `cvxpy_*` 标识归一化为库与后端，已有记录仍可读取。当前镜像为 `llm4om-worker:12`。
+当前配置为九个建模库加可选原生后端；`AUTO` 交给原生库选择。历史 `pywraplp` 和 `cvxpy_*` 标识归一化为库与后端，已有记录仍可读取。当前镜像为 `llm4om-worker:13`。
 
 当前机器没有 MOSEK 许可证，已验证其明确报告许可证错误；持证成功路径的自动测试需要 `LLM4OM_TEST_MOSEK=1` 和有效许可证。COPT 使用自带小规模模式验证。不能据此声称商业部署授权或大规模性能已验证。
 

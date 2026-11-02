@@ -48,6 +48,7 @@ def _conversation_graph(*, optimization: bool) -> Any:
                 raise ValueError("The assistant did not return a reply.")
             update = {"messages": result["messages"], "current": result["current"], "failure": None}
         except Exception as error:
+            # Both save_plan and select_plan cache values before exposing a source, so it stays readable here.
             advanced = session.completed[0]["source"] if len(session.completed) == 1 and session.pending is None else session.selected_plan
             update = {"current": advanced if advanced and session.cache[(advanced["thread_id"], advanced["checkpoint_id"])].get("spec") else current,
                       "failure": f"{type(error).__name__}: {error}"}

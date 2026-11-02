@@ -11,11 +11,12 @@ import httpx
 import pytest
 from langchain.agents.middleware import wrap_model_call
 from langchain.tools import tool
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from llm4om import agent
 from llm4om.agent import AgentContext, optimization_graph, solution_graph
+from llm4om.capabilities.session import Conversation
 from tests.conftest import ACCEPT_REVIEW, PRODUCTION_CODE, PRODUCTION_PROBLEM, TWO_PART_REPLY, tool_call
 from tests.test_followups import EXPLANATION, REVISED_REPLY
 from tests.test_sandbox import ORTOOLS_CODE
@@ -53,6 +54,77 @@ def test_an_initial_idea_can_be_discussed_without_creating_a_run(make_resources,
         "data": {"staff.csv": "name\nA"}}, {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
     assert result["failure"] is None and result["plans"] == []
     saved_plans[1].threads.create.assert_not_called()
+
+
+@pytest.mark.parametrize("mode", ["initial", "scenario"])
+def test_lost_save_response_reuses_the_saved_calculation_on_retry(make_resources, saved_plans, mode):
+    snapshots, client = saved_plans
+    generations = []
+
+    def reply(role, messages, tools):
+        if role == "optimization":
+            if messages[-1].type == "human":
+                if mode == "initial":
+                    return tool_call("model_and_solve", description=PRODUCTION_PROBLEM, name="production")
+                return tool_call("solve_scenarios", scenarios=[{"name": "B >= 3", "instruction": "B 至少生产 3 件"}])
+            return "Saved result is available."
+        if role == "revise_problem":
+            facts = json.loads(messages[-1].text)
+            return facts["original_problem"] + "\n" + facts["change_request"]
+        if role == "explain_result":
+            return EXPLANATION
+        generations.append(role)
+        return TWO_PART_REPLY if mode == "initial" else REVISED_REPLY
+
+    source = {"thread_id": str(uuid4()), "checkpoint_id": str(uuid4())}
+    if mode == "scenario":
+        original = asyncio.run(agent.run(PRODUCTION_PROBLEM, resources=make_resources(lambda *_: TWO_PART_REPLY)))
+        snapshots[source["thread_id"]] = {"values": original, "checkpoint": {"checkpoint_id": source["checkpoint_id"]}}
+    save = client.threads.create.side_effect
+
+    async def save_without_response(**kwargs):
+        await save(**kwargs)
+        raise httpx.ReadError("save response lost")
+
+    client.threads.create.side_effect = save_without_response
+
+    async def check():
+        graph = optimization_graph()
+        graph.checkpointer = InMemorySaver()
+        config = {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}
+        message = HumanMessage("calculate", id="same-turn")
+        failed = await graph.ainvoke({"messages": [message], **({"source": source} if mode == "scenario" else {})}, config)
+        assert "save response lost" in failed["failure"]
+        assert not failed["plans"]
+        result = await graph.ainvoke({"messages": [message]}, config)
+        assert result["failure"] is None, result["failure"]
+        assert len(result["plans"]) == 1
+        assert result["current"] == result["plans"][0]["source"]
+        saved = snapshots[result["current"]["thread_id"]]["values"]
+        assert saved["solve"]["objective"] == (13 if mode == "initial" else 12)
+        assert len([item for item in result["messages"] if item.type == "human"]) == 1
+        client.threads.create.assert_awaited_once()
+        assert generations == ["generate"]
+
+    asyncio.run(check())
+
+
+def test_a_registered_plan_reuses_its_checkpoint_instead_of_its_threads_latest_values(make_resources):
+    source = {"thread_id": "saved", "checkpoint_id": "original"}
+    plan = {"name": "original name", "instruction": "original request", "group": None, "turn_id": "turn", "source": source}
+
+    async def read(identifier, *, checkpoint=None):
+        return {"values": {"solve": {"objective": 13 if checkpoint == {"checkpoint_id": "original"} else 99}}}
+
+    client = SimpleNamespace(threads=SimpleNamespace(get_state=AsyncMock(side_effect=read)))
+    session = Conversation({"messages": [HumanMessage("retry", id="turn")], "plans": [plan]}, AgentContext(),
+        make_resources(lambda *_: "unused"), client, AsyncMock(), optimization=True)
+    calculate = AsyncMock()
+    saved, values = asyncio.run(session.save_plan("saved", {"name": "rephrased", "instruction": "rephrased", "group": None,
+        "turn_id": "turn"}, run=calculate))
+    assert saved == plan and values["solve"]["objective"] == 13
+    calculate.assert_not_awaited()
+    client.threads.get_state.assert_awaited_once_with("saved", checkpoint={"checkpoint_id": "original"})
 
 
 def test_general_chat_and_arithmetic_do_not_require_a_modeling_problem(make_resources, saved_plans):

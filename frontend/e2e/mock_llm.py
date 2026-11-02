@@ -174,7 +174,7 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
                            "conflicts": [{"constraint_ids": list(map(int, facts["constraints"])),
                                           "explanation": "两种产品各至少生产 5 件，需要 15 单位切割资源，但现有容量只有 8 单位。"}],
                            "adjustments": [{"title": "增加切割资源", "instruction": "将切割资源提高至 15 单位，其他条件保持不变。"}]}, ensure_ascii=False)
-    if "Explain a computed optimization solution" in text:
+    if "Answer the person who asked the original question, using the computed solution." in text:
         facts = json.loads(messages[-1]["content"])
         return json.dumps({"summary": "按表中数量安排生产，满足题面要求。", "objective_label": "总利润", "objective_unit": "元",
                            "decisions": [{"variable": name, "label": f"{name} 的生产数量", "unit": "件"}

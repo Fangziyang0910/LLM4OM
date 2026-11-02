@@ -76,8 +76,10 @@ def test_every_language_is_solved_by_its_solver(language: str, code: str, names:
     assert {name.replace(" ", ""): value for name, value in result.variables.items()} == dict(zip(names, (3, 2)))
 
 
-def test_cvxpy_solves_a_convex_quadratic_program_with_clarabel() -> None:
-    result = solve(CVXPY_CODE, "cvxpy")
+@pytest.mark.parametrize("solver", [None, "CLARABEL"])
+def test_cvxpy_solves_a_convex_quadratic_program_with_clarabel(solver: str | None) -> None:
+    result = solve(CVXPY_CODE, "cvxpy", solver=solver)
+    assert result.solver == "CLARABEL"
     assert result.error is None and result.output == "", (result.error, result.output)  # CVXPY's import warnings stay out
     assert result.status == "optimal" and result.objective == pytest.approx(0.5, abs=1e-6)
     assert result.variables == pytest.approx({"x[0]": 0.5, "x[1]": 1.5}, abs=1e-6)
