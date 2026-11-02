@@ -1,5 +1,75 @@
 import { expect, test } from "@playwright/test";
 
+test("attachments finish reading and saving before the agent can send, while the next message stays editable", async ({ page }) => {
+  await page.addInitScript(() => {
+    const read = File.prototype.text;
+    File.prototype.text = function () {
+      if (this.name === "delayed.csv") return new Promise<string>(resolve => {
+        window.addEventListener("finish-file-read", () => resolve("name,price\nA,003\n"), { once: true });
+      });
+      return read.call(this);
+    };
+  });
+  await page.goto("/agent");
+  const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  const send = page.getByRole("button", { name: "发送", exact: true });
+  const attach = page.getByRole("button", { name: "添加数据文件", exact: true });
+  await input.fill("E2E_GENERAL 列表和元组有什么区别？");
+  await page.getByLabel("数据文件", { exact: true }).setInputFiles({ name: "delayed.csv", mimeType: "text/csv", buffer: Buffer.from("name,price\nA,003\n") });
+  await expect(send).toBeDisabled();
+  await expect(attach).toBeDisabled();
+  await expect(attach).toHaveAttribute("title", "正在读取数据……");
+  await input.fill("E2E_GENERAL 列表和元组有什么区别？请简要说明。");
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/agent$/);
+  await page.evaluate(() => window.dispatchEvent(new Event("finish-file-read")));
+  await expect(page.getByRole("button", { name: "delayed.csv", exact: true })).toBeVisible();
+  await expect(send).toBeEnabled();
+  await input.press("Enter");
+  await page.waitForURL(/\/agent\//);
+  await expect(page.getByRole("log")).toContainText("列表可以修改");
+  const threadId = page.url().split("/").at(-1)!;
+  expect((await (await page.request.get(`/threads/${threadId}`)).json()).values.data).toEqual({ "delayed.csv": "name,price\nA,003\n" });
+
+  let finishSave!: () => void;
+  const waiting = new Promise<void>(resolve => { finishSave = resolve; });
+  await page.route(`**/threads/${threadId}/state`, async route => {
+    if (route.request().method() === "POST") await waiting;
+    await route.continue();
+  });
+  await input.fill("E2E_GENERAL 谢谢，请再解释一次。");
+  await page.locator('input[type="file"]').setInputFiles({ name: "second.csv", mimeType: "text/csv", buffer: Buffer.from("value\n2\n") });
+  await expect(send).toBeDisabled();
+  await expect(page.getByRole("button", { name: "移除 delayed.csv", exact: true })).toBeDisabled();
+  await input.fill("E2E_GENERAL 谢谢，请用一句话解释。");
+  await input.press("Enter");
+  finishSave();
+  await expect(send).toBeEnabled();
+  await expect(input).toHaveValue("E2E_GENERAL 谢谢，请用一句话解释。");
+  await expect(page.getByRole("button", { name: "second.csv", exact: true })).toBeVisible();
+  expect((await (await page.request.get(`/threads/${threadId}`)).json()).values.data).toEqual({
+    "delayed.csv": "name,price\nA,003\n", "second.csv": "value\n2\n",
+  });
+  await page.unroute(`**/threads/${threadId}/state`);
+  await page.route(`**/threads/${threadId}/state`, async route => {
+    if (route.request().method() === "POST") await route.fulfill({ status: 400, json: { detail: "attachment save failed" } });
+    else await route.continue();
+  });
+  const third = { name: "third.csv", mimeType: "text/csv", buffer: Buffer.from("value\n3\n") };
+  await page.locator('input[type="file"]').setInputFiles(third);
+  await expect(page.getByText("attachment save failed", { exact: false })).toBeVisible();
+  await expect(send).toBeEnabled();
+  await expect(attach).toBeEnabled();
+  await expect(input).toHaveValue("E2E_GENERAL 谢谢，请用一句话解释。");
+  await expect(page.getByRole("button", { name: "third.csv", exact: true })).toHaveCount(0);
+  await page.unroute(`**/threads/${threadId}/state`);
+  await page.locator('input[type="file"]').setInputFiles(third);
+  await expect(page.getByRole("button", { name: "third.csv", exact: true })).toBeVisible();
+  expect((await (await page.request.get(`/threads/${threadId}`)).json()).values.data).toEqual({
+    "delayed.csv": "name,price\nA,003\n", "second.csv": "value\n2\n", "third.csv": "value\n3\n",
+  });
+});
+
 test("the mobile conversation keeps navigation, composer controls and keyboard sending accessible", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/agent");

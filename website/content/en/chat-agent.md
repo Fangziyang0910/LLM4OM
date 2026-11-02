@@ -68,6 +68,8 @@ A single new plan becomes current. Multiple scenarios use one fixed baseline and
 
 Click file names to edit attachments. After saving, ask to model using the new data. New runs save new inputs; existing plans retain their snapshots. When search is enabled, inspect sources and confirm adopted business rules before calculation.
 
+Optimization chat waits for attachments to finish reading and saving before enabling Send. You can keep editing the message while waiting. If saving fails, the original attachments remain available and an error is shown; add the same file again to retry.
+
 ## Everyday controls and recovery
 
 Enter sends; Shift+Enter adds a line. Drag the divider, or focus it with Tab and use arrow keys, to resize the conversation. Scrolling upward pauses following; “Back to latest” resumes it.

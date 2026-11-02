@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useDesktop } from "@/lib/useDesktop";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Toggle } from "@/components/ui/toggle";
 import { ChatInput } from "@/features/chat/ChatInput";
@@ -42,6 +43,8 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   const [settings, setSettings] = useState(false);
   const { log, content, follow, followLatest } = useChatScroll();
   const [files, setFiles] = useState<Record<string, string> | null>(null);
+  const [reading, setReading] = useState(false);
+  const [savingData, setSavingData] = useState(false);
   const [editing, setEditing] = useState<string>();
   const [tasks, setTasks] = useState<Record<string, ModelingTask>>({});
   const [progress, setProgress] = useState<ChatProgress>();
@@ -80,6 +83,7 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   const searching = search ?? meta?.search ?? false;
   const canSearch = !!options.search_configured || preset?.provider === "deepseek";
   const busy = conversation.busy;
+  const dataPending = reading || savingData;
   const failure = conversation.error || conversation.values.failure;
   const plans = conversation.values.plans ?? [];
   const original = conversation.values.source;
@@ -102,7 +106,7 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   }, [threadId]);
 
   const submit = async (retry = false) => {
-    if (busy || (!retry && !input.trim())) return;
+    if (busy || dataPending || (!retry && !input.trim())) return;
     if (!preset) { toast.error(t("先选择一个可用的预设模型。")); openPresets(); return; }
     followLatest(); setViewed(undefined); setLiveTask(undefined); setProgress(undefined); setTasks({});
     const context = { preset: preset.id, locale, search: searching && canSearch, thinking: thinkingMode,
@@ -118,8 +122,11 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   };
   const stop = async () => { if (await conversation.stop()) { setLiveTask(undefined); onFinished(); } };
   const saveData = async (next: Record<string, string>) => {
-    if (threadId) await client.threads.updateState(threadId, { values: { data: next }, asNode: "discuss" });
-    setFiles(next);
+    setSavingData(true);
+    try {
+      if (threadId) await client.threads.updateState(threadId, { values: { data: next }, asNode: "discuss" });
+      setFiles(next);
+    } finally { setSavingData(false); }
   };
   if (conversation.thread.error) return <div className="flex h-full flex-col">
     <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 xl:hidden">
@@ -134,7 +141,7 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
       <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className={cn("min-h-0 chat-scroll overflow-y-auto overscroll-contain px-4 md:px-8", empty ? "max-h-[50vh]" : "flex-1")}>
         <div ref={content} className="grid min-h-full grid-cols-1">
           {messages.length || failure ? <ChatMessages messages={messages} loading={conversation.loading} label={t("优化助手")}
-            failure={failure} disabled={busy} onRetry={() => void submit(true)} progress={progress} tasks={tasks}
+            failure={failure} disabled={busy || dataPending} onRetry={() => void submit(true)} progress={progress} tasks={tasks}
             onShowTask={id => { setLiveTask(id); setWorkspace(true); setPane("workspace"); }}
             onOpenPlan={source => { setViewed(source); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} />
             : <div className="mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-4 py-5">
@@ -151,8 +158,8 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
     <div className="shrink-0 space-y-2 px-4 pt-2 pb-3 md:px-8">
       {Object.keys(data).length ? <div className="mx-auto flex max-w-[46rem] flex-wrap gap-1.5" aria-label={t("数据文件")}>
         {Object.keys(data).map(name => <span key={name} className="inline-flex max-w-full items-center rounded-lg border bg-card text-xs">
-          <button disabled={busy} className="min-w-0 truncate px-2 py-1.5 hover:text-primary" onClick={() => setEditing(name)}>{name}</button>
-          <Button variant="ghost" size="icon-xs" disabled={busy} aria-label={t("移除 {name}", { name })} onClick={() => {
+          <button disabled={busy || dataPending} className="min-w-0 truncate px-2 py-1.5 hover:text-primary" onClick={() => setEditing(name)}>{name}</button>
+          <Button variant="ghost" size="icon-xs" disabled={busy || dataPending} aria-label={t("移除 {name}", { name })} onClick={() => {
             const next = { ...data }; delete next[name]; void saveData(next).catch(error => toast.error(errorText(error)));
           }}><X /></Button></span>)}
       </div> : null}
@@ -165,22 +172,26 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
             <SelectContent><SelectItem value="auto">{t("自动选择")}</SelectItem>{options.languages.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></label>
       </div> : null}
       <ChatInput label={t("发送给优化助手")} value={input} onChange={setInput}
-        disabled={busy} loading={conversation.loading} stopping={conversation.stopping} inputRef={inputArea}
+        disabled={busy} sendingDisabled={dataPending} loading={conversation.loading} stopping={conversation.stopping} inputRef={inputArea}
         presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets}
         onSend={() => void submit()} onStop={() => void stop()} placeholder={t("提问、聊聊想法，或继续调整当前方案……")}>
-        <Button type="button" variant="ghost" size="icon-sm" disabled={busy} aria-label={t("添加数据文件")} onClick={() => upload.current?.click()}><Paperclip /></Button>
+        <Button type="button" variant="ghost" size="icon-sm" disabled={busy || dataPending} aria-label={t("添加数据文件")}
+          title={t(reading ? "正在读取数据……" : savingData ? "正在保存……" : "添加数据文件")} onClick={() => upload.current?.click()}>
+          {dataPending ? <Spinner /> : <Paperclip />}</Button>
         <Toggle size="sm" pressed={searching} disabled={busy || !canSearch} aria-label={t("联网搜索")} onPressedChange={setSearch}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Toggle>
         <Button type="button" variant={settings || chosenMethod !== "auto" || chosenLanguage !== "auto" ? "secondary" : "ghost"} size="icon-sm" aria-label={t("建模偏好")}
           title={`${options.methods.find(item => item.id === chosenMethod)?.name || t("自动选择")} · ${options.languages.find(item => item.id === chosenLanguage)?.name || t("自动选择")}`}
           aria-expanded={settings} onClick={() => setSettings(!settings)}><SlidersHorizontal /></Button>
       </ChatInput>
-      <input ref={upload} type="file" multiple accept={DATA_FILE_ACCEPT} className="hidden" aria-label={t("数据文件")} onChange={async event => {
+      <input ref={upload} type="file" multiple accept={DATA_FILE_ACCEPT} className="hidden" disabled={busy || dataPending} aria-label={t("数据文件")} onChange={async event => {
         const field = event.currentTarget;
+        if (!field.files?.length || busy || dataPending) return;
+        setReading(true);
         try {
           const added = await readDataFiles(field.files);
-          field.value = "";
           await saveData({ ...data, ...added });
         } catch (error) { toast.error(errorText(error)); }
+        finally { field.value = ""; setReading(false); }
       }} />
     </div>
   </section>;
