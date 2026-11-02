@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock("@/api", () => ({ api: vi.fn(async () => ({ libraries: {} })) }));
-vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
+vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
 
 afterEach(() => { cleanup(); localStorage.removeItem("llm4om-draft"); vi.clearAllMocks(); });
 

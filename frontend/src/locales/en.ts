@@ -693,6 +693,8 @@ export const en: Record<string, string> = {
   "重新加载": "Reload",
   "调整过程与结果的宽度": "Resize process and results",
   "当前生成内容": "Current generated content",
+  "检查需求稿": "Review requirements draft",
+  "调整对话与需求稿的宽度": "Resize conversation and requirements draft",
 };
 
 /** Step titles with numbers in them. */

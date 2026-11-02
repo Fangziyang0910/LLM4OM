@@ -61,7 +61,7 @@ The agent also handles ordinary questions, writing, code explanations, supplied 
 
 ## Screenshots
 
-On desktop, drag the divider beside the Agent or plan assistant to resize the conversation and modeling panels. Layouts survive reload. Historical plans are marked, with a shortcut back to the plan being discussed; browsing does not change the calculation baseline. Run settings show methods, modeling libraries and models side by side.
+Optimization, requirements and plan conversations use the same layout: chat on the left, the draft or plan on the right. Drag the divider to resize the panels; widths survive reload. On phones, Discuss plan opens chat directly and plan cards switch to results. Requirements chat offers Review requirements draft before modeling. Browsing history keeps the calculation baseline, and opening an original plan preserves its frozen version. Run settings show methods, modeling libraries and models side by side.
 
 The conversation screenshots use scripted examples and locally solved results.
 

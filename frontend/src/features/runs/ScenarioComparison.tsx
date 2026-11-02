@@ -37,7 +37,7 @@ export function ScenarioComparison({ source, values }: { source: SourceRun; valu
     <Card className="gap-3 py-4 shadow-none">
       <CardHeader className="flex flex-wrap items-center justify-between gap-2 px-4">
         <CardTitle className="text-sm">{t("方案对比")}</CardTitle>
-        <Button variant="outline" size="sm" asChild><a href={`/run/${source.thread_id}`}>{t("打开原运行")}<ArrowUpRight /></a></Button>
+        <Button variant="outline" size="sm" asChild><a href={`/run/${source.thread_id}${source.checkpoint_id ? `?checkpoint=${encodeURIComponent(source.checkpoint_id)}` : ""}`}>{t("打开原运行")}<ArrowUpRight /></a></Button>
       </CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-4 px-4">
         {values.revision ? <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">

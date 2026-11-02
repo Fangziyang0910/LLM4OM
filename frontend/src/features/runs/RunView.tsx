@@ -133,6 +133,10 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   return <div className="flex h-full min-h-0 min-w-0 flex-col overflow-y-auto">
     <header className="flex shrink-0 flex-col gap-3 border-b px-4 py-3 md:flex-row md:items-center">
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        {!embedded && !assistantOpen && (meta.group || meta.conversation) ? <div className="flex flex-wrap items-center gap-3">
+          {meta.group ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground" onClick={() => onCompare(meta.group!)}><Columns3 />{t("查看对比")}</Button> : null}
+          {meta.conversation ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground" onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回方案对话")}</Button> : null}
+        </div> : null}
         <Tooltip>
           <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{title}</h1></TooltipTrigger>
           <TooltipContent className="max-w-md whitespace-pre-wrap">{(values.description || title).slice(0, 400)}</TooltipContent>
@@ -165,8 +169,6 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" disabled={busy} aria-label={t("更多操作")} title={t("更多操作")}><MoreHorizontal /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {meta.group ? <DropdownMenuItem onClick={() => onCompare(meta.group!)}><Columns3 />{t("查看对比")}</DropdownMenuItem> : null}
-            {meta.conversation && !embedded ? <DropdownMenuItem onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回方案对话")}</DropdownMenuItem> : null}
             <DropdownMenuItem disabled={active || busy || !values.description} onClick={() => void rerun()}><RefreshCw />{t("再运行一次")}</DropdownMenuItem>
             <DropdownMenuItem disabled={!values.description} onClick={() => onEdit(draft())}>
               <Pencil />{t("修改后运行")}</DropdownMenuItem>

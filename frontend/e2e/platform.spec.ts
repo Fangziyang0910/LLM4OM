@@ -149,8 +149,7 @@ test("a plan conversation explains actual values, computes changes and continues
   await page.getByRole("complementary", { name: "方案助手", exact: true }).getByRole("button", { name: "收起方案助手", exact: true }).click();
   await page.waitForURL(/\/run\//);
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "更多操作", exact: true }).click();
-  await page.getByRole("menuitem", { name: "返回方案对话", exact: true }).click();
+  await page.getByRole("button", { name: "返回方案对话", exact: true }).click();
   await expect(page).toHaveURL(chatUrl);
   expect(errors).toEqual([]);
 });

@@ -8,7 +8,7 @@ import { history } from "@/features/runs/api";
 import { targetLabel } from "@/features/runs/target";
 import { STATUS, duration, errorText, formatNumber, formatTokens, tone } from "@/format";
 import { t } from "@/i18n";
-import { isRunEntry, type Entry } from "@/features/runs/types";
+import { isRunEntry, type Entry, type SourceRun } from "@/features/runs/types";
 import type { Options } from "@/types";
 import { StatusIcon, TONE } from "@/features/runs/status";
 import { ScenarioResults } from "./ScenarioResults";
@@ -22,7 +22,7 @@ export function agreement(entries: Entry[]): { solved: number; same: boolean; lo
 }
 
 /** The runs of one comparison side by side: the same problem, one row per method and preset. */
-export function Compare({ group, options, onOpen }: { group: string; options: Options; onOpen: (id: string) => void }) {
+export function Compare({ group, options, onOpen }: { group: string; options: Options; onOpen: (run: string | SourceRun) => void }) {
   const query = useQuery({ queryKey: ["compare", group], queryFn: () => history({ group }),
     refetchInterval: current => current.state.data?.entries.some(entry => entry.state === "running") ? 3000 : false });
   const entries = (query.data?.entries ?? []).filter(isRunEntry)

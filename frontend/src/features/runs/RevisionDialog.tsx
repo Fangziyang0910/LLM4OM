@@ -14,8 +14,8 @@ export function RevisionDialog({ initialInstruction = "", onClose, onRevise }: {
 }) {
   const [instruction, setInstruction] = useState(initialInstruction);
   const [busy, setBusy] = useState(false);
-  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className="flex min-h-0 flex-col sm:max-w-lg">
+  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
+    <DialogContent showCloseButton={!busy} className="flex min-h-0 flex-col sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>{t("调整条件")}</DialogTitle>
         <DialogDescription>{t("沿用原运行的方法、预设模型和附件，整理新题面后重新建模。原方案保留，可查看方案变化。")}</DialogDescription>
@@ -35,7 +35,7 @@ export function RevisionDialog({ initialInstruction = "", onClose, onRevise }: {
             placeholder={t("例如：B 至少生产 3 件，其他条件保持不变。")}/>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>{t("取消")}</Button>
+          <Button type="button" variant="outline" disabled={busy} onClick={onClose}>{t("取消")}</Button>
           <Button type="submit" disabled={!instruction.trim() || busy}>{busy ? <Spinner /> : <ArrowRight />}{t("生成新方案")}</Button>
         </DialogFooter>
       </form>

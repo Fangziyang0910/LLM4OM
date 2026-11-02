@@ -221,10 +221,10 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
       <Button variant={pane === "workspace" ? "secondary" : "ghost"} className="flex-1 rounded-none" onClick={() => setPane("workspace")}>{t("建模工作区")}</Button>
     </div> : null}
     {desktop ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1">
-      <ResizablePanel id="conversation" defaultSize="45%" minSize="350px">{chat}</ResizablePanel>
+      <ResizablePanel id="conversation" defaultSize="40%" minSize="320px">{chat}</ResizablePanel>
       {workspace ? <>
         <ResizableHandle withHandle aria-label={t("调整对话与建模工作区的宽度")} />
-        <ResizablePanel id="workspace" defaultSize="55%" minSize="35%">{workbench}</ResizablePanel>
+        <ResizablePanel id="workspace" defaultSize="60%" minSize="35%">{workbench}</ResizablePanel>
       </> : null}
     </ResizablePanelGroup> : <div className="grid min-h-0 flex-1 grid-cols-1">{chat}{workbench}</div>}
     {editing && data[editing] != null ? <DataEditor key={editing} name={editing} content={data[editing]} onClose={() => setEditing(undefined)}

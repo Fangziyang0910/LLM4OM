@@ -195,7 +195,7 @@ export default function App() {
                 void refresh(); go({ name: "chat", id });
               }} />
             : <PageErrorBoundary key={route.id}><Suspense fallback={<div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载……")}</div>}>
-              {route.name === "compare" ? <Compare key={route.id} group={route.id} options={options} onOpen={id => go({ name: "run", id })} />
+              {route.name === "compare" ? <Compare key={route.id} group={route.id} options={options} onOpen={openRun} />
                 : route.name === "chat" ? <Requirements key={route.id} threadId={route.id} {...modelingProps(options)} searchConfigured={!!options.search_configured}
                   onFinished={() => void refresh()}
                   onUse={next => { setDraft({ ...draft, ...next, origin: route.id }); go({ name: "new" }); }} />

@@ -8,10 +8,10 @@ import { StatusBadge } from "@/features/runs/status";
 import { hasSolution } from "@/features/runs/workbook";
 import { errorText, formatNumber } from "@/format";
 import { t } from "@/i18n";
-import type { Entry, RunMeta, RunValues } from "@/features/runs/types";
+import type { Entry, RunMeta, RunValues, SourceRun } from "@/features/runs/types";
 
 /** Alternative business conditions share a frozen baseline, not a claim that their objective values must agree. */
-export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]; onOpen: (id: string) => void }) {
+export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]; onOpen: (run: string | SourceRun) => void }) {
   const source = entries[0].meta.parent;
   const baseline = useQuery({ queryKey: ["source-run", source?.thread_id, source?.checkpoint_id], enabled: !!source,
     queryFn: () => client.threads.getState<RunValues>(source!.thread_id, source!.checkpoint_id), staleTime: Infinity, retry: false });
@@ -21,7 +21,7 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
   const records = entries.map((entry, i) => ({ name: entry.meta.scenario?.name || entry.meta.title, id: entry.id,
     instruction: entry.meta.scenario?.instruction, values: queries[i].data?.values as RunValues | undefined,
     state: entry.state, error: queries[i].error }));
-  const plans = [...(previous ? [{ name: t("原方案"), id: source!.thread_id, instruction: "", values: previous,
+  const plans = [...(previous ? [{ name: t("原方案"), id: source!.thread_id, source, instruction: "", values: previous,
     state: previous.failure ? "failed" : previous.solve?.status ?? "unknown", error: null }] : []), ...records];
   const names = [...new Set(plans.flatMap(plan => hasSolution(plan.values?.solve) ? Object.keys(plan.values!.solve!.variables) : []))];
   const changed = names.filter(name => plans.some(plan => plan.values?.solve?.variables[name] !== previous?.solve?.variables[name]));
@@ -40,7 +40,7 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
           <TableCell><StatusBadge status={plan.state} />{plan.error ? <p role="alert" className="mt-1 text-xs text-destructive">{errorText(plan.error)}</p> : null}</TableCell>
           <TableCell className="text-right"><span className="font-mono tabular">{hasSolution(plan.values?.solve) && plan.values?.solve?.objective != null ? formatNumber(plan.values.solve.objective) : plan.state === "running" ? "…" : "—"}</span>
             {plan.values?.explanation ? <p className="mt-1 text-xs text-muted-foreground">{plan.values.explanation.objective_label} {plan.values.explanation.objective_unit}</p> : null}</TableCell>
-          <TableCell><Button variant="ghost" size="icon-sm" aria-label={t("打开方案：{name}", { name: plan.name })} onClick={() => onOpen(plan.id)}><ArrowUpRight /></Button></TableCell>
+          <TableCell><Button variant="ghost" size="icon-sm" aria-label={t("打开方案：{name}", { name: plan.name })} onClick={() => onOpen("source" in plan && plan.source ? plan.source : plan.id)}><ArrowUpRight /></Button></TableCell>
         </TableRow>)}</TableBody>
       </Table>
     {entries.some(entry => entry.state === "running") ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner />{t("场景正在计算，结果会自动更新。")}</p> : null}

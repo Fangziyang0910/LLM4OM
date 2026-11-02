@@ -120,7 +120,7 @@ test("the plan assistant can be widened and keeps that width after reload", asyn
   const box = (await divider.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x - 100, box.y + box.height / 2, { steps: 10 });
+  await page.mouse.move(box.x + 100, box.y + box.height / 2, { steps: 10 });
   await page.mouse.up();
   await expect.poll(async () => (await assistant.boundingBox())!.width).toBeGreaterThan(before + 90);
   const resized = (await assistant.boundingBox())!.width;

@@ -2,6 +2,9 @@ import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useRef, 
 import { ArrowRight, Columns3, Database, MessageSquare, Play, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
+import { useDefaultLayout } from "react-resizable-panels";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { useDesktop } from "@/lib/useDesktop";
 import { api } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -76,11 +79,14 @@ export type ComposerProps = {
 };
 
 export function Composer({ options, presets, draft, setDraft, onStart, onCompare, openPresets, openExamples, onDiscuss, presetsStatus = "ready", editor, assistant, disabled = false }: ComposerProps) {
+  const desktop = useDesktop();
+  const layout = useDefaultLayout({ id: "llm4om-requirements", panelIds: ["conversation", "problem"], onlySaveAfterUserInteractions: true });
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(!!assistant);
   const [focusPane, setFocusPane] = useState(assistant ? "assistant" : "problem");
+  const reviewFirst = !!assistant && assistantOpen && !desktop && focusPane === "assistant";
   const methodList = useRef<HTMLDivElement>(null);
   const set = (change: Partial<Draft>) => setDraft(current => ({ ...current, ...change }));
 
@@ -123,7 +129,9 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
   const ready = draft.description.trim().length > 0 && !disabled && !reading && !backendUnavailable && presetsStatus === "ready"
     && (!comparing || (runs.length > 0 && runs.length <= MAX_COMPARED));
   const start = async () => {
-    if (!ready || busy) return;
+    if (busy) return;
+    if (reviewFirst) { setFocusPane("problem"); return; }
+    if (!ready) return;
     if (!preset) { toast.error(t("先添加一个预设模型。")); openPresets(); return; }
     setBusy(true);
     try {
@@ -144,7 +152,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
   }, []);
   const toggle = (key: "methods" | "presets", id: string, on: boolean) =>
     set({ [key]: on ? [...(draft[key] ?? []).filter(item => item !== id), id] : (draft[key] ?? []).filter(item => item !== id) });
-  const label = reading ? t("正在读取数据……") : busy ? t("正在启动") : comparing ? t("开始对比（{count} 个运行）", { count: runs.length }) : t("开始建模");
+  const label = reviewFirst ? t("检查需求稿") : reading ? t("正在读取数据……") : busy ? t("正在启动") : comparing ? t("开始对比（{count} 个运行）", { count: runs.length }) : t("开始建模");
 
   const choiceClass = "relative flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-sm font-normal transition-colors hover:bg-accent/50 has-focus-visible:border-ring has-focus-visible:ring-2 has-focus-visible:ring-ring/50 sm:min-h-9 sm:py-1.5";
   const methodChoices = options.methods.map(item => {
@@ -248,12 +256,46 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
     </Card>
   </aside>;
 
+  const problemPanel = <TabsContent value="problem" forceMount className="mt-0 h-full flex min-h-0 min-w-0 flex-col gap-4 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
+    {editor ?? <ProblemEditor autoFocus value={draft.description} data={draft.data} reading={reading} onChange={description => set({ description })}
+      onFiles={list => void attach(list)} onExamples={openExamples} onClear={() => {
+        const previous = { description: draft.description, data: draft.data, origin: draft.origin }; set({ description: "", data: {}, origin: undefined });
+        toast.success(t("已清空问题和附件。"), { action: { label: t("撤销"), onClick: () => set(previous) } });
+      }}
+      onDataChange={(name, content) => setDraft(current => ({ ...current, data: { ...current.data, [name]: content } }))}
+      onRemove={name => setDraft(current => {
+        const data = { ...current.data }; delete data[name]; return { ...current, data };
+      })} />}
+    {!draft.description && !assistant ? <section className="flex shrink-0 flex-col gap-3">
+      <h2 className="text-sm font-medium text-muted-foreground">{t("从一个例子开始")}</h2>
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        {STARTERS.map(item => <button key={item.title} onClick={() => set({ description: t(item.description), data: item.data ?? {}, origin: undefined })}
+          className="group flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-4 text-left shadow-xs transition-colors hover:border-primary/40 hover:bg-accent/40">
+          <span className="flex items-center gap-2 text-sm">
+            <span className="font-medium whitespace-nowrap">{t(item.title)}</span><Badge variant="secondary" className="hidden font-normal sm:inline-flex">{t(item.tag)}</Badge>
+            <ArrowRight className="ml-auto size-4 text-muted-foreground" />
+          </span>
+          <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t(item.description)}</span>
+        </button>)}
+        <button onClick={openExamples}
+          className="group flex min-w-0 flex-col gap-2 rounded-xl border border-dashed p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/40">
+          <span className="flex items-center gap-2 text-sm font-medium"><Database className="size-4 text-primary" />{t("公开题库")}
+            <ArrowRight className="ml-auto size-4 text-muted-foreground" /></span>
+          <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t("NL4Opt、MAMO、IndustryOR 等 Benchmark 的题面，可直接取用。")}</span>
+        </button>
+      </div>
+    </section> : null}
+  </TabsContent>;
+  const conversationPanel = assistant ? <TabsContent value="assistant" forceMount className={cn("mt-0 h-full min-h-0 min-w-0 data-[state=inactive]:hidden", assistantOpen ? "lg:data-[state=inactive]:block" : "hidden")}>
+    <aside aria-label={t("需求助手")} className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-card">{assistant}</aside>
+  </TabsContent> : null;
+
   return <div className="flex h-full flex-col">
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className={cn("mx-auto flex min-h-full max-w-6xl flex-col gap-3 p-4 lg:h-full", assistant && assistantOpen && "h-full")}>
         <header className="flex shrink-0 flex-col gap-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("描述一个优化问题")}</h1>
+          <div className={cn("flex flex-wrap items-center justify-between gap-2", assistant && "justify-end lg:justify-between")}>
+          <h1 className={cn("text-xl font-semibold tracking-tight sm:text-2xl", assistant && "hidden lg:block")}>{t(assistant ? "需求对话" : "描述一个优化问题")}</h1>
           <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy || reading}
             aria-expanded={!!assistant && assistantOpen} onClick={async () => {
               if (assistant) { setAssistantOpen(value => !value); setFocusPane("assistant"); return; }
@@ -261,11 +303,11 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
               try { await onDiscuss?.(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
             }}><MessageSquare />{assistant && assistantOpen ? t("收起需求助手") : t("通过对话整理需求")}</Button>
           </div>
-          <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{t("写清要安排什么、希望达到的目标，以及必须满足的条件。需要时附上数据。")}</p>
+          <p className={cn("max-w-3xl text-sm leading-relaxed text-muted-foreground", assistant && "hidden lg:block")}>{t("写清要安排什么、希望达到的目标，以及必须满足的条件。需要时附上数据。")}</p>
         </header>
 
         <button type="button" aria-label={t("查看运行设置")} aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}
-          className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-card px-4 py-3 text-left text-sm transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          className={cn("flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-card px-4 py-3 text-left text-sm transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", reviewFirst && "hidden lg:flex")}>
           <span className="flex items-center gap-2 font-medium"><Settings2 className="size-4 text-muted-foreground" />{t("运行设置")}</span>
           <span><span className="mr-2 text-xs text-muted-foreground">{t("建模方法")}</span>{comparing ? t("方法对比") : method.name}</span>
           <span><span className="mr-2 text-xs text-muted-foreground">{t("建模求解器")}</span>{language.name}</span>
@@ -274,44 +316,13 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
         </button>
         <Tabs value={assistant && assistantOpen ? focusPane : "problem"} onValueChange={setFocusPane} className="min-h-0 flex-1 gap-3">
           {assistant && assistantOpen ? <TabsList className="grid shrink-0 grid-cols-2 lg:hidden" aria-label={t("问题与助手")}>
-            <TabsTrigger value="problem">{t("问题与数据")}</TabsTrigger><TabsTrigger value="assistant">{t("需求助手")}</TabsTrigger>
+            <TabsTrigger value="assistant">{t("需求助手")}</TabsTrigger><TabsTrigger value="problem">{t("当前需求稿")}</TabsTrigger>
           </TabsList> : null}
-        <div className={cn("grid min-h-0 flex-1 grid-cols-1 items-stretch gap-4", assistant && assistantOpen && "lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]")}>
-          <TabsContent value="problem" forceMount className="mt-0 flex min-h-0 min-w-0 flex-col gap-4 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
-            {editor ?? <ProblemEditor autoFocus value={draft.description} data={draft.data} reading={reading} onChange={description => set({ description })}
-              onFiles={list => void attach(list)} onExamples={openExamples} onClear={() => {
-                const previous = { description: draft.description, data: draft.data, origin: draft.origin }; set({ description: "", data: {}, origin: undefined });
-                toast.success(t("已清空问题和附件。"), { action: { label: t("撤销"), onClick: () => set(previous) } });
-              }}
-              onDataChange={(name, content) => setDraft(current => ({ ...current, data: { ...current.data, [name]: content } }))}
-              onRemove={name => setDraft(current => {
-                const data = { ...current.data }; delete data[name]; return { ...current, data };
-              })} />}
-            {!draft.description && !assistant ? <section className="flex shrink-0 flex-col gap-3">
-              <h2 className="text-sm font-medium text-muted-foreground">{t("从一个例子开始")}</h2>
-              <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                {STARTERS.map(item => <button key={item.title} onClick={() => set({ description: t(item.description), data: item.data ?? {}, origin: undefined })}
-                  className="group flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-4 text-left shadow-xs transition-colors hover:border-primary/40 hover:bg-accent/40">
-                  <span className="flex items-center gap-2 text-sm">
-                    <span className="font-medium whitespace-nowrap">{t(item.title)}</span><Badge variant="secondary" className="hidden font-normal sm:inline-flex">{t(item.tag)}</Badge>
-                    <ArrowRight className="ml-auto size-4 text-muted-foreground" />
-                  </span>
-                  <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t(item.description)}</span>
-                </button>)}
-                <button onClick={openExamples}
-                  className="group flex min-w-0 flex-col gap-2 rounded-xl border border-dashed p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/40">
-                  <span className="flex items-center gap-2 text-sm font-medium"><Database className="size-4 text-primary" />{t("公开题库")}
-                    <ArrowRight className="ml-auto size-4 text-muted-foreground" /></span>
-                  <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t("NL4Opt、MAMO、IndustryOR 等 Benchmark 的题面，可直接取用。")}</span>
-                </button>
-              </div>
-            </section> : null}
-          </TabsContent>
-
-          {assistant ? <TabsContent value="assistant" forceMount className={cn("mt-0 min-h-0 min-w-0 data-[state=inactive]:hidden", assistantOpen ? "lg:data-[state=inactive]:block" : "hidden")}>
-            <aside aria-label={t("需求助手")} className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-card">{assistant}</aside>
-          </TabsContent> : null}
-        </div>
+        {desktop && assistant && assistantOpen ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1">
+          <ResizablePanel id="conversation" defaultSize="40%" minSize="320px">{conversationPanel}</ResizablePanel>
+          <ResizableHandle withHandle aria-label={t("调整对话与需求稿的宽度")} className="mx-2 bg-transparent" />
+          <ResizablePanel id="problem" defaultSize="60%" minSize="35%">{problemPanel}</ResizablePanel>
+        </ResizablePanelGroup> : <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-4">{conversationPanel}{problemPanel}</div>}
         </Tabs>
       </div>
     </div>
@@ -328,8 +339,8 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
       <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:min-w-56">
         {comparing && runs.length > MAX_COMPARED ? <p className="text-xs text-destructive">
           {t("一次最多对比 {max} 个运行，当前为 {count} 个。", { max: MAX_COMPARED, count: runs.length })}</p> : null}
-        <Button size="lg" className="w-full" disabled={!ready || busy} onClick={() => void start()}>
-          {busy || reading ? <Spinner /> : comparing ? <Columns3 /> : <Play />}{label}
+        <Button size="lg" className="w-full" disabled={busy || (reviewFirst ? disabled || reading || !draft.description.trim() : !ready)} onClick={() => void start()}>
+          {busy || reading ? <Spinner /> : reviewFirst ? <ArrowRight /> : comparing ? <Columns3 /> : <Play />}{label}
           {!busy ? <KbdGroup className="ml-1 hidden opacity-70 sm:inline-flex"><Kbd className="bg-primary-foreground/15 text-primary-foreground">Ctrl</Kbd>
             <Kbd className="bg-primary-foreground/15 text-primary-foreground">↵</Kbd></KbdGroup> : null}
         </Button>

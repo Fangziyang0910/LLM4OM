@@ -240,9 +240,7 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
   await rows.filter({ hasText: "Feedback Repair" }).click();
   await page.waitForURL(/\/run\//);
   await page.setViewportSize({ width: 320, height: 740 });
-  await page.getByRole("button", { name: "更多操作", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: "查看对比", exact: true })).toBeInViewport();
-  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "查看对比", exact: true })).toBeInViewport();
   expect(await page.getByRole("main").evaluate(main => main.scrollWidth <= main.clientWidth)).toBe(true);
   for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(viewport);
@@ -254,8 +252,7 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
   await page.getByRole("button", { name: "更多操作", exact: true }).click();
   await page.getByRole("menuitem", { name: "复制链接" }).click();
   await page.locator("[data-sonner-toast]").filter({ hasText: "已复制链接。" }).waitFor();
-  await page.getByRole("button", { name: "更多操作", exact: true }).click();
-  await page.getByRole("menuitem", { name: "查看对比", exact: true }).click();
+  await page.getByRole("button", { name: "查看对比", exact: true }).click();
   await page.waitForURL(/\/compare\//);
   expect(errors).toEqual([]);
 });
