@@ -48,10 +48,19 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
   const label = (id: string) => providers.find(item => item.id === id)?.label ?? id;
   const shown = presets.find(item => item.id === viewing);
   const provider = providers.find(item => item.id === form.provider) ?? providers[0];
-  const set = (field: keyof Form) => (event: { target: { value: string } }) => setForm({ ...form, [field]: event.target.value });
+  const set = (field: keyof Form) => (event: { target: { value: string } }) => {
+    setForm({ ...form, [field]: event.target.value });
+    if (field === "base_url" || field === "api_key") setModels(null);
+  };
   const show = (id: string | null) => { setViewing(id); setProblem(null); setConfirming(false); };
   let extraError: string | null = null;
-  try { if (form.extra_body.trim()) JSON.parse(form.extra_body); } catch { extraError = t("不是有效的 JSON。"); }
+  try {
+    if (form.extra_body.trim()) {
+      const extra: unknown = JSON.parse(form.extra_body);
+      if (extra === null || Array.isArray(extra) || typeof extra !== "object")
+        extraError = t("请填写 JSON 对象，不能是数组、空值或单个值。");
+    }
+  } catch { extraError = t("不是有效的 JSON。"); }
   const body = () => ({
     name: form.name.trim(), provider: form.provider, model: form.model.trim(), api_key: form.api_key.trim(),
     base_url: form.base_url.trim(),

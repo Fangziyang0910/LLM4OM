@@ -209,6 +209,79 @@ test("a preset loading error can be retried without opening an empty configurati
   await expect(page.getByRole("button", { name: "查看运行设置", exact: true })).toContainText("deepseek-v4.1 flash-1017");
 });
 
+test("preset parameters are checked before loading models or saving and can be corrected", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
+  await page.getByRole("button", { name: "管理", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "预设模型", exact: true });
+  await dialog.getByRole("button", { name: "添加预设", exact: true }).click();
+  await page.getByLabel("接口地址", { exact: true }).fill("http://127.0.0.1:8796/v1");
+  await page.getByLabel("API 密钥", { exact: true }).fill("test-key");
+  await page.getByLabel("预设名称", { exact: true }).fill("Validated parameters");
+  await page.getByLabel("模型 ID", { exact: true }).fill("mock-model");
+  await page.getByRole("button", { name: "高级参数", exact: true }).click();
+  const parameters = page.getByLabel("额外请求参数（JSON）", { exact: true });
+  const save = dialog.getByRole("button", { name: "添加预设", exact: true }).last();
+  const models = dialog.getByRole("button", { name: "读取可用模型", exact: true });
+  for (const value of ["[]", "null", '"text"']) {
+    await parameters.fill(value);
+    await expect(parameters).toHaveAttribute("aria-invalid", "true");
+    await expect(dialog.getByText("请填写 JSON 对象，不能是数组、空值或单个值。", { exact: true })).toBeVisible();
+    await expect(save).toBeDisabled();
+    await expect(models).toBeDisabled();
+  }
+  await parameters.fill("{}");
+  await models.click();
+  await expect(dialog.getByRole("button", { name: "mock-model", exact: true })).toBeVisible();
+  await save.click();
+  await expect(dialog.getByRole("heading", { name: "Validated parameters", exact: true })).toBeVisible();
+  const presets = (await (await page.request.get("/api/presets")).json()).presets;
+  const saved = presets.find((preset: { name: string }) => preset.name === "Validated parameters");
+  expect(saved.extra_body).toEqual({});
+  await page.request.delete(`/api/presets/${saved.id}`);
+});
+
+test("changing preset credentials clears old models and a failed lookup preserves the draft", async ({ page }) => {
+  let failing = false;
+  let catalog = ["first-model"];
+  await page.route("**/api/models", route => route.fulfill({
+    status: failing ? 401 : 200, contentType: "application/json",
+    body: JSON.stringify(failing ? { detail: "Model lookup rejected the test key" } : { models: catalog }),
+  }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
+  await page.getByRole("button", { name: "管理", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "预设模型", exact: true });
+  await dialog.getByRole("button", { name: "添加预设", exact: true }).click();
+  const endpoint = dialog.getByLabel("接口地址", { exact: true });
+  const key = dialog.getByLabel("API 密钥", { exact: true });
+  const model = dialog.getByLabel("模型 ID", { exact: true });
+  const lookup = dialog.getByRole("button", { name: "读取可用模型", exact: true });
+  await endpoint.fill("http://127.0.0.1:8796/v1");
+  await key.fill("test-key");
+  await dialog.getByLabel("预设名称", { exact: true }).fill("Keep this preset draft");
+  await lookup.click();
+  await expect(dialog.getByRole("button", { name: "first-model", exact: true })).toBeVisible();
+  await endpoint.fill("http://127.0.0.1:8796/other/v1");
+  await expect(dialog.getByRole("button", { name: "first-model", exact: true })).toHaveCount(0);
+  await model.fill("second-model");
+  failing = true;
+  await lookup.click();
+  await expect(dialog.getByRole("alert")).toContainText("Model lookup rejected the test key");
+  await expect(endpoint).toHaveValue("http://127.0.0.1:8796/other/v1");
+  await expect(key).toHaveValue("test-key");
+  await expect(model).toHaveValue("second-model");
+  await expect(dialog.getByLabel("预设名称", { exact: true })).toHaveValue("Keep this preset draft");
+  failing = false;
+  catalog = ["second-model"];
+  await lookup.click();
+  await expect(dialog.getByRole("button", { name: "second-model", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await key.fill("updated-test-key");
+  await expect(dialog.getByRole("button", { name: "second-model", exact: true })).toHaveCount(0);
+  await expect(model).toHaveValue("second-model");
+});
+
 test.describe("windowed desktop navigation", () => {
   test.use({ viewport: { width: 1024, height: 768 } });
   test("history search and row actions work through nested menus and drawer reopening", async ({ page }) => {

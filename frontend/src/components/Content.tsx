@@ -8,6 +8,7 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import type { Nodes } from "mdast";
 import { Check, Copy } from "lucide-react";
 import { memo, useMemo, useState } from "react";
+import { toast } from "sonner";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -39,16 +40,29 @@ function normalizeMath(text: string, singleDollarMath: boolean): string {
   return parts.join("") + replace(text.slice(offset));
 }
 
-/** Copies text; over plain HTTP the Clipboard API is missing, so a hidden text area is copied instead. */
+/** Copies text with a hidden text area when the Clipboard API is missing or rejects access. */
 export async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard) return navigator.clipboard.writeText(text);
+  if (navigator.clipboard?.writeText) {
+    const copied = await navigator.clipboard.writeText(text).then(() => true, () => false);
+    if (copied) return;
+  }
+  const active = document.activeElement;
+  const selection = document.getSelection();
+  const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange()) : [];
   const area = Object.assign(document.createElement("textarea"), { value: text, readOnly: true });
   area.style.cssText = "position:fixed;opacity:0";
-  document.body.append(area);
-  area.select();
-  const copied = document.execCommand("copy");
-  area.remove();
-  if (!copied) throw new Error("copy failed");
+  try {
+    document.body.append(area);
+    area.select();
+    if (!document.execCommand("copy")) throw new Error("copy failed");
+  } finally {
+    area.remove();
+    if (active instanceof HTMLElement) active.focus({ preventScroll: true });
+    if (selection) {
+      selection.removeAllRanges();
+      ranges.forEach(range => selection.addRange(range));
+    }
+  }
 }
 
 export function download(name: string, content: string | Blob) {
@@ -61,7 +75,8 @@ export function download(name: string, content: string | Blob) {
 export function CopyButton({ text, label = t("复制"), className }: { text: string; label?: string; className?: string }) {
   const [copied, setCopied] = useState(false);
   return <Button type="button" variant="ghost" size="icon-sm" aria-label={label} title={label} className={className}
-    onClick={() => copyText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }, () => undefined)}>
+    onClick={() => copyText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); },
+      () => toast.error(t("复制失败，请选中文本后手动复制。")))}>
     {copied ? <Check className="text-success" /> : <Copy />}
   </Button>;
 }

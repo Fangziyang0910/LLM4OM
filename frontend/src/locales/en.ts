@@ -306,6 +306,8 @@ export const en: Record<string, string> = {
 
   // Presets
   "不是有效的 JSON。": "Not valid JSON.",
+  "请填写 JSON 对象，不能是数组、空值或单个值。": "Enter a JSON object, rather than an array, null or a single value.",
+  "复制失败，请选中文本后手动复制。": "Copy failed. Select the text and copy it manually.",
   "已添加预设 {model}。": "Added preset {model}.",
   "已删除预设 {model}。": "Deleted preset {model}.",
   "运行只能选择预设。预设添加后不能修改，密钥只保存在服务器上，任何页面都读不到。":
