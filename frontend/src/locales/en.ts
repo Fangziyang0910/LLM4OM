@@ -191,6 +191,8 @@ export const en: Record<string, string> = {
 
   // Composer
   "{name} 超过 2 MB，没有添加。": "{name} is larger than 2 MB and was not added.",
+  "不支持 {name}，请添加 CSV、TSV、JSON、TXT 或 XLSX 文件。": "{name} is not supported. Add a CSV, TSV, JSON, TXT or XLSX file.",
+  "{name} 没有可导入的数据，请先在工作表中填写数据。": "{name} has no data to import. Add data to a worksheet first.",
   "{name} 已转换为 {count} 个 CSV 文件。": "{name} became {count} CSV file(s).",
   "无法读取 {name}：{error}": "Cannot read {name}: {error}",
   "先添加一个预设模型。": "Add an LLM preset first.",

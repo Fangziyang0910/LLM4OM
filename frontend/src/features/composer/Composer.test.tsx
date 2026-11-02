@@ -42,6 +42,20 @@ test("an unreadable text attachment reports the failure and keeps the draft", as
   expect(JSON.parse(localStorage.getItem("llm4om-draft")!).data).toEqual({});
 });
 
+test("dropping unsupported files reports their format without discarding supported attachments", async () => {
+  render(<Form />);
+  const read = vi.fn(async () => "%PDF-1.7 binary contents");
+  fireEvent.drop(screen.getByRole("textbox", { name: "问题描述" }), { dataTransfer: { files: [
+    { name: "report.pdf", size: 20, text: read },
+    { name: "data.CSV", size: 12, text: async () => "name,price\nA,003\n" },
+  ] } });
+  await screen.findByText("data.CSV");
+  expect(screen.queryByText("report.pdf")).toBeNull();
+  expect(read).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith("不支持 report.pdf，请添加 CSV、TSV、JSON、TXT 或 XLSX 文件。");
+  expect(JSON.parse(localStorage.getItem("llm4om-draft")!).data).toEqual({ "data.CSV": "name,price\nA,003\n" });
+});
+
 test("an empty stored draft uses the defaults", () => {
   localStorage.setItem("llm4om-draft", "null");
   expect(initialDraft()).toMatchObject({ description: "", data: {}, method: "direct" });

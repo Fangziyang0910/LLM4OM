@@ -7,6 +7,7 @@
 <main class="docs-main" id="article" tabindex="-1"><div class="doc-breadcrumb"><span>功能指南</span><span aria-hidden="true">/</span><span>上传与编辑数据</span></div><header class="article-heading"><h1>上传与编辑数据</h1><p>检查表格、字段和单位，保留完整数据用于计算。</p></header><details class="docs-inline-toc"><summary>本页内容</summary><nav aria-label="本页内容"><a href="#section-1" class="toc-level-2">准备文件与说明</a><a href="#section-2" class="toc-level-2">在编辑器中检查什么</a><a href="#section-3" class="toc-level-2">试一次保存与取消</a><a href="#section-4" class="toc-level-2">数据从哪里进入模型</a><a href="#section-5" class="toc-level-2">查看实际操作</a></nav></details><article class="doc-prose"><link rel="preload" as="image" href="../../../assets/screens/zh/data.png"/><p>在问题中添加 Excel、CSV、TSV、JSON 或文本文件，可以让建模代码直接使用完整数据。点击文件名打开编辑器，检查字段、修改单元格或调整原文，再保存到当前需求。</p>
 <h2 id="section-1">准备文件与说明<a href="#section-1" class="heading-anchor" aria-label="准备文件与说明 — 章节链接">#</a></h2>
 <p>每个上传文件最大 2 MB。Excel 的每张工作表转换为一个 CSV；文件名保留中文、空格和括号等常见字符。题面中写清文件名、字段含义、单位和索引。</p>
+<p>添加和拖放均支持 CSV、TSV、JSON、TXT 和 XLSX；PDF、旧版 XLS 等其他格式会提示不支持。空 Excel 会提示先填写数据。同批文件中只有不支持或读取失败的文件被跳过，其他有效文件仍会添加。</p>
 <p>例如附件 <code>production.json</code> 可包含产品、利润、工时矩阵和资源容量。配套说明为：“usage 的行对应资源，列对应产品，单位小时/件；产量按非负整数计。”</p>
 <p>下载可直接使用的 <a href="../../../assets/examples/production.json">JSON 示例</a>和<a href="../../../assets/examples/production.csv">CSV 示例</a>。</p>
 <h2 id="section-2">在编辑器中检查什么<a href="#section-2" class="heading-anchor" aria-label="在编辑器中检查什么 — 章节链接">#</a></h2>

@@ -4,6 +4,8 @@ Attach Excel, CSV, TSV, JSON or text files so generated code can use complete da
 
 Each uploaded file supports up to 2 MB. Every Excel worksheet becomes a CSV. Common file-name characters are preserved. Describe file names, fields, units and index mappings in the problem.
 
+Both file selection and drag-and-drop accept CSV, TSV, JSON, TXT and XLSX. Other formats, including PDF and legacy XLS, show an unsupported-format message. Empty workbooks prompt you to add worksheet data first. Unsupported or unreadable files are skipped individually; valid files selected with them are still added.
+
 For `production.json`, explain that usage rows identify resources and columns identify products, measured in hours per unit, with nonnegative integer production quantities.
 
 Download the ready-to-use [JSON example](../../../assets/examples/production.json) and [CSV example](../../../assets/examples/production.csv).

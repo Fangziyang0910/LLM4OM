@@ -4,6 +4,8 @@
 
 每个上传文件最大 2 MB。Excel 的每张工作表转换为一个 CSV；文件名保留中文、空格和括号等常见字符。题面中写清文件名、字段含义、单位和索引。
 
+添加和拖放均支持 CSV、TSV、JSON、TXT 和 XLSX；PDF、旧版 XLS 等其他格式会提示不支持。空 Excel 会提示先填写数据。同批文件中只有不支持或读取失败的文件被跳过，其他有效文件仍会添加。
+
 例如附件 `production.json` 可包含产品、利润、工时矩阵和资源容量。配套说明为：“usage 的行对应资源，列对应产品，单位小时/件；产量按非负整数计。”
 
 下载可直接使用的 [JSON 示例](../../../assets/examples/production.json)和[CSV 示例](../../../assets/examples/production.csv)。
