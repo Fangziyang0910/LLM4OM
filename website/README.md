@@ -35,18 +35,18 @@ npm --prefix website run dev
 
 预览复用前端已安装的 Vite，支持视频片段跳转所需的 HTTP Range 请求。
 
-文档入口为 `/docs/zh/introduction/` 与 `/docs/en/introduction/`；`/docs/` 会按链接参数或已保存偏好进入对应语言。更新内容时，先生成文档，再同步 `public/` 发布。
+文档入口为 `/docs/zh/introduction/` 与 `/docs/en/introduction/`；`/docs/` 会按链接参数或已保存偏好进入对应语言。更新内容时，先生成文档，再将 `public/` 与源稿一起提交到 `main`。
 
 ## 用 GitHub Pages 发布
 
-宣传站使用同一仓库的 `gh-pages` 分支根目录发布。该分支仅保存 `website/public/` 内的静态文件，无需安装 Node.js 或运行前端构建，不包含平台运行数据、测试或设计记录。
+官网与文档的源稿、生成器和静态文件统一维护在 `main`。`.github/workflows/pages.yml` 通过 GitHub Actions 将 `website/public/` 上传为 Pages 产物并部署，不另建发布分支。发布只上传该目录，不包含平台运行数据、测试或设计记录。
 
-1. 检查页面后，把 `website/public/` 的内容同步到独立的 `gh-pages` 检出目录，包含 `.nojekyll`。
-2. 在该分支提交并推送。不要从当前 `main` 分支直接推送未发布的平台提交。
-3. **Settings → Pages → Build and deployment** 使用 **Deploy from a branch → gh-pages → / (root)**。GitHub 会在该分支更新后重新发布。
+1. 生成文档并完成本地检查，将源稿和 `website/public/` 的变化一起提交、推送到 `main`。
+2. `website/public/` 或发布工作流变化时，GitHub Actions 自动发布。需要重新部署时，在 Actions 的 **Publish website** 中手动运行，选择 `main`。
+3. **Settings → Pages → Build and deployment → Source** 使用 **GitHub Actions**；`github-pages` 环境允许从 `main` 部署。
 4. 站点地址为 `https://fangziyang0910.github.io/LLM4OM/`。可以用 `?lang=en` 或 `?lang=zh` 分享指定语言。
 
-仓库已公开，发布分支为 `gh-pages`。[中文官网](https://fangziyang0910.github.io/LLM4OM/?lang=zh)、[英文官网](https://fangziyang0910.github.io/LLM4OM/?lang=en)、[中文Docs](https://fangziyang0910.github.io/LLM4OM/docs/zh/introduction/)和[英文Docs](https://fangziyang0910.github.io/LLM4OM/docs/en/introduction/)可公开访问。每次更新先通过本地检查，再推送发布分支并在线复测。
+仓库已公开。[中文官网](https://fangziyang0910.github.io/LLM4OM/?lang=zh)、[英文官网](https://fangziyang0910.github.io/LLM4OM/?lang=en)、[中文Docs](https://fangziyang0910.github.io/LLM4OM/docs/zh/introduction/)和[英文Docs](https://fangziyang0910.github.io/LLM4OM/docs/en/introduction/)地址不变。发布后检查工作流结果，再在线复测。
 
 GitHub Pages 承载官网与文档。完整建模服务仍需 Python、Docker 求解环境和模型服务配置，不能直接运行在 Pages 中。
 
