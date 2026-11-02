@@ -14,7 +14,29 @@ export type Matrix = { rows: string[]; columns: string[]; cell: (row: string, co
 export function parseVariable(name: string, value: number): Variable {
   const match = /^(.+?)[[(](.*)[\])]$/.exec(name.trim());
   if (!match) return { name, indices: [], value };
-  const indices = match[2].split(",").map(index => index.trim().replace(/^['"]|['"]$/g, ""));
+  const source = match[2];
+  const parts: string[] = [];
+  let start = 0;
+  let quote = "";
+  for (let position = 0; position < source.length; position++) {
+    const character = source[position];
+    if (quote) {
+      if (character === "\\") position++;
+      else if (character === quote) quote = "";
+    } else if ((character === "'" || character === '"') && !source.slice(start, position).trim()) {
+      quote = character;
+    } else if (character === ",") {
+      parts.push(source.slice(start, position));
+      start = position + 1;
+    }
+  }
+  parts.push(source.slice(start));
+  const indices = parts.map(part => {
+    const index = part.trim();
+    const delimiter = index[0];
+    if (index.length < 2 || (delimiter !== "'" && delimiter !== '"') || index.at(-1) !== delimiter) return index;
+    return index.slice(1, -1).replace(/\\([\\'"])/g, (escape, character: string) => character === delimiter || character === "\\" ? character : escape);
+  });
   return { name, indices, value };
 }
 

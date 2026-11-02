@@ -1,5 +1,39 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import readXlsxFile from "read-excel-file/node";
+
+test("quoted customer indices survive solving, matrix display, CSV and Excel downloads", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "问题描述" }).fill(
+    "E2E_QUOTED_INDICES 周一向客户 North, East 发货 3 件，向 West 发货 0 件。数量为非负整数，最小化总发货量。");
+  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.waitForURL(/\/run\//);
+  const excel = page.getByRole("button", { name: "导出 Excel", exact: true });
+  await expect(excel).toBeVisible({ timeout: 60_000 });
+  await page.getByText("完整变量取值（2 个）", { exact: true }).click();
+  await expect(page.getByRole("columnheader", { name: "Monday", exact: true })).toBeVisible();
+  await expect(page.getByRole("rowheader", { name: "North, East", exact: true }).locator("..")).toContainText("3");
+  await expect(page.getByRole("rowheader", { name: "West", exact: true }).locator("..")).toContainText("0");
+  const csvDownloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "下载变量取值 CSV", exact: true }).click();
+  const csv = await csvDownloading;
+  const csvPath = testInfo.outputPath("quoted-indices.csv");
+  await csv.saveAs(csvPath);
+  const text = await readFile(csvPath, "utf8");
+  expect(text).toContain(`"x['North, East',Monday]",3`);
+  expect(text).toContain(`"x[West,Monday]",0`);
+  const excelDownloading = page.waitForEvent("download");
+  await excel.click();
+  const workbook = await excelDownloading;
+  const excelPath = testInfo.outputPath("quoted-indices.xlsx");
+  await workbook.saveAs(excelPath);
+  const [plan] = await readXlsxFile(excelPath);
+  expect(plan.data).toContainEqual(["x['North, East',Monday] 的生产数量", 3, "件", "x['North, East',Monday]"]);
+  expect(plan.data).toContainEqual(["x[West,Monday] 的生产数量", 0, "件", "x[West,Monday]"]);
+  await page.reload();
+  await page.getByText("完整变量取值（2 个）", { exact: true }).click();
+  await expect(page.getByRole("rowheader", { name: "North, East", exact: true })).toBeVisible();
+});
 
 test("downloads an Excel business plan with actual values and the source problem", async ({ page }, testInfo) => {
   await page.goto("/");

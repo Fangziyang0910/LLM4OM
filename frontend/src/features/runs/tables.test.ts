@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { asMatrix, groupVariables, parseDelimited, variableChanges } from "@/features/runs/tables";
+import { asMatrix, groupVariables, parseDelimited, parseVariable, variableChanges } from "@/features/runs/tables";
+
+describe("parseVariable", () => {
+  it.each([
+    [`x['North, East',Monday]`, ["North, East", "Monday"]],
+    [`x["O'Brien, East",Monday]`, ["O'Brien, East", "Monday"]],
+    [`x[' North, East ', Monday]`, [" North, East ", "Monday"]],
+    [`x[O'Brien,Monday]`, ["O'Brien", "Monday"]],
+    [String.raw`x['Both \' and " here, East',Monday]`, [`Both ' and " here, East`, "Monday"]],
+    [String.raw`x['West\\East, North',Monday]`, [String.raw`West\East, North`, "Monday"]],
+    [`x("North, East", 'Monday, Tuesday')`, ["North, East", "Monday, Tuesday"]],
+  ])("preserves string indices in %s", (name, indices) => {
+    expect(parseVariable(name, 3)).toEqual({ name, indices, value: 3 });
+  });
+});
 
 describe("groupVariables", () => {
   it("groups indexed variables by base name and lays two-index groups out as a matrix", () => {
@@ -15,6 +29,15 @@ describe("groupVariables", () => {
     const groups = groupVariables({ "x('a', 'b')": 1, "x[c]": 2 });
     expect(groups[0].variables.map(variable => variable.indices)).toEqual([["a", "b"], ["c"]]);
     expect(asMatrix(groups[0])).toBeNull();
+  });
+
+  it("keeps quoted customer names as one matrix dimension and retains zero values", () => {
+    const groups = groupVariables({ "x['North, East',Monday]": 3, "x['North, East',Tuesday]": 0, "x[West,Monday]": 2 });
+    expect(groups[0].dims).toBe(2);
+    const matrix = asMatrix(groups[0])!;
+    expect(matrix.rows).toEqual(["North, East", "West"]);
+    expect(matrix.columns).toEqual(["Monday", "Tuesday"]);
+    expect([matrix.cell("North, East", "Monday"), matrix.cell("North, East", "Tuesday"), matrix.cell("West", "Tuesday")]).toEqual([3, 0, undefined]);
   });
 });
 

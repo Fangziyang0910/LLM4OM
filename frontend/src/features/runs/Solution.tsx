@@ -121,10 +121,10 @@ function Group({ group }: { group: VariableGroup }) {
       <table className="w-full text-[13px]">
         <thead><tr className="border-b">
           <th className="sticky left-0 bg-card px-3 py-1.5" />
-          {matrix.columns.map(column => <th key={column} className="px-3 py-1.5 text-right font-mono text-xs font-medium text-muted-foreground">{column}</th>)}
+          {matrix.columns.map(column => <th key={column} scope="col" className="px-3 py-1.5 text-right font-mono text-xs font-medium text-muted-foreground">{column}</th>)}
         </tr></thead>
         <tbody>{matrix.rows.slice(0, limit).map(row => <tr key={row} className="border-b last:border-0">
-          <th className="sticky left-0 bg-card px-3 py-1.5 text-left font-mono text-xs font-medium text-muted-foreground">{row}</th>
+          <th scope="row" className="sticky left-0 bg-card px-3 py-1.5 text-left font-mono text-xs font-medium text-muted-foreground">{row}</th>
           {matrix.columns.map(column => {
             const cell = matrix.cell(row, column);
             return <td key={column} className={cn("px-3 py-1.5 text-right", cell && "bg-primary/5 font-medium")}>{cell == null ? "" : value(cell)}</td>;

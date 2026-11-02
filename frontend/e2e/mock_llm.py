@@ -196,6 +196,17 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
         return f"### Formulation\n{FORMULATION}\n\n```python\n{CP_SAT}```"
     if 'import cvxpy as cp' in text:
         return f"### Formulation\nMinimize squared distance to (1,2), with nonnegative x and sum(x)<=2.\n\n```python\n{CVXPY}```"
+    if "E2E_QUOTED_INDICES" in text:
+        code = '''import pyomo.environ as pyo
+def build_model(data_dir):
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(["North, East", "West"], ["Monday"], domain=pyo.NonNegativeIntegers)
+    m.north = pyo.Constraint(expr=m.x["North, East", "Monday"] == 3)
+    m.west = pyo.Constraint(expr=m.x["West", "Monday"] == 0)
+    m.obj = pyo.Objective(expr=sum(m.x.values()))
+    return m
+'''
+        return f"### Formulation\nShip 3 units to North, East and 0 to West on Monday. Minimize total shipments.\n\n```python\n{code}```"
     code = INFEASIBLE if "合同" in text else FEASIBLE
     if "切割资源共 15 单位" in text:
         code = code.replace("<= 8", "<= 15")
