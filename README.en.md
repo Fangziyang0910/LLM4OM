@@ -134,12 +134,12 @@ Open <http://localhost:8767>. Others on the network use `http://<this machine's 
 You need Python 3.11–3.13, [uv](https://docs.astral.sh/uv/) and Docker:
 
 ```bash
-uv sync --all-extras
+uv sync --extra web
 uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:13
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
-The repository includes the built frontend, so Node.js is not needed.
+The repository includes the built frontend, so Node.js is not needed. Solver dependencies run inside the Docker Worker; the host only needs the Web dependencies, without installing every commercial or platform-specific solver locally.
 
 ### Try a problem
 

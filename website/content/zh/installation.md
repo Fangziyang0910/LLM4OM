@@ -55,12 +55,12 @@ docker compose ps
 在已经克隆的仓库中执行：
 
 ```bash
-uv sync --all-extras
+uv sync --extra web
 uv run llm4om build-worker
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
-该方式使用仓库提供的工作台构建文件，Python服务通过Docker沙箱完成求解。工作区 `runs/web` 保存历史与预设；使用其他位置时通过 `--workspace` 指定。
+该方式使用仓库提供的工作台构建文件，Python服务通过Docker沙箱完成求解。求解依赖随 Worker 镜像安装，宿主机只需 Web 依赖，不必安装全部商业或平台限定的求解器。工作区 `runs/web` 保存历史与预设；使用其他位置时通过 `--workspace` 指定。
 
 ## 常用维护命令
 

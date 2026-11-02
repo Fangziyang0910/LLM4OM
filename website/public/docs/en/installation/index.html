@@ -33,11 +33,11 @@ docker compose ps
 <p>Then add attachments or try Optimization chat. Other devices can use the server address. See <a href="../team-deployment/">team deployment</a> for shared access and HTTPS.</p>
 <h2 id="section-5">Start from Python<a href="#section-5" class="heading-anchor" aria-label="Start from Python — link to section">#</a></h2>
 <p>In the cloned repository:</p>
-<pre><code class="language-bash">uv <span class="hljs-built_in">sync</span> --all-extras
+<pre><code class="language-bash">uv <span class="hljs-built_in">sync</span> --extra web
 uv run llm4om build-worker
 uv run llm4om serve --workspace runs/web --port 8767
 </code></pre>
-<p>This uses bundled workbench build files and Docker solver sandboxes. <code>runs/web</code> retains history and presets; use <code>--workspace</code> for another location.</p>
+<p>This uses bundled workbench build files and Docker solver sandboxes. Solver dependencies are installed in the Worker image; the host only needs Web dependencies, without every commercial or platform-specific solver. <code>runs/web</code> retains history and presets; use <code>--workspace</code> for another location.</p>
 <h2 id="section-6">Maintenance commands<a href="#section-6" class="heading-anchor" aria-label="Maintenance commands — link to section">#</a></h2>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Table, scroll horizontally"><table><thead><tr><th>Action</th><th>Command</th></tr></thead><tbody><tr><td>Status</td><td><code>docker compose ps</code></td></tr><tr><td>Logs</td><td><code>docker compose logs -f app</code></td></tr><tr><td>Update</td><td><code>git pull</code>, then <code>docker compose up -d --build</code></td></tr><tr><td>Apply environment changes</td><td><code>docker compose up -d app</code></td></tr><tr><td>Stop, retaining data volume</td><td><code>docker compose down</code></td></tr></tbody></table></div>
 <p>See <a href="../model-presets/">presets</a> for connections, <a href="../backends/">backends</a> for solver setup and <a href="../configuration/">backups</a> for persistent data.</p>

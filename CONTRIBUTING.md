@@ -13,7 +13,7 @@
 
 ```bash
 git clone https://github.com/Fangziyang0910/LLM4OM.git && cd LLM4OM
-uv sync --all-extras
+uv sync --extra web
 uv run llm4om build-worker          # 构建沙箱镜像 llm4om-worker:13
 cp .env.example .env                # 填写默认预设，供真实运行使用
 ```
@@ -42,7 +42,7 @@ LLM4OM/
 uv run llm4om serve --workspace runs/dev --port 8767
 ```
 
-修改服务端代码后，重启服务。开发时可以加 `--sandbox local`，在本机子进程中执行生成代码，不需要 Docker。
+修改服务端代码后，重启服务。开发时可以加 `--sandbox local`，在本机子进程中执行生成代码，不需要 Docker，但需另装所用建模库和求解后端。完整求解依赖的安装与限制见[测试](#测试)。
 
 前端：
 
@@ -73,7 +73,7 @@ npm --prefix frontend run build     # 输出到 src/llm4om/server/web_assets/，
 | 前端单元测试 | `npm --prefix frontend test` | 步骤分组、断流恢复、公式渲染、解的表格、报告、Excel、译文完整、发起运行 |
 | 浏览器测试 | `npm --prefix frontend run e2e` | 真实页面上的运行、对比、不可行诊断、备注、报告、Excel 和英文界面 |
 
-Python 测试不调用真实 LLM，也不需要 Docker。方法使用脚本化聊天模型，求解使用本机 Worker（需要 `solve` 可选依赖）。AutoFormulation 的等价判断测试需要 `autoformulation` 可选依赖。
+Python 测试不调用真实 LLM，也不需要 Docker。方法使用脚本化聊天模型，求解使用本机 Worker（需要 `solve` 可选依赖）。AutoFormulation 的等价判断测试需要 `autoformulation` 可选依赖。完整测试环境使用 `uv sync --all-extras`；部分求解器有平台限制，例如 Exact 2.2.1 不提供 macOS 安装包，不能在所有系统上安装全部扩展。只修改 Web 界面或使用 Docker 沙箱时，保留上述 Web 依赖即可。
 
 `tests/test_host.py` 通过公开宿主接口逐次打开本地检查点，覆盖 13 种方法与 9 种建模库、复杂搜索、工具循环、重试和预算。CLI 的跨进程回归验证无需 Web 与平台模型配置。基础包只安装宿主 CLI 依赖；开发依赖包含 `web`，原有服务与模型测试仍可直接运行。单独使用宿主模式时可执行 `uv tool install .`。
 

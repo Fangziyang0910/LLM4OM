@@ -9,7 +9,7 @@ Docs 沿用官网风格，提供 46 篇文章、92 个中英文页面：快速�
 先准备主项目 Python 环境与前端依赖（已有环境可直接复用）：
 
 ```bash
-uv sync --all-extras
+uv sync --extra web
 npm --prefix frontend ci
 npm --prefix website ci
 npm --prefix website run build

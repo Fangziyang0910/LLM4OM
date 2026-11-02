@@ -33,11 +33,11 @@ docker compose ps
 <p>之后可添加附件、尝试优化对话，或在另一台设备使用服务器地址访问。共享访问和HTTPS见<a href="../team-deployment/">团队部署</a>。</p>
 <h2 id="section-5">使用 Python 环境启动<a href="#section-5" class="heading-anchor" aria-label="使用 Python 环境启动 — 章节链接">#</a></h2>
 <p>在已经克隆的仓库中执行：</p>
-<pre><code class="language-bash">uv <span class="hljs-built_in">sync</span> --all-extras
+<pre><code class="language-bash">uv <span class="hljs-built_in">sync</span> --extra web
 uv run llm4om build-worker
 uv run llm4om serve --workspace runs/web --port 8767
 </code></pre>
-<p>该方式使用仓库提供的工作台构建文件，Python服务通过Docker沙箱完成求解。工作区 <code>runs/web</code> 保存历史与预设；使用其他位置时通过 <code>--workspace</code> 指定。</p>
+<p>该方式使用仓库提供的工作台构建文件，Python服务通过Docker沙箱完成求解。求解依赖随 Worker 镜像安装，宿主机只需 Web 依赖，不必安装全部商业或平台限定的求解器。工作区 <code>runs/web</code> 保存历史与预设；使用其他位置时通过 <code>--workspace</code> 指定。</p>
 <h2 id="section-6">常用维护命令<a href="#section-6" class="heading-anchor" aria-label="常用维护命令 — 章节链接">#</a></h2>
 <div class="table-scroll" tabindex="0" role="region" aria-label="表格，可横向滚动"><table><thead><tr><th>操作</th><th>命令</th></tr></thead><tbody><tr><td>查看运行状态</td><td><code>docker compose ps</code></td></tr><tr><td>查看服务日志</td><td><code>docker compose logs -f app</code></td></tr><tr><td>应用更新</td><td><code>git pull</code> 后执行 <code>docker compose up -d --build</code></td></tr><tr><td>应用环境变量变化</td><td><code>docker compose up -d app</code></td></tr><tr><td>停止服务并保留数据卷</td><td><code>docker compose down</code></td></tr></tbody></table></div>
 <p>模型连接问题见<a href="../model-presets/">预设配置</a>，后端问题见<a href="../backends/">求解环境</a>，历史数据备份见<a href="../configuration/">配置与备份</a>。</p>

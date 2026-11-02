@@ -134,12 +134,12 @@ docker compose up -d --build
 需要 Python 3.11–3.13、[uv](https://docs.astral.sh/uv/) 和 Docker：
 
 ```bash
-uv sync --all-extras
+uv sync --extra web
 uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:13
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
-仓库已包含前端构建文件，不需要 Node.js。
+仓库已包含前端构建文件，不需要 Node.js。求解依赖安装在 Docker Worker 中，宿主机只需安装 Web 依赖；不必在本机安装全部商业或平台限定的求解器。
 
 ### 试一个问题
 

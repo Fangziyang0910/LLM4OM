@@ -148,17 +148,17 @@ docker compose stop app && docker compose cp runs/web/. app:/data/ && docker com
 
 需要在 LangSmith 中查看每次 LLM 调用时，在 `.env` 中设置 `LANGSMITH_TRACING=true`、`LANGSMITH_API_KEY` 和 `LANGSMITH_PROJECT`，然后重启。开启后，问题、数据和模型回答都会发送到 LangSmith。只在允许数据离开服务器时使用。
 
-## 不用 Docker 部署
+## 在宿主机启动 Python 服务
 
 服务器上有 Python 3.11–3.13、uv 和 Docker 时，可以直接运行服务：
 
 ```bash
-uv sync --all-extras
+uv sync --extra web
 uv run llm4om build-worker
 uv run llm4om serve --workspace /srv/llm4om --port 8767 --jobs 4
 ```
 
-服务默认监听 `0.0.0.0`。用 systemd 等工具让它开机启动。沙箱仍然需要 Docker。
+服务默认监听 `0.0.0.0`。用 systemd 等工具让它开机启动。沙箱仍然需要 Docker，求解依赖随 Worker 镜像安装，不需要在宿主机安装 `solve` 扩展。
 
 ## 故障排查
 

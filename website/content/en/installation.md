@@ -55,12 +55,12 @@ Then add attachments or try Optimization chat. Other devices can use the server 
 In the cloned repository:
 
 ```bash
-uv sync --all-extras
+uv sync --extra web
 uv run llm4om build-worker
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
-This uses bundled workbench build files and Docker solver sandboxes. `runs/web` retains history and presets; use `--workspace` for another location.
+This uses bundled workbench build files and Docker solver sandboxes. Solver dependencies are installed in the Worker image; the host only needs Web dependencies, without every commercial or platform-specific solver. `runs/web` retains history and presets; use `--workspace` for another location.
 
 ## Maintenance commands
 
