@@ -144,6 +144,28 @@ test("stopping after a lost progress stream shows the stopped run without a manu
   expect(runs[0].status).toBe("interrupted");
 });
 
+test("a failed run can be retried directly while preserving its original record and settings", async ({ page }) => {
+  await open(page);
+  await page.getByRole("textbox", { name: "问题描述" }).fill("E2E_PAUSE_REPAIR 工厂生产计划");
+  await page.getByRole("button", { name: "开始建模", exact: true }).click();
+  await page.waitForURL(/\/run\//);
+  const originalUrl = page.url();
+  const threadId = originalUrl.split("/").at(-1)!;
+  const retry = page.getByRole("button", { name: "再运行一次", exact: true });
+  await expect(retry).toBeVisible({ timeout: 60_000 });
+  const before = await (await page.request.get(`/threads/${threadId}`)).json();
+  await retry.click();
+  await expect(page).not.toHaveURL(originalUrl);
+  await expect(page.getByRole("button", { name: "再运行一次", exact: true })).toBeVisible({ timeout: 60_000 });
+  const retried = await (await page.request.get(`/threads/${page.url().split("/").at(-1)}`)).json();
+  expect(retried.values.description).toBe(before.values.description);
+  expect(retried.values.spec).toMatchObject({ method: before.values.spec.method, language: before.values.spec.language,
+    preset: before.values.spec.preset, solver: before.values.spec.solver });
+  expect(retried.metadata.origin).toBe(threadId);
+  const original = await (await page.request.get(`/threads/${threadId}`)).json();
+  expect(original.values).toEqual(before.values);
+});
+
 test("a named DeepSeek preset keeps its native provider, custom endpoint and actual model ID", async ({ page }) => {
   const errors = await open(page);
   await page.getByRole('button', { name: /预设模型/ }).click();

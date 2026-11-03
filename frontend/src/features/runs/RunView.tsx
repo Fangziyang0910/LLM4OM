@@ -168,6 +168,9 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
           <Layers />{t("建模过程")}</Button>
         {active ? <Button variant="outline" size="sm" disabled={stopping} onClick={() => void stop()}>
           {stopping ? <Spinner /> : <Square className="fill-current" />}{stopping ? t("正在停止") : t("停止")}</Button> : <>
+          {["failed", "error", "timeout", "interrupted"].includes(state) ? <Button variant="outline" size="sm"
+            disabled={busy || !values.description} title={t("用同样的问题和设置再运行一次")} onClick={() => void rerun()}>
+            {busy ? <Spinner /> : <RefreshCw />}{t("再运行一次")}</Button> : null}
           {hasSolution(solve) ? <Button variant="outline" size="sm" className="size-8 p-0 sm:w-auto sm:px-3" aria-label={t("导出 Excel")}
             title={t("导出 Excel")} disabled={exporting} onClick={() => void exportExcel()}>
             {exporting ? <Spinner /> : <FileDown />}<span className="hidden sm:inline">{t("导出 Excel")}</span></Button> : null}
