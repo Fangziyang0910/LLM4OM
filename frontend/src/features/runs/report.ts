@@ -1,4 +1,4 @@
-import { STATUS, formatNumber } from "@/format";
+import { STATUS } from "@/format";
 import { locale, t } from "@/i18n";
 import type { Options } from "@/types";
 import type { RunMeta, RunValues } from "@/features/runs/types";
@@ -50,18 +50,18 @@ export function report(meta: RunMeta, values: RunValues, options: Options, link?
     }
     if (values.explanation) {
       const explanation = values.explanation;
-      const decisions = explanation.decisions.map(item => `- ${item.label}${COLON}${formatNumber(solve.variables[item.variable])} ${item.unit}`);
-      const objective = solve.objective == null ? "" : `${explanation.objective_label}${COLON}${formatNumber(solve.objective)} ${explanation.objective_unit}`;
+      const decisions = explanation.decisions.map(item => `- ${item.label}${COLON}${solve.variables[item.variable]} ${item.unit}`);
+      const objective = solve.objective == null ? "" : `${explanation.objective_label}${COLON}${solve.objective} ${explanation.objective_unit}`;
       parts.push([`## ${t("方案解读")}`, explanation.summary, objective, decisions.join("\n"),
         explanation.notes.map(note => `- ${note}`).join("\n")].filter(Boolean).join("\n\n"));
     }
     const lines = [`- ${t("求解状态")}${COLON}${(STATUS[solve.status] ?? solve.status)}`];
-    if (solve.objective != null) lines.push(`- ${t("目标值")}${COLON}${formatNumber(solve.objective)}`);
+    if (solve.objective != null) lines.push(`- ${t("目标值")}${COLON}${solve.objective}`);
     const nonzero = Object.entries(solve.variables).filter(([, value]) => value !== 0);
     let text = `## ${t("求解结果")}\n\n${lines.join("\n")}`;
     if (nonzero.length) {
       text += `\n\n${t("非零变量（{count} / {total}）", { count: nonzero.length, total: Object.keys(solve.variables).length })}${COLON}\n\n`
-        + `| ${t("变量")} | ${t("取值")} |\n|---|---:|\n` + nonzero.slice(0, 500).map(([name, value]) => `| \`${name}\` | ${formatNumber(value)} |`).join("\n");
+        + `| ${t("变量")} | ${t("取值")} |\n|---|---:|\n` + nonzero.slice(0, 500).map(([name, value]) => `| \`${name}\` | ${value} |`).join("\n");
       if (nonzero.length > 500) text += `\n\n${t("报告只列出前 500 个非零变量；完整结果可下载 CSV。")}`;
     }
     if (solve.diagnosis?.items.length) {

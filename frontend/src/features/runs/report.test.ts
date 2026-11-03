@@ -30,6 +30,21 @@ describe("run report", () => {
     expect(text).toContain("利润：12 元");
   });
 
+  it("preserves stored numeric precision in the explanation and solution", () => {
+    const text = report({ title: "精度核对", method: "direct", language: "pyomo", provider: null, model: "m1" }, {
+      explanation: { summary: "按实际结果导出。", objective_label: "成本", objective_unit: "元",
+        decisions: [{ variable: "quantity", label: "用量", unit: "吨" }], notes: [], total_variables: 3 },
+      solve: { status: "optimal", objective: 123456789.12345679,
+        variables: { quantity: 0.123456789123, residual: -1.23456789123e-12, total: 1234567 }, output: "", error: null },
+    }, options);
+    expect(text).toContain("成本：123456789.12345679 元");
+    expect(text).toContain("- 目标值：123456789.12345679");
+    expect(text).toContain("用量：0.123456789123 吨");
+    expect(text).toContain("| `quantity` | 0.123456789123 |");
+    expect(text).toContain("| `residual` | -1.23456789123e-12 |");
+    expect(text).toContain("| `total` | 1234567 |");
+  });
+
   it("holds the settings, problem, formulation, code and nonzero variables of a run", () => {
     const text = report({ title: "生产计划", method: "direct", language: "pyomo", provider: null, model: "m1", note: "核对过", tags: ["整数"] },
       { description: "最大化利润", data: { "a.csv": "x,1\n" }, formulation: "$$\\max 3x$$", code: "print('```')\n",
