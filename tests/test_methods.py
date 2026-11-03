@@ -13,6 +13,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 
 from llm4om.graph import run
 from llm4om.languages import LANGUAGES, CodeTarget
+from llm4om.llm import LLMSettings
 from llm4om.model_code import ModelCode
 from llm4om.runtime import Limits
 from tests.conftest import ACCEPT_REVIEW, FORMULATION, PRODUCTION_CODE, TWO_PART_REPLY, ScriptedChat, tool_call
@@ -605,6 +606,30 @@ def test_trival_uses_tools_even_when_a_model_advertises_native_json_schema(make_
     resources.model_factory = lambda settings, **kwargs: ScriptedChat(script=script, profile={"structured_output": True}, **kwargs)
     record = asyncio.run(run("Production planning", method="trival", resources=resources))
     assert_solved(record)
+
+
+@pytest.mark.parametrize("thinking", [True, False])
+def test_trival_preserves_the_model_preset_without_forcing_tool_choice(make_resources: Any, thinking: bool) -> None:
+    script = trival_script([{"code_validation_passed": True, "code_validation_feedback": "faithful"}], [PASS_FORMULATION])
+    settings = LLMSettings("deepseek", "deepseek-flash", api_key="test-key",
+                           extra_body={"thinking": {"type": "enabled" if thinking else "disabled"}})
+    seen = []
+
+    class UnforcedChat(ScriptedChat):
+        def bind_tools(self, tools: Any, **kwargs: Any) -> ScriptedChat:
+            assert kwargs.get("tool_choice") in (None, "auto")
+            return super().bind_tools(tools, **kwargs)
+
+    def factory(configured: LLMSettings, **kwargs: Any) -> ScriptedChat:
+        seen.append(configured)
+        return UnforcedChat(script=script, profile={"structured_output": True}, **kwargs)
+
+    resources = make_resources(script, llm=settings)
+    resources.model_factory = factory
+    record = asyncio.run(run("Production planning", method="trival", resources=resources))
+    assert_solved(record)
+    assert len(seen) >= 3
+    assert all(configured == settings for configured in seen)
 
 
 def test_trival_routes_formulation_defects_back(run_method: Any) -> None:

@@ -18,7 +18,7 @@ Python startup prints the listening address and workspace. Compose uses `LLM4OM_
 | 401 | Check key and provider |
 | 404 | Check endpoint, protocol and model ID |
 | Structured-output/tool-choice error | Inspect service tool support, method and advanced parameters |
-| DeepSeek with TriVAL | Set `{"thinking":{"type":"disabled"}}` in the run preset |
+| TriVAL model request fails | Check the preset endpoint, model ID and tool-calling support; TriVAL uses the preset's thinking settings |
 | Quota message | Check daily usage and select an available preset or continue next day |
 
 Failed saves retain entered values. Follow [preset configuration](../model-presets/), then confirm with a small example.

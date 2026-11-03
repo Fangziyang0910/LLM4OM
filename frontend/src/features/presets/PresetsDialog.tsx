@@ -166,9 +166,9 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
                   <Field label={t("最大输出 token")} htmlFor="max-tokens"><Input id="max-tokens" type="number" min="1" value={form.max_tokens} onChange={set("max_tokens")} placeholder={t("服务默认")} /></Field>
                 </div>
                 <Field label={t("额外请求参数（JSON）")} htmlFor="extra-body" error={extraError}
-                  help={t("填写所选服务商支持的请求参数。DeepSeek 运行 TriVAL 时需要关闭思考模式。")}>
+                  help={t("填写所选服务商支持的请求参数。所有建模方法沿用所选预设的模型和思考配置。")}>
                   <Input id="extra-body" value={form.extra_body} onChange={set("extra_body")} className="font-mono text-xs"
-                    placeholder={t("例如 {example}", { example: '{"thinking": {"type": "disabled"}}' })} aria-invalid={!!extraError} />
+                    placeholder={t("例如 {example}", { example: '{"thinking": {"type": "enabled"}}' })} aria-invalid={!!extraError} />
                 </Field>
               </CollapsibleContent>
             </Collapsible>

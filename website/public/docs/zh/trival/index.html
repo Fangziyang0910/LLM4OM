@@ -38,7 +38,7 @@ A, B ∈ 非负整数</code></pre></div><div class="step-panel" data-nodes="Code
 <p>最终结果同时保存求解数值和各阶段验证反馈。方法比较可以读取求解状态、未通过阶段、修订位置和实际调用用量。</p>
 <h2 id="section-5">使用条件与预算<a href="#section-5" class="heading-anchor" aria-label="使用条件与预算 — 章节链接">#</a></h2>
 <p>在运行设置选择 TriVAL，并选择支持目标数学类型的库和后端。每阶段最多五次验证，代码执行最多二十次；节点数和返回路径使总调用数随问题变化。</p>
-<p>DeepSeek 的强制工具选择与思考模式存在兼容要求。使用该服务时，预设额外参数应包含 <code>{&quot;thinking&quot;:{&quot;type&quot;:&quot;disabled&quot;}}</code>，详见<a href="../model-presets/">大模型预设</a>。</p>
+<p>模型需要支持工具调用。TriVAL 沿用运行预设的模型和思考参数，不单独关闭思考，详见<a href="../model-presets/">大模型预设</a>。</p>
 <h2 id="section-6">与其他方法及原始实现的关系<a href="#section-6" class="heading-anchor" aria-label="与其他方法及原始实现的关系 — 章节链接">#</a></h2>
 <p><a href="../feedback-repair/">Feedback Repair</a> 在求解后整体复核；TriVAL 把检查前移并分层。<a href="../sac-opt/">SAC-Opt</a> 聚焦约束代码的回译一致性，检查粒度不同。</p>
 <p>平台移植 <a href="https://github.com/SCUT-EIPI/TriVAL/tree/380a529">SCUT-EIPI/TriVAL 的固定实现</a>，保留图、节点、提示和循环，接入平台 LLM 与沙箱，并增加输入映射和未解决验证的退出报告。</p>

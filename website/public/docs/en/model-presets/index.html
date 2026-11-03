@@ -19,8 +19,8 @@ LLM4OM_LLM_NAME=Team model
 </code></pre>
 <p>Replace placeholders and recreate the service. UI-added presets use the workspace&#x27;s private configuration; the default is managed through server environment variables.</p>
 <h2 id="section-3">DeepSeek and structured calls<a href="#section-3" class="heading-anchor" aria-label="DeepSeek and structured calls — link to section">#</a></h2>
-<p>DeepSeek uses a dedicated client. TriVAL uses forced tool selection; configure the run preset as:</p>
-<pre><code class="language-json"><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;thinking&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;disabled&quot;</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">}</span>
+<p>DeepSeek uses a dedicated client. TriVAL follows the run preset&#x27;s model and thinking settings, like other modeling methods. It does not disable thinking separately. To enable DeepSeek thinking, set the extra request parameters to:</p>
+<pre><code class="language-json"><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;thinking&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;enabled&quot;</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">}</span>
 </code></pre>
 <p>The conversation thinking toggle controls that conversation&#x27;s replies and is retained there. Modeling tools read run presets. Other providers use fields supported by their client integrations.</p>
 <h2 id="section-4">OpenRouter and advanced parameters<a href="#section-4" class="heading-anchor" aria-label="OpenRouter and advanced parameters — link to section">#</a></h2>

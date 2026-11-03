@@ -38,7 +38,7 @@ Stage feedback records the final validation decision.</code></pre></div></div><p
 <p>The run retains solver values and stage validation feedback. Comparisons can inspect status, failed stages, revisions and actual call usage.</p>
 <h2 id="section-5">Requirements and budget<a href="#section-5" class="heading-anchor" aria-label="Requirements and budget — link to section">#</a></h2>
 <p>Select TriVAL and a library/backend supporting the intended mathematics. Each stage allows at most five validations; code execution allows twenty attempts. Total LLM use depends on nodes and return paths.</p>
-<p>For DeepSeek, forced tool choice requires thinking mode to be disabled in the preset: <code>{&quot;thinking&quot;:{&quot;type&quot;:&quot;disabled&quot;}}</code>. See <a href="../model-presets/">LLM presets</a>.</p>
+<p>The model must support tool calling. TriVAL uses the run preset&#x27;s model and thinking settings without disabling thinking separately. See <a href="../model-presets/">LLM presets</a>.</p>
 <h2 id="section-6">Related methods and implementation<a href="#section-6" class="heading-anchor" aria-label="Related methods and implementation — link to section">#</a></h2>
 <p><a href="../feedback-repair/">Feedback Repair</a> reviews the model after solving; TriVAL moves checks into separate levels. <a href="../sac-opt/">SAC-Opt</a> focuses on the consistency of backtranslated constraint code.</p>
 <p>The platform ports the <a href="https://github.com/SCUT-EIPI/TriVAL/tree/380a529">pinned SCUT-EIPI/TriVAL implementation</a>, retaining its graph, nodes, prompts and loops. It supplies the LLM and sandbox, maps input and reports unresolved validation at exit.</p>

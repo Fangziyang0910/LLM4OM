@@ -30,10 +30,10 @@ Replace placeholders and recreate the service. UI-added presets use the workspac
 
 ## DeepSeek and structured calls
 
-DeepSeek uses a dedicated client. TriVAL uses forced tool selection; configure the run preset as:
+DeepSeek uses a dedicated client. TriVAL follows the run preset's model and thinking settings, like other modeling methods. It does not disable thinking separately. To enable DeepSeek thinking, set the extra request parameters to:
 
 ```json
-{"thinking": {"type": "disabled"}}
+{"thinking": {"type": "enabled"}}
 ```
 
 The conversation thinking toggle controls that conversation's replies and is retained there. Modeling tools read run presets. Other providers use fields supported by their client integrations.

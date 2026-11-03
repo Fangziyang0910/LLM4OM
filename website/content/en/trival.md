@@ -50,7 +50,7 @@ The run retains solver values and stage validation feedback. Comparisons can ins
 
 Select TriVAL and a library/backend supporting the intended mathematics. Each stage allows at most five validations; code execution allows twenty attempts. Total LLM use depends on nodes and return paths.
 
-For DeepSeek, forced tool choice requires thinking mode to be disabled in the preset: `{"thinking":{"type":"disabled"}}`. See [LLM presets](../model-presets/).
+The model must support tool calling. TriVAL uses the run preset's model and thinking settings without disabling thinking separately. See [LLM presets](../model-presets/).
 
 ## Related methods and implementation
 

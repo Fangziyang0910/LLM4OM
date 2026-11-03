@@ -30,10 +30,10 @@ LLM4OM_LLM_NAME=Team model
 
 ## DeepSeek 与结构化调用
 
-DeepSeek 使用专用客户端。TriVAL 的结构化输出使用强制工具选择，运行预设配置：
+DeepSeek 使用专用客户端。TriVAL 与其他建模方法一样沿用运行预设的模型和思考参数，不单独关闭思考。启用 DeepSeek 思考模式时，在额外请求参数中填写：
 
 ```json
-{"thinking": {"type": "disabled"}}
+{"thinking": {"type": "enabled"}}
 ```
 
 对话输入区的“深度思考”开关按轮控制回复，保存于当前对话。建模工具继续读取运行预设。其他服务商参数按其客户端支持的字段填写。

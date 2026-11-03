@@ -341,7 +341,7 @@ export const en: Record<string, string> = {
   "服务没有返回模型列表，请直接填写。": "The service returned no model list; type the model ID.",
   "高级参数": "Advanced",
   "额外请求参数（JSON）": "Extra request body (JSON)",
-  "填写所选服务商支持的请求参数。DeepSeek 运行 TriVAL 时需要关闭思考模式。": "Request parameters the provider supports. DeepSeek needs thinking turned off for TriVAL.",
+  "填写所选服务商支持的请求参数。所有建模方法沿用所选预设的模型和思考配置。": "Request parameters the provider supports. All modeling methods use the selected preset's model and thinking settings.",
   "例如 {example}": "e.g. {example}",
   "确认删除？": "Delete for sure?",
   "删除这个预设": "Delete this preset",

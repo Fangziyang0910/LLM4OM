@@ -1,6 +1,10 @@
 import logging
-from typing import Literal
+from typing import Any, Literal
 
+from langchain.tools import ToolRuntime
+from langchain_core.messages import ToolMessage
+from langchain_core.tools import StructuredTool
+from langgraph.types import Command
 from pydantic import BaseModel, Field
 
 from llm4om.runtime import Context
@@ -10,6 +14,19 @@ logger = logging.getLogger("llm4om.trival")
 
 # The platform's runtime context is the context of every TriVAL graph and agent.
 ContextSchema = Context
+
+
+def validation_tool(schema: type[BaseModel]) -> StructuredTool:
+    def submit_validation(runtime: ToolRuntime[ContextSchema], **values: Any) -> Command:
+        return Command(update={
+            "structured_response": schema.model_validate(values),
+            "messages": [ToolMessage("Validation recorded.", tool_call_id=runtime.tool_call_id, name=schema.__name__)],
+        })
+
+    return StructuredTool.from_function(
+        submit_validation, name=schema.__name__, args_schema=schema,
+        description="Submit the complete validation decision and feedback.", return_direct=True,
+    )
 
 
 class FormulationValidationOutput(BaseModel):

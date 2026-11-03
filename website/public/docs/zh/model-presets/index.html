@@ -19,8 +19,8 @@ LLM4OM_LLM_NAME=Team model
 </code></pre>
 <p>替换为实际服务信息后重新创建服务。页面添加的预设保存在工作区私有配置，默认预设通过服务器环境管理。</p>
 <h2 id="section-3">DeepSeek 与结构化调用<a href="#section-3" class="heading-anchor" aria-label="DeepSeek 与结构化调用 — 章节链接">#</a></h2>
-<p>DeepSeek 使用专用客户端。TriVAL 的结构化输出使用强制工具选择，运行预设配置：</p>
-<pre><code class="language-json"><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;thinking&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;disabled&quot;</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">}</span>
+<p>DeepSeek 使用专用客户端。TriVAL 与其他建模方法一样沿用运行预设的模型和思考参数，不单独关闭思考。启用 DeepSeek 思考模式时，在额外请求参数中填写：</p>
+<pre><code class="language-json"><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;thinking&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;enabled&quot;</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">}</span>
 </code></pre>
 <p>对话输入区的“深度思考”开关按轮控制回复，保存于当前对话。建模工具继续读取运行预设。其他服务商参数按其客户端支持的字段填写。</p>
 <h2 id="section-4">OpenRouter 与其他高级参数<a href="#section-4" class="heading-anchor" aria-label="OpenRouter 与其他高级参数 — 章节链接">#</a></h2>

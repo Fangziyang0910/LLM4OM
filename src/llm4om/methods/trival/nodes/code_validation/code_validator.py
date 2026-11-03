@@ -1,10 +1,9 @@
 from langchain.agents import create_agent
-from langchain.agents.structured_output import ToolStrategy
 from langchain.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
-from llm4om.methods.trival.schema import CodeValidationOutput, ContextSchema, logger
+from llm4om.methods.trival.schema import CodeValidationOutput, ContextSchema, logger, validation_tool
 from llm4om.methods.trival.state import State
 
 CODE_VALIDATOR_SYSTEM_PROMPT = """
@@ -79,11 +78,10 @@ Please complete the validation based on the content above."""
 
     agent = create_agent(
         model=runtime.context.llm("trival.code_validator"),
-        tools=[],
+        tools=[validation_tool(CodeValidationOutput)],
         state_schema=State,
         context_schema=ContextSchema,
-        system_prompt=CODE_VALIDATOR_SYSTEM_PROMPT,
-        response_format=ToolStrategy(CodeValidationOutput),
+        system_prompt=CODE_VALIDATOR_SYSTEM_PROMPT + "\nSubmit your decision using CodeValidationOutput.",
         name="code_validator",
     )
 
