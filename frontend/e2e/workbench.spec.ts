@@ -125,6 +125,25 @@ test("a closed progress stream offers reconnect without creating another run", a
   expect((await (await page.request.get(`/threads/${threadId}`)).json()).values.solve.objective).toBe(13);
 });
 
+test("stopping after a lost progress stream shows the stopped run without a manual reload", async ({ page }) => {
+  await open(page);
+  await page.route(/\/runs\/[^/]+\/stream/, route => route.fulfill({
+    status: 200, contentType: "text/event-stream", body: "",
+  }));
+  await page.getByRole("textbox", { name: "问题描述" }).fill("E2E_AGENT_PAUSE 工厂生产计划");
+  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.waitForURL(/\/run\//);
+  const originalUrl = page.url();
+  const threadId = originalUrl.split("/").at(-1)!;
+  await expect(page.getByText("实时连接已断开，服务器仍在运行。", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "停止", exact: true }).click();
+  await expect(page.getByText("运行已停止", { exact: true })).toBeVisible();
+  expect(page.url()).toBe(originalUrl);
+  const runs = await (await page.request.get(`/threads/${threadId}/runs`)).json();
+  expect(runs).toHaveLength(1);
+  expect(runs[0].status).toBe("interrupted");
+});
+
 test("a named DeepSeek preset keeps its native provider, custom endpoint and actual model ID", async ({ page }) => {
   const errors = await open(page);
   await page.getByRole('button', { name: /预设模型/ }).click();

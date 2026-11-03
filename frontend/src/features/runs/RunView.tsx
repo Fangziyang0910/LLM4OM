@@ -53,7 +53,8 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   onCompare: (group: string) => void; onMetaChange: () => void;
 }) {
   const threadId = source?.thread_id ?? requested;
-  const { meta: loaded, values, steps, live, run, streaming, error } = useRun(source ?? threadId, onFinished);
+  const [refresh, setRefresh] = useState(0);
+  const { meta: loaded, values, steps, live, run, streaming, error } = useRun(source ?? threadId, onFinished, refresh);
   const [changed, setChanged] = useState<Partial<RunMeta>>({});  // note and tags saved since the run was read
   const [noting, setNoting] = useState(false);
   const [revision, setRevision] = useState<string | null>(null);
@@ -101,7 +102,12 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const stop = async () => {
     if (!run) return;
     setStopping(true);
-    await client.runs.cancel(threadId, run.run_id).catch(reason => { toast.error(errorText(reason)); setStopping(false); });
+    try {
+      await client.runs.cancel(threadId, run.run_id, true);
+      setRefresh(current => current + 1);
+      onFinished();
+    } catch (reason) { toast.error(errorText(reason)); }
+    finally { setStopping(false); }
   };
   const rerun = async () => {
     setBusy(true);

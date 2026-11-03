@@ -17,7 +17,7 @@ const EMPTY: RunData = { meta: null, values: {}, steps: [], live: {}, run: null,
 type Event = { step?: Step; delta?: { id: string; text: string; reasoning: string } };
 
 /** One run: a thread's latest run, or a saved plan at its fixed checkpoint. */
-export function useRun(run: string | SourceRun, onFinished: () => void): RunData {
+export function useRun(run: string | SourceRun, onFinished: () => void, refresh = 0): RunData {
   const threadId = typeof run === "string" ? run : run.thread_id;
   const checkpointId = typeof run === "string" ? undefined : run.checkpoint_id;
   const [data, setData] = useState<RunData>(EMPTY);
@@ -118,7 +118,7 @@ export function useRun(run: string | SourceRun, onFinished: () => void): RunData
       }
     })();
     return () => controller.abort();
-  }, [threadId, checkpointId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [threadId, checkpointId, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return data;
 }
