@@ -377,6 +377,7 @@ export const en: Record<string, string> = {
   "保存": "Save",
   "无法读取运行": "Cannot read the run",
   "重新连接": "Reconnect",
+  "实时连接已断开，服务器仍在运行。": "The live connection was lost. The server is still running.",
   "LLM 正在处理：{calls}": "LLM working: {calls}",
   "正在沙箱中求解代码": "Solving the code in the sandbox",
   "刚完成：{title}": "Just finished: {title}",

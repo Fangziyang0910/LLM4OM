@@ -59,6 +59,22 @@ test("a broken stream reports an active run as disconnected", async () => {
   expect(threads.get).toHaveBeenCalledTimes(2);
 });
 
+test("a stream ending normally while the run is active reports disconnection instead of completion", async () => {
+  threads.get.mockResolvedValue({ metadata: {}, values: { description: "problem" } } as never);
+  runs.list.mockResolvedValue([{ run_id: "run", status: "running" }] as never);
+  runs.joinStream.mockImplementation(() => ({
+    [Symbol.asyncIterator]: async function* () { yield* []; },
+  }) as never);
+  const onFinished = vi.fn();
+  const { result, unmount } = renderHook(() => useRun("thread", onFinished));
+  await waitFor(() => expect(threads.get).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(result.current.error).toBeTruthy());
+  expect(result.current.run?.status).toBe("running");
+  expect(result.current.streaming).toBe(false);
+  expect(onFinished).not.toHaveBeenCalled();
+  unmount();
+});
+
 test("leaving a run ignores its late state response", async () => {
   let resolve!: (value: unknown) => void;
   threads.get.mockReturnValue(new Promise(done => { resolve = done }) as never);

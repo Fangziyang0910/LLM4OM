@@ -100,7 +100,9 @@ export function useRun(run: string | SourceRun, onFinished: () => void): RunData
           try { await replay(latest); } catch (error) { streamError = error; }
           if (controller.signal.aborted) return;
           const current = (await load()).run;
-          if (streamError && (current?.status === "pending" || current?.status === "running")) throw streamError;
+          if (current?.status === "pending" || current?.status === "running") {
+            throw streamError ?? new Error(t("实时连接已断开，服务器仍在运行。"));
+          }
           onFinished();
         } else if (latest.status !== "success" && !values.steps?.length) {
           inputRead = true;
