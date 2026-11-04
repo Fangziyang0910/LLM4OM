@@ -121,7 +121,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
   const attach = async (list: FileList | null) => {
     setReading(true);
     try {
-      const data = await readDataFiles(list);
+      const data = await readDataFiles(list, draft.data);
       setDraft(current => ({ ...current, data: { ...current.data, ...data } }));
     } finally { setReading(false); }
   };

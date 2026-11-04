@@ -188,7 +188,7 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
         if (!field.files?.length || busy || dataPending) return;
         setReading(true);
         try {
-          const added = await readDataFiles(field.files);
+          const added = await readDataFiles(field.files, data);
           await saveData({ ...data, ...added });
         } catch (error) { toast.error(errorText(error)); }
         finally { field.value = ""; setReading(false); }

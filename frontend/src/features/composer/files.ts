@@ -6,8 +6,15 @@ import { excelToCsv } from "./spreadsheet";
 export const DATA_FILE_ACCEPT = ".csv,.json,.txt,.tsv,.xlsx";
 
 /** Problem and conversation entries attach the same text files; Excel sheets become CSV. */
-export async function readDataFiles(list: FileList | null): Promise<Record<string, string>> {
+export async function readDataFiles(list: FileList | null, existing: Record<string, string> = {}): Promise<Record<string, string>> {
   const data: Record<string, string> = {};
+  const add = (files: Record<string, string>) => {
+    for (const [name, content] of Object.entries(files)) {
+      if (Object.hasOwn(existing, name) || Object.hasOwn(data, name))
+        toast.success(t("已替换同名数据文件：{name}", { name }));
+      data[name] = content;
+    }
+  };
   for (const file of Array.from(list ?? [])) {
     if (!DATA_FILE_ACCEPT.split(",").some(extension => file.name.toLowerCase().endsWith(extension))) {
       toast.error(t("不支持 {name}，请添加 CSV、TSV、JSON、TXT 或 XLSX 文件。", { name: file.name })); continue;
@@ -18,9 +25,9 @@ export async function readDataFiles(list: FileList | null): Promise<Record<strin
         const sheets = await excelToCsv(file);
         const count = Object.keys(sheets).length;
         if (!count) { toast.error(t("{name} 没有可导入的数据，请先在工作表中填写数据。", { name: file.name })); continue; }
-        Object.assign(data, sheets);
+        add(sheets);
         toast.success(t("{name} 已转换为 {count} 个 CSV 文件。", { name: file.name, count }));
-      } else data[file.name] = await file.text();
+      } else add({ [file.name]: await file.text() });
     } catch (error) { toast.error(t("无法读取 {name}：{error}", { name: file.name, error: errorText(error) })); }
   }
   return data;

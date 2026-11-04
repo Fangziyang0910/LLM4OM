@@ -94,7 +94,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const attach = async (files: FileList | null) => {
     setReading(true);
     try {
-      const data = await readDataFiles(files);
+      const data = await readDataFiles(files, draft.data);
       const next = { ...draft, data: { ...draft.data, ...data } };
       setEdited(next);
       await save(next);
