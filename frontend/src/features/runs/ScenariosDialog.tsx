@@ -39,7 +39,12 @@ export function ScenariosDialog({ onClose, onStart }: {
               placeholder={t("例如：把切割资源容量改为 10 单位，其他条件保持不变。")}/>
           </fieldset>)}
           <Button type="button" variant="outline" className="self-start" disabled={busy || scenarios.length >= 6}
-            onClick={() => setScenarios(items => [...items, { name: t("场景 {number}", { number: items.length + 1 }), instruction: "" }])}><Plus />{t("添加场景")}</Button>
+            onClick={() => setScenarios(items => {
+              const names = new Set(items.map(item => item.name.trim()));
+              let number = 1;
+              while (names.has(t("场景 {number}", { number }))) number++;
+              return [...items, { name: t("场景 {number}", { number }), instruction: "" }];
+            })}><Plus />{t("添加场景")}</Button>
         </div>
         <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={onClose}>{t("取消")}</Button>
           <Button type="submit" disabled={busy || scenarios.some(item => !item.name.trim() || !item.instruction.trim())}>{busy ? <Spinner /> : <Columns3 />}{t("计算并对比")}</Button></DialogFooter>
