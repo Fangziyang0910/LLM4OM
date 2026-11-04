@@ -30,3 +30,24 @@ test("quoted customer names remain intact in matrix labels and CSV exports", () 
   expect(csv).toContain(`"x['North, East',Monday]",3`);
   expect(csv).toContain(`"x[West,Monday]",0`);
 });
+
+test("search finds zero values in grouped and list views and restores the zero filter when cleared", () => {
+  render(<Solution solve={{ status: "optimal", objective: 12,
+    variables: { production_A: 4, production_B: 0, "shipment[West]": 0 }, output: "", error: null }} />);
+  expect(screen.queryByTitle("production_B")).toBeNull();
+  fireEvent.change(screen.getByLabelText("筛选变量"), { target: { value: "production_B" } });
+  expect(screen.getByTitle("production_B").parentElement?.textContent).toContain("0");
+  expect(screen.queryByText("全部取值为 0。")).toBeNull();
+  fireEvent.change(screen.getByLabelText("筛选变量"), { target: { value: "shipment" } });
+  expect(screen.getByTitle("shipment[West]").parentElement?.textContent).toContain("0");
+  fireEvent.click(screen.getByLabelText("全部列表"));
+  expect(screen.getByRole("cell", { name: "shipment[West]" })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("筛选变量"), { target: { value: "" } });
+  expect(screen.queryByRole("cell", { name: "shipment[West]" })).toBeNull();
+  expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("false");
+  fireEvent.click(screen.getByRole("switch"));
+  fireEvent.change(screen.getByLabelText("筛选变量"), { target: { value: "West" } });
+  fireEvent.change(screen.getByLabelText("筛选变量"), { target: { value: "" } });
+  expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("true");
+  expect(screen.getByRole("cell", { name: "shipment[West]" })).toBeTruthy();
+});

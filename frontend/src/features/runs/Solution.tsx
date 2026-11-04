@@ -28,7 +28,7 @@ export function Solution({ solve }: { solve: Solve }) {
   const groups = useMemo(() => groupVariables(solve.variables), [solve.variables]);
   const query = filter.trim().toLowerCase();
   const matches = (name: string) => !query || name.toLowerCase().includes(query);
-  const shown = entries.filter(([name, number]) => (zeros || number !== 0) && matches(name));
+  const shown = entries.filter(([name, number]) => (zeros || query || number !== 0) && matches(name));
   const shownGroups = groups.map(group => matches(group.base) ? group : {
     ...group, variables: group.variables.filter(variable => matches(variable.name)),
   }).filter(group => group.variables.length);
@@ -52,7 +52,7 @@ export function Solution({ solve }: { solve: Solve }) {
           <ToggleGroupItem value="grouped" aria-label={t("按变量分组")}><Grid3x3 />{t("分组")}</ToggleGroupItem>
           <ToggleGroupItem value="list" aria-label={t("全部列表")}><List />{t("列表")}</ToggleGroupItem>
         </ToggleGroup>
-        {layout === "list" ? <Label className="ml-1 gap-2 text-xs font-normal text-muted-foreground">
+        {query ? <span className="text-xs text-muted-foreground">{t("搜索结果包含零值变量。")}</span> : layout === "list" ? <Label className="ml-1 gap-2 text-xs font-normal text-muted-foreground">
           <Switch size="sm" checked={zeros} onCheckedChange={setZeros} />{t("含取值为 0 的变量")}</Label> : null}
         <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" aria-label={t("下载变量取值 CSV")}
           onClick={() => download("solution.csv", toCsv([["variable", "value"], ...entries]))}>
@@ -60,7 +60,7 @@ export function Solution({ solve }: { solve: Solve }) {
       </div>
 
       {layout === "grouped" ? <div className="flex flex-col gap-3">
-        {shownGroups.slice(0, limit).map(group => <Group key={group.base} group={group} />)}
+        {shownGroups.slice(0, limit).map(group => <Group key={group.base} group={group} includeZeros={!!query} />)}
         {shownGroups.length > limit ? <Button variant="link" size="sm" onClick={() => setLimit(limit + 200)}>
           {t("再显示 {count} 个（共 {total} 个）", { count: Math.min(200, shownGroups.length - limit), total: shownGroups.length })}</Button> : null}
         {!shownGroups.length ? <p className="py-6 text-center text-sm text-muted-foreground">{t("没有匹配的变量。")}</p> : null}
@@ -105,12 +105,12 @@ function Conflict({ diagnosis }: { diagnosis: Diagnosis }) {
 }
 
 /** One base name: a matrix for two indices, otherwise index → value rows. */
-function Group({ group }: { group: VariableGroup }) {
+function Group({ group, includeZeros }: { group: VariableGroup; includeZeros: boolean }) {
   const [limit, setLimit] = useState(200);
   const matrix = asMatrix(group);
   const nonzero = group.variables.filter(variable => variable.value !== 0).length;
   const shape = matrix ? `${matrix.rows.length} × ${matrix.columns.length}` : group.dims ? t("{count} 个下标", { count: group.dims }) : t("标量");
-  const rows = group.variables.filter(variable => variable.value !== 0);
+  const rows = group.variables.filter(variable => includeZeros || variable.value !== 0);
   return <div className="overflow-hidden rounded-lg border">
     <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-xs">
       <span className="font-mono font-semibold">{group.base || t("标量变量")}</span>

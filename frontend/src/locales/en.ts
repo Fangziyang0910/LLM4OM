@@ -422,6 +422,7 @@ export const en: Record<string, string> = {
   "全部列表": "Full list",
   "列表": "List",
   "含取值为 0 的变量": "Include zero values",
+  "搜索结果包含零值变量。": "Search results include zero values.",
   "下载变量取值 CSV": "Download variable values as CSV",
   "没有匹配的变量。": "No matching variable.",
   "变量": "Variable",
