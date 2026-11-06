@@ -2,6 +2,31 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import writeExcelFile from "write-excel-file/node";
 
+test("data rows can be added, saved and cancelled without editing CSV syntax", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({ name: "demand.csv", mimeType: "text/csv", buffer: Buffer.from("客户,需求量\n门店A,003\n") });
+  await page.getByRole("button", { name: "编辑 demand.csv", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "添加数据行", exact: true }).click();
+  await dialog.getByLabel("第 2 行，第 1 列", { exact: true }).fill("门店B");
+  await dialog.getByLabel("第 2 行，第 2 列", { exact: true }).fill("004");
+  await dialog.getByRole("button", { name: "保存数据", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  await page.getByRole("button", { name: "编辑 demand.csv", exact: true }).click();
+  await expect(dialog.getByLabel("第 1 行，第 2 列", { exact: true })).toHaveValue("003");
+  await expect(dialog.getByLabel("第 2 行，第 2 列", { exact: true })).toHaveValue("004");
+  await dialog.getByRole("button", { name: "添加数据行", exact: true }).click();
+  await dialog.getByLabel("第 3 行，第 1 列", { exact: true }).fill("不保存的门店");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(dialog.getByRole("button", { name: "保存数据", exact: true })).toBeInViewport();
+  await dialog.getByRole("button", { name: "取消", exact: true }).click();
+  await page.getByRole("button", { name: "编辑 demand.csv", exact: true }).click();
+  await expect(dialog.getByLabel("第 3 行，第 1 列", { exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("llm4om-draft")!).data["demand.csv"]))
+    .toBe("客户,需求量\n门店A,003\n门店B,004\n");
+});
+
 for (const language of ["zh", "en"]) {
   test(`invalid imports explain rejected files and keep valid data (${language})`, async ({ page }) => {
     await page.addInitScript(language => localStorage.setItem("llm4om-locale", language), language);

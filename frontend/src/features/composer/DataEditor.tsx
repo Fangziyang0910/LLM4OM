@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Save } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -67,7 +67,11 @@ export function DataEditor({ name, content, onSave, onClose }: {
                   </TableRow>;
                 })}
               </TableBody></Table>
-            <div className="mt-2 flex shrink-0 items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => {
+                setText(toCsv([...rows, Array<string>(columns).fill("")], delimiter));
+                setPage(Math.floor((rows.length - 1) / PAGE));
+              }}><Plus />{t("添加数据行")}</Button>
               <span>{t("{count} 行数据 · 第 {page}/{pages} 页", { count: rows.length - 1, page: current + 1, pages })}</span>
               <div className="flex gap-1"><Button variant="ghost" size="icon-sm" aria-label={t("上一页")} disabled={!current} onClick={() => setPage(current - 1)}><ChevronLeft /></Button>
                 <Button variant="ghost" size="icon-sm" aria-label={t("下一页")} disabled={current === pages - 1} onClick={() => setPage(current + 1)}><ChevronRight /></Button></div>

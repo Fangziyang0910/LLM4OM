@@ -613,6 +613,7 @@ export const en: Record<string, string> = {
   "{count} 行数据 · 第 {page}/{pages} 页": "{count} data rows · Page {page}/{pages}",
   "数据文件原文": "Data file text",
   "文件超过 2 MB，请缩减数据。": "The file exceeds 2 MB. Reduce the data size.",
+  "添加数据行": "Add data row",
   "已替换同名数据文件：{name}": "Replaced the existing data file: {name}",
   "保存数据": "Save data",
   "编辑 {name}": "Edit {name}",
