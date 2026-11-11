@@ -34,8 +34,17 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
 
   return <Card className={cn("relative h-[min(44dvh,24rem)] min-h-64 min-w-0 flex-none gap-0 overflow-hidden py-0 lg:h-auto lg:min-h-0 lg:flex-1",
     dragging && "border-primary ring-2 ring-primary/20")}
-    onDragOver={event => { event.preventDefault(); if (!locked) setDragging(true); }} onDragLeave={() => setDragging(false)}
-    onDrop={event => { event.preventDefault(); setDragging(false); if (!locked) onFiles(event.dataTransfer.files); }}>
+    onDragOver={event => {
+      if (!event.dataTransfer.types?.includes("Files") && !event.dataTransfer.files?.length) return;
+      event.preventDefault(); if (!locked) setDragging(true);
+    }} onDragLeave={event => {
+      if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDragging(false);
+    }}
+    onDrop={event => {
+      setDragging(false);
+      if (!event.dataTransfer.types?.includes("Files") && !event.dataTransfer.files?.length) return;
+      event.preventDefault(); if (!locked) onFiles(event.dataTransfer.files);
+    }}>
     <Tabs value={mode} onValueChange={setMode} className="min-h-0 flex-1 gap-0">
       <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
         <Label htmlFor="problem-description" className="min-w-0 text-sm font-semibold">{label}</Label>
