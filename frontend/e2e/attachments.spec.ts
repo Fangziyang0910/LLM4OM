@@ -27,6 +27,37 @@ test("data rows can be added, saved and cancelled without editing CSV syntax", a
     .toBe("客户,需求量\n门店A,003\n门店B,004\n");
 });
 
+test("dragging text into the problem preserves native insertion and file imports", async ({ page }) => {
+  await page.goto("/");
+  const input = page.getByRole("textbox", { name: "问题描述", exact: true });
+  await input.fill("");
+  await input.evaluate(node => {
+    const source = document.createElement("p");
+    source.id = "text-drag-source";
+    source.textContent = "每位客户最多分配 3 辆车。";
+    source.draggable = true;
+    source.addEventListener("dragstart", event => event.dataTransfer!.setData("text/plain", source.textContent!));
+    node.before(source);
+  });
+  await page.locator("#text-drag-source").dragTo(input, { targetPosition: { x: 30, y: 30 } });
+  await expect(input).toHaveValue("每位客户最多分配 3 辆车。");
+  await expect(page.getByText("松开以添加数据文件", { exact: true })).toHaveCount(0);
+  const dropped = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["name,price\nA,003\n"], "prices.csv", { type: "text/csv" }));
+    return transfer;
+  });
+  await input.dispatchEvent("dragover", { dataTransfer: dropped });
+  await expect(page.getByText("松开以添加数据文件", { exact: true })).toBeVisible();
+  await input.dispatchEvent("drop", { dataTransfer: dropped });
+  await dropped.dispose();
+  await expect(page.getByRole("button", { name: "编辑 prices.csv", exact: true })).toBeVisible();
+  await expect(input).toHaveValue("每位客户最多分配 3 辆车。");
+  await page.reload();
+  await expect(input).toHaveValue("每位客户最多分配 3 辆车。");
+  await expect(page.getByRole("button", { name: "编辑 prices.csv", exact: true })).toBeVisible();
+});
+
 for (const language of ["zh", "en"]) {
   test(`invalid imports explain rejected files and keep valid data (${language})`, async ({ page }) => {
     await page.addInitScript(language => localStorage.setItem("llm4om-locale", language), language);
