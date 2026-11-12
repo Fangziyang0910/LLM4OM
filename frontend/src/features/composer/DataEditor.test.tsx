@@ -36,6 +36,34 @@ test("cancel does not save edited data and a failed save keeps the editor open",
   expect(save.mock.calls[0][0]).toBe("name\tprice\nA\t004\n");
 });
 
+test("adding a row opens its page and preserves earlier CSV values", async () => {
+  const rows = [["name", "value"], ...Array.from({ length: 50 }, (_, index) => [index === 0 ? "001" : `item ${index}`, 'two\n"lines"'])];
+  const save = vi.fn();
+  render(<DataEditor name="data.csv" content={toCsv(rows)} onSave={save} onClose={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "添加数据行" }));
+  expect(screen.getByText("51 行数据 · 第 2/2 页")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("第 51 行，第 1 列"), { target: { value: "门店B" } });
+  fireEvent.change(screen.getByLabelText("第 51 行，第 2 列"), { target: { value: "004" } });
+  fireEvent.click(screen.getByRole("button", { name: "上一页" }));
+  expect((screen.getByLabelText("第 1 行，第 1 列") as HTMLTextAreaElement).value).toBe("001");
+  fireEvent.click(screen.getByRole("button", { name: "保存数据" }));
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  expect(parseCsv(save.mock.calls[0][0])).toEqual([...rows, ["门店B", "004"]]);
+});
+
+test("a header-only TSV accepts multiple added rows and cancel keeps the original attachment", () => {
+  const save = vi.fn(), close = vi.fn();
+  render(<DataEditor name="data.tsv" content={"客户\t需求量\n"} onSave={save} onClose={close} />);
+  fireEvent.click(screen.getByRole("button", { name: "添加数据行" }));
+  fireEvent.change(screen.getByLabelText("第 1 行，第 1 列"), { target: { value: "门店A" } });
+  fireEvent.click(screen.getByRole("button", { name: "添加数据行" }));
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "原文" }), { button: 0, ctrlKey: false });
+  expect((screen.getByLabelText("数据文件原文") as HTMLTextAreaElement).value).toBe("客户\t需求量\n门店A\t\n\t\n");
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(save).not.toHaveBeenCalled();
+  expect(close).toHaveBeenCalledOnce();
+});
+
 test("raw editing can repair malformed CSV without silently discarding it", async () => {
   const save = vi.fn();
   render(<DataEditor name="broken.csv" content={'name,price\nA,"broken'} onSave={save} onClose={vi.fn()} />);

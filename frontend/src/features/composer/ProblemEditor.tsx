@@ -9,8 +9,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
+import { parseCsv } from "@/lib/csv";
 import { DATA_FILE_ACCEPT } from "./files";
 import { DataEditor } from "./DataEditor";
+
+function dataRowCount(name: string, content: string): number {
+  if (/\.(csv|tsv)$/i.test(name)) {
+    try { return parseCsv(content, /\.tsv$/i.test(name) ? "\t" : ",").length; }
+    catch { /* Keep the attachment usable while it is being repaired. */ }
+  }
+  return content.split("\n").filter(Boolean).length;
+}
 
 /** Editing and preview share the original text; rendering never changes the submitted problem. */
 export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, onRemove, onClear, onExamples, disabled = false, reading = false,
@@ -34,8 +43,17 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
 
   return <Card className={cn("relative h-[min(44dvh,24rem)] min-h-64 min-w-0 flex-none gap-0 overflow-hidden py-0 lg:h-auto lg:min-h-0 lg:flex-1",
     dragging && "border-primary ring-2 ring-primary/20")}
-    onDragOver={event => { event.preventDefault(); if (!locked) setDragging(true); }} onDragLeave={() => setDragging(false)}
-    onDrop={event => { event.preventDefault(); setDragging(false); if (!locked) onFiles(event.dataTransfer.files); }}>
+    onDragOver={event => {
+      if (!event.dataTransfer.types?.includes("Files") && !event.dataTransfer.files?.length) return;
+      event.preventDefault(); if (!locked) setDragging(true);
+    }} onDragLeave={event => {
+      if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDragging(false);
+    }}
+    onDrop={event => {
+      setDragging(false);
+      if (!event.dataTransfer.types?.includes("Files") && !event.dataTransfer.files?.length) return;
+      event.preventDefault(); if (!locked) onFiles(event.dataTransfer.files);
+    }}>
     <Tabs value={mode} onValueChange={setMode} className="min-h-0 flex-1 gap-0">
       <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
         <Label htmlFor="problem-description" className="min-w-0 text-sm font-semibold">{label}</Label>
@@ -65,7 +83,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
           className="flex min-w-0 items-center gap-1.5 rounded-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
           <FileText className="size-3.5 shrink-0 text-muted-foreground" /><span className="max-w-48 truncate font-medium">{name}</span>
         </button>
-        <span className="shrink-0 text-muted-foreground">{t("{count} 行", { count: content.split("\n").filter(Boolean).length })}</span>
+        <span className="shrink-0 text-muted-foreground">{t("{count} 行", { count: dataRowCount(name, content) })}</span>
         <Button variant="ghost" size="icon-xs" disabled={locked} aria-label={t("移除 {name}", { name })} onClick={() => onRemove(name)}><X /></Button>
       </li>)}
     </ul> : null}
