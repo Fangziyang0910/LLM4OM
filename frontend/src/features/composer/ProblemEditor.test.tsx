@@ -7,9 +7,9 @@ afterEach(cleanup);
 
 const source = "# 营养计划\n\n- 鸡肉 $4\n- 大米 $8\n\n| 食物 | 蛋白质 |\n| --- | --- |\n| 鸡肉 | 18 |\n\n约束：\\(x \\le 8\\)。\n\n$$x \\ge 0$$";
 
-function Editor() {
+function Editor({ data = {} }: { data?: Record<string, string> }) {
   const [value, setValue] = useState(source);
-  return <ProblemEditor value={value} data={{}} onChange={setValue} onFiles={vi.fn()} onRemove={vi.fn()}
+  return <ProblemEditor value={value} data={data} onChange={setValue} onFiles={vi.fn()} onRemove={vi.fn()}
     onClear={() => setValue("")} onExamples={vi.fn()} onDataChange={vi.fn()} />;
 }
 
@@ -35,4 +35,9 @@ test("clearing a preview returns to an empty editable problem", () => {
   fireEvent.mouseDown(screen.getByRole("tab", { name: "预览" }));
   fireEvent.click(screen.getByRole("button", { name: "清空" }));
   expect((screen.getByRole("textbox", { name: "问题描述" }) as HTMLTextAreaElement).value).toBe("");
+});
+
+test("attachment counts CSV records instead of physical lines in multiline cells", () => {
+  render(<Editor data={{ "notes.csv": 'name,notes\nA,"first line\nsecond line"\n' }} />);
+  expect(screen.getByText("2 行")).toBeTruthy();
 });

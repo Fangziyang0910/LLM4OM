@@ -9,8 +9,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
+import { parseCsv } from "@/lib/csv";
 import { DATA_FILE_ACCEPT } from "./files";
 import { DataEditor } from "./DataEditor";
+
+function dataRowCount(name: string, content: string): number {
+  if (/\.(csv|tsv)$/i.test(name)) {
+    try { return parseCsv(content, /\.tsv$/i.test(name) ? "\t" : ",").length; }
+    catch { /* Keep the attachment usable while it is being repaired. */ }
+  }
+  return content.split("\n").filter(Boolean).length;
+}
 
 /** Editing and preview share the original text; rendering never changes the submitted problem. */
 export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, onRemove, onClear, onExamples, disabled = false, reading = false,
@@ -65,7 +74,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
           className="flex min-w-0 items-center gap-1.5 rounded-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
           <FileText className="size-3.5 shrink-0 text-muted-foreground" /><span className="max-w-48 truncate font-medium">{name}</span>
         </button>
-        <span className="shrink-0 text-muted-foreground">{t("{count} 行", { count: content.split("\n").filter(Boolean).length })}</span>
+        <span className="shrink-0 text-muted-foreground">{t("{count} 行", { count: dataRowCount(name, content) })}</span>
         <Button variant="ghost" size="icon-xs" disabled={locked} aria-label={t("移除 {name}", { name })} onClick={() => onRemove(name)}><X /></Button>
       </li>)}
     </ul> : null}
