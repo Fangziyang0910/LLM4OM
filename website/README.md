@@ -42,7 +42,7 @@ npm --prefix website run dev
 官网与文档的源稿、生成器和静态文件统一维护在 `main`。`.github/workflows/pages.yml` 通过 GitHub Actions 将 `website/public/` 上传为 Pages 产物并部署，不另建发布分支。发布只上传该目录，不包含平台运行数据、测试或设计记录。
 
 1. 生成文档并完成本地检查，将源稿和 `website/public/` 的变化一起提交、推送到 `main`。
-2. `website/public/` 或发布工作流变化时，GitHub Actions 自动发布。需要重新部署时，在 Actions 的 **Publish website** 中手动运行，选择 `main`。
+2. 推送不会自动发布。在 Actions 的 **Publish website** 中手动运行，选择 `main`，发布当前 `website/public/`。
 3. **Settings → Pages → Build and deployment → Source** 使用 **GitHub Actions**；`github-pages` 环境允许从 `main` 部署。
 4. 站点地址为 `https://fangziyang0910.github.io/LLM4OM/`。可以用 `?lang=en` 或 `?lang=zh` 分享指定语言。
 

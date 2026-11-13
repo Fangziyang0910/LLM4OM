@@ -91,7 +91,7 @@ npm --prefix frontend run e2e       # 启动脚本化 LLM（8796）和本机沙�
 uv run llm4om run --problem "……" --method trival
 ```
 
-确定性测试和真实运行的结果要分别报告。CI（`.github/workflows/checks.yml`）在 Python 3.11–3.13 上运行全部检查，并构建 Docker 镜像。
+确定性测试和真实运行的结果要分别报告。测试与构建在本机执行；GitHub 仅保留手动网站部署。
 
 ## 接入研究方法
 
@@ -146,7 +146,7 @@ MY_METHOD = Method("my_method", "我的方法", "一句话说明。", my_graph, 
 1. 同一种原生模型的新写法通常不需要适配，只需补充数值集成测试。示例放在 `tests/modeling_examples.py`；确有必要的生成指引才进入生产代码。
 2. 原生模型类型或结果确实不同时，在 `sandbox/worker.py` 自动识别并读取。后端使用库自己的插件注册表与分发入口，不建立接口配置层或方法兼容矩阵。
 3. 需要新运行时依赖时，更新 `worker.Dockerfile`、`pyproject.toml` 的 solve 依赖和 uv.lock，核对许可证及加载条件。
-4. Worker 代码或依赖变化时，更新 `WORKER_IMAGE`、Compose、CI 中的镜像标签。
+4. Worker 代码或依赖变化时，更新 `WORKER_IMAGE` 和 Compose 中的镜像标签。
 5. 用真实模型验证数值结果、不可用错误和状态语义。明确选择的后端不能隐式替换或放松整数域。
 6. 固定方言的方法只修改必要的代码模板；界面从 options/backends 读取库和后端，不复制插件名单。同步 README 与[原生 API 说明](docs/references/modeling-libraries.md)。
 
@@ -165,7 +165,7 @@ MY_METHOD = Method("my_method", "我的方法", "一句话说明。", my_graph, 
 2. 重新构建前端。
 3. 在 [CHANGELOG](CHANGELOG.md) 中写这个版本的变化。
 4. 运行全部检查，并用真实 LLM 跑通几个问题。
-5. 提交，推送到 `main`，确认 CI 通过。
+5. 确认本地检查通过后提交，推送到 `main`。
 
 ## 交付
 
@@ -175,7 +175,7 @@ MY_METHOD = Method("my_method", "我的方法", "一句话说明。", my_graph, 
 
 ### Docker 集成检查
 
-涉及沙箱启动、取消或 Worker 时，在本机运行真实容器回归（CI 的 Docker job 执行同一组检查）：
+涉及沙箱启动、取消或 Worker 时，在本机运行真实容器回归：
 
 ```bash
 uv run llm4om build-worker
