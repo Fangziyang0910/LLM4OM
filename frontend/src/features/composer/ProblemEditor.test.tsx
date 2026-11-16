@@ -7,33 +7,88 @@ afterEach(cleanup);
 
 const source = "# 营养计划\n\n- 鸡肉 $4\n- 大米 $8\n\n| 食物 | 蛋白质 |\n| --- | --- |\n| 鸡肉 | 18 |\n\n约束：\\(x \\le 8\\)。\n\n$$x \\ge 0$$";
 
-function Editor({ data = {} }: { data?: Record<string, string> }) {
-  const [value, setValue] = useState(source);
-  return <ProblemEditor value={value} data={data} onChange={setValue} onFiles={vi.fn()} onRemove={vi.fn()}
-    onClear={() => setValue("")} onExamples={vi.fn()} onDataChange={vi.fn()} />;
+function Editor({ initial = source, data = {}, onChangeSpy }: {
+  initial?: string; data?: Record<string, string>; onChangeSpy?: (value: string) => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const update = (next: string) => { setValue(next); onChangeSpy?.(next); };
+  return <ProblemEditor value={value} data={data} onChange={update} onFiles={vi.fn()} onRemove={vi.fn()}
+    onClear={() => update("")} onExamples={vi.fn()} onDataChange={vi.fn()} />;
 }
 
-test("Markdown preview renders the problem without changing its source or dollar prices", () => {
-  const { container } = render(<Editor />);
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "预览" }));
+test("renders Markdown, tables and math live in one box without edit/preview buttons or altering dollar prices", () => {
+  const spy = vi.fn();
+  const { container } = render(<Editor onChangeSpy={spy} />);
+  expect(screen.queryByRole("tab", { name: "编辑" })).toBeNull();
+  expect(screen.queryByRole("tab", { name: "预览" })).toBeNull();
   expect(screen.getByRole("heading", { name: "营养计划" })).toBeTruthy();
   expect(screen.getByRole("table")).toBeTruthy();
   expect(screen.getByText("鸡肉 $4")).toBeTruthy();
   expect(screen.getByText("大米 $8")).toBeTruthy();
   expect(container.querySelectorAll(".katex-mathml")).toHaveLength(2);
   expect(container.querySelector(".katex-error")).toBeNull();
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "编辑" }));
+
+  // Clicking a rendered block reveals only its Markdown source borderlessly while keeping other blocks rendered.
+  fireEvent.mouseDown(screen.getByText("鸡肉 $4"));
   const input = screen.getByRole("textbox", { name: "问题描述" }) as HTMLTextAreaElement;
-  expect(input.value).toBe(source);
-  fireEvent.change(input, { target: { value: source.replace("营养计划", "更新后的计划") } });
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "预览" }));
+  expect(input.value).toBe("- 鸡肉 $4");
+  expect(input.className).toContain("border-0");
+  expect(input.className).toContain("bg-transparent");
+  expect(screen.getByText("大米 $8")).toBeTruthy();
+
+  fireEvent.mouseDown(screen.getByRole("heading", { name: "营养计划" }));
+  expect(input.value).toBe("# 营养计划");
+  expect(screen.queryByRole("heading", { name: "营养计划" })).toBeNull();
+  expect(screen.getByRole("table")).toBeTruthy();
+  expect(container.querySelectorAll(".katex-mathml")).toHaveLength(2);
+
+  fireEvent.change(input, { target: { value: "# 更新后的计划", selectionStart: 8 } });
+  expect(spy).toHaveBeenLastCalledWith(source.replace("营养计划", "更新后的计划"));
+
+  // Moving focus out immediately renders the edited block and exposes the full lossless source on the textbox.
+  fireEvent.blur(input);
   expect(screen.getByRole("heading", { name: "更新后的计划" })).toBeTruthy();
+  expect(input.value).toBe(source.replace("营养计划", "更新后的计划"));
 });
 
-test("clearing a preview returns to an empty editable problem", () => {
+test("typing a heading and pressing Enter renders the completed block live above the cursor", () => {
+  render(<Editor initial="" />);
+  const input = screen.getByRole("textbox", { name: "问题描述" }) as HTMLTextAreaElement;
+  fireEvent.focus(input);
+  fireEvent.change(input, { target: { value: "# 生产计划\n", selectionStart: 7 } });
+  expect(screen.getByRole("heading", { name: "生产计划" })).toBeTruthy();
+  expect(input.value).toBe("");
+
+  fireEvent.change(input, { target: { value: "第二段内容", selectionStart: 5 } });
+  expect(screen.getByRole("heading", { name: "生产计划" })).toBeTruthy();
+  expect(input.value).toBe("第二段内容");
+
+  // Backspace at the start of the second block merges back with the heading seamlessly.
+  input.setSelectionRange(0, 0);
+  fireEvent.keyDown(input, { key: "Backspace" });
+  expect(input.value).toBe("# 生产计划第二段内容");
+});
+
+test("arrow navigation and Ctrl+A work across blocks in the live editor", () => {
+  render(<Editor initial={"# 标题\n\n正文内容"} />);
+  fireEvent.mouseDown(screen.getByRole("heading", { name: "标题" }));
+  const input = screen.getByRole("textbox", { name: "问题描述" }) as HTMLTextAreaElement;
+  expect(input.value).toBe("# 标题");
+
+  input.setSelectionRange(4, 4);
+  fireEvent.keyDown(input, { key: "ArrowDown" });
+  expect(screen.getByRole("heading", { name: "标题" })).toBeTruthy();
+  expect(input.value).toBe("正文内容");
+
+  fireEvent.keyDown(input, { key: "a", ctrlKey: true });
+  expect(input.value).toBe("# 标题\n\n正文内容");
+});
+
+test("clearing rendered content returns to an empty editable problem", () => {
   render(<Editor />);
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "预览" }));
+  expect(screen.getByRole("heading", { name: "营养计划" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "清空" }));
+  expect(screen.queryByRole("heading", { name: "营养计划" })).toBeNull();
   expect((screen.getByRole("textbox", { name: "问题描述" }) as HTMLTextAreaElement).value).toBe("");
 });
 

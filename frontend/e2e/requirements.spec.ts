@@ -163,8 +163,7 @@ test("the requirements assistant retries a failed turn and keeps the editable pr
   await page.setViewportSize({ width: 375, height: 812 });
   await page.getByRole("tab", { name: "当前需求稿", exact: true }).click();
   await expect(page.getByLabel("问题描述")).toHaveValue(result.description);
-  await page.getByRole("tab", { name: "预览", exact: true }).click();
-  await expect(page.getByRole("tabpanel", { name: "预览", exact: true })).toContainText("总利润最大");
+  await expect(page.getByRole("tabpanel", { name: "当前需求稿", exact: true })).toContainText("总利润最大");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("tab", { name: "需求助手", exact: true }).click();
   await page.getByRole("button", { name: "用于建模", exact: true }).click();

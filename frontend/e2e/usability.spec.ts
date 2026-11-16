@@ -74,15 +74,14 @@ test("clearing the problem can be undone with its attachments", async ({ page })
   await expect(page.getByRole("button", { name: "编辑 costs.csv", exact: true })).toBeVisible();
 });
 
-test("desktop editing retains the cursor through preview and respects composition before Ctrl+Enter", async ({ page }) => {
+test("desktop editing renders Markdown live in place and respects composition before Ctrl+Enter", async ({ page }) => {
   await page.goto("/");
   const input = page.getByLabel("问题描述");
   await expect(input).toBeFocused();
   await input.fill("# 生产计划\n\n" + Array.from({ length: 35 }, (_, i) => `第 ${i + 1} 项业务条件。`).join("\n"));
-  await input.evaluate(node => { const field = node as HTMLTextAreaElement; field.setSelectionRange(14, 20); field.scrollTop = 80; });
-  await page.getByRole("tab", { name: "预览", exact: true }).click();
-  await page.getByRole("tab", { name: "编辑", exact: true }).click();
-  expect(await input.evaluate(node => [(node as HTMLTextAreaElement).selectionStart, (node as HTMLTextAreaElement).selectionEnd, node.scrollTop])).toEqual([14, 20, 80]);
+  await expect(page.getByRole("heading", { name: "生产计划", exact: true })).toBeVisible();
+  await page.getByRole("heading", { name: "生产计划", exact: true }).click();
+  await expect(input).toHaveValue("# 生产计划");
   await input.dispatchEvent("keydown", { key: "Enter", ctrlKey: true, isComposing: true });
   await expect(page).toHaveURL(/\/$/);
   await input.press("Control+Enter");
