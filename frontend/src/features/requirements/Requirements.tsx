@@ -60,9 +60,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const busy = conversation.busy || action || reading;
   const failure = conversation.error || conversation.values.failure;
 
-
   const save = (snapshot = edited) => {
-    // Serialize a blur-save with Send/Use so an edit cannot land after a new turn has started.
     const task = saveQueue.current.catch(() => undefined).then(async () => {
       if (!snapshot || saved.current === snapshot) return;
       setSaving(true);
@@ -79,11 +77,10 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   };
   const submit = async (retry = false) => {
     if (busy || (!retry && !input.trim())) return;
-    if (!preset) { toast.error(t("先选择一个可用的预设模型。")); openPresets(); return; }
+    if (!preset) { toast.error(t("请先配置可用的 AI 模型。")); openPresets(); return; }
     setAction(true);
     followLatest();
     try {
-      // The draft save queue must settle before the run starts; native create/updateState order is not enough.
       await save();
       await conversation.send({ retry, context: { preset: preset.id, locale, search: searchOn, thinking: thinkingMode },
         values: draft, metadata: { preset: preset.id, provider: preset.provider, model: preset.name || preset.model,
@@ -106,65 +103,68 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   if (conversation.thread.error) return <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-destructive">
     <p>{errorText(conversation.thread.error)}</p><Button variant="outline" onClick={conversation.thread.reload}><RefreshCw />{t("重试")}</Button></div>;
 
-  const assistant = <div className="flex h-full min-h-0 flex-col gap-2 p-3">
-    <div className="flex shrink-0 items-center justify-between gap-2 border-b pb-3">
-      <h2 className="flex items-center gap-2 text-sm font-medium"><Sparkles className="size-4 text-muted-foreground" />{t("需求助手")}</h2>
-      <Button variant="ghost" size="xs" disabled={busy || !draft.description.trim()} onClick={async () => {
+  const assistant = <div className="flex h-full min-h-0 flex-col gap-3 p-3.5">
+    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/70 pb-3">
+      <h2 className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="size-4 text-primary" />{t("需求梳理助手")}</h2>
+      <Button variant="secondary" size="xs" className="rounded-lg" disabled={busy || !draft.description.trim()} onClick={async () => {
         setAction(true);
         try { await save(); onUse(draft); } catch (error) { toast.error(errorText(error)); } finally { setAction(false); }
-      }}>{t("用于建模")}<ArrowRight /></Button>
+      }}>{t("带入快速求解")}<ArrowRight /></Button>
     </div>
-          <div className="relative flex min-h-0 flex-1 flex-col">
-            <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain">
-              <div ref={content} className="grid min-h-full grid-cols-1">
-                {!messages.length && !failure ? <div className="mx-auto flex min-h-full flex-col justify-center gap-5 py-6">
-                  <h2 className="text-base font-semibold">{t("先说说，你想安排什么？")}</h2>
-                  <div className="grid gap-2 ">{STARTERS.map(item => <button key={item.title} type="button"
-                    disabled={busy} onClick={() => { setInput(t(item.text)); inputArea.current?.focus(); }}
-                    className="flex items-center gap-3 rounded-xl border bg-card p-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ">
-                    <item.icon className="size-4 text-primary" /><span>{t(item.title)}</span></button>)}</div>
-                </div> : <ChatMessages messages={messages} loading={conversation.loading} label={t("需求助手")}
-                  failure={failure} disabled={busy} onRetry={() => void submit(true)} />}
-              </div>
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain">
+        <div ref={content} className="grid min-h-full grid-cols-1">
+          {!messages.length && !failure ? <div className="mx-auto flex min-h-full flex-col justify-center gap-4 py-6">
+            <div className="space-y-1">
+              <h2 className="text-base font-semibold">{t("先聊聊，你想优化什么事项？")}</h2>
+              <p className="text-xs text-muted-foreground">{t("在对话中确认的目标与限制会自动整理到右侧需求稿。")}</p>
             </div>
-            {!follow ? <Button type="button" variant="outline" size="icon-sm" aria-label={t("回到最新消息")}
-              className="absolute right-3 bottom-3 rounded-full bg-background shadow-sm" onClick={followLatest}><ArrowDown /></Button> : null}
-          </div>
-          <ChatInput value={input} onChange={setInput} disabled={busy} loading={conversation.loading} stopping={conversation.stopping} label={t("发送给需求助手")}
-            inputRef={inputArea} presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets}
-            onSend={() => void submit()} onStop={() => void stop()}>
-              <Button asChild type="button" variant="ghost" size="icon-sm" title={Object.keys(draft.data).join(", ") || t("添加附件")}>
-                <label className={cn("relative cursor-pointer", busy && "pointer-events-none opacity-50")}><Paperclip />
-                  {Object.keys(draft.data).length ? <span className="absolute -top-0.5 -right-0.5 rounded-full bg-primary px-1 text-[9px] text-primary-foreground">{Object.keys(draft.data).length}</span> : null}
-                  <input type="file" className="sr-only" aria-label={t("添加附件")} multiple accept={DATA_FILE_ACCEPT} disabled={busy}
-                    onChange={event => { void attach(event.target.files); event.target.value = ""; }} />
-                </label>
-              </Button>
-              <span title={canSearch ? t("搜索公开资料，并在回复中展示来源。") : t("选择 DeepSeek 预设或由管理员配置搜索服务。")}>
-                <Button type="button" variant="ghost" size="sm" aria-label={t("联网搜索")} aria-pressed={searchOn} disabled={busy || !canSearch}
-                  className={cn("h-8 gap-1.5 px-2 text-xs", searchOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
-                  onClick={() => setSearch(!searchOn)}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Button>
-              </span>
-          </ChatInput>
+            <div className="grid gap-2">{STARTERS.map(item => <button key={item.title} type="button"
+              disabled={busy} onClick={() => { setInput(t(item.text)); inputArea.current?.focus(); }}
+              className="flex items-center gap-3 rounded-xl border border-border/80 bg-card p-3 text-left text-sm shadow-2xs transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
+              <span className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary"><item.icon className="size-4" /></span>
+              <span className="font-medium">{t(item.title)}</span></button>)}</div>
+          </div> : <ChatMessages messages={messages} loading={conversation.loading} label={t("需求助手")}
+            failure={failure} disabled={busy} onRetry={() => void submit(true)} />}
+        </div>
+      </div>
+      {!follow ? <Button type="button" variant="outline" size="icon-sm" aria-label={t("回到最新消息")}
+        className="absolute right-3 bottom-3 rounded-full bg-background shadow-sm" onClick={followLatest}><ArrowDown /></Button> : null}
+    </div>
+    <ChatInput value={input} onChange={setInput} disabled={busy} loading={conversation.loading} stopping={conversation.stopping} label={t("发送给需求助手")}
+      inputRef={inputArea} presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets}
+      onSend={() => void submit()} onStop={() => void stop()}>
+      <Button asChild type="button" variant="ghost" size="icon-sm" title={Object.keys(draft.data).join(", ") || t("添加附件")}>
+        <label className={cn("relative cursor-pointer", busy && "pointer-events-none opacity-50")}><Paperclip />
+          {Object.keys(draft.data).length ? <span className="absolute -top-0.5 -right-0.5 rounded-full bg-primary px-1 text-[9px] text-primary-foreground">{Object.keys(draft.data).length}</span> : null}
+          <input type="file" className="sr-only" aria-label={t("添加附件")} multiple accept={DATA_FILE_ACCEPT} disabled={busy}
+            onChange={event => { void attach(event.target.files); event.target.value = ""; }} />
+        </label>
+      </Button>
+      <span title={canSearch ? t("搜索公开资料，并在回复中展示来源。") : t("选择支持搜索的模型或由管理员开启搜索服务。")}>
+        <Button type="button" variant="ghost" size="sm" aria-label={t("联网搜索")} aria-pressed={searchOn} disabled={busy || !canSearch}
+          className={cn("h-8 gap-1.5 px-2 text-xs", searchOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
+          onClick={() => setSearch(!searchOn)}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Button>
+      </span>
+    </ChatInput>
   </div>;
   const editor = <>
-          {saveError ? <p role="alert" className="text-xs text-destructive">{t("需求稿未保存：{error}", { error: saveError })}</p> : null}
-          <div className="flex min-h-0 flex-1 flex-col [&>div]:h-auto [&>div]:min-h-0 [&>div]:flex-1"
-            onBlur={event => {
-              // Dialog focus events bubble through React portals; only the draft itself triggers autosave.
-              if (!busy && event.currentTarget.contains(event.target) && !event.currentTarget.contains(event.relatedTarget)) void save().catch(() => undefined);
-            }}>
-            <ProblemEditor value={draft.description} data={draft.data} disabled={busy} reading={reading} onChange={description => setEdited({ ...draft, description })}
-              label={t("当前需求稿")} placeholder={t("对话中确认的目标和条件会整理到这里，也可以直接编辑。")}
-              actions={<Button variant="ghost" size="icon-sm" aria-label={t("保存需求稿")}
-                title={saving ? t("正在保存……") : t("保存需求稿")} disabled={busy || saving || !edited || edited === savedDraft}
-                onClick={() => void save().catch(() => undefined)}>
-                {saving ? <Spinner /> : edited && edited !== savedDraft ? <Save /> : <Check />}</Button>}
-              onFiles={files => void attach(files)} onDataChange={async (name, content) => {
-                const next = { ...draft, data: { ...draft.data, [name]: content } }; await save(next); setEdited(next);
-              }} onClear={() => setEdited({ description: "", data: {} })}
-              onRemove={name => { const data = { ...draft.data }; delete data[name]; setEdited({ ...draft, data }); }} />
-          </div>
+    {saveError ? <p role="alert" className="text-xs text-destructive">{t("需求稿未保存：{error}", { error: saveError })}</p> : null}
+    <div className="flex min-h-0 flex-1 flex-col [&>div]:h-auto [&>div]:min-h-0 [&>div]:flex-1"
+      onBlur={event => {
+        if (!busy && event.currentTarget.contains(event.target) && !event.currentTarget.contains(event.relatedTarget)) void save().catch(() => undefined);
+      }}>
+      <ProblemEditor value={draft.description} data={draft.data} disabled={busy} reading={reading} onChange={description => setEdited({ ...draft, description })}
+        label={t("当前需求稿")} placeholder={t("对话中确认的目标和条件会自动同步整理到这里，您也可以随时手动修改…")}
+        actions={<Button variant="ghost" size="icon-sm" aria-label={t("保存需求稿")}
+          title={saving ? t("正在保存…") : t("保存需求稿")} disabled={busy || saving || !edited || edited === savedDraft}
+          onClick={() => void save().catch(() => undefined)}>
+          {saving ? <Spinner /> : edited && edited !== savedDraft ? <Save /> : <Check />}</Button>}
+        onFiles={files => void attach(files)} onDataChange={async (name, content) => {
+          const next = { ...draft, data: { ...draft.data, [name]: content } }; await save(next); setEdited(next);
+        }} onClear={() => setEdited({ description: "", data: {} })}
+        onRemove={name => { const data = { ...draft.data }; delete data[name]; setEdited({ ...draft, data }); }} />
+    </div>
   </>;
   return <Composer {...composer} draft={{ ...configuration, ...draft, origin: threadId }} disabled={busy} editor={editor} assistant={assistant}
     setDraft={change => {

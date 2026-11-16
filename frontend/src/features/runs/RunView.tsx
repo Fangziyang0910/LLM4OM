@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
-import { ArrowRight, ChevronDown, CircleCheck, Clock, CodeXml, Columns3, Cpu, FileDown, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Square, Tag, Trash2, TriangleAlert, Zap } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, CircleCheck, Clock, CodeXml, Columns3, Cpu, FileDown, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sparkles, Square, Tag, Trash2, TriangleAlert, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -22,7 +22,7 @@ import { t } from "@/i18n";
 import { report } from "@/features/runs/report";
 import { exportSolution, hasSolution } from "@/features/runs/workbook";
 import { STATUS, duration, errorText, formatNumber, formatTokens, outcome, tone } from "@/format";
-import { phases, working } from "@/features/runs/steps";
+import { phases } from "@/features/runs/steps";
 import type { Draft } from "@/features/composer/types";
 import type { Options } from "@/types";
 import type { RunMeta, RunValues, SourceRun, Step } from "@/features/runs/types";
@@ -73,10 +73,10 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const now = useNow(active);
   const withProcess = processVisible ?? active;
 
-  if (!meta) return error ? <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm">
+  if (!meta) return error ? <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm">
     <TriangleAlert className="size-6 text-destructive" /><p>{error}</p>
     <Button variant="outline" size="sm" onClick={() => location.reload()}><RefreshCw />{t("重新连接")}</Button></div>
-    : <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在读取运行……")}</div>;
+    : <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载方案详情…")}</div>;
 
   const method = options.methods.find(item => item.id === meta.method);
   const language = options.languages.find(item => item.id === meta.language);
@@ -127,33 +127,50 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const timeline = <Timeline steps={steps} live={live} active={active} onShow={show} />;
   const outputs = <Outputs values={values} steps={steps} active={active} tab={tab} setTab={setTab} picked={picked} language={language}
     finished={finished} source={meta.parent} onAdjust={setRevision} setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))} />;
-  const title = meta.title || (values.description ?? "").trim().split("\n")[0] || t("未命名运行");
+  const title = meta.title || (values.description ?? "").trim().split("\n")[0] || t("未命名方案");
   const facts: [React.ReactNode, React.ReactNode, string?][] = [
     [<Layers />, method?.name ?? meta.method, method?.description],
     [<CodeXml />, targetLabel(options, meta, solve?.solver)],
     [<Cpu />, meta.model ?? provider?.label, provider?.label],
     [<Clock />, elapsed == null ? "—" : duration(elapsed)],
   ];
-  if (calls) facts.push([<Zap />, t("{count} 次调用", { count: calls }) + (tokens ? ` · ${formatTokens(tokens)} token` : "")]);
+  if (calls) facts.push([<Zap />, t("{count} 次推理", { count: calls }) + (tokens ? ` · ${formatTokens(tokens)} token` : "")]);
+
+  const followUpActions = !active && !embedded ? <div role="group" aria-label={t("运行操作")} className="flex flex-wrap items-center gap-2">
+    <Button variant="secondary" size="sm" className="rounded-lg shadow-2xs" disabled={busy || !values.description} onClick={() => setRevision("")}>
+      <Pencil />{t("调整条件")}
+    </Button>
+    <Button variant="outline" size="sm" className="rounded-lg bg-background/70" disabled={busy || !values.spec} onClick={() => setScenarios(true)}>
+      <Columns3 />{t("多场景对比")}
+    </Button>
+    {!assistantOpen ? <Button variant="outline" size="sm" className="rounded-lg bg-background/70" disabled={busy || !values.spec} onClick={async () => {
+      setBusy(true);
+      try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
+    }}>{busy ? <Spinner /> : <MessageSquare />}{t("对话追问")}</Button> : null}
+  </div> : null;
 
   return <div className="flex h-full min-h-0 min-w-0 flex-col overflow-y-auto">
-    <header className="flex shrink-0 flex-col gap-3 border-b px-4 py-3 md:flex-row md:items-center">
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+    <header className="flex shrink-0 flex-col gap-2.5 border-b border-border/70 bg-background/80 px-4 py-3 backdrop-blur-md sm:px-5 md:flex-row md:items-center">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         {!embedded && !assistantOpen && (meta.group || meta.conversation) ? <div className="flex flex-wrap items-center gap-3">
-          {meta.group ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground" onClick={() => onCompare(meta.group!)}><Columns3 />{t("查看对比")}</Button> : null}
-          {meta.conversation ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground" onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回方案对话")}</Button> : null}
+          {meta.group ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground hover:text-primary" onClick={() => onCompare(meta.group!)}><Columns3 />{t("返回对比列表")}</Button> : null}
+          {meta.conversation ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground hover:text-primary" onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回对话规划")}</Button> : null}
         </div> : null}
-        <Tooltip>
-          <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{title}</h1></TooltipTrigger>
-          <TooltipContent className="max-w-md whitespace-pre-wrap">{(values.description || title).slice(0, 400)}</TooltipContent>
-        </Tooltip>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{title}</h1></TooltipTrigger>
+            <TooltipContent className="max-w-md whitespace-pre-wrap">{(values.description || title).slice(0, 400)}</TooltipContent>
+          </Tooltip>
+          {elapsed != null ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/70 px-2 py-0.5 text-[11px] text-muted-foreground tabular">
+            <Clock className="size-3" />{duration(elapsed)}
+          </span> : null}
+        </div>
         <details className="group/info min-w-0 text-xs text-muted-foreground">
-          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <span className="truncate">{method?.name ?? meta.method} · {language?.name ?? meta.language}{elapsed == null ? "" : ` · ${duration(elapsed)}`}</span>
-            <span className="shrink-0">{t("运行信息")}</span><ChevronDown className="size-3.5 shrink-0 transition-transform group-open/info:rotate-180" />
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <span>{t("查看求解配置")}</span><ChevronDown className="size-3.5 shrink-0 transition-transform group-open/info:rotate-180" />
           </summary>
-          <div className="mt-2 flex flex-col gap-1.5 border-l pl-3 [&_svg]:size-3.5">
-            {facts.filter(([, text]) => text).map(([icon, text, hint], index) => <span key={index} title={hint} className="flex min-w-0 items-center gap-1.5 break-all [&_svg]:shrink-0">{icon}{text}</span>)}
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 rounded-xl border border-border/60 bg-muted/20 px-3 py-2 [&_svg]:size-3.5">
+            {facts.filter(([, text]) => text).map(([icon, text, hint], index) => <span key={index} title={hint} className="flex min-w-0 items-center gap-1.5 break-all [&_svg]:shrink-0 [&_svg]:text-muted-foreground">{icon}{text}</span>)}
           </div>
         </details>
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5 empty:hidden">
@@ -162,60 +179,52 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
             <NotebookPen />{meta.note.split("\n")[0]}</button> : null}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <Button variant="ghost" size="sm" aria-expanded={wide && !assistantOpen ? withProcess : view === "process"}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <Button variant={wide && !assistantOpen && withProcess ? "secondary" : "ghost"} size="sm" className="rounded-lg"
+          aria-expanded={wide && !assistantOpen ? withProcess : view === "process"}
           onClick={() => { if (wide && !assistantOpen) setProcessVisible(!withProcess); else setView(view === "process" ? "outputs" : "process"); }}>
-          <Layers />{t("建模过程")}</Button>
-        {active ? <Button variant="outline" size="sm" disabled={stopping} onClick={() => void stop()}>
+          <Layers />{t("求解步骤")}</Button>
+        {active ? <Button variant="outline" size="sm" className="rounded-lg" disabled={stopping} onClick={() => void stop()}>
           {stopping ? <Spinner /> : <Square className="fill-current" />}{stopping ? t("正在停止") : t("停止")}</Button> : <>
-          {["failed", "error", "timeout", "interrupted"].includes(state) ? <Button variant="outline" size="sm"
-            disabled={busy || !values.description} title={t("用同样的问题和设置再运行一次")} onClick={() => void rerun()}>
-            {busy ? <Spinner /> : <RefreshCw />}{t("再运行一次")}</Button> : null}
-          {hasSolution(solve) ? <Button variant="outline" size="sm" className="size-8 p-0 sm:w-auto sm:px-3" aria-label={t("导出 Excel")}
+          {["failed", "error", "timeout", "interrupted"].includes(state) ? <Button variant="outline" size="sm" className="rounded-lg"
+            disabled={busy || !values.description} title={t("用同样的问题和设置再求解一次")} onClick={() => void rerun()}>
+            {busy ? <Spinner /> : <RefreshCw />}{t("重新求解")}</Button> : null}
+          {hasSolution(solve) ? <Button variant="outline" size="sm" className="size-8 rounded-lg p-0 sm:w-auto sm:px-3" aria-label={t("导出 Excel")}
             title={t("导出 Excel")} disabled={exporting} onClick={() => void exportExcel()}>
-            {exporting ? <Spinner /> : <FileDown />}<span className="hidden sm:inline">{t("导出 Excel")}</span></Button> : null}
+            {exporting ? <Spinner /> : <FileDown />}<span className="hidden sm:inline">{t("导出表格")}</span></Button> : null}
         </>}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" disabled={busy} aria-label={t("更多操作")} title={t("更多操作")}><MoreHorizontal /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled={active || busy || !values.description} onClick={() => void rerun()}><RefreshCw />{t("再运行一次")}</DropdownMenuItem>
+          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" className="rounded-lg" disabled={busy} aria-label={t("更多操作")} title={t("更多操作")}><MoreHorizontal /></Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 rounded-xl">
+            <DropdownMenuItem disabled={active || busy || !values.description} onClick={() => void rerun()}><RefreshCw />{t("重新求解一次")}</DropdownMenuItem>
             <DropdownMenuItem disabled={!values.description} onClick={() => onEdit(draft())}>
-              <Pencil />{t("修改后运行")}</DropdownMenuItem>
+              <Pencil />{t("编辑原问题")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => void copyText(href).then(() => toast.success(t("已复制链接。")), () => toast.error(t("无法复制，请手动复制地址栏中的链接。")))}>
-              <Link2 />{t("复制链接")}</DropdownMenuItem>
+              <Link2 />{t("复制分享链接")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setNoting(true)}><NotebookPen />{t("备注与标签")}</DropdownMenuItem>
             <DropdownMenuItem disabled={!values.description} onClick={() => download(`${(meta.title || "run").slice(0, 40).replace(/[\\/:*?"<>|]/g, "_")}.md`,
-              report(meta, values, options, href))}><FileDown />{t("导出报告（Markdown）")}</DropdownMenuItem>
+              report(meta, values, options, href))}><FileDown />{t("导出完整报告（MD）")}</DropdownMenuItem>
             {/* A saved plan's thread may hold later runs; deleting it from a fixed view would remove them too. */}
             {source ? null : <><DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={() => onDelete(meta)}><Trash2 />{t("删除这次运行")}</DropdownMenuItem></>}
+              <DropdownMenuItem variant="destructive" onClick={() => onDelete(meta)}><Trash2 />{t("删除此记录")}</DropdownMenuItem></>}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
     </header>
 
-    <div className="shrink-0 px-4 pt-3">
-      <Summary state={state} values={values} steps={steps} error={error} active={active} elapsed={elapsed} onTab={showTab} />
+    <div className="shrink-0 px-4 pt-3.5 sm:px-5">
+      <Summary state={state} values={values} steps={steps} error={error} active={active} elapsed={elapsed} onTab={showTab} actions={followUpActions} />
     </div>
 
-    {!active && !embedded ? <div role="group" aria-label={t("运行操作")} className="flex shrink-0 flex-wrap items-center gap-1 px-4 pt-2 [&>button]:shrink-0">
-      <Button variant="outline" size="sm" disabled={busy || !values.description} onClick={() => setRevision("")}><Pencil />{t("调整条件")}</Button>
-      <Button variant="ghost" size="sm" disabled={busy || !values.spec} onClick={() => setScenarios(true)}><Columns3 />{t("业务场景对比")}</Button>
-          {!assistantOpen ? <Button variant="ghost" size="sm" className="px-2 sm:px-3" disabled={busy || !values.spec} onClick={async () => {
-            setBusy(true);
-            try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
-          }}>{busy ? <Spinner /> : <MessageSquare />}{t("讨论方案")}</Button> : null}
-    </div> : null}
-
-    {wide && !assistantOpen && withProcess ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1 p-4 pt-3">
+    {wide && !assistantOpen && withProcess ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1 p-4 pt-3.5 sm:px-5">
       <ResizablePanel id="process" defaultSize="32%" minSize="25%"><Pane>{timeline}</Pane></ResizablePanel>
       <ResizableHandle withHandle aria-label={t("调整过程与结果的宽度")} className="mx-2 bg-transparent" />
       <ResizablePanel id="outputs" defaultSize="68%" minSize="30%"><Pane>{outputs}</Pane></ResizablePanel>
-    </ResizablePanelGroup> : <div className="flex min-h-96 flex-1 shrink-0 flex-col gap-3 p-4 pt-3 lg:min-h-0 lg:shrink">
+    </ResizablePanelGroup> : <div className="flex min-h-96 flex-1 shrink-0 flex-col gap-3 p-4 pt-3.5 sm:px-5 lg:min-h-0 lg:shrink">
       {!wide && !embedded ? <Tabs value={view} onValueChange={value => setView(value as "outputs" | "process")}>
-        <TabsList className="w-full">
-          <TabsTrigger value="outputs">{t("结果")}</TabsTrigger>
-          <TabsTrigger value="process">{t("过程")}{active ? <span className="size-1.5 animate-pulse rounded-full bg-primary" /> : null}</TabsTrigger>
+        <TabsList className="w-full rounded-xl">
+          <TabsTrigger value="outputs" className="rounded-lg">{t("求解结果")}</TabsTrigger>
+          <TabsTrigger value="process" className="rounded-lg">{t("求解步骤")}{active ? <span className="size-1.5 animate-pulse rounded-full bg-primary" /> : null}</TabsTrigger>
         </TabsList>
       </Tabs> : null}
       <Pane>{view === "outputs" ? outputs : timeline}</Pane>
@@ -244,21 +253,21 @@ function NoteDialog({ meta, onClose, onSave }: { meta: RunMeta; onClose: () => v
     catch (reason) { toast.error(errorText(reason)); setBusy(false); }
   };
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className="flex min-h-0 flex-col sm:max-w-lg">
+    <DialogContent className="flex min-h-0 flex-col rounded-2xl sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>{t("备注与标签")}</DialogTitle>
-        <DialogDescription>{t("记录这次运行的结论或问题。能打开工作台的人都能看到和修改。")}</DialogDescription>
+        <DialogDescription>{t("记录当前方案的业务结论或复盘要点，方便后续检索与对比。")}</DialogDescription>
       </DialogHeader>
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="run-note" className="text-xs">{t("备注")}</Label>
+          <Label htmlFor="run-note" className="text-xs font-medium">{t("备注")}</Label>
           <Textarea id="run-note" value={note} onChange={event => setNote(event.target.value.slice(0, 2000))} className="h-32 min-h-20 field-sizing-fixed resize-none"
-            placeholder={t("例如：漏了整数约束，目标值偏大")} />
+            placeholder={t("例如：已确认满足下周交期要求，可作为基准方案")} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="run-tags" className="text-xs">{t("标签")}</Label>
-          <Input id="run-tags" value={tags} onChange={event => setTags(event.target.value)} placeholder={t("用逗号或空格分隔，例如：NL4Opt 已核对")} />
-          <p className="text-xs text-muted-foreground">{t("左侧搜索框输入 #标签 可筛选运行。")}</p>
+          <Label htmlFor="run-tags" className="text-xs font-medium">{t("标签")}</Label>
+          <Input id="run-tags" value={tags} onChange={event => setTags(event.target.value)} placeholder={t("用逗号或空格分隔，例如：生产排程 已确认")} />
+          <p className="text-xs text-muted-foreground">{t("左侧搜索框输入 #标签 可快速筛选记录。")}</p>
         </div>
       </div>
       <DialogFooter>
@@ -270,61 +279,114 @@ function NoteDialog({ meta, onClose, onSave }: { meta: RunMeta; onClose: () => v
 }
 
 function Pane({ children }: { children: React.ReactNode }) {
-  return <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-xs">{children}</section>;
+  return <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-xs">{children}</section>;
 }
 
-/** The answer to "what came of this run?" with the next thing to look at. */
-function Summary({ state, values, steps, error, active, elapsed, onTab }: {
-  state: string; values: RunValues; steps: Step[]; error: string | null; active: boolean; elapsed: number | null; onTab: (tab: Tab) => void;
+const PROGRESS_STAGES = [
+  { key: "understand", label: "理解问题" },
+  { key: "model", label: "建立模型" },
+  { key: "solve", label: "自动求解" },
+  { key: "explain", label: "生成方案" },
+] as const;
+
+function inferStageIndex(steps: Step[], values: RunValues): number {
+  if (values.solve || steps.some(step => step.type === "solve" && !step.running)) return 3;
+  if (steps.some(step => step.type === "solve" && step.running) || values.code || steps.some(step => step.code)) return 2;
+  if (values.formulation || steps.some(step => step.formulation || step.type === "artifact")) return 1;
+  return 0;
+}
+
+/** The answer to "what came of this run?" with clear visual progress or executive KPI + next actions. */
+function Summary({ state, values, steps, error, active, elapsed, onTab, actions }: {
+  state: string; values: RunValues; steps: Step[]; error: string | null; active: boolean; elapsed: number | null;
+  onTab: (tab: Tab) => void; actions?: React.ReactNode;
 }) {
   const solve = values.solve;
   const frame = (kind: keyof typeof TONE, icon: React.ReactNode, body: React.ReactNode, side?: React.ReactNode) =>
-    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-card p-3 shadow-xs sm:gap-x-4", TONE[kind].border)}>
-      <span className={cn("grid size-10 shrink-0 place-items-center rounded-full [&_svg]:size-5", TONE[kind].soft)}>{icon}</span>
-      <div className="min-w-0 flex-1 basis-40">{body}</div>
-      {side ? <div className="flex flex-wrap gap-2">{side}</div> : null}
+    <div className={cn("animate-fade-up flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border bg-card p-4 shadow-xs", TONE[kind].border)}>
+      <span className={cn("grid size-11 shrink-0 place-items-center rounded-xl border [&_svg]:size-5", TONE[kind].soft)}>{icon}</span>
+      <div className="min-w-0 flex-1 basis-52">{body}</div>
+      {side ? <div className="flex flex-wrap items-center gap-2">{side}</div> : null}
     </div>;
 
-  if (error) return frame("bad", <TriangleAlert />, <><p className="font-medium">{t("无法读取运行")}</p><p className="text-sm text-muted-foreground">{error}</p></>,
+  if (error) return frame("bad", <TriangleAlert />, <><p className="font-medium">{t("无法读取方案")}</p><p className="text-sm text-muted-foreground">{error}</p></>,
     <Button variant="outline" size="sm" onClick={() => location.reload()}><RefreshCw />{t("重新连接")}</Button>);
+
   if (active) {
+    const stageIdx = inferStageIndex(steps, values);
+    const stageHints = [
+      t("正在梳理业务目标、决策变量与约束条件…"),
+      t("正在构建严谨的数学优化模型与求解程序…"),
+      t("正在调用求解引擎计算全局最优方案…"),
+      t("已完成核心计算，正在整理通俗易懂的方案解读…"),
+    ];
     const all = phases(steps);
     const current = all.at(-1);
-    const calls = current ? working(current.calls) : null;
-    const doing = calls ? t("LLM 正在处理：{calls}", { calls })
-      : current?.step?.running ? t("正在沙箱中求解代码") : current?.step ? t("刚完成：{title}", { title: t(current.step.title) }) : t("正在准备");
-    const done = all.filter(phase => phase.kind !== "working").length;
-    return frame("live", <Spinner />, <><p className="font-medium">{t("正在建模")}</p><p className="truncate text-sm text-muted-foreground">{doing}</p></>,
-      <div className="flex items-baseline gap-4 text-sm text-muted-foreground">
-        <span><strong className="text-lg font-semibold text-foreground tabular">{done}</strong> {t("个阶段")}</span>
-        <span><strong className="text-lg font-semibold text-foreground tabular">{elapsed == null ? "—" : duration(elapsed)}</strong></span>
-      </div>);
+    const subtitle = current?.step?.running ? t("正在隔离环境中执行优化求解计算…") : stageHints[stageIdx];
+    return <div className="animate-fade-up relative overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/[0.06] via-card to-card p-4 shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+            <Sparkles className="size-5 animate-pulse" />
+          </span>
+          <div className="min-w-0">
+            <p className="font-semibold tracking-tight">{t("正在智能建模与求解")}</p>
+            <p className="truncate text-xs text-muted-foreground sm:text-sm">{subtitle}</p>
+          </div>
+        </div>
+        <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary tabular">
+          {elapsed == null ? "0s" : duration(elapsed)}
+        </span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {PROGRESS_STAGES.map((stage, idx) => {
+          const done = idx < stageIdx;
+          const currentStage = idx === stageIdx;
+          return <div key={stage.key} className={cn(
+            "flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
+            done ? "border-primary/25 bg-primary/10 text-primary"
+              : currentStage ? "border-primary/40 bg-background text-foreground shadow-2xs"
+                : "border-border/60 bg-muted/25 text-muted-foreground"
+          )}>
+            <span className={cn("grid size-5 shrink-0 place-items-center rounded-full text-[10px] font-semibold",
+              done ? "bg-primary text-primary-foreground" : currentStage ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground")}>
+              {done ? <Check className="size-3" /> : currentStage ? <Spinner className="size-3" /> : idx + 1}
+            </span>
+            <span className="truncate">{t(stage.label)}</span>
+          </div>;
+        })}
+      </div>
+    </div>;
   }
-  if (state === "interrupted") return frame("warn", <Square />, <><p className="font-medium">{t("运行已停止")}</p>
-    <p className="text-sm text-muted-foreground">{steps.length ? t("停止前已保存的过程和产物仍可查看。") : t("停止前的过程没有保存。")}</p></>);
-  if (state === "failed") return frame("bad", <TriangleAlert />, <><p className="font-medium">{t("运行失败")}</p>
+
+  if (state === "interrupted") return frame("warn", <Square />, <><p className="font-medium">{t("已停止求解")}</p>
+    <p className="text-sm text-muted-foreground">{steps.length ? t("停止前已生成的中间模型与记录仍可查看。") : t("任务在生成结果前已停止。")}</p></>, actions);
+  if (state === "failed") return frame("bad", <TriangleAlert />, <><p className="font-medium">{t("求解未能完成")}</p>
     <p className="line-clamp-2 text-sm text-muted-foreground">{values.failure}</p>
-    <details className="mt-2 text-xs"><summary className="cursor-pointer text-muted-foreground">{t("查看完整错误")}</summary><Plain className="mt-2 max-h-64 overflow-auto">{values.failure}</Plain></details></>);
+    <details className="mt-2 text-xs"><summary className="cursor-pointer text-muted-foreground hover:text-foreground">{t("查看详细原因")}</summary><Plain className="mt-2 max-h-64 overflow-auto">{values.failure}</Plain></details></>, actions);
   if (!solve) return frame(tone(state), <TriangleAlert />, <><p className="font-medium">{STATUS[state] ?? state}</p>
-    <p className="text-sm text-muted-foreground">{t("运行没有正常结束。")}</p></>);
-  if (solve.error) return frame("bad", <TriangleAlert />, <><p className="font-medium">{t("代码执行出错")}</p>
+    <p className="text-sm text-muted-foreground">{t("本次求解未返回完整结果。")}</p></>, actions);
+  if (solve.error) return frame("bad", <TriangleAlert />, <><p className="font-medium">{t("模型计算时遇到错误")}</p>
     <p className="truncate font-mono text-xs text-muted-foreground">{solve.error.trim().split("\n").pop()}</p></>,
-    <Button variant="outline" size="sm" onClick={() => onTab("solution")}>{t("查看详情")}<ArrowRight /></Button>);
+    <>{actions}<Button variant="outline" size="sm" className="rounded-lg" onClick={() => onTab("solution")}>{t("查看详情")}<ArrowRight /></Button></>);
 
   const kind = tone(solve.status);
   const explain = kind === "good" ? null
     : solve.status === "infeasible" ? (solve.diagnosis?.items.length
-      ? t("求解器判定模型不可行。{tool} 找到 {count} 条不能同时满足的约束，见“解”。", { tool: solve.diagnosis.tool, count: solve.diagnosis.total })
-      : t("求解器判定模型不可行：约束之间互相矛盾。请检查数学模型的约束与数据。"))
-    : solve.status === "unbounded" ? t("求解器判定模型无界：目标可以无限改进，通常是缺少约束。")
+      ? t("当前条件存在冲突，无法同时满足（共定位到 {count} 处冲突条件），请查看下方冲突诊断与调整建议。", { count: solve.diagnosis.total })
+      : t("当前约束条件之间存在矛盾，无法同时满足。建议点击右侧“调整条件”放宽部分限制后重试。"))
+    : solve.status === "unbounded" ? t("优化目标可以无限放大或缩小，通常是因为缺少上限或预算等约束条件。")
     : STATUS[solve.status] ?? solve.status;
+
   return frame(kind, kind === "good" ? <CircleCheck /> : <TriangleAlert />, <div className="flex flex-col gap-1">
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      {solve.objective != null ? <span className="flex flex-wrap items-baseline gap-2"><span className="text-xs text-muted-foreground">{values.explanation?.objective_label || t("目标值")}</span>
-        <span className="text-2xl font-semibold tracking-tight tabular">{formatNumber(solve.objective)}</span>
-        {values.explanation?.objective_unit ? <span className="text-xs text-muted-foreground">{values.explanation.objective_unit}</span> : null}</span> : null}
+      {solve.objective != null ? <span className="flex flex-wrap items-baseline gap-2">
+        <span className="text-xs font-medium text-muted-foreground">{values.explanation?.objective_label || t("最优目标值")}</span>
+        <span className="text-2xl font-bold tracking-tight tabular sm:text-3xl">{formatNumber(solve.objective)}</span>
+        {values.explanation?.objective_unit ? <span className="text-xs font-medium text-muted-foreground">{values.explanation.objective_unit}</span> : null}
+      </span> : <span className="font-semibold">{STATUS[solve.status] ?? solve.status}</span>}
       <StatusBadge status={solve.status} />
     </div>
-    {explain ? <p className="text-sm text-muted-foreground">{explain}</p> : null}
-  </div>);
+    {explain ? <p className="text-sm leading-relaxed text-muted-foreground">{explain}</p> : null}
+  </div>, actions);
 }

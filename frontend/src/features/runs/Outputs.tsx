@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, CodeXml, Download, FileText, GitCompare, type LucideIcon, Sigma, Table2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, CodeXml, Download, FileText, GitCompare, type LucideIcon, Sigma, Sparkles, Table2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { t } from "@/i18n";
@@ -21,10 +21,13 @@ import { ScenarioComparison } from "@/features/runs/ScenarioComparison";
 
 export type Tab = "solution" | "formulation" | "code" | "problem" | "comparison";
 const TABS: [Tab, string, LucideIcon][] = [
-  ["solution", t("解"), Table2], ["formulation", t("数学模型"), Sigma], ["code", t("求解代码"), CodeXml], ["problem", t("问题与数据"), FileText],
+  ["solution", t("最优方案"), Sparkles],
+  ["problem", t("问题与数据"), FileText],
+  ["formulation", t("数学模型"), Sigma],
+  ["code", t("求解代码"), CodeXml],
 ];
 
-/** What the run produced: the solution, the formulation and the code (each in every version), and the problem. */
+/** What the run produced: the solution, the problem & data, the formulation, and the code. */
 export function Outputs({ values, steps, active, tab, setTab, picked, setPicked, language, finished, source, onAdjust }: {
   values: RunValues; steps: Step[]; active: boolean; tab: Tab; setTab: (tab: Tab) => void;
   picked: Partial<Record<"formulation" | "code", string>>; setPicked: (key: "formulation" | "code", id: string | undefined) => void;
@@ -49,32 +52,34 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
   const counts: Partial<Record<Tab, number>> = { formulation: formulations.length, code: codes.length };
 
   return <Tabs value={tab} onValueChange={value => setTab(value as Tab)} className="h-full min-h-0 min-w-0 gap-0">
-      <TabsList ref={tabs} variant="line" aria-label={t("运行产物")} className="h-11 w-full justify-start overflow-x-auto rounded-none border-b px-3">
-        {[...TABS, ...(source ? [["comparison", t("方案对比"), Table2] as const] : [])].map(([id, label, TabIcon]) => <TabsTrigger key={id} value={id} className="flex-none px-2 sm:px-2.5 [&_svg]:hidden sm:[&_svg]:inline-block">
-          <TabIcon />{label}
-          {(counts[id] ?? 0) > 1 ? <span className="rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground tabular">{counts[id]}</span> : null}
-          {active && (counts[id] ?? 0) > 0 ? <span className="size-1.5 animate-pulse rounded-full bg-primary" aria-label={t("正在更新")} /> : null}
-        </TabsTrigger>)}
-      </TabsList>
-    <TabsContent key={tab} value={tab} className="min-h-0 overflow-y-auto p-4">
+    <TabsList ref={tabs} variant="line" aria-label={t("运行产物")} className="h-11 w-full justify-start gap-1 overflow-x-auto rounded-none border-b border-border/70 bg-muted/15 px-3">
+      {[...TABS, ...(source ? [["comparison", t("方案对比"), Table2] as const] : [])].map(([id, label, TabIcon]) => <TabsTrigger key={id} value={id} className="flex-none px-2.5 sm:px-3 [&_svg]:hidden sm:[&_svg]:inline-block">
+        <TabIcon />{label}
+        {(counts[id] ?? 0) > 1 ? <span className="rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground tabular">{counts[id]}</span> : null}
+        {active && (counts[id] ?? 0) > 0 ? <span className="size-1.5 animate-pulse rounded-full bg-primary" aria-label={t("正在更新")} /> : null}
+      </TabsTrigger>)}
+    </TabsList>
+    <TabsContent key={tab} value={tab} className="min-h-0 overflow-y-auto p-4 sm:p-5">
       {tab === "solution" ? values.solve ? <div className="flex flex-col gap-4">
         {values.explanation ? <Explanation explanation={values.explanation} solve={values.solve} /> : null}
         {values.infeasibility ? <Infeasibility explanation={values.infeasibility} onAdjust={active ? undefined : onAdjust} /> : null}
-        {values.explanation_error ? <Alert><AlertDescription>{t("方案解读未完成，求解结果仍可正常查看。")}</AlertDescription></Alert> : null}
-        {values.explanation ? <details className="rounded-lg border p-3">
-          <summary className="cursor-pointer text-sm font-medium">{t("完整变量取值（{count} 个）", { count: Object.keys(values.solve.variables).length })}</summary>
-          <div className="mt-3"><Solution solve={values.solve} /></div>
+        {values.explanation_error ? <Alert><AlertDescription>{t("通俗解读暂未生成，您仍可直接查看下方详细决策数值。")}</AlertDescription></Alert> : null}
+        {values.explanation ? <details className="group/vars rounded-2xl border border-border/80 bg-card p-4 shadow-2xs">
+          <summary className="flex cursor-pointer items-center justify-between text-sm font-medium">
+            <span>{t("查看全部决策变量明细（共 {count} 项）", { count: Object.keys(values.solve.variables).length })}</span>
+          </summary>
+          <div className="mt-4 border-t border-border/60 pt-4"><Solution solve={values.solve} /></div>
         </details> : <Solution solve={values.solve} />}
       </div>
-        : <Blank icon={Table2} text={active ? t("代码在沙箱中求解后，解会显示在这里。") : values.failure ? t("没有求解结果。") : finished ? t("没有求解结果。") : t("运行没有完成。")} />
+        : <Blank icon={Sparkles} text={active ? t("正在计算最优方案，求解完成后将展示在这里…") : values.failure ? t("本次求解未能生成方案。") : finished ? t("暂无求解结果。") : t("求解尚未完成。")} />
         : null}
       {tab === "formulation" ? <Versioned key="formulation" items={formulations} picked={picked.formulation} pick={id => setPicked("formulation", id)}
         noun={t("数学模型")} active={active} file="formulation.md"
-        empty={active ? t("方法给出数学模型后显示在这里。") : t("这个方法没有单独给出数学模型；请看求解代码。")}
+        empty={active ? t("正在整理数学优化模型，稍后显示在这里…") : t("当前求解模式直接生成了求解程序，可在“求解代码”中查看。")}
         render={text => <Markdown text={text} />} /> : null}
       {tab === "code" ? <Versioned key="code" items={codes} picked={picked.code} pick={id => setPicked("code", id)}
         noun={t("代码")} active={active} file="model.py" extra={language?.name}
-        empty={active ? t("方法写出代码后显示在这里。") : t("没有求解代码。")}
+        empty={active ? t("正在编写求解程序，稍后显示在这里…") : t("暂无求解程序。")}
         render={text => <Code text={text} />} /> : null}
       {tab === "problem" ? <Problem values={values} /> : null}
       {tab === "comparison" && source ? <ScenarioComparison source={source} values={values} /> : null}
@@ -102,7 +107,7 @@ function Versioned({ items, picked, pick, noun, active, file, extra, empty, rend
   const go = (index: number) => pick(index === items.length - 1 ? undefined : items[index].id);
 
   return <div className="flex flex-col gap-4">
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
       {items.length > 1 ? <div className="flex items-center gap-1">
         <Button variant="outline" size="icon-sm" aria-label={t("上一版")} disabled={position === 0} onClick={() => go(position - 1)}><ChevronLeft /></Button>
         <Select value={current.id} onValueChange={id => go(items.findIndex(item => item.id === id))}>
@@ -111,8 +116,8 @@ function Versioned({ items, picked, pick, noun, active, file, extra, empty, rend
             {t("第 {number} 版", { number: number + 1 })}<span className="text-muted-foreground">{t(item.title)}</span></SelectItem>)}</SelectContent>
         </Select>
         <Button variant="outline" size="icon-sm" aria-label={t("下一版")} disabled={latest} onClick={() => go(position + 1)}><ChevronRight /></Button>
-      </div> : <span className="text-xs text-muted-foreground">{t(current.title)}</span>}
-      {extra ? <span className="text-xs text-muted-foreground">{extra}</span> : null}
+      </div> : <span className="text-xs font-medium text-muted-foreground">{t(current.title)}</span>}
+      {extra ? <span className="rounded-md bg-background px-2 py-0.5 text-xs text-muted-foreground">{extra}</span> : null}
       <span className="ml-auto flex items-center gap-1">
         {previous ? <Toggle size="sm" pressed={compare} onPressedChange={setCompare} aria-label={t("与上一版对比")} className="h-8 text-xs">
           <GitCompare />{t("对比上一版")}</Toggle> : null}
@@ -130,16 +135,16 @@ function Versioned({ items, picked, pick, noun, active, file, extra, empty, rend
 function Problem({ values }: { values: RunValues }) {
   const files = Object.entries(values.data ?? {});
   return <div className="flex flex-col gap-4">
-    <Card className="gap-3 py-4 shadow-none">
-      <CardHeader className="flex items-center gap-2 px-4">
-        <CardTitle className="text-sm">{t("问题描述")}</CardTitle>
+    <Card className="gap-3 rounded-2xl border-border/80 py-4 shadow-2xs">
+      <CardHeader className="flex items-center gap-2 px-5">
+        <CardTitle className="text-sm font-semibold">{t("问题描述")}</CardTitle>
         <CopyButton text={values.description ?? ""} label={t("复制问题")} className="ml-auto" />
       </CardHeader>
-      <CardContent className="min-w-0 px-4"><Markdown text={values.description ?? ""} singleDollarMath={false} /></CardContent>
+      <CardContent className="min-w-0 px-5"><Markdown text={values.description ?? ""} singleDollarMath={false} /></CardContent>
     </Card>
     {files.map(([name, content]) => <DataFile key={name} name={name} content={content} />)}
-    {values.spec ? <details className="rounded-lg border p-4">
-      <summary className="cursor-pointer text-sm font-medium">{t("运行配置")}</summary>
+    {values.spec ? <details className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3 text-xs text-muted-foreground">
+      <summary className="cursor-pointer font-medium hover:text-foreground">{t("查看底层运行参数")}</summary>
       <Plain className="mt-3 max-h-96 overflow-auto">{JSON.stringify(values.spec, null, 2)}</Plain>
     </details> : null}
   </div>;
@@ -147,22 +152,22 @@ function Problem({ values }: { values: RunValues }) {
 
 function DataFile({ name, content }: { name: string; content: string }) {
   const table = useMemo(() => parseDelimited(content, /\.tsv$/i.test(name) ? "\t" : ","), [name, content]);
-  return <Card className="gap-3 py-4 shadow-none">
-    <CardHeader className="flex items-center gap-2 px-4">
-      <FileText className="size-4 shrink-0 text-muted-foreground" />
+  return <Card className="gap-3 rounded-2xl border-border/80 py-4 shadow-2xs">
+    <CardHeader className="flex items-center gap-2 px-5">
+      <FileText className="size-4 shrink-0 text-primary" />
       <CardTitle className="min-w-0 font-mono text-sm break-all">{name}</CardTitle>
-      <span className="shrink-0 text-xs text-muted-foreground">{t("{count} 行", { count: content.split("\n").filter(Boolean).length })}</span>
+      <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{t("{count} 行", { count: content.split("\n").filter(Boolean).length })}</span>
       <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={t("下载 {name}", { name })} onClick={() => download(name, content)}><Download /></Button>
     </CardHeader>
-    <CardContent className="px-4">
-      {table ? <Table className="text-[13px]" containerClassName="max-h-96 rounded-lg border">
-          <TableHeader className="sticky top-0 z-10 bg-muted"><TableRow>
-            {table[0].map((cell, index) => <TableHead key={index} className="h-8 font-mono text-xs">{cell}</TableHead>)}
-          </TableRow></TableHeader>
-          <TableBody>{table.slice(1, 501).map((row, index) => <TableRow key={index}>
-            {row.map((cell, column) => <TableCell key={column} className={column ? "py-1.5 text-right font-mono tabular" : "py-1.5 font-mono font-medium"}>{cell}</TableCell>)}
-          </TableRow>)}</TableBody>
-        </Table> : <Plain className="max-h-96 overflow-y-auto">{content}</Plain>}
+    <CardContent className="px-5">
+      {table ? <Table className="text-[13px]" containerClassName="max-h-96 rounded-xl border">
+        <TableHeader className="sticky top-0 z-10 bg-muted"><TableRow>
+          {table[0].map((cell, index) => <TableHead key={index} className="h-8 font-mono text-xs">{cell}</TableHead>)}
+        </TableRow></TableHeader>
+        <TableBody>{table.slice(1, 501).map((row, index) => <TableRow key={index}>
+          {row.map((cell, column) => <TableCell key={column} className={column ? "py-1.5 text-right font-mono tabular" : "py-1.5 font-mono font-medium"}>{cell}</TableCell>)}
+        </TableRow>)}</TableBody>
+      </Table> : <Plain className="max-h-96 overflow-y-auto">{content}</Plain>}
       {table && table.length > 501 ? <p className="mt-2 text-xs text-muted-foreground">{t("仅预览前 500 行，下载可查看完整数据。")}</p> : null}
     </CardContent>
   </Card>;

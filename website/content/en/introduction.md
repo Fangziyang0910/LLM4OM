@@ -1,4 +1,4 @@
-LLM4OM turns natural-language problems and data into optimization models and calls solvers to compute plans. Describe requirements, inspect decisions and the modeling process, then revise conditions, compare alternatives and export results.
+General Intelligent Optimization Solver is a general solver for complex optimization problems, turning natural-language problems and business data into mathematical optimization models and calling solvers to compute optimal plans. Describe requirements, inspect decisions and the modeling process, then revise conditions, compare alternatives and export results.
 
 ## Choose an entry point
 
@@ -50,4 +50,4 @@ The interface supports Chinese, English and light/dark/system themes. Desktop di
 
 [Team deployment](../team-deployment/) covers shared services, HTTPS and access configuration. [Usage and backups](../configuration/) covers quotas, concurrency and data maintenance. [CLI and Python](../cli-python/) runs the same modeling workflows from existing programs.
 
-LLM4OM is developed by the [EIPI team](https://scut-eipi.github.io/), with publicly maintained source and documentation.
+General Intelligent Optimization Solver is developed by the [EIPI team](https://scut-eipi.github.io/), with publicly maintained source and documentation.

@@ -101,7 +101,7 @@ const output = path.join(__dirname, "../artifacts/website/docs");
     await page.goto(`${base}?lang=en`);
     await expect(page.locator('[data-docs="introduction"]')).toHaveAttribute("href", /docs\/en\/introduction\/$/);
     await page.locator('[data-docs="introduction"]').click();
-    await expect(page.locator("h1")).toHaveText("LLM4OM documentation");
+    await expect(page.locator("h1")).toHaveText("General Intelligent Optimization Solver documentation");
 
     for (const width of [1440, 1280, 768, 390, 360, 320]) {
       await page.setViewportSize({ width, height: width >= 768 ? 1000 : 844 });

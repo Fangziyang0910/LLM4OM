@@ -1,6 +1,6 @@
 # 开发指南
 
-本文面向修改 LLM4OM 代码的人：搭建环境、本地开发、测试、接入新方法、增加代码写法和发布版本。先读 [GLOSSARY](GLOSSARY.md)、[CODING_STANDARDS](CODING_STANDARDS.md) 和[架构](docs/architecture.md)。工作项使用 [GitHub Issues](docs/agents/issue-tracker.md)。
+本文面向修改通用智能优化求解器代码的人：搭建环境、本地开发、测试、接入新方法、增加代码写法和发布版本。先读 [GLOSSARY](GLOSSARY.md)、[CODING_STANDARDS](CODING_STANDARDS.md) 和[架构](docs/architecture.md)。工作项使用 [GitHub Issues](docs/agents/issue-tracker.md)。
 
 ## 环境
 

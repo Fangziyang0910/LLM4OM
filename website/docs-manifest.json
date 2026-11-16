@@ -1,13 +1,13 @@
 {
   "groups": [
-    {"id":"start","title":["开始使用","Getting started"],"description":["了解平台，完成第一个方案。","Understand the platform and compute your first plan."]},
+    {"id":"start","title":["开始使用","Getting started"],"description":["了解通用智能优化求解器，完成第一个方案。","Understand the general solver and compute your first plan."]},
     {"id":"features","title":["功能指南","User guides"],"description":["描述需求、整理数据、讨论与调整方案。","Prepare data, discuss results and revise your plans."]},
     {"id":"methods","title":["建模方法","Modeling methods"],"description":["了解每种方法怎样建立、检查和修正模型。","See how each method builds, checks and repairs models."]},
     {"id":"solvers","title":["建模库与求解器","Libraries & solvers"],"description":["选择模型表达方式与实际计算引擎。","Choose a modeling library and a compatible solver backend."]},
     {"id":"deployment","title":["部署与参考","Deployment & reference"],"description":["部署服务、设置用量、排查问题。","Deploy the service, configure usage and resolve problems."]}
   ],
   "articles": [
-    {"id":"introduction","group":"start","title":["LLM4OM 文档","LLM4OM documentation"],"summary":["从第一次建模，到选择方法与部署平台。","From your first optimization problem to methods, solvers and deployment."],"sources":["README.md","GLOSSARY.md"]},
+    {"id":"introduction","group":"start","title":["通用智能优化求解器文档","General Intelligent Optimization Solver documentation"],"summary":["求解各种复杂优化问题的通用求解器：从第一次建模求解，到选择方法与部署平台。","A general solver for complex optimization problems: from your first optimization problem to methods, solvers and deployment."],"sources":["README.md","GLOSSARY.md"]},
     {"id":"quickstart","group":"start","title":["完成第一个方案","Your first plan"],"summary":["用一个生产问题体验建模、求解与条件调整。","Build, solve and revise a small production plan."],"sources":["README.md","docs/user-guide.md"]},
     {"id":"installation","group":"start","title":["安装与启动","Install and launch"],"summary":["使用 Docker Compose 或本地 Python 环境启动平台。","Start the platform with Docker Compose or a local Python environment."],"sources":["README.md","docs/deployment.md"]},
     {"id":"concepts","group":"start","title":["理解一次建模","How modeling works"],"summary":["区分建模方法、大模型、建模库、求解器和运行记录。","Understand methods, LLMs, modeling libraries, solvers and saved runs."],"sources":["GLOSSARY.md","docs/architecture.md"]},

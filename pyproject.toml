@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "llm4om"
 version = "0.43.0"
-description = "Automated optimization modeling with large language models: problem to formulation, code and solution"
+description = "General Intelligent Optimization Solver (通用智能优化求解器): a general solver for complex optimization problems"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = "Apache-2.0"

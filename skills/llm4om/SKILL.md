@@ -1,11 +1,11 @@
 ---
 name: llm4om
-description: "Model and solve optimization problems using the current coding-agent model and LLM4OM methods. Use for mathematical programming, scheduling, resource allocation, routing, constraint models, or a named LLM4OM modeling method."
+description: "General Intelligent Optimization Solver (通用智能优化求解器): model and solve complex optimization problems using the current coding-agent model and the llm4om CLI. Use for mathematical programming, scheduling, resource allocation, routing, constraint models, or a named modeling method."
 ---
 
-# LLM4OM
+# General Intelligent Optimization Solver
 
-Use your current model for conversation, modeling, review, code generation, and explanation. LLM4OM supplies the original method graphs and local execution tools. This workflow requires no platform LLM credentials or Web server.
+General Intelligent Optimization Solver is a general solver for complex optimization problems. Use your current model for conversation, modeling, review, code generation, and explanation. The `llm4om` CLI supplies the original method graphs and local execution tools. This workflow requires no platform LLM credentials or Web server.
 
 ## Prepare
 

@@ -36,11 +36,11 @@ function messageReasoning(message: Message): string {
 const Reasoning = memo(function Reasoning({ text, active }: { text: string; active: boolean }) {
   const [open, setOpen] = useState(false);
   return <details className="group/thinking mb-3 min-w-0" onToggle={event => setOpen(event.currentTarget.open)}>
-    <summary className="flex w-fit max-w-full cursor-pointer list-none items-center gap-1.5 rounded-md py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-      {active ? <Spinner className="size-3.5" aria-hidden="true" role="presentation" /> : <Brain className="size-3.5" />}
+    <summary className="flex w-fit max-w-full cursor-pointer list-none items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      {active ? <Spinner className="size-3.5 text-primary" aria-hidden="true" role="presentation" /> : <Brain className="size-3.5 text-primary" />}
       <span>{t(active ? "正在思考……" : "思考过程")}</span><ChevronRight className="size-3.5 transition-transform group-open/thinking:rotate-90" />
     </summary>
-    {open ? <div className="mt-1 max-h-64 overflow-y-auto border-l border-border/80 pl-3"><Markdown text={text} className="text-muted-foreground" /></div> : null}
+    {open ? <div className="mt-2 max-h-64 overflow-y-auto border-l-2 border-primary/25 pl-3"><Markdown text={text} className="text-muted-foreground" /></div> : null}
   </details>;
 });
 
@@ -48,7 +48,7 @@ const Reasoning = memo(function Reasoning({ text, active }: { text: string; acti
 function ToolResult({ message, onOpenPlan, onCompare }: {
   message: Extract<Message, { type: "tool" }>; onOpenPlan?: (source: SourceRun) => void; onCompare?: (group: string) => void;
 }) {
-  if (message.status === "error") return <details className="group/error min-w-0 rounded-lg border border-destructive/20 bg-card px-3 py-2 text-xs">
+  if (message.status === "error") return <details className="group/error min-w-0 rounded-xl border border-destructive/20 bg-card px-3.5 py-2.5 text-xs">
     <summary className="flex cursor-pointer list-none items-center gap-2 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <TriangleAlert className="size-3.5 shrink-0 text-destructive" /><span>{t("这一步未完成")}</span>
       <ChevronRight className="ml-auto size-3.5 shrink-0 transition-transform group-open/error:rotate-90" />
@@ -83,7 +83,7 @@ export function ChatMessages({ messages, loading, label, failure, disabled, onRe
       if (!text && !reasoning) return null;
       const human = message.type === "human";
       return <article key={message.id ?? index} aria-label={human ? t("你") : label}
-        className={human ? "group ml-auto w-fit min-w-0 max-w-[85%] rounded-2xl bg-muted/70 px-4 py-2.5"
+        className={human ? "group ml-auto w-fit min-w-0 max-w-[85%] rounded-2xl rounded-br-md border border-primary/15 bg-primary/[0.08] px-4 py-2.5 shadow-2xs"
           : "group w-full min-w-0"}>
         {/* The assistant name stays available to readers and browser tests without repeating a visual header. */}
         {human ? null : <h3 className="sr-only select-none">{label}</h3>}
@@ -94,25 +94,25 @@ export function ChatMessages({ messages, loading, label, failure, disabled, onRe
         </div> : null}
       </article>;
     })}
-    {loading && !(pending && messageReasoning(pending) && !messageText(pending) && !calls.length) ? <div role="status" className="flex min-w-0 flex-col gap-2 text-xs text-muted-foreground">
+    {loading && !(pending && messageReasoning(pending) && !messageText(pending) && !calls.length) ? <div role="status" className="flex min-w-0 flex-col gap-2.5 text-xs text-muted-foreground">
       {calls.length ? calls.map(call => <div key={call.id ?? call.name} className="flex min-w-0 flex-col gap-2">
-        <div className="flex items-start gap-2">
-        <Spinner aria-hidden="true" role="presentation" className="mt-0.5 shrink-0" /><div className="min-w-0"><p>{activity(call.name)}</p>
-          {progress && progress.tool_call_id === call.id ? <p className="mt-1 break-words">{t("方案 {index}/{total}：{name}", { index: progress.index, total: progress.total, name: progress.name })} · {stages[progress.stage]}</p>
-            : call.name === "web_search" && typeof call.args?.query === "string" ? <p className="mt-1 break-words">{call.args.query}</p> : null}
-        </div></div>
-        {call.id && tasks?.[call.id] ? <details className="min-w-0 rounded-xl border border-border/70 bg-card" open>
-          <summary className="cursor-pointer px-3 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{tasks[call.id].name} · {tasks[call.id].language}</summary>
+        <div className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-foreground/90">
+          <Spinner aria-hidden="true" role="presentation" className="mt-0.5 shrink-0 text-primary" /><div className="min-w-0"><p className="font-medium">{activity(call.name)}</p>
+            {progress && progress.tool_call_id === call.id ? <p className="mt-1 break-words text-muted-foreground">{t("方案 {index}/{total}：{name}", { index: progress.index, total: progress.total, name: progress.name })} · {stages[progress.stage]}</p>
+              : call.name === "web_search" && typeof call.args?.query === "string" ? <p className="mt-1 break-words text-muted-foreground">{call.args.query}</p> : null}
+          </div></div>
+        {call.id && tasks?.[call.id] ? <details className="min-w-0 overflow-hidden rounded-2xl border border-border/80 bg-card shadow-xs" open>
+          <summary className="cursor-pointer bg-muted/20 px-3.5 py-2.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{tasks[call.id].name}</summary>
           <div className="h-64 border-t"><Timeline steps={tasks[call.id].steps} live={{}} active={loading}
             onShow={() => onShowTask?.(call.id!)} /></div>
-          <div className="border-t px-2 py-1"><Button variant="link" size="sm" onClick={() => onShowTask?.(call.id!)}>{t("查看正在生成的产物")}</Button></div>
+          <div className="border-t px-3 py-1.5"><Button variant="link" size="sm" className="px-0" onClick={() => onShowTask?.(call.id!)}>{t("在方案面板中查看详情")}</Button></div>
         </details> : null}
-      </div>) : <p className="flex items-center gap-2"><Spinner aria-hidden="true" role="presentation" />{pending && messageText(pending) ? t("正在输出……") : t("正在准备回复……")}</p>}
-    </div> : failed || stopped || unanswered ? <div className="min-w-0 rounded-xl border border-border/70 bg-muted/30 p-3 text-xs" role={failed ? "alert" : "status"}>
-      <p>{failed ? t("这轮回复未完成，可以重试。") : t("这轮回复已停止，可以重新回答。")}</p>
+      </div>) : <p className="flex items-center gap-2"><Spinner aria-hidden="true" role="presentation" className="text-primary" />{pending && messageText(pending) ? t("正在输出……") : t("正在准备回复……")}</p>}
+    </div> : failed || stopped || unanswered ? <div className="min-w-0 rounded-2xl border border-border/80 bg-muted/30 p-3.5 text-xs" role={failed ? "alert" : "status"}>
+      <p className="font-medium">{failed ? t("这轮回复未完成，可以重试。") : t("这轮回复已停止，可以重新回答。")}</p>
       <p className="mt-1 text-muted-foreground">{unanswered ? t("重试使用原问题，输入框中的草稿会保留。") : t("请从输入框重新发送，草稿会保留。")}</p>
-      {failed ? <details className="mt-2 text-muted-foreground"><summary className="cursor-pointer">{t("查看错误详情")}</summary><p className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words">{errorText(failure)}</p></details> : null}
-      {unanswered ? <Button variant="outline" size="sm" className="mt-3" disabled={disabled} onClick={onRetry}><RefreshCw />{t("重试这一轮")}</Button> : null}
+      {failed ? <details className="mt-2 text-muted-foreground"><summary className="cursor-pointer hover:text-foreground">{t("查看错误详情")}</summary><p className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words">{errorText(failure)}</p></details> : null}
+      {unanswered ? <Button variant="outline" size="sm" className="mt-3 rounded-lg" disabled={disabled} onClick={onRetry}><RefreshCw />{t("重试这一轮")}</Button> : null}
     </div> : null}
   </div>;
 }

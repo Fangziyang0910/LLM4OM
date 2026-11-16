@@ -1,4 +1,4 @@
-LLM4OM connects requirements, modeling, computation and plan management. These terms map to settings and artifacts in the workbench.
+General Intelligent Optimization Solver connects requirements, modeling, computation and plan management for complex optimization problems. These terms map to settings and artifacts in the workbench.
 
 ## Run data flow
 

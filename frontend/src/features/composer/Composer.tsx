@@ -1,5 +1,5 @@
 import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useRef, useState } from "react";
-import { ArrowRight, Columns3, Database, MessageSquare, Play, Settings2 } from "lucide-react";
+import { ArrowRight, BookOpen, CalendarClock, Columns3, Factory, MessageSquareText, Play, Settings2, SlidersHorizontal, Sparkles, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { useDefaultLayout } from "react-resizable-panels";
@@ -28,23 +28,32 @@ import type { Draft } from "@/features/composer/types";
 import type { BackendCatalog, Method, Options, Preset } from "@/types";
 
 const DRAFT_KEY = "llm4om-draft";
-export const MAX_COMPARED = 12;  // runs one comparison may start
+export const MAX_COMPARED = 12;
 
-const STARTERS: { title: string; tag: string; description: string; data?: Record<string, string> }[] = [
+const STARTERS = [
   {
-    title: "生产计划", tag: "整数规划",
+    icon: Factory,
+    title: "生产计划",
+    tag: "提升利润",
+    summary: "在有限设备与工序额度下，合理安排多种产品的产量，让总利润最高。",
     description: "工厂生产 A、B 两种产品，数量必须是非负整数。每件 A 利润为 3，每件 B 利润为 2。A 消耗 2 单位切割资源和 1 单位加工资源，" +
       "B 消耗 1 单位切割资源和 2 单位加工资源。两种资源各有 8 单位。请确定生产数量，使总利润最大。",
   },
   {
-    title: "运输问题", tag: "附数据文件",
+    icon: Truck,
+    title: "运输问题",
+    tag: "附数据表",
+    summary: "三个仓库向四个客户发货，自动读取表格算出总运费最低的调拨方案。",
     description: "三个仓库向四个客户运送同一种货物。各仓库的供应量、各客户的需求量和单位运费见数据文件 transport.csv：" +
       "前三行是仓库到客户的单位运费，supply 列是仓库供应量，最后一行 demand 是客户需求量。每个客户的需求必须恰好满足，" +
       "仓库发货不能超过供应量。请制定运输方案，使总运费最小。",
     data: { "transport.csv": "from,C1,C2,C3,C4,supply\nW1,4,6,9,5,120\nW2,7,3,4,8,150\nW3,6,5,7,3,100\ndemand,80,90,110,70,\n" },
   },
   {
-    title: "任务指派", tag: "0-1 规划",
+    icon: CalendarClock,
+    title: "任务指派",
+    tag: "缩短工时",
+    summary: "根据每位员工处理各项任务的耗时差异，安排一对一指派使总耗时最短。",
     description: "把 4 名员工分配到 4 项任务，每人恰好做一项，每项恰好由一人完成。完成时间（小时）如下：" +
       "员工 1：9、2、7、8；员工 2：6、4、3、7；员工 3：5、8、1、8；员工 4：7、6、9、4（依次对应任务 1–4）。" +
       "请给出总完成时间最短的分配方案。",
@@ -100,7 +109,6 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
   const catalog = useQuery({ queryKey: ["backends"], queryFn: () => api<BackendCatalog>("/api/backends"), staleTime: Infinity, retry: false });
   const backends = catalog.data?.libraries[language.id];
   const backendUnavailable = !!backends && !backends.some(item => item.id === backend && item.available);
-  // A comparison runs each chosen method that supports the language with each chosen preset.
   const compared = options.methods.filter(item => draft.methods?.includes(item.id) && !unsupported(item, language.id));
   const comparedPresets = presets.filter(item => draft.presets?.includes(item.id));
   const runs = compared.flatMap(item => (comparedPresets.length ? comparedPresets : preset ? [preset] : [])
@@ -131,7 +139,7 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
     if (busy) return;
     if (reviewFirst) { setFocusPane("problem"); return; }
     if (!ready) return;
-    if (!preset) { toast.error(t("先添加一个预设模型。")); openPresets(); return; }
+    if (!preset) { toast.error(t("请先配置一个可用的 AI 模型。")); openPresets(); return; }
     setBusy(true);
     try {
       const request = { ...draft, method: method.id, language: language.id, solver: backend, preset: preset.id };
@@ -151,85 +159,66 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
   }, []);
   const toggle = (key: "methods" | "presets", id: string, on: boolean) =>
     set({ [key]: on ? [...(draft[key] ?? []).filter(item => item !== id), id] : (draft[key] ?? []).filter(item => item !== id) });
-  const label = reviewFirst ? t("检查需求稿") : reading ? t("正在读取数据……") : busy ? t("正在启动") : comparing ? t("开始对比（{count} 个运行）", { count: runs.length }) : t("开始建模");
 
-  const choiceClass = "relative flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-sm font-normal transition-colors hover:bg-accent/50 has-focus-visible:border-ring has-focus-visible:ring-2 has-focus-visible:ring-ring/50 sm:min-h-9 sm:py-1.5";
+  const isDefaultConfig = !comparing && method.id === "direct" && language.id === "pyomo" && backend === "AUTO";
+  const settingsBadge = comparing
+    ? t("多方案对比（{count}）", { count: runs.length })
+    : isDefaultConfig
+      ? t("智能推荐配置")
+      : `${method.name} · ${language.name}`;
+
+  const label = reviewFirst ? t("检查需求稿") : reading ? t("正在读取数据……") : busy ? t("正在启动求解…")
+    : comparing ? t("开始对比（{count} 个方案）", { count: runs.length }) : t("立即求解");
+
+  const choiceClass = "relative flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-sm font-normal transition-all duration-150 hover:bg-accent/50 has-focus-visible:border-ring has-focus-visible:ring-2 has-focus-visible:ring-ring/50 sm:min-h-9 sm:py-1.5";
   const methodChoices = options.methods.map(item => {
     const blocked = unsupported(item, language.id);
     const selected = comparing ? !blocked && !!draft.methods?.includes(item.id) : item.id === method.id;
     const id = `${comparing ? "compare" : "method"}-${item.id}`;
-    return <Label key={item.id} htmlFor={id} title={blocked ? t("{method}：当前方法不支持这种代码写法与求解器", { method: item.name }) : t(item.description)}
-      className={cn(choiceClass, selected && "border-primary/50 bg-primary/5 hover:bg-primary/5", blocked && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
+    return <Label key={item.id} htmlFor={id} title={blocked ? t("{method}：当前策略暂不支持所选求解引擎", { method: item.name }) : t(item.description)}
+      className={cn(choiceClass, selected && "border-primary/50 bg-primary/8 shadow-2xs hover:bg-primary/10", blocked && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
       {comparing ? <Checkbox id={id} checked={selected} disabled={blocked} onCheckedChange={on => toggle("methods", item.id, on === true)} />
         : <RadioGroupItem id={id} value={item.id} disabled={blocked} />}
       <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
-      {item.linear_only ? <Badge variant="outline" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-muted-foreground">LP / MILP</Badge> : null}
+      {item.id === "direct" && !comparing ? <Badge variant="secondary" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-primary">{t("默认")}</Badge>
+        : item.linear_only ? <Badge variant="outline" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-muted-foreground">{t("线性/整数")}</Badge> : null}
     </Label>;
   });
   const methodListClass = "grid grid-cols-1 gap-1.5 sm:grid-cols-2";
 
   const settingsPanel = <aside aria-label={t("运行设置")} className="flex min-h-0 min-w-0 flex-1 flex-col">
     <Card className="min-h-0 flex-1 gap-0 overflow-hidden border-0 py-0 shadow-none">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b pr-12 pl-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold"><Settings2 className="size-4 text-muted-foreground" />{t("运行设置")}</h2>
-        <Label className="ml-auto gap-2 text-xs font-normal text-muted-foreground" title={t("同一问题同时用多个方法或预设运行，并排比较结果")}>
-          <Columns3 className="size-3.5" />{t("对比")}
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b bg-muted/20 pr-12 pl-5">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-sm font-semibold"><Settings2 className="size-4 text-primary" />{t("求解偏好与高级设置")}</h2>
+          <p className="hidden text-[11px] text-muted-foreground sm:block">{t("一般保持默认即可；需要对比不同策略或指定求解引擎时可在此调整。")}</p>
+        </div>
+        <Label className="ml-auto shrink-0 cursor-pointer gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium shadow-2xs" title={t("同一问题同时用多个策略或模型计算，并排核对结果")}>
+          <Columns3 className="size-3.5 text-primary" />{t("多方案对比")}
           <Switch size="sm" checked={comparing} aria-label={t("对比多个方法")} onCheckedChange={on => set({ comparing: on,
             methods: on && !draft.methods?.length ? [method.id] : draft.methods })} />
         </Label>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 divide-y overflow-y-auto lg:grid-cols-[1.2fr_1fr] lg:divide-y-0">
-        <section aria-labelledby="methods-label" className="min-w-0 px-4 py-4 lg:row-span-2 lg:border-r">
-          <h3 id="methods-label" className="mb-3 text-xs font-medium text-muted-foreground">{comparing ? t("建模方法（可多选）") : t("建模方法")}</h3>
+        <section aria-labelledby="methods-label" className="min-w-0 px-5 py-4 lg:row-span-2 lg:border-r">
+          <h3 id="methods-label" className="mb-3 text-xs font-semibold text-foreground/80">{comparing ? t("建模策略（可多选）") : t("建模策略")}</h3>
           {comparing ? <div ref={methodList} role="group" aria-label={t("建模方法")} className={methodListClass}>{methodChoices}</div>
             : <RadioGroup ref={methodList} value={method.id} onValueChange={value => set({ method: value })} aria-label={t("建模方法")}
               aria-describedby="method-description" className={methodListClass}>{methodChoices}</RadioGroup>}
-          <p id="method-description" title={comparing ? undefined : t(method.description)} className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-            {t(comparing ? "同一问题同时用多个方法或预设运行，并排比较结果" : method.description)}</p>
+          <p id="method-description" title={comparing ? undefined : t(method.description)} className="mt-2.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+            {t(comparing ? "开启对比后，系统会并行运行所选策略并自动比对目标结果是否一致。" : method.description)}</p>
         </section>
 
-        <section aria-labelledby="libraries-label" className="min-w-0 px-4 py-4">
-          <h3 id="libraries-label" className="mb-3 text-xs font-medium text-muted-foreground">{t("建模求解器")}</h3>
-          <RadioGroup value={language.id} onValueChange={value => set({ language: value, solver: undefined })} aria-label={t("建模求解器")}
-            className="grid grid-cols-3 gap-1.5">
-            {options.languages.map(item => {
-              const allowed = supports(item.id);
-              const tile = <Label htmlFor={`language-${item.id}`} className={cn(choiceClass, "h-full justify-center px-1.5 text-center",
-                item.id === language.id && "border-primary/50 bg-primary/5 hover:bg-primary/5", !allowed && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
-                <RadioGroupItem id={`language-${item.id}`} value={item.id} disabled={!allowed} className="sr-only" />
-                <span className="text-xs font-medium sm:text-[13px]">{item.name}</span>
-              </Label>;
-              return allowed ? <div key={item.id}>{tile}</div> : <Tooltip key={item.id}>
-                <TooltipTrigger asChild><div>{tile}</div></TooltipTrigger>
-                <TooltipContent>{t("{method}：当前方法不支持这种代码写法与求解器", { method: method.name })}</TooltipContent>
-              </Tooltip>;
-            })}
-          </RadioGroup>
-          <div className="mt-4 flex flex-col gap-2">
-            <Label htmlFor="solver-backend" className="text-xs text-muted-foreground">{t("求解后端")}</Label>
-            <Select value={backend} onValueChange={value => set({ solver: value })}>
-              <SelectTrigger id="solver-backend" aria-label={t("求解后端")} className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>{(backends ?? [{ id: backend, available: true, detail: "" }]).map(item =>
-                <SelectItem key={item.id} value={item.id} disabled={!item.available} title={item.detail}>
-                  {item.id === "AUTO" ? t("自动选择") : item.id}{!item.available ? ` · ${t("当前环境不可用")}` : ""}
-                </SelectItem>)}</SelectContent>
-            </Select>
-            {catalog.isPending ? <p className="text-xs text-muted-foreground">{t("正在检查求解后端……")}</p> : null}
-            {catalog.error ? <p className="text-xs text-destructive">{errorText(catalog.error)}</p> : null}
-            {backendUnavailable ? <p className="text-xs text-destructive">{t("所选后端在当前环境不可用，请选择其他后端。")}</p> : null}
-          </div>
-        </section>
-
-        <section aria-labelledby="presets-label" className="min-w-0 px-4 py-4 lg:border-t">
+        <section aria-labelledby="presets-label" className="min-w-0 px-5 py-4">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h3 id="presets-label" className="text-xs font-medium text-muted-foreground">{comparing ? t("预设模型（可多选）") : t("预设模型")}</h3>
-            <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => { setSettingsOpen(false); openPresets(); }}>{t("管理")}</Button>
+            <h3 id="presets-label" className="text-xs font-semibold text-foreground/80">{comparing ? t("AI 模型（可多选）") : t("AI 模型")}</h3>
+            <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => { setSettingsOpen(false); openPresets(); }}>{t("管理模型")}</Button>
           </div>
           {!preset && presetsStatus !== "ready" ? <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-            {presetsStatus === "loading" ? <Spinner /> : null}{t(presetsStatus === "loading" ? "正在加载预设模型……" : "预设模型暂不可用，请重试加载。")}
+            {presetsStatus === "loading" ? <Spinner /> : null}{t(presetsStatus === "loading" ? "正在加载模型列表……" : "模型列表暂不可用，请重试加载。")}
           </p> : !preset ? <Alert>
-            <AlertDescription className="flex flex-col items-start gap-2">{t("还没有预设模型。")}
-              <Button size="sm" onClick={() => { setSettingsOpen(false); openPresets(); }}>{t("添加预设模型")}</Button></AlertDescription>
+            <AlertDescription className="flex flex-col items-start gap-2">{t("尚未配置可用的 AI 模型。")}
+              <Button size="sm" onClick={() => { setSettingsOpen(false); openPresets(); }}>{t("去添加模型")}</Button></AlertDescription>
           </Alert> : comparing ? <div role="group" aria-label={t("预设模型")} className="flex flex-col gap-1.5">
             {presets.map(item => <Label key={item.id} htmlFor={`compare-preset-${item.id}`} className={cn(choiceClass, "py-2 sm:py-2")}
               title={item.name || item.model}>
@@ -239,25 +228,94 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
                 <span className="truncate text-xs text-muted-foreground">{providerLabel(item.provider)}</span>
               </span>
             </Label>)}
-            {!comparedPresets.length ? <p className="text-xs text-muted-foreground">{t("未选择时使用默认预设 {model}。", { model: preset.name || preset.model })}</p> : null}
+            {!comparedPresets.length ? <p className="text-xs text-muted-foreground">{t("未勾选时默认使用 {model}。", { model: preset.name || preset.model })}</p> : null}
           </div> : <>
             <Select value={preset.id} onValueChange={value => set({ preset: value })}>
-              <SelectTrigger aria-label={t("预设模型")} className="w-full min-w-0" title={preset.name || preset.model}>
+              <SelectTrigger aria-label={t("预设模型")} className="w-full min-w-0 rounded-xl" title={preset.name || preset.model}>
                 <SelectValue>{preset.name || preset.model}</SelectValue></SelectTrigger>
               <SelectContent>{presets.map(item => <SelectItem key={item.id} value={item.id}>
                 <span className="font-medium">{item.name || item.model}</span><span className="text-muted-foreground">{providerLabel(item.provider)}</span>
               </SelectItem>)}</SelectContent>
             </Select>
-            <p className="mt-2 text-xs text-muted-foreground">{providerLabel(preset.provider)}</p>
+            <p className="mt-1.5 text-xs text-muted-foreground">{providerLabel(preset.provider)}</p>
           </>}
+        </section>
+
+        <section aria-labelledby="libraries-label" className="min-w-0 px-5 py-4 lg:border-t">
+          <h3 id="libraries-label" className="mb-3 text-xs font-semibold text-foreground/80">{t("底层求解引擎（专业项）")}</h3>
+          <RadioGroup value={language.id} onValueChange={value => set({ language: value, solver: undefined })} aria-label={t("建模求解器")}
+            className="grid grid-cols-3 gap-1.5">
+            {options.languages.map(item => {
+              const allowed = supports(item.id);
+              const tile = <Label htmlFor={`language-${item.id}`} className={cn(choiceClass, "h-full justify-center px-1.5 text-center",
+                item.id === language.id && "border-primary/50 bg-primary/8 shadow-2xs hover:bg-primary/10", !allowed && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
+                <RadioGroupItem id={`language-${item.id}`} value={item.id} disabled={!allowed} className="sr-only" />
+                <span className="text-xs font-medium sm:text-[13px]">{item.name}</span>
+              </Label>;
+              return allowed ? <div key={item.id}>{tile}</div> : <Tooltip key={item.id}>
+                <TooltipTrigger asChild><div>{tile}</div></TooltipTrigger>
+                <TooltipContent>{t("{method}：当前策略暂不支持该求解引擎", { method: method.name })}</TooltipContent>
+              </Tooltip>;
+            })}
+          </RadioGroup>
+          <div className="mt-3.5 flex flex-col gap-1.5">
+            <Label htmlFor="solver-backend" className="text-xs text-muted-foreground">{t("数值计算器")}</Label>
+            <Select value={backend} onValueChange={value => set({ solver: value })}>
+              <SelectTrigger id="solver-backend" aria-label={t("求解后端")} className="w-full rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent>{(backends ?? [{ id: backend, available: true, detail: "" }]).map(item =>
+                <SelectItem key={item.id} value={item.id} disabled={!item.available} title={item.detail}>
+                  {item.id === "AUTO" ? t("自动匹配最优计算器") : item.id}{!item.available ? ` · ${t("当前环境未安装")}` : ""}
+                </SelectItem>)}</SelectContent>
+            </Select>
+            {catalog.isPending ? <p className="text-xs text-muted-foreground">{t("正在检查可用计算器……")}</p> : null}
+            {catalog.error ? <p className="text-xs text-destructive">{errorText(catalog.error)}</p> : null}
+            {backendUnavailable ? <p className="text-xs text-destructive">{t("所选计算器在当前环境不可用，请切换为自动匹配或其他选项。")}</p> : null}
+          </div>
         </section>
       </div>
     </Card>
   </aside>;
 
-  const problemPanel = <TabsContent value="problem" forceMount className="mt-0 h-full flex min-h-0 min-w-0 flex-col gap-4 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
-    {editor ?? <ProblemEditor autoFocus value={draft.description} data={draft.data} reading={reading} onChange={description => set({ description })}
-      onFiles={list => void attach(list)} onExamples={openExamples} onClear={() => {
+  const settingsTrigger = <button type="button" aria-label={t("查看运行设置")} aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}
+    title={t("点击调整 AI 模型、多方案对比或底层求解引擎")}
+    className={cn(
+      "inline-flex h-8 max-w-full items-center gap-1.5 rounded-xl border bg-background/80 px-2.5 text-xs font-normal shadow-2xs transition-colors hover:border-primary/40 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      (!isDefaultConfig || comparing) ? "border-primary/35 bg-primary/8 text-primary font-medium" : "text-muted-foreground")}>
+    <SlidersHorizontal className="size-3.5 shrink-0" />
+    <span className="truncate">{settingsBadge}</span>
+  </button>;
+
+  const discussTrigger = !assistant && onDiscuss ? <Button type="button" variant="ghost" size="sm"
+    className="h-8 rounded-xl px-2.5 text-xs font-normal text-muted-foreground hover:text-foreground"
+    disabled={busy || reading} onClick={async () => {
+      setBusy(true);
+      try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
+    }}>
+    <MessageSquareText className="size-3.5 text-primary/80" />{t("边聊边梳理")}
+  </Button> : null;
+
+  const startButton = <div className="flex w-full flex-col items-end gap-1 sm:w-auto">
+    {comparing && runs.length > MAX_COMPARED ? <p className="text-xs text-destructive">
+      {t("一次最多对比 {max} 个方案，当前已选 {count} 个。", { max: MAX_COMPARED, count: runs.length })}</p> : null}
+    <Button size="default" className="h-9 w-full gap-1.5 rounded-xl px-5 font-medium shadow-xs sm:w-auto"
+      disabled={busy || (reviewFirst ? disabled || reading || !draft.description.trim() : !ready)} onClick={() => void start()}>
+      {busy || reading ? <Spinner /> : reviewFirst ? <ArrowRight className="size-4" /> : comparing ? <Columns3 className="size-4" /> : <Play className="size-3.5 fill-current" />}
+      <span>{label}</span>
+    </Button>
+  </div>;
+
+  const problemPanel = <TabsContent value="problem" forceMount className="mt-0 flex h-full min-h-0 min-w-0 flex-col gap-5 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
+    {editor ? <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {editor}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl border bg-card px-3.5 py-2.5 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2">{settingsTrigger}</div>
+        {startButton}
+      </div>
+    </div> : <ProblemEditor autoFocus value={draft.description} data={draft.data} reading={reading} onChange={description => set({ description })}
+      onFiles={list => void attach(list)}
+      toolbarExtra={<>{settingsTrigger}{discussTrigger}</>}
+      primaryAction={startButton}
+      onClear={() => {
         const previous = { description: draft.description, data: draft.data, origin: draft.origin }; set({ description: "", data: {}, origin: undefined });
         toast.success(t("已清空问题和附件。"), { action: { label: t("撤销"), onClick: () => set(previous) } });
       }}
@@ -265,81 +323,105 @@ export function Composer({ options, presets, draft, setDraft, onStart, onCompare
       onRemove={name => setDraft(current => {
         const data = { ...current.data }; delete data[name]; return { ...current, data };
       })} />}
-    {!draft.description && !assistant ? <section className="flex shrink-0 flex-col gap-3">
-      <h2 className="text-sm font-medium text-muted-foreground">{t("从一个例子开始")}</h2>
-      <div className="grid grid-cols-2 gap-2 sm:gap-3">
-        {STARTERS.map(item => <button key={item.title} onClick={() => set({ description: t(item.description), data: item.data ?? {}, origin: undefined })}
-          className="group flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-4 text-left shadow-xs transition-colors hover:border-primary/40 hover:bg-accent/40">
-          <span className="flex items-center gap-2 text-sm">
-            <span className="font-medium whitespace-nowrap">{t(item.title)}</span><Badge variant="secondary" className="hidden font-normal sm:inline-flex">{t(item.tag)}</Badge>
-            <ArrowRight className="ml-auto size-4 text-muted-foreground" />
+
+    {!draft.description && !assistant ? <section className="animate-fade-up flex shrink-0 flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <h2 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Sparkles className="size-3.5 text-primary/80" />{t("不知道怎么写？点选常见场景立即体验")}</h2>
+      </div>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {STARTERS.map(item => {
+          const Icon = item.icon;
+          return <button key={item.title} type="button" onClick={() => set({ description: t(item.description), data: item.data ?? {}, origin: undefined })}
+            className="group flex min-w-0 items-start gap-3 rounded-2xl border bg-card/90 p-3.5 text-left shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-sm">
+            <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+              <Icon className="size-4.5" />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="flex items-center gap-2 text-sm">
+                <span className="font-semibold text-foreground">{t(item.title)}</span>
+                <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-[11px] font-normal">{t(item.tag)}</Badge>
+                <ArrowRight className="ml-auto size-3.5 text-muted-foreground/60 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
+              </span>
+              <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t(item.summary)}</span>
+            </span>
+          </button>;
+        })}
+        <button type="button" onClick={openExamples}
+          className="group flex min-w-0 items-start gap-3 rounded-2xl border border-dashed bg-card/50 p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-sm">
+          <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-accent text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+            <BookOpen className="size-4.5" />
           </span>
-          <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t(item.description)}</span>
-        </button>)}
-        <button onClick={openExamples}
-          className="group flex min-w-0 flex-col gap-2 rounded-xl border border-dashed p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/40">
-          <span className="flex items-center gap-2 text-sm font-medium"><Database className="size-4 text-primary" />{t("公开题库")}
-            <ArrowRight className="ml-auto size-4 text-muted-foreground" /></span>
-          <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t("NL4Opt、MAMO、IndustryOR 等 Benchmark 的题面，可直接取用。")}</span>
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <span>{t("浏览案例模板库")}</span>
+              <ArrowRight className="ml-auto size-3.5 text-muted-foreground/60 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
+            </span>
+            <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t("涵盖生产制造、仓储配送、排班调度等真实优化场景，一键填入修改。")}</span>
+          </span>
         </button>
       </div>
     </section> : null}
   </TabsContent>;
+
   const conversationPanel = assistant ? <TabsContent value="assistant" forceMount className={cn("mt-0 h-full min-h-0 min-w-0 data-[state=inactive]:hidden", assistantOpen ? "lg:data-[state=inactive]:block" : "hidden")}>
-    <aside aria-label={t("需求助手")} className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-card">{assistant}</aside>
+    <aside aria-label={t("需求助手")} className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border bg-card shadow-xs">{assistant}</aside>
   </TabsContent> : null;
 
   return <div className="flex h-full flex-col">
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className={cn("mx-auto flex min-h-full max-w-6xl flex-col gap-3 p-4 lg:h-full", assistant && assistantOpen && "h-full")}>
-        <header className="flex shrink-0 flex-col gap-1.5">
-          <div className={cn("flex flex-wrap items-center justify-between gap-2", assistant && "justify-end lg:justify-between")}>
-          <h1 className={cn("text-xl font-semibold tracking-tight sm:text-2xl", assistant && "hidden lg:block")}>{t(assistant ? "需求对话" : "描述一个优化问题")}</h1>
-          <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={busy || reading}
-            aria-expanded={!!assistant && assistantOpen} onClick={async () => {
-              if (assistant) { setAssistantOpen(value => !value); setFocusPane("assistant"); return; }
-              setBusy(true);
-              try { await onDiscuss?.(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
-            }}><MessageSquare />{assistant && assistantOpen ? t("收起需求助手") : t("通过对话整理需求")}</Button>
-          </div>
+      <div className={cn("mx-auto flex min-h-full flex-col gap-4 p-4 sm:px-6 sm:py-5 lg:h-full",
+        assistant ? "max-w-6xl h-full" : "max-w-5xl")}>
+        <header className="animate-fade-up flex shrink-0 flex-col gap-2">
+          {!assistant ? <>
+            <div className="hidden flex-wrap items-center gap-2 text-xs text-muted-foreground sm:flex" aria-label={t("使用步骤")}>
+              <span className="inline-flex items-center gap-1.5 rounded-full border bg-card/80 px-2.5 py-0.5 font-medium text-foreground/85 shadow-2xs">
+                <span className="grid size-4 place-items-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">1</span>{t("描述目标与条件")}
+              </span>
+              <span className="text-muted-foreground/50">→</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border bg-card/80 px-2.5 py-0.5">
+                <span className="grid size-4 place-items-center rounded-full bg-muted text-[10px] font-semibold">2</span>{t("上传表格（可选）")}
+              </span>
+              <span className="text-muted-foreground/50">→</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border bg-card/80 px-2.5 py-0.5">
+                <span className="grid size-4 place-items-center rounded-full bg-muted text-[10px] font-semibold">3</span>{t("自动求得最优方案")}
+              </span>
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("你想解决什么优化问题？")}</h1>
+              <p className="mt-1 hidden text-[13px] leading-relaxed text-muted-foreground sm:block">{t("无需编写公式或代码：用日常语言说明目标（如降低成本、提高利润、合理排班）与限制条件，系统将自动完成数学建模并算出最优方案。")}</p>
+            </div>
+          </> : <div className="flex flex-wrap items-center justify-between gap-2">
+            <h1 className="hidden text-lg font-semibold tracking-tight lg:block">{t("边聊边梳理需求")}</h1>
+            <Button variant="ghost" size="sm" className="ml-auto rounded-xl text-xs text-muted-foreground" disabled={busy || reading}
+              aria-expanded={assistantOpen} onClick={() => { setAssistantOpen(value => !value); setFocusPane("assistant"); }}>
+              <MessageSquareText className="size-3.5" />{assistantOpen ? t("收起对话助手") : t("展开对话助手")}
+            </Button>
+          </div>}
         </header>
 
-        <button type="button" aria-label={t("查看运行设置")} aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}
-          className={cn("flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-card px-4 py-3 text-left text-sm transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", reviewFirst && "hidden lg:flex")}>
-          <span className="flex items-center gap-2 font-medium"><Settings2 className="size-4 text-muted-foreground" />{t("运行设置")}</span>
-          <span><span className="mr-2 text-xs text-muted-foreground">{t("建模方法")}</span>{comparing ? t("方法对比") : method.name}</span>
-          <span><span className="mr-2 text-xs text-muted-foreground">{t("建模求解器")}</span>{language.name}</span>
-          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{preset?.name || preset?.model || t("选择预设模型")}</span>
-          <span className="text-xs text-primary">{t("调整配置")}</span>
-        </button>
         <Tabs value={assistant && assistantOpen ? focusPane : "problem"} onValueChange={setFocusPane} className="min-h-0 flex-1 gap-3">
-          {assistant && assistantOpen ? <TabsList className="grid shrink-0 grid-cols-2 lg:hidden" aria-label={t("问题与助手")}>
-            <TabsTrigger value="assistant">{t("需求助手")}</TabsTrigger><TabsTrigger value="problem">{t("当前需求稿")}</TabsTrigger>
+          {assistant && assistantOpen ? <TabsList className="grid shrink-0 grid-cols-2 rounded-xl lg:hidden" aria-label={t("问题与助手")}>
+            <TabsTrigger value="assistant" className="rounded-lg">{t("对话助手")}</TabsTrigger>
+            <TabsTrigger value="problem" className="rounded-lg">{t("当前需求稿")}</TabsTrigger>
           </TabsList> : null}
-        {desktop && assistant && assistantOpen ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1">
-          <ResizablePanel id="conversation" defaultSize="40%" minSize="320px">{conversationPanel}</ResizablePanel>
-          <ResizableHandle withHandle aria-label={t("调整对话与需求稿的宽度")} className="mx-2 bg-transparent" />
-          <ResizablePanel id="problem" defaultSize="60%" minSize="35%">{problemPanel}</ResizablePanel>
-        </ResizablePanelGroup> : <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-4">{conversationPanel}{problemPanel}</div>}
+          {desktop && assistant && assistantOpen ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1">
+            <ResizablePanel id="conversation" defaultSize="42%" minSize="320px">{conversationPanel}</ResizablePanel>
+            <ResizableHandle withHandle aria-label={t("调整对话与需求稿的宽度")} className="mx-2 bg-transparent" />
+            <ResizablePanel id="problem" defaultSize="58%" minSize="35%">{problemPanel}</ResizablePanel>
+          </ResizablePanelGroup> : <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-4">{conversationPanel}{problemPanel}</div>}
         </Tabs>
+
+        {reviewFirst ? <div className="shrink-0 pt-1">{startButton}</div> : null}
       </div>
     </div>
+
     <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-      <DialogContent onOpenAutoFocus={() => revealMethod(methodList.current)} className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-2xl lg:max-w-5xl">
+      <DialogContent onOpenAutoFocus={() => revealMethod(methodList.current)} className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-2xl lg:max-w-5xl">
         <DialogTitle className="sr-only">{t("运行设置")}</DialogTitle>
         <DialogDescription className="sr-only">{t("选择建模方法、建模求解器和预设模型。")}</DialogDescription>
         {settingsPanel}
-        <div className="flex shrink-0 justify-end border-t px-4 py-3"><Button onClick={() => setSettingsOpen(false)}>{t("完成")}</Button></div>
+        <div className="flex shrink-0 justify-end border-t bg-muted/20 px-5 py-3"><Button className="rounded-xl px-5" onClick={() => setSettingsOpen(false)}>{t("完成")}</Button></div>
       </DialogContent>
     </Dialog>
-    <footer className="flex shrink-0 items-center justify-end gap-2 border-t bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-4 sm:px-6">
-      <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:min-w-56">
-        {comparing && runs.length > MAX_COMPARED ? <p className="text-xs text-destructive">
-          {t("一次最多对比 {max} 个运行，当前为 {count} 个。", { max: MAX_COMPARED, count: runs.length })}</p> : null}
-        <Button size="lg" className="w-full" disabled={busy || (reviewFirst ? disabled || reading || !draft.description.trim() : !ready)} onClick={() => void start()}>
-          {busy || reading ? <Spinner /> : reviewFirst ? <ArrowRight /> : comparing ? <Columns3 /> : <Play />}{label}
-        </Button>
-      </div>
-    </footer>
   </div>;
 }

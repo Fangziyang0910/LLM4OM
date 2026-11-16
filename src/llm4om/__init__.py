@@ -1,4 +1,4 @@
-"""LLM4OM: automated optimization modeling with pluggable methods, LLMs and code languages."""
+"""General Intelligent Optimization Solver: a general solver for complex optimization problems."""
 
 import asyncio
 from pathlib import Path

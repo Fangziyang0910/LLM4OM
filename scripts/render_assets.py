@@ -59,8 +59,8 @@ def pill(x: float, y: float, value: str, c: dict[str, str]) -> str:
 
 
 BANNER = {
-    "subtitle": "Large Language Models for Optimization Modeling",
-    "lines": ("用自然语言描述优化问题，", "得到可核对的数学模型、代码与最优解。"),
+    "subtitle": "General Intelligent Optimization Solver",
+    "lines": ("求解各种复杂优化问题的通用求解器，", "输出可核对的数学模型、求解代码与最优解。"),
     "problem": ("工厂生产 A、B 两种产品，", "两种资源各有 8 单位……"),
 }
 
@@ -82,7 +82,10 @@ def banner(c: dict[str, str]) -> str:
              + text(62, 66, "目标值 · 最优", c, 13, "muted") + text(62, 100, "13", c, 30, weight=700)
              + text(104, 100, "A=3  B=2", c, 13, "muted", mono=True), accent=True),
     ]
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="372" viewBox="0 0 1280 372" role="img" aria-label="LLM4OM: natural-language problem to formulation, code and solution">
+    label = "通用智能优化求解器 (General Intelligent Optimization Solver): a general solver for optimization problems"
+    title = (f'<text x="100" y="54" font-family="{FONT}" font-size="48" font-weight="800" '
+             f'fill="{c["text"]}" letter-spacing="-1">通用智能优化求解器</text>')
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="372" viewBox="0 0 1280 372" role="img" aria-label="{label}">
 {defs(c)}
 {background(1280, 372)}
 <g transform="translate(64,92)">
@@ -90,7 +93,7 @@ def banner(c: dict[str, str]) -> str:
   <g transform="translate(14,14) scale(2)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16c.5-2 1.5-7 4-7 2 0 2 3 4 3 2.5 0 4.5-5 5-7"/>
   </g>
-  <text x="100" y="58" font-family="{FONT}" font-size="64" font-weight="800" fill="{c['text']}" letter-spacing="-1.5">LLM4OM</text>
+  {title}
 </g>
 {text(64, 218, BANNER["subtitle"], c, 20, "muted", 500)}
 {text(64, 262, BANNER["lines"][0], c, 24, weight=600)}
@@ -143,7 +146,8 @@ def architecture(c: dict[str, str], words: dict[str, tuple[str, ...]]) -> str:
     platform = card(630, top, 250, 122, c, words["platform"][0], text(18, 52, words["platform"][1], c, 13, "muted") + steps,
                     accent=True)
     edges = words["edges"]
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="452" viewBox="0 0 1280 452" role="img" aria-label="LLM4OM architecture">
+    label = "General Intelligent Optimization Solver architecture"
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="452" viewBox="0 0 1280 452" role="img" aria-label="{label}">
 {defs(c)}
 {background(1280, 452)}
 {arrow(f"M240 {top + 61} H322", c)}

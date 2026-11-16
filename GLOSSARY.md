@@ -1,6 +1,8 @@
-# LLM4OM 领域术语
+# 通用智能优化求解器领域术语
 
 以下定义用于代码、文档和工作项。模块与接口见[架构](docs/architecture.md)。
+
+**通用智能优化求解器（General Intelligent Optimization Solver，简称 GIOS）**：面向各类复杂优化问题的通用求解器，支持通过工作台或对话完成需求梳理、自动优化建模、隔离沙箱求解与结果解读（底层 Python 包与命令行标识保留为 `llm4om`）。
 
 **自动优化建模（Automated Optimization Modeling）**：从自然语言问题和数据形成可求解的优化模型的任务。
 _Avoid_: 与方法名 AutoFormulation 混用。

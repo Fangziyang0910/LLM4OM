@@ -166,6 +166,26 @@ test("history pages use all server rows for offsets and keep execution time afte
   expect(next.entries[0].elapsed).toBeNull();
 });
 
+test("idle history uses the latest run for unfinished conversations and unsolved runs", async () => {
+  const base = { created_at: "2026-01-01", updated_at: "2026-01-01", status: "idle" };
+  threads.search.mockResolvedValueOnce([
+    { ...base, thread_id: "stopped", metadata: { kind: "optimization", title: "stopped" }, extracted: { last_message_type: "human" } },
+    { ...base, thread_id: "failed", metadata: { title: "failed" }, extracted: {} },
+    { ...base, thread_id: "complete", metadata: { kind: "requirements", title: "complete" }, extracted: { last_message_type: "ai" } },
+    { ...base, thread_id: "tool", metadata: { kind: "solution_chat", title: "tool" },
+      extracted: { last_message_type: "ai", last_message_tools: [{ id: "pending-tool" }] } },
+    { ...base, thread_id: "explaining", metadata: { title: "explaining" }, extracted: { solved: "optimal" } },
+    { ...base, thread_id: "queued", status: "busy", metadata: { kind: "optimization", title: "queued" }, extracted: {} },
+  ] as never);
+  runs.list.mockImplementation(async id => [{ status: id === "queued" ? "pending" : id === "failed" ? "error" : "interrupted" }] as never);
+  const result = await history();
+  expect(result.entries.map(item => [item.id, item.state])).toEqual([
+    ["stopped", "interrupted"], ["failed", "error"], ["complete", "success"], ["tool", "interrupted"],
+    ["explaining", "interrupted"], ["queued", "pending"],
+  ]);
+  expect(runs.list.mock.calls.map(([id]) => id)).toEqual(["stopped", "failed", "tool", "explaining", "queued"]);
+});
+
 test("a comparison cut short keeps the runs that started", async () => {
   runs.create.mockResolvedValueOnce({} as never).mockRejectedValue(limited);
   const result = await startComparison(draft, [{ method: "direct", preset: undefined }, { method: "coe", preset: undefined },

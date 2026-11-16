@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
-    <img src="docs/assets/banner-light.svg" alt="LLM4OM: describe an optimization problem in plain language; get a formulation, code and an optimal solution you can check" width="100%">
+    <img src="docs/assets/banner-light.svg" alt="General Intelligent Optimization Solver: a general solver for complex optimization problems, delivering formulations, code and optimal solutions you can verify" width="100%">
   </picture>
 </p>
 
@@ -27,9 +27,9 @@
 
 ---
 
-**LLM4OM** (Large Language Models for Optimization Modeling) is a platform for automated optimization modeling. Use the original configuration workbench, or chat with the optimization assistant and attach data. The agent calls a complete modeling method to write the mathematical model and solver code, then solve in an isolated container. Inspect actual steps and results in the modeling workspace, and continue the conversation to change conditions.
+**General Intelligent Optimization Solver** (**通用智能优化求解器**) is a general solver for complex optimization problems across scheduling, supply chains, vehicle routing, resource allocation, network flows and nonlinear programming. Configure runs directly in the workbench, or chat with the optimization assistant and attach business data. The agent invokes a complete modeling workflow to formulate the mathematical model, write solver code and compute optimal solutions inside an isolated container. Inspect actual steps, formulations, code and results in the workspace alongside chat, and continue the conversation to revise constraints.
 
-The platform includes **13 LLM modeling methods**: its own Direct and Feedback Repair methods, plus eleven methods from public research. Enter a problem, run the modeling process and inspect the model and result without writing solver code yourself.
+The platform integrates **13 intelligent modeling methods** (including two in-house methods, Direct and Feedback Repair, plus eleven methods from public research) and **9 modeling libraries**. Enter a complex optimization problem, run modeling and solving, and inspect verifiable models and solutions without writing solver code yourself.
 
 <p align="center">
   <img src="docs/assets/demo.gif" alt="Demo: ordinary chat, arithmetic and the Agent modeling workspace" width="100%">
@@ -210,7 +210,7 @@ See [interface contracts and validation](docs/references/modeling-libraries.md).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-en-dark.svg">
-  <img src="docs/assets/architecture-en-light.svg" alt="LLM4OM architecture: the browser and the CLI reach the platform graph through the LangGraph server; methods call LLM presets; code is solved in a sandbox container" width="100%">
+  <img src="docs/assets/architecture-en-light.svg" alt="General Intelligent Optimization Solver architecture: the browser and the CLI reach the platform graph through the LangGraph server; methods call LLM presets; code is solved in a sandbox container" width="100%">
 </picture>
 
 The platform is thin. LangChain makes the LLM calls. The LangGraph server (in-memory runtime, no license needed) runs, streams and stores the runs. The platform adds only the code contract, the solver sandbox, step records and the workbench. See [architecture](docs/architecture.md) (in Chinese).
@@ -233,12 +233,12 @@ Issues and pull requests are welcome. Please read the [development guide](CONTRI
 
 ## Citation
 
-If you use LLM4OM in research, please cite this repository (see [CITATION.cff](CITATION.cff)) and the papers of the methods you use.
+If you use General Intelligent Optimization Solver in research, please cite this repository (see [CITATION.cff](CITATION.cff)) and the papers of the methods you use.
 
 ```bibtex
 @software{llm4om,
   author  = {Fang, Ziyang},
-  title   = {{LLM4OM}: A Platform for Automated Optimization Modeling with Large Language Models},
+  title   = {General Intelligent Optimization Solver: A General Solver for Complex Optimization Problems},
   year    = {2026},
   version = {0.43.0},
   url     = {https://github.com/Fangziyang0910/LLM4OM}

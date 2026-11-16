@@ -16,7 +16,10 @@ function initial(): Locale {
 }
 
 export const locale: Locale = initial();
-if (typeof document !== "undefined") document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
+if (typeof document !== "undefined") {
+  document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
+  document.title = locale === "zh" ? "通用智能优化求解器" : "General Intelligent Optimization Solver";
+}
 
 export function setLocale(next: Locale): void {
   try { localStorage.setItem(KEY, next); } catch { /* storage may be unavailable */ }

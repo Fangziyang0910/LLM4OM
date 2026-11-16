@@ -7,8 +7,8 @@
         "Getting started"
       ],
       "description": [
-        "了解平台，完成第一个方案。",
-        "Understand the platform and compute your first plan."
+        "了解通用智能优化求解器，完成第一个方案。",
+        "Understand the general solver and compute your first plan."
       ]
     },
     {
@@ -61,12 +61,12 @@
       "id": "introduction",
       "group": "start",
       "title": [
-        "LLM4OM 文档",
-        "LLM4OM documentation"
+        "通用智能优化求解器文档",
+        "General Intelligent Optimization Solver documentation"
       ],
       "summary": [
-        "从第一次建模，到选择方法与部署平台。",
-        "From your first optimization problem to methods, solvers and deployment."
+        "求解各种复杂优化问题的通用求解器：从第一次建模求解，到选择方法与部署平台。",
+        "A general solver for complex optimization problems: from your first optimization problem to methods, solvers and deployment."
       ],
       "sources": [
         "README.md",

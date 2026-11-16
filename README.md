@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
-    <img src="docs/assets/banner-light.svg" alt="LLM4OM：用自然语言描述优化问题，得到可核对的数学模型、代码与最优解" width="100%">
+    <img src="docs/assets/banner-light.svg" alt="通用智能优化求解器：求解各种复杂优化问题的通用求解器，输出可核对的数学模型、代码与最优解" width="100%">
   </picture>
 </p>
 
@@ -27,9 +27,9 @@
 
 ---
 
-**LLM4OM**（Large Language Models for Optimization Modeling）是一个自动优化建模平台。你可以在原工作台配置运行，也可以与优化助手对话、上传数据，由 Agent 调用建模方法，写出数学模型和求解代码，在隔离容器中求解。实际步骤、模型、代码和结果可在旁边的建模工作区查看，也可以继续对话调整条件。
+**通用智能优化求解器**（General Intelligent Optimization Solver）是一个求解各种复杂优化问题的通用求解器。面向生产排程、供应链规划、车辆路径、资源配置、网络流与非线性规划等各类复杂优化场景，你可以在工作台直接配置运行，也可以与优化助手对话、上传业务数据，由 Agent 调用完整建模方法，自动构建数学模型和求解代码，并在隔离容器中计算最优解。实际步骤、模型、代码和结果可在旁边的建模工作区随时核对，也可以继续对话调整约束条件。
 
-平台内置 **13 种 LLM 建模方法**，包括 Direct、Feedback Repair 两种自有方法，以及 11 种来自公开研究的方法。你不需要手写求解代码，可以直接输入问题、运行建模，再查看模型和结果。
+平台内置 **13 种智能建模方法**（包括 Direct、Feedback Repair 两种自有方法，以及 11 种来自公开研究的方法）与 **9 种建模求解库**。你不需要手写求解代码，可以直接输入复杂优化问题、运行建模求解，再查看可核对的模型和结果。
 
 <p align="center">
   <img src="docs/assets/demo.gif" alt="演示：普通对话、计算与 Agent 建模工作区" width="100%">
@@ -214,7 +214,7 @@ print(state["failure"] or state["solve"]["objective"])
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-zh-dark.svg">
-  <img src="docs/assets/architecture-zh-light.svg" alt="LLM4OM 架构：浏览器和命令行经 LangGraph 服务器进入平台图，方法调用 LLM 预设，代码在沙箱容器中求解" width="100%">
+  <img src="docs/assets/architecture-zh-light.svg" alt="通用智能优化求解器架构：浏览器和命令行经 LangGraph 服务器进入平台图，方法调用 LLM 预设，代码在沙箱容器中求解" width="100%">
 </picture>
 
 平台本身很薄。LLM 调用交给 LangChain，图编排、运行、流式推送和历史交给 LangGraph 服务器（内存运行时，无需许可证）。平台只提供代码契约、求解沙箱、步骤记录和工作台。详见[架构](docs/architecture.md)。
@@ -237,12 +237,12 @@ print(state["failure"] or state["solve"]["objective"])
 
 ## 引用
 
-在研究中使用 LLM4OM 时，可以引用本仓库（见 [CITATION.cff](CITATION.cff)）：
+在研究中使用通用智能优化求解器时，可以引用本仓库（见 [CITATION.cff](CITATION.cff)）：
 
 ```bibtex
 @software{llm4om,
   author  = {Fang, Ziyang},
-  title   = {{LLM4OM}: A Platform for Automated Optimization Modeling with Large Language Models},
+  title   = {General Intelligent Optimization Solver: A General Solver for Complex Optimization Problems},
   year    = {2026},
   version = {0.43.0},
   url     = {https://github.com/Fangziyang0910/LLM4OM}

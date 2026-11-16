@@ -52,7 +52,7 @@ export default function App() {
   // Runs started elsewhere (another tab, the CLI against the server) finish without telling this page.
   const historyQuery = useInfiniteQuery({ queryKey: ["history"], initialPageParam: 0,
     queryFn: ({ pageParam }) => history(undefined, pageParam), getNextPageParam: page => page.nextOffset,
-    refetchInterval: query => query.state.data?.pages.some(page => page.entries.some(entry => entry.state === "running")) ? 4000 : false });
+    refetchInterval: query => query.state.data?.pages.some(page => page.entries.some(entry => ["running", "pending"].includes(entry.state))) ? 4000 : 10000 });
   const entries = [...new Map((historyQuery.data?.pages.flatMap(page => page.entries) ?? []).map(entry => [entry.id, entry])).values()];
   const options = optionsQuery.data ?? null;
   const [route, setRoute] = useState<Route>(routeFromUrl);
@@ -71,7 +71,9 @@ export default function App() {
     setRoute(next);
     setMenuOpen(false);
   }, []);
-  const refresh = useCallback(() => queryClient.invalidateQueries({ queryKey: ["history"] }), [queryClient]);
+  const refresh = useCallback(() => queryClient.invalidateQueries({
+    predicate: query => ["history", "conversation", "compare"].includes(String(query.queryKey[0])),
+  }), [queryClient]);
   const newProblem = () => { setDraft(current => ({ ...current, origin: undefined })); go({ name: "new" }); };
   const newAgent = () => { setAgentDraft({ description: "", data: {} }); go({ name: "agent-new" }); };
 
@@ -93,10 +95,10 @@ export default function App() {
     if (error) toast.error(t("只启动了 {started}/{total} 个运行：{error}", { started, total: runs.length, error: errorText(error) }));
   };
   const remove = (entry: Pick<Entry, "id" | "meta">) => setConfirm({
-    title: entry.meta.kind === "optimization" ? t("删除这段优化对话？") : entry.meta.kind === "solution_chat" ? t("删除这段方案对话？") : entry.meta.kind === "requirements" ? t("删除这段需求对话？") : t("删除这次运行？"), action: t("删除"),
+    title: entry.meta.kind === "optimization" ? t("删除这段对话规划？") : entry.meta.kind === "solution_chat" ? t("删除这段方案追问？") : entry.meta.kind === "requirements" ? t("删除这段需求梳理？") : t("删除这条求解记录？"), action: t("删除"),
     text: entry.meta.kind === "solution_chat" || entry.meta.kind === "optimization" ? t("“{title}”的对话记录会被删除，原方案和已生成的方案会保留。", { title: entry.meta.title })
       : entry.meta.kind === "requirements" ? t("“{title}”的对话、需求稿和附件都会被删除，已创建的建模运行会保留。", { title: entry.meta.title })
-      : t("“{title}”的问题、数学模型、代码和过程都会被删除，无法恢复。", { title: entry.meta.title }),
+      : t("“{title}”的问题、模型和计算结果都会被删除，无法恢复。", { title: entry.meta.title }),
     run: async () => {
       await deleteRun(entry.id);
       try { sessionStorage.removeItem(`llm4om-message-${entry.id}`); } catch { /* storage may be unavailable */ }
@@ -111,8 +113,6 @@ export default function App() {
     go(typeof run === "string" ? { name: "run", id } : { name: "run", id, checkpoint: run.checkpoint_id });
   };
   const renderRun = (run: string | SourceRun, assistantOpen = false, embedded = false) => {
-    // A saved plan keeps its checkpoint through its view and every action derived from it. A plain thread keeps
-    // the existing latest-run meaning.
     const source = typeof run === "string" ? undefined : run;
     const threadId = typeof run === "string" ? run : run.thread_id;
     return <RunView key={typeof run === "string" ? run : sourceKey(run)} threadId={threadId} source={source} options={options!}
@@ -143,7 +143,8 @@ export default function App() {
     openPresets: () => setPresetsOpen(true), openExamples: () => setExamplesOpen(true) });
 
   const current = "id" in route ? route.id : null;
-  const sidebar = <Sidebar entries={entries} current={current} options={options} presets={presets} onNew={newProblem} onAgent={newAgent}
+  const activeMode = route.name === "agent-new" || route.name === "agent" ? "agent" : "quick";
+  const sidebar = <Sidebar entries={entries} current={current} activeMode={activeMode} options={options} presets={presets} onNew={newProblem} onAgent={newAgent}
     query={search} onQuery={setSearch}
     hasMore={historyQuery.hasNextPage} loading={historyQuery.isFetching} error={historyQuery.error ? errorText(historyQuery.error) : null}
     onLoadMore={() => void historyQuery.fetchNextPage()} onRetry={() => void historyQuery.refetch()}
@@ -151,8 +152,8 @@ export default function App() {
     onCompare={group => go({ name: "compare", id: group })} onDelete={remove}
     onExamples={() => { setExamplesOpen(true); setMenuOpen(false); }} onPresets={() => { setPresetsOpen(true); setMenuOpen(false); }} />;
 
-  return <div className="flex h-dvh overflow-hidden">
-    <aside aria-label={t("导航")} className="hidden w-64 shrink-0 border-r border-sidebar-border xl:block">{sidebar}</aside>
+  return <div className="flex h-dvh overflow-hidden bg-background">
+    <aside aria-label={t("导航")} className="hidden w-68 shrink-0 border-r border-sidebar-border xl:block">{sidebar}</aside>
     <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
       <SheetContent side="left" className="w-72 gap-0 p-0" aria-describedby={undefined}>
         <SheetTitle className="sr-only">{t("导航")}</SheetTitle>
@@ -160,27 +161,27 @@ export default function App() {
       </SheetContent>
     </Sheet>
 
-    <div className="flex min-w-0 flex-1 flex-col">
-      {(route.name !== "agent-new" && route.name !== "agent" || !options || optionsQuery.error) ? <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 xl:hidden">
-        <Button variant="ghost" size="icon" aria-label={t("打开菜单")} onClick={() => setMenuOpen(true)}><Menu /></Button>
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? t("新建建模")
-          : route.name === "agent-new" || route.name === "agent" ? t("优化对话") : route.name === "chat" ? t("需求对话") : route.name === "discussion" ? t("方案对话") : route.name === "compare" ? t("对比") : t("建模结果")}</span>
-        {route.name !== "new" ? <Button variant="ghost" size="icon" aria-label={t("新建建模")} onClick={newProblem}><Plus /></Button> : null}
+    <div className="ambient-canvas flex min-w-0 flex-1 flex-col">
+      {(route.name !== "agent-new" && route.name !== "agent" || !options || optionsQuery.error) ? <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-background/80 px-2.5 backdrop-blur-md xl:hidden">
+        <Button variant="ghost" size="icon-sm" aria-label={t("打开菜单")} onClick={() => setMenuOpen(true)}><Menu /></Button>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? t("快速求解")
+          : route.name === "agent-new" || route.name === "agent" ? t("对话规划") : route.name === "chat" ? t("需求梳理") : route.name === "discussion" ? t("方案追问") : route.name === "compare" ? t("方案对比") : t("求解结果")}</span>
+        {route.name !== "new" ? <Button variant="ghost" size="icon-sm" aria-label={t("快速求解")} title={t("新建快速求解")} onClick={newProblem}><Plus /></Button> : null}
       </header> : null}
-      {presetsQuery.error ? <div role="alert" className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 border-b px-4 py-2 text-xs text-destructive sm:px-6">
-        <span>{t("预设模型加载失败：{error}", { error: errorText(presetsQuery.error) })}</span>
+      {presetsQuery.error ? <div role="alert" className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive sm:px-6">
+        <span>{t("模型配置加载失败：{error}", { error: errorText(presetsQuery.error) })}</span>
         <Button variant="outline" size="sm" disabled={presetsQuery.isFetching} onClick={() => void presetsQuery.refetch()}><RefreshCw />{t("重试")}</Button>
       </div> : null}
       <main className="mx-auto min-h-0 w-full max-w-[1600px] flex-1">
         {optionsQuery.error ? <Empty className="h-full">
           <EmptyHeader>
             <EmptyMedia variant="icon"><ServerCrash /></EmptyMedia>
-            <EmptyTitle>{t("无法连接服务器")}</EmptyTitle>
+            <EmptyTitle>{t("无法连接服务")}</EmptyTitle>
             <EmptyDescription>{errorText(optionsQuery.error)}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent><Button variant="outline" onClick={() => void optionsQuery.refetch()}><RefreshCw />{t("重试")}</Button></EmptyContent>
         </Empty>
-          : !options ? <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载……")}</div>
+          : !options ? <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在准备环境……")}</div>
           : route.name === "agent-new" || route.name === "agent"
             ? <PageErrorBoundary key={route.name === "agent" ? route.id : `new-${agentDraft.description}`}><Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
               <Agent key={route.name === "agent" ? route.id : `new-${agentDraft.description}`} threadId={route.name === "agent" ? route.id : undefined}

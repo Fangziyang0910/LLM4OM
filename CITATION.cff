@@ -1,6 +1,6 @@
 cff-version: 1.2.0
-message: "If you use LLM4OM in your research, please cite it as below."
-title: "LLM4OM: A Platform for Automated Optimization Modeling with Large Language Models"
+message: "If you use General Intelligent Optimization Solver in your research, please cite it as below."
+title: "General Intelligent Optimization Solver: A General Solver for Complex Optimization Problems"
 type: software
 authors:
   - family-names: Fang

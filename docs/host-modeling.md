@@ -1,8 +1,8 @@
 # Host-model skills / 宿主模型建模
 
-The current Codex or Claude Code model performs conversation, modeling, code generation, review, and explanation. LLM4OM runs the original methods and solvers locally. No platform model preset, LLM API key, Web deployment, or listening port is needed.
+The current Codex or Claude Code model performs conversation, modeling, code generation, review, and explanation. General Intelligent Optimization Solver (`llm4om`) runs the original methods and solvers locally as a general solver for complex optimization problems. No platform model preset, LLM API key, Web deployment, or listening port is needed.
 
-宿主当前模型承担对话、理解、建模、代码生成、核对和结果解释。本地程序复用方法图、检查脚本和求解器。不需要配置平台预设模型、LLM API Key，也不需要部署 Web。
+宿主当前模型承担对话、理解、建模、代码生成、核对和结果解释。通用智能优化求解器（`llm4om`）在本地复用方法图、检查脚本和求解器，求解各类复杂优化问题。不需要配置平台预设模型、LLM API Key，也不需要部署 Web。
 
 ## Install / 安装
 

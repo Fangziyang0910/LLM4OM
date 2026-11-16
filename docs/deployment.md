@@ -1,6 +1,6 @@
 # 部署指南
 
-本文说明怎样把 LLM4OM 部署在服务器上，供课题组或团队使用。只在自己电脑上用时，按 [README](../README.md#快速开始) 启动即可。
+本文说明怎样把通用智能优化求解器部署在服务器上，供课题组或团队求解复杂优化问题。只在自己电脑上用时，按 [README](../README.md#快速开始) 启动即可。
 
 ## 推荐方式：Docker Compose
 
@@ -12,21 +12,24 @@ cp .env.example .env && chmod 600 .env    # 填写默认预设的服务商、地
 docker compose up -d --build
 ```
 
-在防火墙或云服务器安全组中放行端口 8767。其他人用 `http://<服务器 IP>:8767` 访问。
+在防火墙或云服务器安全组中放行端口 8767（求解工作台）及可选的 8831（宣传官网与文档中心）。其他人用 `http://<服务器 IP>:8767` 访问工作台，用 `http://<服务器 IP>:8831` 访问官网与文档中心。
 
 | 设置 | 作用 |
 |---|---|
-| `LLM4OM_PORT` | 对外端口，默认 `8767`。写成 `127.0.0.1:8767` 时只在本机监听 |
+| `LLM4OM_PORT` | 工作台对外端口，默认 `8767`。写成 `127.0.0.1:8767` 时只在本机监听 |
+| `LLM4OM_SITE_PORT` | 官网与文档中心对外端口，默认 `8831`。写成 `127.0.0.1:8831` 时只在本机监听 |
 | `DOCKER_SOCKET` | Docker socket 路径。使用 rootless Docker 时设置 |
 | `LLM4OM_LLM_*` | 默认预设：服务商、接口地址、模型、密钥和额外请求参数；可用 `LLM4OM_LLM_NAME` 设置显示名称，API 模型 ID 仍由 `LLM4OM_LLM_MODEL` 指定。见 [.env.example](../.env.example) |
 
 ### 组成
 
 ```text
-浏览器 ──HTTP(S)──► app 容器（工作台 + LangGraph 服务器，用户 llm4om）
+浏览器 ──HTTP(S)──► app 容器（工作台 + LangGraph 服务器，用户 llm4om，默认 :8767）
                       │  通过宿主机的 Docker socket，每次求解启动一个沙箱
                       ▼
                     沙箱容器 llm4om-worker:13（无网络、只读、非 root，用完即删）
+
+浏览器 ──HTTP────► website 容器（Caddy 静态托管宣传官网与双语文档中心，默认 :8831）
 
 数据卷 llm4om-data：预设模型（含密钥）和全部运行记录
 ```
@@ -34,6 +37,7 @@ docker compose up -d --build
 | 组成 | 说明 |
 |---|---|
 | `app` 容器（镜像 `llm4om`） | 工作台和 LangGraph 服务器。启动脚本读取 Docker socket 的用户组，整理 `/data` 的属主，然后以用户 `llm4om`（uid 10001）运行服务，不保留任何 capability。根文件系统只读，日志自动轮转，崩溃或服务器重启后自动恢复 |
+| `website` 容器（镜像 `caddy:2.10.2-alpine`） | 以只读方式挂载 `website/public/`，托管中英文宣传官网与 92 页文档中心，非 root、只读根文件系统、崩溃或重启后自动恢复 |
 | 沙箱镜像 `llm4om-worker:13` | 由 `worker` 服务构建。每次求解，`app` 通过宿主机的 Docker 启动一个沙箱容器 |
 | 数据卷 `llm4om-data` | 预设模型（含密钥）和全部运行记录。`docker compose down` 不会删除它 |
 

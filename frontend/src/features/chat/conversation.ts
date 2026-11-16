@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import type { UseStream } from "@langchain/langgraph-sdk/react";
 import type { BagTemplate, Message, ThreadState } from "@langchain/langgraph-sdk";
@@ -51,6 +51,7 @@ export type ConversationOptions<State extends ConversationState, Bag extends Bag
 export function useConversation<State extends ConversationState, Bag extends BagTemplate = BagTemplate>(
   options: ConversationOptions<State, Bag>,
 ) {
+  const queryClient = useQueryClient();
   const threadId = options.threadId;
   const { value: input, setValue: setInput, prepare, acknowledge, savePending } = useChatDraft(
     threadId ?? `${options.assistantId}-new`, threadId ? "" : options.initialInput);
@@ -64,6 +65,7 @@ export function useConversation<State extends ConversationState, Bag extends Bag
   const sendingRef = useRef(false);
   const stoppingRef = useRef(false);
   const runId = useRef<string | null>(null);
+  const startedRun = useRef<string | null>(null);
   const createdThread = useRef<string | undefined>(undefined);
   // The SDK's generic resolver keeps conditional state types unresolved inside this generic hook; the runtime object
   // is the normal `UseStream` for this state.
@@ -73,7 +75,13 @@ export function useConversation<State extends ConversationState, Bag extends Bag
     onMetadataEvent: event => { runId.current = event.run_id; },
     onCreated: event => { runId.current = event.run_id; options.onCreated?.(); },
     onCheckpointEvent: (event, { namespace }) => {
-      if (!namespace?.length) acknowledge((event.values as unknown as State).messages);
+      if (namespace?.length) return;
+      acknowledge((event.values as unknown as State).messages);
+      // The first root checkpoint confirms execution has started, including a run that was queued.
+      if (runId.current && startedRun.current !== runId.current) {
+        startedRun.current = runId.current;
+        void queryClient.invalidateQueries({ queryKey: ["history"] });
+      }
     },
     onFinish: state => {
       // A stream can end without a root checkpoint event; the final state is the other persisted confirmation.

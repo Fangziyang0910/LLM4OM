@@ -15,10 +15,10 @@ export function RevisionDialog({ initialInstruction = "", onClose, onRevise }: {
   const [instruction, setInstruction] = useState(initialInstruction);
   const [busy, setBusy] = useState(false);
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
-    <DialogContent showCloseButton={!busy} className="flex min-h-0 flex-col sm:max-w-lg">
+    <DialogContent showCloseButton={!busy} className="flex min-h-0 flex-col rounded-2xl sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>{t("调整条件")}</DialogTitle>
-        <DialogDescription>{t("沿用原运行的方法、预设模型和附件，整理新题面后重新建模。原方案保留，可查看方案变化。")}</DialogDescription>
+        <DialogDescription>{t("直接用自然语言说明需要修改的约束、预算或目标。原方案将完整保留，完成后自动对比前后差异。")}</DialogDescription>
       </DialogHeader>
       <form className="flex min-h-0 min-w-0 flex-col gap-4" onSubmit={async event => {
         event.preventDefault();
@@ -29,10 +29,10 @@ export function RevisionDialog({ initialInstruction = "", onClose, onRevise }: {
         finally { setBusy(false); }
       }}>
         <div className="flex min-h-0 flex-col gap-2">
-          <Label htmlFor="revision-instruction">{t("要调整什么？")}</Label>
+          <Label htmlFor="revision-instruction" className="text-xs font-medium">{t("要调整什么？")}</Label>
           <Textarea id="revision-instruction" value={instruction} disabled={busy}
-            onChange={event => setInstruction(event.target.value)} className="h-36 min-h-20 field-sizing-fixed resize-none text-base sm:text-sm"
-            placeholder={t("例如：B 至少生产 3 件，其他条件保持不变。")}/>
+            onChange={event => setInstruction(event.target.value)} className="h-36 min-h-20 field-sizing-fixed resize-none rounded-xl text-base sm:text-sm"
+            placeholder={t("例如：产品 B 至少生产 3 件，或将总预算上限提高到 50 万元，其余条件不变。")} />
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={busy} onClick={onClose}>{t("取消")}</Button>

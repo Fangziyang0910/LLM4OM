@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import type { Message } from "@langchain/langgraph-sdk";
-import { ArrowDown, ArrowUpRight, BookOpen, Columns2, Globe, Menu, Paperclip, RefreshCw, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, CalendarDays, Columns2, Factory, Globe, Menu, Paperclip, RefreshCw, SlidersHorizontal, Sparkles, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -28,9 +28,30 @@ import { cn } from "@/lib/utils";
 type Values = { messages?: Message[]; description?: string; data?: Record<string, string>; source?: SourceRun;
   current?: SourceRun; plans?: Plan[]; usage?: Usage; failure?: string | null };
 
-export function Agent({ threadId, options, presets, initial, onThread, openPresets, onManual, onMenu, onExamples, onFinished, onOpen, onCompare, renderRun }: {
+const AGENT_STARTERS = [
+  {
+    icon: CalendarDays,
+    title: "门店排班规划",
+    summary: "平衡早晚班人手需求与人力成本",
+    prompt: "我想给门店安排下周的班次，既要保证高峰时段人手充足，又想控制总排班成本，应该先提供哪些信息？",
+  },
+  {
+    icon: Factory,
+    title: "生产排产优化",
+    summary: "在产能与原料约束下最大化收益",
+    prompt: "工厂有几条产线和不同利润的产品订单，设备工时有限，帮我梳理一下怎么安排生产最划算。",
+  },
+  {
+    icon: Truck,
+    title: "仓储配送调度",
+    summary: "多仓库向多客户供货，降低总运费",
+    prompt: "我有多个发货仓库和一批门店补货需求，想规划一套总运费最低的调拨方案。",
+  },
+] as const;
+
+export function Agent({ threadId, options, presets, initial, onThread, openPresets, onMenu, onExamples, onFinished, onOpen, onCompare, renderRun }: {
   threadId?: string; options: Options; presets: Preset[]; initial: { description: string; data: Record<string, string> };
-  onThread: (id: string) => void; openPresets: () => void; onManual: () => void; onMenu: () => void; onExamples: () => void;
+  onThread: (id: string) => void; openPresets: () => void; onManual?: () => void; onMenu: () => void; onExamples: () => void;
   onFinished: () => void; onOpen: (source: SourceRun) => void; onCompare: (id: string) => void; renderRun: (source: SourceRun) => ReactNode;
 }) {
   const desktop = useDesktop();
@@ -97,7 +118,6 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   useEffect(() => {
     if (!threadId) return;
     let disposed = false;
-    // The first run is started before navigation, so attach through the SDK even without a tab-local receipt.
     void client.runs.list(threadId, { limit: 1 }).then(runs => {
       const active = runs[0];
       if (!disposed && active && (active.status === "pending" || active.status === "running")) return reconnect.current(active.run_id);
@@ -107,14 +127,13 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
 
   const submit = async (retry = false) => {
     if (busy || dataPending || (!retry && !input.trim())) return;
-    if (!preset) { toast.error(t("先选择一个可用的预设模型。")); openPresets(); return; }
+    if (!preset) { toast.error(t("请先配置可用的 AI 模型。")); openPresets(); return; }
     followLatest(); setViewed(undefined); setLiveTask(undefined); setProgress(undefined); setTasks({});
     const context = { preset: preset.id, locale, search: searching && canSearch, thinking: thinkingMode,
       method: chosenMethod === "auto" ? null : chosenMethod, language: chosenLanguage === "auto" ? null : chosenLanguage };
     const metadata = { preset: preset.id, provider: preset.provider, model: preset.name || preset.model,
       method: context.method, language: context.language, search: context.search, thinking: thinkingMode };
     if (!threadId) {
-      // Persist the question with the native thread first, then start its run before navigating to the thread.
       const created = await conversation.startThread({ context, metadata: { ...metadata, kind: "optimization",
         title: input.trim().split("\n")[0].slice(0, 120) }, values: { description: initial.description, data } });
       if (created) { onThread(created); onFinished(); }
@@ -130,51 +149,95 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   };
   if (conversation.thread.error) return <div className="flex h-full flex-col">
     <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 xl:hidden">
-      <Button variant="ghost" size="icon" aria-label={t("打开菜单")} onClick={onMenu}><Menu /></Button><span className="text-sm font-medium">{t("优化对话")}</span>
+      <Button variant="ghost" size="icon" aria-label={t("打开菜单")} onClick={onMenu}><Menu /></Button><span className="text-sm font-medium">{t("对话规划")}</span>
     </header>
     <div role="alert" className="grid flex-1 place-content-center gap-3 p-6 text-sm text-destructive">
       <p>{errorText(conversation.thread.error)}</p><Button variant="outline" onClick={conversation.thread.reload}><RefreshCw />{t("重试")}</Button></div>
   </div>;
+
   const empty = !threadId && !messages.length && !failure && !busy && !settings && !Object.keys(data).length;
   const chat = <section aria-label={t("优化对话")} className={cn("flex h-full min-h-0 min-w-0 flex-col", empty && "justify-center", workspace && pane === "workspace" && "hidden lg:flex")}>
     <div className={cn("relative flex min-h-0 flex-col", !empty && "flex-1")}>
-      <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className={cn("min-h-0 chat-scroll overflow-y-auto overscroll-contain px-4 md:px-8", empty ? "max-h-[50vh]" : "flex-1")}>
+      <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className={cn("min-h-0 chat-scroll overflow-y-auto overscroll-contain px-4 md:px-8", empty ? "max-h-[60vh]" : "flex-1")}>
         <div ref={content} className="grid min-h-full grid-cols-1">
           {messages.length || failure ? <ChatMessages messages={messages} loading={conversation.loading} label={t("优化助手")}
             failure={failure} disabled={busy || dataPending} onRetry={() => void submit(true)} progress={progress} tasks={tasks}
             onShowTask={id => { setLiveTask(id); setWorkspace(true); setPane("workspace"); }}
             onOpenPlan={source => { setViewed(source); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} />
-            : <div className="mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-4 py-5">
-              <h2 className="text-2xl font-semibold tracking-tight">{t("说说你想优化什么")}</h2>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => { setInput(t("我想给门店安排下周的班次，应该先提供哪些信息？")); inputArea.current?.focus(); }}>{t("聊聊排班需求")}</Button>
-                <Button variant="outline" onClick={onExamples}><BookOpen />{t("从示例开始")}</Button>
+            : <div className="animate-fade-up mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-5 py-6">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/8 px-3 py-1 text-xs font-medium text-primary">
+                  <Sparkles className="size-3.5" />
+                  <span>{t("对话式需求梳理与智能求解")}</span>
+                </div>
+                <h2 className="text-2xl font-semibold tracking-tight sm:text-[1.7rem]">{t("聊聊你想解决什么问题")}</h2>
+                <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                  {t("哪怕只有初步想法也没关系。告诉我你的业务目标和限制条件，我会一步步帮你理清需求、自动建模并求得最优方案。")}
+                </p>
+              </div>
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {AGENT_STARTERS.map(item => {
+                  const Icon = item.icon;
+                  return <button
+                    key={item.title}
+                    type="button"
+                    onClick={() => { setInput(t(item.prompt)); inputArea.current?.focus(); }}
+                    className="group flex items-start gap-3 rounded-2xl border border-border/80 bg-card/85 p-3.5 text-left shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                      <Icon className="size-4" />
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">{t(item.title)}</span>
+                        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0.5 group-hover:text-primary group-hover:opacity-100" />
+                      </div>
+                      <p className="line-clamp-1 text-xs text-muted-foreground">{t(item.summary)}</p>
+                    </div>
+                  </button>;
+                })}
+                <button
+                  type="button"
+                  onClick={onExamples}
+                  className="group flex items-start gap-3 rounded-2xl border border-dashed border-border bg-muted/25 p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground transition-colors group-hover:bg-primary/15 group-hover:text-primary">
+                    <BookOpen className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium">{t("浏览案例模板库")}</span>
+                      <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                    </div>
+                    <p className="line-clamp-1 text-xs text-muted-foreground">{t("查看真实行业优化案例并一键带入")}</p>
+                  </div>
+                </button>
               </div>
             </div>}
         </div>
       </div>
       {!follow ? <Button variant="outline" size="icon-sm" aria-label={t("回到最新消息")} className="absolute right-5 bottom-3 rounded-full bg-background shadow-sm" onClick={followLatest}><ArrowDown /></Button> : null}
     </div>
-    <div className="shrink-0 space-y-2 px-4 pt-2 pb-3 md:px-8">
+    <div className="shrink-0 space-y-2 px-4 pt-2 pb-4 md:px-8">
       {Object.keys(data).length ? <div className="mx-auto flex max-w-[46rem] flex-wrap gap-1.5" aria-label={t("数据文件")}>
-        {Object.keys(data).map(name => <span key={name} className="inline-flex max-w-full items-center rounded-lg border bg-card text-xs">
-          <button disabled={busy || dataPending} className="min-w-0 truncate px-2 py-1.5 hover:text-primary" onClick={() => setEditing(name)}>{name}</button>
-          <Button variant="ghost" size="icon-xs" disabled={busy || dataPending} aria-label={t("移除 {name}", { name })} onClick={() => {
+        {Object.keys(data).map(name => <span key={name} className="inline-flex max-w-full items-center rounded-xl border border-border/80 bg-card text-xs shadow-2xs">
+          <button disabled={busy || dataPending} className="min-w-0 truncate px-2.5 py-1.5 font-medium hover:text-primary" onClick={() => setEditing(name)}>{name}</button>
+          <Button variant="ghost" size="icon-xs" className="mr-0.5" disabled={busy || dataPending} aria-label={t("移除 {name}", { name })} onClick={() => {
             const next = { ...data }; delete next[name]; void saveData(next).catch(error => toast.error(errorText(error)));
           }}><X /></Button></span>)}
       </div> : null}
-      {settings ? <div className="mx-auto grid max-w-[46rem] grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3">
-        <label className="space-y-1 text-xs text-muted-foreground">{t("建模方法")}
+      {settings ? <div className="animate-scale-in mx-auto grid max-w-[46rem] grid-cols-1 gap-2.5 rounded-2xl border border-border/80 bg-card/90 p-3.5 shadow-xs sm:grid-cols-2">
+        <label className="space-y-1 text-xs font-medium text-muted-foreground">{t("求解策略偏好")}
           <Select value={chosenMethod} onValueChange={setMethod} disabled={busy}><SelectTrigger className="w-full" aria-label={t("固定建模方法")}><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="auto">{t("自动选择")}</SelectItem>{options.methods.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></label>
-        <label className="space-y-1 text-xs text-muted-foreground">{t("建模求解器")}
+            <SelectContent><SelectItem value="auto">{t("智能自动选择（推荐）")}</SelectItem>{options.methods.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></label>
+        <label className="space-y-1 text-xs font-medium text-muted-foreground">{t("求解引擎偏好")}
           <Select value={chosenLanguage} onValueChange={setLanguage} disabled={busy}><SelectTrigger className="w-full" aria-label={t("固定建模求解器")}><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="auto">{t("自动选择")}</SelectItem>{options.languages.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></label>
+            <SelectContent><SelectItem value="auto">{t("智能自动匹配（推荐）")}</SelectItem>{options.languages.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></label>
       </div> : null}
       <ChatInput label={t("发送给优化助手")} value={input} onChange={setInput}
         disabled={busy} sendingDisabled={dataPending} loading={conversation.loading} stopping={conversation.stopping} inputRef={inputArea}
         presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets}
-        onSend={() => void submit()} onStop={() => void stop()} placeholder={t("提问、聊聊想法，或继续调整当前方案……")}>
+        onSend={() => void submit()} onStop={() => void stop()} placeholder={t("描述你想解决的业务问题，或继续补充调整要求…")}>
         <Button type="button" variant="ghost" size="icon-sm" disabled={busy || dataPending} aria-label={t("添加数据文件")}
           title={t(reading ? "正在读取数据……" : savingData ? "正在保存……" : "添加数据文件")} onClick={() => upload.current?.click()}>
           {dataPending ? <Spinner /> : <Paperclip />}</Button>
@@ -195,43 +258,46 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
       }} />
     </div>
   </section>;
-  const workbench = workspace ? <aside aria-label={t("建模工作区")} className={cn("flex h-full min-h-0 min-w-0 flex-col bg-card", pane !== "workspace" && "hidden lg:flex")}>
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-      <h2 className="shrink-0 text-xs font-medium text-muted-foreground">{t("建模工作区")}</h2>
+
+  const workbench = workspace ? <aside aria-label={t("方案面板")} className={cn("flex h-full min-h-0 min-w-0 flex-col border-l border-border/70 bg-card", pane !== "workspace" && "hidden lg:flex")}>
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/70 bg-muted/15 px-3.5">
+      <h2 className="shrink-0 text-xs font-semibold text-muted-foreground">{t("方案面板")}</h2>
       {plans.length ? <Select value={task ? "live" : viewing ? sourceKey(viewing) : ""} onValueChange={id => {
         const chosen = plans.find(plan => sourceKey(plan.source) === id)?.source;
         if (chosen) { setViewed(chosen); setLiveTask(undefined); }
       }}>
         <SelectTrigger size="sm" aria-label={t("查看计算方案")} className="min-w-0 flex-1 border-0 shadow-none"><SelectValue /></SelectTrigger>
         <SelectContent>{task ? <SelectItem value="live">{task.name}</SelectItem> : null}{plans.map(plan => <SelectItem key={sourceKey(plan.source)} value={sourceKey(plan.source)}>{plan.name}{sameSource(plan.source, currentPlan) ? ` · ${t("当前讨论方案")}` : ""}</SelectItem>)}</SelectContent>
-      </Select> : <span className="min-w-0 flex-1 truncate text-xs">{task?.name}</span>}
-      {shown && !task ? <Button variant="ghost" size="icon-xs" aria-label={t("打开完整运行")} onClick={() => onOpen(shown)}><ArrowUpRight /></Button> : null}
-      <Button variant="ghost" size="icon-xs" aria-label={t("收起建模工作区")} onClick={() => { setWorkspace(false); setPane("chat"); }}><X /></Button>
+      </Select> : <span className="min-w-0 flex-1 truncate text-xs font-medium">{task?.name}</span>}
+      {shown && !task ? <Button variant="ghost" size="icon-xs" aria-label={t("打开完整运行")} title={t("独立页面查看")} onClick={() => onOpen(shown)}><ArrowUpRight /></Button> : null}
+      <Button variant="ghost" size="icon-xs" aria-label={t("收起方案面板")} onClick={() => { setWorkspace(false); setPane("chat"); }}><X /></Button>
     </div>
-    {!task && shown && currentPlan && !sameSource(shown, currentPlan) ? <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-xs" aria-label={t("方案上下文")}>
-        <Badge variant="outline">{t("正在查看历史方案")}</Badge>
-        <Button variant="link" size="xs" className="h-auto p-0" onClick={() => setViewed(undefined)}>{t("查看讨论中的方案")}</Button>
+    {!task && shown && currentPlan && !sameSource(shown, currentPlan) ? <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/30 px-3.5 py-2 text-xs" aria-label={t("方案上下文")}>
+      <Badge variant="outline">{t("正在查看历史方案")}</Badge>
+      <Button variant="link" size="xs" className="h-auto p-0" onClick={() => setViewed(undefined)}>{t("返回当前讨论方案")}</Button>
     </div> : null}
     <div className="min-h-0 flex-1">{task ? <LiveWorkspace key={liveTask} task={task} data={data} options={options} /> : shown ? renderRun(shown)
-      : <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">{t("开始计算后，在这里查看数学模型、代码和求解结果。")}</div>}</div>
+      : <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">{t("开始求解后，最优决策方案、数学模型与计算代码将实时呈现在这里。")}</div>}</div>
   </aside> : null;
+
   return <div className="flex h-full min-h-0 flex-col">
-    <header className="flex h-13 shrink-0 items-center gap-2 border-b px-4">
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/70 bg-background/80 px-4 backdrop-blur-md">
       <Button variant="ghost" size="icon-sm" aria-label={t("打开菜单")} className="-ml-2 xl:hidden" onClick={onMenu}><Menu /></Button>
-      <Sparkles className="hidden size-4 text-muted-foreground sm:block" /><h1 className="min-w-0 flex-1 truncate text-sm font-medium">{meta?.title || t("优化对话")}</h1>
-      <Button variant="ghost" size="sm" onClick={onManual}>{t("手动建模")}</Button>
-      <Button variant={workspace ? "secondary" : "ghost"} size="sm" aria-pressed={workspace} onClick={() => { setWorkspace(!workspace); setPane("workspace"); }}>
-        <Columns2 />{t("建模工作区")}</Button>
+      <Sparkles className="hidden size-4 text-primary sm:block" />
+      <h1 className="min-w-0 flex-1 truncate text-sm font-semibold">{meta?.title || t("对话规划")}</h1>
+      {(plans.length > 0 || !!currentPlan || !!task || workspace) ? <Button variant={workspace ? "secondary" : "ghost"} size="sm" className="rounded-lg" aria-pressed={workspace} onClick={() => { setWorkspace(!workspace); setPane("workspace"); }}>
+        <Columns2 />{t("方案面板")}
+      </Button> : null}
     </header>
     {workspace ? <div className="flex shrink-0 border-b lg:hidden">
       <Button variant={pane === "chat" ? "secondary" : "ghost"} className="flex-1 rounded-none" onClick={() => setPane("chat")}>{t("对话")}</Button>
-      <Button variant={pane === "workspace" ? "secondary" : "ghost"} className="flex-1 rounded-none" onClick={() => setPane("workspace")}>{t("建模工作区")}</Button>
+      <Button variant={pane === "workspace" ? "secondary" : "ghost"} className="flex-1 rounded-none" onClick={() => setPane("workspace")}>{t("方案面板")}</Button>
     </div> : null}
     {desktop ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1">
-      <ResizablePanel id="conversation" defaultSize="40%" minSize="320px">{chat}</ResizablePanel>
+      <ResizablePanel id="conversation" defaultSize="42%" minSize="320px">{chat}</ResizablePanel>
       {workspace ? <>
-        <ResizableHandle withHandle aria-label={t("调整对话与建模工作区的宽度")} />
-        <ResizablePanel id="workspace" defaultSize="60%" minSize="35%">{workbench}</ResizablePanel>
+        <ResizableHandle withHandle aria-label={t("调整对话与方案面板的宽度")} />
+        <ResizablePanel id="workspace" defaultSize="58%" minSize="35%">{workbench}</ResizablePanel>
       </> : null}
     </ResizablePanelGroup> : <div className="grid min-h-0 flex-1 grid-cols-1">{chat}{workbench}</div>}
     {editing && data[editing] != null ? <DataEditor key={editing} name={editing} content={data[editing]} onClose={() => setEditing(undefined)}

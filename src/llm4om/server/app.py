@@ -42,7 +42,7 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
                trust_proxy: bool | None = None) -> FastAPI:
     """The platform routes. Settings left out come from the service resources and LLM4OM_RUNS_PER_HOUR and
     LLM4OM_TRUST_PROXY."""
-    app = FastAPI(title="LLM4OM")
+    app = FastAPI(title="通用智能优化求解器", description="求解各种复杂优化问题的通用求解器")
     app.add_middleware(ThreadCleanup)
     app.add_middleware(JsonOnlyWrites)
     app.add_middleware(RunRateLimit, per_hour=int(os.environ.get("LLM4OM_RUNS_PER_HOUR") or 0)

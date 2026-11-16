@@ -59,7 +59,7 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
 
   const submit = async (retry = false) => {
     if (busy || (!retry && !input.trim())) return;
-    if (!preset) { toast.error(t("先选择一个可用的预设模型。")); openPresets(); return; }
+    if (!preset) { toast.error(t("请先配置可用的 AI 模型。")); openPresets(); return; }
     followLatest(); setViewed(undefined); setProgress(undefined);
     await conversation.send({ retry, context: { preset: preset.id, locale, thinking: thinkingMode },
       metadata: { preset: preset.id, provider: preset.provider, model: preset.name || preset.model, thinking: thinkingMode } });
@@ -72,29 +72,29 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
     {shown ? renderRun(shown) : <div className="grid h-full place-items-center"><Spinner /></div>}
   </TabsContent>;
   const chat = <TabsContent value="conversation" forceMount className="mt-0 h-full min-h-0 min-w-0 data-[state=inactive]:hidden lg:data-[state=inactive]:flex">
-    <aside aria-label={t("方案助手")} className="flex h-full min-h-0 w-full flex-col gap-3 bg-card p-3">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b pb-3">
-        <h2 className="flex items-center gap-2 text-sm font-medium"><Sparkles className="size-4 text-muted-foreground" />{t("方案助手")}</h2>
+    <aside aria-label={t("方案助手")} className="flex h-full min-h-0 w-full flex-col gap-3 border-r border-border/70 bg-card p-3.5">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/70 pb-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="size-4 text-primary" />{t("方案追问与调优")}</h2>
         <Button variant="ghost" size="icon-xs" disabled={!shown} aria-label={t("收起方案助手")} onClick={() => onOpen(shown!)}><X /></Button>
       </div>
-      <div className={cn("shrink-0 rounded-lg border bg-muted/30 p-3 text-xs", sameSource(shown, currentPlan) && "lg:hidden")} aria-label={t("当前讨论方案")}>
+      <div className={cn("shrink-0 rounded-xl border border-border/80 bg-muted/25 p-3 text-xs", sameSource(shown, currentPlan) && "lg:hidden")} aria-label={t("当前讨论方案")}>
         <p className="mb-1 text-muted-foreground">{t("当前讨论方案")}</p>
         {summary.error ? <p role="alert" className="text-destructive">{errorText(summary.error)}</p> : !values ? <Spinner /> : <>
           <p className="truncate font-medium" title={values.description}>{values.description?.trim().split("\n")[0].replace(/^#{1,6}\s+/, "")}</p>
           <div className="mt-2 flex items-center justify-between gap-2">
-            <span>{values.explanation?.objective_label || t("目标值")} <strong>{values.solve?.objective == null ? "—" : formatNumber(values.solve.objective)}</strong> {values.explanation?.objective_unit}</span>
+            <span>{values.explanation?.objective_label || t("最优目标值")} <strong>{values.solve?.objective == null ? "—" : formatNumber(values.solve.objective)}</strong> {values.explanation?.objective_unit}</span>
             <StatusBadge status={values.failure ? "failed" : values.solve?.status ?? "unknown"} />
           </div>
         </>}
-        {viewed && !sameSource(viewed, currentPlan) ? <Button variant="link" size="xs" className="mt-2 h-auto p-0" onClick={() => setViewed(undefined)}>{t("查看讨论中的方案")}</Button> : null}
+        {viewed && !sameSource(viewed, currentPlan) ? <Button variant="link" size="xs" className="mt-2 h-auto p-0" onClick={() => setViewed(undefined)}>{t("返回当前讨论方案")}</Button> : null}
       </div>
-      <details className="max-h-48 shrink-0 overflow-y-auto text-xs" aria-label={t("已生成的方案")}>
-        <summary className="cursor-pointer font-medium text-muted-foreground">{t("相关方案")} · {plans.length + 1}</summary>
+      <details className="max-h-48 shrink-0 overflow-y-auto rounded-xl border border-border/60 bg-muted/15 px-3 py-2 text-xs" aria-label={t("已生成的方案")}>
+        <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">{t("相关衍生方案")} · {plans.length + 1}</summary>
         <div className="mt-2 flex flex-col gap-1">
-          <Button variant="ghost" size="sm" className="justify-between text-xs" disabled={!original} onClick={() => original && openPlan(original)}>{t("打开原运行")}<ArrowUpRight /></Button>
-          {plans.map(plan => <Button key={sourceKey(plan.source)} variant="ghost" className="h-auto justify-between py-2 text-left text-xs whitespace-normal"
+          <Button variant="ghost" size="sm" className="justify-between rounded-lg text-xs" disabled={!original} onClick={() => original && openPlan(original)}>{t("查看原方案")}<ArrowUpRight /></Button>
+          {plans.map(plan => <Button key={sourceKey(plan.source)} variant="ghost" className="h-auto justify-between rounded-lg py-2 text-left text-xs whitespace-normal"
             onClick={() => openPlan(plan.source)} title={plan.instruction}><span>{plan.name}</span><ArrowUpRight className="shrink-0" /></Button>)}
-          {groups.map((group, i) => <Button key={group} variant="ghost" size="sm" onClick={() => onCompare(group)}><Columns3 />{t("查看场景对比 {number}", { number: i + 1 })}</Button>)}
+          {groups.map((group, i) => <Button key={group} variant="ghost" size="sm" className="rounded-lg" onClick={() => onCompare(group)}><Columns3 />{t("查看多场景对比 {number}", { number: i + 1 })}</Button>)}
         </div>
       </details>
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -103,9 +103,13 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
             {messages.length || failure ? <ChatMessages messages={messages} loading={conversation.loading} label={t("方案助手")}
               failure={failure} disabled={busy} onRetry={() => void submit(true)} progress={progress}
               onOpenPlan={openPlan} onCompare={onCompare} />
-              : <div className="mx-auto flex min-h-full max-w-md flex-col justify-center gap-4 py-6">
-                <h2 className="text-base font-semibold">{t("接下来，想了解或调整什么？")}</h2>
-                <Button variant="outline" className="self-start" onClick={() => { setInput(t("请用通俗的话解释这个方案的主要决策。")); inputArea.current?.focus(); }}>{t("解释主要决策")}</Button>
+              : <div className="mx-auto flex min-h-full max-w-md flex-col justify-center gap-3.5 py-6">
+                <h2 className="text-base font-semibold">{t("想进一步了解或微调当前方案吗？")}</h2>
+                <p className="text-xs leading-relaxed text-muted-foreground">{t("可以让我用通俗语言解读关键决策，或直接提出新的假设条件重新测算。")}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setInput(t("请用通俗的话解释这个方案的主要决策和原因。")); inputArea.current?.focus(); }}>{t("解读关键决策")}</Button>
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setInput(t("如果预算或产能缩减 10%，方案会怎么变？")); inputArea.current?.focus(); }}>{t("测算条件变化")}</Button>
+                </div>
               </div>}
           </div>
         </div>
@@ -114,13 +118,12 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
       <ChatInput label={t("发送给方案助手")} value={input} onChange={setInput} disabled={busy} loading={conversation.loading} stopping={conversation.stopping}
         inputRef={inputArea}
         presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets} onSend={() => void submit()}
-        placeholder={t("追问方案，或说明你想调整的条件……")} onStop={() => void stop()} />
-
+        placeholder={t("追问方案细节，或提出新的调整条件…")} onStop={() => void stop()} />
     </aside>
   </TabsContent>;
   return <Tabs value={pane} onValueChange={setPane} className="h-full min-h-0 gap-0">
-    <TabsList className="mx-4 my-2 grid shrink-0 grid-cols-2 lg:hidden">
-      <TabsTrigger value="conversation">{t("方案助手")}</TabsTrigger><TabsTrigger value="plan">{t("建模结果")}</TabsTrigger>
+    <TabsList className="mx-4 my-2 grid shrink-0 grid-cols-2 rounded-xl lg:hidden">
+      <TabsTrigger value="conversation" className="rounded-lg">{t("方案助手")}</TabsTrigger><TabsTrigger value="plan" className="rounded-lg">{t("方案详情")}</TabsTrigger>
     </TabsList>
     {desktop ? <ResizablePanelGroup orientation="horizontal" defaultLayout={layout.defaultLayout} onLayoutChanged={layout.onLayoutChanged} className="min-h-0 flex-1">
       <ResizablePanel id="conversation" defaultSize="40%" minSize="320px">{chat}</ResizablePanel>

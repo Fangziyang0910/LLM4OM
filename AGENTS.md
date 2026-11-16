@@ -1,4 +1,4 @@
-# LLM4OM 工作约定
+# 通用智能优化求解器工作约定
 
 - 开工前读 [README](README.md)、[GLOSSARY](GLOSSARY.md) 和 [架构](docs/architecture.md)。
 - 修改文件前读 [CODING_STANDARDS](CODING_STANDARDS.md)；开发、测试和交付时读 [CONTRIBUTING](CONTRIBUTING.md)。

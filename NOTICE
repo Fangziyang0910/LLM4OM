@@ -1,8 +1,9 @@
-LLM4OM
+General Intelligent Optimization Solver (通用智能优化求解器)
 Copyright 2026 Ziyang Fang
 
-This repository contains an implementation of an automated optimization
-modeling platform and its documentation.
+This repository contains the implementation and documentation of General
+Intelligent Optimization Solver, a general solver for complex optimization
+problems.
 
 OptiMind's public hints and adapted inference prompts are from Microsoft
 OptiGuide/optimind, commit 419cf7b9eee20b6af036abf15152fa775b20c951.

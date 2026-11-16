@@ -17,9 +17,9 @@ export function ScenariosDialog({ onClose, onStart }: {
   const [busy, setBusy] = useState(false);
   const set = (index: number, change: Partial<typeof scenarios[number]>) => setScenarios(items => items.map((item, i) => i === index ? { ...item, ...change } : item));
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
-    <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-2xl">
-      <DialogHeader><DialogTitle>{t("业务场景对比")}</DialogTitle>
-        <DialogDescription>{t("每个场景都从同一份原方案出发，使用原方法、模型预设和附件重新建模。分别写出具体变化，其他条件保持不变。")}</DialogDescription></DialogHeader>
+    <DialogContent className="flex max-h-[90dvh] flex-col rounded-2xl sm:max-w-2xl">
+      <DialogHeader><DialogTitle>{t("多场景对比分析")}</DialogTitle>
+        <DialogDescription>{t("基于当前方案衍生多个假设场景（如旺季需求增长、预算收紧、产能扩充），并行计算并横向对比各方案结果。")}</DialogDescription></DialogHeader>
       <form className="flex min-h-0 flex-col gap-4" onSubmit={async event => {
         event.preventDefault();
         if (busy || scenarios.some(item => !item.name.trim() || !item.instruction.trim())) return;
@@ -28,17 +28,18 @@ export function ScenariosDialog({ onClose, onStart }: {
         catch (error) { toast.error(errorText(error)); }
         finally { setBusy(false); }
       }}>
-        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
-          {scenarios.map((scenario, index) => <fieldset key={index} disabled={busy} className="flex flex-col gap-2 rounded-xl border p-3">
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
+          {scenarios.map((scenario, index) => <fieldset key={index} disabled={busy} className="flex flex-col gap-2 rounded-xl border border-border/80 bg-muted/15 p-3.5">
             <div className="flex items-center gap-2"><Input aria-label={t("场景 {number} 名称", { number: index + 1 })} value={scenario.name} maxLength={100}
-              onChange={event => set(index, { name: event.target.value })} className="font-medium" />
+              onChange={event => set(index, { name: event.target.value })} className="rounded-lg bg-background font-medium" />
               <Button type="button" variant="ghost" size="icon-sm" aria-label={t("移除场景 {number}", { number: index + 1 })}
                 disabled={busy || scenarios.length <= 2} onClick={() => setScenarios(items => items.filter((_, i) => i !== index))}><X /></Button></div>
             <Label htmlFor={`scenario-${index}`} className="sr-only">{t("场景 {number} 调整要求", { number: index + 1 })}</Label>
             <Textarea id={`scenario-${index}`} value={scenario.instruction} onChange={event => set(index, { instruction: event.target.value })}
-              placeholder={t("例如：把切割资源容量改为 10 单位，其他条件保持不变。")}/>
+              className="rounded-lg bg-background"
+              placeholder={t("例如：假设订单总需求上浮 20%，其他条件保持不变。")} />
           </fieldset>)}
-          <Button type="button" variant="outline" className="self-start" disabled={busy || scenarios.length >= 6}
+          <Button type="button" variant="outline" className="self-start rounded-lg" disabled={busy || scenarios.length >= 6}
             onClick={() => setScenarios(items => {
               const names = new Set(items.map(item => item.name.trim()));
               let number = 1;
