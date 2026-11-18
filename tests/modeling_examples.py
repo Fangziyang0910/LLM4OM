@@ -1,6 +1,6 @@
 """Executable native API examples used by integration tests."""
 
-from llm4om.code_prompts import REFERENCES as ORTOOLS
+from llm4om.languages import REFERENCES as ORTOOLS
 
 REFERENCES = {
     **ORTOOLS,

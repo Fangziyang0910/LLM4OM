@@ -297,7 +297,10 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
     }
   }, [textareaValue, effectiveActive, showFullTextarea, inlineBlockEditing]);
 
-  const applyDocumentChange = (nextValue: string, globalCursor: number, timestamp: number, forceHistorySplit = false) => {
+  const applyDocumentChange = (nextValue: string, globalCursor: number, timestamp: number, forceHistorySplit = false, beforeCursor?: number) => {
+    if (beforeCursor !== undefined && history.current.entries[history.current.index]) {
+      history.current.entries[history.current.index].cursor = beforeCursor;
+    }
     pushHistoryEntry(history.current, nextValue, globalCursor, timestamp, forceHistorySplit);
     const nextBlocks = splitMarkdownBlocks(nextValue);
     const nextIdx = blockIndexAtOffset(nextBlocks, globalCursor);
@@ -440,17 +443,18 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
           const start = element.selectionStart ?? 0;
           const end = element.selectionEnd ?? 0;
           const mod = event.ctrlKey || event.metaKey;
+          const key = event.key.toLowerCase();
 
-          if (mod && event.key.toLowerCase() === "a" && !showFullTextarea && blocks.length > 1) {
+          if (mod && key === "a" && !showFullTextarea && blocks.length > 1) {
             event.preventDefault();
             setFullMode(true);
             pendingSelection.current = { start: 0, end: value.length };
             return;
           }
 
-          if (mod && event.key.toLowerCase() === "z") {
+          if (mod && (key === "z" || (key === "y" && !event.shiftKey))) {
             const state = history.current;
-            const redo = event.shiftKey;
+            const redo = key === "y" || event.shiftKey;
             const targetIndex = redo ? state.index + 1 : state.index - 1;
             if (targetIndex >= 0 && targetIndex < state.entries.length) {
               event.preventDefault();
@@ -498,7 +502,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
             const gap = value.slice(prev.contentEnd, activeBlock.start);
             const trimmedGap = gap.replace(/\r?\n$/, "");
             const nextValue = value.slice(0, prev.contentEnd) + trimmedGap + value.slice(activeBlock.start);
-            applyDocumentChange(nextValue, prev.contentEnd + trimmedGap.length, event.timeStamp, true);
+            applyDocumentChange(nextValue, prev.contentEnd + trimmedGap.length, event.timeStamp, true, activeBlock.start);
             return;
           }
 
@@ -508,7 +512,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
             const gap = value.slice(activeBlock.contentEnd, next.start);
             const trimmedGap = gap.replace(/^\r?\n/, "");
             const nextValue = value.slice(0, activeBlock.contentEnd) + trimmedGap + value.slice(next.start);
-            applyDocumentChange(nextValue, activeBlock.contentEnd, event.timeStamp, true);
+            applyDocumentChange(nextValue, activeBlock.contentEnd, event.timeStamp, true, activeBlock.contentEnd);
             return;
           }
 

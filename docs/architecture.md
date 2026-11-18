@@ -27,7 +27,7 @@ solve：方法没有求解最终代码时，在沙箱中求解一次
 
 LangChain 工具中间件在每轮允许一次方案变更调用（建模、场景计算或选择已存方案），避免并行调用重复求解或冲突写入当前方案。多个业务场景仍在一次 `solve_scenarios` 调用内计算；选择并修改条件时直接传 `base_plan_id`。查询和表达式计算不受这项限制，其输入错误作为原生错误工具消息返回，供模型在本轮修正。
 
-`chat_prompts.py` 共享自然对话准则，并分别定义建模委托和实际结果使用规则。知识问答、写作、代码解释、资料整理和闲聊不要求进入建模，不改写已有需求或当前方案。`calculate` 用 simpleeval 计算单个数值表达式，不执行 Python 脚本或开放属性访问。普通算术不依赖方案；引用 `v`、`values` 或 `objective` 时读取指定检查点的实际数值，聚合不受提示中前 100 项的限制。表达式、结果及读取的决策值数量保存为工具产物。`lookup_variables` 通过 `next_offset` 分页读取完整变量。
+`agent.py` 共享自然对话准则，并分别定义建模委托和实际结果使用规则。知识问答、写作、代码解释、资料整理和闲聊不要求进入建模，不改写已有需求或当前方案。`calculate` 用 simpleeval 计算单个数值表达式，不执行 Python 脚本或开放属性访问。普通算术不依赖方案；引用 `v`、`values` 或 `objective` 时读取指定检查点的实际数值，聚合不受提示中前 100 项的限制。表达式、结果及读取的决策值数量保存为工具产物。`lookup_variables` 通过 `next_offset` 分页读取完整变量。
 
 运行时提示词、工具说明和内部代码文本使用英文。回复语言由 `locale` 独立指定为 `Simplified Chinese` 或 `English`；题面、附件、历史消息和生成产物保留各自原语言。用于界面的方法介绍、阶段名称及其他展示文案继续走中英文翻译，双语文档保留。
 
@@ -49,21 +49,20 @@ LangChain 工具中间件在每轮允许一次方案变更调用（建模、场�
 
 ## 模块
 
-`agent.py` 只负责会话图、模型与预算、执行期限，以及将本轮结果写回原生状态。`capabilities.assemble_capabilities()` 按既有对话模式组合原生 LangChain 工具和中间件：方案、计算、建模能力各自维护工具、对应指令和工具可用条件。扩展能力可直接提供 `BaseTool` 或 `AgentMiddleware`，不需要修改会话图。搜索继续使用 `web_search.search_tool()`。
+`agent.py` 统一承载优化对话与方案对话的会话图、本轮模型与预算准备、执行期限、工具与状态中间件，以及独立方案的保存与登记；`requirements.py` 复用共享的对话轮次模型准备、Agent 调用入口与自然对话准则。搜索继续使用 `web_search.search_tool()`。
 
-`capabilities.session.Conversation` 管理本轮共享的方案缓存、已完成操作和待恢复请求，并统一独立方案的保存与登记。方案操作与首次建模共用每轮一次修改的限制。跨轮数据仍使用原有 LangGraph 状态与检查点；历史状态字段、运行引用和图名称不变。
+`Conversation`（位于 `agent.py`）管理本轮共享的方案缓存、已完成操作和待恢复请求，并统一独立方案的保存与登记。方案操作与首次建模共用每轮一次修改的限制。跨轮数据仍使用原有 LangGraph 状态与检查点；历史状态字段、运行引用和图名称不变。
 
-首次建模与场景求解共用 `Conversation.save_plan`：按调用方的稳定线程 ID 复用或计算，再保存原生线程，读取检查点，先填缓存再登记方案。已登记的方案按原 `SourceRun` 读取；保存成功但响应丢失时，重试完成登记而不重复计算。首次请求冻结、场景批次恢复与当前方案选择仍由对应能力负责。
+首次建模与场景求解共用 `Conversation.save_plan`：按调用方的稳定线程 ID 复用或计算，再保存原生线程，读取检查点，先填缓存再登记方案。已登记的方案按原 `SourceRun` 读取；保存成功但响应丢失时，重试完成登记而不重复计算。
 
 ```text
 src/llm4om/
 ├── __init__.py          公共入口：run、run_problem 及常用类型
 ├── cli.py               命令行：host、solve、methods、target、backends；可选 serve、run 与 build-worker
 ├── host/                宿主模型适配、本地方法会话与执行记录，不连接平台 LLM 或 Web 服务
-├── method_steps.py      平台与宿主模式共用的方法产物记录
+├── method_steps.py      平台、进度保存与宿主模式共用的方法产物记录
 ├── problem.py           题面判空、附件名校验与有限提示预览；附件原文独立传入 Context.data
-├── languages.py         九个建模库、原生代码契约和 CodeTarget
-├── code_prompts.py      官方建模接口的代码参考
+├── languages.py         九个建模库、官方接口代码参考、原生代码契约和 CodeTarget
 ├── model_code.py        原生变量、约束、目标和函数组装，供组件式方法复用
 ├── llm.py               服务商列表、LLMSettings、chat_model()
 ├── llm_presets.py       预设读写、迁移和环境预设；同一事务内读取并原子替换
@@ -82,17 +81,10 @@ src/llm4om/
 ├── graph.py             平台图 platform_graph(method)、RunState、RunContext、Resources、进程内运行 run()
 ├── followups.py         完整题面整理、方案与无解解释、实际变量及冲突证据引用校验
 ├── requirements.py      需求对话图、业务需求稿与 LangChain Agent
-├── agent.py             优化与方案对话图、模型和预算、本轮状态提交
-├── capabilities/        原生 LangChain 能力装配
-│   ├── __init__.py      按对话模式组合工具和中间件
-│   ├── session.py       原有会话状态、方案引用、本轮缓存与恢复请求
-│   ├── plans.py         方案读取、选择、场景求解及其指令
-│   ├── calculation.py   数值计算与可恢复输入错误
-│   └── modeling.py      首次建模、能力查询及其指令
-├── chat_prompts.py      三类对话共享的表达准则
+├── agent.py             优化与方案对话图、会话方案缓存、工具集、中间件与本轮状态提交
 ├── web_search.py        DeepSeek 搜索工具、来源与端点凭据绑定
 └── server/              Web 工作台
-    ├── graphs.py        各方法的平台图及两种独立对话图，供 LangGraph 服务器注册
+    ├── graphs.py        各方法的平台图及三类对话图，供 LangGraph 服务器注册
     ├── app.py           服务器挂载的路由：选项、预设模型、模型列表、题库、前端页面
     ├── middleware.py    请求格式、运行频率、线程删除及进度清理
     ├── examples.py      内置题库的只读浏览（数据在 examples_data/）
@@ -102,7 +94,7 @@ src/llm4om/
 依赖只朝一个方向：
 
 ```text
-languages · llm · sandbox  →  runtime  →  methods  →  graph  →  capabilities · requirements  →  agent · server · cli
+languages · llm · sandbox  →  runtime  →  methods  →  graph  →  agent · requirements  →  server · cli
 storage → llm_presets · budget ──────────────────────┘
 runtime → progress ─────────────────────────────────┘
 ```
@@ -258,18 +250,19 @@ LLM 调用由聊天模型上的回调记录，包括子图和 `create_agent` 智
 ```text
 frontend/src/
 ├── main.tsx / App.tsx   挂载、路由、布局和跨功能组合
-├── api.ts / types.ts   普通 JSON HTTP 请求和共享选项/预设类型
+├── api.ts / types.ts   普通 JSON HTTP 请求和共享选项/预设/草稿类型
 ├── i18n.ts / locales/  中英文文本
 ├── format.ts          状态、数字和用时的展示
 ├── features/
-│   ├── composer/      Composer、ProblemEditor、DataEditor、Examples、Excel 导入、Draft 类型及测试
-│   ├── chat/          三类对话共用的消息生命周期、渲染、输入、模型选择、滚动跟随和标签页内的未发送草稿
+│   ├── agent/         优化对话工作区与实时建模面板
+│   ├── composer/      Composer、RunSettings、ProblemEditor、DataEditor、Examples、文件与 Excel 导入及测试
+│   ├── chat/          三类对话共用的消息生命周期、未发送草稿、渲染、输入、模型选择与滚动跟随
 │   ├── presets/       PresetsDialog
-│   ├── requirements/  需求对话、可编辑需求稿、原生线程创建与交接
+│   ├── requirements/  需求对话、可编辑需求稿与交接
 │   ├── solution_chat/ 方案对话、固定方案读取与独立方案导航
 │   └── runs/          RunView、Compare、Outputs、Solution、Timeline、状态图标
 │                      Explanation、Infeasibility、RevisionDialog、ScenarioComparison、ScenariosDialog、ScenarioResults
-│                      api、sdk、useRun、history、types、steps、tables、report、workbook 及相邻测试
+│                      api（运行、修订、对比及对话线程创建/保存）、sdk、useRun、history、target、types、steps、tables、report、workbook 及相邻测试
 ├── components/        Sidebar、Content、PageErrorBoundary、theme 等共享界面
 │   └── ui/            shadcn/ui 组件
 └── lib/                utils.ts 合并 Tailwind 类名；csv.ts 统一 CSV/TSV 无损文本解析与转义
@@ -285,7 +278,7 @@ frontend/src/
 
 页面按用户的任务顺序组织：
 
-1. 编辑页用 `ProblemEditor` 管理单框动态实时 Markdown 渲染、按块源码编辑和附件展示，`Composer` 管理草稿、文件读取及运行设置。问题占据主区域，配置摘要打开原有完整设置；底部建模操作常驻。`Requirements` 通过编辑器和助手插槽复用同一个 `Composer`，提交建模前等待原生需求稿保存队列。
+1. 编辑页用 `ProblemEditor` 管理单框动态实时 Markdown 渲染、按块源码编辑和附件展示，`Composer` 专注快速求解草稿与模板，`RunSettings`（`useRunLauncher`）管理建模方法、引擎校验、设置弹窗和启动动作。`Requirements` 直接管理对话与需求稿双栏布局，复用 `ProblemEditor` 与 `useRunLauncher`，提交建模前等待原生需求稿保存队列。
 2. 运行页先用结论卡回答“得到了什么”（目标值、状态或失败原因），再提供“核对数学模型”和“查看解”。
 3. 运行中展开建模过程与产物分栏；完成后默认收起过程，保留显式展开入口。`SolutionChat` 在结果旁显示对话，通过 `renderRun` 插槽复用完整 `RunView`；查看其他方案与对话的当前基准分开保存，不改写原生图状态。
 

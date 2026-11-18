@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { targetLabel } from "./target";
+import { normalizeTarget, targetLabel } from "./target";
 import type { Options } from "@/types";
 
 const options: Options = { methods: [], providers: [], datasets: [], languages: [
@@ -8,6 +8,9 @@ const options: Options = { methods: [], providers: [], datasets: [], languages: 
 ] };
 
 test("one library label covers old pairs, native code and the backend actually used", () => {
+  expect(normalizeTarget("cvxpy_osqp")).toEqual({ language: "cvxpy", solver: "OSQP" });
+  expect(normalizeTarget("pywraplp")).toEqual({ language: "ortools", solver: undefined });
+  expect(normalizeTarget()).toEqual({ language: "pyomo", solver: undefined });
   expect(targetLabel(options, { language: "pywraplp" })).toBe("OR-Tools · SCIP");
   expect(targetLabel(options, { language: "cvxpy_osqp" })).toBe("CVXPY · OSQP");
   expect(targetLabel(options, { language: "cvxpy", solver: "AUTO" }, "SCIP")).toBe("CVXPY · SCIP");

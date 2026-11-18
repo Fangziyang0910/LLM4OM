@@ -228,7 +228,7 @@ def test_preset_names_are_display_metadata_and_older_presets_still_load(tmp_path
     with client(tmp_path) as api:
         named = api.post("/api/presets", json={**PRESET, "name": " deepseek-v4.1 flash-1017 "}).json()["presets"][0]
         assert named["name"] == "deepseek-v4.1 flash-1017" and named["model"] == LLM.model
-        assert store.get(named["id"]) == LLM
+        assert store.find(named["id"]).settings == LLM
     content = json.loads(store.path.read_text())
     del content["presets"][0]["name"]
     store.path.write_text(json.dumps(content))

@@ -22,7 +22,7 @@ export function hasSolution(solve: Solve | null | undefined): solve is Solve {
 }
 
 /** A business plan with every actual value, plus the problem and settings that produced it. */
-export function solutionWorkbook(meta: RunMeta, values: RunValues, options: Options, link?: string): Sheet<Blob>[] {
+function solutionWorkbook(meta: RunMeta, values: RunValues, options: Options, link?: string): Sheet<Blob>[] {
   const solve = values.solve;
   if (!hasSolution(solve)) {
     throw new Error(t("当前没有可导出的求解方案。"));

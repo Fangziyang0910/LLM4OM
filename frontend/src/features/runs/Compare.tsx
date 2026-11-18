@@ -14,7 +14,7 @@ import { StatusIcon, TONE } from "@/features/runs/status";
 import { ScenarioResults } from "./ScenarioResults";
 
 /** Whether the solved runs agree on the objective value, up to a relative 1e-6. */
-export function agreement(entries: Entry[]): { solved: number; same: boolean; low: number | null; high: number | null } {
+function agreement(entries: Entry[]): { solved: number; same: boolean; low: number | null; high: number | null } {
   const values = entries.filter(entry => tone(entry.state) === "good" && entry.objective != null).map(entry => entry.objective!);
   if (!values.length) return { solved: 0, same: false, low: null, high: null };
   const low = Math.min(...values), high = Math.max(...values);

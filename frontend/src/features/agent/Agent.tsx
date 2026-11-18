@@ -17,6 +17,7 @@ import { useChatScroll } from "@/features/chat/scroll";
 import { DATA_FILE_ACCEPT, readDataFiles } from "@/features/composer/files";
 import { DataEditor } from "@/features/composer/DataEditor";
 import { Outputs, type Tab } from "@/features/runs/Outputs";
+import { saveThreadValues } from "@/features/runs/api";
 import { client } from "@/features/runs/sdk";
 import type { OptimizationMeta, Plan, RunValues, SourceRun, Usage } from "@/features/runs/types";
 import { sameSource, sourceKey } from "@/features/runs/types";
@@ -143,7 +144,7 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   const saveData = async (next: Record<string, string>) => {
     setSavingData(true);
     try {
-      if (threadId) await client.threads.updateState(threadId, { values: { data: next }, asNode: "discuss" });
+      if (threadId) await saveThreadValues(threadId, { data: next });
       setFiles(next);
     } finally { setSavingData(false); }
   };

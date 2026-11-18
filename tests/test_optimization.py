@@ -9,14 +9,11 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from langchain.agents.middleware import wrap_model_call
-from langchain.tools import tool
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from llm4om import agent
-from llm4om.agent import AgentContext, optimization_graph, solution_graph
-from llm4om.capabilities.session import Conversation
+from llm4om.agent import AgentContext, Conversation, optimization_graph
 from tests.conftest import ACCEPT_REVIEW, PRODUCTION_CODE, PRODUCTION_PROBLEM, TWO_PART_REPLY, tool_call
 from tests.test_followups import EXPLANATION, REVISED_REPLY
 from tests.test_sandbox import ORTOOLS_CODE
@@ -118,7 +115,7 @@ def test_a_registered_plan_reuses_its_checkpoint_instead_of_its_threads_latest_v
 
     client = SimpleNamespace(threads=SimpleNamespace(get_state=AsyncMock(side_effect=read)))
     session = Conversation({"messages": [HumanMessage("retry", id="turn")], "plans": [plan]}, AgentContext(),
-        make_resources(lambda *_: "unused"), client, AsyncMock(), optimization=True)
+        make_resources(lambda *_: "unused"), client, optimization=True)
     calculate = AsyncMock()
     saved, values = asyncio.run(session.save_plan("saved", {"name": "rephrased", "instruction": "rephrased", "group": None,
         "turn_id": "turn"}, run=calculate))
@@ -149,45 +146,6 @@ def test_general_chat_and_arithmetic_do_not_require_a_modeling_problem(make_reso
         assert second["messages"][-2].artifact["type"] == "calculation"
 
     asyncio.run(check())
-    saved_plans[1].threads.create.assert_not_called()
-
-
-@pytest.mark.parametrize("factory", [optimization_graph, solution_graph])
-def test_a_native_capability_supplies_its_tools_and_instructions_without_changing_the_graph(make_resources, saved_plans, monkeypatch, factory):
-    source = {"thread_id": str(uuid4()), "checkpoint_id": str(uuid4())}
-    saved_plans[0][source["thread_id"]] = {"values": {"description": "A saved plan", "spec": {"preset": None}},
-        "checkpoint": {"checkpoint_id": source["checkpoint_id"]}}
-
-    @tool
-    def read_reference() -> str:
-        """Read a public reference note without changing any plan."""
-        return "A reference note."
-
-    @wrap_model_call(tools=[read_reference])
-    async def references(request, handler):
-        return await handler(request.override(system_message=SystemMessage(
-            request.system_message.text + "\nUse read_reference when the user requests the reference note.")))
-
-    assemble = agent.assemble_capabilities
-
-    def with_references(*args):
-        tools, middleware = assemble(*args)
-        return tools, [*middleware, references]
-
-    monkeypatch.setattr(agent, "assemble_capabilities", with_references)
-
-    def reply(role, messages, tools):
-        assert "Use read_reference" in messages[0].text and "read_reference" in tools
-        assert ("model_and_solve" in tools) == (factory is optimization_graph)
-        if messages[-1].type == "human":
-            return tool_call("read_reference")
-        assert messages[-1].text == "A reference note."
-        return "Here is the reference note."
-
-    result = asyncio.run(factory().ainvoke({"source": source, "messages": [("human", "Read the reference note.")]},
-        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
-    assert result["failure"] is None, result["failure"]
-    assert result["current"] == source and not result["plans"] and result["usage"]["solves"] == 0
     saved_plans[1].threads.create.assert_not_called()
 
 

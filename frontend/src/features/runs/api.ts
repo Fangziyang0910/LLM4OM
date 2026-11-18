@@ -1,11 +1,34 @@
 import { outcome } from "@/format";
 import { locale, t } from "@/i18n";
-import type { Draft } from "@/features/composer/types";
-import type { Entry, RequirementsMeta, SolutionChatMeta, OptimizationMeta, RunMeta, RunSpec, RunValues, SourceRun, Usage } from "@/features/runs/types";
-import type { Preset } from "@/types";
+import type { Entry, OptimizationMeta, RequirementsMeta, RunMeta, RunSpec, RunValues, SolutionChatMeta, SourceRun, Usage } from "@/features/runs/types";
+import type { Draft, Preset } from "@/types";
 
-/** The LangGraph SDK client, loaded on first use. */
+export type RequirementsDraft = { description: string; data: Record<string, string> };
+
+/** The LangGraph SDK client, loaded on first use so the initial page entry stays lightweight. */
 const sdk = () => import("@/features/runs/sdk").then(module => module.client);
+
+export const chatDraftKey = (threadId: string) => `llm4om-message-${threadId}`;
+
+export function clearChatDraft(threadId: string): void {
+  const key = chatDraftKey(threadId);
+  try {
+    sessionStorage.removeItem(key);
+    sessionStorage.removeItem(`${key}-pending`);
+  } catch { /* storage may be unavailable */ }
+}
+
+/** Centralize the conversation graph node name for native LangGraph checkpoint writes. */
+export const discussSupersteps = (values: Record<string, unknown>) => [{ updates: [{ asNode: "discuss", values }] }];
+
+export async function saveThreadValues(threadId: string, values: Record<string, unknown>): Promise<void> {
+  await (await sdk()).threads.updateState(threadId, { values, asNode: "discuss" });
+}
+
+export async function getThreadKind(threadId: string): Promise<string | undefined> {
+  const thread = await (await sdk()).threads.get(threadId);
+  return thread.metadata?.kind as string | undefined;
+}
 
 /** Create a thread for the draft and start its run in the background; returns the thread id. */
 export async function startRun(draft: Draft, preset: Preset | undefined, group: string | null = null,
@@ -38,6 +61,31 @@ export async function startRun(draft: Draft, preset: Preset | undefined, group: 
   return thread.thread_id;
 }
 
+async function loadCheckpoint(threadId: string, source: SourceRun | undefined, busyMessage: string, requireSpec = false) {
+  const client = await sdk();
+  const targetId = source?.thread_id ?? threadId;
+  const [state, thread] = await Promise.all([
+    client.threads.getState<RunValues>(targetId, source?.checkpoint_id),
+    client.threads.get(targetId),
+  ]);
+  if (!source && thread.status === "busy") throw new Error(busyMessage);
+  const values = state.values as RunValues;
+  if ((requireSpec && !values.spec) || !values.description || !state.checkpoint.checkpoint_id)
+    throw new Error(t("原问题尚未保存，请稍后重试。"));
+  return {
+    values,
+    meta: runMeta(thread.metadata as RunMeta, values.spec),
+    pinned: source ?? { thread_id: targetId, checkpoint_id: state.checkpoint.checkpoint_id },
+  };
+}
+
+async function revisionSource(threadId: string, presets: Preset[], source?: SourceRun) {
+  const { values, meta, pinned } = await loadCheckpoint(threadId, source, t("请等待当前运行结束后再调整条件。"));
+  const preset = meta.preset ? presets.find(item => item.id === meta.preset) : presets[0];
+  return { draft: { description: values.description!, data: values.data ?? {}, method: meta.method,
+    language: meta.language, solver: meta.solver, preset: meta.preset ?? null }, preset, source: pinned };
+}
+
 /** Revise a saved checkpoint in a new thread; the source's problem, attachments and choices remain intact. */
 export async function startRevision(threadId: string, instruction: string, presets: Preset[], source?: SourceRun): Promise<string> {
   if (!instruction.trim()) throw new Error(t("请描述要调整的条件。"));
@@ -45,18 +93,31 @@ export async function startRevision(threadId: string, instruction: string, prese
   return startRun(base.draft, base.preset, null, { instruction: instruction.trim(), source: base.source });
 }
 
-async function revisionSource(threadId: string, presets: Preset[], source?: SourceRun) {
+/** A native thread holds the conversation and editable draft, even before the first message. */
+export async function createRequirements(draft: RequirementsDraft, preset: Preset | undefined, origin?: string): Promise<string> {
   const client = await sdk();
-  const [state, thread] = await Promise.all([client.threads.getState<RunValues>(source?.thread_id ?? threadId, source?.checkpoint_id),
-    client.threads.get(source?.thread_id ?? threadId)]);
-  if (!source && thread.status === "busy") throw new Error(t("请等待当前运行结束后再调整条件。"));
-  const values = state.values as RunValues;
-  if (!values.description || !state.checkpoint.checkpoint_id) throw new Error(t("原问题尚未保存，请稍后重试。"));
-  const meta = runMeta(thread.metadata as RunMeta, values.spec);
-  const preset = meta.preset ? presets.find(item => item.id === meta.preset) : presets[0];
-  return { draft: { description: values.description, data: values.data ?? {}, method: meta.method,
-    language: meta.language, solver: meta.solver, preset: meta.preset ?? null }, preset,
-    source: source ?? { thread_id: threadId, checkpoint_id: state.checkpoint.checkpoint_id } };
+  const metadata: RequirementsMeta = { kind: "requirements",
+    title: draft.description.trim().split("\n")[0].replace(/^#{1,6}\s+/, "").slice(0, 120) || t("新需求对话"),
+    preset: preset?.id ?? null, provider: preset?.provider ?? null, model: preset?.name || preset?.model || null,
+    ...(origin ? { origin } : {}) };
+  const thread = await client.threads.create({ graphId: "requirements", metadata,
+    supersteps: discussSupersteps({ ...draft, messages: [] }) });
+  return thread.thread_id;
+}
+
+/** Freeze the starting checkpoint; future reruns of the source cannot change this conversation's facts. */
+export async function createSolutionChat(run: string | SourceRun): Promise<string> {
+  const client = await sdk();
+  const source = typeof run === "string" ? undefined : run;
+  const threadId = typeof run === "string" ? run : run.thread_id;
+  const { meta, pinned } = await loadCheckpoint(threadId, source, t("请等待当前运行结束后再讨论方案。"), true);
+  const existing = await client.threads.search({ metadata: { kind: "solution_chat", parent: pinned }, limit: 1, select: ["thread_id"] });
+  if (existing.length) return existing[0].thread_id;
+  const metadata: SolutionChatMeta = { kind: "solution_chat", title: t("方案对话 · {title}", { title: meta.title }),
+    preset: meta.preset, provider: meta.provider, model: meta.model, parent: pinned };
+  const created = await client.threads.create({ graphId: "solution_chat", metadata,
+    supersteps: discussSupersteps({ source: pinned, current: pinned, messages: [], plans: [] }) });
+  return created.thread_id;
 }
 
 const comparisonId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, "0")).join("");
@@ -111,6 +172,7 @@ export async function deleteRun(threadId: string): Promise<void> {
     // A retry also clears progress left after the thread was already deleted.
     if (!(error instanceof Error && "status" in error && error.status === 404)) throw error;
   }
+  clearChatDraft(threadId);
 }
 
 const PAGE_SIZE = 100;

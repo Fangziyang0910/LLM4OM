@@ -8,20 +8,17 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/api";
-import { deleteRun, history, startComparison, startRevision, startRun, startScenarios } from "@/features/runs/api";
+import { createRequirements, createSolutionChat, deleteRun, getThreadKind, history, startComparison, startRevision, startRun, startScenarios } from "@/features/runs/api";
 import { errorText } from "@/format";
 import { Composer, initialDraft } from "@/features/composer/Composer";
 import { Examples } from "@/features/composer/Examples";
 import { PresetsDialog } from "@/features/presets/PresetsDialog";
-import { createRequirements } from "@/features/requirements/api";
-import { createSolutionChat } from "@/features/solution_chat/api";
 import { Sidebar } from "@/components/Sidebar";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { t } from "@/i18n";
-import type { Draft } from "@/features/composer/types";
 import type { Entry, SourceRun } from "@/features/runs/types";
 import { sourceKey } from "@/features/runs/types";
-import type { Options, Preset, Presets } from "@/types";
+import type { Draft, Options, Preset, Presets } from "@/types";
 
 // Load run pages on demand.
 const RunView = lazy(() => import("@/features/runs/RunView").then(module => ({ default: module.RunView })));
@@ -101,7 +98,6 @@ export default function App() {
       : t("“{title}”的问题、模型和计算结果都会被删除，无法恢复。", { title: entry.meta.title }),
     run: async () => {
       await deleteRun(entry.id);
-      try { sessionStorage.removeItem(`llm4om-message-${entry.id}`); } catch { /* storage may be unavailable */ }
       if ("id" in route && route.id === entry.id) go({ name: entry.meta.kind === "optimization" ? "agent-new" : "new" });
       await refresh();
       toast.success(t("已删除。"));
@@ -122,9 +118,8 @@ export default function App() {
       const chat = await createSolutionChat(source ?? threadId); void refresh(); go({ name: "discussion", id: chat });
     }}
     onConversation={id => {
-      void import("@/features/runs/sdk").then(async ({ client }) => {
-        const thread = await client.threads.get(id);
-        go({ name: thread.metadata?.kind === "optimization" ? "agent" : "discussion", id });
+      void getThreadKind(id).then(kind => {
+        go({ name: kind === "optimization" ? "agent" : "discussion", id });
       }).catch(error => toast.error(errorText(error)));
     }} onScenarios={async scenarios => {
       const result = await startScenarios(threadId, scenarios, presets, source);

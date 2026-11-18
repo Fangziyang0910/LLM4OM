@@ -67,7 +67,7 @@ flowchart LR
 | 方法 | 固定来源 | 实现方式 |
 |---|---|---|
 | TriVAL | [SCUT-EIPI/TriVAL@380a529](https://github.com/SCUT-EIPI/TriVAL/tree/380a529) | 移植原 LangGraph 图、节点、提示和循环上限 |
-| OptiMUS 0.3 | [teshnizi/OptiMUS@e182e9e](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) | 上游 README 标注为 v0.3；`main.py` 流程改写为图；提示逐字提取（`optimus/prompts.py`，MIT）；保留上游输出格式并修正解析；代码示例按库组装（`optimus/dialects.py`），共享原生代码生成（`model_code.py`） |
+| OptiMUS 0.3 | [teshnizi/OptiMUS@e182e9e](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) | 上游 README 标注为 v0.3；`main.py` 流程改写为图；提示逐字提取（`optimus/prompts.py`，MIT）；保留上游输出格式并修正解析；代码示例按库组装（`optimus/graph.py`），共享原生代码生成（`model_code.py`） |
 | CoE | [xzymustbexzy/Chain-of-Experts@afb89bf](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) | `main.py` 的 `chain_of_experts` 改写为图；七位专家、协调者和汇总器的提示逐字保留 |
 | OptiTree | [MIRALab-USTC/OptiTree@2e70ecf](https://github.com/MIRALab-USTC/OptiTree/tree/2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9) | `Reasoner.reason_run` 改写为图；分类、推理、检查三组提示逐字提取（`optitree/prompts.py`）；随包分发原问题类型树和思路模板（`optitree/source/`，MIT） |
 | OR-LLM-Agent | [bwz96sco/or_llm_agent@5dccdaa](https://github.com/bwz96sco/or_llm_agent/tree/5dccdaab89ab91c3cb28066fe849423dc124d287) | `or_llm_eval.py` 的 `or_llm_agent` 改写为图；提示逐字保留，代码请求改为平台契约 |

@@ -4,7 +4,7 @@ import { useStream } from "@langchain/langgraph-sdk/react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { client } from "@/features/runs/sdk";
-import { useConversation } from "./conversation";
+import { clearChatDraft, useChatDraft, useConversation } from "./conversation";
 
 vi.mock("@/features/runs/sdk", () => ({ client: {
   threads: { get: vi.fn(), update: vi.fn(), create: vi.fn(), updateState: vi.fn() },
@@ -28,6 +28,7 @@ beforeEach(() => {
   vi.mocked(useStream).mockReturnValue(stream as never);
   threads.get.mockResolvedValue({ metadata: {}, values: { messages: [] } } as never);
   threads.create.mockResolvedValue({ thread_id: "created" } as never);
+  threads.updateState.mockResolvedValue({} as never);
   runs.create.mockResolvedValue({ run_id: "first-run" } as never);
 });
 afterEach(cleanup);
@@ -38,6 +39,46 @@ function conversation(threadId: string | null = "chat") {
     wrapper: ({ children }) => <QueryClientProvider client={query}>{children}</QueryClientProvider>,
   });
 }
+
+test("a prepared message stays in the draft until its own persisted message ID is acknowledged, and clearChatDraft clears both keys", () => {
+  const { result } = renderHook(() => useChatDraft("chat"));
+  act(() => result.current.setValue("  帮我排班  "));
+  const prepared = result.current.prepare(result.current.value);
+  expect(prepared.content).toBe("帮我排班");
+  expect(prepared.id).toBeTruthy();
+  expect(result.current.value).toBe("  帮我排班  ");
+  act(() => result.current.acknowledge([{ type: "human", id: "older-question", content: "帮我排班" }]));
+  expect(result.current.value).toBe("  帮我排班  ");
+  clearChatDraft("chat");
+  expect(sessionStorage.getItem("llm4om-message-chat")).toBeNull();
+  expect(sessionStorage.getItem("llm4om-message-chat-pending")).toBeNull();
+  act(() => result.current.acknowledge([prepared]));
+  expect(result.current.value).toBe("");
+});
+
+test("receipt acknowledgment survives reload and never clears a newer draft", () => {
+  const first = renderHook(() => useChatDraft("chat"));
+  act(() => first.result.current.setValue("已提交的问题"));
+  const prepared = first.result.current.prepare(first.result.current.value);
+  act(() => first.result.current.setValue("下一轮的新草稿"));
+  first.unmount();
+  const reopened = renderHook(() => useChatDraft("chat"));
+  expect(reopened.result.current.value).toBe("下一轮的新草稿");
+  act(() => reopened.result.current.acknowledge([prepared]));
+  expect(reopened.result.current.value).toBe("下一轮的新草稿");
+  expect(sessionStorage.getItem("llm4om-message-chat-pending")).toBeNull();
+});
+
+test("a rejected question save keeps both the pending question and the newer draft", async () => {
+  const { result } = renderHook(() => useChatDraft("chat"));
+  act(() => result.current.setValue("已提交的问题"));
+  const prepared = result.current.prepare(result.current.value);
+  act(() => result.current.setValue("下一轮的新草稿"));
+  threads.updateState.mockRejectedValueOnce(new Error("save rejected"));
+  await expect(result.current.savePending()).rejects.toThrow("save rejected");
+  expect(result.current.value).toBe("下一轮的新草稿");
+  expect(JSON.parse(sessionStorage.getItem("llm4om-message-chat-pending")!).id).toBe(prepared.id);
+});
 
 test.each(["checkpoint", "finish"])("only persisted %s confirmation acknowledges a message and preserves a later draft", async receipt => {
   const { result, rerender } = conversation();

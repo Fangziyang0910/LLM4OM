@@ -83,14 +83,13 @@ async def _host(args: argparse.Namespace) -> int:
 
 
 async def _run(args: argparse.Namespace) -> int:
-    from llm4om.graph import Resources, run
-    from llm4om.llm_presets import LLMPresetStore
-    from llm4om.sandbox import Sandbox, SolveResult
+    from llm4om.graph import run
+    from llm4om.sandbox import SolveResult
 
     problem, data = _problem(args), _data(args.data)
-    resources = Resources(LLMPresetStore(Path(args.workspace)), Sandbox(args.sandbox))
     state = await run(problem, method=args.method, language=args.language, data=data,
-                      solver=args.solver, preset=args.preset, resources=resources, on_step=_print_step)
+                      solver=args.solver, preset=args.preset, workspace=args.workspace,
+                      sandbox=args.sandbox, on_step=_print_step)
     if args.output:
         Path(args.output).write_text(json.dumps(state, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
     if state.get("failure"):

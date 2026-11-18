@@ -298,13 +298,21 @@ def platform_graph(method: Method) -> Any:
 
 async def run(description: str, *, method: str = "direct", language: str = "pyomo",
               solver: str | None = None, data: dict[str, str] | None = None,
-              preset: str | None = None, resources: Resources | None = None,
+              preset: str | None = None, llm: LLMSettings | None = None,
+              workspace: str | Path | None = None, sandbox: str | None = None,
+              resources: Resources | None = None,
               change: str | None = None, explain: bool = False, locale: Literal["zh", "en"] = "zh",
               on_step: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
     """Run one method in process and return the final state. `on_step` receives each step as it is recorded."""
     available = methods()
     if method not in available:
         raise ValueError(f"Unknown method {method!r}; choose one of {sorted(available)}.")
+    if resources is None and (llm is not None or workspace is not None or sandbox is not None):
+        resources = Resources(
+            LLMPresetStore(Path("runs/web" if workspace is None else workspace)),
+            Sandbox("docker" if sandbox is None else sandbox),
+            llm=llm,
+        )
     final: dict[str, Any] = {}
     # In-process execution must not inherit a calling conversation's checkpoints, progress key or message stream.
     config: RunnableConfig = {"tags": ["nostream"], "configurable": {"thread_id": None, "llm4om_resources": resources}}

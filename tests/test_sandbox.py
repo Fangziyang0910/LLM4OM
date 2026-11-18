@@ -155,19 +155,31 @@ def test_solves_and_scripts_share_capacity_and_queued_cancellation_releases_it(m
         release, full = asyncio.Event(), asyncio.Event()
         active = peak = 0
 
-        async def execute(*args):
-            nonlocal active, peak
-            active += 1
-            peak = max(peak, active)
-            if active == 2:
-                full.set()
-            try:
-                await release.wait()
-                return {"status": "executed"}
-            finally:
-                active -= 1
+        class FakeProcess:
+            returncode = 0
 
-        monkeypatch.setattr(sandbox, "_execute", execute)
+            async def communicate(self, _input: bytes = b"") -> tuple[bytes, bytes]:
+                nonlocal active, peak
+                active += 1
+                peak = max(peak, active)
+                if active == 2:
+                    full.set()
+                try:
+                    await release.wait()
+                    return b'@@LLM4OM_RESULT@@{"status": "executed"}\n', b""
+                finally:
+                    active -= 1
+
+            def kill(self) -> None:
+                pass
+
+            async def wait(self) -> int:
+                return 0
+
+        async def fake_exec(*_args, **_kwargs) -> FakeProcess:
+            return FakeProcess()
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
         first = asyncio.create_task(sandbox.solve("", {}, "pyomo", 1))
         second = asyncio.create_task(sandbox.run_script("", 1))
         await asyncio.wait_for(full.wait(), 1)

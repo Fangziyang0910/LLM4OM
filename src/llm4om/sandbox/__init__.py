@@ -120,33 +120,30 @@ class Sandbox:
 
     async def _run(self, request: dict[str, Any], time_limit: float) -> dict[str, Any]:
         async with self._slots:
-            return await self._execute(request, time_limit)
-
-    async def _execute(self, request: dict[str, Any], time_limit: float) -> dict[str, Any]:
-        timeout = time_limit + START_MARGIN
-        name = "llm4om-" + uuid.uuid4().hex[:12]
-        env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "GRB_LICENSE_FILE",
-                                               "MOSEKLM_LICENSE_FILE", "COPT_LICENSE_DIR")
-               if key in os.environ} if self.kind == "local" else None
-        if env is not None:
-            env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="2")
-        process = await asyncio.create_subprocess_exec(*self._command(name), stdin=asyncio.subprocess.PIPE,
-                                                       stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env)
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(json.dumps(request).encode()), timeout)
-        except (asyncio.TimeoutError, asyncio.CancelledError) as error:
-            with contextlib.suppress(ProcessLookupError):
-                process.kill()
-            await process.wait()
-            if self.kind == "docker":
-                await (await asyncio.create_subprocess_exec("docker", "rm", "--force", name, stdout=asyncio.subprocess.DEVNULL,
-                                                            stderr=asyncio.subprocess.DEVNULL)).wait()
-            if isinstance(error, asyncio.CancelledError):
-                raise
-            return {"status": "error", "error": f"Execution exceeded {timeout:g} seconds and was stopped."}
-        for line in reversed(stdout.decode(errors="replace").splitlines()):
-            if line.startswith(RESULT_MARKER):
-                return json.loads(line[len(RESULT_MARKER):])
-        detail = stderr.decode(errors="replace").strip()[-2000:]
-        hint = " Build it with `llm4om build-worker`." if "Unable to find image" in detail else ""
-        return {"status": "error", "error": f"The sandbox did not return a result (exit code {process.returncode}).{hint}\n{detail}"}
+            timeout = time_limit + START_MARGIN
+            name = "llm4om-" + uuid.uuid4().hex[:12]
+            env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "GRB_LICENSE_FILE",
+                                                   "MOSEKLM_LICENSE_FILE", "COPT_LICENSE_DIR")
+                   if key in os.environ} if self.kind == "local" else None
+            if env is not None:
+                env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="2")
+            process = await asyncio.create_subprocess_exec(*self._command(name), stdin=asyncio.subprocess.PIPE,
+                                                           stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env)
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(json.dumps(request).encode()), timeout)
+            except (asyncio.TimeoutError, asyncio.CancelledError) as error:
+                with contextlib.suppress(ProcessLookupError):
+                    process.kill()
+                await process.wait()
+                if self.kind == "docker":
+                    await (await asyncio.create_subprocess_exec("docker", "rm", "--force", name, stdout=asyncio.subprocess.DEVNULL,
+                                                                stderr=asyncio.subprocess.DEVNULL)).wait()
+                if isinstance(error, asyncio.CancelledError):
+                    raise
+                return {"status": "error", "error": f"Execution exceeded {timeout:g} seconds and was stopped."}
+            for line in reversed(stdout.decode(errors="replace").splitlines()):
+                if line.startswith(RESULT_MARKER):
+                    return json.loads(line[len(RESULT_MARKER):])
+            detail = stderr.decode(errors="replace").strip()[-2000:]
+            hint = " Build it with `llm4om build-worker`." if "Unable to find image" in detail else ""
+            return {"status": "error", "error": f"The sandbox did not return a result (exit code {process.returncode}).{hint}\n{detail}"}

@@ -1,15 +1,56 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { v7 } from "@langchain/core/utils/uuid";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import type { UseStream } from "@langchain/langgraph-sdk/react";
 import type { BagTemplate, Message, ThreadState } from "@langchain/langgraph-sdk";
 import type { GetConfigurableType, GetCustomEventType, GetUpdateType } from "@langchain/langgraph-sdk/ui";
 import { toast } from "sonner";
+import { chatDraftKey, clearChatDraft, discussSupersteps, saveThreadValues } from "@/features/runs/api";
 import { client } from "@/features/runs/sdk";
 import { errorText } from "@/format";
-import { useChatDraft } from "./draft";
 
+export { clearChatDraft };
+
+type Pending = { id: string; text: string };
 type ConversationState = Record<string, unknown> & { messages?: Message[] };
+
+/** Unsent messages stay in this browser tab and never enter the conversation history. */
+export function useChatDraft(threadId: string, initial = "") {
+  const key = chatDraftKey(threadId);
+  const [value, setValue] = useState(() => { try { return initial || sessionStorage.getItem(key) || ""; } catch { return initial; } });
+  const pending = useRef<Pending | null>(null);
+  if (pending.current === null) {
+    try { pending.current = JSON.parse(sessionStorage.getItem(`${key}-pending`) ?? "null") as Pending | null; } catch { /* storage may be unavailable */ }
+  }
+  useEffect(() => {
+    try { if (value) sessionStorage.setItem(key, value); else sessionStorage.removeItem(key); } catch { /* storage may be unavailable */ }
+  }, [key, value]);
+  const prepare = (text: string): Message => {
+    const message: Message = { type: "human", id: v7(), content: text.trim() };
+    pending.current = { id: message.id!, text };
+    try { sessionStorage.setItem(`${key}-pending`, JSON.stringify(pending.current)); } catch { /* storage may be unavailable */ }
+    return message;
+  };
+  const acknowledge = useCallback((messages?: Message[]) => {
+    const sent = pending.current;
+    if (!sent || !messages?.some(message => message.id === sent.id)) return;
+    // Run creation precedes the input checkpoint; only a checkpoint confirms the question was saved.
+    setValue(current => current === sent.text ? "" : current);
+    pending.current = null;
+    try { sessionStorage.removeItem(`${key}-pending`); } catch { /* storage may be unavailable */ }
+  }, [key]);
+  /** Save the unconfirmed question; `target` covers a thread created just before navigation. */
+  const savePending = async (target = threadId) => {
+    const sent = pending.current;
+    if (!sent) return;
+    const message: Message = { type: "human", id: sent.id, content: sent.text.trim() };
+    // Immediate cancellation can precede the graph's first input checkpoint.
+    await saveThreadValues(target, { messages: [message] });
+    acknowledge([message]);
+  };
+  return { value, setValue, prepare, acknowledge, savePending };
+}
 
 export type ConversationTurn<State extends ConversationState, Bag extends BagTemplate = BagTemplate> = {
   /** Graph context for this turn, such as the preset and model options. */
@@ -142,7 +183,7 @@ export function useConversation<State extends ConversationState, Bag extends Bag
       let created: string;
       try {
         created = (await client.threads.create({ graphId: options.assistantId, metadata: turn.metadata,
-          supersteps: [{ updates: [{ asNode: "discuss", values: { ...turn.values, messages: [message] } }] }] })).thread_id;
+          supersteps: discussSupersteps({ ...turn.values, messages: [message] }) })).thread_id;
       } catch (error) { toast.error(errorText(error)); return undefined; }
       // `threads.create(supersteps)` is a root native checkpoint, so the question is already persisted.
       acknowledge([message]);

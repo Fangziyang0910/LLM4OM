@@ -30,7 +30,6 @@ from langgraph.runtime import Runtime
 
 from llm4om.methods import Method, presets
 from llm4om.methods.optimus import prompts as P
-from llm4om.methods.optimus.dialects import constraint_prompt, objective_prompt
 from llm4om.methods.optimus.parsing import (
     extract_code_from_end,
     extract_debugged_code,
@@ -206,14 +205,24 @@ async def write_code(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """target_code.get_codes for the selected language's dialect."""
     context, desc, params, variables = runtime.context, state["problem"], state["parameters"], state["variables"]
     code = ModelCode(context.target)
+    constraint_template = (
+        P.TARGET_CODE__PROMPT_CONSTRAINTS_CODE
+        .replace("    model.addConstr(SalesVolumes[i] <= MaxProductionVolumes[i])",
+                 "    " + code.constraint("SalesVolumes[i] <= MaxProductionVolumes[i]"))
+        .replace("Gurobi does not support a <= x <= b syntax", "Use separate constraints for lower and upper bounds")
+    )
+    objective_template = P.TARGET_CODE__PROMPT_OBJECTIVE_CODE.replace(
+        "model.setObjective(quicksum(price[i] * x[i] for i in range(N)), GRB.MAXIMIZE)",
+        code.objective("quicksum(price[i] * x[i] for i in range(N))", "max"),
+    )
     coded = []
     for c in state["constraints"]:
-        res = await _ask(context, "constraint_code", constraint_prompt(code).format(
+        res = await _ask(context, "constraint_code", constraint_template.format(
             solver=context.target.library, description=desc, params=_dump(params), vars=_dump(variables), constraint=_dump(c),
             directions=code.prompt))
         coded.append({**c, "code": extract_code_from_end(res)})
     objective = state["objective"]
-    res = await _ask(context, "objective_code", objective_prompt(code).format(
+    res = await _ask(context, "objective_code", objective_template.format(
         solver=context.target.library, description=desc, params=_dump(params), vars=_dump(variables), objective=_dump(objective),
         directions=code.prompt))
     return {"constraints": coded, "objective": {**objective, "code": extract_code_from_end(res)}}

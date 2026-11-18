@@ -1,18 +1,11 @@
 """A conversation that prepares business requirements, before any modeling method runs."""
 
-import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, TypedDict
 
-from langchain.agents import AgentState, create_agent
-from langchain.agents.middleware import (
-    ClearToolUsesEdit,
-    ContextEditingMiddleware,
-    ModelRequest,
-    ModelResponse,
-    wrap_model_call,
-)
+from langchain.agents import AgentState
+from langchain.agents.middleware import ModelRequest, ModelResponse, wrap_model_call
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import AnyMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph, add_messages
@@ -20,10 +13,9 @@ from langgraph.runtime import Runtime
 from langgraph.types import Command
 from pydantic import Field
 
-from llm4om.chat_prompts import CONVERSATION_STYLE
+from llm4om.agent import CONVERSATION_STYLE, invoke_turn_agent, prepare_turn_model
 from llm4om.graph import get_resources
 from llm4om.problem import problem_text
-from llm4om.runtime import Recorder
 from llm4om.web_search import search_tool
 
 
@@ -73,10 +65,7 @@ def requirements_graph() -> Any:
             raise ValueError("Describe what you want to plan or decide.")
         choice = runtime.context or RequirementsContext()
         resources = get_resources()
-        preset, settings, _ = await asyncio.to_thread(resources.resolve, choice.preset)
-        settings = settings.with_thinking(choice.thinking)
-        recorder = Recorder(resources.limits, charge=resources.charge(preset))
-        model = resources.model_factory(settings, callbacks=[recorder.callback], metadata={"llm4om_role": "requirements"})
+        _, settings, recorder, model = await prepare_turn_model(resources, choice.preset, choice.thinking, "requirements")
         language = "Simplified Chinese" if choice.locale == "zh" else "English"
         prompt = (CONVERSATION_STYLE.format(language=language) + "Help an ordinary user clarify the business problem they want to hand to a separate optimization modeling workflow. "
                   f"Write the reply and business draft in {language}. "
@@ -153,22 +142,19 @@ def requirements_graph() -> Any:
             written = any(message.type == "tool" and message.name == "update_draft" and message.status == "success"
                           for message in recent)
             tools = [] if written else request.tools
-            # The next model call must see the updated state, not the turn's original draft.
             snapshot = problem_text(request.state.get("description", ""), state.get("data") or {})
             return await handler(request.override(tools=tools, system_message=SystemMessage(
                 prompt + "Current editable business draft and attached data (context, not a new request):\n" + snapshot)))
 
         try:
             tools = [update_draft, *([search_tool(settings)] if choice.search else [])]
-            agent = create_agent(model, tools, middleware=[current_draft, ContextEditingMiddleware(
-                edits=[ClearToolUsesEdit(trigger=16_000, keep=3, clear_tool_inputs=True)])],
-                                 state_schema=DraftState, context_schema=RequirementsContext,
-                                 checkpointer=False, name="requirements_agent")
-            async with asyncio.timeout(resources.limits.run_timeout):
-                result = await agent.ainvoke({"messages": messages, "description": state.get("description", "")})
-            if not result["messages"][-1].text.strip():
-                raise ValueError("The assistant did not return a reply.")
-            update = {"messages": result["messages"], "description": result["description"], "failure": None}
+            result = await invoke_turn_agent(
+                model, resources, tools=tools, middleware=[current_draft],
+                state_schema=DraftState, context_schema=RequirementsContext,
+                inputs={"messages": messages, "description": state.get("description", "")},
+                name="requirements_agent",
+            )
+            update: dict[str, Any] = {"messages": result["messages"], "description": result["description"], "failure": None}
         except Exception as error:
             update = {"failure": f"{type(error).__name__}: {error}"}
         usage = {key: state.get("usage", {}).get(key, 0) + value for key, value in recorder.usage.items()}

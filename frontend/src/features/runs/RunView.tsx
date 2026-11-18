@@ -23,8 +23,7 @@ import { report } from "@/features/runs/report";
 import { exportSolution, hasSolution } from "@/features/runs/workbook";
 import { STATUS, duration, errorText, formatNumber, formatTokens, outcome, tone } from "@/format";
 import { phases } from "@/features/runs/steps";
-import type { Draft } from "@/features/composer/types";
-import type { Options } from "@/types";
+import type { Draft, Options } from "@/types";
 import type { RunMeta, RunValues, SourceRun, Step } from "@/features/runs/types";
 import { useRun } from "@/features/runs/useRun";
 import { copyText, download, Plain } from "@/components/Content";
@@ -240,7 +239,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
 }
 
 /** Tags are split on commas or spaces. */
-export const parseTags = (text: string) => [...new Set(text.split(/[,，、\s]+/).map(tag => tag.trim().replace(/^#/, "")).filter(Boolean))].slice(0, 12);
+const parseTags = (text: string) => [...new Set(text.split(/[,，、\s]+/).map(tag => tag.trim().replace(/^#/, "")).filter(Boolean))].slice(0, 12);
 
 /** A run's note and tags, which anyone can edit; they help find and compare runs later. */
 function NoteDialog({ meta, onClose, onSave }: { meta: RunMeta; onClose: () => void; onSave: (change: Partial<RunMeta>) => Promise<void> }) {

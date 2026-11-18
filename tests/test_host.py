@@ -138,6 +138,192 @@ def test_host_trival_backtracks_from_code_validation_to_formulation(tmp_path: Pa
     assert titles.count("trival.code_validator") == 2
 
 
+def test_host_resumes_a_legacy_nested_trival_checkpoint_to_completion(tmp_path: Path, monkeypatch: Any) -> None:
+    import sqlite3
+    from dataclasses import replace
+
+    from langchain_core.messages import HumanMessage
+    from langgraph.graph import END, START, StateGraph
+    from langgraph.runtime import Runtime
+
+    from llm4om.methods.trival import TRIVAL
+    from llm4om.methods.trival.graph import State
+    from llm4om.runtime import Context
+
+    def build_legacy_nested_graph() -> Any:
+        async def extractor(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
+            reply = await runtime.context.llm("trival.semantic_fact_extractor").ainvoke([HumanMessage(state["problem"])])
+            return {"semantic_facts": reply.text}
+
+        stage = StateGraph(State, context_schema=Context)
+        stage.add_node("semantic_fact_extractor", extractor)
+        stage.add_edge(START, "semantic_fact_extractor")
+        stage.add_edge("semantic_fact_extractor", END)
+
+        outer = StateGraph(State, context_schema=Context)
+        outer.add_node("semantic_validation", stage.compile(name="semantic_validation"))
+        outer.add_edge(START, "semantic_validation")
+        outer.add_edge("semantic_validation", END)
+        return outer.compile(name="trival")
+
+    directory = tmp_path / "legacy-trival"
+    legacy_trival = replace(TRIVAL, graph=build_legacy_nested_graph)
+    real_methods = methods()
+    monkeypatch.setattr("llm4om.host.session.methods", lambda: {**real_methods, "trival": legacy_trival})
+    initial = asyncio.run(start(directory, PRODUCTION_PROBLEM, method="trival", sandbox="local"))
+    assert initial["status"] == "waiting" and initial["pending"][0]["role"] == "trival.semantic_fact_extractor"
+    with sqlite3.connect(directory / "checkpoints.sqlite") as conn:
+        assert conn.execute("SELECT 1 FROM checkpoints WHERE checkpoint_ns LIKE 'method:%|%'").fetchone() is not None
+
+    # Restore the real flattened TriVAL graph and verify an invalid answer leaves the legacy checkpoint intact.
+    monkeypatch.setattr("llm4om.host.session.methods", methods)
+    with pytest.raises(ValueError):
+        asyncio.run(resume(directory, {"wrong": {"content": "bad"}}))
+    assert asyncio.run(status(directory))["pending"][0]["id"] == initial["pending"][0]["id"]
+
+    script = trival_script(
+        [{"code_validation_passed": False, "code_validation_feedback": "re-verify", "error_attribution": "code"},
+         {"code_validation_passed": True, "code_validation_feedback": "Matches."}],
+        [dict(PASS_FORMULATION)],
+    )
+    first_req = initial["pending"][0]
+    first_ans = script(first_req["role"], convert_to_messages(first_req["messages"]),
+                       [t["function"]["name"] for t in first_req["tools"]])
+    first_payload = {first_req["id"]: {"content": first_ans.content, "tool_calls": first_ans.tool_calls}}
+
+    # 1) Fault before COMMIT leaves the original checkpoint intact and retryable.
+    real_write = __import__("llm4om.host.session", fromlist=["_write_outputs"])._write_outputs
+    monkeypatch.setattr("llm4om.host.session._write_outputs", lambda *_: (_ for _ in ()).throw(RuntimeError("crash before commit")))
+    with pytest.raises(RuntimeError, match="crash before commit"):
+        asyncio.run(resume(directory, first_payload))
+    monkeypatch.setattr("llm4om.host.session._write_outputs", real_write)
+    assert asyncio.run(status(directory))["pending"][0]["id"] == first_req["id"]
+
+    # 2) Fault mid-cutover (after checkpoints.sqlite replaced, before records.sqlite replaced) rolls forward on status().
+    real_replace = os.replace
+
+    def fail_on_records_replace(src: Any, dst: Any) -> None:
+        if Path(dst) == directory / "records.sqlite":
+            raise OSError("disk glitch between checkpoints and records")
+        real_replace(src, dst)
+
+    monkeypatch.setattr("llm4om.host.records.os.replace", fail_on_records_replace)
+    with pytest.raises(OSError, match="disk glitch"):
+        asyncio.run(resume(directory, first_payload))
+    assert not (directory / ".migrating" / "checkpoints.sqlite").exists()
+    assert (directory / ".migrating" / "records.sqlite").is_file()
+    assert (directory / ".migrating" / "COMMIT").is_file()
+    monkeypatch.setattr("llm4om.host.records.os.replace", real_replace)
+    rolled_forward = asyncio.run(status(directory))
+    assert not (directory / ".migrating").exists()
+    assert rolled_forward["status"] == "waiting" and rolled_forward["pending"][0]["id"] != first_req["id"]
+    assert json.loads((directory / "result.json").read_text())["pending"] == rolled_forward["pending"]
+    assert rolled_forward["usage"]["llm_calls"] == 2
+
+    result = rolled_forward
+    for _ in range(45):
+        if result["status"] != "waiting":
+            break
+        responses = {}
+        for req in result["pending"]:
+            ans = script(req["role"], convert_to_messages(req["messages"]), [t["function"]["name"] for t in req["tools"]])
+            responses[req["id"]] = {"content": ans.content, "tool_calls": ans.tool_calls} if isinstance(ans, AIMessage) else {"content": ans}
+        result = asyncio.run(resume(directory, responses))
+    assert result["status"] == "completed", result.get("failure")
+    assert result["solve"]["objective"] == 13
+
+    # 3) Legacy session with partial/extra validator calls + two identical-code solves preserves FIFO order & durations.
+    prior_llm = [
+        ("trival.semantic_fact_extractor", {"content": "", "tool_calls": [{"name": "write_semantic_facts", "id": "c1", "args": {"semantic_facts": "- facts"}}]}),
+        ("trival.semantic_fact_extractor", {"content": "Done.", "tool_calls": []}),
+        ("trival.semantic_validator", {"content": "", "tool_calls": [
+            {"name": "SemanticValidationOutput", "id": "c2", "args": {"facts_faithful": True, "ambiguities_relevant": True, "resolutions_consistent": True}},
+            {"name": "SemanticValidationOutput", "id": "c2_partial", "args": {"feedback": "missing required booleans"}},
+            {"name": "unknown_helper", "id": "c2b", "args": {}},
+        ]}),
+        ("trival.parameter_index_expert", {"content": "M1", "tool_calls": []}),
+        ("trival.decision_variable_expert", {"content": "M2", "tool_calls": []}),
+        ("trival.constraint_expert", {"content": "M3", "tool_calls": []}),
+        ("trival.objective_expert", {"content": "M4", "tool_calls": []}),
+        ("trival.formulation_selector", {"content": "", "tool_calls": [{"name": "select_formulation", "id": "c3", "args": {"expert_name": "constraint_expert"}}]}),
+        ("trival.formulation_selector", {"content": "Done.", "tool_calls": []}),
+        ("trival.formulation_validator", {"content": "", "tool_calls": [{"name": "FormulationValidationOutput", "id": "c4", "args": dict(PASS_FORMULATION)}]}),
+        ("trival.code_agent", {"content": "", "tool_calls": [{"name": "write_code", "id": "c5", "args": {"code": PRODUCTION_CODE}}]}),
+        ("trival.code_agent", {"content": "Done.", "tool_calls": []}),
+        ("trival.code_validator", {"content": "", "tool_calls": [{"name": "CodeValidationOutput", "id": "c6", "args": {"code_validation_passed": False, "code_validation_feedback": "retry", "error_attribution": "code"}}]}),
+        ("trival.code_agent", {"content": "", "tool_calls": [{"name": "write_code", "id": "c7", "args": {"code": PRODUCTION_CODE}}]}),
+    ]
+    final_ans = {"content": "", "tool_calls": [{"name": "CodeValidationOutput", "id": "c8", "args": {"code_validation_passed": True, "code_validation_feedback": "ok", "error_attribution": "code"}}]}
+
+    def build_legacy_code_agent_pause() -> Any:
+        async def agent_node(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
+            reply = await runtime.context.llm("trival.code_agent").ainvoke([HumanMessage(state["problem"])])
+            return {"code": reply.text}
+        stage = StateGraph(State, context_schema=Context)
+        stage.add_node("code_agent", agent_node)
+        stage.add_edge(START, "code_agent")
+        stage.add_edge("code_agent", END)
+        outer = StateGraph(State, context_schema=Context)
+        outer.add_node("code_validation", stage.compile(name="code_validation"))
+        outer.add_edge(START, "code_validation")
+        outer.add_edge("code_validation", END)
+        return outer.compile(name="trival")
+
+    dir_fifo = tmp_path / "legacy-fifo-solves"
+    monkeypatch.setattr("llm4om.host.session.methods", lambda: {**real_methods, "trival": replace(TRIVAL, graph=build_legacy_code_agent_pause)})
+    paused_fifo = asyncio.run(start(dir_fifo, PRODUCTION_PROBLEM, method="trival", sandbox="local"))
+    monkeypatch.setattr("llm4om.host.session.methods", methods)
+    with sqlite3.connect(dir_fifo / "records.sqlite", isolation_level=None) as conn:
+        conn.execute("DELETE FROM host_operations")
+        for idx, (role, reply) in enumerate(prior_llm):
+            conn.execute("INSERT INTO host_operations VALUES (?, 'llm', ?, ?)",
+                         (f"op-llm-{idx}", json.dumps({"role": role}), json.dumps(reply)))
+        for idx, (obj, secs) in enumerate(((101.0, 0.2), (202.0, 0.7))):
+            conn.execute(
+                "INSERT INTO host_operations VALUES (?, 'solve', ?, ?)",
+                (f"op-solve-{idx}", json.dumps({"code": PRODUCTION_CODE, "title": f"Solve {idx}"}),
+                 json.dumps({"status": "optimal", "objective": obj, "variables": {"x[A]": 3.0, "x[B]": 2.0}})),
+            )
+            conn.execute(
+                "INSERT INTO host_steps VALUES (?, ?)",
+                (f"op-solve-{idx}", json.dumps({"id": f"op-solve-{idx}", "type": "solve", "title": f"Solve {idx}", "seconds": secs})),
+            )
+    waiting_validator = asyncio.run(resume(dir_fifo, {paused_fifo["pending"][0]["id"]: {"content": "Done."}}))
+    assert waiting_validator["status"] == "waiting" and waiting_validator["pending"][0]["role"] == "trival.code_validator"
+    assert "202" in str(waiting_validator["pending"][0]["messages"])
+    done = asyncio.run(resume(dir_fifo, {waiting_validator["pending"][0]["id"]: final_ans}))
+    assert done["status"] == "completed", done.get("failure")
+    solve_steps = [step for step in done["steps"] if step["type"] == "solve"]
+    assert [step["objective"] for step in solve_steps] == [101.0, 202.0]
+    assert [step["seconds"] for step in solve_steps] == [0.2, 0.7]
+    assert done["solve"]["objective"] == 202.0
+
+    # 4) If an answer was saved in host_operations before the checkpoint committed, retry deduplicates by interrupt ID
+    #    and prefers the already-saved answer without double-counting max_calls.
+    dir_dedup = tmp_path / "legacy-dedup"
+    monkeypatch.setattr("llm4om.host.session.methods", lambda: {**real_methods, "trival": legacy_trival})
+    paused_dedup = asyncio.run(start(dir_dedup, PRODUCTION_PROBLEM, method="trival", sandbox="local", max_calls=2))
+    monkeypatch.setattr("llm4om.host.session.methods", methods)
+    pending_id = paused_dedup["pending"][0]["id"]
+    saved_reply = {
+        "content": "",
+        "tool_calls": [{"name": "write_semantic_facts", "id": "saved_c1", "args": {"semantic_facts": "- saved facts"}}],
+        "id": f"host_{pending_id}",
+    }
+    with sqlite3.connect(dir_dedup / "records.sqlite", isolation_level=None) as conn:
+        conn.execute("UPDATE host_operations SET result = ?", (json.dumps(saved_reply),))
+    resubmitted = {
+        pending_id: {
+            "content": "",
+            "tool_calls": [{"name": "write_semantic_facts", "id": "other_c1", "args": {"semantic_facts": "- overwritten"}}],
+        }
+    }
+    after_dedup = asyncio.run(resume(dir_dedup, resubmitted))
+    assert after_dedup["status"] == "waiting" and after_dedup["usage"]["llm_calls"] == 2
+    assert "saved_c1" in str(after_dedup["pending"][0]["messages"])
+    assert "overwritten" not in str(after_dedup["pending"][0]["messages"])
+
+
 def test_host_solve_budget_keeps_results_bound_to_the_code_actually_executed(tmp_path: Path) -> None:
     script = by_role({"generate": TWO_PART_REPLY.replace("return m", "return m.missing"),
                       "repair": TWO_PART_REPLY, "review": ACCEPT_REVIEW})

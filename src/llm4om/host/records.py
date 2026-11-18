@@ -1,6 +1,8 @@
 """Local execution evidence next to LangGraph's checkpoints; no model credentials or server."""
 
 import json
+import os
+import shutil
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -85,6 +87,13 @@ class Records:
         id, cached = self.begin("solve", {"code": code, "title": title})
         if cached is not None:
             return SolveResult(**cached)
+        replayed = context.pop_solve_replay(code)
+        if replayed is not None:
+            result, seconds = replayed
+            self.complete(id, asdict(result))
+            self.recorder.step("solve", title, result.feedback(), id=id, running=False,
+                               seconds=seconds, status=result.status, objective=result.objective)
+            return result
         started = time.monotonic()
         try:
             result = await context.sandbox.solve(code, context.data, context.target.language,
@@ -98,10 +107,25 @@ class Records:
         return result
 
 
+def finish_pending_migration(directory: Path) -> None:
+    """Roll forward a committed migration cutover if an earlier process failed mid-replacement; discard uncommitted staging."""
+    staging = directory / ".migrating"
+    if not staging.exists():
+        return
+    if not (staging / "COMMIT").is_file():
+        shutil.rmtree(staging, ignore_errors=True)
+        return
+    for name in ("checkpoints.sqlite", "records.sqlite", "result.json", "formulation.md", "model.py"):
+        source = staging / name
+        if source.is_file():
+            os.replace(source, directory / name)
+    shutil.rmtree(staging, ignore_errors=True)
+
+
 @contextmanager
 def open_records(directory: Path) -> Iterator[Records]:
     """SQLite releases this cross-platform session lock even after a killed CLI process."""
-    if not (directory / "records.sqlite").is_file():
+    if not (directory / "records.sqlite").is_file() and not (directory / ".migrating" / "COMMIT").is_file():
         raise ValueError(f"No host session at {directory}.")
     lock = sqlite3.connect(directory / ".lock.sqlite", timeout=0)
     try:
@@ -109,6 +133,7 @@ def open_records(directory: Path) -> Iterator[Records]:
             lock.execute("BEGIN EXCLUSIVE")
         except sqlite3.OperationalError as error:
             raise ValueError("This host session is already in use. Wait for its current command to finish.") from error
+        finish_pending_migration(directory)
         records = Records(directory)
         try:
             yield records

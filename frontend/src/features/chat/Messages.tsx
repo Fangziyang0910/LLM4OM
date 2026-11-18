@@ -18,7 +18,7 @@ export type ChatProgress = {
   stage: "revise" | "model" | "solve" | "explain";
 };
 
-export function messageText(message: Message): string {
+function messageText(message: Message): string {
   return typeof message.content === "string" ? message.content : (message.content ?? [])
     .filter(block => block.type === "text").map(block => block.text).join("\n");
 }

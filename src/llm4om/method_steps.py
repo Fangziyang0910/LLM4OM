@@ -1,6 +1,7 @@
 """Record each method's public node outputs in both platform and host-model runs."""
 
 import json
+from collections.abc import Iterable
 from typing import Any
 from uuid import UUID
 
@@ -10,6 +11,12 @@ from llm4om.methods import Method
 from llm4om.runtime import Recorder
 
 HIDDEN_KEYS = {"problem", "description", "solve", "messages", "failure"}
+
+
+def latest_artifacts(steps: Iterable[dict[str, Any]]) -> dict[str, str]:
+    """Latest formulation and code recorded across public artifact steps."""
+    return {key: step[key] for step in steps for key in ("formulation", "code")
+            if step.get("type") == "artifact" and isinstance(step.get(key), str)}
 
 
 def render_update(update: dict[str, Any], hidden: frozenset[str] = frozenset()) -> str:

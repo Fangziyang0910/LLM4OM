@@ -63,10 +63,26 @@ test("typing a heading and pressing Enter renders the completed block live above
   expect(screen.getByRole("heading", { name: "生产计划" })).toBeTruthy();
   expect(input.value).toBe("第二段内容");
 
-  // Backspace at the start of the second block merges back with the heading seamlessly.
+  // Backspace at the start of the second block merges back with the heading seamlessly, and Ctrl+Z / Ctrl+Shift+Z undo/redo it.
   input.setSelectionRange(0, 0);
   fireEvent.keyDown(input, { key: "Backspace" });
   expect(input.value).toBe("# 生产计划第二段内容");
+
+  fireEvent.keyDown(input, { key: "z", ctrlKey: true });
+  expect(screen.getByRole("heading", { name: "生产计划" })).toBeTruthy();
+  expect(input.value).toBe("第二段内容");
+
+  fireEvent.keyDown(input, { key: "z", ctrlKey: true, shiftKey: true });
+  expect(input.value).toBe("# 生产计划第二段内容");
+
+  // Delete at the end of a block also records an undoable history step.
+  fireEvent.keyDown(input, { key: "z", ctrlKey: true });
+  fireEvent.mouseDown(screen.getByRole("heading", { name: "生产计划" }));
+  input.setSelectionRange(input.value.length, input.value.length);
+  fireEvent.keyDown(input, { key: "Delete" });
+  expect(input.value).toBe("# 生产计划第二段内容");
+  fireEvent.keyDown(input, { key: "z", ctrlKey: true });
+  expect(input.value).toBe("# 生产计划");
 });
 
 test("arrow navigation and Ctrl+A work across blocks in the live editor", () => {

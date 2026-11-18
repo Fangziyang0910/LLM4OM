@@ -608,6 +608,57 @@ def test_trival_uses_tools_even_when_a_model_advertises_native_json_schema(make_
     assert_solved(record)
 
 
+def test_trival_validator_rejects_conflicting_verdicts_in_one_reply(run_method: Any) -> None:
+    from langchain_core.messages import convert_to_openai_messages
+
+    base = trival_script([{"code_validation_passed": True, "code_validation_feedback": "faithful"}], [PASS_FORMULATION])
+    attempts = 0
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> Any:
+        nonlocal attempts
+        if role == "trival.semantic_validator":
+            attempts += 1
+            if attempts == 1:
+                return AIMessage("", tool_calls=[
+                    {"name": "SemanticValidationOutput", "id": "v1", "args": {
+                        "facts_faithful": True, "ambiguities_relevant": True, "resolutions_consistent": True}},
+                    {"name": "SemanticValidationOutput", "id": "v2", "args": {
+                        "facts_faithful": False, "ambiguities_relevant": True, "resolutions_consistent": True, "feedback": "conflict"}},
+                ])
+            if attempts == 2:
+                return AIMessage(
+                    content=[
+                        {"type": "text", "text": "checking"},
+                        {"type": "function_call", "call_id": "v3", "name": "SemanticValidationOutput", "arguments": "{}"},
+                        {"type": "function_call", "call_id": "bad_resp_id", "name": "SemanticValidationOutput", "arguments": "{bad"},
+                    ],
+                    tool_calls=[{"name": "SemanticValidationOutput", "id": "v3", "args": {
+                        "facts_faithful": True, "ambiguities_relevant": True, "resolutions_consistent": True}}],
+                    invalid_tool_calls=[{"name": "SemanticValidationOutput", "id": None, "args": "{bad", "error": "bad json", "type": "invalid_tool_call"}],
+                )
+            if attempts == 3:
+                from langchain_openai.chat_models.base import (
+                    _construct_responses_api_input,
+                    _convert_message_to_dict,
+                )
+
+                for serialized in (convert_to_openai_messages(messages), [_convert_message_to_dict(m) for m in messages]):
+                    assistant_ids = [call["id"] for msg in serialized if msg.get("role") == "assistant" for call in msg.get("tool_calls") or []]
+                    tool_ids = [msg["tool_call_id"] for msg in serialized if msg.get("role") == "tool"]
+                    assert None not in assistant_ids and "" not in assistant_ids and assistant_ids == tool_ids
+                responses_items = _construct_responses_api_input(messages)
+                fc_ids = [item["call_id"] for item in responses_items if item.get("type") == "function_call"]
+                fco_ids = [item["call_id"] for item in responses_items if item.get("type") == "function_call_output"]
+                assert fc_ids == fco_ids == ["v1", "v2", "v3"]
+            return tool_call("SemanticValidationOutput", facts_faithful=False if attempts == 3 else True,
+                             ambiguities_relevant=True, resolutions_consistent=True, feedback="missing constraint")
+        return base(role, messages, tools)
+
+    record = run_method("trival", script)
+    assert_solved(record)
+    assert attempts == 4
+
+
 @pytest.mark.parametrize("thinking", [True, False])
 def test_trival_preserves_the_model_preset_without_forcing_tool_choice(make_resources: Any, thinking: bool) -> None:
     script = trival_script([{"code_validation_passed": True, "code_validation_feedback": "faithful"}], [PASS_FORMULATION])

@@ -1,9 +1,8 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { deleteRun, history, runMeta, startComparison, startRevision, startRun, startScenarios } from "@/features/runs/api";
+import { createSolutionChat, deleteRun, history, runMeta, startComparison, startRevision, startRun, startScenarios } from "@/features/runs/api";
 import { errorText } from "@/format";
-import { createSolutionChat } from "@/features/solution_chat/api";
 import { client } from "@/features/runs/sdk";
-import type { Draft } from "@/features/composer/types";
+import type { Draft } from "@/types";
 import type { RunMeta, RunSpec } from "@/features/runs/types";
 
 vi.mock("@/features/runs/sdk", () => ({

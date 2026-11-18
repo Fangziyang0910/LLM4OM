@@ -7,6 +7,7 @@ from typing import Any, AsyncIterator
 
 from langgraph.store.base import BaseStore
 
+from llm4om.method_steps import latest_artifacts
 from llm4om.runtime import Recorder
 
 NAMESPACE = ("llm4om", "progress")
@@ -42,11 +43,9 @@ async def save_progress(store: BaseStore | None, thread_id: str | None, state: d
     async def save(*, finished: bool = False) -> None:
         steps = {step["id"]: step for step in state.get("steps", [])}
         steps.update(recorder.steps)
-        artifacts = {key: step[key] for step in steps.values() for key in ("formulation", "code")
-                     if step.get("type") == "artifact" and isinstance(step.get(key), str)}
         snapshot = {key: state[key] for key in ("description", "data", "spec", "formulation", "code", "solve",
                                                "revision", "explanation", "infeasibility", "explanation_error") if key in state}
-        snapshot.update(artifacts, steps=list(steps.values()), usage=dict(recorder.usage),
+        snapshot.update(latest_artifacts(steps.values()), steps=list(steps.values()), usage=dict(recorder.usage),
                         timing=timing(state["timing"]["started_at"], finished=finished))
         await store.aput(NAMESPACE, thread_id, snapshot, index=False)
 

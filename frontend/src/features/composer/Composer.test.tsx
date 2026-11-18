@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, expect, test, vi } from "vitest";
 import { toast } from "sonner";
 import { Composer, initialDraft } from "./Composer";
+import { useRunLauncher } from "./RunSettings";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
@@ -66,4 +67,64 @@ test("saved backend pairs become one library while preserving the chosen backend
   expect(initialDraft()).toMatchObject({ language: "cvxpy", solver: "OSQP" });
   localStorage.setItem("llm4om-draft", JSON.stringify({ language: "pywraplp" }));
   expect(initialDraft()).toMatchObject({ language: "ortools" });
+});
+
+test("changing run settings outside Composer persists to localStorage without overwriting the saved quick-solve text", () => {
+  localStorage.setItem("llm4om-draft", JSON.stringify({ description: "quick-solve text", method: "direct", language: "pyomo" }));
+  function StandaloneLauncher() {
+    const [draft, setDraft] = useState(initialDraft);
+    const { settingsTrigger, settingsDialog } = useRunLauncher({
+      options: {
+        methods: [
+          { id: "direct", name: "Direct", description: "", source: null, languages: null },
+          { id: "optimind", name: "OptiMind", description: "", source: null, languages: null },
+        ],
+        languages: [{ id: "pyomo", name: "Pyomo", solver: "highs" }],
+        providers: [],
+        datasets: [],
+      },
+      presets: [],
+      draft,
+      setDraft,
+      onStart: vi.fn(),
+      onCompare: vi.fn(),
+      openPresets: vi.fn(),
+      problem: { description: "requirements thread draft", data: {} },
+    });
+    return <>{settingsTrigger}{settingsDialog}</>;
+  }
+  render(<QueryClientProvider client={new QueryClient()}><StandaloneLauncher /></QueryClientProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "查看运行设置" }));
+  fireEvent.click(screen.getByRole("radio", { name: "OptiMind" }));
+  expect(JSON.parse(localStorage.getItem("llm4om-draft")!)).toMatchObject({
+    description: "quick-solve text",
+    method: "optimind",
+  });
+});
+
+test("Ctrl+Enter does nothing while the launcher is disabled (such as on a failed thread screen)", () => {
+  const onStart = vi.fn();
+  function DisabledLauncher() {
+    const [draft, setDraft] = useState(() => ({ ...initialDraft(), description: "saved quick-solve" }));
+    const { settingsTrigger } = useRunLauncher({
+      options: {
+        methods: [{ id: "direct", name: "Direct", description: "", source: null, languages: null }],
+        languages: [{ id: "pyomo", name: "Pyomo", solver: "highs" }],
+        providers: [],
+        datasets: [],
+      },
+      presets: [{ id: "p1", source: "saved", provider: "deepseek", model: "m1", base_url: "", temperature: null, max_tokens: null, extra_body: {}, tokens_today: 0 }],
+      draft,
+      setDraft,
+      onStart,
+      onCompare: vi.fn(),
+      openPresets: vi.fn(),
+      problem: { description: "saved quick-solve", data: {}, origin: "failed-thread" },
+      disabled: true,
+    });
+    return settingsTrigger;
+  }
+  render(<QueryClientProvider client={new QueryClient()}><DisabledLauncher /></QueryClientProvider>);
+  fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+  expect(onStart).not.toHaveBeenCalled();
 });

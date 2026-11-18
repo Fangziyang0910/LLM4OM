@@ -14,3 +14,11 @@ export type Preset = {
 };
 /** The presets and each one's daily token budget; 0 means no budget. */
 export type Presets = { presets: Preset[]; daily_tokens: number };
+
+/** A request to model one problem: the composer's draft. */
+export type Draft = {
+  description: string; data: Record<string, string>; method: string; language: string; preset: string | null;
+  solver?: string;
+  origin?: string;
+  comparing?: boolean; methods?: string[]; presets?: string[];  // a comparison runs every method with every preset
+};

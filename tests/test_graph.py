@@ -3,6 +3,7 @@
 import asyncio
 import json
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -165,3 +166,26 @@ def test_new_runs_cannot_reuse_old_or_user_supplied_results(make_resources: Any)
             assert len(result["steps"]) == 3
 
     asyncio.run(check())
+
+
+def test_run_problem_preserves_explicit_empty_workspace_and_sandbox_arguments(tmp_path: Path, monkeypatch: Any) -> None:
+    from llm4om import run_problem
+    from llm4om.llm import LLMSettings
+    from llm4om.llm_presets import LLMPresetStore
+
+    with pytest.raises(ValueError, match="docker.*local"):
+        run_problem("Maximize x", sandbox="")
+
+    monkeypatch.chdir(tmp_path)
+    LLMPresetStore(Path("")).add(LLMSettings(provider="deepseek", model="deepseek-chat", api_key="k"))
+    captured: list[Path] = []
+    real_init = LLMPresetStore.__init__
+
+    def spy_init(self: LLMPresetStore, workspace: Path) -> None:
+        captured.append(workspace)
+        real_init(self, workspace)
+
+    monkeypatch.setattr(LLMPresetStore, "__init__", spy_init)
+    result = run_problem("", workspace="", sandbox="local")
+    assert captured == [Path("")]
+    assert result["failure"]
