@@ -16,7 +16,9 @@ import { asMatrix, groupVariables, type VariableGroup } from "@/features/runs/ta
 import type { Diagnosis, Solve } from "@/features/runs/types";
 import { Plain, download } from "@/components/Content";
 
-const value = (number: number) => <span className={cn("font-mono tabular", number === 0 && "text-muted-foreground/50")}>{formatNumber(number)}</span>;
+const value = (number: number | null) => number == null
+  ? <span className="font-mono text-muted-foreground/50">—</span>
+  : <span className={cn("font-mono tabular", number === 0 && "text-muted-foreground/50")}>{formatNumber(number)}</span>;
 
 /** A solve result: status and objective, the variables (grouped into matrices where they have two indices), and the log. */
 export function Solution({ solve }: { solve: Solve }) {
@@ -28,7 +30,7 @@ export function Solution({ solve }: { solve: Solve }) {
   const groups = useMemo(() => groupVariables(solve.variables), [solve.variables]);
   const query = filter.trim().toLowerCase();
   const matches = (name: string) => !query || name.toLowerCase().includes(query);
-  const shown = entries.filter(([name, number]) => (zeros || query || number !== 0) && matches(name));
+  const shown = entries.filter(([name, number]) => (zeros || query || (number != null && number !== 0)) && matches(name));
   const shownGroups = groups.map(group => matches(group.base) ? group : {
     ...group, variables: group.variables.filter(variable => matches(variable.name)),
   }).filter(group => group.variables.length);
@@ -108,9 +110,9 @@ function Conflict({ diagnosis }: { diagnosis: Diagnosis }) {
 function Group({ group, includeZeros }: { group: VariableGroup; includeZeros: boolean }) {
   const [limit, setLimit] = useState(200);
   const matrix = asMatrix(group);
-  const nonzero = group.variables.filter(variable => variable.value !== 0).length;
+  const nonzero = group.variables.filter(variable => variable.value != null && variable.value !== 0).length;
   const shape = matrix ? `${matrix.rows.length} × ${matrix.columns.length}` : group.dims ? t("{count} 维组合", { count: group.dims }) : t("单项指标");
-  const rows = group.variables.filter(variable => includeZeros || variable.value !== 0);
+  const rows = group.variables.filter(variable => includeZeros || (variable.value != null && variable.value !== 0));
   return <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-2xs">
     <div className="flex items-center gap-2 border-b border-border/60 bg-muted/35 px-3.5 py-2 text-xs">
       <span className="font-mono font-semibold">{group.base || t("单项决策")}</span>
@@ -127,7 +129,7 @@ function Group({ group, includeZeros }: { group: VariableGroup; includeZeros: bo
           <th scope="row" className="sticky left-0 bg-card px-3 py-1.5 text-left font-mono text-xs font-medium text-muted-foreground">{row}</th>
           {matrix.columns.map(column => {
             const cell = matrix.cell(row, column);
-            return <td key={column} className={cn("px-3 py-1.5 text-right", cell && "bg-primary/5 font-medium")}>{cell == null ? "" : value(cell)}</td>;
+            return <td key={column} className={cn("px-3 py-1.5 text-right", cell != null && cell !== 0 && "bg-primary/5 font-medium")}>{cell === undefined ? "" : value(cell)}</td>;
           })}
         </tr>)}</tbody>
       </table>

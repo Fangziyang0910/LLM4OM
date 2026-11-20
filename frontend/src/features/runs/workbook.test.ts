@@ -51,4 +51,15 @@ describe("business solution workbook", () => {
     await expect(exportSolution(meta, { solve: { status, objective: 1e30, variables: { A: 1e30 }, output: "", error: null } }, options))
       .rejects.toThrow("当前没有可导出的求解方案。");
   });
+
+  it("chunks long explanation text and handles null variable values cleanly", async () => {
+    const longSummary = "说明文字。".repeat(250);
+    const blob = await exportSolution(meta, {
+      explanation: { summary: longSummary, objective_label: "目标", objective_unit: "", decisions: [], notes: ["备注。".repeat(250)], total_variables: 1 },
+      solve: { status: "optimal", objective: 1, variables: { x: null, y: 2 }, output: "", error: null },
+    }, options);
+    const [plan] = await readXlsxFile(Buffer.from(await blob.arrayBuffer()));
+    expect(plan.data).toContainEqual(["x", "—", null, "x"]);
+    expect(plan.data).toContainEqual(["y", 2, null, "y"]);
+  });
 });

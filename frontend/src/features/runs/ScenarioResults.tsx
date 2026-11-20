@@ -16,15 +16,26 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
   const baseline = useQuery({ queryKey: ["source-run", source?.thread_id, source?.checkpoint_id], enabled: !!source,
     queryFn: () => client.threads.getState<RunValues>(source!.thread_id, source!.checkpoint_id), staleTime: Infinity, retry: false });
   const queries = useQueries({ queries: entries.map(entry => ({ queryKey: ["scenario-result", entry.id, entry.updated],
-    queryFn: () => client.threads.getState<RunValues>(entry.id), enabled: entry.state !== "running", staleTime: Infinity, retry: false })) });
+    queryFn: () => client.threads.getState<RunValues>(entry.id), enabled: !["running", "pending"].includes(entry.state), staleTime: Infinity, retry: false })) });
   const previous = baseline.data?.values as RunValues | undefined;
   const records = entries.map((entry, i) => ({ name: entry.meta.scenario?.name || entry.meta.title, id: entry.id,
     instruction: entry.meta.scenario?.instruction, values: queries[i].data?.values as RunValues | undefined,
     state: entry.state, error: queries[i].error }));
   const plans = [...(previous ? [{ name: t("原方案"), id: source!.thread_id, source, instruction: "", values: previous,
-    state: previous.failure ? "failed" : previous.solve?.status ?? "unknown", error: null }] : []), ...records];
-  const names = [...new Set(plans.flatMap(plan => hasSolution(plan.values?.solve) ? Object.keys(plan.values!.solve!.variables) : []))];
-  const changed = names.filter(name => plans.some(plan => plan.values?.solve?.variables[name] !== previous?.solve?.variables[name]));
+    state: previous.failure ? "failed" : previous.solve?.status ?? (previous.timing?.finished_at ? "success" : "interrupted"), error: null }] : []), ...records];
+  const solvedPlans = plans.filter(plan => hasSolution(plan.values?.solve));
+  const reference = solvedPlans[0]?.values?.solve?.variables;
+  const names = [...new Set(solvedPlans.flatMap(plan => Object.keys(plan.values!.solve!.variables)))];
+  const changed = reference
+    ? names.filter(name => {
+      const refVal = Object.hasOwn(reference, name) ? reference[name] : undefined;
+      return solvedPlans.some(plan => {
+        const vars = plan.values!.solve!.variables;
+        const val = Object.hasOwn(vars, name) ? vars[name] : undefined;
+        return val !== refVal;
+      });
+    })
+    : [];
   const shown = (changed.length ? changed : names).slice(0, 20);
   return <div className="h-full overflow-y-auto"><div className="mx-auto flex max-w-6xl min-w-0 flex-col gap-5 p-4 sm:p-6">
     <header className="animate-fade-up flex flex-col gap-2">
@@ -41,18 +52,22 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
         <TableCell className="min-w-28 max-w-64 font-medium whitespace-normal [overflow-wrap:anywhere]">{plan.name}</TableCell>
         <TableCell className="min-w-48 max-w-96 text-xs leading-5 text-muted-foreground whitespace-normal">{plan.instruction || t("原始基准条件")}</TableCell>
         <TableCell><StatusBadge status={plan.state} />{plan.error ? <p role="alert" className="mt-1 text-xs text-destructive">{errorText(plan.error)}</p> : null}</TableCell>
-        <TableCell className="text-right"><span className="font-mono font-semibold tabular">{hasSolution(plan.values?.solve) && plan.values?.solve?.objective != null ? formatNumber(plan.values.solve.objective) : plan.state === "running" ? "…" : "—"}</span>
+        <TableCell className="text-right"><span className="font-mono font-semibold tabular">{hasSolution(plan.values?.solve) && plan.values?.solve?.objective != null ? formatNumber(plan.values.solve.objective) : ["running", "pending"].includes(plan.state) ? "…" : "—"}</span>
           {plan.values?.explanation ? <p className="mt-1 text-xs text-muted-foreground">{plan.values.explanation.objective_label} {plan.values.explanation.objective_unit}</p> : null}</TableCell>
         <TableCell className="text-right"><Button variant="ghost" size="icon-sm" aria-label={t("打开方案：{name}", { name: plan.name })} onClick={() => onOpen("source" in plan && plan.source ? plan.source : plan.id)}><ArrowUpRight /></Button></TableCell>
       </TableRow>)}</TableBody>
     </Table>
-    {entries.some(entry => entry.state === "running") ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner />{t("部分场景正在计算中，完成后将自动更新…")}</p> : null}
+    {entries.some(entry => ["running", "pending"].includes(entry.state)) ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner />{t("部分场景正在计算中，完成后将自动更新…")}</p> : null}
     {shown.length ? <section className="flex flex-col gap-3"><h2 className="text-sm font-semibold">{t("关键决策横向对比")}</h2>
       <Table containerClassName="rounded-2xl border border-border/80 bg-card shadow-xs"><TableHeader className="bg-muted/40"><TableRow>
         <TableHead>{t("决策项")}</TableHead>{plans.map(plan => <TableHead key={plan.id} className="min-w-28 max-w-64 text-right whitespace-normal [overflow-wrap:anywhere]">{plan.name}</TableHead>)}
       </TableRow></TableHeader><TableBody>{shown.map(name => <TableRow key={name}><TableCell className="font-mono text-xs">{name}</TableCell>
-        {plans.map(plan => { const variables = plan.values?.solve?.variables; return <TableCell key={plan.id} className="text-right font-mono tabular">
-          {hasSolution(plan.values?.solve) && variables && Object.hasOwn(variables, name) ? formatNumber(variables[name]) : "—"}</TableCell>; })}
+        {plans.map(plan => {
+          const variables = plan.values?.solve?.variables;
+          const raw = hasSolution(plan.values?.solve) && variables && Object.hasOwn(variables, name) ? variables[name] : null;
+          return <TableCell key={plan.id} className="text-right font-mono tabular">
+            {raw == null ? "—" : formatNumber(raw)}</TableCell>;
+        })}
       </TableRow>)}</TableBody></Table>
       <p className="text-xs leading-5 text-muted-foreground">{t("优先展示发生变化的前 20 项决策，点击右上角箭头可进入单场景查看全部明细。")}</p>
     </section> : null}

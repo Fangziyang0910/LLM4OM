@@ -73,9 +73,9 @@ test("attachments finish reading and saving before the agent can send, while the
 test("the mobile conversation keeps navigation, composer controls and keyboard sending accessible", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/agent");
-  await expect(page.getByRole("heading", { name: "优化对话", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: "对话规划", exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "打开菜单" }).click();
-  await expect(page.getByRole("dialog").getByRole("button", { name: "新建建模", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog").getByRole("button", { name: "快速求解", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   const input = page.getByRole("textbox", { name: "发送给优化助手" });
   await page.getByRole("button", { name: "建模偏好" }).click();
@@ -122,7 +122,7 @@ test("the independent agent discusses an idea, models it, and calculates changes
   const original = await (await page.request.get(`/threads/${first.thread_id}`)).json();
   expect(original.values.solve.objective).toBe(13);
   expect(original.values.spec.method).toBe("direct");
-  const workspace = page.getByRole("complementary", { name: "建模工作区" });
+  const workspace = page.getByRole("complementary", { name: "方案面板", exact: true });
   await expect(workspace).toBeVisible();
   await workspace.getByRole("tab", { name: /数学模型/ }).click();
   await expect(workspace.getByRole("tabpanel")).toContainText("max");
@@ -138,12 +138,12 @@ test("the independent agent discusses an idea, models it, and calculates changes
   await page.getByRole("option", { name: saved.values.plans[0].name, exact: true }).click();
   await expect(workspace.getByLabel("方案上下文", { exact: true })).toContainText("正在查看历史方案");
   expect((await (await page.request.get(`/threads/${chat}`)).json()).values.current).toEqual(saved.values.current);
-  await workspace.getByRole("button", { name: "查看讨论中的方案", exact: true }).click();
+  await workspace.getByRole("button", { name: "返回当前讨论方案", exact: true }).click();
   await expect(workspace.getByLabel("方案上下文", { exact: true })).toHaveCount(0);
   await expect(workspace.getByRole("combobox", { name: "查看计算方案", exact: true })).toContainText("当前讨论方案");
   const conversation = page.locator('[data-slot="resizable-panel"][id="conversation"]');
   const before = (await conversation.boundingBox())!.width;
-  const divider = page.getByRole("separator", { name: "调整对话与建模工作区的宽度", exact: true });
+  const divider = page.getByRole("separator", { name: "调整对话与方案面板的宽度", exact: true });
   await divider.focus();
   await divider.press("ArrowRight");
   await divider.press("ArrowRight");
@@ -192,7 +192,7 @@ test("ordinary questions and arithmetic work without creating a modeling plan", 
   const saved = await (await page.request.get(`/threads/${id}`)).json();
   expect(saved.values.plans).toEqual([]);
   expect(saved.values.current).toBeNull();
-  await expect(page.getByRole("complementary", { name: "建模工作区", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("complementary", { name: "方案面板", exact: true })).toHaveCount(0);
 });
 
 test("pinned choices, data edits, retries and saved plans survive reload", async ({ page }) => {
@@ -238,14 +238,14 @@ test("an in-flight modeling task shows real steps and can be stopped and retried
   await input.fill("E2E_AGENT_PAUSE 请计算生产计划");
   await input.press("Enter");
   await page.waitForURL(/\/agent\//);
-  await expect(page.getByText("正在建模求解……", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "查看正在生成的产物" })).toBeVisible();
+  await expect(page.getByText("正在自动建模并求解最优方案…", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "在方案面板中查看详情", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "停止", exact: true }).click();
   await expect(page.getByText("这轮回复已停止，可以重新回答。", { exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "重试这一轮" }).click();
   await expect(page.getByRole("log")).toContainText("实际求解结果：13", { timeout: 60_000 });
-  await expect(page.getByRole("complementary", { name: "建模工作区" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "方案面板", exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
@@ -258,24 +258,24 @@ test("search and manual modeling remain available from the agent entry", async (
   await expect(page.getByRole("log")).toContainText("公开排班参考");
   await page.getByRole("complementary", { name: "搜索来源" }).locator("summary").click();
   await expect(page.getByRole("link", { name: "排班参考", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "手动建模", exact: true }).click();
+  await page.getByRole("button", { name: "快速求解", exact: true }).click();
   await page.waitForURL(/\/$/);
   await expect(page.getByRole("textbox", { name: "问题描述" })).toBeVisible();
 });
 
 
-test("the original workbench and agent have independent entry points and preserve the manual draft", async ({ page }) => {
+test("switching between quick solve and planning preserves both unsent drafts", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("textbox", { name: "问题描述" }).fill("原有工作台的未发送问题");
-  await page.getByRole("button", { name: "优化对话", exact: true }).click();
+  await page.getByRole("button", { name: "对话规划", exact: true }).click();
   await page.waitForURL(/\/agent$/);
   await expect(page.getByRole("textbox", { name: "发送给优化助手" })).toBeVisible();
   await page.getByRole("textbox", { name: "发送给优化助手" }).fill("Agent 里另一份未发送草稿");
-  await page.getByRole("button", { name: "手动建模", exact: true }).click();
+  await page.getByRole("button", { name: "快速求解", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue("原有工作台的未发送问题");
-  await page.getByRole("button", { name: "优化对话", exact: true }).click();
+  await page.getByRole("button", { name: "对话规划", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "发送给优化助手" })).toHaveValue("Agent 里另一份未发送草稿");
-  await page.getByRole("button", { name: "新建建模", exact: true }).click();
+  await page.getByRole("button", { name: "快速求解", exact: true }).click();
   await page.waitForURL(/\/$/);
   await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue("原有工作台的未发送问题");
   await page.reload();
@@ -286,7 +286,7 @@ test("the agent entry works on a windowed desktop in English and dark mode", asy
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.addInitScript(() => { localStorage.setItem("llm4om-locale", "en"); localStorage.setItem("theme", "dark"); });
   await page.goto("/agent");
-  await expect(page.getByRole("heading", { name: "What would you like to optimize?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tell me what you want to optimize", exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Message the optimization assistant" })).toBeVisible();
   await expect(page.locator("html")).toHaveClass(/dark/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

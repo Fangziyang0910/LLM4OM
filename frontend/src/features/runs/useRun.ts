@@ -51,17 +51,38 @@ export function useRun(run: string | SourceRun, onFinished: () => void, refresh 
     let live: Live = {};
     let inputRead = false;
 
+    const mergeSteps = (incoming: Step[] | undefined, authoritative: boolean) => {
+      if (authoritative) {
+        steps.clear();
+        for (const step of incoming ?? []) steps.set(step.id, step);
+        return;
+      }
+      for (const step of incoming ?? []) {
+        const existing = steps.get(step.id);
+        if (existing && !existing.running && step.running) continue;
+        steps.set(step.id, step);
+      }
+    };
+
     const load = async () => {
       const [thread, runs] = await Promise.all([client.threads.get<RunValues>(threadId), client.runs.list(threadId, { limit: 1 })]);
-      const saved = runs[0] && runs[0].status !== "success" ? await client.store.getItem(["llm4om", "progress"], threadId,
+      const latestRun = runs[0] ?? null;
+      const saved = latestRun && latestRun.status !== "success" ? await client.store.getItem(["llm4om", "progress"], threadId,
         { signal: controller.signal }) : null;
       const values = { ...(thread.values ?? {}), ...(saved?.value ?? {}) } as RunValues;
-      for (const step of values.steps ?? []) steps.set(step.id, step);
-      if (!controller.signal.aborted) setData(current => ({ ...current, meta: runMeta(thread.metadata as RunMeta, values.spec), values, run: runs[0] ?? null,
-        steps: values.steps?.length ? values.steps : current.steps }));
-      return { run: runs[0] ?? null, values };
+      mergeSteps(values.steps, latestRun?.status === "success");
+      const mergedSteps = [...steps.values()];
+      if (!controller.signal.aborted) setData(current => ({
+        ...current,
+        meta: runMeta(thread.metadata as RunMeta, values.spec),
+        values,
+        run: latestRun,
+        steps: mergedSteps.length ? mergedSteps : current.steps,
+        error: latestRun?.status === "success" || latestRun?.status === "interrupted" ? null : current.error,
+      }));
+      return { run: latestRun, values };
     };
-    const receive = (event: Event) => {
+    const receive = (event: Event, resetOnFirstStep?: { pending: boolean }) => {
       if (controller.signal.aborted) return;
       if (!inputRead) {
         // The thread's values follow the run only when it ends; its latest checkpoint has the input from the first step on.
@@ -72,6 +93,11 @@ export function useRun(run: string | SourceRun, onFinished: () => void, refresh 
         }).catch(() => undefined);
       }
       if (event.step) {
+        if (resetOnFirstStep?.pending) {
+          resetOnFirstStep.pending = false;
+          steps.clear();
+          live = {};
+        }
         steps.set(event.step.id, event.step);
         if (!event.step.running) { live = { ...live }; delete live[event.step.id]; }
       } else if (event.delta) {
@@ -81,11 +107,16 @@ export function useRun(run: string | SourceRun, onFinished: () => void, refresh 
       }
       setData(current => ({ ...current, steps: [...steps.values()], live }));
     };
-    const replay = async (active: Run) => {
+    const replay = async (active: Run, resetSteps = false) => {
+      const resetFlag = { pending: resetSteps };
       const stream = client.runs.joinStream(threadId, active.run_id, { signal: controller.signal, lastEventId: "-1", streamMode: ["custom"] });
       for await (const part of stream) {
-        if (part.event === "custom") receive(part.data);
-        else if (part.event === "error") setData(current => ({ ...current, error: part.data?.message ?? errorText(part.data) }));
+        if (part.event === "custom") receive(part.data, resetFlag);
+        else if (part.event === "error") {
+          const message = errorText(part.data);
+          if (active.status === "interrupted" && /^CancelledError(?:\(\))?$/.test(message)) continue;
+          setData(current => ({ ...current, error: message }));
+        }
       }
     };
 
@@ -97,7 +128,7 @@ export function useRun(run: string | SourceRun, onFinished: () => void, refresh 
         if (latest.status === "pending" || latest.status === "running") {
           setData(current => ({ ...current, streaming: true }));
           let streamError: unknown;
-          try { await replay(latest); } catch (error) { streamError = error; }
+          try { await replay(latest, true); } catch (error) { streamError = error; }
           if (controller.signal.aborted) return;
           const current = (await load()).run;
           if (current?.status === "pending" || current?.status === "running") {

@@ -15,13 +15,20 @@ test("the agent keeps following after the workspace changes the rendered message
   await page.getByRole("combobox", { name: "对话模型", exact: true }).click();
   await page.getByRole("option", { name: "Polish DeepSeek", exact: true }).click();
   const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  const log = page.getByRole("log");
+  await input.fill("请计算工厂的生产计划");
+  await input.press("Enter");
+  await expect(log).toContainText("实际求解结果：13");
+  const panel = page.getByRole("button", { name: "方案面板", exact: true });
+  await expect(panel).toHaveAttribute("aria-pressed", "true");
+  await panel.click();
   await input.fill("E2E_POLISH_STREAM：请解释生产计划的资源约束。");
   await input.press("Enter");
-  const log = page.getByRole("log");
   await expect(log).toContainText("流式公式回复已完成。");
   await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
   for (const open of [true, false, true]) {
-    await page.getByRole("button", { name: open ? "建模工作区" : "收起建模工作区", exact: true }).click();
+    await panel.click();
+    await expect(panel).toHaveAttribute("aria-pressed", String(open));
     await expect.poll(() => log.evaluate(node => node.scrollHeight - node.scrollTop - node.clientHeight)).toBeLessThan(2);
     await expect(page.getByRole("button", { name: "回到最新消息", exact: true })).toHaveCount(0);
   }
@@ -29,7 +36,8 @@ test("the agent keeps following after the workspace changes the rendered message
   await page.mouse.wheel(0, -await log.evaluate(node => node.scrollHeight / 2));
   await expect(page.getByRole("button", { name: "回到最新消息", exact: true })).toBeVisible();
   for (const open of [false, true]) {
-    await page.getByRole("button", { name: open ? "建模工作区" : "收起建模工作区", exact: true }).click();
+    await panel.click();
+    await expect(panel).toHaveAttribute("aria-pressed", String(open));
     await expect.poll(() => log.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
     await expect(page.getByRole("button", { name: "回到最新消息", exact: true })).toBeVisible();
   }

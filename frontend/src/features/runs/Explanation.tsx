@@ -21,11 +21,14 @@ export function Explanation({ explanation, solve }: { explanation: ExplanationDa
         <TableHeader className="bg-muted/40"><TableRow>
           <TableHead>{t("关键决策")}</TableHead><TableHead className="text-right">{t("建议取值")}</TableHead><TableHead>{t("单位")}</TableHead>
         </TableRow></TableHeader>
-        <TableBody>{decisions.map(item => <TableRow key={item.variable}>
-          <TableCell title={item.variable} className="min-w-32 font-medium whitespace-normal [overflow-wrap:anywhere]">{item.label}</TableCell>
-          <TableCell className="text-right font-mono font-semibold tabular">{formatNumber(solve.variables[item.variable])}</TableCell>
-          <TableCell className="text-muted-foreground">{item.unit || "—"}</TableCell>
-        </TableRow>)}</TableBody>
+        <TableBody>{decisions.map(item => {
+          const raw = solve.variables[item.variable];
+          return <TableRow key={item.variable}>
+            <TableCell title={item.variable} className="min-w-32 font-medium whitespace-normal [overflow-wrap:anywhere]">{item.label}</TableCell>
+            <TableCell className="text-right font-mono font-semibold tabular">{raw == null ? "—" : formatNumber(raw)}</TableCell>
+            <TableCell className="text-muted-foreground">{item.unit || "—"}</TableCell>
+          </TableRow>;
+        })}</TableBody>
       </Table> : null}
       {explanation.notes.length ? <ul className="list-disc space-y-1 rounded-xl bg-muted/30 px-4 py-2.5 pl-7 text-xs leading-relaxed text-muted-foreground">
         {explanation.notes.map((note, index) => <li key={index}>{note}</li>)}

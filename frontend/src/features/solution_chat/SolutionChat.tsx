@@ -48,8 +48,8 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
   const summary = useQuery({ queryKey: ["source-run", currentPlan?.thread_id, currentPlan?.checkpoint_id], enabled: !!currentPlan,
     queryFn: () => client.threads.getState<RunValues>(currentPlan!.thread_id, currentPlan!.checkpoint_id), staleTime: Infinity, retry: false });
   const values = summary.data?.values as RunValues | undefined;
-  const presetId = selected ?? meta?.preset ?? presets[0]?.id;
-  const preset = presets.find(item => item.id === presetId);
+  const preset = presets.find(item => item.id === (selected ?? meta?.preset)) ?? presets[0];
+  const presetId = preset?.id;
   const thinkingMode = preset?.provider === "deepseek" ? thinking ?? meta?.thinking ?? null : null;
   const busy = conversation.busy;
   const failure = conversation.error || conversation.values.failure;
@@ -83,7 +83,7 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
           <p className="truncate font-medium" title={values.description}>{values.description?.trim().split("\n")[0].replace(/^#{1,6}\s+/, "")}</p>
           <div className="mt-2 flex items-center justify-between gap-2">
             <span>{values.explanation?.objective_label || t("最优目标值")} <strong>{values.solve?.objective == null ? "—" : formatNumber(values.solve.objective)}</strong> {values.explanation?.objective_unit}</span>
-            <StatusBadge status={values.failure ? "failed" : values.solve?.status ?? "unknown"} />
+            <StatusBadge status={values.failure ? "failed" : values.solve?.status ?? (values.timing?.finished_at ? "success" : "interrupted")} />
           </div>
         </>}
         {viewed && !sameSource(viewed, currentPlan) ? <Button variant="link" size="xs" className="mt-2 h-auto p-0" onClick={() => setViewed(undefined)}>{t("返回当前讨论方案")}</Button> : null}

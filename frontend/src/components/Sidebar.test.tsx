@@ -32,3 +32,14 @@ test.each(["optimization", "requirements", "solution_chat"] as const)("%s histor
   expect(resultText({ ...conversation, state: "timeout" })).toBe("超时");
   expect(resultText({ ...conversation, state: "pending" })).toBe("排队中");
 });
+
+test("non-optimal solved runs keep their true solver status label instead of Optimal", () => {
+  const runEntry: Entry = {
+    id: "r1", created: new Date().toISOString(), updated: new Date().toISOString(), state: "feasible",
+    meta: { title: "计划", method: "direct", language: "pyomo", provider: null, model: null },
+    objective: 13, elapsed: 1, failure: null, usage: null,
+  };
+  expect(resultText(runEntry)).toBe("可行解 · 13");
+  expect(resultText({ ...runEntry, state: "locally_optimal" })).toBe("局部最优 · 13");
+  expect(resultText({ ...runEntry, state: "optimal" })).toBe("最优 · 13");
+});

@@ -160,6 +160,49 @@ function blockIndexAtOffset(blocks: MarkdownBlock[], offset: number): number {
   return blocks.length - 1;
 }
 
+function blocksWithEmpty(text: string, emptyOffset: number | null): MarkdownBlock[] {
+  const base = splitMarkdownBlocks(text);
+  if (emptyOffset === null) return base;
+  let clamped = Math.max(0, Math.min(emptyOffset, text.length));
+  if (clamped > 0 && text[clamped - 1] === "\r" && text[clamped] === "\n") clamped++;
+  const idx = base.findIndex(block => clamped > block.contentEnd && clamped < block.end);
+  if (idx === -1) return base;
+  const block = base[idx];
+  return [
+    ...base.slice(0, idx),
+    { start: block.start, contentEnd: block.contentEnd, end: clamped, content: block.content },
+    { start: clamped, contentEnd: clamped, end: block.end, content: "" },
+    ...base.slice(idx + 1),
+  ];
+}
+
+function resolveDocumentPosition(text: string, cursor: number): {
+  emptyOffset: number | null;
+  index: number;
+  localCursor: number;
+} {
+  let clamped = Math.max(0, Math.min(cursor, text.length));
+  if (clamped > 0 && text[clamped - 1] === "\r" && text[clamped] === "\n") clamped++;
+  const base = splitMarkdownBlocks(text);
+  const gapIdx = base.findIndex(block => clamped > block.contentEnd && clamped < block.end);
+  if (gapIdx !== -1) {
+    return { emptyOffset: clamped, index: gapIdx + 1, localCursor: 0 };
+  }
+  const index = blockIndexAtOffset(base, clamped);
+  const target = base[index];
+  const localCursor = Math.max(0, Math.min(target.content.length, clamped - target.start));
+  return { emptyOffset: null, index, localCursor };
+}
+
+function splitBeforeSlice(text: string, start: number): MarkdownBlock[] {
+  if (start <= 0) return [];
+  const before = splitMarkdownBlocks(text.slice(0, start));
+  while (before.length && before[before.length - 1].start === start && before[before.length - 1].end === start && before[before.length - 1].content === "") {
+    before.pop();
+  }
+  return before;
+}
+
 function isStructuralBlock(content: string): boolean {
   const firstLine = content.split(/\r?\n/, 1)[0] ?? "";
   return ATX_HEADING.test(firstLine) || THEMATIC_BREAK.test(firstLine) || FENCE_OPEN.test(firstLine)
@@ -220,6 +263,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
   const [dragging, setDragging] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [emptyCursor, setEmptyCursor] = useState<number | null>(null);
   const [fullMode, setFullMode] = useState(false);
   const [composingSlice, setComposingSlice] = useState<{ start: number; contentEnd: number } | null>(null);
 
@@ -229,6 +273,10 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
   const input = useRef<HTMLTextAreaElement>(null);
   const pendingSelection = useRef<{ start: number; end: number } | null>(null);
   const pointerActivating = useRef(false);
+  const composingRef = useRef(false);
+  const composingSliceRef = useRef<{ start: number; contentEnd: number } | null>(null);
+  const valueRef = useRef(value);
+  useEffect(() => { valueRef.current = value; });
   const history = useRef<HistoryState>({
     entries: [{ value, cursor: value.length }],
     index: 0,
@@ -239,7 +287,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
     if (composingSlice) {
       const start = Math.min(composingSlice.start, value.length);
       const contentEnd = Math.min(Math.max(start, composingSlice.contentEnd), value.length);
-      const before = start > 0 ? splitMarkdownBlocks(value.slice(0, start)).filter(b => b.content.trim() !== "") : [];
+      const before = splitBeforeSlice(value, start);
       const afterRaw = value.slice(contentEnd);
       const afterOffset = contentEnd + (/^(?:\r?\n)+/.exec(afterRaw)?.[0].length ?? 0);
       const after = afterOffset < value.length
@@ -256,8 +304,8 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
         ...after,
       ];
     }
-    return splitMarkdownBlocks(value);
-  }, [value, composingSlice]);
+    return blocksWithEmpty(value, emptyCursor);
+  }, [value, composingSlice, emptyCursor]);
 
   const effectiveActive = disabled ? null : activeIndex !== null ? Math.min(activeIndex, blocks.length - 1) : null;
   const isEmpty = value.length === 0;
@@ -266,9 +314,11 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
   const textareaValue = showFullTextarea || !activeBlock ? value : activeBlock.content;
 
   useEffect(() => {
+    if (composingRef.current) return;
     const current = history.current.entries[history.current.index];
     if (current?.value !== value) {
       history.current = { entries: [{ value, cursor: value.length }], index: 0, lastPush: 0 };
+      setEmptyCursor(null);
     }
   }, [value]);
 
@@ -289,7 +339,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
     } else {
       element.style.height = "";
     }
-    if (pendingSelection.current && document.activeElement === element) {
+    if (!composingRef.current && pendingSelection.current && document.activeElement === element) {
       const { start, end } = pendingSelection.current;
       pendingSelection.current = null;
       const max = element.value.length;
@@ -302,12 +352,10 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
       history.current.entries[history.current.index].cursor = beforeCursor;
     }
     pushHistoryEntry(history.current, nextValue, globalCursor, timestamp, forceHistorySplit);
-    const nextBlocks = splitMarkdownBlocks(nextValue);
-    const nextIdx = blockIndexAtOffset(nextBlocks, globalCursor);
-    const target = nextBlocks[nextIdx];
-    const localCursor = Math.max(0, Math.min(target.content.length, globalCursor - target.start));
+    const { emptyOffset, index, localCursor } = resolveDocumentPosition(nextValue, globalCursor);
     setFullMode(false);
-    setActiveIndex(nextIdx);
+    setEmptyCursor(emptyOffset);
+    setActiveIndex(index);
     pendingSelection.current = { start: localCursor, end: localCursor };
     onChange(nextValue);
   };
@@ -315,13 +363,23 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
   const activateBlock = (index: number, cursorOffset?: number) => {
     if (disabled) return;
     pointerActivating.current = true;
-    const clampedIndex = Math.max(0, Math.min(index, blocks.length - 1));
-    const target = blocks[clampedIndex];
-    const local = cursorOffset ?? target.content.length;
+    const baseBlocks = emptyCursor !== null ? splitMarkdownBlocks(value) : blocks;
+    const targetBlock = blocks[Math.max(0, Math.min(index, blocks.length - 1))];
+    const clampedIndex = emptyCursor !== null
+      ? Math.max(0, Math.min(blockIndexAtOffset(baseBlocks, targetBlock.start), baseBlocks.length - 1))
+      : Math.max(0, Math.min(index, blocks.length - 1));
+    const target = baseBlocks[clampedIndex];
+    const local = Math.max(0, Math.min(cursorOffset ?? target.content.length, target.content.length));
+    setEmptyCursor(null);
     setFullMode(false);
     setActiveIndex(clampedIndex);
-    pendingSelection.current = { start: local, end: local };
+    const alreadyActive = !showFullTextarea && emptyCursor === null && clampedIndex === effectiveActive;
+    pendingSelection.current = alreadyActive ? null : { start: local, end: local };
     input.current?.focus({ preventScroll: true });
+    if (alreadyActive && input.current) {
+      const max = input.current.value.length;
+      input.current.setSelectionRange(Math.min(local, max), Math.min(local, max));
+    }
     pointerActivating.current = false;
   };
 
@@ -339,8 +397,9 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
     return <div key={block.start} data-slot="markdown-block"
       onMouseDown={event => {
         if (disabled || event.button !== 0) return;
+        if ((event.target as Element | null)?.closest?.("button, a")) return;
         const selection = window.getSelection();
-        if (selection && !selection.isCollapsed) return;
+        if (selection && !selection.isCollapsed && selection.rangeCount > 0 && selection.containsNode(event.currentTarget, true)) return;
         event.preventDefault();
         activateBlock(index);
       }}
@@ -375,7 +434,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
         {actions}
         {value || files.length ? <Button type="button" variant="ghost" size="xs" disabled={locked}
           className="h-7 gap-1 rounded-lg px-2 text-xs text-muted-foreground hover:text-destructive"
-          onClick={() => { setComposingSlice(null); setFullMode(false); setActiveIndex(null); onClear(); }}>
+          onClick={() => { composingRef.current = false; composingSliceRef.current = null; setComposingSlice(null); setEmptyCursor(null); setFullMode(false); setActiveIndex(null); onClear(); }}>
           <Trash2 className="size-3.5" />{t("清空")}</Button> : null}
       </div>
     </div>
@@ -405,28 +464,58 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
         onBlur={event => {
           if (pointerActivating.current) return;
           if (event.relatedTarget instanceof Node && surface.current?.contains(event.relatedTarget)) return;
+          composingRef.current = false;
+          composingSliceRef.current = null;
           setComposingSlice(null);
+          setEmptyCursor(null);
           setFullMode(false);
           setActiveIndex(null);
         }}
         onCompositionStart={() => {
-          if (activeBlock) setComposingSlice({ start: activeBlock.start, contentEnd: activeBlock.contentEnd });
+          composingRef.current = true;
+          pendingSelection.current = null;
+          if (!showFullTextarea && activeBlock) {
+            const slice = { start: activeBlock.start, contentEnd: activeBlock.contentEnd };
+            composingSliceRef.current = slice;
+            setComposingSlice(slice);
+            setActiveIndex(splitBeforeSlice(value, slice.start).length);
+          } else {
+            composingSliceRef.current = null;
+            setComposingSlice(null);
+            setFullMode(true);
+          }
         }}
         onCompositionEnd={event => {
-          if (!composingSlice) return;
-          const nextBlockText = event.currentTarget.value;
-          const nextValue = value.slice(0, composingSlice.start) + nextBlockText + value.slice(composingSlice.contentEnd);
-          const globalCursor = composingSlice.start + (event.currentTarget.selectionStart ?? nextBlockText.length);
+          if (!composingRef.current && !composingSliceRef.current) return;
+          composingRef.current = false;
+          const slice = composingSliceRef.current;
+          composingSliceRef.current = null;
           setComposingSlice(null);
-          applyDocumentChange(nextValue, globalCursor, event.timeStamp, true);
+          const nextBlockText = event.currentTarget.value;
+          const localCursor = event.currentTarget.selectionStart ?? nextBlockText.length;
+          if (slice) {
+            const nextValue = value.slice(0, slice.start) + nextBlockText + value.slice(slice.contentEnd);
+            applyDocumentChange(nextValue, slice.start + localCursor, event.timeStamp, true);
+          } else {
+            applyDocumentChange(nextBlockText, localCursor, event.timeStamp, true);
+          }
         }}
         onChange={event => {
           const rawInput = event.target.value;
           const localCursor = event.target.selectionStart ?? rawInput.length;
-          if (composingSlice) {
-            const nextValue = value.slice(0, composingSlice.start) + rawInput + value.slice(composingSlice.contentEnd);
-            setComposingSlice({ start: composingSlice.start, contentEnd: composingSlice.start + rawInput.length });
-            onChange(nextValue);
+          const isComposing = composingRef.current || Boolean((event.nativeEvent as InputEvent).isComposing);
+          if (isComposing) {
+            if (composingSliceRef.current) {
+              const slice = composingSliceRef.current;
+              const nextValue = value.slice(0, slice.start) + rawInput + value.slice(slice.contentEnd);
+              const updated = { start: slice.start, contentEnd: slice.start + rawInput.length };
+              composingSliceRef.current = updated;
+              setComposingSlice(updated);
+              onChange(nextValue);
+              return;
+            }
+            setFullMode(true);
+            onChange(rawInput);
             return;
           }
           if (showFullTextarea || !activeBlock) {
@@ -447,25 +536,26 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
 
           if (mod && key === "a" && !showFullTextarea && blocks.length > 1) {
             event.preventDefault();
+            setEmptyCursor(null);
             setFullMode(true);
             pendingSelection.current = { start: 0, end: value.length };
             return;
           }
 
           if (mod && (key === "z" || (key === "y" && !event.shiftKey))) {
+            event.preventDefault();
             const state = history.current;
             const redo = key === "y" || event.shiftKey;
             const targetIndex = redo ? state.index + 1 : state.index - 1;
             if (targetIndex >= 0 && targetIndex < state.entries.length) {
-              event.preventDefault();
               state.index = targetIndex;
+              state.lastPush = 0;
               const entry = state.entries[targetIndex];
-              const nextBlocks = splitMarkdownBlocks(entry.value);
-              const idx = blockIndexAtOffset(nextBlocks, entry.cursor);
-              const local = Math.max(0, Math.min(nextBlocks[idx].content.length, entry.cursor - nextBlocks[idx].start));
+              const { emptyOffset, index, localCursor } = resolveDocumentPosition(entry.value, entry.cursor);
               setFullMode(false);
-              setActiveIndex(idx);
-              pendingSelection.current = { start: local, end: local };
+              setEmptyCursor(emptyOffset);
+              setActiveIndex(index);
+              pendingSelection.current = { start: localCursor, end: localCursor };
               onChange(entry.value);
             }
             return;
@@ -473,7 +563,10 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
 
           if (event.key === "Escape" && (effectiveActive !== null || fullMode) && !document.querySelector("[role=dialog]")) {
             event.preventDefault();
+            composingRef.current = false;
+            composingSliceRef.current = null;
             setComposingSlice(null);
+            setEmptyCursor(null);
             setFullMode(false);
             setActiveIndex(null);
             element.blur();
@@ -483,13 +576,13 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
           if (showFullTextarea && !event.shiftKey && !mod && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
             requestAnimationFrame(() => {
               const current = input.current;
-              if (!current || current.selectionStart !== current.selectionEnd) return;
+              if (!current || document.activeElement !== current || current.selectionStart !== current.selectionEnd) return;
               const cursor = current.selectionStart ?? 0;
-              const idx = blockIndexAtOffset(blocks, cursor);
-              const local = Math.max(0, Math.min(blocks[idx].content.length, cursor - blocks[idx].start));
+              const { emptyOffset, index, localCursor } = resolveDocumentPosition(valueRef.current, cursor);
               setFullMode(false);
-              setActiveIndex(idx);
-              pendingSelection.current = { start: local, end: local };
+              setEmptyCursor(emptyOffset);
+              setActiveIndex(index);
+              pendingSelection.current = { start: localCursor, end: localCursor };
             });
             return;
           }
@@ -517,20 +610,43 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
           }
 
           if (!event.shiftKey && !event.altKey && !mod && start === end) {
+            const lineHeight = parseFloat(getComputedStyle(element).lineHeight) || 0;
+            const logicalLines = activeBlock.content.split("\n").length;
+            const visuallyWrapped = lineHeight > 0 && element.scrollHeight > lineHeight * (logicalLines + 0.5);
             if (event.key === "ArrowUp" && effectiveActive > 0 && !activeBlock.content.slice(0, start).includes("\n")) {
-              event.preventDefault();
               const prev = blocks[effectiveActive - 1];
               const lastNewline = prev.content.lastIndexOf("\n");
               const lastLineStart = lastNewline + 1;
-              activateBlock(effectiveActive - 1, Math.min(prev.content.length, lastLineStart + start));
+              const targetOffset = Math.min(prev.content.length, lastLineStart + start);
+              if (visuallyWrapped && start > 0) {
+                requestAnimationFrame(() => {
+                  const current = input.current;
+                  if (current && document.activeElement === current && current.selectionStart === start && current.selectionEnd === start) {
+                    activateBlock(effectiveActive - 1, targetOffset);
+                  }
+                });
+              } else {
+                event.preventDefault();
+                activateBlock(effectiveActive - 1, targetOffset);
+              }
             } else if (event.key === "ArrowDown" && effectiveActive < blocks.length - 1 && !activeBlock.content.slice(start).includes("\n")) {
-              event.preventDefault();
               const lineStart = activeBlock.content.lastIndexOf("\n", start - 1) + 1;
               const col = start - lineStart;
               const next = blocks[effectiveActive + 1];
               const firstLineEnd = next.content.indexOf("\n");
               const maxCol = firstLineEnd === -1 ? next.content.length : firstLineEnd;
-              activateBlock(effectiveActive + 1, Math.min(maxCol, col));
+              const targetOffset = Math.min(maxCol, col);
+              if (visuallyWrapped && start < activeBlock.content.length) {
+                requestAnimationFrame(() => {
+                  const current = input.current;
+                  if (current && document.activeElement === current && current.selectionStart === start && current.selectionEnd === start) {
+                    activateBlock(effectiveActive + 1, targetOffset);
+                  }
+                });
+              } else {
+                event.preventDefault();
+                activateBlock(effectiveActive + 1, targetOffset);
+              }
             } else if (event.key === "ArrowLeft" && start === 0 && effectiveActive > 0) {
               event.preventDefault();
               activateBlock(effectiveActive - 1, blocks[effectiveActive - 1].content.length);
@@ -571,7 +687,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
         <Button variant="outline" size="sm" asChild className="h-8 rounded-xl bg-background/80 text-xs font-normal shadow-2xs">
           <label title={t("支持 Excel (.xlsx)、CSV、TSV、JSON 和文本文件；上传后可直接点击文件名在线编辑。")}
             className={cn("cursor-pointer", locked && "pointer-events-none opacity-50")}>
-            {reading ? <Spinner /> : <Paperclip className="size-3.5 text-primary/80" />}{t(reading ? "正在读取数据……" : "上传数据表")}
+            {reading ? <Spinner /> : <Paperclip className="size-3.5 text-primary/80" />}{reading ? t("正在读取数据……") : t("上传数据表")}
             <input type="file" multiple disabled={locked} accept={DATA_FILE_ACCEPT} className="sr-only"
               onChange={event => { onFiles(event.target.files); event.target.value = ""; }} />
           </label>

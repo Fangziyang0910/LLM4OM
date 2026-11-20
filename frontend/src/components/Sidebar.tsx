@@ -37,7 +37,7 @@ export function resultText(entry: Entry): string {
   if (entry.meta.kind === "requirements") return entry.state === "running" ? t("正在梳理…")
     : entry.failure ? t("梳理中断") : t("需求梳理");
   if (entry.state === "running") return t("正在求解…");
-  if (entry.objective != null && tone(entry.state) === "good") return `${t("最优")} · ${formatNumber(entry.objective)}`;
+  if (entry.objective != null && tone(entry.state) === "good") return `${STATUS[entry.state] ?? entry.state} · ${formatNumber(entry.objective)}`;
   if (entry.state === "infeasible") return t("条件冲突");
   return STATUS[entry.state] ?? entry.state;
 }
@@ -145,8 +145,10 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
 
       {tags.length ? <div className="flex flex-wrap gap-1" aria-label={t("按标签筛选")}>
         {tags.map(tag => {
-          const on = query.split(/\s+/).includes(`#${tag}`);
-          return <button key={tag} onClick={() => onQuery(on ? query.split(/\s+/).filter(word => word !== `#${tag}`).join(" ")
+          const words = query.trim().split(/\s+/).filter(Boolean);
+          const lowerTag = `#${tag.toLowerCase()}`;
+          const on = words.some(word => word.toLowerCase() === lowerTag);
+          return <button key={tag} onClick={() => onQuery(on ? words.filter(word => word.toLowerCase() !== lowerTag).join(" ")
             : `${query.trim()} #${tag}`.trim())} title={`#${tag}`} className={cn("max-w-full truncate rounded-full border px-2 py-0.5 text-[11px] transition-colors hover:bg-sidebar-accent",
             on ? "border-primary/40 bg-primary/10 font-medium text-primary" : "text-muted-foreground")}>#{tag}</button>;
         })}
@@ -164,7 +166,10 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
         {[...groups].map(([label, items]) => <section key={label} className="mt-2 first:mt-0.5">
           <h2 className="px-2.5 py-1.5 text-[11px] font-medium tracking-wide text-muted-foreground/80">{label}</h2>
           <ul className="flex flex-col gap-0.5">{items.map(({ entry, related }) => {
-            const open = expanded[entry.id] ?? (!!query.trim() || related.some(item => item.id === current));
+            const hasActiveOrMatchingChild = related.some(item => item.id === current)
+              || (!!query.trim() && related.some(item => matches(item, query, methodName)));
+            const open = (!!query.trim() && related.some(item => matches(item, query, methodName)))
+              || (expanded[entry.id] ?? hasActiveOrMatchingChild);
             return <li key={entry.id}>
               {row(entry)}
               {related.length ? <>

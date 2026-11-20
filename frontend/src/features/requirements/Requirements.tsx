@@ -33,7 +33,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   threadId: string; searchConfigured: boolean; onFinished: () => void; onUse: (draft: RequirementsDraft) => void;
   openExamples?: () => void;
 }) {
-  const { presets, openPresets, draft: configuration } = modeling;
+  const { presets, openPresets } = modeling;
   const desktop = useDesktop();
   const layout = useDefaultLayout({ id: "llm4om-requirements", panelIds: ["conversation", "problem"], onlySaveAfterUserInteractions: true });
   const [assistantOpen, setAssistantOpen] = useState(true);
@@ -44,7 +44,12 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const [edited, setEdited] = useState<RequirementsDraft | null>(null);
   const conversation = useConversation<Values>({ assistantId: "requirements", threadId,
     onCreated: onFinished, onError: onFinished, onFinish: state => {
-      if (!state.values.failure && !state.tasks?.some(task => task.error)) setEdited(null);
+      if (!state.values.failure && !state.tasks?.some(task => task.error)) {
+        setEdited(null);
+        saved.current = null;
+        setSavedDraft(null);
+        setSaveError(null);
+      }
       onFinished();
     } });
   const meta = conversation.thread.metadata as RequirementsMeta | undefined;
@@ -58,10 +63,10 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const saved = useRef<RequirementsDraft | null>(null);
   const saveQueue = useRef(Promise.resolve());
   const inputArea = useRef<HTMLTextAreaElement>(null);
-  const draft = edited ?? { description: conversation.values.description ?? configuration.description, data: conversation.values.data ?? configuration.data };
+  const draft = edited ?? { description: conversation.values.description ?? "", data: conversation.values.data ?? {} };
   const messages = conversation.messages;
-  const presetId = selected ?? meta?.preset ?? presets[0]?.id;
-  const preset = presets.find(item => item.id === presetId);
+  const preset = presets.find(item => item.id === (selected ?? meta?.preset)) ?? presets[0];
+  const presetId = preset?.id;
   const thinkingMode = preset?.provider === "deepseek" ? thinking ?? meta?.thinking ?? null : null;
   const canSearch = searchConfigured || preset?.provider === "deepseek";
   const searchOn = !!canSearch && (search ?? meta?.search ?? false);
@@ -102,9 +107,11 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
     followLatest();
     try {
       await save();
+      const shouldTitle = !messages.length && (!meta?.title || meta.title === t("新需求对话"));
+      const firstLine = input.trim().split(/\r?\n/).map(line => line.replace(/^#+\s*/, "").trim()).find(Boolean) ?? "";
       await conversation.send({ retry, context: { preset: preset.id, locale, search: searchOn, thinking: thinkingMode },
         values: draft, metadata: { preset: preset.id, provider: preset.provider, model: preset.name || preset.model,
-          thinking: thinkingMode, search: searchOn, ...(!messages.length ? { title: input.trim().slice(0, 120) } : {}) } });
+          thinking: thinkingMode, search: searchOn, ...(shouldTitle && firstLine ? { title: firstLine.slice(0, 120) } : {}) } });
     } catch (error) { toast.error(errorText(error)); }
     finally { setAction(false); }
   };
@@ -112,6 +119,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
     setReading(true);
     try {
       const data = await readDataFiles(files, draft.data);
+      if (!Object.keys(data).length) return;
       const next = { ...draft, data: { ...draft.data, ...data } };
       setEdited(next);
       await save(next);
@@ -189,8 +197,8 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
           {saving ? <Spinner /> : edited && edited !== savedDraft ? <Save /> : <Check />}</Button>}
         onFiles={files => void attach(files)} onDataChange={async (name, content) => {
           const next = { ...draft, data: { ...draft.data, [name]: content } }; await save(next); setEdited(next);
-        }} onClear={() => setEdited({ description: "", data: {} })}
-        onRemove={name => { const data = { ...draft.data }; delete data[name]; setEdited({ ...draft, data }); }} />
+        }} onClear={() => { const next = { description: "", data: {} }; setEdited(next); void save(next).catch(() => undefined); }}
+        onRemove={name => { const data = { ...draft.data }; delete data[name]; const next = { ...draft, data }; setEdited(next); void save(next).catch(() => undefined); }} />
     </div>
   </TabsContent>;
 

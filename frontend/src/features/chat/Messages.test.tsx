@@ -151,3 +151,20 @@ test("computed plan cards show solver facts including zero values and open the s
   fireEvent.click(within(results).getByRole("button", { name: "对比本轮方案" }));
   expect(compare).toHaveBeenCalledWith("group");
 });
+
+test("parallel tool calls keep remaining tool progress visible and mid-stream failures still offer retry", () => {
+  const call: Message = {
+    type: "ai", id: "assistant", content: "",
+    tool_calls: [{ id: "t1", name: "calculate", args: {} }, { id: "t2", name: "web_search", args: { query: "产能" } }],
+  };
+  render(<ChatMessages messages={[question, call, { type: "tool", name: "calculate", content: "1", tool_call_id: "t1" }]}
+    loading label="优化助手" onRetry={vi.fn()} />);
+  expect(screen.getByText("产能")).toBeTruthy();
+
+  cleanup();
+  const retry = vi.fn();
+  render(<ChatMessages messages={[question, { type: "ai", id: "partial", content: "先分析一下…" }]}
+    loading={false} label="优化助手" failure="HTTP 502: Bad Gateway" onRetry={retry} />);
+  fireEvent.click(screen.getByRole("button", { name: "重试这一轮" }));
+  expect(retry).toHaveBeenCalledOnce();
+});

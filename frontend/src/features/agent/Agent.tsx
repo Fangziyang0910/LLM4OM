@@ -76,6 +76,11 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   const [pane, setPane] = useState<"chat" | "workspace">("chat");
   const inputArea = useRef<HTMLTextAreaElement>(null);
   const upload = useRef<HTMLInputElement>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const conversation = useConversation<Values, { CustomEventType: ChatProgress | ModelingEvent }>({
     assistantId: "optimization", threadId, initialInput: initial.description, reconnectOnMount: false,
     onCreated: onFinished,
@@ -90,15 +95,15 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
         setLiveTask(event.tool_call_id); setWorkspace(true);
       }
     },
-    onFinish: () => { setLiveTask(undefined); onFinished(); },
+    onFinish: () => { setFiles(null); setLiveTask(undefined); onFinished(); },
     onError: () => { setLiveTask(undefined); onFinished(); },
   });
   const meta = conversation.thread.metadata as OptimizationMeta | undefined;
   const { input, setInput } = conversation;
   const messages = conversation.messages;
   const data = files ?? conversation.values.data ?? initial.data;
-  const presetId = selected ?? meta?.preset ?? presets[0]?.id;
-  const preset = presets.find(item => item.id === presetId);
+  const preset = presets.find(item => item.id === (selected ?? meta?.preset)) ?? presets[0];
+  const presetId = preset?.id;
   const thinkingMode = preset?.provider === "deepseek" ? thinking ?? meta?.thinking ?? null : null;
   const chosenMethod = method ?? meta?.method ?? "auto";
   const chosenLanguage = language ?? meta?.language ?? "auto";
@@ -115,13 +120,27 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   const viewing = shown ?? plans.at(-1)?.source;
   const task = liveTask ? tasks[liveTask] : undefined;
   const reconnect = useRef(conversation.reconnect);
-  useEffect(() => { reconnect.current = conversation.reconnect; });
+  const reloadThread = useRef(conversation.thread.reload);
+  useEffect(() => {
+    reconnect.current = conversation.reconnect;
+    reloadThread.current = conversation.thread.reload;
+  });
   useEffect(() => {
     if (!threadId) return;
     let disposed = false;
+    let pendingRun: string | null = null;
+    try {
+      pendingRun = sessionStorage.getItem(`llm4om-agent-run-${threadId}`);
+      if (pendingRun) sessionStorage.removeItem(`llm4om-agent-run-${threadId}`);
+    } catch { /* storage may be unavailable */ }
     void client.runs.list(threadId, { limit: 1 }).then(runs => {
+      if (disposed) return;
       const active = runs[0];
-      if (!disposed && active && (active.status === "pending" || active.status === "running")) return reconnect.current(active.run_id);
+      if (active && (active.status === "pending" || active.status === "running")) return reconnect.current(active.run_id);
+      if (pendingRun) {
+        reloadThread.current();
+        return reconnect.current(active?.run_id ?? pendingRun);
+      }
     }).catch(error => { if (!disposed) toast.error(errorText(error)); });
     return () => { disposed = true; };
   }, [threadId]);
@@ -136,9 +155,9 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
       method: context.method, language: context.language, search: context.search, thinking: thinkingMode };
     if (!threadId) {
       const created = await conversation.startThread({ context, metadata: { ...metadata, kind: "optimization",
-        title: input.trim().split("\n")[0].slice(0, 120) }, values: { description: initial.description, data } });
-      if (created) { onThread(created); onFinished(); }
-    } else if (await conversation.send({ retry, context, values: { data }, metadata })) setFiles(null);
+        title: input.trim().split("\n")[0].slice(0, 120) }, values: { data } });
+      if (created && mounted.current) { onThread(created); onFinished(); }
+    } else await conversation.send({ retry, context, values: { data }, metadata });
   };
   const stop = async () => { if (await conversation.stop()) { setLiveTask(undefined); onFinished(); } };
   const saveData = async (next: Record<string, string>) => {
@@ -242,7 +261,9 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
         <Button type="button" variant="ghost" size="icon-sm" disabled={busy || dataPending} aria-label={t("添加数据文件")}
           title={t(reading ? "正在读取数据……" : savingData ? "正在保存……" : "添加数据文件")} onClick={() => upload.current?.click()}>
           {dataPending ? <Spinner /> : <Paperclip />}</Button>
-        <Toggle size="sm" pressed={searching} disabled={busy || !canSearch} aria-label={t("联网搜索")} onPressedChange={setSearch}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Toggle>
+        <span title={canSearch ? t("搜索公开资料，并在回复中展示来源。") : t("选择支持搜索的模型或由管理员开启搜索服务。")}>
+          <Toggle size="sm" pressed={searching && canSearch} disabled={busy || !canSearch} aria-label={t("联网搜索")} onPressedChange={setSearch}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Toggle>
+        </span>
         <Button type="button" variant={settings || chosenMethod !== "auto" || chosenLanguage !== "auto" ? "secondary" : "ghost"} size="icon-sm" aria-label={t("建模偏好")}
           title={`${options.methods.find(item => item.id === chosenMethod)?.name || t("自动选择")} · ${options.languages.find(item => item.id === chosenLanguage)?.name || t("自动选择")}`}
           aria-expanded={settings} onClick={() => setSettings(!settings)}><SlidersHorizontal /></Button>
@@ -253,7 +274,7 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
         setReading(true);
         try {
           const added = await readDataFiles(field.files, data);
-          await saveData({ ...data, ...added });
+          if (Object.keys(added).length) await saveData({ ...data, ...added });
         } catch (error) { toast.error(errorText(error)); }
         finally { field.value = ""; setReading(false); }
       }} />

@@ -58,3 +58,17 @@ test.each([
   expect(await screen.findByRole("button", { name: "test-model-updated" })).toBeTruthy();
   expect(vi.mocked(api).mock.lastCall?.[1]).toMatchObject(label === "接口地址" ? { base_url: value } : { api_key: value });
 });
+
+test("temperature allows arbitrary decimals and rejects negative or non-integer max_tokens", () => {
+  openForm();
+  const temp = screen.getByLabelText("温度") as HTMLInputElement;
+  const maxTokens = screen.getByLabelText("最大输出 token") as HTMLInputElement;
+  expect(temp.step).toBe("any");
+  fireEvent.change(temp, { target: { value: "0.05" } });
+  expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.change(temp, { target: { value: "-0.1" } });
+  expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(temp, { target: { value: "0.2" } });
+  fireEvent.change(maxTokens, { target: { value: "1.5" } });
+  expect((document.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
+});

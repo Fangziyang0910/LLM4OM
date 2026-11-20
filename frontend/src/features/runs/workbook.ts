@@ -13,8 +13,10 @@ const cell = (value: string | number, style: Partial<CellObject> = {}): CellObje
   wrap: true, alignVertical: "center", ...style,
 });
 const wide = (value: string): Row => [cell(value, {
-  columnSpan: 4, height: Math.max(24, (value.split("\n").reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / 45)), 0)) * 18),
+  columnSpan: 4, height: Math.min(409, Math.max(24, (value.split("\n").reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / 45)), 0)) * 18)),
 })];
+const chunkRows = (text: string): Row[] =>
+  text.split("\n").flatMap(paragraph => (paragraph.match(/[\s\S]{1,450}/gu) || [""]).map(wide));
 
 export function hasSolution(solve: Solve | null | undefined): solve is Solve {
   return !!solve && !solve.error && ["optimal", "feasible", "locally_optimal", "time_limit", "iteration_limit"].includes(solve.status)
@@ -37,15 +39,15 @@ function solutionWorkbook(meta: RunMeta, values: RunValues, options: Options, li
       cell(explanation?.objective_unit || "")],
   ];
   if (explanation) {
-    plan.push([], wide(explanation.summary), ...explanation.notes.map(wide));
+    plan.push([], ...chunkRows(explanation.summary), ...explanation.notes.flatMap(chunkRows));
   }
   plan.push([], [t("决策"), t("取值"), t("单位"), t("变量")].map(label => cell(label, header)));
   const stickyRowsCount = plan.length;
   for (const group of groupVariables(solve.variables)) {
     for (const variable of group.variables) {
       const label = labels.get(variable.name);
-      plan.push([cell(label?.label || variable.name, { height: Math.max(30, Math.ceil((label?.label || variable.name).length / 18) * 18) }),
-        cell(variable.value, { align: "right" }),
+      plan.push([cell(label?.label || variable.name, { height: Math.min(409, Math.max(30, Math.ceil((label?.label || variable.name).length / 18) * 18)) }),
+        variable.value == null ? cell("—", { align: "right" }) : cell(variable.value, { align: "right" }),
         cell(label?.unit || ""), cell(variable.name, { textColor: "#5B6474" })]);
     }
   }
@@ -53,9 +55,7 @@ function solutionWorkbook(meta: RunMeta, values: RunValues, options: Options, li
   const section = (title: string, text: string) => {
     problem.push([], [cell(title, { ...header, columnSpan: 4 })]);
     // Excel limits cell text and row height; short chunks preserve the complete problem without clipping.
-    for (const paragraph of text.split("\n")) {
-      for (const chunk of paragraph.match(/[\s\S]{1,450}/gu) || [""]) problem.push(wide(chunk));
-    }
+    problem.push(...chunkRows(text));
   };
   section(t("问题描述"), values.description || "");
   if (values.revision) {

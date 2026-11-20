@@ -70,13 +70,14 @@ function PhaseItem({ phase, index, last, live, active, open, onOpenChange, onSho
 }) {
   const { step, calls } = phase;
   const running = phase.kind === "working" ? active && calls.some(call => call.running) : !!step?.running;
-  const failed = phase.kind === "error" || (phase.kind === "solve" && step?.status === "error") || calls.some(call => call.failed);
-  const state = running ? "live" : phase.kind === "solve" ? tone(step?.status ?? "") : failed ? "bad" : phase.kind === "working" ? "idle" : "done";
+  const solveFailed = phase.kind === "solve" && (!!step?.failed || step?.status === "error");
+  const failed = phase.kind === "error" || solveFailed || calls.some(call => call.failed);
+  const state = running ? "live" : solveFailed ? "bad" : phase.kind === "solve" ? tone(step?.status ?? "") : failed ? "bad" : phase.kind === "working" ? "idle" : "done";
   const title = phase.kind === "working"
     ? (running ? t("正在智能分析与推理…") : active ? t("正在准备下一步…") : t("附加分析记录"))
     : t(step!.title);
   const summary = phase.kind === "artifact" ? preview(step!.content)
-    : phase.kind === "solve" && !running ? (step!.status === "error" ? step!.content.split("\n").find(line => line && !line.startsWith("Status"))
+    : phase.kind === "solve" && !running ? ((step!.failed || step!.status === "error") ? step!.content.split("\n").find(line => line && !line.startsWith("Status"))
       : step!.objective != null ? t("目标值 {value}", { value: formatNumber(step!.objective) }) : STATUS[step!.status ?? ""])
     : phase.kind === "error" ? step!.content.trim().split("\n").pop() : "";
   const meta = phase.seconds ? duration(phase.seconds) : "";
@@ -108,7 +109,7 @@ function PhaseItem({ phase, index, last, live, active, open, onOpenChange, onSho
           </div> : null}
         </> : null}
         {phase.kind === "solve" ? running ? <p className="flex items-center gap-2 text-xs text-muted-foreground"><Spinner className="size-3" />{t("正在执行优化求解计算…")}</p> : <>
-          <Plain tone={step!.status === "error" ? "bad" : undefined}>{step!.content}</Plain>
+          <Plain tone={step!.failed || step!.status === "error" ? "bad" : undefined}>{step!.content}</Plain>
           {step!.code ? <Collapsible className="group/code">
             <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
               <ChevronDown className="size-3.5 -rotate-90 transition-transform group-data-[state=open]/code:rotate-0" />{t("查看执行代码")}</CollapsibleTrigger>

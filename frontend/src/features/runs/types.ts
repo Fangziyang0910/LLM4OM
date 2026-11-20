@@ -8,7 +8,7 @@ export type Step = {
 /** The constraints of an infeasible model that cannot hold together, found by `tool`. */
 export type Diagnosis = { tool: string; items: string[]; total: number; error: string | null };
 export type Solve = {
-  status: string; objective: number | null; variables: Record<string, number>; output: string; error: string | null;
+  status: string; objective: number | null; variables: Record<string, number | null>; output: string; error: string | null;
   diagnosis?: Diagnosis | null;
   solver?: string | null;
 };

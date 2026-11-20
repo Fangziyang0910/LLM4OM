@@ -69,10 +69,17 @@ export function ChatMessages({ messages, loading, label, failure, disabled, onRe
   const completed = new Set(messages.filter(message => message.type === "tool").map(message => message.tool_call_id));
   const last = messages.at(-1);
   const pending = last?.type === "ai" ? last : undefined;
-  const calls = loading ? pending?.tool_calls?.filter(call => !completed.has(call.id ?? "")) ?? [] : [];
+  let turnAi: Extract<Message, { type: "ai" }> | undefined;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.type === "human") break;
+    if (message.type === "ai") { turnAi = message; break; }
+  }
+  const calls = loading ? turnAi?.tool_calls?.filter(call => !completed.has(call.id ?? "")) ?? [] : [];
   const unanswered = last?.type === "human";
   const stopped = failure && /^CancelledError(?:\(\))?$/.test(errorText(failure));
   const failed = !!failure && !stopped;
+  const canRetry = unanswered || ((failed || stopped) && messages.some(message => message.type === "human"));
   const stages = { revise: t("整理调整后的问题"), model: t("正在建模"), solve: t("正在求解"), explain: t("解读求解结果") };
   return <div className="mx-auto flex w-full min-w-0 max-w-[46rem] flex-col gap-5 py-4">
     {messages.map((message, index) => {
@@ -110,9 +117,9 @@ export function ChatMessages({ messages, loading, label, failure, disabled, onRe
       </div>) : <p className="flex items-center gap-2"><Spinner aria-hidden="true" role="presentation" className="text-primary" />{pending && messageText(pending) ? t("正在输出……") : t("正在准备回复……")}</p>}
     </div> : failed || stopped || unanswered ? <div className="min-w-0 rounded-2xl border border-border/80 bg-muted/30 p-3.5 text-xs" role={failed ? "alert" : "status"}>
       <p className="font-medium">{failed ? t("这轮回复未完成，可以重试。") : t("这轮回复已停止，可以重新回答。")}</p>
-      <p className="mt-1 text-muted-foreground">{unanswered ? t("重试使用原问题，输入框中的草稿会保留。") : t("请从输入框重新发送，草稿会保留。")}</p>
+      <p className="mt-1 text-muted-foreground">{canRetry ? t("重试使用原问题，输入框中的草稿会保留。") : t("请从输入框重新发送，草稿会保留。")}</p>
       {failed ? <details className="mt-2 text-muted-foreground"><summary className="cursor-pointer hover:text-foreground">{t("查看错误详情")}</summary><p className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words">{errorText(failure)}</p></details> : null}
-      {unanswered ? <Button variant="outline" size="sm" className="mt-3 rounded-lg" disabled={disabled} onClick={onRetry}><RefreshCw />{t("重试这一轮")}</Button> : null}
+      {canRetry ? <Button variant="outline" size="sm" className="mt-3 rounded-lg" disabled={disabled} onClick={onRetry}><RefreshCw />{t("重试这一轮")}</Button> : null}
     </div> : null}
   </div>;
 }

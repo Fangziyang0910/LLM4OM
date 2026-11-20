@@ -44,3 +44,9 @@ test("an optimization conversation remains the primary history entry for all its
   expect(groups[0].related).toEqual([revised, original]);
   expect(groupHistory([revised, chat])[0].entry).toBe(chat);
 });
+
+test("mixed whole-second and sub-second ISO timestamps sort chronologically", () => {
+  const earlier = { ...entry("earlier"), created: "2026-01-01T00:00:00Z" };
+  const later = { ...entry("later"), created: "2026-01-01T00:00:00.500Z" };
+  expect(groupHistory([earlier, later]).map(group => group.entry.id)).toEqual(["later", "earlier"]);
+});

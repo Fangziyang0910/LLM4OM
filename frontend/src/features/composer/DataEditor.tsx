@@ -37,6 +37,7 @@ export function DataEditor({ name, content, onSave, onClose }: {
     const next = rows!.map(cells => [...cells]);
     while (next[row].length <= column) next[row].push("");
     next[row][column] = value;
+    setError(null);
     setText(toCsv(next, delimiter));
   };
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
@@ -69,6 +70,7 @@ export function DataEditor({ name, content, onSave, onClose }: {
               </TableBody></Table>
             <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => {
+                setError(null);
                 setText(toCsv([...rows, Array<string>(columns).fill("")], delimiter));
                 setPage(Math.floor((rows.length - 1) / PAGE));
               }}><Plus />{t("添加数据行")}</Button>
@@ -80,7 +82,7 @@ export function DataEditor({ name, content, onSave, onClose }: {
         </TabsContent>
         <TabsContent value="text" className="mt-0 flex min-h-0 flex-col data-[state=inactive]:hidden">
           {columns > 50 ? <p className="mb-2 text-xs text-muted-foreground">{t("列数较多，请在原文中编辑；数据会完整保留。")}</p> : null}
-          <Textarea aria-label={t("数据文件原文")} value={text} disabled={busy} onChange={event => setText(event.target.value)}
+          <Textarea aria-label={t("数据文件原文")} value={text} disabled={busy} onChange={event => { setError(null); setText(event.target.value); }}
             className="h-[50dvh] min-h-0 flex-1 field-sizing-fixed resize-none font-mono text-xs" />
         </TabsContent>
       </Tabs>

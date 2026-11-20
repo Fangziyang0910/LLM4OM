@@ -31,7 +31,13 @@ export function outcome(active: boolean, status: string | undefined, failure: un
 
 /** An error's message; for an SDK error ("HTTP 429: {\"detail\": ...}"), the server's detail alone. */
 export function errorText(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message
+    : typeof error === "object" && error !== null
+      ? ("message" in error && typeof error.message === "string" ? error.message
+        : "detail" in error && typeof error.detail === "string" ? error.detail
+        : "error" in error && typeof error.error === "string" ? error.error
+        : JSON.stringify(error))
+      : String(error);
   const body = /^HTTP \d+: (\{.*\})$/s.exec(message)?.[1];
   try {
     const detail = body ? JSON.parse(body).detail : undefined;

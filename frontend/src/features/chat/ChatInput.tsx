@@ -20,7 +20,8 @@ export function ChatInput({ value, onChange, disabled, loading, sendingDisabled 
   const field = useRef<HTMLTextAreaElement>(null);
   const responding = useRef(loading);
   const preset = presets.find(item => item.id === presetId);
-  const thinkingOn = thinking ?? (preset?.extra_body.thinking as { type?: string } | undefined)?.type !== "disabled";
+  const thinkingType = (preset?.extra_body.thinking as { type?: string } | undefined)?.type;
+  const thinkingOn = thinking ?? (thinkingType === "enabled" || (thinkingType !== "disabled" && /reasoner/i.test(preset?.model ?? "")));
   useImperativeHandle(inputRef, () => field.current!, []);
   useEffect(() => {
     if (responding.current && !loading && matchMedia("(pointer: fine)").matches && document.activeElement === document.body)

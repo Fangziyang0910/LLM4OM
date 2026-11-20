@@ -61,3 +61,15 @@ test.each(["```python\n%s\n```", "~~~~\n%s\n~~~~~", "    %s", "``%s``"])(
     expect(container.querySelectorAll(".katex-mathml")).toHaveLength(1);
   },
 );
+
+test("prices adjacent to Chinese text and math, escaped dollars in math, and inline table math all render cleanly", () => {
+  const { container } = render(<Markdown text={String.raw`单价$4，变量$x_A$，折扣为$\$10 + x$。
+
+| 项 | 公式 |
+| --- | --- |
+| 目标 | $$3x_A + 2x_B$$ |`} />);
+  expect(container.textContent).toContain("单价$4，变量");
+  expect(container.querySelector("table")).toBeTruthy();
+  expect(container.querySelectorAll(".katex-mathml")).toHaveLength(3);
+  expect(container.querySelector(".katex-error")).toBeNull();
+});

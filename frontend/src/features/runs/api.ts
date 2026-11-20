@@ -30,11 +30,18 @@ export async function getThreadKind(threadId: string): Promise<string | undefine
   return thread.metadata?.kind as string | undefined;
 }
 
+function titleFromDescription(description: string, fallback: string): string {
+  const line = description.split(/\r?\n/)
+    .map(item => item.trim().replace(/^#{1,6}(?:\s+|$)/, "").trim())
+    .find(Boolean);
+  return (line || fallback).slice(0, 120);
+}
+
 /** Create a thread for the draft and start its run in the background; returns the thread id. */
 export async function startRun(draft: Draft, preset: Preset | undefined, group: string | null = null,
     revision?: { instruction: string; source: SourceRun; name?: string }): Promise<string> {
   if (draft.preset && !preset) throw new Error(t("原预设已删除，请重新选择预设模型。"));
-  const title = draft.description.trim().split("\n")[0].replace(/^#{1,6}\s+/, "").slice(0, 120);
+  const title = titleFromDescription(draft.description, t("未命名方案"));
   const meta: RunMeta = { title: revision ? `${title} · ${revision.name || revision.instruction.slice(0, 60)}` : title,
     method: draft.method, language: draft.language, preset: preset?.id ?? null,
     ...(draft.solver ? { solver: draft.solver } : {}),
@@ -97,7 +104,7 @@ export async function startRevision(threadId: string, instruction: string, prese
 export async function createRequirements(draft: RequirementsDraft, preset: Preset | undefined, origin?: string): Promise<string> {
   const client = await sdk();
   const metadata: RequirementsMeta = { kind: "requirements",
-    title: draft.description.trim().split("\n")[0].replace(/^#{1,6}\s+/, "").slice(0, 120) || t("新需求对话"),
+    title: titleFromDescription(draft.description, t("新需求对话")),
     preset: preset?.id ?? null, provider: preset?.provider ?? null, model: preset?.name || preset?.model || null,
     ...(origin ? { origin } : {}) };
   const thread = await client.threads.create({ graphId: "requirements", metadata,
@@ -183,16 +190,23 @@ export async function history(metadata?: Record<string, unknown>, offset = 0): P
     extract: { objective: "values.solve.objective", solved: "values.solve.status", failure: "values.failure", usage: "values.usage",
       elapsed: "values.timing.elapsed", finished_at: "values.timing.finished_at", spec: "values.spec", actual_solver: "values.solve.solver",
       last_message_type: "values.messages[-1].type", last_message_tools: "values.messages[-1].tool_calls" } });
-  const entries = await Promise.all(threads.filter(thread => thread.metadata?.title).map(async thread => {
+  const entries = (await Promise.all(threads.filter(thread => thread.metadata?.title).map(async thread => {
     const extracted = (thread as unknown as { extracted?: Record<string, unknown> }).extracted ?? {};
     const conversation = ["requirements", "solution_chat", "optimization"].includes(String(thread.metadata?.kind));
     // Cancellation can leave the thread idle. Only its run distinguishes a stopped turn from a completed one.
     // Finished replies and completed modeling runs already have their outcome in the extracted state.
     const unfinished = conversation ? extracted.last_message_type !== "ai"
       || (Array.isArray(extracted.last_message_tools) && extracted.last_message_tools.length > 0) : !extracted.solved || !extracted.finished_at;
-    const latest = thread.status === "busy" || (thread.status === "idle" && unfinished)
-      ? (await client.runs.list(thread.thread_id, { limit: 1, select: ["status"] }))[0] : undefined;
-    const status = latest?.status ?? (thread.status === "idle" ? "success" : thread.status);
+    let latest;
+    if (thread.status === "busy" || (thread.status === "idle" && unfinished)) {
+      try {
+        latest = (await client.runs.list(thread.thread_id, { limit: 1, select: ["status"] }))[0];
+      } catch (error) {
+        if (error instanceof Error && "status" in error && error.status === 404) return null;
+        throw error;
+      }
+    }
+    const status = latest?.status ?? (thread.status === "idle" ? (conversation || !unfinished ? "success" : "interrupted") : thread.status);
     const state = outcome(latest ? status === "running" : thread.status === "busy", status, extracted.failure,
       extracted.solved as string | undefined);
     const spec = extracted.spec as RunSpec | undefined;
@@ -203,6 +217,6 @@ export async function history(metadata?: Record<string, unknown>, offset = 0): P
       objective: typeof extracted.objective === "number" ? extracted.objective : null,
       elapsed: extracted.finished_at && typeof extracted.elapsed === "number" ? extracted.elapsed : null,
       failure: typeof extracted.failure === "string" ? extracted.failure : null, usage: (extracted.usage as Usage | undefined) ?? null };
-  }));
+  }))).filter((entry): entry is Entry => entry !== null);
   return { entries, nextOffset: threads.length === PAGE_SIZE ? offset + PAGE_SIZE : undefined };
 }

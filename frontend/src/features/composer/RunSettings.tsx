@@ -87,9 +87,15 @@ export function useRunLauncher({
     .map(chosen => ({ method: item.id, preset: chosen })));
 
   useEffect(() => {
-    if (method.id !== draft.method || language.id !== draft.language)
-      set({ method: method.id, language: language.id, solver: language.id !== draft.language ? undefined : draft.solver });
-  }, [method.id, language.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (method.id !== draft.method || language.id !== draft.language) {
+      setDraft(current => ({
+        ...current,
+        method: method.id,
+        language: language.id,
+        solver: language.id !== current.language ? undefined : current.solver,
+      }));
+    }
+  }, [method.id, language.id, draft.method, draft.language, setDraft]);
   useEffect(() => {
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* storage may be unavailable or full */ }
   }, [draft]);
@@ -151,13 +157,13 @@ export function useRunLauncher({
 
   const choiceClass = "relative flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-sm font-normal transition-all duration-150 hover:bg-accent/50 has-focus-visible:border-ring has-focus-visible:ring-2 has-focus-visible:ring-ring/50 sm:min-h-9 sm:py-1.5";
   const methodChoices = options.methods.map(item => {
-    const blocked = unsupported(item, language.id);
+    const blocked = comparing && unsupported(item, language.id);
     const selected = comparing ? !blocked && !!draft.methods?.includes(item.id) : item.id === method.id;
     const id = `${comparing ? "compare" : "method"}-${item.id}`;
     return <Label key={item.id} htmlFor={id} title={blocked ? t("{method}：当前策略暂不支持所选求解引擎", { method: item.name }) : t(item.description)}
       className={cn(choiceClass, selected && "border-primary/50 bg-primary/8 shadow-2xs hover:bg-primary/10", blocked && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
       {comparing ? <Checkbox id={id} checked={selected} disabled={blocked} onCheckedChange={on => toggle("methods", item.id, on === true)} />
-        : <RadioGroupItem id={id} value={item.id} disabled={blocked} />}
+        : <RadioGroupItem id={id} value={item.id} />}
       <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
       {item.id === "direct" && !comparing ? <Badge variant="secondary" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-primary">{t("默认")}</Badge>
         : item.linear_only ? <Badge variant="outline" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-muted-foreground">{t("线性/整数")}</Badge> : null}
@@ -208,7 +214,7 @@ export function useRunLauncher({
                 : <RadioGroup ref={methodList} value={method.id} onValueChange={value => set({ method: value })} aria-label={t("建模方法")}
                   aria-describedby="method-description" className={methodListClass}>{methodChoices}</RadioGroup>}
               <p id="method-description" title={comparing ? undefined : t(method.description)} className="mt-2.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                {t(comparing ? "开启对比后，系统会并行运行所选策略并自动比对目标结果是否一致。" : method.description)}</p>
+                {comparing ? t("开启对比后，系统会并行运行所选策略并自动比对目标结果是否一致。") : t(method.description)}</p>
             </section>
 
             <section aria-labelledby="presets-label" className="min-w-0 px-5 py-4">
@@ -217,7 +223,7 @@ export function useRunLauncher({
                 <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => { setSettingsOpen(false); openPresets(); }}>{t("管理模型")}</Button>
               </div>
               {!preset && presetsStatus !== "ready" ? <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-                {presetsStatus === "loading" ? <Spinner /> : null}{t(presetsStatus === "loading" ? "正在加载模型列表……" : "模型列表暂不可用，请重试加载。")}
+                {presetsStatus === "loading" ? <Spinner /> : null}{presetsStatus === "loading" ? t("正在加载模型列表……") : t("模型列表暂不可用，请重试加载。")}
               </p> : !preset ? <Alert>
                 <AlertDescription className="flex flex-col items-start gap-2">{t("尚未配置可用的 AI 模型。")}
                   <Button size="sm" onClick={() => { setSettingsOpen(false); openPresets(); }}>{t("去添加模型")}</Button></AlertDescription>
@@ -264,7 +270,9 @@ export function useRunLauncher({
                 <Label htmlFor="solver-backend" className="text-xs text-muted-foreground">{t("数值计算器")}</Label>
                 <Select value={backend} onValueChange={value => set({ solver: value })}>
                   <SelectTrigger id="solver-backend" aria-label={t("求解后端")} className="w-full rounded-xl"><SelectValue /></SelectTrigger>
-                  <SelectContent>{(backends ?? [{ id: backend, available: true, detail: "" }]).map(item =>
+                  <SelectContent>{(backends
+                    ? (backends.some(item => item.id === backend) ? backends : [{ id: backend, available: false, detail: "" }, ...backends])
+                    : [{ id: backend, available: true, detail: "" }]).map(item =>
                     <SelectItem key={item.id} value={item.id} disabled={!item.available} title={item.detail}>
                       {item.id === "AUTO" ? t("自动匹配最优计算器") : item.id}{!item.available ? ` · ${t("当前环境未安装")}` : ""}
                     </SelectItem>)}</SelectContent>

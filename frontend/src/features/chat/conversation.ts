@@ -134,7 +134,12 @@ export function useConversation<State extends ConversationState, Bag extends Bag
     onCustomEvent: options.onCustomEvent,
   }) as unknown as UseStream<State, Bag>;
   const join = useRef(stream.joinStream);
-  useEffect(() => { join.current = stream.joinStream; });
+  const switchThreadRef = useRef((stream as { switchThread?: (threadId: string | null) => void }).switchThread);
+  useEffect(() => {
+    join.current = stream.joinStream;
+    switchThreadRef.current = (stream as { switchThread?: (threadId: string | null) => void }).switchThread;
+  });
+  useEffect(() => () => { switchThreadRef.current?.(null); }, []);
 
   // The thread query is also the confirmation that survives a reload. A new draft is never cleared here: the
   // draft module compares the acknowledged message ID with the text it is still holding. Do not confirm from
@@ -195,6 +200,7 @@ export function useConversation<State extends ConversationState, Bag extends Bag
           streamMode: ["messages", "custom", "values", "checkpoints"], streamSubgraphs: true, streamResumable: true,
         });
         runId.current = run.run_id;
+        try { sessionStorage.setItem(`llm4om-agent-run-${created}`, run.run_id); } catch { /* storage may be unavailable */ }
       } catch (error) { toast.error(errorText(error)); }
       // The thread and its message remain usable even if the run could not be started.
       return created;
@@ -210,8 +216,17 @@ export function useConversation<State extends ConversationState, Bag extends Bag
     setStopping(true);
     try {
       // Waiting for the server matters: only a confirmed cancellation may be followed by the local stop.
-      if (runId.current) {
-        await client.runs.cancel(active, runId.current, true);
+      let activeRunId = runId.current;
+      if (!activeRunId) {
+        try { activeRunId = sessionStorage.getItem(`lg:stream:${active}`); } catch { /* storage may be unavailable */ }
+      }
+      if (!activeRunId && typeof client.runs.list === "function") {
+        const runs = await client.runs.list(active, { limit: 1 });
+        const latest = runs[0];
+        if (latest && (latest.status === "pending" || latest.status === "running")) activeRunId = latest.run_id;
+      }
+      if (activeRunId) {
+        await client.runs.cancel(active, activeRunId, true);
         // The server run is stopped now; a later retry only needs to finish saving and stopping locally.
         runId.current = null;
       }

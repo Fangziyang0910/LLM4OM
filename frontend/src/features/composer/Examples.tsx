@@ -71,7 +71,7 @@ export function Examples({ open, onClose, datasets, onUse }: {
                   {t("带入此案例")}<ArrowRight /></Button>
               </div>
               <p className={cn("text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap", expanded !== item.id && "line-clamp-4")}>{item.description}</p>
-              {item.description.length > 280 ? <Button variant="link" size="xs" className="self-start p-0"
+              {item.description.length > 280 || item.description.split(/\r?\n/).length > 4 ? <Button variant="link" size="xs" className="self-start p-0"
                 onClick={() => setExpanded(expanded === item.id ? null : item.id)}>{expanded === item.id ? t("收起") : t("展开全文")}</Button> : null}
             </li>)}</ol>
           </>}

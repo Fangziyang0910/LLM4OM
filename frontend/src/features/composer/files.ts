@@ -41,9 +41,15 @@ export async function readDataFiles(list: FileList | null, existing: Record<stri
     try {
       if (/\.xlsx$/i.test(file.name)) {
         const sheets = await excelToCsv(file);
-        const count = Object.keys(sheets).length;
-        if (!count) { toast.error(t("{name} 没有可导入的数据，请先在工作表中填写数据。", { name: file.name })); continue; }
-        add(sheets);
+        if (!Object.keys(sheets).length) { toast.error(t("{name} 没有可导入的数据，请先在工作表中填写数据。", { name: file.name })); continue; }
+        const valid: Record<string, string> = {};
+        for (const [name, content] of Object.entries(sheets)) {
+          if (new Blob([content]).size > 2_000_000) toast.error(t("{name} 超过 2 MB，没有添加。", { name }));
+          else valid[name] = content;
+        }
+        const count = Object.keys(valid).length;
+        if (!count) continue;
+        add(valid);
         toast.success(t("{name} 已转换为 {count} 个 CSV 文件。", { name: file.name, count }));
       } else add({ [file.name]: await file.text() });
     } catch (error) { toast.error(t("无法读取 {name}：{error}", { name: file.name, error: errorText(error) })); }

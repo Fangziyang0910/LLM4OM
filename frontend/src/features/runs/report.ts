@@ -10,6 +10,13 @@ const fence = (text: string, lang = "") => {
   const ticks = "`".repeat(Math.max(3, ...[...text.matchAll(/`+/g)].map(match => match[0].length + 1)));
   return `${ticks}${lang}\n${text.trimEnd()}\n${ticks}`;
 };
+const inlineCode = (text: string, inTable = false) => {
+  const cleaned = text.replace(/\r?\n/g, " ");
+  const escaped = inTable ? cleaned.replace(/\|/g, "\\|") : cleaned;
+  const ticks = "`".repeat(Math.max(1, ...[...escaped.matchAll(/`+/g)].map(match => match[0].length + 1)));
+  const pad = escaped.startsWith("`") || escaped.endsWith("`") ? " " : "";
+  return `${ticks}${pad}${escaped}${pad}${ticks}`;
+};
 
 /** One run as a Markdown report: settings, problem and data, formulation, code, solution and counts. */
 export function report(meta: RunMeta, values: RunValues, options: Options, link?: string): string {
@@ -34,7 +41,7 @@ export function report(meta: RunMeta, values: RunValues, options: Options, link?
   }
   for (const [name, content] of Object.entries(values.data ?? {})) {
     const shown = content.length > MAX_DATA ? content.slice(0, MAX_DATA) + `\n… (${t("共 {count} 字符", { count: content.length })})` : content;
-    parts.push(`### ${t("数据文件")} \`${name}\`\n\n${fence(shown)}`);
+    parts.push(`### ${t("数据文件")} ${inlineCode(name)}\n\n${fence(shown)}`);
   }
   if (values.failure) parts.push(`## ${t("失败原因")}\n\n${values.failure}`);
   if (values.formulation) parts.push(`## ${t("数学模型")}\n\n${values.formulation.trim()}`);
@@ -43,29 +50,34 @@ export function report(meta: RunMeta, values: RunValues, options: Options, link?
     if (values.infeasibility) {
       const explanation = values.infeasibility;
       parts.push([`## ${t("为什么无解")}`, explanation.summary,
-        ...explanation.conflicts.map(item => `${item.explanation}\n\n${item.constraints.map(constraint => `- \`${constraint}\``).join("\n")}`),
+        ...explanation.conflicts.map(item => `${item.explanation}\n\n${item.constraints.map(constraint => `- ${inlineCode(constraint)}`).join("\n")}`),
         ...(explanation.adjustments.length ? [`### ${t("可以尝试的调整")}`, t("建议尚未验证。选择后可编辑调整要求，再重新建模验证。"),
           ...explanation.adjustments.map(item => `- **${item.title}**${COLON}${item.instruction}`)] : []),
       ].join("\n\n"));
     }
     if (values.explanation) {
       const explanation = values.explanation;
-      const decisions = explanation.decisions.map(item => `- ${item.label}${COLON}${solve.variables[item.variable]} ${item.unit}`);
-      const objective = solve.objective == null ? "" : `${explanation.objective_label}${COLON}${solve.objective} ${explanation.objective_unit}`;
+      const decisions = explanation.decisions
+        .filter(item => Object.hasOwn(solve.variables, item.variable))
+        .map(item => {
+          const raw = solve.variables[item.variable];
+          return `- ${item.label}${COLON}${raw == null ? "—" : raw}${item.unit ? ` ${item.unit}` : ""}`;
+        });
+      const objective = solve.objective == null ? "" : `${explanation.objective_label}${COLON}${solve.objective}${explanation.objective_unit ? ` ${explanation.objective_unit}` : ""}`;
       parts.push([`## ${t("方案解读")}`, explanation.summary, objective, decisions.join("\n"),
         explanation.notes.map(note => `- ${note}`).join("\n")].filter(Boolean).join("\n\n"));
     }
     const lines = [`- ${t("求解状态")}${COLON}${(STATUS[solve.status] ?? solve.status)}`];
     if (solve.objective != null) lines.push(`- ${t("目标值")}${COLON}${solve.objective}`);
-    const nonzero = Object.entries(solve.variables).filter(([, value]) => value !== 0);
+    const nonzero = Object.entries(solve.variables).filter(([, value]) => value != null && value !== 0);
     let text = `## ${t("求解结果")}\n\n${lines.join("\n")}`;
     if (nonzero.length) {
       text += `\n\n${t("非零变量（{count} / {total}）", { count: nonzero.length, total: Object.keys(solve.variables).length })}${COLON}\n\n`
-        + `| ${t("变量")} | ${t("取值")} |\n|---|---:|\n` + nonzero.slice(0, 500).map(([name, value]) => `| \`${name}\` | ${value} |`).join("\n");
+        + `| ${t("变量")} | ${t("取值")} |\n|---|---:|\n` + nonzero.slice(0, 500).map(([name, value]) => `| ${inlineCode(name, true)} | ${value} |`).join("\n");
       if (nonzero.length > 500) text += `\n\n${t("报告只列出前 500 个非零变量；完整结果可下载 CSV。")}`;
     }
     if (solve.diagnosis?.items.length) {
-      text += `\n\n${t("冲突的约束（{tool}）", { tool: solve.diagnosis.tool })}${COLON}\n\n` + solve.diagnosis.items.map(item => `- \`${item}\``).join("\n");
+      text += `\n\n${t("冲突的约束（{tool}）", { tool: solve.diagnosis.tool })}${COLON}\n\n` + solve.diagnosis.items.map(item => `- ${inlineCode(item)}`).join("\n");
     }
     if (solve.error) text += `\n\n${fence(solve.error)}`;
     parts.push(text);

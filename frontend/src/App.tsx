@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Menu, Plus, RefreshCw, ServerCrash } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/api";
-import { createRequirements, createSolutionChat, deleteRun, getThreadKind, history, startComparison, startRevision, startRun, startScenarios } from "@/features/runs/api";
+import { clearChatDraft, createRequirements, createSolutionChat, deleteRun, getThreadKind, history, startComparison, startRevision, startRun, startScenarios } from "@/features/runs/api";
 import { errorText } from "@/format";
 import { Composer, initialDraft } from "@/features/composer/Composer";
 import { Examples } from "@/features/composer/Examples";
@@ -53,8 +53,11 @@ export default function App() {
   const entries = [...new Map((historyQuery.data?.pages.flatMap(page => page.entries) ?? []).map(entry => [entry.id, entry])).values()];
   const options = optionsQuery.data ?? null;
   const [route, setRoute] = useState<Route>(routeFromUrl);
+  const routeRef = useRef(route);
+  useEffect(() => { routeRef.current = route; });
   const [draft, setDraft] = useState<Draft>(initialDraft);
-  const [agentDraft, setAgentDraft] = useState({ description: "", data: {} as Record<string, string> });
+  const agentDraftSeq = useRef(0);
+  const [agentDraft, setAgentDraft] = useState({ id: 0, description: "", data: {} as Record<string, string> });
   const [examplesOpen, setExamplesOpen] = useState(false);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -72,7 +75,13 @@ export default function App() {
     predicate: query => ["history", "conversation", "compare"].includes(String(query.queryKey[0])),
   }), [queryClient]);
   const newProblem = () => { setDraft(current => ({ ...current, origin: undefined })); go({ name: "new" }); };
-  const newAgent = () => { setAgentDraft({ description: "", data: {} }); go({ name: "agent-new" }); };
+  const openAgent = () => {
+    if (route.name === "agent") {
+      clearChatDraft("optimization-new");
+      setAgentDraft({ id: ++agentDraftSeq.current, description: "", data: {} });
+    }
+    go({ name: "agent-new" });
+  };
 
   useEffect(() => {
     const onPop = () => setRoute(routeFromUrl());
@@ -98,7 +107,8 @@ export default function App() {
       : t("“{title}”的问题、模型和计算结果都会被删除，无法恢复。", { title: entry.meta.title }),
     run: async () => {
       await deleteRun(entry.id);
-      if ("id" in route && route.id === entry.id) go({ name: entry.meta.kind === "optimization" ? "agent-new" : "new" });
+      const activeRoute = routeRef.current;
+      if ("id" in activeRoute && activeRoute.id === entry.id) go({ name: entry.meta.kind === "optimization" ? "agent-new" : "new" });
       await refresh();
       toast.success(t("已删除。"));
     },
@@ -139,7 +149,7 @@ export default function App() {
 
   const current = "id" in route ? route.id : null;
   const activeMode = route.name === "agent-new" || route.name === "agent" ? "agent" : "quick";
-  const sidebar = <Sidebar entries={entries} current={current} activeMode={activeMode} options={options} presets={presets} onNew={newProblem} onAgent={newAgent}
+  const sidebar = <Sidebar entries={entries} current={current} activeMode={activeMode} options={options} presets={presets} onNew={newProblem} onAgent={openAgent}
     query={search} onQuery={setSearch}
     hasMore={historyQuery.hasNextPage} loading={historyQuery.isFetching} error={historyQuery.error ? errorText(historyQuery.error) : null}
     onLoadMore={() => void historyQuery.fetchNextPage()} onRetry={() => void historyQuery.refetch()}
@@ -178,9 +188,10 @@ export default function App() {
         </Empty>
           : !options ? <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在准备环境……")}</div>
           : route.name === "agent-new" || route.name === "agent"
-            ? <PageErrorBoundary key={route.name === "agent" ? route.id : `new-${agentDraft.description}`}><Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
-              <Agent key={route.name === "agent" ? route.id : `new-${agentDraft.description}`} threadId={route.name === "agent" ? route.id : undefined}
-                options={options} presets={presets} initial={agentDraft} onThread={id => go({ name: "agent", id })}
+            ? <PageErrorBoundary key={route.name === "agent" ? route.id : `new-${agentDraft.id}`}><Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
+              <Agent key={route.name === "agent" ? route.id : `new-${agentDraft.id}`} threadId={route.name === "agent" ? route.id : undefined}
+                options={options} presets={presets} initial={agentDraft}
+                onThread={id => { setAgentDraft({ id: ++agentDraftSeq.current, description: "", data: {} }); go({ name: "agent", id }); }}
                 openPresets={() => setPresetsOpen(true)} onExamples={() => setExamplesOpen(true)} onManual={() => go({ name: "new" })} onMenu={() => setMenuOpen(true)}
                 onFinished={() => void refresh()} onOpen={openRun} onCompare={id => go({ name: "compare", id })} renderRun={source => renderRun(source, false, true)} />
             </Suspense></PageErrorBoundary>
@@ -207,8 +218,11 @@ export default function App() {
     {options ? <>
       <Examples open={examplesOpen} onClose={() => setExamplesOpen(false)} datasets={options.datasets}
         onUse={description => {
-          if (route.name === "agent-new" || route.name === "agent") { setAgentDraft({ description, data: {} }); go({ name: "agent-new" }); }
-          else { setDraft({ ...draft, description, data: {}, origin: undefined }); go({ name: "new" }); }
+          if (route.name === "agent-new" || route.name === "agent") {
+            clearChatDraft("optimization-new");
+            setAgentDraft({ id: ++agentDraftSeq.current, description, data: {} });
+            go({ name: "agent-new" });
+          } else { setDraft({ ...draft, description, data: {}, origin: undefined }); go({ name: "new" }); }
           setExamplesOpen(false);
         }} />
       {presetsOpen ? <PresetsDialog onClose={() => setPresetsOpen(false)} presets={presets} dailyTokens={presetsQuery.data?.daily_tokens ?? 0}
@@ -221,14 +235,14 @@ export default function App() {
 
 function ConfirmDialog({ confirm, onClose }: { confirm: Confirm | null; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
-  return <Dialog open={!!confirm} onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className="sm:max-w-md">
+  return <Dialog open={!!confirm} onOpenChange={open => { if (!open && !busy) onClose(); }}>
+    <DialogContent showCloseButton={!busy} className="sm:max-w-md">
       <DialogHeader>
         <DialogTitle>{confirm?.title}</DialogTitle>
         <DialogDescription>{confirm?.text}</DialogDescription>
       </DialogHeader>
       <DialogFooter>
-        <Button variant="outline" onClick={onClose}>{t("取消")}</Button>
+        <Button variant="outline" disabled={busy} onClick={onClose}>{t("取消")}</Button>
         <Button variant="destructive" disabled={busy} onClick={async () => {
           setBusy(true);
           try { await confirm?.run(); onClose(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }

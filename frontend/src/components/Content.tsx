@@ -23,10 +23,24 @@ hljs.registerLanguage("json", json);
 function normalizeMath(text: string, singleDollarMath: boolean): string {
   if (!/\\[[(]|\$/.test(text)) return text;
   const replace = (part: string) => part.replace(
-    /\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]|\\\(([\s\S]*?)\\\)|(?<![\\$])\$(?![\s$])([^\n$]*?\S)\$(?![\d$])/g,
-    (match, dollars, brackets, inline, single) => dollars !== undefined || brackets !== undefined
-      ? `\n\n$$\n${(dollars ?? brackets).trim()}\n$$\n\n`
-      : inline !== undefined ? `$$${inline}$$` : singleDollarMath ? `$$${single}$$` : match);
+    /\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]|\\\(([\s\S]*?)\\\)|(?<![\\$\w])\$(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?=$|[，。；;：:!?！？）)\]}]|(?:\.(?!\d))|(?:,(?!\d))|\s+(?![+\-*/=<>\\^_|]|\((?!\$)))|(?<![\\$])\$(?![\s$])((?:\\\$|[^\n$])*?(?:\\\$|[^\s$]))\$(?![\d$])/g,
+    (match, dollars, brackets, inline, single, offset: number, source: string) => {
+      if (dollars !== undefined || brackets !== undefined) {
+        const body = (dollars ?? brackets).trim();
+        if (!match.includes("\n")) {
+          const lineStart = source.lastIndexOf("\n", offset - 1) + 1;
+          const nextBreak = source.indexOf("\n", offset + match.length);
+          const lineEnd = nextBreak === -1 ? source.length : nextBreak;
+          if (source.slice(lineStart, offset).includes("|") && source.slice(offset + match.length, lineEnd).includes("|")) {
+            return `$$${body}$$`;
+          }
+        }
+        return `\n\n$$\n${body}\n$$\n\n`;
+      }
+      if (inline !== undefined) return `$$${inline}$$`;
+      if (single !== undefined) return singleDollarMath ? `$$${single}$$` : match;
+      return match;
+    });
   const parts: string[] = [];
   let offset = 0;
   function visit(node: Nodes) {
@@ -51,8 +65,9 @@ export async function copyText(text: string): Promise<void> {
   const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange()) : [];
   const area = Object.assign(document.createElement("textarea"), { value: text, readOnly: true });
   area.style.cssText = "position:fixed;opacity:0";
+  const container = (active instanceof Element ? active.closest('[role="dialog"]') : null) ?? document.body;
   try {
-    document.body.append(area);
+    container.append(area);
     area.select();
     if (!document.execCommand("copy")) throw new Error("copy failed");
   } finally {

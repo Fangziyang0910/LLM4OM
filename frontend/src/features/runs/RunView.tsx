@@ -81,11 +81,11 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const language = options.languages.find(item => item.id === meta.language);
   const provider = options.providers.find(item => item.id === meta.provider);
   const solve = values.solve ?? null;
-  const recordedStatus = run?.status ?? (values.timing?.finished_at ? "success" : undefined);
+  const recordedStatus = run?.status ?? (values.timing?.finished_at || values.solve || values.failure ? "success" : source ? "interrupted" : undefined);
   const state = outcome(active, recordedStatus, values.failure, solve?.status);
   const finished = !active && recordedStatus === "success";
-  const hasFormulation = !!values.formulation || steps.some(step => step.formulation);
-  const hasCode = !!values.code || steps.some(step => step.code);
+  const hasFormulation = !!values.formulation || steps.some(step => step.type === "artifact" && !!step.formulation);
+  const hasCode = !!values.code || steps.some(step => step.type === "artifact" && !!step.code);
   const tab: Tab = chosen ?? (active ? (hasCode ? "code" : hasFormulation ? "formulation" : "problem")
     : meta.parent && values.revision ? "comparison" : solve ? "solution" : hasFormulation ? "formulation" : hasCode ? "code" : "problem");
   const elapsed = values.timing ? active ? Math.max(0, now / 1000 - values.timing.started_at) : values.timing.elapsed : null;
@@ -179,7 +179,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <Button variant={wide && !assistantOpen && withProcess ? "secondary" : "ghost"} size="sm" className="rounded-lg"
+        <Button variant={(wide && !assistantOpen ? withProcess : view === "process") ? "secondary" : "ghost"} size="sm" className="rounded-lg"
           aria-expanded={wide && !assistantOpen ? withProcess : view === "process"}
           onClick={() => { if (wide && !assistantOpen) setProcessVisible(!withProcess); else setView(view === "process" ? "outputs" : "process"); }}>
           <Layers />{t("求解步骤")}</Button>
@@ -226,7 +226,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
           <TabsTrigger value="process" className="rounded-lg">{t("求解步骤")}{active ? <span className="size-1.5 animate-pulse rounded-full bg-primary" /> : null}</TabsTrigger>
         </TabsList>
       </Tabs> : null}
-      <Pane>{view === "outputs" ? outputs : timeline}</Pane>
+      <Pane>{(wide && !assistantOpen) || view === "outputs" ? outputs : timeline}</Pane>
     </div>}
     {noting ? <NoteDialog meta={meta} onClose={() => setNoting(false)} onSave={async change => {
       await updateMeta(threadId, change);
@@ -251,8 +251,8 @@ function NoteDialog({ meta, onClose, onSave }: { meta: RunMeta; onClose: () => v
     try { await onSave({ note: note.trim(), tags: parseTags(tags) }); toast.success(t("已保存备注。")); onClose(); }
     catch (reason) { toast.error(errorText(reason)); setBusy(false); }
   };
-  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className="flex min-h-0 flex-col rounded-2xl sm:max-w-lg">
+  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
+    <DialogContent showCloseButton={!busy} className="flex min-h-0 flex-col rounded-2xl sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>{t("备注与标签")}</DialogTitle>
         <DialogDescription>{t("记录当前方案的业务结论或复盘要点，方便后续检索与对比。")}</DialogDescription>
@@ -260,17 +260,17 @@ function NoteDialog({ meta, onClose, onSave }: { meta: RunMeta; onClose: () => v
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="run-note" className="text-xs font-medium">{t("备注")}</Label>
-          <Textarea id="run-note" value={note} onChange={event => setNote(event.target.value.slice(0, 2000))} className="h-32 min-h-20 field-sizing-fixed resize-none"
+          <Textarea id="run-note" value={note} disabled={busy} onChange={event => setNote(event.target.value.slice(0, 2000))} className="h-32 min-h-20 field-sizing-fixed resize-none"
             placeholder={t("例如：已确认满足下周交期要求，可作为基准方案")} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="run-tags" className="text-xs font-medium">{t("标签")}</Label>
-          <Input id="run-tags" value={tags} onChange={event => setTags(event.target.value)} placeholder={t("用逗号或空格分隔，例如：生产排程 已确认")} />
+          <Input id="run-tags" value={tags} disabled={busy} onChange={event => setTags(event.target.value)} placeholder={t("用逗号或空格分隔，例如：生产排程 已确认")} />
           <p className="text-xs text-muted-foreground">{t("左侧搜索框输入 #标签 可快速筛选记录。")}</p>
         </div>
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={onClose}>{t("取消")}</Button>
+        <Button variant="outline" disabled={busy} onClick={onClose}>{t("取消")}</Button>
         <Button disabled={busy} onClick={() => void save()}>{busy ? <Spinner /> : null}{t("保存")}</Button>
       </DialogFooter>
     </DialogContent>
@@ -289,9 +289,21 @@ const PROGRESS_STAGES = [
 ] as const;
 
 function inferStageIndex(steps: Step[], values: RunValues): number {
-  if (values.solve || steps.some(step => step.type === "solve" && !step.running)) return 3;
-  if (steps.some(step => step.type === "solve" && step.running) || values.code || steps.some(step => step.code)) return 2;
-  if (values.formulation || steps.some(step => step.formulation || step.type === "artifact")) return 1;
+  if (values.solve) return 3;
+  let lastSolveIdx = -1;
+  for (let i = steps.length - 1; i >= 0; i--) {
+    if (steps[i].type === "solve") { lastSolveIdx = i; break; }
+  }
+  if (lastSolveIdx !== -1) {
+    const lastSolve = steps[lastSolveIdx];
+    const after = steps.slice(lastSolveIdx + 1);
+    if (lastSolve.running) return 2;
+    if (!lastSolve.failed && lastSolve.status !== "error"
+      && after.some(step => /explain|infeas|解读|解释无解/i.test(step.title))) return 3;
+    return 2;
+  }
+  if (values.code || steps.some(step => step.type === "artifact" && !!step.code)) return 2;
+  if (values.formulation || steps.some(step => step.type === "artifact" && (!!step.formulation || !!step.content))) return 1;
   return 0;
 }
 

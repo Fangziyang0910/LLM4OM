@@ -61,11 +61,18 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
         extraError = t("请填写 JSON 对象，不能是数组、空值或单个值。");
     }
   } catch { extraError = t("不是有效的 JSON。"); }
+  const temperatureValue = form.temperature.trim() === "" ? null : Number(form.temperature.trim());
+  const temperatureError = temperatureValue !== null && (!Number.isFinite(temperatureValue) || temperatureValue < 0)
+    ? t("请填写不小于 0 的数字。") : null;
+  const maxTokensValue = form.max_tokens.trim() === "" ? null : Number(form.max_tokens.trim());
+  const maxTokensError = maxTokensValue !== null && (!Number.isInteger(maxTokensValue) || maxTokensValue < 1)
+    ? t("请填写不小于 1 的整数。") : null;
+  const formInvalid = !!extraError || !!temperatureError || !!maxTokensError;
   const body = () => ({
     name: form.name.trim(), provider: form.provider, model: form.model.trim(), api_key: form.api_key.trim(),
     base_url: form.base_url.trim(),
-    temperature: form.temperature === "" ? null : Number(form.temperature),
-    max_tokens: form.max_tokens === "" ? null : Number(form.max_tokens),
+    temperature: temperatureValue,
+    max_tokens: maxTokensValue,
     extra_body: form.extra_body.trim() ? JSON.parse(form.extra_body) : {},
   });
   const act = async (kind: "add" | "models" | "delete", action: () => Promise<void>) => {
@@ -155,7 +162,7 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
               </CollapsibleContent>
             </Collapsible>
           </> : <form id="preset-form" className="flex flex-col gap-4" onSubmit={event => {
-            event.preventDefault(); if (!busy && !extraError && form.model.trim() && form.api_key.trim()) void add();
+            event.preventDefault(); if (!busy && !formInvalid && form.model.trim() && form.api_key.trim()) void add();
           }}>
             <fieldset disabled={!!busy} className="flex min-w-0 flex-col gap-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -175,7 +182,7 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
               <Field label={t("模型 ID")} htmlFor="model-id">
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Input id="model-id" value={form.model} onChange={set("model")} placeholder={t("例如 deepseek-chat")} />
-                  <Button type="button" variant="outline" disabled={!!busy || !!extraError || !form.api_key.trim()} onClick={() => void listModels()}>
+                  <Button type="button" variant="outline" disabled={!!busy || formInvalid || !form.api_key.trim()} onClick={() => void listModels()}>
                     {busy === "models" ? <Spinner /> : <RefreshCw />}{t("读取可用模型")}</Button>
                 </div>
                 {models ? <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pt-1">
@@ -193,8 +200,8 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
                   {t("高级参数")}<ChevronDown className="ml-auto size-4 text-muted-foreground transition-transform group-data-[state=open]/advanced:rotate-180" /></CollapsibleTrigger>
                 <CollapsibleContent className="flex flex-col gap-4 border-t p-3.5">
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label={t("温度")} htmlFor="temperature"><Input id="temperature" type="number" step="0.1" min="0" value={form.temperature} onChange={set("temperature")} placeholder={t("服务默认")} /></Field>
-                    <Field label={t("最大输出 token")} htmlFor="max-tokens"><Input id="max-tokens" type="number" min="1" value={form.max_tokens} onChange={set("max_tokens")} placeholder={t("服务默认")} /></Field>
+                    <Field label={t("温度")} htmlFor="temperature" error={temperatureError}><Input id="temperature" type="number" step="any" min="0" value={form.temperature} onChange={set("temperature")} placeholder={t("服务默认")} aria-invalid={!!temperatureError} /></Field>
+                    <Field label={t("最大输出 token")} htmlFor="max-tokens" error={maxTokensError}><Input id="max-tokens" type="number" step="1" min="1" value={form.max_tokens} onChange={set("max_tokens")} placeholder={t("服务默认")} aria-invalid={!!maxTokensError} /></Field>
                   </div>
                   <Field label={t("额外请求参数（JSON）")} htmlFor="extra-body" error={extraError}
                     help={t("填写所选服务商支持的请求参数。所有建模方法沿用所选预设的模型和思考配置。")}>
@@ -214,7 +221,7 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
           {busy === "delete" ? <Spinner /> : <Trash2 />}{confirming ? t("确认删除？") : t("删除这个预设")}</Button> : <span />}
         <div className="flex gap-2">
           <Button variant="outline" disabled={!!busy} onClick={onClose}>{t("关闭")}</Button>
-          {!shown ? <Button type="submit" form="preset-form" disabled={!!busy || !!extraError || !form.model.trim() || !form.api_key.trim()}>
+          {!shown ? <Button type="submit" form="preset-form" disabled={!!busy || formInvalid || !form.model.trim() || !form.api_key.trim()}>
             {busy === "add" ? <Spinner /> : <Plus />}{t("添加预设")}</Button> : null}
         </div>
       </DialogFooter>

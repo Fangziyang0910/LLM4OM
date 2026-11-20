@@ -58,3 +58,17 @@ it("compares actual variable values without turning missing values into zero", (
   ]);
   expect(variableChanges({}, { constructor: 0 })).toEqual([{ name: "constructor", before: undefined, after: 0 }]);
 });
+
+it("parses chained and dotted indexed names, rejects malformed brackets, sorts tuples elementwise, and rejects matrix collisions", () => {
+  expect(parseVariable("x[1)", 2).indices).toEqual([]);
+  expect(parseVariable("foo()", 2).indices).toEqual([]);
+  const groups = groupVariables({ "stage[0].flow[A,B]": 5, "x[0][1]": 3, "m[1,10]": 1, "m[11,0]": 2 });
+  const stageGroup = groups.find(g => g.base === "stage[0].flow")!;
+  expect(stageGroup.variables[0].indices).toEqual(["A", "B"]);
+  const xGroup = groups.find(g => g.base === "x")!;
+  expect(xGroup.variables[0].indices).toEqual(["0", "1"]);
+  const mGroup = groups.find(g => g.base === "m")!;
+  expect(mGroup.variables.map(v => v.indices)).toEqual([["1", "10"], ["11", "0"]]);
+  const colliding = groupVariables({ "c[a,b]": 1, "c['a','b']": 2 })[0];
+  expect(asMatrix(colliding)).toBeNull();
+});

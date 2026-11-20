@@ -82,7 +82,7 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
         empty={active ? t("正在编写求解程序，稍后显示在这里…") : t("暂无求解程序。")}
         render={text => <Code text={text} />} /> : null}
       {tab === "problem" ? <Problem values={values} /> : null}
-      {tab === "comparison" && source ? <ScenarioComparison source={source} values={values} /> : null}
+      {tab === "comparison" && source ? <ScenarioComparison source={source} values={values} active={active} /> : null}
     </TabsContent>
   </Tabs>;
 }
@@ -151,7 +151,7 @@ function Problem({ values }: { values: RunValues }) {
 }
 
 function DataFile({ name, content }: { name: string; content: string }) {
-  const table = useMemo(() => parseDelimited(content, /\.tsv$/i.test(name) ? "\t" : ","), [name, content]);
+  const table = useMemo(() => /\.(csv|tsv)$/i.test(name) ? parseDelimited(content, /\.tsv$/i.test(name) ? "\t" : ",") : null, [name, content]);
   return <Card className="gap-3 rounded-2xl border-border/80 py-4 shadow-2xs">
     <CardHeader className="flex items-center gap-2 px-5">
       <FileText className="size-4 shrink-0 text-primary" />

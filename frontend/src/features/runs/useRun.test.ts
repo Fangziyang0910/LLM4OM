@@ -141,3 +141,25 @@ test("an unavailable checkpoint reports failure instead of falling back to the t
   expect(runs.list).not.toHaveBeenCalled();
   unmount();
 });
+
+test("stale progress snapshots do not revert completed streamed steps and SSE error objects format cleanly", async () => {
+  let stepFinished = false;
+  threads.get.mockResolvedValue({ metadata: { title: "run" }, values: {} } as never);
+  threads.getState.mockResolvedValue({ values: {} } as never);
+  runs.list.mockImplementation(async () => [{ run_id: "r1", status: stepFinished ? "interrupted" : "running" }] as never);
+  vi.mocked(client.store.getItem).mockResolvedValue({ value: {
+    steps: [{ id: "s1", type: "llm", title: "direct", content: "", running: true }],
+  } } as never);
+  runs.joinStream.mockImplementation(() => ({
+    [Symbol.asyncIterator]: async function* () {
+      yield { event: "custom", data: { step: { id: "s1", type: "llm", title: "direct", content: "done", running: false } } };
+      yield { event: "error", data: { error: "CancelledError" } };
+      stepFinished = true;
+    },
+  }) as never);
+  const { result, unmount } = renderHook(() => useRun("thread", vi.fn()));
+  await waitFor(() => expect(result.current.run?.status).toBe("interrupted"));
+  expect(result.current.steps[0]).toMatchObject({ id: "s1", running: false, content: "done" });
+  expect(result.current.error).toBeNull();
+  unmount();
+});

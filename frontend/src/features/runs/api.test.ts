@@ -202,4 +202,19 @@ test("a comparison whose first run cannot start fails", async () => {
 test("an SDK error shows the server's detail alone", () => {
   expect(errorText(new Error('HTTP 429: {"detail":"Try again in 60 min."}'))).toBe("Try again in 60 min.");
   expect(errorText(new Error("HTTP 502: Bad Gateway"))).toBe("HTTP 502: Bad Gateway");
+  expect(errorText({ error: "UpstreamFailed" })).toBe("UpstreamFailed");
+});
+
+test("blank Markdown headings still yield a visible title and deleted threads do not fail history()", async () => {
+  await startRun({ ...draft, description: "# \n真实问题描述" }, undefined);
+  expect(threads.create).toHaveBeenCalledWith({ metadata: expect.objectContaining({ title: "真实问题描述" }) });
+
+  threads.search.mockResolvedValueOnce([
+    { thread_id: "gone", created_at: "2026-01-01", updated_at: "2026-01-01", status: "idle", metadata: { title: "deleted" }, extracted: {} },
+    { thread_id: "ok", created_at: "2026-01-01", updated_at: "2026-01-01", status: "idle", metadata: { title: "alive" },
+      extracted: { finished_at: 1, solved: "optimal", objective: 5 } },
+  ] as never);
+  runs.list.mockRejectedValueOnce(Object.assign(new Error("not found"), { status: 404 }));
+  const page = await history();
+  expect(page.entries.map(item => item.id)).toEqual(["ok"]);
 });

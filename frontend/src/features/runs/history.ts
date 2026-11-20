@@ -2,6 +2,13 @@ import { isRunEntry, type Entry } from "./types";
 
 export type HistoryGroup = { entry: Entry; related: Entry[]; created: string };
 
+function compareTime(a: string, b: string): number {
+  const ta = Date.parse(a);
+  const tb = Date.parse(b);
+  if (!Number.isNaN(ta) && !Number.isNaN(tb) && ta !== tb) return ta - tb;
+  return a.localeCompare(b);
+}
+
 /** Group only recorded relationships; equal titles do not establish the same problem. */
 export function groupHistory(entries: Entry[]): HistoryGroup[] {
   const parents = new Map<string, string>();
@@ -27,8 +34,8 @@ export function groupHistory(entries: Entry[]): HistoryGroup[] {
   }
   return [...groups.values()].map(items => {
     const ordered = [...items].sort((a, b) => Number(b.meta.kind === "optimization") - Number(a.meta.kind === "optimization")
-      || Number(isRunEntry(b)) - Number(isRunEntry(a)) || a.created.localeCompare(b.created));
+      || Number(isRunEntry(b)) - Number(isRunEntry(a)) || compareTime(a.created, b.created));
     return { entry: ordered[0], related: items.filter(item => item !== ordered[0]),
-      created: items.reduce((latest, item) => item.created > latest ? item.created : latest, items[0].created) };
-  }).sort((a, b) => b.created.localeCompare(a.created));
+      created: items.reduce((latest, item) => compareTime(item.created, latest) > 0 ? item.created : latest, items[0].created) };
+  }).sort((a, b) => compareTime(b.created, a.created));
 }

@@ -27,3 +27,14 @@ test("pending attachments block every send path while keeping message editing av
   fireEvent.submit(container.querySelector("form")!);
   expect(send).not.toHaveBeenCalled();
 });
+
+test("DeepSeek thinking toggle defaults to off for deepseek-chat and on for deepseek-reasoner", () => {
+  const chatPreset = { id: "p1", source: "saved" as const, provider: "deepseek", model: "deepseek-chat", base_url: "", temperature: null, max_tokens: null, extra_body: {}, tokens_today: 0 };
+  const reasonerPreset = { ...chatPreset, id: "p2", model: "deepseek-reasoner" };
+  const { rerender } = render(<ChatInput value="" onChange={() => {}} disabled={false} loading={false} onSend={() => {}}
+    onStop={() => {}} presets={[chatPreset, reasonerPreset]} presetId="p1" onPreset={() => {}} openPresets={() => {}} label="消息" thinking={null} onThinking={() => {}} />);
+  expect(screen.getByRole("button", { name: "深度思考" }).getAttribute("aria-pressed")).toBe("false");
+  rerender(<ChatInput value="" onChange={() => {}} disabled={false} loading={false} onSend={() => {}}
+    onStop={() => {}} presets={[chatPreset, reasonerPreset]} presetId="p2" onPreset={() => {}} openPresets={() => {}} label="消息" thinking={null} onThinking={() => {}} />);
+  expect(screen.getByRole("button", { name: "深度思考" }).getAttribute("aria-pressed")).toBe("true");
+});

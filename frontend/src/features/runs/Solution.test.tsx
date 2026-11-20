@@ -51,3 +51,11 @@ test("search finds zero values in grouped and list views and restores the zero f
   expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("true");
   expect(screen.getByRole("cell", { name: "shipment[West]" })).toBeTruthy();
 });
+
+test("null variable values render cleanly without crashing", () => {
+  render(<Solution solve={{ status: "optimal", objective: 5, variables: { x: 5, y: null }, output: "", error: null }} />);
+  fireEvent.click(screen.getByLabelText("全部列表"));
+  fireEvent.click(screen.getByRole("switch"));
+  expect(screen.getByRole("cell", { name: "y" })).toBeTruthy();
+  expect(screen.getByRole("cell", { name: "—" })).toBeTruthy();
+});

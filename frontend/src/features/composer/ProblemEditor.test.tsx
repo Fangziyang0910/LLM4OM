@@ -158,3 +158,35 @@ test.each([false, true])("file drops are intercepted and respect disabled=%s", d
   if (disabled) expect(attach).not.toHaveBeenCalled();
   else expect(attach).toHaveBeenCalledWith(files);
 });
+
+test("pressing Enter at the end of a non-final block opens a new line between blocks instead of concatenating", () => {
+  const spy = vi.fn();
+  render(<Editor initial={"# 标题\n\n正文内容"} onChangeSpy={spy} />);
+  fireEvent.mouseDown(screen.getByRole("heading", { name: "标题" }));
+  const input = screen.getByRole("textbox", { name: "问题描述" }) as HTMLTextAreaElement;
+  expect(input.value).toBe("# 标题");
+  fireEvent.change(input, { target: { value: "# 标题\n", selectionStart: 5 } });
+  expect(input.value).toBe("");
+  fireEvent.change(input, { target: { value: "新增段落", selectionStart: 4 } });
+  expect(spy).toHaveBeenLastCalledWith("# 标题\n新增段落\n\n正文内容");
+});
+
+test("IME composition from an empty editor and clicking a link inside a rendered block behave cleanly", () => {
+  const spy = vi.fn();
+  render(<Editor initial="" onChangeSpy={spy} />);
+  const input = screen.getByRole("textbox", { name: "问题描述" }) as HTMLTextAreaElement;
+  fireEvent.focus(input);
+  fireEvent.compositionStart(input);
+  fireEvent.change(input, { target: { value: "sheng", selectionStart: 5 } });
+  fireEvent.compositionEnd(input, { target: { value: "生产", selectionStart: 2 } });
+  expect(spy).toHaveBeenLastCalledWith("生产");
+  fireEvent.keyDown(input, { key: "z", ctrlKey: true });
+  expect(spy).toHaveBeenLastCalledWith("");
+
+  cleanup();
+  render(<Editor initial={"# 标题\n\n查看 [说明](https://example.org)"} />);
+  const link = screen.getByRole("link", { name: "说明" });
+  const down = createEvent.mouseDown(link, { button: 0 });
+  fireEvent(link, down);
+  expect(down.defaultPrevented).toBe(false);
+});

@@ -992,6 +992,18 @@ export const en: Record<string, string> = {
   "测算条件变化": "Test a what-if change",
   "追问方案细节，或提出新的调整条件…": "Ask about plan details or propose new conditions…",
   "方案详情": "Plan Details",
+  "上传数据表": "Upload Data",
+  "提升利润": "Maximize profit",
+  "附数据表": "With spreadsheet",
+  "缩短工时": "Minimize time",
+  "在有限设备与工序额度下，合理安排多种产品的产量，让总利润最高。": "Choose production quantities under equipment and processing limits to maximize total profit.",
+  "三个仓库向四个客户发货，自动读取表格算出总运费最低的调拨方案。": "Ship from three warehouses to four customers using an attached table to minimize total shipping cost.",
+  "根据每位员工处理各项任务的耗时差异，安排一对一指派使总耗时最短。": "Assign each worker one-to-one to tasks with different completion times to minimize total time.",
+  "开启对比后，系统会并行运行所选策略并自动比对目标结果是否一致。": "When comparison is on, selected strategies run in parallel and their objective values are cross-checked.",
+  "正在加载模型列表……": "Loading model presets…",
+  "模型列表暂不可用，请重试加载。": "Model presets are currently unavailable. Please retry.",
+  "请填写不小于 0 的数字。": "Enter a number greater than or equal to 0.",
+  "请填写不小于 1 的整数。": "Enter an integer greater than or equal to 1.",
 };
 
 /** Step titles with numbers in them. */

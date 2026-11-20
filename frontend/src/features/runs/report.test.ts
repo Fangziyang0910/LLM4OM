@@ -56,4 +56,14 @@ describe("run report", () => {
     expect(text).toContain("| `x[A]` | 3 |");
     expect(text).not.toContain("x[B]");
   });
+
+  it("escapes pipes, backticks and newlines in Markdown tables and omits unknown decision variables", () => {
+    const text = report({ title: "转义", method: "direct", language: "pyomo", provider: null, model: "m1" }, {
+      explanation: { summary: "ok", objective_label: "目标", objective_unit: "", decisions: [{ variable: "missing", label: "不存在", unit: "" }], notes: [], total_variables: 1 },
+      solve: { status: "optimal", objective: 5, variables: { "a|b`c\nd": 5, "n": null }, output: "", error: null },
+    }, options);
+    expect(text).toContain("| ``a\\|b`c d`` | 5 |");
+    expect(text).not.toContain("undefined");
+    expect(text).not.toContain("| `n` |");
+  });
 });
