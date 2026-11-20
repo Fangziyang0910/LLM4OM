@@ -17,6 +17,8 @@ Adaptations:
 """
 
 import json
+import re
+import textwrap
 from dataclasses import asdict
 from functools import cache
 from importlib.resources import files
@@ -53,19 +55,13 @@ def get_template_id(problem_type: str) -> int | None:
 
 def extract_code(text: str) -> str | None:
     """Upstream extract_and_execute_code, without the execution: the first fenced block, or None."""
-    start, used = -1, ""
-    for marker in CODE_MARKERS:
-        start = text.lower().find(marker.lower())
-        if start != -1:
-            used = marker
-            break
-    if start == -1:
+    blocks = list(re.finditer(r"^[ \t]*```([^\r\n`]*)\r?\n(.*?)(?:```|\Z)", text, re.S | re.M))
+    python = [match for match in blocks if match.group(1).strip().lower() in ("python", "py", "python3")]
+    matches = python or [match for match in blocks if not match.group(1).strip()]
+    if not matches:
         return None
-    end = text.find("```", start + len(used))
-    code = text[start + len(used): end if end != -1 else len(text)].strip()
-    for marker in CODE_MARKERS:
-        code = code.replace(marker, "")
-    return code.replace("```", "").strip() + "\n"
+    code = textwrap.dedent(matches[0].group(2).strip("\r\n")).strip()
+    return (code + "\n") if code else None
 
 
 class State(ModelingState, total=False):
@@ -97,9 +93,15 @@ async def classify(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
         info = [{"problem_type": templates[i]["problem_type"], "description": templates[i]["description"]} for i in children]
         prompt = CLASSIFY_PROMPT[1].format(basic_type=current_type, template_info=info, input_problem=problem)
         keys = ("belongs_to_subtypes", "matching_subtype")
-    answer = json_repair.loads(await _reply(runtime.context, "interpreter", CLASSIFY_PROMPT[0], prompt))
-    belongs = isinstance(answer, dict) and bool(answer.get(keys[0]))
-    index = get_template_id(answer.get(keys[1], "")) if belongs else None
+    reply = await _reply(runtime.context, "interpreter", CLASSIFY_PROMPT[0], prompt)
+    fenced = list(re.finditer(r"```(?:json)?[ \t]*\r?\n(.*?)```", reply, re.S | re.I))
+    answer = json_repair.loads(fenced[-1].group(1) if fenced else reply)
+    if isinstance(answer, list):
+        answer = next((item for item in reversed(answer) if isinstance(item, dict)), None)
+    raw_belongs = answer.get(keys[0]) if isinstance(answer, dict) else False
+    belongs = raw_belongs is True or (isinstance(raw_belongs, str) and raw_belongs.strip().lower() == "true")
+    matched = answer.get(keys[1], "") if belongs and isinstance(answer, dict) else ""
+    index = next((i for i in children if templates[i]["problem_type"] == matched), None) if belongs else None
     path = state.get("path") or [current_type]
     if index is None or templates[index]["problem_type"] in path:
         return {"node": node, "path": path, "belongs": False}

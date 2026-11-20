@@ -164,8 +164,10 @@ class PyomoLibrary:
     name = "pyomo"
 
     def recognize(self, model, backend):
+        import pyomo.environ as pyo
         import pyomo.kernel as pmo
 
+        _expect(model, (pyo.Block, pmo.block), "instantiated Pyomo model or kernel block")
         interface = "kernel" if isinstance(model, pmo.block) else "algebraic"
         backend = ("cbc" if interface == "kernel" else "highs") if backend == "AUTO" else backend
         return Selection(model, backend, lambda time_limit: self.solve(model, time_limit, interface, backend),
@@ -173,11 +175,22 @@ class PyomoLibrary:
 
     def solve(self, model, time_limit, interface, backend):
         import pyomo.environ as pyo
+        import pyomo.kernel as pmo
         from pyomo.opt import SolverFactory
         from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 
-        if backend == "highs" and interface != "kernel":
+        if backend == "highs":
+            if interface == "kernel":
+                raise ModelError("Pyomo kernel blocks are not supported by the legacy 'highs' plugin; use 'cbc', 'glpk', or pyo.ConcreteModel.")
             return self._solve_highs(model, time_limit)
+        if interface == "kernel":
+            objectives = list(model.components(ctype=pmo.objective, active=True))
+        else:
+            _expect(model, pyo.Block, "instantiated Pyomo model")
+            objectives = list(model.component_data_objects(pyo.Objective, active=True))
+        if len(objectives) != 1:
+            raise ModelError(f"The model must have exactly one active objective; found {len(objectives)}.")
+        objective = objectives[0]
         if backend not in SolverFactory:
             raise ModelError(f"Unknown Pyomo solver plugin {backend!r}.")
         solver = self._solver(backend)
@@ -195,24 +208,28 @@ class PyomoLibrary:
                   "infeasible": "infeasible", "unbounded": "unbounded",
                   "infeasibleorunbounded": "infeasible_or_unbounded", "maxtimelimit": "time_limit",
                   "maxiterations": "iteration_limit", "feasible": "feasible"}.get(termination, "error")
-        if not result.solution:
+        if not result.solution or not result.solution[0].variable:
             return status, None, None
         solution_status = str(result.solution[0].status).lower()
-        if solution_status not in ("optimal", "feasible", "bestsofar", "stoppedbylimit"):
+        if solution_status not in ("optimal", "globallyoptimal", "locallyoptimal", "feasible", "bestsofar", "stoppedbylimit"):
             return status, None, None
         if interface == "kernel":
-            import pyomo.kernel as pmo
-
-            model.load_solution(result.solution[0])
+            soln = result.solution[0]
+            if getattr(soln, "symbol_map", None) is None and getattr(result, "_smap", None) is not None:
+                soln.symbol_map = result._smap
+            model.load_solution(soln)
             variables = model.components(ctype=pmo.variable)
-            objective = next(model.components(ctype=pmo.objective))
         else:
-            _expect(model, pyo.Block, "instantiated Pyomo model")
             model.solutions.load_from(result)
             variables = model.component_data_objects(pyo.Var)
-            objective = next(model.component_data_objects(pyo.Objective, active=True))
         values = {v.name: v.value for v in variables if v.value is not None}
-        return "feasible" if status == "error" else status, pyo.value(objective), values
+        if not values:
+            return status, None, None
+        try:
+            obj_val = pyo.value(objective)
+        except ValueError:
+            return status, None, None
+        return "feasible" if status == "error" else status, obj_val, values
 
     def _solve_highs(self, model, time_limit):
         import pyomo.environ as pyo
@@ -301,14 +318,15 @@ class GurobipyLibrary:
         status = {
             gp.GRB.OPTIMAL: "optimal", gp.GRB.INFEASIBLE: "infeasible", gp.GRB.UNBOUNDED: "unbounded",
             gp.GRB.INF_OR_UNBD: "infeasible_or_unbounded", gp.GRB.TIME_LIMIT: "time_limit",
+            gp.GRB.ITERATION_LIMIT: "iteration_limit", gp.GRB.NODE_LIMIT: "iteration_limit",
             gp.GRB.SUBOPTIMAL: "feasible",
         }.get(model.Status, "error")
-        if model.SolCount == 0:
+        if model.SolCount == 0 or status not in ("optimal", "locally_optimal", "feasible", "time_limit", "iteration_limit"):
             return status, None, None
         return status, model.ObjVal, {variable.VarName: variable.X for variable in model.getVars()}
 
     def catalog(self):
-        return _unique(_native("gurobi"))
+        return _unique([_entry("gurobi", lambda: __import__("gurobipy") is not None)])
 
 
 class OrtoolsLibrary:
@@ -317,6 +335,7 @@ class OrtoolsLibrary:
     name = "ortools"
 
     def recognize(self, model, backend):
+        from ortools.algorithms.python import knapsack_solver
         from ortools.constraint_solver import pywrapcp
         from ortools.graph.python import linear_sum_assignment, max_flow, min_cost_flow
         from ortools.linear_solver import pywraplp
@@ -324,32 +343,48 @@ class OrtoolsLibrary:
         from ortools.math_opt.python import mathopt
         from ortools.sat.python import cp_model
 
-        native = model.get('model') if isinstance(model, dict) else model
-        kinds = [
+        bare_kinds = [
             (pywraplp.Solver, 'linear', 'AUTO'),
             (mathopt.Model, 'mathopt', 'GSCIP'),
             (model_builder.ModelBuilder, 'model_builder', 'SCIP'),
             (cp_model.CpModel, 'cp_sat', 'CP_SAT'),
+            (min_cost_flow.SimpleMinCostFlow, 'min_cost_flow', 'MIN_COST_FLOW'),
+            (linear_sum_assignment.SimpleLinearSumAssignment, 'assignment', 'ASSIGNMENT'),
+        ]
+        dict_kinds = [
             (pywrapcp.RoutingModel, 'routing', 'ROUTING'),
             (pywrapcp.Solver, 'constraint', 'CP'),
             (max_flow.SimpleMaxFlow, 'max_flow', 'MAX_FLOW'),
             (min_cost_flow.SimpleMinCostFlow, 'min_cost_flow', 'MIN_COST_FLOW'),
-            (linear_sum_assignment.SimpleLinearSumAssignment, 'assignment', 'ASSIGNMENT'),
         ]
-        if isinstance(model, dict) and 'weights' in model and 'capacities' in model:
+        if isinstance(model, dict) and 'weights' in model and 'capacities' in model and 'values' in model:
             interface, default = 'knapsack', 'KNAPSACK_MULTIDIMENSION_BRANCH_AND_BOUND_SOLVER'
-        else:
-            for kind, api_name, default_name in kinds:
+        elif isinstance(model, dict):
+            native = model.get('model')
+            for kind, api_name, default_name in dict_kinds:
                 if isinstance(native, kind):
                     interface, default = api_name, default_name
                     break
             else:
                 raise ModelError(
-                    f'Return a native OR-Tools model, with search arguments when required; got {type(native).__name__}.')
+                    f'Return a native OR-Tools model (not wrapped in a dictionary unless required by routing, '
+                    f'constraint, max_flow, min_cost_flow or knapsack); got dict with model={type(native).__name__}.')
+        else:
+            for kind, api_name, default_name in bare_kinds:
+                if isinstance(model, kind):
+                    interface, default = api_name, default_name
+                    break
+            else:
+                raise ModelError(
+                    f'Return a native OR-Tools model, with search arguments when required; got {type(model).__name__}.')
         auto = backend == 'AUTO'
         if interface in ('cp_sat', 'routing', 'constraint', 'max_flow', 'min_cost_flow', 'assignment') \
                 and not (auto or backend == default):
             raise ModelError(f'{interface} uses its native {default} backend, not {backend}.')
+        if interface == 'knapsack' and not auto and not hasattr(knapsack_solver.SolverType, backend):
+            raise ModelError(f'Unknown OR-Tools knapsack backend {backend!r}.')
+        if interface == 'mathopt' and not auto and backend not in mathopt.SolverType.__members__:
+            raise ModelError(f'Unknown OR-Tools MathOpt backend {backend!r}.')
         backend = default if auto else backend
         solver = model.SolverVersion().split()[0].upper() if interface == 'linear' and auto else backend
         conflict = ("Gurobi IIS", self._iis) if interface == 'linear' else None
@@ -387,11 +422,12 @@ class OrtoolsLibrary:
         error = solver.LoadModelFromProtoKeepNames(proto) if solver is not original else ''
         if error:
             raise ModelError(error)
-        solver.SetTimeLimit(int(float(time_limit) * 1000))
+        solver.SetTimeLimit(max(1, int(float(time_limit) * 1000)))
         result = solver.Solve()
         status = {
             pywraplp.Solver.OPTIMAL: "optimal", pywraplp.Solver.FEASIBLE: "feasible",
             pywraplp.Solver.INFEASIBLE: "infeasible", pywraplp.Solver.UNBOUNDED: "unbounded",
+            pywraplp.Solver.NOT_SOLVED: "time_limit",
         }.get(result, "error")
         if result not in (pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE):
             return status, None, None
@@ -401,6 +437,8 @@ class OrtoolsLibrary:
         from ortools.math_opt.python import mathopt
 
         _expect(model, mathopt.Model, "mathopt.Model")
+        if backend not in mathopt.SolverType.__members__:
+            raise ModelError(f"Unknown OR-Tools MathOpt backend {backend!r}.")
         result = mathopt.solve(model, mathopt.SolverType[backend],
                                params=mathopt.SolveParameters(time_limit=timedelta(seconds=float(time_limit))))
         reason = result.termination.reason.name
@@ -408,7 +446,9 @@ class OrtoolsLibrary:
                   "INFEASIBLE_OR_UNBOUNDED": "infeasible_or_unbounded"}.get(reason, "error")
         if result.termination.limit and result.termination.limit.name == "TIME":
             status = "time_limit"
-        if not result.has_primal_feasible_solution():
+        elif result.termination.limit and result.termination.limit.name in ("ITERATION", "NODE"):
+            status = "iteration_limit"
+        if not result.has_primal_feasible_solution() or status not in ("optimal", "locally_optimal", "feasible", "time_limit", "iteration_limit"):
             return status, None, None
         return status, result.objective_value(), {v.name or f"x[{v.id}]": val for v, val in result.variable_values().items()}
 
@@ -444,7 +484,8 @@ class OrtoolsLibrary:
         solver.set_time_limit_in_seconds(float(time_limit))
         code = solver.solve(model)
         status = {mb.SolveStatus.OPTIMAL: "optimal", mb.SolveStatus.FEASIBLE: "feasible",
-                  mb.SolveStatus.INFEASIBLE: "infeasible", mb.SolveStatus.UNBOUNDED: "unbounded"}.get(code, "error")
+                  mb.SolveStatus.INFEASIBLE: "infeasible", mb.SolveStatus.UNBOUNDED: "unbounded",
+                  mb.SolveStatus.NOT_SOLVED: "time_limit"}.get(code, "error")
         if status not in ("optimal", "feasible"):
             return status, None, None
         return status, solver.objective_value, {v.name or f"x[{v.index}]": solver.value(v) for v in model.get_variables()}
@@ -512,6 +553,8 @@ class OrtoolsLibrary:
         from ortools.graph.python import linear_sum_assignment, max_flow, min_cost_flow
 
         if interface == "knapsack":
+            if not hasattr(knapsack_solver.SolverType, backend):
+                raise ModelError(f"Unknown OR-Tools knapsack backend {backend!r}.")
             native = knapsack_solver.KnapsackSolver(getattr(knapsack_solver.SolverType, backend), 'knapsack')
             native.init(model['values'], model['weights'], model['capacities'])
             count = len(model['values'])
@@ -583,11 +626,26 @@ class CpmpyLibrary:
 
     name = "cpmpy"
 
+    @staticmethod
+    def _interface_name(solver):
+        import cpmpy as cp
+
+        base = next((name for name, cls in cp.SolverLookup.base_solvers() if type(solver) is cls), None)
+        if base is None:
+            return solver.name
+        if ":" in solver.name and solver.name.split(":", 1)[0] == base:
+            return solver.name
+        return base
+
     def recognize(self, model, backend):
-        default = model.name if hasattr(model, 'user_vars') else 'ortools'
+        import cpmpy as cp
+        from cpmpy.solvers.solver_interface import SolverInterface
+
+        _expect(model, (cp.Model, SolverInterface), "cp.Model or CPMpy SolverInterface")
+        default = self._interface_name(model) if isinstance(model, SolverInterface) else 'ortools'
         backend = default if backend == "AUTO" else backend
-        return Selection(model, backend, lambda time_limit: self.solve(model, time_limit, backend),
-                         ("CPMpy MUS", self.mus))
+        conflict = ("CPMpy MUS", self.mus) if isinstance(model, cp.Model) else None
+        return Selection(model, backend, lambda time_limit: self.solve(model, time_limit, backend), conflict)
 
     def solve(self, model, time_limit, backend):
         import cpmpy as cp
@@ -601,8 +659,10 @@ class CpmpyLibrary:
         else:
             variables = model.user_vars
             solver = model
-            if solver.name.split(':')[0] != backend.split(':')[0] or (':' in backend and solver.name != backend):
-                raise ModelError(f"Returned CPMpy interface {solver.name!r} differs from selected backend {backend!r}.")
+            actual = self._interface_name(solver)
+            if actual.split(':', 1)[0] != backend.split(':', 1)[0] or (
+                    ':' in backend and ':' in actual and actual != backend):
+                raise ModelError(f"Returned CPMpy interface {actual!r} differs from selected backend {backend!r}.")
         no_interrupt = backend.startswith('pysat') and type(solver.pysat_solver.solver).__name__.startswith(('Cadical', 'Lingeling'))
         if backend == 'pysdd' or no_interrupt:
             solver.solve()  # these native APIs have no interrupt timer; the subprocess deadline still applies
@@ -666,10 +726,16 @@ class PulpLibrary:
         if backend == 'CyLP':
             return self._solve_cylp(problem, time_limit)
         problem.solve(solver)
-        status = {
-            pulp.LpSolutionOptimal: "optimal", pulp.LpSolutionIntegerFeasible: "feasible",
-            pulp.LpSolutionInfeasible: "infeasible", pulp.LpSolutionUnbounded: "unbounded",
-        }.get(problem.sol_status) or ("time_limit" if problem.status == pulp.LpStatusNotSolved else "error")
+        if problem.status == pulp.LpStatusOptimal:
+            status = "feasible" if problem.sol_status == pulp.LpSolutionIntegerFeasible else "optimal"
+        elif problem.status == pulp.LpStatusInfeasible:
+            status = "infeasible"
+        elif problem.status == pulp.LpStatusUnbounded:
+            status = "unbounded"
+        elif problem.status == pulp.LpStatusNotSolved:
+            status = "feasible" if problem.sol_status == pulp.LpSolutionIntegerFeasible else "time_limit"
+        else:
+            status = "error"
         if status not in ("optimal", "feasible"):
             return status, None, None
         values = {variable.name: variable.varValue for variable in problem.variables() if variable.varValue is not None}
@@ -682,9 +748,22 @@ class PulpLibrary:
 
         native = CyClpSimplex()
         native.logLevel = 0
+        columns = []
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, 'model.mps')
-            variables = problem.writeMPS(path, mpsSense=pulp.LpMinimize)
+            problem.writeMPS(path, mpsSense=pulp.LpMinimize)
+            seen = set()
+            in_columns = False
+            with open(path, encoding="utf-8") as mps_file:
+                for raw_line in mps_file:
+                    if not raw_line.startswith((" ", "\t")):
+                        in_columns = raw_line.strip() == "COLUMNS"
+                        continue
+                    if in_columns:
+                        parts = raw_line.split()
+                        if len(parts) >= 2 and parts[1] != "'MARKER'" and parts[0] not in seen:
+                            seen.add(parts[0])
+                            columns.append(parts[0])
             if native.readMps(path):
                 raise ModelError('CyLP could not read the PuLP model.')
         if problem.isMIP():
@@ -695,14 +774,15 @@ class PulpLibrary:
             status = {'solution': 'optimal', 'problem proven infeasible': 'infeasible',
                       'linear relaxation unbounded': 'unbounded', 'relaxation infeasible': 'infeasible',
                       'stopped on time': 'time_limit'}.get(native.status, 'error')
-            has_solution = status == 'optimal' or native.solutionCount > 0
+            has_solution = status in ('optimal', 'feasible', 'time_limit') and (
+                status == 'optimal' or native.solutionCount > 0)
         else:
             status = {'optimal': 'optimal', 'primal infeasible': 'infeasible', 'dual infeasible': 'unbounded',
                       'stopped on iterations or time': 'time_limit'}.get(native.initialSolve(), 'error')
             has_solution = status == 'optimal'
         if not has_solution:
             return status, None, None
-        values = {v.name: float(value) for v, value in zip(variables, native.primalVariableSolution)}
+        values = {name: float(value) for name, value in zip(columns, native.primalVariableSolution)}
         problem.assignVarsVals(values)
         return status, pulp.value(problem.objective), values
 
@@ -728,6 +808,9 @@ class CvxpyLibrary:
         __import__('cvxpy')
 
     def recognize(self, model, backend):
+        import cvxpy as cp
+
+        _expect(model, cp.Problem, "cvxpy Problem")
         interface = "dcp" if model.is_dcp() else "dgp" if model.is_dgp() else "dqcp"
 
         def solve(time_limit):
@@ -746,6 +829,7 @@ class CvxpyLibrary:
         import numpy as np
 
         _expect(problem, cp.Problem, "cvxpy Problem")
+        glpk_ms = max(1, int(float(time_limit) * 1000))
         options = {
             "CLARABEL": {"time_limit": float(time_limit)},
             "OSQP": {"time_limit": float(time_limit)},
@@ -757,8 +841,8 @@ class CvxpyLibrary:
             "HIGHS": {"time_limit": float(time_limit)},
             "CPLEX": {"cplex_params": {"timelimit": float(time_limit)}},
             "CBC": {"maximumSeconds": float(time_limit)},
-            "GLPK": {"tm_lim": int(float(time_limit)*1000)},
-            "GLPK_MI": {"tm_lim": int(float(time_limit)*1000)},
+            "GLPK": {"glpk": {"tm_lim": glpk_ms}},
+            "GLPK_MI": {"tm_lim": glpk_ms},
             "COPT": {"TimeLimit": float(time_limit)},
             "XPRESS": {"maxtime": max(1, int(time_limit))},
         }
@@ -777,20 +861,31 @@ class CvxpyLibrary:
         status = {
             cp.OPTIMAL: "optimal", cp.OPTIMAL_INACCURATE: "feasible", cp.INFEASIBLE: "infeasible",
             cp.INFEASIBLE_INACCURATE: "infeasible", cp.UNBOUNDED: "unbounded", cp.UNBOUNDED_INACCURATE: "unbounded",
-            cp.USER_LIMIT: "time_limit",
+            cp.settings.INFEASIBLE_OR_UNBOUNDED: "infeasible_or_unbounded", cp.USER_LIMIT: "time_limit",
         }.get(problem.status, "error")
-        if status not in ("optimal", "feasible"):
+        if problem.status not in cp.settings.SOLUTION_PRESENT or problem.value is None:
             return status, None, None
         values = {}
         for variable in problem.variables():
             value = variable.value
             if value is None:
                 continue
+            is_complex = np.iscomplexobj(value)
             if np.ndim(value) == 0:
-                values[variable.name()] = value
+                if is_complex:
+                    values[f"{variable.name()}.real"] = float(np.real(value))
+                    values[f"{variable.name()}.imag"] = float(np.imag(value))
+                else:
+                    values[variable.name()] = value
             else:
                 for index in np.ndindex(np.shape(value)):
-                    values[f"{variable.name()}[{','.join(map(str, index))}]"] = value[index]
+                    entry = value[index]
+                    label = f"{variable.name()}[{','.join(map(str, index))}]"
+                    if is_complex:
+                        values[f"{label}.real"] = float(np.real(entry))
+                        values[f"{label}.imag"] = float(np.imag(entry))
+                    else:
+                        values[label] = entry
         return status, problem.value, values
 
     def catalog(self):
@@ -826,15 +921,17 @@ class PyscipoptLibrary:
         model.setRealParam("limits/time", float(time_limit))
         model.optimize()
         status = {"optimal": "optimal", "infeasible": "infeasible", "unbounded": "unbounded",
-                  "inforunbd": "infeasible_or_unbounded", "timelimit": "time_limit"}.get(str(model.getStatus()))
+                  "inforunbd": "infeasible_or_unbounded", "timelimit": "time_limit",
+                  "nodelimit": "iteration_limit", "gaplimit": "feasible",
+                  "sollimit": "feasible"}.get(str(model.getStatus()))
         solution = model.getBestSol()
-        if solution is None:
+        if solution is None or status not in ("optimal", "locally_optimal", "feasible", "time_limit", "iteration_limit", None):
             return status or "error", None, None
         return status or "feasible", model.getSolObjVal(solution), {
             v.name: model.getSolVal(solution, v) for v in model.getVars()}
 
     def catalog(self):
-        return _unique(_native("scip"))
+        return _unique([_entry("scip", lambda: __import__("pyscipopt") is not None)])
 
 
 class CasadiLibrary:
@@ -842,17 +939,35 @@ class CasadiLibrary:
 
     name = "casadi"
 
+    @staticmethod
+    def _failure_status(return_status, *, conic):
+        text = str(return_status or "").lower()
+        if "infeasible" in text:
+            return "infeasible" if conic else "locally_infeasible"
+        if "unbounded" in text:
+            return "unbounded"
+        if "iteration" in text or "max_iter" in text:
+            return "iteration_limit"
+        if "time" in text and ("exceeded" in text or "limit" in text):
+            return "time_limit"
+        return "error"
+
     def recognize(self, model, backend):
         import casadi as ca
 
+        _expect(model, (ca.Opti, dict), "ca.Opti or CasADi problem dictionary")
         if backend == 'AUTO':
-            backend = model.get('solver', 'ipopt') if isinstance(model, dict) else 'ipopt'
-        conic = 'Conic::'+backend in ca.CasadiMeta.plugins().split(';')
+            chosen = model.get('solver') if isinstance(model, dict) else None
+            backend = chosen or 'ipopt'
+        conic = 'Conic::'+str(backend) in ca.CasadiMeta.plugins().split(';')
         native = model.get('model') if isinstance(model, dict) else model
         if isinstance(native, ca.Opti):
             interface = 'opti_conic' if conic else 'opti'
         else:
-            interface = 'conic' if 'h' in model.get('problem', {}) else 'qpsol' if conic else 'nlpsol'
+            problem = model.get('problem') if isinstance(model, dict) else None
+            _expect(problem, dict, "CasADi problem dictionary")
+            is_sparsity = any(isinstance(value, ca.Sparsity) for value in problem.values())
+            interface = 'conic' if ('h' in problem or is_sparsity) else 'qpsol' if conic else 'nlpsol'
         return Selection(model, backend, lambda time_limit: self.solve(model, time_limit, interface, backend))
 
     def solve(self, model, time_limit, interface, backend):
@@ -872,18 +987,19 @@ class CasadiLibrary:
             native_options = {**custom, "print_level": 0, "sb": "yes", "max_wall_time": float(time_limit)} \
                 if backend == "ipopt" else custom
             model.solver(backend, options, native_options)
+            is_conic = interface == "opti_conic"
             try:
                 result = model.solve_limited()
             except RuntimeError as error:
-                if model.stats().get("return_status") == "Infeasible_Problem_Detected":
-                    return "locally_infeasible", None, None
+                mapped = self._failure_status(model.stats().get("return_status"), conic=is_conic)
+                if mapped != "error":
+                    return mapped, None, None
                 raise error
             stats = result.stats()
             success = stats.get("success", False)
-            status = ("optimal" if interface == "opti_conic" else "locally_optimal") if success else \
-                "time_limit" if "exceeded" in stats.get("return_status", "").lower() else "error"
             if not success:
-                return status, None, None
+                return self._failure_status(stats.get("return_status"), conic=is_conic), None, None
+            status = "optimal" if is_conic else "locally_optimal"
             values = {}
             for variable in ca.symvar(model.x):
                 for i in range(variable.numel()):
@@ -899,8 +1015,7 @@ class CasadiLibrary:
         result = solver(**(model.get("arguments") or {}))
         stats = solver.stats()
         if not stats.get("success", False):
-            status = "locally_infeasible" if stats.get("return_status") == "Infeasible_Problem_Detected" else "error"
-            return status, None, None
+            return self._failure_status(stats.get("return_status"), conic=interface != "nlpsol"), None, None
         x = result["x"].full().ravel()
         objective = result["cost"] if interface == "conic" else result["f"]
         return ("locally_optimal" if interface == "nlpsol" else "optimal"), objective_sign * float(objective), {
@@ -948,12 +1063,12 @@ class CoptpyLibrary:
                   cp.COPT.INF_OR_UNB: "infeasible_or_unbounded", cp.COPT.TIMEOUT: "time_limit",
                   cp.COPT.LOCAL_OPTIMAL: "locally_optimal",
                   cp.COPT.LOCAL_INFEASIBLE: "locally_infeasible"}.get(model.status)
-        if not model.hasSol:
+        if not model.hasSol or status not in ("optimal", "locally_optimal", "feasible", "time_limit", "iteration_limit", None):
             return status or "error", None, None
         return status or "feasible", model.objval, {v.name: v.x for v in model.getVars()}
 
     def catalog(self):
-        return _unique(_native("copt"))
+        return _unique([_entry("copt", lambda: __import__("coptpy") is not None)])
 
 
 # The nine native libraries, in the order shown to users. This is the complete set, not a discovery hook.
@@ -965,7 +1080,13 @@ LIBRARIES = {library.name: library for library in (
 
 def backend_catalog():
     """Discover native plugins in the execution environment, including optional unavailable backends."""
-    return {"libraries": {name: library.catalog() for name, library in LIBRARIES.items()}}
+    libraries = {}
+    for name, library in LIBRARIES.items():
+        try:
+            libraries[name] = library.catalog()
+        except Exception as error:
+            libraries[name] = _unique([{"id": name, "available": False, "detail": str(error)[-350:]}])
+    return {"libraries": libraries}
 
 
 def clean(value):
@@ -975,10 +1096,10 @@ def clean(value):
     return 0.0 if value == 0 else value
 
 
-def describe_error(error):
+def describe_error(error, filename="model.py"):
     """Keep the generated code's frames so feedback points at the model, not at the worker."""
     frames = traceback.extract_tb(error.__traceback__)
-    own = [frame for frame in frames if frame.filename == "model.py"] or frames[-2:]
+    own = [frame for frame in frames if frame.filename == filename] or frames[-2:]
     return "".join(traceback.format_list(own) + traceback.format_exception_only(error)).rstrip()
 
 
@@ -1010,11 +1131,14 @@ def run(request):
             if status == "infeasible":
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                     result["diagnosis"] = diagnose(selection)
-        result["status"] = status
+        cleaned_objective = None
+        cleaned_variables = {}
         if values is not None:
-            result["objective"] = None if objective is None else clean(objective)
-            mapped = {name: clean(value) for name, value in values.items()}
-            result["variables"] = mapped
+            cleaned_objective = None if objective is None else clean(objective)
+            cleaned_variables = {name: cleaned for name, value in values.items() if (cleaned := clean(value)) is not None}
+        result["status"] = status
+        result["objective"] = cleaned_objective
+        result["variables"] = cleaned_variables
     except ModelError as error:
         result["error"] = f"[{stage}] {error}"
     except BaseException as error:
@@ -1029,15 +1153,17 @@ def run_script(request):
     error = None
     with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
         try:
+            linecache.cache["script.py"] = (len(request["script"]), None, request["script"].splitlines(True), "script.py")
             exec(compile(request["script"], "script.py", "exec"), {"__name__": "__main__"})
         except BaseException as caught:
             traceback.print_exception(caught)
-            error = describe_error(caught)
+            error = describe_error(caught, filename="script.py")
     return {"status": "error" if error else "executed", "objective": None, "variables": {},
             "output": output.getvalue()[-MAX_OUTPUT_CHARS:], "error": error}
 
 
 def main():
+    result_fd = os.dup(1)
     request = json.loads(sys.stdin.read())
     if request.get('catalog'):
         try:
@@ -1046,8 +1172,20 @@ def main():
         except Exception as error:
             result = {"error": describe_error(error)}
     else:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        try:
+            os.dup2(devnull, 1)
+            os.dup2(devnull, 2)
+        finally:
+            os.close(devnull)
         result = run_script(request) if "script" in request else run(request)
-    sys.stdout.write("\n" + RESULT_MARKER + json.dumps(result) + "\n")
+    payload = ("\n" + RESULT_MARKER + json.dumps(result) + "\n").encode("utf-8")
+    view = memoryview(payload)
+    written = 0
+    while written < len(view):
+        written += os.write(result_fd, view[written:])
+    os.close(result_fd)
+    os._exit(0)
 
 
 if __name__ == "__main__":

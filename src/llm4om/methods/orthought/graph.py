@@ -10,6 +10,7 @@ function whose parameters have default values ... and whose return value is the 
 """
 
 import re
+import textwrap
 from dataclasses import asdict
 from typing import Any
 
@@ -48,30 +49,40 @@ async def _ask(context: Context, role: str, prompt: str) -> str:
     return (await model.ainvoke([HumanMessage(prompt.replace("Gurobipy", context.target.library))])).text
 
 
-def _code(reply: str) -> str:
+def _code(reply: str) -> str | None:
     """Upstream extract_code_model: the longest ```python (or ```code) block, else the <code> block."""
     if "```python\n```python" in reply:
         reply = reply.replace("```python\n```python", "```python", 1)
-    blocks = re.findall(r"```(?:python|code)\s*\n(.*?)\n```", reply, re.S)
+    blocks = [textwrap.dedent(block.strip("\r\n")).strip()
+              for block in re.findall(r"```(?:python3?|py|code)[ \t]*\r?\n(.*?)\r?\n?[ \t]*```", reply, re.S | re.I)
+              if block.strip()]
     # llm4om: upstream ignores blocks of 400 characters or less; a build_model function is often shorter.
     if blocks:
-        return max(blocks, key=lambda block: len(block.strip())).strip() + "\n"
-    found = re.search(r"<code>\s*\n(.*?)\n</code>", reply, re.S)
-    return found.group(1).strip() + "\n" if found else "No code found"
+        return max(blocks, key=len) + "\n"
+    found = list(re.finditer(r"<code>[ \t]*\r?\n?(.*?)</code>", reply, re.S | re.I))
+    if found:
+        body = textwrap.dedent(found[-1].group(1).strip("\r\n")).strip()
+        if body:
+            return body + "\n"
+    return None
 
 
-def _target_text(reply: str, mark: str) -> str:
-    """Upstream extract_target_text: the text after the last <mark> line, up to </mark>."""
-    start = reply.rfind(f"<{mark}>")
-    if mark == "code" and start == -1:
-        start = reply.rfind("```python")
-    if start == -1:
-        return "No target text found"
-    start = reply.find("\n", start) + 1
-    end = reply.find(f"</{mark}>", start)
-    if mark == "code" and end == -1:
-        end = reply.find("```", start)
-    return reply[start:end].strip()
+def _target_text(reply: str, mark: str) -> str | None:
+    """Upstream extract_target_text: the text inside the last <mark>...</mark>, or fenced code for mark='code'."""
+    matches = list(re.finditer(rf"<{mark}>[ \t]*\r?\n?(.*?)</{mark}>", reply, re.S | re.I))
+    if matches:
+        body = matches[-1].group(1)
+        if mark == "code":
+            nested = _code(body)
+            if nested:
+                return nested.rstrip("\n")
+            cleaned = textwrap.dedent(body.strip("\r\n")).strip()
+            return cleaned or None
+        return body.strip()
+    if mark == "code":
+        extracted = _code(reply)
+        return extracted.rstrip("\n") if extracted else None
+    return ""
 
 
 async def model(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
@@ -79,9 +90,9 @@ async def model(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     prompt = prompts.formalized_solution_path_prompt.format(nlp=state["problem"]).replace(
         UPSTREAM_CODE_SECTION, CODE_SECTION.format(contract=context.target.prompt))
     reply = await _ask(context, "model", prompt)
-    found = re.search(r"```(?:model|latex|markdown)\s*\n(.*?)\n```", reply, re.S)
-    return {"solution_path": _target_text(reply, "solution_path"),
-            "formulation": found.group(1).strip() if found else "No model found", "code": _code(reply)}
+    found = re.search(r"```(?:model|latex|markdown)[ \t]*\r?\n(.*?)\r?\n?[ \t]*```", reply, re.S | re.I)
+    return {"solution_path": _target_text(reply, "solution_path") or "",
+            "formulation": found.group(1).strip() if found else None, "code": _code(reply)}
 
 
 async def execute(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
@@ -96,7 +107,10 @@ async def debug(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
                                          error_message=state["solve"].feedback())
     reply = await _ask(context, "debug", prompt.replace(UPSTREAM_DEBUG_CONTRACT, DEBUG_CONTRACT.format(contract=context.target.prompt)))
     code = _target_text(reply, "code")
-    return {"code": code + "\n", "debug_round": state.get("debug_round", 0) + 1}
+    update: dict[str, Any] = {"debug_round": state.get("debug_round", 0) + 1}
+    if code:
+        update["code"] = code + "\n"
+    return update
 
 
 def after_execute(state: State) -> str:

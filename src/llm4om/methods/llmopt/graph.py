@@ -21,6 +21,7 @@ actual self-correction, and a missing or conflicting verdict is reported as a fa
 """
 
 import re
+import textwrap
 from dataclasses import asdict
 from typing import Any
 
@@ -68,12 +69,12 @@ def _source_problem(state: State, context: Context) -> str:
 
 def _five_element(reply: str) -> str:
     """Upstream infer_five_elem: the ```text, ```plaintext or first ``` block."""
-    block = next((reply.split(fence)[1].split("```")[0].strip() for fence in ("```text", "```plaintext", "```")
-                  if fence in reply), "")
+    match = re.search(r"^[ \t]*```[^\r\n`]*\r?\n(.*?)```", reply, re.S | re.M)
+    block = match.group(1).strip() if match else ""
     # llm4om: a general LLM often fences each section on its own or none at all; the first block then holds only the
     # sets. Without all five sections in it, take the whole reply without its fence lines.
     if not all(section in block for section in SECTIONS):
-        block = re.sub(r"^[ \t]*```.*\n?", "", reply, flags=re.M).strip()
+        block = re.sub(r"^[ \t]*```.*\r?\n?", "", reply, flags=re.M).strip()
     if not block:
         raise ValueError("The reply contains no five-element formulation.")
     return block
@@ -114,9 +115,13 @@ async def write_code(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     if reply.strip().startswith(MISSING_DATA):
         raise ValueError("LLMOPT cannot generate code without the required source data: "
                          + reply.strip()[len(MISSING_DATA):].strip())
-    if "```python" not in reply:
+    blocks = list(re.finditer(r"^[ \t]*```([^\r\n`]*)\r?\n(.*?)```", reply, re.S | re.M))
+    python = [match for match in blocks if match.group(1).strip().lower() in ("python", "py", "python3")]
+    matches = python or [match for match in blocks if not match.group(1).strip()]
+    code = textwrap.dedent(matches[-1].group(2).strip("\r\n")).strip() if matches else ""
+    if not code:
         raise ValueError("The reply contains no ```python code block.")
-    return {"code": reply.split("```python")[1].split("```")[0].strip() + "\n"}
+    return {"code": code + "\n"}
 
 
 async def execute(state: State, runtime: Runtime[Context]) -> dict[str, Any]:

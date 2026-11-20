@@ -54,9 +54,11 @@ class Recorder:
 
     def __init__(self, limits: Limits, usage: dict[str, int] | None = None,
                  emit: Callable[[dict[str, Any]], None] | None = None,
-                 charge: Callable[[int], None] | None = None) -> None:
+                 charge: Callable[[int], None] | None = None,
+                 redact: Callable[[str], str] | None = None) -> None:
         self.limits = limits
         self.charge = charge or (lambda _: None)  # the preset's daily budget: adds tokens, or checks it with 0
+        self.redact = redact or (lambda text: text)
         self.usage = {"llm_calls": 0, "solves": 0, "input_tokens": 0, "output_tokens": 0, **(usage or {})}
         self.steps: dict[str, dict[str, Any]] = {}  # step id -> step, in the order the steps started
         self.emit = emit or (lambda _: None)  # sends one custom stream event
@@ -172,19 +174,28 @@ class _LLMEvents(BaseCallbackHandler):
 
     def on_llm_end(self, response: LLMResult, *, run_id: UUID, **kwargs: Any) -> None:
         call = self.calls.pop(run_id, {"role": "llm", "start": time.monotonic()})
-        message = response.generations[0][0].message
+        generation = response.generations[0][0] if response.generations and response.generations[0] else None
+        message = getattr(generation, "message", None)
+        if message is None:
+            self.recorder.step("llm", call["role"], "", id=str(run_id), running=False,
+                               seconds=round(time.monotonic() - call["start"], 1))
+            return
         usage = message.usage_metadata or {}
         text = message.text
         calls = [f"{item['name']}({json.dumps(item['args'], ensure_ascii=False)})"
                  for item in message.tool_calls]
-        self.recorder.usage["input_tokens"] += usage.get("input_tokens") or 0
-        self.recorder.usage["output_tokens"] += usage.get("output_tokens") or 0
-        self.recorder.charge((usage.get("input_tokens") or 0) + (usage.get("output_tokens") or 0))
+        input_tokens = usage.get("input_tokens") or 0
+        output_tokens = usage.get("output_tokens") or 0
+        self.recorder.usage["input_tokens"] += input_tokens
+        self.recorder.usage["output_tokens"] += output_tokens
+        if (total := input_tokens + output_tokens) > 0:
+            self.recorder.charge(total)
         self.recorder.step("llm", call["role"], "\n\n".join(part for part in (text, *calls) if part), id=str(run_id),
                            running=False, seconds=round(time.monotonic() - call["start"], 1),
                            input_tokens=usage.get("input_tokens"), output_tokens=usage.get("output_tokens"))
 
     def on_llm_error(self, error: BaseException, *, run_id: UUID, **kwargs: Any) -> None:
         call = self.calls.pop(run_id, {"role": "llm"})
-        self.recorder.step("llm", call["role"], f"{type(error).__name__}: {error}", id=str(run_id), running=False,
-                           failed=True)
+        seconds = {"seconds": round(time.monotonic() - call["start"], 1)} if "start" in call else {}
+        self.recorder.step("llm", call["role"], self.recorder.redact(f"{type(error).__name__}: {error}"),
+                           id=str(run_id), running=False, failed=True, **seconds)

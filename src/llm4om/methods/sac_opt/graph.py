@@ -5,6 +5,7 @@ llm4om adaptations (batching, attachments and bounded final validation) are deta
 """
 
 import json
+import re
 import textwrap
 from dataclasses import asdict
 from typing import Annotated, TypeVar
@@ -34,10 +35,13 @@ class Confidence(BaseModel):
 
 
 def code_fragment(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        _, text = split_formulation_and_code(text)
-    return textwrap.dedent(text).strip()
+    stripped = text.strip("\r\n")
+    if stripped.lstrip().startswith("```"):
+        _, stripped = split_formulation_and_code(stripped)
+    cleaned = textwrap.dedent(stripped.strip("\r\n")).strip()
+    if not cleaned:
+        raise ValueError("Code fragment must not be empty.")
+    return cleaned
 
 
 Code = Annotated[str, AfterValidator(code_fragment), Field(min_length=1)]
@@ -94,14 +98,15 @@ async def structured(context: Context, role: str, instruction: str, payload: dic
     for attempt in range(presets.SAC_OPT.max_parse_attempts):
         reply = await context.llm(role).bind(temperature=presets.SAC_OPT.temperature).ainvoke(messages)
         try:
-            parsed = schema.model_validate_json(reply.text.strip().removeprefix("```json").removesuffix("```").strip())
+            cleaned = re.sub(r"^```(?:json)?[ \t]*\r?\n?|\r?\n?```$", "", reply.text.strip(), flags=re.I).strip()
+            parsed = schema.model_validate_json(cleaned)
             if length and len(getattr(parsed, length[0])) != length[1]:
                 raise ValueError(f"{length[0]} must have exactly {length[1]} entries, covering every constraint in order.")
             return parsed
         except ValueError as error:
             if attempt + 1 == presets.SAC_OPT.max_parse_attempts:
                 raise
-            messages += [AIMessage(reply.text), HumanMessage("Correct the JSON response: " + str(error))]
+            messages += [AIMessage(reply.text or "[empty response]"), HumanMessage("Correct the JSON response: " + str(error))]
     raise AssertionError("SAC-Opt requires at least one parse attempt.")
 
 

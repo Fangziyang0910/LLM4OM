@@ -1,24 +1,28 @@
 """Platform operations around modeling: revise the problem and explain an actual solution."""
 
 import json
-from typing import Any
+from typing import Annotated, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from llm4om.runtime import Context
 
 MAX_EXPLAINED_VARIABLES = 100
+_StrippedText = Annotated[str, StringConstraints(strip_whitespace=True)]
+_NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class Decision(BaseModel):
     variable: str = Field(description="Exact variable name from the supplied solution")
-    label: str = Field(description="Business meaning of this decision, without its numeric value")
-    unit: str = ""
+    label: _NonEmptyText = Field(description="Business meaning of this decision, without its numeric value")
+    unit: _StrippedText = ""
 
 
 class Explanation(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     summary: str = Field(min_length=1, description="A direct answer to the user's question, including the actual choices and result")
     objective_label: str = Field(description="Business meaning of the objective, without its numeric value")
     objective_unit: str = ""
@@ -28,16 +32,22 @@ class Explanation(BaseModel):
 
 
 class ConflictReason(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     constraint_ids: list[int] = Field(min_length=1, description="One-based IDs of the supplied conflicting constraints")
     explanation: str = Field(min_length=1, description="Business meaning of this conflict, in plain language")
 
 
 class Adjustment(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     title: str = Field(min_length=1, description="Short name of a candidate change to the user's requirements")
     instruction: str = Field(min_length=1, description="A complete change request with explicit new requirements, no missing values")
 
 
 class InfeasibilityExplanation(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     summary: str = Field(min_length=1, description="Why the computed model cannot meet these requirements together")
     conflicts: list[ConflictReason] = Field(min_length=1, max_length=5)
     adjustments: list[Adjustment] = Field(default_factory=list, max_length=1,

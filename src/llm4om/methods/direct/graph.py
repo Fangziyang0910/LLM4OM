@@ -36,8 +36,7 @@ async def _generate(context: Context, role: str, user: str) -> dict[str, Any]:
         if not formulation or not code.strip():
             raise ValueError("The reply must include both a mathematical formulation and nonempty Python code.")
     except ValueError as error:
-        return {"_reply": reply, "_format_error": str(error), "failure": str(error), "review": None,
-                "formulation": None, "code": None, "solve": None}
+        return {"_reply": reply, "_format_error": str(error), "failure": str(error), "review": None}
     return {"_reply": reply, "_format_error": None, "failure": None, "review": None,
             "formulation": formulation, "code": code, "solve": None}
 
@@ -87,7 +86,7 @@ def attempt_feedback(state: State) -> str:
 async def review(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     reply = await ask(runtime.context, "review", REVIEW.format(target=runtime.context.target.prompt),
                       state["problem"] + "\n\n" + attempt_feedback(state))
-    fenced = re.fullmatch(r"```(?:json)?[ \t]*\n(.*?)\n?```", reply.strip(), re.S | re.I)
+    fenced = re.fullmatch(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n?```", reply.strip(), re.S | re.I)
     try:
         verdict = Review.model_validate_json(fenced[1] if fenced else reply)
     except ValueError as error:
@@ -121,6 +120,8 @@ def finish(state: State) -> dict[str, Any]:
         return {"failure": state["failure"]}
     if state.get("review") and state["review"]["action"] == "repair":
         return {"failure": "Model review still found a problem after the repair limit: " + state["review"]["reason"]}
+    if state.get("solve") is not None and not state["solve"].executed:
+        return {"failure": "Code execution still failed after the repair limit: " + (state["solve"].error or state["solve"].status)}
     return {"failure": None}
 
 

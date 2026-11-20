@@ -23,10 +23,11 @@ from .utils_general import (
 def get_dv_sym_str(var_name, space_index = []):
     if len(space_index) == 0:
         return f"{var_name} = sp.symbols('{var_name}')"
-    elif len(space_index) == 1:
-        return f"{var_name} = {{i: sp.symbols( ('{var_name}_' + str(i)).replace(' ', '_') ) for i in {space_index[0]}}}"
-    elif len(space_index) == 2:
-        return f"{var_name} = {{(i,j): sp.symbols(  ('{var_name}_' + str(i) + '_' +  str(j)).replace(' ', '_') ) for i in {space_index[0]} for j in {space_index[1]}}}"
+    idx = ["i", "j"][:len(space_index)] if len(space_index) <= 2 else [f"i{k}" for k in range(len(space_index))]
+    key = idx[0] if len(idx) == 1 else "(" + ",".join(idx) + ")"
+    name_expr = f"'{var_name}_' + " + " + '_' + ".join(f"str({k})" for k in idx)
+    loops = " ".join(f"for {k} in {space}" for k, space in zip(idx, space_index))
+    return f"{var_name} = {{{key}: sp.symbols(({name_expr}).replace(' ', '_')) {loops}}}"
 
 
 def get_symbolic_par_dv(this_dict):
@@ -59,14 +60,13 @@ def dict_to_obj_str(this_dict):
 
     # Define the objective functions
     this_idx = 1
+    senses = []
     for i, (obj_name, obj_expr) in enumerate(this_dict.items(), start=1):
         if obj_name.startswith('objective_'):
             output_string += f"# Define the objective function {this_idx}\n"
-            if 'min' in obj_expr.keys():
-                this_obj = obj_expr['min'].replace('\n', '')
-            else:
-                this_obj = obj_expr['max'].replace('\n', '')
-
+            sense, expr = next(iter(obj_expr.items()))
+            senses.append('max' if str(sense).strip().lower() in ('max', 'maximize', 'maximization') else 'min')
+            this_obj = str(expr).replace('\n', '')
             output_string += f"objective{this_idx} = {this_obj}\n\n"
             this_idx += 1
 
@@ -77,7 +77,8 @@ def dict_to_obj_str(this_dict):
 
     # Check if they are equivalent
     output_string += "# Check if they are equivalent\n"
-    output_string += "equivalence = sp.simplify(simplified_obj1 - simplified_obj2) == 0\n\n"
+    same_sense = len(senses) == 2 and senses[0] == senses[1]
+    output_string += f"equivalence = {same_sense!r} and sp.simplify(simplified_obj1 - simplified_obj2) == 0\n\n"
     output_string += 'print("Hypothesis are equivalent: ", equivalence)\n'
 
     return output_string
@@ -204,7 +205,8 @@ def get_most_common_dict_index(dict_list):
         if isinstance(o, (list, tuple)):
             return tuple(make_hashable(e) for e in o)
         elif isinstance(o, dict):
-            return tuple(sorted((make_hashable(k), make_hashable(v)) for k, v in o.items()))
+            return tuple(sorted(((make_hashable(k), make_hashable(v)) for k, v in o.items()),
+                                key=lambda item: (type(item[0]).__name__, repr(item[0]))))
         else:
             return o
 
@@ -296,12 +298,13 @@ def get_dv_smt_str(output_string, var_name, space_index = []):
     if len(space_index) == 0:
         output_string += f"{var_name} = Reals('{var_name}')[0]\n"
         output_string += f"all_variables += [{var_name}]\n"
-    elif len(space_index) == 1:
-        output_string += f"{var_name} = {{i: Reals( ('{var_name}_' + str(i)).replace(' ', '_') )[0] for i in {space_index[0]}}}\n"
-        output_string += f"all_variables += [Reals( ('{var_name}_' + str(i)).replace(' ', '_') )[0] for i in {space_index[0]}]\n"
-    elif len(space_index) == 2:
-        output_string += f"{var_name} = {{(i,j): Reals(  ('{var_name}_' + str(i) + '_' +  str(j)).replace(' ', '_') )[0] for i in {space_index[0]} for j in {space_index[1]}}}\n"
-        output_string += f"all_variables += [Reals(  ('{var_name}_' + str(i) + '_' +  str(j)).replace(' ', '_') )[0]  for i in {space_index[0]} for j in {space_index[1]}]\n"
+    else:
+        idx = ["i", "j"][:len(space_index)] if len(space_index) <= 2 else [f"i{k}" for k in range(len(space_index))]
+        key = idx[0] if len(idx) == 1 else "(" + ",".join(idx) + ")"
+        name_expr = f"'{var_name}_' + " + " + '_' + ".join(f"str({k})" for k in idx)
+        loops = " ".join(f"for {k} in {space}" for k, space in zip(idx, space_index))
+        output_string += f"{var_name} = {{{key}: Reals(({name_expr}).replace(' ', '_'))[0] {loops}}}\n"
+        output_string += f"all_variables += [Reals(({name_expr}).replace(' ', '_'))[0] {loops}]\n"
     return output_string
 
 

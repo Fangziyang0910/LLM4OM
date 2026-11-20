@@ -1,5 +1,6 @@
 """TriVAL workflow: semantic, formulation and code validation on one flat StateGraph."""
 
+import re
 from collections.abc import Callable, Sequence
 from typing import Any, Literal, TypeVar
 
@@ -108,17 +109,25 @@ def _strip_invalid_calls(reply: AIMessage) -> tuple[AIMessage, list[dict[str, An
     return reply.model_copy(update={"content": content, "invalid_tool_calls": [], "additional_kwargs": extra}), invalid
 
 
-async def _run_tools(llm: Any, system_prompt: str, user_content: str, tools: Sequence[BaseTool]) -> None:
+async def _run_tools(llm: Any, system_prompt: str, user_content: str, tools: Sequence[BaseTool],
+                     *, require_done: Callable[[], bool] | None = None, max_reminders: int = 2) -> None:
     """Execute a tool-calling turn loop sequentially in call order without nested StateGraphs or Command replays."""
     bound = llm.bind_tools(tools)
     by_name = {item.name: item for item in tools}
     messages: list[BaseMessage] = [SystemMessage(system_prompt), HumanMessage(user_content)]
+    reminders = 0
     while True:
         reply, invalid = _strip_invalid_calls(await bound.ainvoke(messages))
         if not reply.tool_calls and not invalid:
+            if require_done is not None and not require_done() and reminders < max_reminders:
+                reminders += 1
+                messages.append(reply if reply.text else reply.model_copy(update={"content": "[empty response]"}))
+                messages.append(HumanMessage(f"Call one of {list(by_name)} to record your decision."))
+                continue
             return
         messages.append(reply)
-        for call in reply.tool_calls:
+        for index, call in enumerate(reply.tool_calls):
+            call_id = call.get("id") or f"call_{index}"
             selected = by_name.get(call["name"])
             if selected is None:
                 output = f"Unknown tool {call['name']!r}; choose from {list(by_name)}."
@@ -127,7 +136,7 @@ async def _run_tools(llm: Any, system_prompt: str, user_content: str, tools: Seq
                     output = selected.invoke(call["args"])
                 except ValidationError as error:
                     output = f"Invalid arguments: {error}"
-            messages.append(ToolMessage(str(output), tool_call_id=call["id"], name=call["name"]))
+            messages.append(ToolMessage(str(output), tool_call_id=call_id, name=call["name"]))
         if invalid:
             errors = "; ".join(str(bad.get("error") or "invalid JSON arguments") for bad in invalid)
             messages.append(HumanMessage(f"Malformed tool call ({errors}). Retry with valid JSON arguments."))
@@ -149,24 +158,25 @@ async def _validate(llm: Any, system_prompt: str, user_content: str, schema: typ
     while True:
         reply, invalid = _strip_invalid_calls(await bound.ainvoke(messages))
         if not reply.tool_calls and not invalid:
-            cleaned = reply.text.strip().removeprefix("```json").removesuffix("```").strip()
+            cleaned = re.sub(r"^```(?:json)?[ \t]*\r?\n?|\r?\n?```$", "", reply.text.strip(), flags=re.I).strip()
             try:
                 return schema.model_validate_json(cleaned)
             except ValidationError:
-                messages.append(reply)
+                messages.append(reply if reply.text else reply.model_copy(update={"content": "[empty response]"}))
                 messages.append(HumanMessage(f"Call {schema.__name__} once with a valid validation decision."))
                 continue
         messages.append(reply)
         parsed: list[T] = []
-        for call in reply.tool_calls:
+        for index, call in enumerate(reply.tool_calls):
+            call_id = call.get("id") or f"call_{index}"
             if call["name"] != schema.__name__:
-                messages.append(ToolMessage(f"Call {schema.__name__}.", tool_call_id=call["id"], name=call["name"]))
+                messages.append(ToolMessage(f"Call {schema.__name__}.", tool_call_id=call_id, name=call["name"]))
                 continue
             try:
                 parsed.append(schema.model_validate(call["args"]))
-                messages.append(ToolMessage(f"Recorded {schema.__name__}.", tool_call_id=call["id"], name=call["name"]))
+                messages.append(ToolMessage(f"Recorded {schema.__name__}.", tool_call_id=call_id, name=call["name"]))
             except ValidationError as error:
-                messages.append(ToolMessage(str(error), tool_call_id=call["id"], name=call["name"]))
+                messages.append(ToolMessage(str(error), tool_call_id=call_id, name=call["name"]))
         total_calls = len(reply.tool_calls) + len(invalid)
         if len(parsed) == 1 and total_calls == 1:
             return parsed[0]
@@ -176,8 +186,8 @@ async def _validate(llm: Any, system_prompt: str, user_content: str, schema: typ
 
 def _semantic_context(state: State) -> str:
     return (
-        f"## Original Problem Description\n{state.get('problem_description')}\n\n"
-        f"## Semantic Specification\n{state.get('semantic_facts', '')}\n{state.get('ambiguity_resolutions', '')}\n"
+        f"## Original Problem Description\n{state.get('problem_description') or ''}\n\n"
+        f"## Semantic Specification\n{state.get('semantic_facts') or ''}\n{state.get('ambiguity_resolutions') or ''}\n"
     )
 
 
@@ -248,8 +258,8 @@ async def semantic_fact_extractor(state: State, runtime: Runtime[Context]) -> di
     if (facts_faithful is False or ambiguities_relevant is False) and feedback:
         user_content = (
             f"## Original Problem Description\n{state['problem_description']}\n\n"
-            f"## Current Semantic Facts\n{state.get('semantic_facts', '(none)')}\n\n"
-            f"## Current Ambiguities\n{state.get('semantic_ambiguities', '(none)')}\n\n"
+            f"## Current Semantic Facts\n{state.get('semantic_facts') or '(none)'}\n\n"
+            f"## Current Ambiguities\n{state.get('semantic_ambiguities') or '(none)'}\n\n"
             f"## Validation Feedback\n{feedback}\n\n"
             "Revise the current semantic specification to satisfy the validation requirements."
         )
@@ -309,14 +319,14 @@ async def semantic_validator(state: State, runtime: Runtime[Context]) -> dict[st
 
 async def formulation_selector(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     candidates = {
-        "parameter_index_expert": state.get("parameter_index_candidate", ""),
-        "constraint_expert": state.get("constraint_candidate", ""),
-        "decision_variable_expert": state.get("decision_variable_candidate", ""),
-        "objective_expert": state.get("objective_candidate", ""),
+        "parameter_index_expert": state.get("parameter_index_candidate") or "",
+        "constraint_expert": state.get("constraint_candidate") or "",
+        "decision_variable_expert": state.get("decision_variable_candidate") or "",
+        "objective_expert": state.get("objective_candidate") or "",
     }
     chosen: dict[str, Any] = {
-        "formulation": state.get("formulation", ""),
-        "selected_formulation_expert": state.get("selected_formulation_expert"),
+        "formulation": "",
+        "selected_formulation_expert": None,
     }
 
     @tool("select_formulation")
@@ -349,7 +359,14 @@ async def formulation_selector(state: State, runtime: Runtime[Context]) -> dict[
         P.FORMULATION_SELECTOR_SYSTEM_PROMPT,
         user_content,
         [select_formulation],
+        require_done=lambda: bool(chosen["formulation"].strip()),
     )
+    if not chosen["formulation"].strip():
+        for name, candidate in candidates.items():
+            if candidate.strip():
+                chosen["formulation"] = candidate
+                chosen["selected_formulation_expert"] = name
+                break
     return chosen
 
 
@@ -378,10 +395,10 @@ async def revise_formulation(state: State, runtime: Runtime[Context]) -> dict[st
         revised["formulation"] = formulation
         return "Fixed formulation has been written."
 
-    parts = [_semantic_context(state), f"## Selected Formulation\n{state.get('formulation', '')}"]
-    if feedback := state.get("formulation_validation_feedback", ""):
+    parts = [_semantic_context(state), f"## Selected Formulation\n{state.get('formulation') or ''}"]
+    if state.get("formulation_validation_passed") is False and (feedback := state.get("formulation_validation_feedback")):
         parts.append(f"## Formulation Validation Feedback\n{feedback}")
-    if state.get("error_attribution") == "formulation" and (code_feedback := state.get("code_validation_feedback", "")):
+    if state.get("error_attribution") == "formulation" and (code_feedback := state.get("code_validation_feedback")):
         parts.append(f"## Code Validation Feedback (Reason for Formulation Revision)\n{code_feedback}")
 
     await _run_tools(
@@ -392,6 +409,7 @@ async def revise_formulation(state: State, runtime: Runtime[Context]) -> dict[st
     )
     return {
         "formulation": revised["formulation"],
+        "code": None,
         "error_attribution": None,
         "code_validation_passed": None,
         "code_validation_feedback": None,
@@ -452,13 +470,13 @@ async def code_agent(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     )
     if state.get("code_validation_passed") is False and state.get("code_validation_feedback") and state.get("code_executable") is not False:
         content += (
-            f"## Current Code\n{state.get('code', '')}\n\n"
+            f"## Current Code\n{state.get('code') or ''}\n\n"
             f"## Validation Feedback\n{state['code_validation_feedback']}\n\n"
             "Please fix the code based on the validation feedback above.\n"
         )
     elif state.get("code_executable") is False and state.get("execution_feedback"):
         content += (
-            f"## Current Code\n{state.get('code', '')}\n\n"
+            f"## Current Code\n{state.get('code') or ''}\n\n"
             f"## Execution Error\n{state['execution_feedback']}\n\n"
             "Please fix the code based on the error information above.\n"
         )
@@ -524,18 +542,21 @@ def receive_problem(state: State) -> dict[str, Any]:
         "problem_description": state["problem"],
         "code_execution_count": 0,
         "code_validation_count": 0,
-        "failure": "TriVAL stopped before code generation: the semantic or formulation stage did not pass.",
+        "failure": None,
     }
 
 
 def finish(state: State) -> dict[str, Any]:
     if not state.get("code"):
-        return {}
+        detail = state.get("execution_feedback") or "TriVAL finished without generating code."
+        return {"failure": detail}
+    code_feedback = (state.get("code_validation_feedback")
+                     or (state.get("execution_feedback") if state.get("code_executable") is False else None))
     checks = (
         ("semantic", all(state.get(key) for key in ("facts_faithful", "ambiguities_relevant", "resolutions_consistent")),
          state.get("semantic_validation_feedback")),
         ("formulation", state.get("formulation_validation_passed"), state.get("formulation_validation_feedback")),
-        ("code", state.get("code_validation_passed"), state.get("code_validation_feedback")),
+        ("code", state.get("code_validation_passed"), code_feedback),
     )
     unresolved = [f"{stage}: {feedback or 'validation did not pass'}" for stage, passed, feedback in checks if not passed]
     return {"failure": "TriVAL ended with unresolved validation: " + "; ".join(unresolved) if unresolved else None}

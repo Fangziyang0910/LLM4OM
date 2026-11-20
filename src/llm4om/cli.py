@@ -124,7 +124,8 @@ def _serve(args: argparse.Namespace) -> int:
     reach = "; other machines use this machine's address" if args.host == "0.0.0.0" else ""
     print(f"LLM4OM: http://{local}:{args.port}{reach}  (runs are kept in {workspace})", file=sys.stderr)
     run_server(host=args.host, port=args.port, graphs=graphs, n_jobs_per_worker=args.jobs, open_browser=False,
-               http={"app": "llm4om.server.app:app", "cors": {"allow_origins": []}},
+               http={"app": "llm4om.server.app:app", "cors": {"allow_origins": []},
+                     "disable_mcp": True, "disable_a2a": True},
                server_level="WARNING")
     return 0
 
@@ -235,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
         extra = "web" if args.command == "serve" else "llm"
         print(f"Error: Missing {error.name}. Install llm4om[{extra}] to use '{args.command}'.", file=sys.stderr)
         return 2
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, RuntimeError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:

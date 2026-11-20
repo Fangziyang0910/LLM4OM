@@ -30,7 +30,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import Command
 from langgraph_sdk import get_client
 from pydantic import BaseModel, ConfigDict, Field
-from simpleeval import InvalidExpression, simple_eval
+from simpleeval import DEFAULT_OPERATORS, InvalidExpression, simple_eval
 
 from llm4om.graph import Resources, get_resources, run
 from llm4om.languages import LANGUAGES
@@ -116,9 +116,24 @@ If unfinished_modeling or unfinished_scenarios is supplied, finish that exact re
 Original plans and attachments remain intact. Delegate modeling to the supplied tools instead of generating substitute solver code.
 """
 
-TOOL_INPUT_ERRORS = (InvalidExpression, ArithmeticError, ValueError, KeyError, TypeError, SyntaxError)
+TOOL_INPUT_ERRORS = (InvalidExpression, ArithmeticError, ValueError, LookupError, TypeError, SyntaxError)
 CHANGE_TOOLS = {"select_plan", "solve_scenarios", "model_and_solve"}
 RECOVERABLE_TOOLS = {"lookup_variables", "select_plan", "calculate"}
+_FORBIDDEN_CALC_NODES = (ast.JoinedStr, ast.FormattedValue, ast.LShift, ast.RShift)
+
+
+def _safe_pow(base: Any, exponent: Any) -> int | float:
+    if not isinstance(base, (int, float)) or not isinstance(exponent, (int, float)):
+        raise TypeError("Exponentiation requires numeric operands.")
+    if abs(exponent) > 1024:
+        raise ValueError("Exponent is too large.")
+    if isinstance(base, int) and isinstance(exponent, int) and exponent >= 0 and abs(base) > 1 and exponent * abs(base).bit_length() > 4096:
+        raise OverflowError("Result of exponentiation is too large.")
+    return base ** exponent
+
+
+_CALC_OPERATORS = {op: fn for op, fn in DEFAULT_OPERATORS.items() if op not in (ast.LShift, ast.RShift)}
+_CALC_OPERATORS[ast.Pow] = _safe_pow
 
 
 class SourceRun(TypedDict):
@@ -211,7 +226,7 @@ async def prepare_turn_model(
     """Resolve the conversation turn's LLM preset, thinking override and call recorder."""
     preset, settings, _ = await asyncio.to_thread(resources.resolve, preset_id)
     settings = settings.with_thinking(thinking)
-    recorder = Recorder(resources.limits, charge=resources.charge(preset))
+    recorder = Recorder(resources.limits, charge=resources.charge(preset), redact=settings.redact)
     model = resources.model_factory(settings, callbacks=[recorder.callback], metadata={"llm4om_role": role})
     return preset, settings, recorder, model
 
@@ -265,7 +280,7 @@ class Conversation:
 
     @property
     def change_complete(self) -> bool:
-        return self.change_started or (bool(self.recovered) and self.pending is None)
+        return self.change_started or (bool(self.recovered) and self.pending is None and self.pending_model is None)
 
     async def load(self, source: SourceRun) -> dict[str, Any]:
         key = (source["thread_id"], source["checkpoint_id"])
@@ -322,15 +337,17 @@ class Conversation:
         """Build the outer conversation state update for either a completed or failed turn."""
         if error is None and result is not None:
             update: dict[str, Any] = {"messages": result["messages"], "current": result["current"], "failure": None}
+            pending, pending_model = None, None
         else:
             advanced = self.completed[0]["source"] if len(self.completed) == 1 and self.pending is None else self.selected_plan
             valid = advanced and self.cache[(advanced["thread_id"], advanced["checkpoint_id"])].get("spec")
-            update = {"current": advanced if valid else current, "failure": f"{type(error).__name__}: {error}"}
+            update = {"current": advanced if valid else current, "failure": recorder.redact(f"{type(error).__name__}: {error}")}
+            pending, pending_model = self.pending, self.pending_model
         plans = {item["source"]["thread_id"]: item for item in [*(self.state.get("plans") or []), *self.completed]}
         usage = {key: (base_usage or {}).get(key, 0) + value for key, value in recorder.usage.items()}
         first = self.completed[0]["source"] if self.completed else None
         initial = first if first and self.cache[(first["thread_id"], first["checkpoint_id"])].get("spec") else None
-        return {**update, "plans": list(plans.values()), "pending": self.pending, "pending_model": self.pending_model,
+        return {**update, "plans": list(plans.values()), "pending": pending, "pending_model": pending_model,
                 **({"source": initial} if not self.state.get("source") and initial else {}), "usage": usage}
 
 
@@ -391,7 +408,9 @@ def _build_tools_and_middleware(
         if session.pending:
             scenarios = [Scenario.model_validate(item) for item in session.pending["scenarios"]]
         values = await session.load(base)
-        spec = values["spec"]
+        spec = values.get("spec")
+        if not spec:
+            raise ValueError("This attempt has no saved modeling configuration. Choose a saved modeling plan.")
         if session.optimization and ((session.choice.method and session.choice.method != spec["method"])
                              or (session.choice.language and session.choice.language != spec["language"])
                              or (session.choice.solver and session.choice.solver != spec["solver"])):
@@ -435,6 +454,7 @@ def _build_tools_and_middleware(
                 "group": group, "turn_id": turn}, run=run_plan)
             results.append(_plan_result(plan, result))
         session.pending = None
+        session.pending_model = None
         update: dict[str, Any] = {"messages": [ToolMessage(json.dumps(results, ensure_ascii=False),
             tool_call_id=runtime.tool_call_id, name="solve_scenarios", artifact={"type": "plans", "plans": results})]}
         if len(session.completed) == 1 and result.get("spec"):
@@ -453,6 +473,8 @@ def _build_tools_and_middleware(
         Constants must come from the supplied problem or data. This evaluates expressions, not Python scripts.
         """
         parsed = ast.parse(expression, mode="eval")
+        if any(isinstance(node, _FORBIDDEN_CALC_NODES) for node in ast.walk(parsed)):
+            raise InvalidExpression("Unsupported expression syntax.")
         uses_plan = any(isinstance(node, ast.Name) and node.id in {"v", "values", "objective"}
                         for node in ast.walk(parsed))
         source = (session.selected_source(plan_id, runtime.state["current"])
@@ -466,8 +488,10 @@ def _build_tools_and_middleware(
         names = {"v": dict(variables), "values": list(matched.values())} if variables else {}
         if solved.get("objective") is not None:
             names["objective"] = solved["objective"]
-        result = simple_eval(expression, names=names, functions={"sum": sum, "min": min, "max": max,
-            "abs": abs, "round": round, "len": len, "sqrt": math.sqrt}, allowed_attrs={})
+        result = simple_eval(expression, names=names, operators=_CALC_OPERATORS,
+                             functions={"sum": sum, "min": min, "max": max,
+                                        "abs": abs, "round": round, "len": len, "sqrt": math.sqrt},
+                             allowed_attrs={})
         if type(result) not in (int, float) or not math.isfinite(result):
             raise ValueError("The expression must return a finite number.")
         facts = {"source": source, "expression": expression, "query": query,
@@ -510,7 +534,7 @@ def _build_tools_and_middleware(
         library = next((item.id for item in LANGUAGES.values()
                         if request["language"].strip().casefold() in (item.id, item.name.casefold())), request["language"])
         target = selected.code_target(library, request["solver"])
-        request = {**request, "method": selected.id, "language": target.language}
+        request = {**request, "method": selected.id, "language": target.language, "solver": target.solver}
         session.pending_model = request
         identity = json.dumps(request, sort_keys=True, ensure_ascii=False)
         identifier = str(uuid5(NAMESPACE_URL, f"{runtime.config['configurable']['thread_id']}:{identity}"))
@@ -535,6 +559,7 @@ def _build_tools_and_middleware(
         plan, result = await session.save_plan(identifier, {"name": request["name"], "instruction": request["description"],
             "group": None, "turn_id": session.messages[-1].id}, run=run_plan)
         session.pending_model = None
+        session.pending = None
         facts = {**_plan_result(plan, result), "method": request["method"], "language": request["language"]}
         return Command(update={**({"current": plan["source"]} if result.get("spec") else {}),
             "messages": [ToolMessage(json.dumps(facts, ensure_ascii=False), tool_call_id=runtime.tool_call_id,
@@ -598,20 +623,23 @@ def _build_tools_and_middleware(
                           handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command]]) -> ToolMessage | Command:
         name = request.tool_call["name"]
         if name in CHANGE_TOOLS:
-            if session.change_started:
+            if session.change_complete:
                 return ToolMessage("A plan change is already being applied this turn. Use its result. "
                                    "For selection and changes together, call solve_scenarios with base_plan_id; "
                                    "send multiple scenarios in one call.",
                                    name=name, tool_call_id=request.tool_call["id"], status="error")
             session.change_started = True
         try:
-            return await handler(request)
+            result = await handler(request)
         except TOOL_INPUT_ERRORS as error:
             if name not in RECOVERABLE_TOOLS:
                 raise
             if name == "select_plan":
                 session.change_started = False
             return ToolMessage(str(error), name=name, tool_call_id=request.tool_call["id"], status="error")
+        if name in CHANGE_TOOLS and isinstance(result, ToolMessage) and result.status == "error":
+            session.change_started = False
+        return result
 
     return tools, [turn_context, guard_tools]
 
@@ -631,7 +659,7 @@ def _conversation_graph(*, optimization: bool) -> Any:
         if not optimization and (not original.get("spec") or not original.get("description")):
             raise ValueError("The source must be a saved modeling run.")
         preset, settings, recorder, model = await prepare_turn_model(
-            resources, choice.preset or original.get("spec", {}).get("preset"), choice.thinking, kind)
+            resources, choice.preset or (original.get("spec") or {}).get("preset"), choice.thinking, kind)
         language = "Simplified Chinese" if choice.locale == "zh" else "English"
 
         try:

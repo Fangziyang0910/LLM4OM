@@ -66,8 +66,9 @@ class LLMPresetStore:
             for values in self._saved():
                 identity, name = values.pop("id"), values.pop("name", "")
                 saved.append(LLMPreset(identity, LLMSettings(**values), name=name))
-        environment = settings_from_env()
-        return ([LLMPreset(ENV_PRESET, environment, "env", os.environ.get("LLM4OM_LLM_NAME", ""))] if environment else []) + saved
+            environment = settings_from_env()
+            env_name = os.environ.get("LLM4OM_LLM_NAME", "").strip()
+        return ([LLMPreset(ENV_PRESET, environment, "env", env_name)] if environment else []) + saved
 
     def find(self, preset: str | None = None) -> LLMPreset:
         """The preset `preset`, or the default preset."""
@@ -114,11 +115,16 @@ def settings_from_env() -> LLMSettings | None:
     """Default settings from LLM4OM_LLM_* variables (a `.env` file in the working directory is read first)."""
     from dotenv import load_dotenv
 
-    load_dotenv()
-    model = os.environ.get("LLM4OM_LLM_MODEL", "")
-    if not model:
-        return None
-    return LLMSettings(provider=os.environ.get("LLM4OM_LLM_PROVIDER", "openai_compatible"), model=model,
-                       api_key=os.environ.get("LLM4OM_LLM_API_KEY", ""),
-                       base_url=os.environ.get("LLM4OM_LLM_BASE_URL", ""),
-                       extra_body=json.loads(os.environ.get("LLM4OM_LLM_EXTRA_BODY") or "{}"))
+    with LLMPresetStore._lock:
+        load_dotenv()
+        model = os.environ.get("LLM4OM_LLM_MODEL", "").strip()
+        if not model:
+            return None
+        provider = os.environ.get("LLM4OM_LLM_PROVIDER", "openai_compatible").strip() or "openai_compatible"
+        api_key = os.environ.get("LLM4OM_LLM_API_KEY", "")
+        base_url = os.environ.get("LLM4OM_LLM_BASE_URL", "")
+        extra_raw = os.environ.get("LLM4OM_LLM_EXTRA_BODY") or "{}"
+    extra_body = json.loads(extra_raw)
+    if not isinstance(extra_body, dict):
+        raise ValueError("LLM4OM_LLM_EXTRA_BODY must be a JSON object.")
+    return LLMSettings(provider=provider, model=model, api_key=api_key, base_url=base_url, extra_body=extra_body)

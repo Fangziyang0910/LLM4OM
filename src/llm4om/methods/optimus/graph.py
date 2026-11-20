@@ -40,7 +40,7 @@ from llm4om.methods.optimus.parsing import (
     shape_string_to_list,
 )
 from llm4om.model_code import ModelCode
-from llm4om.runtime import Context, ModelingState
+from llm4om.runtime import Context, LimitExceeded, ModelingState
 
 PARAMS_PROMPT = P.PARAMETERS__PROMPT_PARAMS.replace(
     '        "type": "TYPE"\n    }}\n}}',
@@ -83,15 +83,17 @@ async def parameters(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
         while True:
             try:
                 params = extract_json_from_end(await _ask(context, "parameters", PARAMS_PROMPT.format(description=state["problem"])))
+                if not isinstance(params, dict) or not all(isinstance(v, dict) for v in params.values()):
+                    raise ValueError("Parameters must map each symbol to a JSON object.")
+                for p in params:
+                    params[p]["shape"] = shape_string_to_list(params[p].get("shape"))
                 break
-            except GraphBubbleUp:
-                raise  # Host-model pauses are graph control flow, not malformed model replies.
+            except (GraphBubbleUp, LimitExceeded):
+                raise  # Host-model pauses and run limits are control flow, not malformed model replies.
             except Exception:
                 k -= 1
                 if k == 0:
                     raise Exception("Failed to extract parameters")
-        for p in params:
-            params[p]["shape"] = shape_string_to_list(params[p]["shape"])
     values = {key: params[key].pop("value", None) for key in params}  # utils.create_state
     return {"parameters": params, "_values": values}
 
@@ -114,7 +116,7 @@ async def constraints(state: State, runtime: Runtime[Context]) -> dict[str, Any]
                 description=desc, params=_dump(params), constraints=_dump(found)))
             found = extract_json_from_end(x, list)
             break
-        except GraphBubbleUp:
+        except (GraphBubbleUp, LimitExceeded):
             raise
         except Exception:
             k -= 1
@@ -135,19 +137,23 @@ async def _score_constraint(context: Context, desc: str, text: str, params: dict
         description=desc, params=_dump(params), vars=_dump({}), extracted_constraints=_dump(found),
         new_constraint=c, new_constraint_explanation=text))
     output_json = extract_json_from_end(response)
-    action, updated_constraint = output_json["action"], output_json["updatedConstraint"]
-    if action.lower().startswith("y"):
+    raw_action = output_json.get("action")
+    action = str(raw_action).strip().lower() if raw_action is not None else ""
+    updated_constraint = output_json.get("updatedConstraint")
+    if action.startswith("y"):
         return True, found
-    if action.lower().startswith("n"):
+    if action.startswith("n"):
         found.remove(c)
         return True, found
-    if action.lower().startswith("m"):
+    if action.startswith("m"):
+        if not isinstance(updated_constraint, str) or not updated_constraint.strip():
+            raise ValueError("Missing updatedConstraint for modify action.")
         found.remove(c)
         # Upstream appends {"Description": ..., "Formulation": None, "Code": None}, which the next step wraps again
         # as the description of a constraint; the text is kept instead.
         found.append(updated_constraint)
         return True, found
-    raise Exception("Invalid input!")
+    raise ValueError("Invalid action in constraint feedback.")
 
 
 async def check_constraints(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
@@ -159,7 +165,12 @@ async def check_constraints(state: State, runtime: Runtime[Context]) -> dict[str
         while k > 0:
             x = await _ask(context, "constraint_check", P.CONSTRAINT__PROMPT_CONSTRAINTS_Q.format(
                 description=desc, params=_dump(params), targetConstraint=c, question=P.CONSTRAINT__QS_0))
-            valid, checked = await _score_constraint(context, desc, x, params, found, c)
+            try:
+                valid, checked = await _score_constraint(context, desc, x, params, found, c)
+            except (GraphBubbleUp, LimitExceeded):
+                raise
+            except (ValueError, KeyError, TypeError):
+                valid, checked = False, None
             if valid:
                 found = checked or []
                 break
@@ -232,12 +243,15 @@ async def write_code(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
 def assemble(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """Assemble the method's parameters and code fragments using the selected library."""
     code = ModelCode(runtime.context.target)
-    body = ["data = " + pformat(state['_values'], width=110, sort_dicts=False) + "\n"]
+    body = ["_params = " + pformat(state['_values'], width=110, sort_dicts=False) + "\n"]
     for symbol, value in state['parameters'].items():
-        body.append(f'{symbol} = data["{symbol}"]\n')
+        body.append(f'{symbol} = _params[{symbol!r}]\n')
     for symbol, value in state['variables'].items():
-        body.append(code.variables(symbol, [f'range({n})' for n in value['shape']], value['type'],
-                                   str(value.get('lower_bound', 0)), str(value.get('upper_bound'))))
+        lb_raw = value.get('lower_bound', 0)
+        ub_raw = value.get('upper_bound')
+        lb = '0' if lb_raw is None or (isinstance(lb_raw, str) and not lb_raw.strip()) else str(lb_raw)
+        ub = 'None' if ub_raw is None or (isinstance(ub_raw, str) and not ub_raw.strip()) else str(ub_raw)
+        body.append(code.variables(symbol, [f'range({n})' for n in value['shape']], value['type'], lb, ub))
     body.extend(c['code'] for c in state['constraints'])
     body.append(state['objective']['code'])
     return {'code': code.assemble(body), 'tries': 0}

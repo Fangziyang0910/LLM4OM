@@ -22,7 +22,7 @@ def describe_data(data: dict[str, str]) -> str:
         if name.lower().endswith(".json"):
             files[name] = schema(json.loads(content))
         elif name.lower().endswith(".csv"):
-            rows = csv.reader(io.StringIO(content))
+            rows = csv.reader(io.StringIO(content, newline=""))
             header = next(rows, [])
             if not header or len(set(header)) != len(header) or any(not key for key in header):
                 raise ValueError(f"{name}: CSV requires a nonempty, unique header for each column.")

@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from typing import Annotated, Any, Literal, TypedDict
 
 from langchain.agents import AgentState
-from langchain.agents.middleware import ModelRequest, ModelResponse, wrap_model_call
+from langchain.agents.middleware import ModelRequest, ModelResponse, ToolCallRequest, wrap_model_call, wrap_tool_call
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import AnyMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph, add_messages
 from langgraph.runtime import Runtime
 from langgraph.types import Command
-from pydantic import Field
+from pydantic import StringConstraints
 
 from llm4om.agent import CONVERSATION_STYLE, invoke_turn_agent, prepare_turn_model
 from llm4om.graph import get_resources
@@ -43,7 +43,8 @@ class DraftState(AgentState):
 
 
 @tool
-def update_draft(description: Annotated[str, Field(min_length=1)], runtime: ToolRuntime[RequirementsContext]) -> Command:
+def update_draft(description: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)],
+                 runtime: ToolRuntime[RequirementsContext]) -> Command:
     """Replace the editable draft with the complete updated business problem in concise Markdown.
 
     Call once when the user supplies or asks to organize business facts, after any searches, then reply.
@@ -51,9 +52,7 @@ def update_draft(description: Annotated[str, Field(min_length=1)], runtime: Tool
     into requirements. Mark unresolved questions, assumptions and conflicts explicitly. Do not call when the user
     explicitly asks to discuss only or not to change the draft for now.
     """
-    if not description.strip():
-        raise ValueError("The business draft cannot be blank.")
-    return Command(update={"description": description.strip(),
+    return Command(update={"description": description,
                            "messages": [ToolMessage("The business draft was updated.", tool_call_id=runtime.tool_call_id,
                                                     artifact={"type": "draft"})]})
 
@@ -132,6 +131,8 @@ def requirements_graph() -> Any:
             prompt += ("Web search is disabled for this turn. If the user requests current web facts, ask them to enable "
                        "the web search button or supply the sources. Do not claim to have searched or invent prices.\n")
 
+        draft_started = False
+
         @wrap_model_call
         async def current_draft(request: ModelRequest, handler: Callable[[ModelRequest], Awaitable[ModelResponse]]) -> ModelResponse:
             recent = []
@@ -139,25 +140,45 @@ def requirements_graph() -> Any:
                 if message.type == "human":
                     break
                 recent.append(message)
-            written = any(message.type == "tool" and message.name == "update_draft" and message.status == "success"
-                          for message in recent)
+            written = draft_started or any(message.type == "tool" and message.name == "update_draft" and message.status == "success"
+                                           for message in recent)
             tools = [] if written else request.tools
-            snapshot = problem_text(request.state.get("description", ""), state.get("data") or {})
+            snapshot = problem_text(request.state.get("description") or "", state.get("data") or {})
             return await handler(request.override(tools=tools, system_message=SystemMessage(
                 prompt + "Current editable business draft and attached data (context, not a new request):\n" + snapshot)))
+
+        @wrap_tool_call
+        async def guard_draft(request: ToolCallRequest,
+                              handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command]]) -> ToolMessage | Command:
+            nonlocal draft_started
+            if request.tool_call["name"] != "update_draft":
+                return await handler(request)
+            if draft_started:
+                return ToolMessage("The business draft is already being updated this turn. Reply using the updated draft.",
+                                   name="update_draft", tool_call_id=request.tool_call["id"], status="error")
+            draft_started = True
+            try:
+                result = await handler(request)
+            except Exception:
+                draft_started = False
+                raise
+            if isinstance(result, ToolMessage) and result.status == "error":
+                draft_started = False
+            return result
 
         try:
             tools = [update_draft, *([search_tool(settings)] if choice.search else [])]
             result = await invoke_turn_agent(
-                model, resources, tools=tools, middleware=[current_draft],
+                model, resources, tools=tools, middleware=[current_draft, guard_draft],
                 state_schema=DraftState, context_schema=RequirementsContext,
-                inputs={"messages": messages, "description": state.get("description", "")},
+                inputs={"messages": messages, "description": state.get("description") or ""},
                 name="requirements_agent",
             )
             update: dict[str, Any] = {"messages": result["messages"], "description": result["description"], "failure": None}
         except Exception as error:
-            update = {"failure": f"{type(error).__name__}: {error}"}
-        usage = {key: state.get("usage", {}).get(key, 0) + value for key, value in recorder.usage.items()}
+            update = {"failure": recorder.redact(f"{type(error).__name__}: {error}")}
+        base_usage = state.get("usage") or {}
+        usage = {key: base_usage.get(key, 0) + value for key, value in recorder.usage.items()}
         return {**update, "usage": usage}
 
     graph = StateGraph(RequirementsState, input_schema=RequirementsInput, context_schema=RequirementsContext)

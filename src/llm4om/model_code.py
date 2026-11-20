@@ -1,5 +1,6 @@
 """Native Python fragments shared by methods that assemble models from parts."""
 
+import re
 import textwrap
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -34,20 +35,25 @@ return factory(-{model}.infinity() if lb is None else lb, {model}.infinity() if 
                              is_integer=kind != 'CONTINUOUS', name=name)''',
     'cp_sat': '''if kind == 'CONTINUOUS':
     raise ValueError('CP-SAT cannot represent continuous decision variables.')
-if lb is None or ub is None:
+if lb is None or ub is None or not (math.isfinite(lb) and math.isfinite(ub)):
     raise ValueError('CP-SAT requires finite integer bounds derived from the problem.')
-return {model}.new_int_var(lb, ub, name)''',
-    'cpmpy': '''if kind == 'BINARY':
+if not (float(lb).is_integer() and float(ub).is_integer()):
+    raise ValueError('CP-SAT requires integer bounds derived from the problem.')
+return {model}.new_int_var(int(lb), int(ub), name)''',
+    'cpmpy': '''if kind == 'CONTINUOUS':
+    raise ValueError('CPMpy cannot represent continuous decision variables.')
+if lb is None or ub is None or not (math.isfinite(lb) and math.isfinite(ub)):
+    raise ValueError('CPMpy requires finite integer bounds derived from the problem.')
+if not (float(lb).is_integer() and float(ub).is_integer()):
+    raise ValueError('CPMpy requires integer bounds derived from the problem.')
+lb, ub = int(lb), int(ub)
+if kind == 'BINARY':
     variable = cp.boolvar(name=name)
     if lb > 0:
         {model}.add(variable >= lb)
     if ub < 1:
         {model}.add(variable <= ub)
     return variable
-if kind == 'CONTINUOUS':
-    raise ValueError('CPMpy cannot represent continuous decision variables.')
-if lb is None or ub is None:
-    raise ValueError('CPMpy requires finite integer bounds derived from the problem.')
 return cp.intvar(lb, ub, name=name)''',
     'pulp': '''variable = pulp.LpVariable(name, lowBound=lb, upBound=ub,
                            cat={'CONTINUOUS': 'Continuous', 'INTEGER': 'Integer', 'BINARY': 'Binary'}[kind])
@@ -88,13 +94,13 @@ class ModelCode:
         if self.target.language == 'ortools':
             if self.target.solver == 'CP_SAT':
                 return 'cp_sat'
-            if self.target.solver in ('HIGHS', 'GSCIP'):
+            if self.target.solver in ('HIGHS', 'GSCIP', 'OSQP', 'ECOS', 'SCS'):
                 return 'mathopt'
         return self.target.language
 
     @property
     def imports(self) -> str:
-        return 'import csv\nimport io\nimport itertools\nimport json\nimport numpy as np\n' + IMPORTS[self.api]
+        return 'import csv\nimport io\nimport itertools\nimport json\nimport math\nimport numpy as np\n' + IMPORTS[self.api]
 
     @property
     def setup(self) -> str:
@@ -140,7 +146,9 @@ class ModelCode:
         if not ranges:
             return f'{symbol} = {self.new_var(kind, repr(symbol), lb, ub)}\n'
         if indices is None:
-            indices = ['i', 'j', 'k'][:len(ranges)] if len(ranges) <= 3 else [f'i{n}' for n in range(len(ranges))]
+            referenced = set(re.findall(r'\b[A-Za-z_]\w*\b', ' '.join((*ranges, lb, ub))))
+            defaults = ['i', 'j', 'k'][:len(ranges)] if len(ranges) <= 3 else [f'i{n}' for n in range(len(ranges))]
+            indices = [f'_idx_{n}' if name in referenced else name for n, name in enumerate(defaults)]
         key = indices[0] if len(indices) == 1 else '(' + ', '.join(indices) + ')'
         label = "f'" + symbol + '[' + ','.join('{' + index + '}' for index in indices) + "]'"
         loops = ' '.join(f'for {index} in {space}' for index, space in zip(indices, ranges, strict=True))
@@ -157,7 +165,14 @@ class ModelCode:
         return templates[self.api].format(model=model, expr=expression, name=name)
 
     def objective(self, expression: str, sense: str) -> str:
-        model, maximum = self.name, sense.lower() in ('max', 'maximize')
+        normalized = sense.strip().lower()
+        if normalized in ('max', 'maximize', 'maximization'):
+            maximum = True
+        elif normalized in ('min', 'minimize', 'minimization'):
+            maximum = False
+        else:
+            raise ValueError(f'Unsupported objective sense: {sense!r}')
+        model = self.name
         if self.api == 'pyomo':
             return f'{model}.objective = pyo.Objective(expr={expression}, sense=pyo.{"maximize" if maximum else "minimize"})'
         if self.api in ('gurobipy', 'coptpy'):

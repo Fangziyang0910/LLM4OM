@@ -1,10 +1,12 @@
 """LLM settings, providers and LangChain chat-model construction."""
 
+import math
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.language_models import BaseChatModel
+from pydantic import SecretStr
 
 
 @dataclass(frozen=True)
@@ -32,7 +34,7 @@ PROVIDERS = {provider.id: provider for provider in (
 class LLMSettings:
     provider: str
     model: str
-    api_key: str = ""
+    api_key: str = field(default="", repr=False)
     base_url: str = ""
     temperature: float | None = 0
     max_tokens: int | None = None
@@ -42,13 +44,20 @@ class LLMSettings:
 
     @property
     def url(self) -> str:
-        return self.base_url or PROVIDERS[self.provider].base_url
+        return self.base_url.strip() or PROVIDERS[self.provider].base_url
 
     def public(self) -> dict[str, Any]:
         """Reproducible settings without the credential; used in the run's configuration snapshot."""
         values = asdict(self)
         del values["api_key"]
         return {**values, "base_url": self.url}
+
+    def redact(self, text: str) -> str:
+        """Remove this preset's credential from any recorded error or traceback text."""
+        for secret in dict.fromkeys((self.api_key, self.api_key.strip())):
+            if secret:
+                text = text.replace(secret, "[REDACTED]")
+        return text
 
     def with_thinking(self, enabled: bool | None) -> "LLMSettings":
         """Apply a conversation's DeepSeek switch without editing its shared preset."""
@@ -68,10 +77,20 @@ class LLMSettings:
             raise ValueError("Choose an LLM model.")
         if not self.url:
             raise ValueError("Enter the base URL of the OpenAI-compatible service.")
-        if not self.api_key:
+        if not self.api_key.strip():
             raise ValueError(f"Set the API key for {PROVIDERS[self.provider].label}.")
-        reserved = {"model", "api_key", "base_url", "temperature", "max_tokens", "timeout", "max_retries",
-                    "callbacks", "metadata", "streaming"}
+        if self.temperature is not None and not math.isfinite(self.temperature):
+            raise ValueError("Temperature must be a finite number.")
+        if not isinstance(self.extra_body, dict):
+            raise ValueError("Extra parameters must be a JSON object.")
+        reserved = {
+            "model", "model_name", "api_key", "base_url", "api_base", "temperature", "max_tokens",
+            "max_tokens_to_sample", "timeout", "request_timeout", "default_request_timeout", "max_retries",
+            "callbacks", "callback_manager", "metadata", "streaming", "stream", "stream_usage",
+            "stream_options", "disable_streaming", "default_headers",
+            "anthropic_api_url", "anthropic_api_key", "openrouter_api_key", "openrouter_api_base",
+            "openai_api_key", "openai_api_base", "client", "async_client", "http_client", "http_async_client",
+        }
         if duplicates := self.extra_body.keys() & reserved:
             raise ValueError(f"Extra parameters cannot replace configured fields: {', '.join(sorted(duplicates))}.")
 
@@ -80,8 +99,9 @@ def chat_model(settings: LLMSettings, *, callbacks: list[BaseCallbackHandler] | 
                metadata: dict[str, Any] | None = None) -> BaseChatModel:
     settings.validate()
     # Streaming lets the run view show each reply as it is written; the reply and its usage stay the same.
-    common: dict[str, Any] = {"model": settings.model, "api_key": settings.api_key, "max_retries": settings.max_retries,
-                              "callbacks": callbacks, "metadata": metadata, "streaming": True}
+    common: dict[str, Any] = {"model": settings.model, "api_key": SecretStr(settings.api_key),
+                              "max_retries": settings.max_retries, "callbacks": callbacks,
+                              "metadata": metadata, "streaming": True}
     if settings.temperature is not None:
         common["temperature"] = settings.temperature
     protocol = PROVIDERS[settings.provider].protocol
@@ -112,6 +132,8 @@ def chat_model(settings: LLMSettings, *, callbacks: list[BaseCallbackHandler] | 
 
 async def list_models(settings: LLMSettings) -> list[str]:
     """Model IDs from the provider's catalog endpoint; some services do not offer one."""
+    if settings.provider not in PROVIDERS:
+        raise ValueError(f"Unknown LLM provider {settings.provider!r}.")
     if PROVIDERS[settings.provider].protocol == "anthropic":
         from anthropic import AsyncAnthropic
 

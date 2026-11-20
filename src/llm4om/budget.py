@@ -23,6 +23,8 @@ class TokenBudget:
     """
 
     def __init__(self, workspace: Path, daily_limit: int) -> None:
+        if daily_limit < 0:
+            raise ValueError("daily_limit must be non-negative.")
         self.path = workspace / ".private" / "token-usage.json"
         self.daily_limit = daily_limit
         self._condition = threading.Condition()  # held only while the counts or writer state change
@@ -44,6 +46,8 @@ class TokenBudget:
 
     def charge(self, preset: str, tokens: int = 0) -> None:
         """Add `tokens` to the preset's count. With none, check it: raises LimitExceeded once the budget is spent."""
+        if tokens < 0:
+            raise ValueError("tokens must be non-negative.")
         if not tokens:
             if self.daily_limit and self.used().get(preset, 0) >= self.daily_limit:
                 raise LimitExceeded(f"The LLM preset {preset!r} used its daily budget of {self.daily_limit:,} "

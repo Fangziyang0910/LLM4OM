@@ -1,8 +1,9 @@
 """Save visible progress while a method's private graph is still running."""
 
 import asyncio
+import logging
 import time
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 from langgraph.store.base import BaseStore
@@ -10,6 +11,7 @@ from langgraph.store.base import BaseStore
 from llm4om.method_steps import latest_artifacts
 from llm4om.runtime import Recorder
 
+logger = logging.getLogger(__name__)
 NAMESPACE = ("llm4om", "progress")
 SAVE_INTERVAL = 1.0
 
@@ -53,7 +55,10 @@ async def save_progress(store: BaseStore | None, thread_id: str | None, state: d
         while True:
             await changed.wait()
             changed.clear()
-            await save()
+            try:
+                await save()
+            except Exception:
+                logger.exception("Could not save intermediate progress for thread %s", thread_id)
             await asyncio.sleep(SAVE_INTERVAL)
 
     recorder.emit = record
@@ -67,6 +72,24 @@ async def save_progress(store: BaseStore | None, thread_id: str | None, state: d
     finally:
         recorder.emit = emit
         writer.cancel()
-        with suppress(asyncio.CancelledError):
-            await writer
-        await asyncio.shield(save(finished=interrupted))
+        cancelled = False
+        while not writer.done():
+            try:
+                await writer
+            except asyncio.CancelledError:
+                if not writer.done():
+                    cancelled = True
+            except Exception:
+                logger.exception("Progress writer failed for thread %s", thread_id)
+                break
+        final_save = asyncio.create_task(save(finished=interrupted))
+        while not final_save.done():
+            try:
+                await asyncio.shield(final_save)
+            except asyncio.CancelledError:
+                cancelled = True
+            except Exception:
+                logger.exception("Could not flush final progress for thread %s", thread_id)
+                break
+        if cancelled and not interrupted:
+            raise asyncio.CancelledError

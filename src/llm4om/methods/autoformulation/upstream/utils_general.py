@@ -7,17 +7,8 @@ def check_none_key_value(d):
     return d.get(None) is None and None in d
 
 def transform_keys(data):
-    for key, value in data.items():
-        if isinstance(value, dict):  # Check if the value is a dictionary
-            new_dict = {}
-            for sub_key, sub_value in value.items():
-                try:
-                    new_key = float(sub_key)  # Try to convert the key to an integer
-                except (TypeError, ValueError):
-                    new_key = sub_key  # Keep the key as a string if it can't be converted
-                new_dict[new_key] = sub_value
-            data[key] = new_dict  # Replace the old dictionary with the new one
-    return data
+    # llm4om: preserve exact key types (e.g. '2024', '01', 'inf') without in-place mutation or float coercion.
+    return {key: dict(value) if isinstance(value, dict) else value for key, value in data.items()}
 
 def get_param_code_str(formalization_dict, apply_ast = False):
     if apply_ast:
@@ -44,31 +35,41 @@ def get_var_name(this_var):
     else:
         return this_var, False
 
+def extract_iteration_spec(comp_str):
+    """Return `(targets, iterables)` for an iteration_space expression."""
+    if comp_str is None:
+        return [], []
+    text = str(comp_str).strip()
+    if not text:
+        return [], []
+    if text.startswith("for "):
+        text = "0 " + text
+    comp_ast = None
+    for candidate in (text, f"[{text}]"):
+        try:
+            comp_ast = ast.parse(candidate, mode='eval')
+            break
+        except SyntaxError:
+            continue
+    if comp_ast is None:
+        return [], []
+    body = comp_ast.body
+    if isinstance(body, (ast.ListComp, ast.GeneratorExp)):
+        targets = [ast.unparse(gen.target) for gen in body.generators]
+        iterables = [ast.unparse(gen.iter) for gen in body.generators]
+        return targets, iterables
+    if isinstance(body, (ast.Tuple, ast.List)):
+        return [], [ast.unparse(element) for element in body.elts]
+    if isinstance(body, ast.Name):
+        return [], [ast.unparse(body)]
+    return [], []
+
+
 def extract_range_iterables(comp_str):
     if comp_str is None:
         return ''
-    try:
-        # Parse the string as a Python expression
-        # llm4om: also accept `i for i in I`, `for i in I`, a generator expression, or the index sets `I` / `I, J`
-        comp_str = comp_str.strip()
-        comp_str = "0 " + comp_str if comp_str.startswith("for ") else comp_str
-        wrapped = not comp_str.startswith(("[", "("))
-        comp_ast = ast.parse("[" + comp_str + "]" if wrapped else comp_str, mode='eval')
-        if isinstance(comp_ast.body, ast.Tuple) or (wrapped and isinstance(comp_ast.body, ast.List)):
-            return [ast.unparse(element) for element in comp_ast.body.elts]
-        # Check if the parsed expression is a List Comprehension
-        if isinstance(comp_ast.body, (ast.ListComp, ast.GeneratorExp)):
-            iterables = []
-            for gen in comp_ast.body.generators:
-                iterable = gen.iter
-                # Use ast.unparse to convert the AST node back to a string
-                iter_str = ast.unparse(iterable)
-                iterables.append(iter_str)
-            return iterables
-    except Exception as e:
-        print(f"Error parsing comprehension: {e}")
-        return ""
-    return []
+    _, iterables = extract_iteration_spec(comp_str)
+    return iterables
 
 
 def extract_range_dv(input_dict):
@@ -82,7 +83,7 @@ def extract_range_dv(input_dict):
 
 def extract_variable_name(equation):
     # Match everything before the first opening bracket
-    match = re.match(r"([a-zA-Z_]+)\[", equation)
+    match = re.match(r"^\s*([a-zA-Z_]\w*)\[", equation)
     if match:
         return match.group(1)
     return None
@@ -104,7 +105,7 @@ def separate_constraint_from_for(input_string):
         elif char == ')':
             if stack:
                 stack.pop()
-        elif input_string[i:i+4] == ' for' and not stack:
+        elif not stack and char.isspace() and re.match(r'\s+for\s+', input_string[i:]):
             for_loop_starts.append(i)
     if for_loop_starts:
         main_expr = input_string[:for_loop_starts[0]].strip()
@@ -116,22 +117,34 @@ def separate_constraint_from_for(input_string):
 
 
 def extract_loop_variables(loop_string):
-    # Remove any content after an "if" statement (for filtering conditions)
-    loop_string = loop_string.split(' if ')[0]
-    # Find all variables that appear right after the 'for' keyword and before 'in'
-    variables = re.findall(r'for\s+([a-zA-Z_]\w*)|for\s+\((.*?)\)\s+in', loop_string)
-    # Extract the first group of results from tuples in the findall result
-    results = [v for group in variables for v in group if v]
-    # Split tuples inside the loop and flatten the list
+    if not loop_string or not str(loop_string).strip():
+        return []
+    text = str(loop_string).strip()
+    candidate = f"[0 {text}]" if text.startswith("for ") else f"[{text}]"
+    try:
+        parsed = ast.parse(candidate, mode="eval").body
+        if isinstance(parsed, (ast.ListComp, ast.GeneratorExp)):
+            names = []
+            for gen in parsed.generators:
+                for node in ast.walk(gen.target):
+                    if isinstance(node, ast.Name):
+                        names.append(node.id)
+            if names:
+                return names
+    except SyntaxError:
+        pass
+    # Fallback regex preserving order across multiple clauses
+    variables = re.findall(r'for\s+\(([^)]+)\)\s+in|for\s+([a-zA-Z_]\w*(?:\s*,\s*[a-zA-Z_]\w*)*)\s+in', text)
     flattened_results = []
-    for item in results:
-        flattened_results.extend(item.split(', '))
+    for group in variables:
+        raw = group[0] or group[1]
+        flattened_results.extend(item.strip() for item in raw.split(',') if item.strip())
     return flattened_results
 
 
 def is_constant_constraint(equation: str, allowed_variables: list):
     # Step 1: Eliminate the for loop if it exists at the end of the string
-    equation = re.sub(r'\s+for\s+\w+\s+in\s+\w+', '', equation).strip()
+    equation, _ = separate_constraint_from_for(equation)
 
     # Step 2: Split the equation into left and right parts by "=="
     if "==" not in equation:
@@ -195,6 +208,8 @@ def get_prompt_cte_constraints(all_const_cte, formalization_dict, const_dict, va
     prompt = ""
     for const_name, indexes in all_const_cte:
         var_name      = extract_variable_name(const_dict[const_name])
+        if var_name not in vtypes:
+            continue
         _, for_loop   = separate_constraint_from_for(const_dict[const_name])
         vtype         = vtypes[var_name]
         idx_str_1     = ', '.join(indexes)

@@ -78,7 +78,8 @@ async def write_code(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
 
 async def execute(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """Upstream extract_and_execute_python_code: run the first non-empty ```python block."""
-    blocks = [block.strip() for block in re.findall(r"```python\s*([\s\S]*?)```", state["reply"]) if block.strip()]
+    blocks = [block.strip() for block in re.findall(r"^[ \t]*```(?:python3?|py)[ \t]*\r?\n([\s\S]*?)```",
+                                                    state["reply"], re.I | re.M) if block.strip()]
     if not blocks:
         return {"executed": False, "_error": "No Python code blocks found"}
     code = blocks[0] + "\n"

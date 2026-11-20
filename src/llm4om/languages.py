@@ -348,7 +348,8 @@ class CodeTarget:
                 capability += " Only quadratic objectives and linear constraints; no other cones."
             reference = CVXPY.format(solver=backend, capability=capability).replace("The problem must follow CVXPY's disciplined convex programming rules.", "Use the native DCP, DGP or DQCP rules as appropriate.")
         elif self.language == "ortools":
-            key = {"GSCIP": "mathopt", "HIGHS": "mathopt", "CP_SAT": "cp_sat", "ROUTING": "routing", "CP": "constraint",
+            key = {"GSCIP": "mathopt", "HIGHS": "mathopt", "OSQP": "mathopt", "ECOS": "mathopt", "SCS": "mathopt",
+                   "CP_SAT": "cp_sat", "ROUTING": "routing", "CP": "constraint",
                    "MAX_FLOW": "max_flow", "MIN_COST_FLOW": "min_cost_flow", "ASSIGNMENT": "assignment"}.get(backend)
             if backend.startswith("KNAPSACK_"):
                 key = "knapsack"

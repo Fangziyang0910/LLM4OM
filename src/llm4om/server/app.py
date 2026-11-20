@@ -8,11 +8,12 @@ from dataclasses import asdict
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from llm4om.budget import TokenBudget
 from llm4om.graph import default_resources
@@ -28,6 +29,8 @@ PAGES = ("/", "/model", "/agent", "/agent/{thread_id}", "/run/{thread_id}", "/co
 
 
 class PresetBody(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     name: str = ""
     provider: str
     model: str = ""
@@ -44,11 +47,11 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
     LLM4OM_TRUST_PROXY."""
     app = FastAPI(title="通用智能优化求解器", description="求解各种复杂优化问题的通用求解器")
     app.add_middleware(ThreadCleanup)
-    app.add_middleware(JsonOnlyWrites)
     app.add_middleware(RunRateLimit, per_hour=int(os.environ.get("LLM4OM_RUNS_PER_HOUR") or 0)
                        if runs_per_hour is None else runs_per_hour,
-                       trust_proxy=os.environ.get("LLM4OM_TRUST_PROXY", "") not in ("", "0", "false")
+                       trust_proxy=os.environ.get("LLM4OM_TRUST_PROXY", "").strip().lower() in ("1", "true", "yes", "on")
                        if trust_proxy is None else trust_proxy)
+    app.add_middleware(JsonOnlyWrites)
     store = presets or default_resources().presets
     budget = budget or (default_resources().budget if presets is None else None)
 
@@ -105,12 +108,16 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
             raise ValueError(f"Unknown LLM provider {settings.provider!r}.")
         if not settings.url:
             raise ValueError("Enter the base URL of the OpenAI-compatible service.")
-        if not settings.api_key:
+        parsed = urlparse(settings.url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ValueError("Base URL must be an http:// or https:// address.")
+        if not settings.api_key.strip():
             raise ValueError("Enter the API key to read the model list.")
         try:
             return {"models": await list_models(settings)}
         except Exception as error:  # report any catalog failure; the user can still type a model ID
-            raise HTTPException(502, f"Could not read the model list: {type(error).__name__}: {error}") from error
+            detail = settings.redact(f"{type(error).__name__}: {error}")
+            raise HTTPException(502, f"Could not read the model list: {detail}") from error
 
     @app.get("/api/datasets/{dataset_id}")
     def dataset(dataset_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:

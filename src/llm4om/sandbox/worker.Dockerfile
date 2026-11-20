@@ -25,6 +25,6 @@ RUN mkdir /tmp/gcs-json && tar -xzf /tmp/gcs-json.tar.gz --strip-components=1 -C
     && python -m pip install --no-cache-dir --no-deps --target /opt/ortools-cvxpy ortools==9.14.6206 \
     && python -m pip uninstall -y pip \
     && rm -rf /tmp/gcs-json /tmp/gcs-json.tar.gz
-COPY worker.py /opt/llm4om/worker.py
+COPY --chmod=644 worker.py /opt/llm4om/worker.py
 USER 65532:65532
 WORKDIR /tmp

@@ -3,8 +3,8 @@
 from llm4om.languages import CodeTarget
 from llm4om.methods.autoformulation.upstream.utils_general import (
     check_none_key_value,
+    extract_iteration_spec,
     extract_loop_variables,
-    extract_range_dv,
     extract_variable_name,
     extract_vtype_dv,
     get_borders_constraints,
@@ -23,9 +23,11 @@ def _model(target: CodeTarget | str) -> ModelCode:
 def dv_code(target: CodeTarget | str, form: dict) -> str:
     model, lines = _model(target), []
     for name, description in form['decision_variables'].items():
-        lines.append(model.variables(get_var_name(name)[0], extract_range_dv(description), extract_vtype_dv(description),
+        targets, ranges = extract_iteration_spec(description.get('iteration_space'))
+        indices = targets if targets and len(targets) == len(ranges) else None
+        lines.append(model.variables(get_var_name(name)[0], ranges, extract_vtype_dv(description),
                      str(description.get('lower_bound', 0)), str(description.get('upper_bound')),
-                     indices=extract_loop_variables(description['iteration_space'] or '') or None))
+                     indices=indices))
     return ''.join(lines)
 
 
@@ -51,6 +53,8 @@ def _border_code(target: CodeTarget | str, form: dict, const_dict: dict) -> str:
     code = ""
     for const_name, indexes in borders:
         var_name = extract_variable_name(const_dict[const_name])
+        if var_name not in descriptions:
+            continue
         _, for_loop = separate_constraint_from_for(const_dict[const_name])
         index = ", ".join(indexes)
         description = descriptions[var_name]
@@ -71,7 +75,7 @@ def _all_constraints(target: CodeTarget | str, const_dict: dict) -> str:
     for name, expression in const_dict.items():
         main, loop = separate_constraint_from_for(expression)
         index = ', '.join('{' + item + '}' for item in extract_loop_variables(loop))
-        label = f"f'{name}[{index}]'" if loop else repr(name)
+        label = f"{name!r} + f'[{index}]'" if loop else repr(name)
         code += 'all_const += [' + model.constraint(main, label) + (' ' + loop if loop else '') + ']\n'
     return code
 

@@ -91,6 +91,7 @@ class Records:
         if replayed is not None:
             result, seconds = replayed
             self.complete(id, asdict(result))
+            self.recorder.steps.get(id, {}).pop("failed", None)
             self.recorder.step("solve", title, result.feedback(), id=id, running=False,
                                seconds=seconds, status=result.status, objective=result.objective)
             return result
@@ -102,6 +103,7 @@ class Records:
             self.recorder.step("solve", title, f"{type(error).__name__}: {error}", id=id, running=False, failed=True)
             raise
         self.complete(id, asdict(result))
+        self.recorder.steps.get(id, {}).pop("failed", None)
         self.recorder.step("solve", title, result.feedback(), id=id, running=False,
                            seconds=round(time.monotonic() - started, 1), status=result.status, objective=result.objective)
         return result
@@ -118,6 +120,9 @@ def finish_pending_migration(directory: Path) -> None:
     for name in ("checkpoints.sqlite", "records.sqlite", "result.json", "formulation.md", "model.py"):
         source = staging / name
         if source.is_file():
+            if name.endswith(".sqlite"):
+                for suffix in ("-wal", "-shm", "-journal"):
+                    (directory / f"{name}{suffix}").unlink(missing_ok=True)
             os.replace(source, directory / name)
     shutil.rmtree(staging, ignore_errors=True)
 
@@ -127,14 +132,20 @@ def open_records(directory: Path) -> Iterator[Records]:
     """SQLite releases this cross-platform session lock even after a killed CLI process."""
     if not (directory / "records.sqlite").is_file() and not (directory / ".migrating" / "COMMIT").is_file():
         raise ValueError(f"No host session at {directory}.")
-    lock = sqlite3.connect(directory / ".lock.sqlite", timeout=0)
+    try:
+        lock = sqlite3.connect(directory / ".lock.sqlite", timeout=0)
+    except sqlite3.Error as error:
+        raise ValueError(f"Cannot open host session at {directory}: {error}.") from error
     try:
         try:
             lock.execute("BEGIN EXCLUSIVE")
         except sqlite3.OperationalError as error:
             raise ValueError("This host session is already in use. Wait for its current command to finish.") from error
         finish_pending_migration(directory)
-        records = Records(directory)
+        try:
+            records = Records(directory)
+        except sqlite3.Error as error:
+            raise ValueError(f"Cannot read host session at {directory}: {error}.") from error
         try:
             yield records
         finally:

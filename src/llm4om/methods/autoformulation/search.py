@@ -65,18 +65,18 @@ def compute_ranking(pairwise_comparisons: dict[int, dict[int, float]]) -> list[i
                 score_ji = pairwise_comparisons.get(j, {}).get(i, None)
                 if score_ij is not None:
                     if score_ij > 0.5:
-                        data.append([i, j])
-                        labels.append(1)
+                        data.extend([[i, j], [j, i]])
+                        labels.extend([1, 0])
                     elif score_ij < 0.5:
-                        data.append([i, j])
-                        labels.append(0)
+                        data.extend([[i, j], [j, i]])
+                        labels.extend([0, 1])
                 elif score_ji is not None:
                     if score_ji > 0.5:
-                        data.append([i, j])
-                        labels.append(0)
+                        data.extend([[i, j], [j, i]])
+                        labels.extend([0, 1])
                     elif score_ji < 0.5:
-                        data.append([i, j])
-                        labels.append(1)
+                        data.extend([[i, j], [j, i]])
+                        labels.extend([1, 0])
     if len(set(labels)) < 2:
         raise ValueError("Insufficient variation in labels. The model requires both wins and losses.")
     x = np.zeros((len(data), max(solutions) + 1))
@@ -101,10 +101,11 @@ def comparison_prompt(sol1: Any, sol2: Any, problem_str: str, library: str) -> s
 
 def extract_best_solution(text: str) -> dict[str, str]:
     """extract_dictionary_rank_final_form_2."""
-    dict_pattern = re.search(r'best_solution\s*=\s*\{(.*?)\}', text, re.DOTALL)
-    if not dict_pattern:
+    matches = list(re.finditer(r'best_solution\s*=\s*\{(.*?)\}', text, re.DOTALL))
+    if not matches:
         return {}
-    key_value_pairs = re.findall(r'(\d+):\s*["\'\s]?(solution_A|solution_B)["\'\s]?', dict_pattern.group(1).strip())
+    key_value_pairs = re.findall(r'["\']?(\d+)["\']?\s*:\s*["\'\s]?(solution_A|solution_B)["\'\s]?',
+                                 matches[-1].group(1).strip())
     return {str(key): str(value) for key, value in key_value_pairs}
 
 
@@ -171,9 +172,9 @@ def _ranking(search: Search) -> list[int] | None:
         if len(search.baselines) < 2:
             return None
         if len(search.baselines) == 2:
-            # pairwise[1][0] is the share of judgments that prefer leaf 1; upstream ranks leaf 0 first exactly then,
-            # the reverse of its Bradley-Terry branch. The preferred leaf comes first here.
-            ranking = [1, 0] if pairwise[1][0] >= 0.5 else [0, 1]
+            # pairwise[o1][o0] is the share of judgments that prefer baseline 1 over baseline 0.
+            o0, o1 = order[search.baselines[0]], order[search.baselines[1]]
+            ranking = [o1, o0] if pairwise[o1][o0] >= 0.5 else [o0, o1]
         else:
             ranking = compute_ranking(pairwise)
     except Exception:

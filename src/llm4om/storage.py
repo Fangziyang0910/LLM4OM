@@ -14,7 +14,7 @@ def write_private_json(path: Path, value: Any) -> None:
     temporary = Path(file.name)  # NamedTemporaryFile creates it with mode 600.
     try:
         with file:
-            json.dump(value, file, ensure_ascii=False, indent=2)
+            json.dump(value, file, ensure_ascii=False, indent=2, allow_nan=False)
             file.write("\n")
             file.flush()
             os.fsync(file.fileno())

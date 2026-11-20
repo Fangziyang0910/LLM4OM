@@ -12,6 +12,7 @@ code in the platform sandbox instead of calling the function on an LLM-generated
 test-input prompt is not used).
 """
 
+import json
 import random
 from dataclasses import asdict
 from typing import Any
@@ -120,7 +121,8 @@ async def expert(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
 async def reducer(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     answer = await _predict(runtime.context, "reducer", REDUCER + '\n\n{code_contract}', problem_description=state["problem"],
                             comment_text=_comment_text(state["_comments"]), code_contract=runtime.context.target.prompt)
-    return {"code": extract_code_from_string(answer)}
+    formulation = "\n\n".join(text for name, text in state["_comments"] if name == 'Modeling Expert' and isinstance(text, str))
+    return {"code": extract_code_from_string(answer), **({"formulation": formulation} if formulation else {})}
 
 
 async def evaluate(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
@@ -142,16 +144,29 @@ async def backward(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
         result = parse_json_from_string(reply, expected_type=dict)
     except ValueError:
         return {"_stack": stack, "_comments": comments, "_feedback_pool": pool + [(previous.name, reply)]}
-    if result.get('is_caused_by_you'):
-        refined = result.get('refined_result', previous_comment)
-        return {"_stack": stack + [previous.name], "_comments": comments + [(previous_name, refined)],
-                "blamed": previous.name, "comment": refined}
-    return {"_stack": stack, "_comments": comments, "_feedback_pool": pool + [(previous.name, result.get('reason', ''))]}
+    caused = result.get('is_caused_by_you')
+    is_caused = caused.strip().lower() == 'true' if isinstance(caused, str) else bool(caused)
+    if is_caused:
+        raw_refined = result.get('refined_result')
+        if raw_refined is None:
+            refined = previous_comment
+        elif isinstance(raw_refined, str):
+            refined = raw_refined
+        else:
+            refined = json.dumps(raw_refined, ensure_ascii=False)
+        update: dict[str, Any] = {"_stack": stack + [previous.name], "_comments": comments + [(previous_name, refined)],
+                                  "blamed": previous.name, "comment": refined}
+        if previous_name == 'Modeling Expert' and refined.strip():
+            update["formulation"] = refined
+        return update
+    reason = result.get('reason')
+    reason_text = reason if isinstance(reason, str) else (json.dumps(reason, ensure_ascii=False) if reason is not None else '')
+    return {"_stack": stack, "_comments": comments, "_feedback_pool": pool + [(previous.name, reason_text)]}
 
 
 def finish(state: State) -> dict[str, Any]:
-    formulation = "\n\n".join(text for name, text in state["_comments"] if name == 'Modeling Expert')
-    return {"formulation": formulation or None}
+    formulation = "\n\n".join(text for name, text in state["_comments"] if name == 'Modeling Expert' and isinstance(text, str))
+    return {"formulation": formulation or state.get("formulation") or None}
 
 
 def after_expert(state: State) -> str:

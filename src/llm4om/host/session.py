@@ -4,6 +4,7 @@ import asyncio
 import json
 import math
 import shutil
+import sqlite3
 import time
 from collections import defaultdict, deque
 from dataclasses import asdict, replace
@@ -179,7 +180,8 @@ def result_document(records: Records, snapshot: Any, *, session_dir: Path | None
     artifacts = latest_artifacts(steps)
     code = values.get("code") or artifacts.get("code")
     solved = records.solved().get(code) if code else None
-    state = "failed" if failure else "waiting" if pending else "interrupted" if snapshot.next else "completed"
+    state = ("failed" if failure else "waiting" if pending else
+             "interrupted" if snapshot.next or snapshot.created_at is None else "completed")
     public_spec = {key: value for key, value in spec.items() if key != "data"}
     public_spec["data_files"] = list(spec["data"])
     return {"session": str(session_dir or records.directory), "status": state, "spec": public_spec,
@@ -249,6 +251,12 @@ async def _migrate_legacy_trival(directory: Path, method: Method, spec: dict[str
                     raise RuntimeError("Legacy TriVAL migration did not reach a durable state.")
                 result = result_document(staging_records, snapshot, session_dir=directory)
                 _write_outputs(staging, result)
+            conn = sqlite3.connect(staging / "checkpoints.sqlite", isolation_level=None)
+            try:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                conn.execute("PRAGMA journal_mode=DELETE")
+            finally:
+                conn.close()
         finally:
             staging_records.db.close()
 
@@ -265,6 +273,8 @@ async def _migrate_legacy_trival(directory: Path, method: Method, spec: dict[str
 async def drive(directory: Path, *, initial: bool = False, responses: dict[str, Any] | None = None) -> dict[str, Any]:
     with open_records(directory) as records:
         spec = records.get("spec")
+        if not isinstance(spec, dict):
+            raise ValueError(f"Incomplete host session at {directory}. Start a new session.")
         available = methods()
         if spec["method"] not in available:
             raise ValueError(f"The saved method {spec['method']!r} is not installed.")
@@ -284,17 +294,22 @@ async def drive(directory: Path, *, initial: bool = False, responses: dict[str, 
                 inputs: Any = {"problem": problem_text(spec["description"], spec["data"]),
                                "description": spec["description"]}
             elif responses is not None:
-                if records.get("failure") or not snapshot.next:
+                if records.get("failure") or (not snapshot.next and snapshot.created_at is not None):
                     raise ValueError("This host session has ended. Start a new session for a new attempt.")
-                pending = pending_requests(snapshot)
-                validated = validate_responses(pending, responses)
-                legacy = spec["method"] == "trival" and await (await saver.conn.execute(
-                    "SELECT 1 FROM checkpoints WHERE checkpoint_ns LIKE 'method:%|%' LIMIT 1"
-                )).fetchone()
-                if legacy:
-                    legacy_migration = (pending, validated)
+                if snapshot.created_at is None:
+                    validate_responses([], responses)
+                    inputs = {"problem": problem_text(spec["description"], spec["data"]),
+                              "description": spec["description"]}
                 else:
-                    inputs = Command(resume=validated) if validated else None
+                    pending = pending_requests(snapshot)
+                    validated = validate_responses(pending, responses)
+                    legacy = spec["method"] == "trival" and await (await saver.conn.execute(
+                        "SELECT 1 FROM checkpoints WHERE checkpoint_ns LIKE 'method:%|%' LIMIT 1"
+                    )).fetchone()
+                    if legacy:
+                        legacy_migration = (pending, validated)
+                    else:
+                        inputs = Command(resume=validated) if validated else None
             if (initial or responses is not None) and legacy_migration is None:
                 started = time.monotonic()
                 active = records.get("active_seconds", 0)

@@ -10,15 +10,17 @@ import json
 import os
 import sys
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
 WORKER = Path(__file__).with_name("worker.py")
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
 # The image contains worker.py, so a change to worker.py or worker.Dockerfile needs a new tag (and compose.yaml's).
-WORKER_IMAGE = "llm4om-worker:13"
+WORKER_IMAGE = "llm4om-worker:14"
 START_MARGIN = 60  # seconds beyond the time limit for starting the sandbox, importing libraries and building the model
+MAX_STDOUT_BYTES = 32 * 1024 * 1024
+MAX_STDERR_BYTES = 1 * 1024 * 1024
 
 
 @dataclass
@@ -73,18 +75,29 @@ class Sandbox:
         self._catalog: dict[str, Any] | None = None
         self._catalog_lock = asyncio.Lock()
 
+    @staticmethod
+    def _to_result(payload: dict[str, Any]) -> SolveResult:
+        allowed = {item.name for item in fields(SolveResult)}
+        filtered = {key: value for key, value in payload.items() if key in allowed}
+        if not isinstance(filtered.get("status"), str):
+            return SolveResult("error", error="The sandbox returned an invalid result payload.")
+        try:
+            return SolveResult(**filtered)
+        except TypeError as error:
+            return SolveResult("error", error=f"The sandbox returned an invalid result payload: {error}")
+
     async def solve(self, code: str, data: dict[str, str], language: str, time_limit: float, *,
                     solver: str | None = None) -> SolveResult:
         """Build the model from `code` with `data` and solve it with the language's solver, within `time_limit`."""
         from llm4om.languages import CodeTarget
 
         target = CodeTarget(language, solver)
-        return SolveResult(**await self._run({"code": code, "data": data, "language": target.language,
-                           "solver": target.solver, "time_limit": time_limit}, time_limit))
+        return self._to_result(await self._run({"code": code, "data": data, "language": target.language,
+                                                "solver": target.solver, "time_limit": time_limit}, time_limit))
 
     async def run_script(self, script: str, time_limit: float) -> SolveResult:
         """Run a script as __main__; `output` holds what it printed and any traceback."""
-        return SolveResult(**await self._run({"script": script}, time_limit))
+        return self._to_result(await self._run({"script": script}, time_limit))
 
     async def catalog(self) -> dict[str, Any]:
         """One native capability discovery per service process, in the actual solving environment."""
@@ -111,12 +124,52 @@ class Sandbox:
         # Mount only COPT's two license files, never the entire installation or home directory.
         license_dir = os.environ.get("COPT_LICENSE_DIR")
         if license_dir:
+            mounted = False
             for filename in ("license.dat", "license.key"):
                 path = Path(license_dir, filename)
                 if path.is_file():
                     command += ["-v", f"{path.resolve()}:/opt/copt/{filename}:ro"]
-            command += ["-e", "COPT_LICENSE_DIR=/opt/copt"]
+                    mounted = True
+            if mounted:
+                command += ["-e", "COPT_LICENSE_DIR=/opt/copt"]
         return command + [self.image, "python", "-I", "/opt/llm4om/worker.py"]
+
+    @staticmethod
+    async def _communicate(process: Any, payload: bytes) -> tuple[bytes, bytes]:
+        if getattr(process, "stdin", None) is None or getattr(process, "stdout", None) is None or getattr(process, "stderr", None) is None:
+            return await process.communicate(payload)
+
+        async def feed() -> None:
+            try:
+                process.stdin.write(payload)
+                await process.stdin.drain()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            finally:
+                with contextlib.suppress(Exception):
+                    process.stdin.close()
+
+        async def read_stdout() -> bytes:
+            chunks: list[bytes] = []
+            total = 0
+            while chunk := await process.stdout.read(65536):
+                total += len(chunk)
+                if total > MAX_STDOUT_BYTES:
+                    raise OverflowError("The sandbox produced too much stdout output and was stopped.")
+                chunks.append(chunk)
+            return b"".join(chunks)
+
+        async def read_stderr() -> bytes:
+            tail = bytearray()
+            while chunk := await process.stderr.read(65536):
+                tail.extend(chunk)
+                if len(tail) > MAX_STDERR_BYTES:
+                    del tail[:-MAX_STDERR_BYTES]
+            return bytes(tail)
+
+        _, stdout, stderr = await asyncio.gather(feed(), read_stdout(), read_stderr())
+        await process.wait()
+        return stdout, stderr
 
     async def _run(self, request: dict[str, Any], time_limit: float) -> dict[str, Any]:
         async with self._slots:
@@ -129,21 +182,46 @@ class Sandbox:
                 env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="2")
             process = await asyncio.create_subprocess_exec(*self._command(name), stdin=asyncio.subprocess.PIPE,
                                                            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env)
-            try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(json.dumps(request).encode()), timeout)
-            except (asyncio.TimeoutError, asyncio.CancelledError) as error:
+
+            async def cleanup() -> None:
                 with contextlib.suppress(ProcessLookupError):
                     process.kill()
-                await process.wait()
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(process.wait(), timeout=10)
                 if self.kind == "docker":
-                    await (await asyncio.create_subprocess_exec("docker", "rm", "--force", name, stdout=asyncio.subprocess.DEVNULL,
-                                                                stderr=asyncio.subprocess.DEVNULL)).wait()
+                    with contextlib.suppress(Exception):
+                        rm = await asyncio.create_subprocess_exec(
+                            "docker", "rm", "--force", name,
+                            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+                        )
+                        await asyncio.wait_for(rm.wait(), timeout=15)
+
+            async def run_cleanup() -> None:
+                task = asyncio.create_task(cleanup())
+                while not task.done():
+                    try:
+                        await asyncio.shield(task)
+                    except asyncio.CancelledError:
+                        pass
+
+            try:
+                stdout, stderr = await asyncio.wait_for(self._communicate(process, json.dumps(request).encode()), timeout)
+            except (asyncio.TimeoutError, asyncio.CancelledError, OverflowError) as error:
+                await run_cleanup()
                 if isinstance(error, asyncio.CancelledError):
                     raise
+                if isinstance(error, OverflowError):
+                    return {"status": "error", "error": str(error)}
                 return {"status": "error", "error": f"Execution exceeded {timeout:g} seconds and was stopped."}
             for line in reversed(stdout.decode(errors="replace").splitlines()):
                 if line.startswith(RESULT_MARKER):
-                    return json.loads(line[len(RESULT_MARKER):])
+                    try:
+                        parsed = json.loads(line[len(RESULT_MARKER):])
+                    except json.JSONDecodeError as error:
+                        return {"status": "error", "error": f"The sandbox returned malformed JSON: {error}"}
+                    if not isinstance(parsed, dict):
+                        return {"status": "error", "error": "The sandbox returned an invalid JSON result."}
+                    return parsed
             detail = stderr.decode(errors="replace").strip()[-2000:]
             hint = " Build it with `llm4om build-worker`." if "Unable to find image" in detail else ""
             return {"status": "error", "error": f"The sandbox did not return a result (exit code {process.returncode}).{hint}\n{detail}"}

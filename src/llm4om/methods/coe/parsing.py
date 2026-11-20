@@ -3,21 +3,29 @@
 import ast
 import json
 import re
+import textwrap
+from collections.abc import Iterator
 from typing import Any
+
+import json_repair
 
 
 def extract_code_from_string(text: str) -> str:
     """Upstream utils.extract_code_from_string: all code blocks joined, without pip lines; the text if none."""
-    blocks = re.findall(r'```(?:python)?\s*(.*?)\s*```', text, re.DOTALL)
+    raw_blocks = re.findall(r'^[ \t]*```([^\r\n`]*)\r?\n(.*?)```', text, re.DOTALL | re.MULTILINE)
+    python = [textwrap.dedent(body.strip("\r\n")).strip()
+              for tag, body in raw_blocks if tag.strip().lower() in ('python', 'py', 'python3')]
+    blocks = python or [textwrap.dedent(body.strip("\r\n")).strip()
+                        for tag, body in raw_blocks if not tag.strip()]
     if not blocks:
         return text
     if len(blocks) == 1:
         return blocks[0]
-    return '\n'.join(code for code in blocks if 'pip' not in code)
+    return '\n'.join(code for code in blocks if not re.search(r'(?m)^\s*!?\s*pip3?\s+install\b', code))
 
 
-def _extract_first_json_blob(text: str) -> str | None:
-    starts = [i for i, c in enumerate(text) if c in ['{', '[']]
+def _extract_json_blobs(text: str) -> Iterator[str]:
+    starts = [i for i, c in enumerate(text) if c in ('{', '[')]
     for start in starts:
         stack: list[str] = []
         quote_char = None
@@ -34,32 +42,32 @@ def _extract_first_json_blob(text: str) -> str | None:
                 if ch == quote_char:
                     quote_char = None
                 continue
-            if ch in ['"', "'"]:
+            if ch in ('"', "'"):
                 quote_char = ch
-            elif ch in ['{', '[']:
+            elif ch in ('{', '['):
                 stack.append(ch)
-            elif ch in ['}', ']']:
+            elif ch in ('}', ']'):
                 if not stack:
                     break
                 left = stack.pop()
                 if (left == '{' and ch != '}') or (left == '[' and ch != ']'):
                     break
                 if not stack:
-                    return text[start:idx + 1]
-    return None
+                    yield text[start:idx + 1]
+                    break
 
 
 def parse_json_from_string(text: Any, expected_type: type | None = None) -> Any:
-    """Upstream utils.parse_json_from_string: JSON or a Python literal, from the text, its code block or its first blob."""
+    """Upstream utils.parse_json_from_string: JSON or a Python literal, from the text, its code block or its blobs."""
     raw = str(text).strip()
     candidates = [raw] if raw else []
     code = extract_code_from_string(raw).strip()
     if code and code not in candidates:
         candidates.append(code)
     for source in (raw, code):
-        blob = _extract_first_json_blob(source)
-        if blob and blob not in candidates:
-            candidates.append(blob)
+        for blob in _extract_json_blobs(source):
+            if blob not in candidates:
+                candidates.append(blob)
     for candidate in candidates:
         for parser in (json.loads, ast.literal_eval):
             try:
@@ -69,4 +77,16 @@ def parse_json_from_string(text: Any, expected_type: type | None = None) -> Any:
             if expected_type is not None and not isinstance(value, expected_type):
                 continue
             return value
+    for candidate in candidates:
+        if not candidate or candidate[0] not in ('{', '['):
+            continue
+        try:
+            value = json_repair.loads(candidate)
+        except Exception:
+            continue
+        if value in ('', None):
+            continue
+        if expected_type is not None and not isinstance(value, expected_type):
+            continue
+        return value
     raise ValueError(f'Cannot parse JSON from text: {raw[:200]}')

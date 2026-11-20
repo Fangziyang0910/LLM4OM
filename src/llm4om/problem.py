@@ -20,12 +20,16 @@ def problem_text(description: str, data: Mapping[str, str]) -> str:
 
 def validate_description(description: str) -> None:
     """Reject a blank problem without changing the user's text."""
-    if not description.strip():
+    if not isinstance(description, str) or not description.strip():
         raise ValueError("Describe the optimization problem first.")
 
 
 def validate_data_files(data: Mapping[str, str]) -> None:
     """Reject attachment names that are not a single file name; accepted names stay byte for byte."""
-    for name in data:
-        if not name.strip() or name in {".", ".."} or any(char in name for char in "/\\\0\r\n"):
+    if not isinstance(data, Mapping):
+        raise ValueError("Attached data files must be a mapping from file name to text content.")
+    for name, content in data.items():
+        if not isinstance(name, str) or not name.strip() or name in {".", ".."} or any(char in name for char in "/\\\0\r\n"):
             raise ValueError(f"Invalid data file name {name!r}; supply a single file name without path separators or line breaks.")
+        if not isinstance(content, str):
+            raise ValueError(f"Invalid content for data file {name!r}; attachment content must be text.")

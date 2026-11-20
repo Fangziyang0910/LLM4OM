@@ -23,6 +23,7 @@ utils_diff.py); search.py ports the rest of the helpers. Adaptations:
 """
 
 import asyncio
+import copy
 import json
 import math
 from collections.abc import Coroutine
@@ -152,7 +153,10 @@ async def _check(context: Context, node: Node) -> None:
 
 async def _equivalent(context: Context, first: Node, second: Node) -> bool:
     """utils_diff.get_equivalence_function: run the SymPy/Z3 comparison script."""
-    code = obtain_code_compar(dict(first.form_dict_eval), dict(second.form_dict_eval), first.step)
+    try:
+        code = obtain_code_compar(dict(first.form_dict_eval), dict(second.form_dict_eval), first.step)
+    except Exception:
+        return False
     return extract_equivalence_value((await context.run_script(code)).output)
 
 
@@ -176,7 +180,10 @@ async def _unique_by_llm(context: Context, parent: Node, nodes: list[Node], prob
                                        solution_prompt(step, [node.form_dict_str for node in nodes]))
     replies = await _sample(context, "group_decision_variables", prompt, presets.AUTOFORMULATION.n_dv_unique_gpt)
     try:
-        return [nodes[index] for index in extract_unique_group_idx(replies, len(nodes), step)]
+        indices = list(dict.fromkeys(extract_unique_group_idx(replies, len(nodes), step)))
+        if not indices or any(not 0 <= index < len(nodes) for index in indices):
+            return nodes
+        return [nodes[index] for index in indices]
     except Exception:
         return nodes
 
@@ -207,7 +214,9 @@ async def expand(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """ReasoningMCTSNode._get_children for the next node of the depth-first walk."""
     context = runtime.context
     nodes, stack = dict(state["_nodes"]), list(state["_stack"])
-    parent = nodes[stack.pop()]
+    parent_id = stack.pop()
+    parent = copy.deepcopy(nodes[parent_id])
+    nodes[parent_id] = parent
     step = STEPS[parent.depth + 1]
     template = P.TEMPLATE_PROBLEM.replace("###PROBLEM DESCRIPTION###", state["problem"])
     prompt = obtain_new_prompt(template, parent.form_dict_str, _instruction(context, parent.depth + 1))
@@ -292,7 +301,7 @@ async def _reward_by_ranking(context: Context, problem: str, nodes: dict[int, No
 
 async def rollout(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """MCTS.rollout over the built tree, repeated until one rollout reaches a leaf not yet evaluated."""
-    nodes, search = state["_nodes"], state["_search"]
+    nodes, search = state["_nodes"], copy.deepcopy(state["_search"])
     while search.attempts < presets.AUTOFORMULATION.max_rollout_attempts:
         search.attempts += 1
         path = [nodes[0]]

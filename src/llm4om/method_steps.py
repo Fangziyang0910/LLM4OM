@@ -16,7 +16,7 @@ HIDDEN_KEYS = {"problem", "description", "solve", "messages", "failure"}
 def latest_artifacts(steps: Iterable[dict[str, Any]]) -> dict[str, str]:
     """Latest formulation and code recorded across public artifact steps."""
     return {key: step[key] for step in steps for key in ("formulation", "code")
-            if step.get("type") == "artifact" and isinstance(step.get(key), str)}
+            if step.get("type") == "artifact" and isinstance(step.get(key), str) and step[key].strip()}
 
 
 def render_update(update: dict[str, Any], hidden: frozenset[str] = frozenset()) -> str:
@@ -65,7 +65,8 @@ class NodeSteps(BaseCallbackHandler):
     def on_chain_end(self, outputs: Any, *, run_id: UUID, **kwargs: Any) -> None:
         node = self.nodes.pop(run_id, None)
         if node and isinstance(outputs, dict) and (text := render_update(outputs, self.method.hidden)):
-            produced = {key: outputs[key] for key in ("formulation", "code") if isinstance(outputs.get(key), str)}
+            produced = {key: outputs[key] for key in ("formulation", "code")
+                        if isinstance(outputs.get(key), str) and outputs[key].strip()}
             self.recorder.step("artifact", self.method.titles[node], text, node=node, **produced)
 
     def on_chain_error(self, error: BaseException, *, run_id: UUID, **kwargs: Any) -> None:

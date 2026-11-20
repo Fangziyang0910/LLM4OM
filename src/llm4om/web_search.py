@@ -7,7 +7,7 @@ from typing import Annotated, Any
 import httpx
 from langchain.tools import tool
 from langchain_core.tools import BaseTool
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
 
 from llm4om.llm import LLMSettings
 
@@ -18,6 +18,11 @@ class SearchResult(BaseModel):
     summary: str = ""
     snippet: str = ""
     date: str | None = None
+
+    @field_validator("summary", "snippet", mode="before")
+    @classmethod
+    def _none_to_empty(cls, value: Any) -> Any:
+        return "" if value is None else value
 
 
 class SearchResults(BaseModel):
@@ -51,7 +56,7 @@ def search_tool(settings: LLMSettings) -> BaseTool:
                 artifact["results"] = SearchResults.model_validate(response.json()).model_dump(mode="json")["results"]
         except httpx.HTTPStatusError as error:
             artifact["error"] = f"DeepSeek Search returned HTTP {error.response.status_code}."
-        except httpx.RequestError:
+        except (httpx.RequestError, httpx.InvalidURL):
             artifact["error"] = "Could not reach DeepSeek Search."
         except ValueError:
             artifact["error"] = "DeepSeek Search returned an unreadable result."

@@ -7,6 +7,11 @@ if [ ! -S "$socket" ]; then
     echo "llm4om: mount the host's Docker socket at $socket; the sandbox runs generated code in Docker." >&2
     exit 1
 fi
+socket_gid="$(stat -c %g "$socket")"
+if ! setpriv --reuid=llm4om --regid=llm4om --groups="$socket_gid" --no-new-privs -- test -r "$socket" -a -w "$socket"; then
+    echo "llm4om: $socket is not readable/writable by its group ($socket_gid). Rootless 0600 sockets need group access (0660) or a socket proxy." >&2
+    exit 1
+fi
 # Data copied in with `docker compose cp` or left by another image may belong to someone else.
 find /data ! -user llm4om -exec chown llm4om:llm4om {} +
-exec setpriv --reuid=llm4om --regid=llm4om --groups="$(stat -c %g "$socket")" --no-new-privs -- "$@"
+exec setpriv --reuid=llm4om --regid=llm4om --groups="$socket_gid" --no-new-privs -- "$@"

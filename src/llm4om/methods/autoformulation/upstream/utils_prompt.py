@@ -362,13 +362,20 @@ def most_common_clustering(list_dicts):
 
 
 def update_rank(current_dict, rank):
+    updated = dict(current_dict)
     for r, variable in rank.items():
-        if variable in current_dict:
-            current_dict[variable] += r
+        if variable not in updated:
+            continue
+        if isinstance(r, bool):
+            continue
+        if isinstance(r, (int, float)):
+            score = r
+        elif isinstance(r, str) and r.strip().isdigit():
+            score = int(r.strip())
         else:
-            current_dict[variable] = r
-
-    return current_dict
+            continue
+        updated[variable] += score
+    return updated
 
 def get_normalized_rank(dict_1):
     def rank_array(arr):
