@@ -14,7 +14,7 @@
 ```bash
 git clone https://github.com/Fangziyang0910/LLM4OM.git && cd LLM4OM
 uv sync --extra web
-uv run llm4om build-worker          # 构建沙箱镜像 llm4om-worker:13
+uv run llm4om build-worker          # 构建沙箱镜像 llm4om-worker:14
 cp .env.example .env                # 填写默认预设，供真实运行使用
 ```
 
