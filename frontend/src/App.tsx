@@ -33,7 +33,7 @@ type Confirm = { title: string; text: string; action: string; run: () => Promise
 
 const routeFromUrl = (): Route => {
   const match = location.pathname.match(/^\/(run|compare|chat|discussion|agent)\/([\w-]+)/);
-  if (!match) return { name: location.pathname === "/agent" ? "agent-new" : "new" };
+  if (!match) return { name: location.pathname === "/model" ? "new" : "agent-new" };
   const name = match[1] as "run" | "compare" | "chat" | "discussion" | "agent";
   // A plain /run/{thread} keeps the latest-run meaning; only an explicit checkpoint selects a saved plan.
   const checkpoint = name === "run" ? new URLSearchParams(location.search).get("checkpoint") ?? undefined : undefined;
@@ -65,7 +65,7 @@ export default function App() {
   const [confirm, setConfirm] = useState<Confirm | null>(null);
 
   const go = useCallback((next: Route) => {
-    const path = next.name === "new" ? "/" : next.name === "agent-new" ? "/agent"
+    const path = next.name === "agent-new" ? "/" : next.name === "new" ? "/model"
       : `/${next.name}/${next.id}${next.name === "run" && next.checkpoint ? `?checkpoint=${encodeURIComponent(next.checkpoint)}` : ""}`;
     if (location.pathname + location.search !== path) window.history.pushState(null, "", path);
     setRoute(next);
@@ -94,7 +94,7 @@ export default function App() {
     void refresh();
     go({ name: "run", id });
   };
-  const compare = async (request: Draft, runs: { method: string; preset: Preset }[]) => {
+  const compare = async (request: Draft, runs: { method: string; language: string; solver: string; preset: Preset }[]) => {
     const { group, started, error } = await startComparison(request, runs);
     void refresh();
     go({ name: "compare", id: group });
@@ -108,7 +108,7 @@ export default function App() {
     run: async () => {
       await deleteRun(entry.id);
       const activeRoute = routeRef.current;
-      if ("id" in activeRoute && activeRoute.id === entry.id) go({ name: entry.meta.kind === "optimization" ? "agent-new" : "new" });
+      if ("id" in activeRoute && activeRoute.id === entry.id) go({ name: "agent-new" });
       await refresh();
       toast.success(t("已删除。"));
     },
@@ -169,9 +169,9 @@ export default function App() {
     <div className="ambient-canvas flex min-w-0 flex-1 flex-col">
       {(route.name !== "agent-new" && route.name !== "agent" || !options || optionsQuery.error) ? <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-background/80 px-2.5 backdrop-blur-md xl:hidden">
         <Button variant="ghost" size="icon-sm" aria-label={t("打开菜单")} onClick={() => setMenuOpen(true)}><Menu /></Button>
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? t("快速求解")
-          : route.name === "agent-new" || route.name === "agent" ? t("对话规划") : route.name === "chat" ? t("需求梳理") : route.name === "discussion" ? t("方案追问") : route.name === "compare" ? t("方案对比") : t("求解结果")}</span>
-        {route.name !== "new" ? <Button variant="ghost" size="icon-sm" aria-label={t("快速求解")} title={t("新建快速求解")} onClick={newProblem}><Plus /></Button> : null}
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? t("多方案对比")
+          : route.name === "agent-new" || route.name === "agent" ? t("智能优化对话") : route.name === "chat" ? t("需求梳理") : route.name === "discussion" ? t("方案追问") : route.name === "compare" ? t("方案对比") : t("求解结果")}</span>
+        <Button variant="ghost" size="icon-sm" aria-label={t("新建优化任务")} title={t("新建优化任务")} onClick={openAgent}><Plus /></Button>
       </header> : null}
       {presetsQuery.error ? <div role="alert" className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive sm:px-6">
         <span>{t("模型配置加载失败：{error}", { error: errorText(presetsQuery.error) })}</span>
@@ -218,11 +218,14 @@ export default function App() {
     {options ? <>
       <Examples open={examplesOpen} onClose={() => setExamplesOpen(false)} datasets={options.datasets}
         onUse={description => {
-          if (route.name === "agent-new" || route.name === "agent") {
+          if (route.name === "new") {
+            setDraft({ ...draft, description, data: {}, origin: undefined });
+            go({ name: "new" });
+          } else {
             clearChatDraft("optimization-new");
             setAgentDraft({ id: ++agentDraftSeq.current, description, data: {} });
             go({ name: "agent-new" });
-          } else { setDraft({ ...draft, description, data: {}, origin: undefined }); go({ name: "new" }); }
+          }
           setExamplesOpen(false);
         }} />
       {presetsOpen ? <PresetsDialog onClose={() => setPresetsOpen(false)} presets={presets} dailyTokens={presetsQuery.data?.daily_tokens ?? 0}

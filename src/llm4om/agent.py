@@ -71,6 +71,9 @@ and you can also help with ordinary conversation and related tasks. Let the user
 Explain or help edit code when asked; use the modeling tools when the user wants the platform to actually solve an optimization problem.
 For a first calculation, a different problem, updated attachments or a different method/library, use model_and_solve with
 the complete standalone business problem and actual file names. Defaults are Direct, Pyomo and automatic backend selection.
+When no method is pinned, prefer autoco (built-in metaheuristic/evolutionary pool, no external library needed) for
+multi-objective Pareto trade-off problems or hard nonlinear/combinatorial problems (such as QAP, routing, or complex
+scheduling) where exact MILP solvers struggle; otherwise use Direct with Pyomo.
 Use solve_scenarios for changes to an existing plan with unchanged configuration and data.
 Use modeling_capabilities before selecting a non-default method, modeling library or explicit backend; honor linear_only scope.
 Follow explicit user choices; pinned configuration takes priority over tool arguments. Users need not configure technical details.
@@ -210,11 +213,28 @@ def _configuration(values: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _pareto_summary(solved: dict[str, Any]) -> dict[str, Any] | None:
+    pareto = solved.get("pareto")
+    if not isinstance(pareto, dict):
+        return None
+    solutions = pareto.get("solutions") or []
+    if not solutions:
+        return None
+    knee = next((item for item in solutions if isinstance(item, dict) and item.get("knee")), solutions[0])
+    return {
+        "total": pareto.get("total", len(solutions)),
+        "objectives": pareto.get("objectives") or [],
+        "knee": knee.get("objectives") if isinstance(knee, dict) else None,
+    }
+
+
 def _plan_result(plan: Plan, values: dict[str, Any]) -> dict[str, Any]:
     solved = values.get("solve") or {}
     variables = solved.get("variables") or {}
+    pareto = _pareto_summary(solved)
     return {**plan, "description": values["description"], "configuration": _configuration(values),
             "status": solved.get("status"), "objective": solved.get("objective"),
+            **({"pareto": pareto} if pareto else {}),
             "variables": dict(islice(variables.items(), 100)), "total_variables": len(variables),
             "failure": values.get("failure"), "explanation": values.get("explanation"),
             "infeasibility": values.get("infeasibility")}
@@ -591,7 +611,9 @@ def _build_tools_and_middleware(
         facts["source"] = current
         facts["available_plans"] = [{**plan, "current": plan["id"] == (current or {}).get("thread_id"),
             "original": plan["id"] == (session.state.get("source") or {}).get("thread_id")} for plan in available.values()]
+        pareto = _pareto_summary(solved)
         facts["solve"] = {**{key: solved.get(key) for key in ("status", "objective", "diagnosis", "error")},
+                          **({"pareto": pareto} if pareto else {}),
                           "variables": dict(islice((solved.get("variables") or {}).items(), 100)),
                           "total_variables": len(solved.get("variables") or {})}
         if session.pending:
@@ -603,8 +625,11 @@ def _build_tools_and_middleware(
             for plan in session.recovered:
                 saved = await session.load(plan["source"])
                 result = saved.get("solve") or {}
+                scenario_pareto = _pareto_summary(result)
                 facts["already_computed_scenarios"].append({"name": plan["name"], "instruction": plan["instruction"],
-                    "status": result.get("status"), "objective": result.get("objective"), "failure": saved.get("failure"),
+                    "status": result.get("status"), "objective": result.get("objective"),
+                    **({"pareto": scenario_pareto} if scenario_pareto else {}),
+                    "failure": saved.get("failure"),
                     "variables": dict(islice((result.get("variables") or {}).items(), 100))})
         sections = []
         if session.optimization:

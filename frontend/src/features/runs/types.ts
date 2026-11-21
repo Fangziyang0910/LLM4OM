@@ -75,11 +75,12 @@ export type RunMeta = {
 export type RequirementsMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags" | "origin" | "thinking"> & { kind: "requirements"; search?: boolean };
 export type SolutionChatMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags" | "thinking"> & { kind: "solution_chat"; parent: SourceRun };
 export type OptimizationMeta = Pick<RunMeta, "title" | "preset" | "provider" | "model" | "note" | "tags" | "thinking"> & {
-  kind: "optimization"; method?: string | null; language?: string | null; search?: boolean;
+  kind: "optimization"; method?: string | null; language?: string | null; solver?: string | null; search?: boolean;
 };
 /** A run in the history list. */
 export type Entry<Meta = RunMeta | RequirementsMeta | SolutionChatMeta | OptimizationMeta> = {
   id: string; created: string; updated: string; meta: Meta; state: string; objective: number | null;
+  paretoTotal?: number | null;
   failure: string | null; usage: Usage | null; elapsed: number | null;
 };
 

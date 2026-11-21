@@ -1,9 +1,7 @@
 import { useState } from "react";
-import { ArrowRight, BookOpen, CalendarClock, Factory, MessageSquareText, Sparkles, Truck } from "lucide-react";
+import { ArrowRight, BookOpen, Factory, GitFork, Sparkles, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { errorText } from "@/format";
 import { t } from "@/i18n";
 import { ProblemEditor } from "@/features/composer/ProblemEditor";
 import { DRAFT_KEY, type ModelingConfigProps, useRunLauncher } from "@/features/composer/RunSettings";
@@ -11,14 +9,23 @@ import { readDataFiles } from "@/features/composer/files";
 import { normalizeTarget } from "@/features/runs/target";
 import type { Draft } from "@/types";
 
-const STARTERS = [
+const STARTERS: {
+  icon: typeof Factory;
+  title: string;
+  tag: string;
+  summary: string;
+  description: string;
+  data?: Record<string, string>;
+  method?: string;
+}[] = [
   {
     icon: Factory,
     title: "生产计划",
-    tag: "提升利润",
+    tag: "精确求解",
     summary: "在有限设备与工序额度下，合理安排多种产品的产量，让总利润最高。",
     description: "工厂生产 A、B 两种产品，数量必须是非负整数。每件 A 利润为 3，每件 B 利润为 2。A 消耗 2 单位切割资源和 1 单位加工资源，" +
       "B 消耗 1 单位切割资源和 2 单位加工资源。两种资源各有 8 单位。请确定生产数量，使总利润最大。",
+    method: "direct",
   },
   {
     icon: Truck,
@@ -29,15 +36,19 @@ const STARTERS = [
       "前三行是仓库到客户的单位运费，supply 列是仓库供应量，最后一行 demand 是客户需求量。每个客户的需求必须恰好满足，" +
       "仓库发货不能超过供应量。请制定运输方案，使总运费最小。",
     data: { "transport.csv": "from,C1,C2,C3,C4,supply\nW1,4,6,9,5,120\nW2,7,3,4,8,150\nW3,6,5,7,3,100\ndemand,80,90,110,70,\n" },
+    method: "direct",
   },
   {
-    icon: CalendarClock,
-    title: "任务指派",
-    tag: "缩短工时",
-    summary: "根据每位员工处理各项任务的耗时差异，安排一对一指派使总耗时最短。",
-    description: "把 4 名员工分配到 4 项任务，每人恰好做一项，每项恰好由一人完成。完成时间（小时）如下：" +
-      "员工 1：9、2、7、8；员工 2：6、4、3、7；员工 3：5、8、1、8；员工 4：7、6、9、4（依次对应任务 1–4）。" +
-      "请给出总完成时间最短的分配方案。",
+    icon: GitFork,
+    title: "多目标 GPU 调度",
+    tag: "AutoCO · 多目标",
+    summary: "把 12 个 AI 训练任务分到 4 个集群，同时权衡总电费与故障风险，自动生成 Pareto 前沿。",
+    description: "将 12 个 AI 计算任务（编号 0 到 11）分配到 4 个异构 GPU 集群（编号 0 到 3），每个任务只能分配到一个集群。" +
+      "任务算力需求为 [18, 25, 14, 30, 22, 16, 28, 19, 24, 15, 27, 20]；" +
+      "各集群算力上限为 [80, 90, 75, 85]，单位电费系数为 [1.0, 1.2, 0.9, 1.3]，故障风险系数为 [0.08, 0.04, 0.11, 0.02]。" +
+      "硬约束：每个集群承担的总算力不能超过其上限，且互斥任务对 (0, 1)、(3, 6)、(5, 10) 不能分在同一集群。" +
+      "请同时最小化两个冲突目标（求 Pareto 非支配解集）：1）总电费 = sum(任务算力 * 所在集群电费系数）；2）总故障风险 = sum(任务算力 * 所在集群风险系数）。",
+    method: "autoco",
   },
 ];
 
@@ -46,8 +57,8 @@ export function initialDraft(): Draft {
   try { saved = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "{}") ?? {}; } catch { /* storage may be unavailable */ }
   const target = normalizeTarget(saved.language, saved.solver);
   return { description: saved.description ?? "", data: saved.data ?? {}, method: saved.method ?? "direct",
-    language: target.language, preset: saved.preset ?? null, solver: target.solver, origin: saved.origin,
-    comparing: saved.comparing ?? false, methods: saved.methods ?? [], presets: saved.presets ?? [] };
+    language: target.language, preset: saved.preset ?? null, solver: target.solver, time_limit: saved.time_limit,
+    origin: saved.origin, comparing: saved.comparing ?? false, methods: saved.methods ?? [], presets: saved.presets ?? [] };
 }
 
 export type ComposerProps = ModelingConfigProps & {
@@ -55,11 +66,11 @@ export type ComposerProps = ModelingConfigProps & {
   onDiscuss?: () => Promise<void>;
 };
 
-export function Composer({ openExamples, onDiscuss, ...modeling }: ComposerProps) {
-  const { draft, setDraft } = modeling;
+export function Composer({ openExamples, ...modeling }: ComposerProps) {
+  const { draft, setDraft, options } = modeling;
   const [reading, setReading] = useState(false);
   const set = (change: Partial<Draft>) => setDraft(current => ({ ...current, ...change }));
-  const { busy, setBusy, settingsTrigger, startButton, settingsDialog } = useRunLauncher({
+  const { settingsTrigger, startButton, settingsDialog } = useRunLauncher({
     ...modeling,
     problem: { description: draft.description, data: draft.data, origin: draft.origin },
     reading,
@@ -72,15 +83,6 @@ export function Composer({ openExamples, onDiscuss, ...modeling }: ComposerProps
       setDraft(current => ({ ...current, data: { ...current.data, ...data } }));
     } finally { setReading(false); }
   };
-
-  const discussTrigger = onDiscuss ? <Button type="button" variant="ghost" size="sm"
-    className="h-8 rounded-xl px-2.5 text-xs font-normal text-muted-foreground hover:text-foreground"
-    disabled={busy || reading} onClick={async () => {
-      setBusy(true);
-      try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
-    }}>
-    <MessageSquareText className="size-3.5 text-primary/80" />{t("边聊边梳理")}
-  </Button> : null;
 
   return <div className="flex h-full flex-col">
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -108,7 +110,7 @@ export function Composer({ openExamples, onDiscuss, ...modeling }: ComposerProps
         <div className="flex min-h-0 flex-1 flex-col gap-5">
           <ProblemEditor autoFocus value={draft.description} data={draft.data} reading={reading} onChange={description => set({ description })}
             onFiles={list => void attach(list)}
-            toolbarExtra={<>{settingsTrigger}{discussTrigger}</>}
+            toolbarExtra={settingsTrigger}
             primaryAction={startButton}
             onClear={() => {
               const previous = { description: draft.description, data: draft.data, origin: draft.origin }; set({ description: "", data: {}, origin: undefined });
@@ -126,7 +128,11 @@ export function Composer({ openExamples, onDiscuss, ...modeling }: ComposerProps
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               {STARTERS.map(item => {
                 const Icon = item.icon;
-                return <button key={item.title} type="button" onClick={() => set({ description: t(item.description), data: item.data ?? {}, origin: undefined })}
+                const targetMethod = item.method && options.methods.some(m => m.id === item.method) ? item.method : undefined;
+                return <button key={item.title} type="button" onClick={() => set({
+                  description: t(item.description), data: item.data ?? {}, origin: undefined,
+                  ...(targetMethod ? { method: targetMethod, comparing: false } : {}),
+                })}
                   className="group flex min-w-0 items-start gap-3 rounded-2xl border bg-card/90 p-3.5 text-left shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-sm">
                   <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                     <Icon className="size-4.5" />

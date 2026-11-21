@@ -1,14 +1,16 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useDefaultLayout } from "react-resizable-panels";
 import type { Message } from "@langchain/langgraph-sdk";
-import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, CalendarDays, Columns2, Factory, Globe, Menu, Paperclip, SlidersHorizontal, Sparkles, Truck, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, CalendarDays, Columns2, Factory, GitFork, Globe, Menu, Paperclip, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
+import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useDesktop } from "@/lib/useDesktop";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Toggle } from "@/components/ui/toggle";
 import { ChatInput } from "@/features/chat/ChatInput";
 import { ChatMessages, ThreadLoadError, type ChatProgress, type ModelingEvent, type ModelingTask } from "@/features/chat/Messages";
@@ -17,36 +19,40 @@ import { useChatScroll } from "@/features/chat/scroll";
 import { DATA_FILE_ACCEPT, readDataFiles } from "@/features/composer/files";
 import { DataEditor } from "@/features/composer/DataEditor";
 import { Outputs, type Tab } from "@/features/runs/Outputs";
+import { Timeline } from "@/features/runs/Timeline";
+import { phases } from "@/features/runs/steps";
 import { saveThreadValues } from "@/features/runs/api";
 import { client } from "@/features/runs/sdk";
 import type { OptimizationMeta, Plan, RunValues, SourceRun, Usage } from "@/features/runs/types";
 import { sameSource, sourceKey } from "@/features/runs/types";
-import type { Options, Preset } from "@/types";
+import type { BackendCatalog, Options, Preset } from "@/types";
 import { errorText } from "@/format";
 import { locale, t } from "@/i18n";
 import { cn } from "@/lib/utils";
+
+const CORE_METHODS = new Set(["direct", "feedback_repair", "trival", "autoco"]);
 
 type Values = { messages?: Message[]; description?: string; data?: Record<string, string>; source?: SourceRun;
   current?: SourceRun; plans?: Plan[]; usage?: Usage; failure?: string | null };
 
 const AGENT_STARTERS = [
   {
-    icon: CalendarDays,
-    title: "门店排班规划",
-    summary: "平衡早晚班人手需求与人力成本",
-    prompt: "我想给门店安排下周的班次，既要保证高峰时段人手充足，又想控制总排班成本，应该先提供哪些信息？",
-  },
-  {
     icon: Factory,
     title: "生产排产优化",
-    summary: "在产能与原料约束下最大化收益",
-    prompt: "工厂有几条产线和不同利润的产品订单，设备工时有限，帮我梳理一下怎么安排生产最划算。",
+    summary: "在产能与原料约束下最大化总利润",
+    prompt: "工厂生产 A、B 两种产品，数量必须是非负整数。每件 A 利润为 3，每件 B 利润为 2。A 消耗 2 单位切割资源和 1 单位加工资源，B 消耗 1 单位切割资源和 2 单位加工资源，两种资源各有 8 单位。请直接帮我算出总利润最高的生产方案。",
   },
   {
-    icon: Truck,
-    title: "仓储配送调度",
-    summary: "多仓库向多客户供货，降低总运费",
-    prompt: "我有多个发货仓库和一批门店补货需求，想规划一套总运费最低的调拨方案。",
+    icon: GitFork,
+    title: "多目标 GPU 调度",
+    summary: "同时权衡总电费与故障风险，生成 Pareto 权衡方案",
+    prompt: "请帮我把 12 个 AI 计算任务（算力需求 [18, 25, 14, 30, 22, 16, 28, 19, 24, 15, 27, 20]）分配到 4 个 GPU 集群（算力上限 [80, 90, 75, 85]，电费系数 [1.0, 1.2, 0.9, 1.3]，故障风险系数 [0.08, 0.04, 0.11, 0.02]）。互斥任务对 (0,1)、(3,6)、(5,10) 不能分在同一集群。请同时最小化总电费和总故障风险，给我一组多目标 Pareto 权衡方案。",
+  },
+  {
+    icon: CalendarDays,
+    title: "门店排班规划",
+    summary: "平衡高峰人手需求与人力成本，边聊边理清约束",
+    prompt: "我想给门店安排下周的班次，既要保证高峰时段人手充足，又想控制总排班成本，应该先提供哪些信息？",
   },
 ] as const;
 
@@ -59,6 +65,7 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   const layout = useDefaultLayout({ id: "llm4om-agent", panelIds: ["conversation", "workspace"], onlySaveAfterUserInteractions: true });
   const [method, setMethod] = useState<string>();
   const [language, setLanguage] = useState<string>();
+  const [solver, setSolver] = useState<string>();
   const [search, setSearch] = useState<boolean>();
   const [settings, setSettings] = useState(false);
   const { log, content, follow, followLatest } = useChatScroll();
@@ -102,7 +109,31 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   const data = files ?? conversation.values.data ?? initial.data;
   const { preset, presetId, setSelected, thinkingMode, setThinking } = useChatModel(presets, meta);
   const chosenMethod = method ?? meta?.method ?? "auto";
-  const chosenLanguage = language ?? meta?.language ?? "auto";
+  const chosenMethodMeta = options.methods.find(item => item.id === chosenMethod);
+  const chosenSelfContained = !!chosenMethodMeta?.builtin_solver;
+  const rawLanguage = chosenSelfContained ? "auto" : (language ?? meta?.language ?? "auto");
+  const languageAllowed = (id: string) =>
+    !chosenMethodMeta || chosenMethodMeta.builtin_solver || !chosenMethodMeta.languages || chosenMethodMeta.languages.includes(id);
+  const chosenLanguage = rawLanguage === "auto" || languageAllowed(rawLanguage) ? rawLanguage : "auto";
+  const chosenSolver = chosenSelfContained || chosenLanguage === "auto" ? "AUTO" : (solver ?? meta?.solver ?? "AUTO");
+  const catalog = useQuery({
+    queryKey: ["backends"],
+    queryFn: () => api<BackendCatalog>("/api/backends"),
+    enabled: settings || chosenLanguage !== "auto",
+    staleTime: Infinity,
+    retry: false,
+  });
+  const backends = chosenLanguage !== "auto" ? catalog.data?.libraries[chosenLanguage] : undefined;
+  const coreMethods = options.methods.filter(item => CORE_METHODS.has(item.id));
+  const extraMethods = options.methods.filter(item => !CORE_METHODS.has(item.id));
+  const customized = chosenMethod !== "auto" || chosenLanguage !== "auto" || chosenSolver !== "AUTO";
+  const configSummary = !customized
+    ? t("自动求解")
+    : [
+      chosenMethodMeta?.name ?? (chosenMethod === "auto" ? t("自动方法") : chosenMethod),
+      !chosenSelfContained && chosenLanguage !== "auto" ? (options.languages.find(item => item.id === chosenLanguage)?.name ?? chosenLanguage) : null,
+      !chosenSelfContained && chosenSolver !== "AUTO" ? chosenSolver : null,
+    ].filter(Boolean).join(" · ");
   const searching = search ?? meta?.search ?? false;
   const canSearch = !!options.search_configured || preset?.provider === "deepseek";
   const busy = conversation.busy;
@@ -146,9 +177,11 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
     if (!preset) { toast.error(t("请先配置可用的 AI 模型。")); openPresets(); return; }
     followLatest(); setViewed(undefined); setLiveTask(undefined); setProgress(undefined); setTasks({});
     const context = { preset: preset.id, locale, search: searching && canSearch, thinking: thinkingMode,
-      method: chosenMethod === "auto" ? null : chosenMethod, language: chosenLanguage === "auto" ? null : chosenLanguage };
+      method: chosenMethod === "auto" ? null : chosenMethod,
+      language: chosenLanguage === "auto" ? null : chosenLanguage,
+      solver: chosenSolver === "AUTO" ? null : chosenSolver };
     const metadata = { preset: preset.id, provider: preset.provider, model: preset.name || preset.model,
-      method: context.method, language: context.language, search: context.search, thinking: thinkingMode };
+      method: context.method, language: context.language, solver: context.solver, search: context.search, thinking: thinkingMode };
     if (!threadId) {
       const created = await conversation.startThread({ context, metadata: { ...metadata, kind: "optimization",
         title: input.trim().split("\n")[0].slice(0, 120) }, values: { data } });
@@ -239,13 +272,70 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
             const next = { ...data }; delete next[name]; void saveData(next).catch(error => toast.error(errorText(error)));
           }}><X /></Button></span>)}
       </div> : null}
-      {settings ? <div className="animate-scale-in mx-auto grid max-w-[46rem] grid-cols-1 gap-2.5 rounded-2xl border border-border/80 bg-card/90 p-3.5 shadow-xs sm:grid-cols-2">
-        <label className="space-y-1 text-xs font-medium text-muted-foreground">{t("求解策略偏好")}
-          <Select value={chosenMethod} onValueChange={setMethod} disabled={busy}><SelectTrigger className="w-full" aria-label={t("固定建模方法")}><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="auto">{t("智能自动选择（推荐）")}</SelectItem>{options.methods.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></label>
-        <label className="space-y-1 text-xs font-medium text-muted-foreground">{t("求解引擎偏好")}
-          <Select value={chosenLanguage} onValueChange={setLanguage} disabled={busy}><SelectTrigger className="w-full" aria-label={t("固定建模求解器")}><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="auto">{t("智能自动匹配（推荐）")}</SelectItem>{options.languages.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></label>
+      {settings ? <div className="animate-scale-in mx-auto flex max-w-[46rem] flex-col gap-2.5 rounded-2xl border border-border/80 bg-card/95 p-3.5 shadow-xs">
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <span className="font-medium text-foreground/85">{t("建模方法与求解器（默认自动选择）")}</span>
+          {customized ? <button type="button" disabled={busy}
+            onClick={() => { setMethod("auto"); setLanguage("auto"); setSolver("AUTO"); }}
+            className="text-xs font-medium text-primary hover:underline disabled:opacity-50">{t("恢复默认自动")}</button> : null}
+        </div>
+        <div className={cn("grid grid-cols-1 gap-2.5", chosenSelfContained ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
+          <label className="space-y-1 text-xs font-medium text-muted-foreground">{t("建模方法")}
+            <Select value={chosenMethod} onValueChange={next => {
+              setMethod(next);
+              const nextMeta = options.methods.find(item => item.id === next);
+              if (nextMeta?.builtin_solver) { setLanguage("auto"); setSolver("AUTO"); }
+              else if (nextMeta?.languages && chosenLanguage !== "auto" && !nextMeta.languages.includes(chosenLanguage)) {
+                setLanguage("auto"); setSolver("AUTO");
+              }
+            }} disabled={busy}>
+              <SelectTrigger className="w-full" aria-label={t("固定建模方法")}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">{t("自动选择（推荐）")}</SelectItem>
+                {coreMethods.length ? <SelectGroup>
+                  <SelectLabel>{t("常用方法")}</SelectLabel>
+                  {coreMethods.map(item => <SelectItem key={item.id} value={item.id}>{item.name}{item.builtin_solver ? ` · ${t("智能优化")}` : ""}</SelectItem>)}
+                </SelectGroup> : null}
+                {extraMethods.length ? <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>{t("更多研究方法（{count}）", { count: extraMethods.length })}</SelectLabel>
+                    {extraMethods.map(item => <SelectItem key={item.id} value={item.id}>{item.name}{item.builtin_solver ? ` · ${t("智能优化")}` : ""}</SelectItem>)}
+                  </SelectGroup>
+                </> : null}
+              </SelectContent>
+            </Select>
+          </label>
+          {chosenSelfContained ? <div className="space-y-1 text-xs font-medium text-muted-foreground">{t("求解引擎")}
+            <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-xs font-normal text-muted-foreground">
+              {t("{method} 内置 12 类算法池（自动选配）", { method: chosenMethodMeta?.name ?? chosenMethod })}
+            </div>
+          </div> : <>
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">{t("建模框架")}
+              <Select value={chosenLanguage} onValueChange={next => { setLanguage(next); setSolver("AUTO"); }} disabled={busy}>
+                <SelectTrigger className="w-full" aria-label={t("固定建模求解器")}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">{t("自动匹配（推荐）")}</SelectItem>
+                  {options.languages.map(item => <SelectItem key={item.id} value={item.id} disabled={!languageAllowed(item.id)}>{item.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">{t("底层求解器")}
+              {chosenLanguage === "auto" ? <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-xs font-normal text-muted-foreground">
+                {t("随建模框架自动匹配")}
+              </div> : <Select value={chosenSolver} onValueChange={setSolver} disabled={busy}>
+                <SelectTrigger className="w-full" aria-label={t("固定底层求解器")}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(backends ?? [{ id: "AUTO", available: true, detail: "" }]).map(item => (
+                    <SelectItem key={item.id} value={item.id} disabled={!item.available} title={item.detail}>
+                      {item.id === "AUTO" ? t("自动匹配最优求解器") : item.id}{!item.available ? ` · ${t("当前环境未安装")}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>}
+            </label>
+          </>}
+        </div>
       </div> : null}
       <ChatInput label={t("发送给优化助手")} value={input} onChange={setInput}
         disabled={busy} sendingDisabled={dataPending} loading={conversation.loading} stopping={conversation.stopping} inputRef={inputArea}
@@ -254,12 +344,16 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
         <Button type="button" variant="ghost" size="icon-sm" disabled={busy || dataPending} aria-label={t("添加数据文件")}
           title={t(reading ? "正在读取数据……" : savingData ? "正在保存……" : "添加数据文件")} onClick={() => upload.current?.click()}>
           {dataPending ? <Spinner /> : <Paperclip />}</Button>
-        <span title={canSearch ? t("搜索公开资料，并在回复中展示来源。") : t("选择支持搜索的模型或由管理员开启搜索服务。")}>
-          <Toggle size="sm" pressed={searching && canSearch} disabled={busy || !canSearch} aria-label={t("联网搜索")} onPressedChange={setSearch}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Toggle>
-        </span>
-        <Button type="button" variant={settings || chosenMethod !== "auto" || chosenLanguage !== "auto" ? "secondary" : "ghost"} size="icon-sm" aria-label={t("建模偏好")}
-          title={`${options.methods.find(item => item.id === chosenMethod)?.name || t("自动选择")} · ${options.languages.find(item => item.id === chosenLanguage)?.name || t("自动选择")}`}
-          aria-expanded={settings} onClick={() => setSettings(!settings)}><SlidersHorizontal /></Button>
+        <Button type="button" variant={settings || customized ? "secondary" : "ghost"} size="sm" aria-label={t("建模偏好")}
+          title={t("可选指定建模方法与求解器，默认自动匹配")}
+          className={cn("h-8 max-w-44 gap-1.5 rounded-lg px-2 text-xs font-normal", customized ? "text-primary font-medium" : "text-muted-foreground")}
+          aria-expanded={settings} onClick={() => setSettings(!settings)}>
+          <SlidersHorizontal className="size-3.5 shrink-0" />
+          <span className="truncate">{configSummary}</span>
+        </Button>
+        {canSearch ? <span title={t("搜索公开资料，并在回复中展示来源。")}>
+          <Toggle size="sm" pressed={searching} disabled={busy} aria-label={t("联网搜索")} onPressedChange={setSearch}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Toggle>
+        </span> : null}
       </ChatInput>
       <input ref={upload} type="file" multiple accept={DATA_FILE_ACCEPT} className="hidden" disabled={busy || dataPending} aria-label={t("数据文件")} onChange={async event => {
         const field = event.currentTarget;
@@ -321,12 +415,36 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
 }
 
 function LiveWorkspace({ task, data, options }: { task: ModelingTask; data: Record<string, string>; options: Options }) {
+  const [view, setView] = useState<"steps" | "outputs">("steps");
   const [tab, setTab] = useState<Tab>("formulation");
   const [picked, setPicked] = useState<Partial<Record<"formulation" | "code", string>>>({});
   const values: RunValues = { data, ...Object.assign({}, ...task.steps.filter(step => step.type === "artifact").map(step => ({
     ...(step.formulation ? { formulation: step.formulation } : {}), ...(step.code ? { code: step.code } : {}),
   }))) };
-  return <Outputs values={values} steps={task.steps} active tab={tab} setTab={setTab} picked={picked}
-    setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))}
-    language={options.languages.find(item => item.id === task.language)} finished={false} onAdjust={() => undefined} />;
+  const all = phases(task.steps);
+  const currentTitle = all.at(-1)?.step?.title;
+  return <div className="flex h-full min-h-0 flex-col">
+    <div className="flex shrink-0 items-center gap-2 border-b bg-primary/5 px-3.5 py-2 text-xs">
+      <Spinner className="size-3.5 text-primary" />
+      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+        {currentTitle ? t("正在执行：{step}…", { step: t(currentTitle) }) : t("正在准备求解流程…")}
+      </span>
+      <div className="flex shrink-0 rounded-lg border bg-background p-0.5">
+        <button type="button" onClick={() => setView("steps")}
+          className={cn("rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors", view === "steps" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+          {t("求解步骤")}
+        </button>
+        <button type="button" onClick={() => setView("outputs")}
+          className={cn("rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors", view === "outputs" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+          {t("模型与代码")}
+        </button>
+      </div>
+    </div>
+    <div className="min-h-0 flex-1">
+      {view === "steps" ? <Timeline steps={task.steps} live={{}} active onShow={(key, id) => { setPicked(current => ({ ...current, [key]: id })); setTab(key); setView("outputs"); }} />
+        : <Outputs values={values} steps={task.steps} active tab={tab} setTab={setTab} picked={picked}
+          setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))}
+          language={options.languages.find(item => item.id === task.language)} finished={false} onAdjust={() => undefined} />}
+    </div>
+  </div>;
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, ChartSpline, ChevronDown, Columns3, Cpu, History, MessageSquareText, MoreHorizontal, Search, Sparkles, Trash2, X, Zap } from "lucide-react";
+import { BookOpen, ChartSpline, ChevronDown, Columns3, Cpu, History, MessageSquareText, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ export function resultText(entry: Entry): string {
   if (entry.meta.kind === "requirements") return entry.state === "running" ? t("正在梳理…")
     : entry.failure ? t("梳理中断") : t("需求梳理");
   if (entry.state === "running") return t("正在求解…");
+  if (entry.paretoTotal && entry.paretoTotal > 0 && tone(entry.state) === "good") return t("{count} 个 Pareto 解", { count: entry.paretoTotal });
   if (entry.objective != null && tone(entry.state) === "good") return `${STATUS[entry.state] ?? entry.state} · ${formatNumber(entry.objective)}`;
   if (entry.state === "infeasible") return t("条件冲突");
   return STATUS[entry.state] ?? entry.state;
@@ -108,33 +109,20 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
   return <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground select-none">
     <div className="flex flex-col gap-3 p-3.5 pb-2.5">
       <a className="group flex items-center gap-2.5 rounded-xl px-1.5 py-1 transition-colors hover:bg-sidebar-accent/50" href="/"
-        title={t("通用智能优化求解器 — 求解各种复杂优化问题的通用求解器")} onClick={event => { event.preventDefault(); onNew(); }}>
+        title={t("通用智能优化求解器 — 求解各种复杂优化问题的通用求解器")} onClick={event => { event.preventDefault(); onAgent(); }}>
         <span className="grid size-8.5 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-xs transition-transform duration-200 group-hover:scale-105">
           <ChartSpline className="size-4.5" />
         </span>
         <span className="flex min-w-0 flex-col leading-tight">
           <span className="truncate text-[14px] font-semibold tracking-tight">{t("通用智能优化求解器")}</span>
-          <span className="truncate text-[11px] text-muted-foreground">{t("智能规划与最优决策平台")}</span>
+          <span className="truncate text-[11px] text-muted-foreground">{t("自然语言建模与智能求解")}</span>
         </span>
       </a>
 
-      {/* Unified two-mode entry: eliminates confusing scattered start buttons */}
-      <div role="group" aria-label={t("求解方式")} className="grid grid-cols-2 gap-1 rounded-xl border bg-background/70 p-1 shadow-2xs">
-        <button type="button" onClick={onNew} aria-pressed={activeMode === "quick" && !current}
-          title={t("直接填写问题与数据，一键自动算出最优方案")}
-          className={cn("flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-all duration-150",
-            activeMode === "quick" && !current ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:bg-accent/70 hover:text-foreground")}>
-          <Zap className="size-3.5 shrink-0" />
-          <span className="truncate">{t("快速求解")}</span>
-        </button>
-        <button type="button" onClick={onAgent} aria-pressed={activeMode === "agent" && !current}
-          title={t("像聊天一样梳理需求、测算方案、追问结果")}
-          className={cn("flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-all duration-150",
-            activeMode === "agent" && !current ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:bg-accent/70 hover:text-foreground")}>
-          <Sparkles className="size-3.5 shrink-0" />
-          <span className="truncate">{t("对话规划")}</span>
-        </button>
-      </div>
+      <Button type="button" onClick={onAgent} className="h-9.5 w-full justify-center gap-1.5 rounded-xl text-[13px] font-medium shadow-xs">
+        <Plus className="size-4" />
+        <span>{t("新建优化任务")}</span>
+      </Button>
 
       {entries.length > 0 || query ? <div className="relative">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -193,6 +181,12 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
     </div>
 
     <div className="flex flex-col gap-1 border-t bg-sidebar/80 p-2.5">
+      <Button variant={activeMode === "quick" && !current ? "secondary" : "ghost"}
+        className="h-9 justify-start gap-2.5 rounded-xl px-2.5 text-[13px] font-normal text-foreground/85 hover:bg-sidebar-accent"
+        title={t("同一问题并排体验多种建模方法、模型或求解器")}
+        onClick={onNew}>
+        <Columns3 className="size-4 text-primary/80" />{t("多方案对比")}
+      </Button>
       <Button variant="ghost" className="h-9 justify-start gap-2.5 rounded-xl px-2.5 text-[13px] font-normal text-foreground/85 hover:bg-sidebar-accent" onClick={onExamples}>
         <BookOpen className="size-4 text-primary/80" />{t("案例模板库")}
       </Button>

@@ -13,12 +13,15 @@ import type { Options } from "@/types";
 import { StatusIcon, TONE } from "@/features/runs/status";
 import { ScenarioResults } from "./ScenarioResults";
 
-/** Whether the solved runs agree on the objective value, up to a relative 1e-6. */
-function agreement(entries: Entry[]): { solved: number; same: boolean; low: number | null; high: number | null } {
-  const values = entries.filter(entry => tone(entry.state) === "good" && entry.objective != null).map(entry => entry.objective!);
-  if (!values.length) return { solved: 0, same: false, low: null, high: null };
+/** Whether single-objective solved runs agree on the objective value, up to a relative 1e-6. */
+function agreement(entries: Entry[]): { solved: number; same: boolean; low: number | null; high: number | null; pareto: number } {
+  const pareto = entries.filter(entry => tone(entry.state) === "good" && !!entry.paretoTotal && entry.paretoTotal > 0).length;
+  const values = entries
+    .filter(entry => tone(entry.state) === "good" && (!entry.paretoTotal || entry.paretoTotal <= 0) && entry.objective != null)
+    .map(entry => entry.objective!);
+  if (!values.length) return { solved: 0, same: false, low: null, high: null, pareto };
   const low = Math.min(...values), high = Math.max(...values);
-  return { solved: values.length, same: high - low <= 1e-6 * Math.max(1, Math.abs(high)), low, high };
+  return { solved: values.length, same: high - low <= 1e-6 * Math.max(1, Math.abs(high)), low, high, pareto };
 }
 
 /** The runs of one comparison side by side: the same problem, one row per method and preset. */
@@ -79,8 +82,10 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
               <StatusIcon status={entry.state} className="size-3.5" />{(STATUS[entry.state] ?? entry.state)}</span>
               {entry.failure ? <p className="mt-1 max-w-64 text-xs whitespace-normal text-destructive">{entry.failure}</p> : null}</TableCell>
             <TableCell className="text-right font-mono font-semibold tabular">
-              {entry.objective != null && tone(entry.state) === "good"
-                ? formatNumber(entry.objective) : "—"}</TableCell>
+              {entry.paretoTotal && entry.paretoTotal > 0 && tone(entry.state) === "good"
+                ? t("{count} 个 Pareto 解", { count: entry.paretoTotal })
+                : entry.objective != null && tone(entry.state) === "good"
+                  ? formatNumber(entry.objective) : "—"}</TableCell>
             <TableCell className="text-right tabular text-muted-foreground">{entry.state === "running" ? "…" : entry.elapsed == null ? "—" : duration(entry.elapsed)}</TableCell>
             <TableCell className="text-right"><Button variant="ghost" size="icon-xs" aria-label={t("打开运行")}><ArrowRight /></Button></TableCell>
           </TableRow>

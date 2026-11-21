@@ -79,6 +79,7 @@ test("multi-objective pareto front renders knee badge, switches active row detai
   }} />);
   expect(screen.getByText("多目标 Pareto 前沿")).toBeTruthy();
   expect(screen.getByText("共 2 个非支配解")).toBeTruthy();
+  expect(screen.getByRole("img", { name: "目标权衡图" })).toBeTruthy();
   expect(screen.getByText(/"label": "balanced"/)).toBeTruthy();
   fireEvent.click(screen.getByText("#1"));
   expect(screen.getByText(/"label": "low-cost"/)).toBeTruthy();

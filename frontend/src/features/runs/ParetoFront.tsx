@@ -3,15 +3,126 @@ import { ArrowDown, ArrowUp, Download, GitFork, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plain, download } from "@/components/Content";
 import { formatNumber } from "@/format";
 import { t } from "@/i18n";
 import { toCsv } from "@/lib/csv";
 import { cn } from "@/lib/utils";
-import type { ParetoFront as ParetoFrontData } from "@/features/runs/types";
+import type { ParetoFront as ParetoFrontData, ParetoObjective, ParetoSolution } from "@/features/runs/types";
 
-/** Dedicated multi-objective Pareto front table card with knee-point highlight, CSV export and row inspection. */
+/** Lightweight zero-dependency interactive 2D SVG trade-off plot synced with the Pareto table. */
+function TradeoffPlot({
+  objectives,
+  solutions,
+  activeIndex,
+  onSelect,
+}: {
+  objectives: ParetoObjective[];
+  solutions: ParetoSolution[];
+  activeIndex: number;
+  onSelect: (index: number) => void;
+}) {
+  const [xAxis, setXAxis] = useState(0);
+  const [yAxis, setYAxis] = useState(1);
+  if (objectives.length < 2 || solutions.length < 2) return null;
+
+  const xi = xAxis < objectives.length ? xAxis : 0;
+  const yi = yAxis < objectives.length && yAxis !== xi ? yAxis : (xi === 0 ? 1 : 0);
+  const points = solutions
+    .map((sol, idx) => ({ idx, x: sol.objectives[xi], y: sol.objectives[yi], knee: !!sol.knee }))
+    .filter((pt): pt is { idx: number; x: number; y: number; knee: boolean } => pt.x != null && pt.y != null);
+  if (points.length < 2) return null;
+
+  const xMin = Math.min(...points.map(p => p.x));
+  const xMax = Math.max(...points.map(p => p.x));
+  const yMin = Math.min(...points.map(p => p.y));
+  const yMax = Math.max(...points.map(p => p.y));
+  const xSpan = xMax - xMin || 1;
+  const ySpan = yMax - yMin || 1;
+
+  const W = 520;
+  const H = 190;
+  const padL = 58;
+  const padR = 18;
+  const padT = 14;
+  const padB = 34;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const sx = (v: number) => padL + ((v - xMin) / xSpan) * plotW;
+  const sy = (v: number) => padT + plotH - ((v - yMin) / ySpan) * plotH;
+
+  const xObj = objectives[xi];
+  const yObj = objectives[yi];
+
+  return <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+    <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <span className="font-medium text-foreground/85">{t("目标权衡图")}</span>
+      {objectives.length > 2 ? <div className="ml-auto flex items-center gap-1.5">
+        <span>X</span>
+        <Select value={String(xi)} onValueChange={v => setXAxis(Number(v))}>
+          <SelectTrigger size="sm" aria-label={t("横轴目标")} className="h-7 min-w-28 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>{objectives.map((obj, idx) => <SelectItem key={idx} value={String(idx)}>{obj.name}</SelectItem>)}</SelectContent>
+        </Select>
+        <span>Y</span>
+        <Select value={String(yi)} onValueChange={v => setYAxis(Number(v))}>
+          <SelectTrigger size="sm" aria-label={t("纵轴目标")} className="h-7 min-w-28 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>{objectives.map((obj, idx) => <SelectItem key={idx} value={String(idx)} disabled={idx === xi}>{obj.name}</SelectItem>)}</SelectContent>
+        </Select>
+      </div> : null}
+    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("目标权衡图")} className="h-44 w-full select-none">
+      {/* Subtle gridlines */}
+      {[0, 0.5, 1].map(frac => {
+        const y = padT + plotH * (1 - frac);
+        const val = yMin + ySpan * frac;
+        return <g key={`y-${frac}`}>
+          <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="currentColor" strokeOpacity="0.1" strokeDasharray="3 3" />
+          <text x={padL - 6} y={y + 3} textAnchor="end" fontSize="9.5" className="fill-muted-foreground font-mono">
+            {formatNumber(Number(val.toPrecision(4)))}
+          </text>
+        </g>;
+      })}
+      {[0, 0.5, 1].map(frac => {
+        const x = padL + plotW * frac;
+        const val = xMin + xSpan * frac;
+        return <g key={`x-${frac}`}>
+          <line x1={x} y1={padT} x2={x} y2={padT + plotH} stroke="currentColor" strokeOpacity="0.08" strokeDasharray="3 3" />
+          <text x={x} y={H - 17} textAnchor="middle" fontSize="9.5" className="fill-muted-foreground font-mono">
+            {formatNumber(Number(val.toPrecision(4)))}
+          </text>
+        </g>;
+      })}
+      <line x1={padL} y1={padT + plotH} x2={W - padR} y2={padT + plotH} stroke="currentColor" strokeOpacity="0.25" />
+      <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="currentColor" strokeOpacity="0.25" />
+      <text x={padL + plotW / 2} y={H - 3} textAnchor="middle" fontSize="10" className="fill-muted-foreground font-medium">
+        {xObj.name} ({xObj.sense === "max" ? "↑" : "↓"})
+      </text>
+      <text x={11} y={padT + plotH / 2} textAnchor="middle" fontSize="10" transform={`rotate(-90 11 ${padT + plotH / 2})`} className="fill-muted-foreground font-medium">
+        {yObj.name} ({yObj.sense === "max" ? "↑" : "↓"})
+      </text>
+      {points.map(pt => {
+        const isSel = pt.idx === activeIndex;
+        const cx = sx(pt.x);
+        const cy = sy(pt.y);
+        return <g key={pt.idx} className="cursor-pointer" onClick={() => onSelect(pt.idx)}>
+          <title>{`#${pt.idx + 1}${pt.knee ? ` (${t("推荐折中")})` : ""}: ${xObj.name}=${formatNumber(pt.x)}, ${yObj.name}=${formatNumber(pt.y)}`}</title>
+          {isSel || pt.knee ? <circle cx={cx} cy={cy} r={isSel ? 8 : 6.5} fill="none" stroke="var(--primary)" strokeWidth={isSel ? 2 : 1.5} strokeOpacity={isSel ? 0.9 : 0.45} /> : null}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={isSel ? 4.5 : pt.knee ? 4 : 3}
+            fill={isSel || pt.knee ? "var(--primary)" : "currentColor"}
+            fillOpacity={isSel ? 1 : pt.knee ? 0.9 : 0.45}
+          />
+        </g>;
+      })}
+    </svg>
+  </div>;
+}
+
+/** Dedicated multi-objective Pareto front table card with 2D scatter plot, knee-point highlight, CSV export and row inspection. */
 export function ParetoFront({ pareto }: { pareto: ParetoFrontData }) {
   const defaultIndex = Math.max(0, pareto.solutions.findIndex(item => item.knee));
   const [selected, setSelected] = useState(defaultIndex);
@@ -57,6 +168,7 @@ export function ParetoFront({ pareto }: { pareto: ParetoFrontData }) {
       </p>
     </CardHeader>
     <CardContent className="flex min-w-0 flex-col gap-3.5 px-5">
+      <TradeoffPlot objectives={pareto.objectives} solutions={pareto.solutions} activeIndex={activeIndex} onSelect={setSelected} />
       <Table className="text-[13px]" containerClassName="max-h-80 rounded-xl border border-border/80 bg-background/80">
         <TableHeader className="sticky top-0 z-10 bg-muted/80 backdrop-blur-xs">
           <TableRow>

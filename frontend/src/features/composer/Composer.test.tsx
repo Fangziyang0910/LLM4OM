@@ -95,6 +95,7 @@ test("changing run settings outside Composer persists to localStorage without ov
   }
   render(<QueryClientProvider client={new QueryClient()}><StandaloneLauncher /></QueryClientProvider>);
   fireEvent.click(screen.getByRole("button", { name: "查看运行设置" }));
+  fireEvent.click(screen.getByRole("button", { name: /更多研究方法/ }));
   fireEvent.click(screen.getByRole("radio", { name: "OptiMind" }));
   expect(JSON.parse(localStorage.getItem("llm4om-draft")!)).toMatchObject({
     description: "quick-solve text",
@@ -157,12 +158,14 @@ test("selecting a self-contained method like AutoCO displays its built-in solver
   fireEvent.click(screen.getByRole("button", { name: "查看运行设置" }));
   fireEvent.click(screen.getByRole("radio", { name: /AutoCO/ }));
   expect(screen.getByText("AutoCO 内置智能优化算法池")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "180 秒" }));
   fireEvent.click(screen.getByRole("button", { name: "完成" }));
-  expect(screen.getByRole("button", { name: "查看运行设置" }).textContent).toBe("AutoCO");
+  expect(screen.getByRole("button", { name: "查看运行设置" }).textContent).toBe("AutoCO · 180s");
   fireEvent.click(screen.getByRole("button", { name: "立即求解" }));
   await waitFor(() => expect(onStart).toHaveBeenCalledWith(expect.objectContaining({
     method: "autoco",
     language: "autoco",
     solver: "AUTO",
+    time_limit: 180,
   })));
 });

@@ -53,7 +53,8 @@ export async function startRun(draft: Draft, preset: Preset | undefined, group: 
   try {
     await client.runs.create(thread.thread_id, draft.method, {
       input: { description: draft.description, data: draft.data, ...(revision ? { change: revision.instruction } : {}) },
-      context: { language: draft.language, solver: draft.solver, preset: preset?.id ?? null, explain: true, locale },
+      context: { language: draft.language, solver: draft.solver, preset: preset?.id ?? null, explain: true, locale,
+        ...(draft.time_limit ? { time_limit: draft.time_limit } : {}) },
       streamMode: ["custom"], streamResumable: true,
     });
   } catch (error) {
@@ -153,9 +154,14 @@ export async function startScenarios(threadId: string, scenarios: { name: string
 
 /** Start one run of the same problem for each method and preset, as one comparison. If a start fails after others
  * started, those runs stay in the comparison and `error` says why the rest did not start. */
-export async function startComparison(draft: Draft, runs: { method: string; preset: Preset | undefined }[]):
+export async function startComparison(draft: Draft, runs: { method: string; language?: string; solver?: string; preset: Preset | undefined }[]):
     Promise<{ group: string; started: number; error: unknown }> {
-  return startBatch(runs, (item, group) => startRun({ ...draft, method: item.method }, item.preset, group));
+  return startBatch(runs, (item, group) => startRun({
+    ...draft,
+    method: item.method,
+    ...(item.language ? { language: item.language } : {}),
+    ...(item.solver ? { solver: item.solver } : {}),
+  }, item.preset, group));
 }
 
 /** Merge `change` into a run's metadata: its note and tags. */
@@ -183,7 +189,7 @@ export async function history(metadata?: Record<string, unknown>, offset = 0): P
   const client = await sdk();
   const threads = await client.threads.search({ limit: PAGE_SIZE, offset, sortBy: "created_at", sortOrder: "desc", metadata,
     select: ["thread_id", "created_at", "updated_at", "status", "metadata"],
-    extract: { objective: "values.solve.objective", solved: "values.solve.status", failure: "values.failure", usage: "values.usage",
+    extract: { objective: "values.solve.objective", pareto_total: "values.solve.pareto.total", solved: "values.solve.status", failure: "values.failure", usage: "values.usage",
       elapsed: "values.timing.elapsed", finished_at: "values.timing.finished_at", spec: "values.spec", actual_solver: "values.solve.solver",
       last_message_type: "values.messages[-1].type", last_message_tools: "values.messages[-1].tool_calls" } });
   const entries = (await Promise.all(threads.filter(thread => thread.metadata?.title).map(async thread => {
@@ -211,8 +217,9 @@ export async function history(metadata?: Record<string, unknown>, offset = 0): P
     if ((meta.kind == null || meta.kind === "run") && typeof extracted.actual_solver === "string") (meta as RunMeta).solver = extracted.actual_solver;
     return { id: thread.thread_id, created: thread.created_at, updated: thread.updated_at, meta, state,
       objective: typeof extracted.objective === "number" ? extracted.objective : null,
+      paretoTotal: typeof extracted.pareto_total === "number" ? extracted.pareto_total : undefined,
       elapsed: extracted.finished_at && typeof extracted.elapsed === "number" ? extracted.elapsed : null,
-      failure: typeof extracted.failure === "string" ? extracted.failure : null, usage: (extracted.usage as Usage | undefined) ?? null };
+      failure: typeof extracted.failure === "string" ? extracted.failure : null, usage: (extracted.usage as Usage | undefined) ?? null } as Entry;
   }))).filter((entry): entry is Entry => entry !== null);
   return { entries, nextOffset: threads.length === PAGE_SIZE ? offset + PAGE_SIZE : undefined };
 }

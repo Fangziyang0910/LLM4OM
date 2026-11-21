@@ -137,7 +137,10 @@ def test_posts_must_be_json(tmp_path: Path) -> None:
 def test_examples_are_paged(tmp_path: Path) -> None:
     with client(tmp_path) as api:
         page = api.get("/api/datasets/nl4opt", params={"offset": 5, "limit": 3}).json()
+        filtered = api.get("/api/datasets/nl4opt", params={"q": "bakery", "limit": 10}).json()
     assert page["total"] == 205 and len(page["cases"]) == 3 and page["cases"][0]["description"]
+    assert 0 < filtered["total"] < 205
+    assert all("bakery" in item["description"].lower() for item in filtered["cases"])
 
 
 @pytest.mark.parametrize("params", [{"offset": -1}, {"limit": 0}, {"limit": 101}])

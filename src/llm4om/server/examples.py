@@ -23,9 +23,19 @@ def _cases(dataset_id: str) -> list[dict[str, Any]]:
     return json.loads(ROOT.joinpath(dataset_id + ".json").read_text("utf-8"))["cases"]
 
 
-def cases(dataset_id: str, offset: int = 0, limit: int = 20) -> dict[str, Any]:
-    """One page of problems. The bundled problems carry all numbers in their descriptions."""
-    selected = _cases(dataset_id)[offset:offset + limit]
-    return {"total": len(_cases(dataset_id)), "cases": [
+def cases(dataset_id: str, offset: int = 0, limit: int = 20, q: str = "") -> dict[str, Any]:
+    """One page of problems, optionally filtered by substring query `q`."""
+    all_cases = _cases(dataset_id)
+    query = q.strip().lower()
+    if query:
+        tokens = query.split()
+        filtered = [
+            case for case in all_cases
+            if all(tok in f"{case['sample_id']} {case['subset']} {case['description']}".lower() for tok in tokens)
+        ]
+    else:
+        filtered = all_cases
+    selected = filtered[offset:offset + limit]
+    return {"total": len(filtered), "cases": [
         {"id": case["case_id"], "sample_id": case["sample_id"], "subset": case["subset"], "description": case["description"]}
         for case in selected]}

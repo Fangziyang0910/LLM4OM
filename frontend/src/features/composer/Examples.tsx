@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, BookOpen, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { ArrowRight, BookOpen, ChevronLeft, ChevronRight, ExternalLink, Search, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,10 +22,16 @@ export function Examples({ open, onClose, datasets, onUse }: {
 }) {
   const [dataset, setDataset] = useState<Dataset>(datasets[0]);
   const [offset, setOffset] = useState(0);
+  const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const trimmed = search.trim();
   const { data: page, error, refetch, isFetching } = useQuery({
-    queryKey: ["dataset", dataset?.id, offset], enabled: open && !!dataset, staleTime: Infinity,
-    queryFn: () => api<{ total: number; cases: Case[] }>(`/api/datasets/${dataset.id}?offset=${offset}&limit=${PAGE}`),
+    queryKey: ["dataset", dataset?.id, offset, trimmed], enabled: open && !!dataset, staleTime: Infinity,
+    queryFn: () => {
+      const params = new URLSearchParams({ offset: String(offset), limit: String(PAGE) });
+      if (trimmed) params.set("q", trimmed);
+      return api<{ total: number; cases: Case[] }>(`/api/datasets/${dataset.id}?${params}`);
+    },
   });
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => { list.current?.scrollTo(0, 0); }, [page]);
@@ -54,14 +61,22 @@ export function Examples({ open, onClose, datasets, onUse }: {
           })}
         </nav>
         <div ref={list} className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-5">
-          {dataset ? <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/25 px-3.5 py-2.5 text-xs text-muted-foreground">
+          {dataset ? <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/25 px-3.5 py-2.5 text-xs text-muted-foreground">
             <p className="min-w-0 flex-1 leading-relaxed break-words">{dataset.description}</p>
             <Button variant="link" size="xs" asChild className="h-auto shrink-0 p-0 text-xs">
               <a href={dataset.source_url} target="_blank" rel="noreferrer">{t("数据来源")}<ExternalLink /></a></Button>
           </div> : null}
+          <div className="relative mb-3">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input aria-label={t("搜索案例")} value={search} placeholder={t("按关键词筛选当前题库（如 routing、knapsack、schedule）…")}
+              onChange={event => { setSearch(event.target.value); setOffset(0); }} className="h-9 rounded-xl pr-8 pl-8 text-xs" />
+            {search ? <Button variant="ghost" size="icon-xs" aria-label={t("清除搜索")} className="absolute top-1/2 right-1 -translate-y-1/2"
+              onClick={() => { setSearch(""); setOffset(0); }}><X /></Button> : null}
+          </div>
           {error ? <Alert variant="destructive"><AlertDescription className="flex items-center justify-between gap-3">{errorText(error)}
             <Button variant="outline" size="sm" onClick={() => void refetch()}>{t("重试")}</Button></AlertDescription></Alert>
-            : !page ? <div className="flex flex-col gap-3">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-28 rounded-2xl" />)}</div> : <>
+            : !page ? <div className="flex flex-col gap-3">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-28 rounded-2xl" />)}</div>
+            : !page.cases.length ? <p className="py-10 text-center text-sm text-muted-foreground">{t("当前题库中没有匹配的案例。")}</p> : <>
             <ol className="flex flex-col gap-3">{page.cases.map(item => <li key={item.id}
               className="group flex flex-col gap-2.5 rounded-2xl border border-border/80 bg-card p-4 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md">
               <div className="flex items-center gap-2">

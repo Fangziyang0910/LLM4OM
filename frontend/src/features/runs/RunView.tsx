@@ -127,9 +127,13 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const outputs = <Outputs values={values} steps={steps} active={active} tab={tab} setTab={setTab} picked={picked} language={language}
     finished={finished} source={meta.parent} onAdjust={setRevision} setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))} />;
   const title = meta.title || (values.description ?? "").trim().split("\n")[0] || t("未命名方案");
+  const targetText = targetLabel(options, meta, solve?.solver);
+  const methodText = method?.name ?? meta.method;
+  const engineBadge = targetText && !targetText.toLowerCase().startsWith(methodText.toLowerCase())
+    ? `${methodText} · ${targetText}` : (targetText || methodText);
   const facts: [React.ReactNode, React.ReactNode, string?][] = [
-    [<Layers />, method?.name ?? meta.method, method?.description],
-    [<CodeXml />, targetLabel(options, meta, solve?.solver)],
+    [<Layers />, methodText, method?.description],
+    [<CodeXml />, targetText],
     [<Cpu />, meta.model ?? provider?.label, provider?.label],
     [<Clock />, elapsed == null ? "—" : duration(elapsed)],
   ];
@@ -160,6 +164,9 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
             <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{title}</h1></TooltipTrigger>
             <TooltipContent className="max-w-md whitespace-pre-wrap">{(values.description || title).slice(0, 400)}</TooltipContent>
           </Tooltip>
+          <span className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {engineBadge}
+          </span>
           {elapsed != null ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/70 px-2 py-0.5 text-[11px] text-muted-foreground tabular">
             <Clock className="size-3" />{duration(elapsed)}
           </span> : null}
@@ -328,12 +335,17 @@ function Summary({ state, values, steps, error, active, elapsed, onTab, actions 
     const stageHints = [
       t("正在梳理业务目标、决策变量与约束条件…"),
       t("正在构建严谨的数学优化模型与求解程序…"),
-      t("正在调用求解引擎计算全局最优方案…"),
+      t("正在调用求解引擎计算优化方案…"),
       t("已完成核心计算，正在整理通俗易懂的方案解读…"),
     ];
     const all = phases(steps);
     const current = all.at(-1);
-    const subtitle = current?.step?.running ? t("正在隔离环境中执行优化求解计算…") : stageHints[stageIdx];
+    const activeTitle = current?.step?.title ? t(current.step.title) : null;
+    const subtitle = current?.step?.running && activeTitle
+      ? t("正在执行：{step}…", { step: activeTitle })
+      : activeTitle
+        ? t("当前进展：{step}", { step: activeTitle })
+        : stageHints[stageIdx];
     return <div className="animate-fade-up relative overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/[0.06] via-card to-card p-4 shadow-xs">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">

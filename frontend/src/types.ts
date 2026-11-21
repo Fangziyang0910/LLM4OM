@@ -22,6 +22,7 @@ export type Presets = { presets: Preset[]; daily_tokens: number };
 export type Draft = {
   description: string; data: Record<string, string>; method: string; language: string; preset: string | null;
   solver?: string;
+  time_limit?: number;
   origin?: string;
   comparing?: boolean; methods?: string[]; presets?: string[];  // a comparison runs every method with every preset
 };

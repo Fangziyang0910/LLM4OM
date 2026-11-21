@@ -10,7 +10,7 @@ import operator
 import os
 import time
 import traceback
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from functools import cache
 from importlib.metadata import version
 from pathlib import Path
@@ -67,6 +67,7 @@ class RunContext:
     solver: str | None = None
     explain: bool = False  # the workbench explains solutions and diagnosed infeasible models
     locale: Literal["zh", "en"] = "zh"
+    time_limit: float | None = None  # optional per-solve time limit override in seconds (5..300)
 
 
 @dataclass
@@ -114,12 +115,25 @@ def get_resources() -> Resources:
 def platform_graph(method: Method) -> Any:
     """The compiled platform graph that runs `method` and solves its final code."""
 
+    def resolved_limits(resources: Resources, choice: RunContext, spec: dict[str, Any] | None = None) -> Limits:
+        base = method.limits or resources.limits
+        saved = (spec or {}).get("limits")
+        if isinstance(saved, dict) and "solve_time_limit" in saved:
+            return replace(base, solve_time_limit=float(saved["solve_time_limit"]))
+        if choice.time_limit is None:
+            return base
+        import math
+
+        if not isinstance(choice.time_limit, (int, float)) or isinstance(choice.time_limit, bool) or not math.isfinite(choice.time_limit) or not (5 <= choice.time_limit <= 300):
+            raise ValueError("The solve time limit must be between 5 and 300 seconds.")
+        return replace(base, solve_time_limit=float(choice.time_limit))
+
     def context(state: RunState, runtime: Runtime[RunContext], settings: LLMSettings | None = None) -> Context:
         """Continue this run's counts, using the already resolved LLM settings for every role."""
         resources = get_resources()
         choice = runtime.context or RunContext()
         spec = state.get("spec") or {}
-        recorder = Recorder(method.limits or resources.limits, state.get("usage"), runtime.stream_writer,
+        recorder = Recorder(resolved_limits(resources, choice, spec), state.get("usage"), runtime.stream_writer,
                             resources.charge(spec.get("preset")),
                             redact=settings.redact if settings is not None else None)
 
@@ -151,6 +165,7 @@ def platform_graph(method: Method) -> Any:
             if state.get("change") is not None and (not isinstance(state["change"], str) or not state["change"].strip()):
                 raise ValueError("Describe how you want to change the problem.")
             target = method.code_target(choice.language, choice.solver)
+            limits = resolved_limits(resources, choice)
             validate_data_files(data)
             preset, settings, preset_name = await asyncio.to_thread(resources.resolve, choice.preset)
             if charge := resources.charge(preset):
@@ -158,7 +173,7 @@ def platform_graph(method: Method) -> Any:
         except (ValueError, LimitExceeded) as error:
             return {**fresh, "failure": str(error)}
         spec = {"version": version("llm4om"), "method": method.id, "source": method.source,
-                "parameters": method.parameters(), "limits": asdict(method.limits or resources.limits),
+                "parameters": method.parameters(), "limits": asdict(limits),
                 "language": target.language if target is not None else method.id,
                 "solver": target.solver if target is not None else "AUTO",
                 "preset": preset, "preset_name": preset_name,

@@ -52,8 +52,21 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
         <TableCell className="min-w-28 max-w-64 font-medium whitespace-normal [overflow-wrap:anywhere]">{plan.name}</TableCell>
         <TableCell className="min-w-48 max-w-96 text-xs leading-5 text-muted-foreground whitespace-normal">{plan.instruction || t("原始基准条件")}</TableCell>
         <TableCell><StatusBadge status={plan.state} />{plan.error ? <p role="alert" className="mt-1 text-xs text-destructive">{errorText(plan.error)}</p> : null}</TableCell>
-        <TableCell className="text-right"><span className="font-mono font-semibold tabular">{hasSolution(plan.values?.solve) && plan.values?.solve?.objective != null ? formatNumber(plan.values.solve.objective) : ["running", "pending"].includes(plan.state) ? "…" : "—"}</span>
-          {plan.values?.explanation ? <p className="mt-1 text-xs text-muted-foreground">{plan.values.explanation.objective_label} {plan.values.explanation.objective_unit}</p> : null}</TableCell>
+        <TableCell className="text-right">{(() => {
+          const pareto = plan.values?.solve?.pareto?.solutions.length ? plan.values.solve.pareto : null;
+          if (pareto) {
+            const knee = pareto.solutions.find(item => item.knee) ?? pareto.solutions[0];
+            return <>
+              <span className="font-mono font-semibold tabular">{t("{count} 个 Pareto 解", { count: pareto.total })}</span>
+              {knee ? <p className="mt-1 text-xs text-muted-foreground tabular">{pareto.objectives.map((obj, idx) =>
+                `${obj.name} = ${knee.objectives[idx] == null ? "—" : formatNumber(knee.objectives[idx]!)}`).join(" · ")}</p> : null}
+            </>;
+          }
+          return <>
+            <span className="font-mono font-semibold tabular">{hasSolution(plan.values?.solve) && plan.values?.solve?.objective != null ? formatNumber(plan.values.solve.objective) : ["running", "pending"].includes(plan.state) ? "…" : "—"}</span>
+            {plan.values?.explanation ? <p className="mt-1 text-xs text-muted-foreground">{plan.values.explanation.objective_label} {plan.values.explanation.objective_unit}</p> : null}
+          </>;
+        })()}</TableCell>
         <TableCell className="text-right"><Button variant="ghost" size="icon-sm" aria-label={t("打开方案：{name}", { name: plan.name })} onClick={() => onOpen("source" in plan && plan.source ? plan.source : plan.id)}><ArrowUpRight /></Button></TableCell>
       </TableRow>)}</TableBody>
     </Table>

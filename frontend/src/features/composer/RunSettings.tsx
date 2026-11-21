@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
-import { ArrowRight, Columns3, Play, Settings2, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, ChevronDown, Clock, Columns3, Play, Settings2, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -22,6 +23,12 @@ import type { BackendCatalog, Draft, Method, Options, Preset } from "@/types";
 
 export const DRAFT_KEY = "llm4om-draft";
 const MAX_COMPARED = 12;
+const CORE_METHODS = new Set(["direct", "feedback_repair", "trival", "autoco"]);
+const TIME_LIMITS = [
+  { seconds: 15, label: "15 秒" },
+  { seconds: 60, label: "60 秒" },
+  { seconds: 180, label: "180 秒" },
+] as const;
 
 /** Self-contained methods ship their own built-in solver pool and need no external modeling library. */
 const isSelfContained = (method: Method) => !!method.builtin_solver;
@@ -40,7 +47,7 @@ export type ModelingConfigProps = {
   draft: Draft;
   setDraft: Dispatch<SetStateAction<Draft>>;
   onStart: (draft: Draft) => Promise<void>;
-  onCompare: (draft: Draft, runs: { method: string; preset: Preset }[]) => Promise<void>;
+  onCompare: (draft: Draft, runs: { method: string; language: string; solver: string; preset: Preset }[]) => Promise<void>;
   openPresets: () => void;
   presetsStatus?: "loading" | "error" | "ready";
 };
@@ -70,6 +77,7 @@ export function useRunLauncher({
 }) {
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [moreMethodsOpen, setMoreMethodsOpen] = useState(false);
   const methodList = useRef<HTMLDivElement>(null);
   const set = (change: Partial<Draft>) => setDraft(current => ({ ...current, ...change }));
 
@@ -77,6 +85,11 @@ export function useRunLauncher({
   const preset = presets.find(item => item.id === draft.preset) ?? presets[0];
   const providerLabel = (id: string) => options.providers.find(item => item.id === id)?.label ?? id;
   const method = options.methods.find(item => item.id === draft.method) ?? options.methods[0];
+  const coreMethods = options.methods.filter(item => CORE_METHODS.has(item.id));
+  const extraMethods = options.methods.filter(item => !CORE_METHODS.has(item.id));
+  const hasSelectedExtra = !CORE_METHODS.has(method.id) || (comparing && !!draft.methods?.some(id => !CORE_METHODS.has(id)));
+  const showMoreMethods = moreMethodsOpen || hasSelectedExtra;
+  const timeLimit = draft.time_limit ?? 60;
   const selfContained = isSelfContained(method);
   const supports = (language: string) => comparing || selfContained || !unsupported(method, language);
   const language = options.languages.find(item => item.id === draft.language && supports(item.id))
@@ -88,7 +101,12 @@ export function useRunLauncher({
   const compared = options.methods.filter(item => draft.methods?.includes(item.id) && !unsupported(item, language.id));
   const comparedPresets = presets.filter(item => draft.presets?.includes(item.id));
   const runs = compared.flatMap(item => (comparedPresets.length ? comparedPresets : preset ? [preset] : [])
-    .map(chosen => ({ method: item.id, preset: chosen })));
+    .map(chosen => ({
+      method: item.id,
+      language: isSelfContained(item) ? item.id : language.id,
+      solver: isSelfContained(item) ? "AUTO" : backend,
+      preset: chosen,
+    })));
 
   useEffect(() => {
     const nextLanguage = selfContained && !comparing ? draft.language : language.id;
@@ -150,20 +168,19 @@ export function useRunLauncher({
   const toggle = (key: "methods" | "presets", id: string, on: boolean) =>
     set({ [key]: on ? [...(draft[key] ?? []).filter(item => item !== id), id] : (draft[key] ?? []).filter(item => item !== id) });
 
-  const isDefaultConfig = !comparing && method.id === "direct" && language.id === "pyomo" && backend === "AUTO";
+  const isDefaultConfig = !comparing && method.id === "direct" && language.id === "pyomo" && backend === "AUTO" && timeLimit === 60;
+  const limitSuffix = timeLimit !== 60 ? ` · ${timeLimit}s` : "";
   const settingsBadge = comparing
     ? t("多方案对比（{count}）", { count: runs.length })
-    : isDefaultConfig
-      ? t("智能推荐配置")
-      : selfContained
-        ? method.name
-        : `${method.name} · ${language.name}`;
+    : selfContained
+      ? `${method.name}${limitSuffix}`
+      : `${method.name} · ${language.name}${backend !== "AUTO" ? ` (${backend})` : ""}${limitSuffix}`;
 
   const label = reviewFirst ? t("检查需求稿") : reading ? t("正在读取数据……") : busy ? t("正在启动求解…")
     : comparing ? t("开始对比（{count} 个方案）", { count: runs.length }) : t("立即求解");
 
   const choiceClass = "relative flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-sm font-normal transition-all duration-150 hover:bg-accent/50 has-focus-visible:border-ring has-focus-visible:ring-2 has-focus-visible:ring-ring/50 sm:min-h-9 sm:py-1.5";
-  const methodChoices = options.methods.map(item => {
+  const renderChoice = (item: Method) => {
     const blocked = comparing && unsupported(item, language.id);
     const selected = comparing ? !blocked && !!draft.methods?.includes(item.id) : item.id === method.id;
     const id = `${comparing ? "compare" : "method"}-${item.id}`;
@@ -176,8 +193,18 @@ export function useRunLauncher({
         : isSelfContained(item) ? <Badge variant="outline" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-primary/80">{t("智能优化")}</Badge>
           : item.linear_only ? <Badge variant="outline" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-muted-foreground">{t("线性/整数")}</Badge> : null}
     </Label>;
-  });
+  };
   const methodListClass = "grid grid-cols-1 gap-1.5 sm:grid-cols-2";
+  const groupedMethods = <div className="flex flex-col gap-3">
+    <div className={methodListClass}>{(coreMethods.length ? coreMethods : options.methods).map(renderChoice)}</div>
+    {extraMethods.length > 0 && coreMethods.length > 0 ? <Collapsible open={showMoreMethods} onOpenChange={setMoreMethodsOpen}>
+      <CollapsibleTrigger className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
+        <ChevronDown className={cn("size-3.5 transition-transform", !showMoreMethods && "-rotate-90")} />
+        {t("更多研究方法（{count}）", { count: extraMethods.length })}
+      </CollapsibleTrigger>
+      <CollapsibleContent className={cn(methodListClass, "pt-2")}>{extraMethods.map(renderChoice)}</CollapsibleContent>
+    </Collapsible> : null}
+  </div>;
 
   const settingsTrigger = <button type="button" aria-label={t("查看运行设置")} aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}
     title={t("点击调整 AI 模型、多方案对比或底层求解引擎")}
@@ -218,11 +245,24 @@ export function useRunLauncher({
           <div className="grid min-h-0 flex-1 grid-cols-1 divide-y overflow-y-auto lg:grid-cols-[1.2fr_1fr] lg:divide-y-0">
             <section aria-labelledby="methods-label" className="min-w-0 px-5 py-4 lg:row-span-2 lg:border-r">
               <h3 id="methods-label" className="mb-3 text-xs font-semibold text-foreground/80">{comparing ? t("建模策略（可多选）") : t("建模策略")}</h3>
-              {comparing ? <div ref={methodList} role="group" aria-label={t("建模方法")} className={methodListClass}>{methodChoices}</div>
+              {comparing ? <div ref={methodList} role="group" aria-label={t("建模方法")}>{groupedMethods}</div>
                 : <RadioGroup ref={methodList} value={method.id} onValueChange={value => set({ method: value })} aria-label={t("建模方法")}
-                  aria-describedby="method-description" className={methodListClass}>{methodChoices}</RadioGroup>}
-              <p id="method-description" title={comparing ? undefined : t(method.description)} className="mt-2.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                  aria-describedby="method-description">{groupedMethods}</RadioGroup>}
+              <p id="method-description" title={comparing ? undefined : t(method.description)} className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                 {comparing ? t("开启对比后，系统会并行运行所选策略并自动比对目标结果是否一致。") : t(method.description)}</p>
+              <div className="mt-4 border-t pt-3.5">
+                <Label className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-foreground/80">
+                  <Clock className="size-3.5 text-muted-foreground" />{t("单次求解限时")}
+                </Label>
+                <div role="group" aria-label={t("单次求解限时")} className="grid grid-cols-3 gap-1.5">
+                  {TIME_LIMITS.map(option => <button key={option.seconds} type="button" aria-pressed={timeLimit === option.seconds}
+                    onClick={() => set({ time_limit: option.seconds === 60 ? undefined : option.seconds })}
+                    className={cn("h-8 rounded-xl border text-xs font-medium transition-colors",
+                      timeLimit === option.seconds ? "border-primary/50 bg-primary/10 text-primary" : "bg-background text-muted-foreground hover:bg-accent/60 hover:text-foreground")}>
+                    {t(option.label)}
+                  </button>)}
+                </div>
+              </div>
             </section>
 
             <section aria-labelledby="presets-label" className="min-w-0 px-5 py-4">

@@ -96,3 +96,12 @@ test("CSV parsing preserves records and rejects malformed quoting", () => {
   expect(() => parseCsv('a,b\n"x"oops,1')).toThrow();
   expect(() => parseCsv('a,b\nx"y,1')).toThrow();
 });
+
+test("deleting a data row keeps header and remaining rows intact", async () => {
+  const save = vi.fn();
+  render(<DataEditor name="warehouses.csv" content={"name,supply\nW1,100\nW2,150\n"} onSave={save} onClose={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "删除第 1 行" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存数据" }));
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  expect(parseCsv(save.mock.calls[0][0])).toEqual([["name", "supply"], ["W2", "150"]]);
+});

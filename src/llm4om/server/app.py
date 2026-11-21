@@ -112,9 +112,10 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
             raise HTTPException(502, f"Could not read the model list: {detail}") from error
 
     @app.get("/api/datasets/{dataset_id}")
-    def dataset(dataset_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+    def dataset(dataset_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100),
+                q: str = Query("", max_length=200)) -> dict[str, Any]:
         try:
-            return examples.cases(dataset_id, offset, limit)
+            return examples.cases(dataset_id, offset, limit, q=q)
         except KeyError:
             raise HTTPException(404, "This dataset does not exist.") from None
 

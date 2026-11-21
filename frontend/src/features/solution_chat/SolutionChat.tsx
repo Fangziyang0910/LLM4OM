@@ -77,7 +77,8 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
         {summary.error ? <p role="alert" className="text-destructive">{errorText(summary.error)}</p> : !values ? <Spinner /> : <>
           <p className="truncate font-medium" title={values.description}>{values.description?.trim().split("\n")[0].replace(/^#{1,6}\s+/, "")}</p>
           <div className="mt-2 flex items-center justify-between gap-2">
-            <span>{values.explanation?.objective_label || t("最优目标值")} <strong>{values.solve?.objective == null ? "—" : formatNumber(values.solve.objective)}</strong> {values.explanation?.objective_unit}</span>
+            {values.solve?.pareto?.solutions.length ? <span>{t("多目标 Pareto 前沿")} <strong>{t("{count} 个 Pareto 解", { count: values.solve.pareto.total })}</strong></span>
+              : <span>{values.explanation?.objective_label || t("最优目标值")} <strong>{values.solve?.objective == null ? "—" : formatNumber(values.solve.objective)}</strong> {values.explanation?.objective_unit}</span>}
             <StatusBadge status={savedRunState(values)} />
           </div>
         </>}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Save } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -57,6 +57,7 @@ export function DataEditor({ name, content, onSave, onClose }: {
                   <Input aria-label={t("第 {column} 列列名", { column: column + 1 })} disabled={busy} value={rows[0][column] ?? ""}
                     onChange={event => changeCell(0, column, event.target.value)} className="min-w-32 border-transparent font-medium" />
                 </TableHead>)}
+                <TableHead className="w-10" />
               </TableRow></TableHeader><TableBody>
                 {rows.slice(current * PAGE + 1, (current + 1) * PAGE + 1).map((cells, index) => {
                   const row = current * PAGE + index + 1;
@@ -65,6 +66,15 @@ export function DataEditor({ name, content, onSave, onClose }: {
                       <Textarea rows={1} aria-label={t("第 {row} 行，第 {column} 列", { row, column: column + 1 })} value={cells[column] ?? ""} disabled={busy}
                         onChange={event => changeCell(row, column, event.target.value)} className="max-h-24 min-h-8 min-w-32 resize-none border-transparent py-1.5 font-mono text-xs field-sizing-content" />
                     </TableCell>)}
+                    <TableCell className="p-1 text-center">
+                      <Button type="button" variant="ghost" size="icon-xs" disabled={busy}
+                        aria-label={t("删除第 {row} 行", { row })} title={t("删除这一行")}
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => {
+                          setError(null);
+                          setText(toCsv(rows.filter((_, idx) => idx !== row), delimiter));
+                        }}><Trash2 className="size-3.5" /></Button>
+                    </TableCell>
                   </TableRow>;
                 })}
               </TableBody></Table>

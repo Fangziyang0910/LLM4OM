@@ -30,8 +30,15 @@ export function ScenarioComparison({ source, values, active = false }: { source:
   const changes = waitingForResult ? [] : variableChanges(before.solve?.variables ?? {}, values.solve?.variables ?? {});
   const labels = new Map([...(before.explanation?.decisions ?? []), ...(values.explanation?.decisions ?? [])].map(item => [item.variable, item.label]));
   const previous = before.solve?.objective, current = values.solve?.objective;
-  const difference = previous != null && current != null ? current - previous : null;
+  const beforePareto = before.solve?.pareto?.solutions.length ? before.solve.pareto : null;
+  const afterPareto = values.solve?.pareto?.solutions.length ? values.solve.pareto : null;
+  const hasPareto = !!beforePareto || !!afterPareto;
+  const difference = !hasPareto && previous != null && current != null ? current - previous : null;
   const number = (value: number | undefined | null) => value == null ? "—" : formatNumber(value);
+  const paretoKnee = (pareto: NonNullable<typeof beforePareto>) => {
+    const knee = pareto.solutions.find(item => item.knee) ?? pareto.solutions[0];
+    return pareto.objectives.map((obj, idx) => `${obj.name} = ${number(knee?.objectives[idx])}`).join(" · ");
+  };
   const statusOf = (result: RunValues, isCurrent: boolean) =>
     isCurrent && active && !result.solve ? "running" : savedRunState(result);
   const scenarios: [string, RunValues, boolean][] = [[t("调整前（原方案）"), before, false], [t("调整后（新方案）"), values, true]];
@@ -46,17 +53,25 @@ export function ScenarioComparison({ source, values, active = false }: { source:
         {values.revision ? <div className="rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words">
           <span className="font-semibold text-primary">{t("本次调整条件")}：</span>{values.revision.instruction}</div> : null}
         <div className="grid gap-3 sm:grid-cols-3">
-          {scenarios.map(([label, result, isCurrent]) => (
-            <div key={label} className="flex min-w-0 flex-col gap-2 rounded-xl border border-border/70 bg-muted/15 p-3.5">
+          {scenarios.map(([label, result, isCurrent]) => {
+            const pareto = result.solve?.pareto?.solutions.length ? result.solve.pareto : null;
+            return <div key={label} className="flex min-w-0 flex-col gap-2 rounded-xl border border-border/70 bg-muted/15 p-3.5">
               <span className="text-xs font-medium text-muted-foreground">{label}</span>
               <StatusBadge status={statusOf(result, isCurrent)} />
-              <span className="text-2xl font-bold tracking-tight tabular">{number(result.solve?.objective)}</span>
-            </div>
-          ))}
+              {pareto ? <>
+                <span className="text-lg font-bold tracking-tight tabular">{t("{count} 个 Pareto 解", { count: pareto.total })}</span>
+                <span className="text-xs leading-relaxed text-muted-foreground tabular">{t("推荐折中解：")}{paretoKnee(pareto)}</span>
+              </> : <span className="text-2xl font-bold tracking-tight tabular">{number(result.solve?.objective)}</span>}
+            </div>;
+          })}
           <div className="flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary/[0.04] p-3.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("目标值变化量（新 − 原）")}</span>
-            <span className="text-2xl font-bold tracking-tight text-primary tabular">{difference != null && difference > 0 ? `+${number(difference)}` : number(difference)}</span>
-            <span className="text-xs leading-relaxed text-muted-foreground">{t("当两次优化的目标单位一致时可直接比较增减。")}</span>
+            <span className="text-xs font-medium text-muted-foreground">{hasPareto ? t("多目标权衡对比") : t("目标值变化量（新 − 原）")}</span>
+            {hasPareto ? <span className="text-xs leading-relaxed text-muted-foreground">
+              {t("多目标方案包含一组权衡解，可切换至“最优方案”标签页查看完整的 Pareto 前沿图与折中解。")}
+            </span> : <>
+              <span className="text-2xl font-bold tracking-tight text-primary tabular">{difference != null && difference > 0 ? `+${number(difference)}` : number(difference)}</span>
+              <span className="text-xs leading-relaxed text-muted-foreground">{t("当两次优化的目标单位一致时可直接比较增减。")}</span>
+            </>}
           </div>
         </div>
         <details className="min-w-0 rounded-xl border border-border/70 bg-muted/15 p-3.5">
