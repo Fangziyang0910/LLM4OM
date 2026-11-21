@@ -123,7 +123,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const showTab = (next: Tab) => { setTab(next); setView("outputs"); };
   const show = (key: "formulation" | "code", id: string) => { setPicked(current => ({ ...current, [key]: id })); showTab(key); };
 
-  const timeline = <Timeline steps={steps} live={live} active={active} onShow={show} />;
+  const timeline = <Timeline steps={steps} live={live} active={active} hideHeader={embedded} onShow={show} />;
   const outputs = <Outputs values={values} steps={steps} active={active} tab={tab} setTab={setTab} picked={picked} language={language}
     finished={finished} source={meta.parent} onAdjust={setRevision} setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))} />;
   const title = meta.title || (values.description ?? "").trim().split("\n")[0] || t("未命名方案");
@@ -150,21 +150,91 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
     }}>{busy ? <Spinner /> : <MessageSquare />}{t("对话追问")}</Button> : null}
   </div> : null;
 
+  const headerActions = <div className="flex shrink-0 items-center gap-1.5">
+    <Button variant={(wide && !assistantOpen ? withProcess : view === "process") ? "secondary" : "ghost"} size="sm" className="h-8 rounded-lg text-xs"
+      aria-expanded={wide && !assistantOpen ? withProcess : view === "process"}
+      onClick={() => { if (wide && !assistantOpen) setProcessVisible(!withProcess); else setView(view === "process" ? "outputs" : "process"); }}>
+      <Layers className="size-3.5" />{t("求解步骤")}</Button>
+    {active ? <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" disabled={stopping} onClick={() => void stop()}>
+      {stopping ? <Spinner /> : <Square className="size-3 fill-current" />}{stopping ? t("正在停止") : t("停止")}</Button> : <>
+      {["failed", "error", "timeout", "interrupted"].includes(state) ? <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs"
+        disabled={busy || !values.description} title={t("用同样的问题和设置再求解一次")} onClick={() => void rerun()}>
+        {busy ? <Spinner /> : <RefreshCw className="size-3.5" />}{t("重新求解")}</Button> : null}
+      {hasSolution(solve) ? <Button variant="outline" size="sm" className="size-8 rounded-lg p-0 text-xs sm:w-auto sm:px-2.5" aria-label={t("导出 Excel")}
+        title={t("导出 Excel")} disabled={exporting} onClick={() => void exportExcel()}>
+        {exporting ? <Spinner /> : <FileDown className="size-3.5" />}<span className="hidden sm:inline">{t("导出表格")}</span></Button> : null}
+    </>}
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" className="size-8 rounded-lg" disabled={busy} aria-label={t("更多操作")} title={t("更多操作")}><MoreHorizontal /></Button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48 rounded-xl">
+        <DropdownMenuItem disabled={active || busy || !values.description} onClick={() => void rerun()}><RefreshCw />{t("重新求解一次")}</DropdownMenuItem>
+        <DropdownMenuItem disabled={!values.description} onClick={() => onEdit(draft())}>
+          <Pencil />{t("编辑原问题")}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => void copyText(href).then(() => toast.success(t("已复制链接。")), () => toast.error(t("无法复制，请手动复制地址栏中的链接。")))}>
+          <Link2 />{t("复制分享链接")}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setNoting(true)}><NotebookPen />{t("备注与标签")}</DropdownMenuItem>
+        <DropdownMenuItem disabled={!values.description} onClick={() => download(`${(meta.title || "run").slice(0, 40).replace(/[\\/:*?"<>|]/g, "_")}.md`,
+          report(meta, values, options, href))}><FileDown />{t("导出完整报告（MD）")}</DropdownMenuItem>
+        {/* A saved plan's thread may hold later runs; deleting it from a fixed view would remove them too. */}
+        {source ? null : <><DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={() => onDelete(meta)}><Trash2 />{t("删除此记录")}</DropdownMenuItem></>}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>;
+
+  if (embedded) {
+    const pareto = solve?.pareto?.solutions.length ? solve.pareto : null;
+    const knee = pareto ? (pareto.solutions.find(item => item.knee) ?? pareto.solutions[0]) : null;
+    const embeddedMeta = [engineBadge, elapsed != null ? duration(elapsed) : null].filter(Boolean).join(" · ");
+    return <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/70 bg-muted/15 px-4 py-2.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          {error ? <p className="truncate text-xs font-medium text-destructive">{error}</p>
+            : active ? <div className="flex items-center gap-2 text-xs font-medium">
+              <Spinner className="size-3.5 text-primary" /><span>{t("正在智能建模与求解")}</span>
+              {elapsed != null ? <span className="text-muted-foreground tabular">{duration(elapsed)}</span> : null}
+            </div>
+            : <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              {pareto ? <span className="text-base font-semibold tracking-tight tabular">{t("共 {total} 个非支配解", { total: pareto.total })}</span>
+                : solve?.objective != null ? <span className="flex items-baseline gap-1.5">
+                  <span className="text-xs text-muted-foreground">{values.explanation?.objective_label || t("最优目标值")}</span>
+                  <span className="text-lg font-bold tracking-tight tabular">{formatNumber(solve.objective)}</span>
+                  {values.explanation?.objective_unit ? <span className="text-xs text-muted-foreground">{values.explanation.objective_unit}</span> : null}
+                </span> : null}
+              <StatusBadge status={solve ? solve.status : state} />
+              <span title={configDetail} className="truncate text-xs text-muted-foreground tabular">{embeddedMeta}</span>
+            </div>}
+          {!active && pareto && knee ? <p className="truncate text-xs text-muted-foreground tabular">
+            {t("推荐折中解：")}{pareto.objectives.map((obj, idx) => `${obj.name} = ${knee.objectives[idx] == null ? "—" : formatNumber(knee.objectives[idx]!)}`).join(" · ")}
+          </p> : null}
+        </div>
+        {headerActions}
+      </div>
+      <div className="min-h-0 flex-1">
+        {view === "outputs" ? outputs : timeline}
+      </div>
+      {noting ? <NoteDialog meta={meta} onClose={() => setNoting(false)} onSave={async change => {
+        await updateMeta(threadId, change);
+        setChanged(current => ({ ...current, ...change }));
+        onMetaChange();
+      }} /> : null}
+      {revision !== null ? <RevisionDialog initialInstruction={revision} onClose={() => setRevision(null)} onRevise={onRevise} /> : null}
+      {scenarios ? <ScenariosDialog onClose={() => setScenarios(false)} onStart={onScenarios} /> : null}
+    </div>;
+  }
+
   return <div className="flex h-full min-h-0 min-w-0 flex-col overflow-y-auto">
-    <header className={cn(
-      "flex shrink-0 flex-col gap-2 border-b border-border/70 bg-background/80 px-4 backdrop-blur-md sm:px-5 md:flex-row md:items-center",
-      embedded ? "py-2" : "py-2.5",
-    )}>
+    <header className="flex shrink-0 flex-col gap-2 border-b border-border/70 bg-background/80 px-4 py-2.5 backdrop-blur-md sm:px-5 md:flex-row md:items-center">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        {!embedded && !assistantOpen && (meta.group || meta.conversation) ? <div className="flex flex-wrap items-center gap-3">
+        {!assistantOpen && (meta.group || meta.conversation) ? <div className="flex flex-wrap items-center gap-3">
           {meta.group ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground hover:text-primary" onClick={() => onCompare(meta.group!)}><Columns3 />{t("返回对比列表")}</Button> : null}
           {meta.conversation ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground hover:text-primary" onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回对话规划")}</Button> : null}
         </div> : null}
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {!embedded ? <Tooltip>
+          <Tooltip>
             <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{title}</h1></TooltipTrigger>
             <TooltipContent className="max-w-md whitespace-pre-wrap">{(values.description || title).slice(0, 400)}</TooltipContent>
-          </Tooltip> : null}
+          </Tooltip>
           <span title={configDetail} className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
             {engineBadge}
           </span>
@@ -178,37 +248,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
             <NotebookPen />{meta.note.split("\n")[0]}</button> : null}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        <Button variant={(wide && !assistantOpen ? withProcess : view === "process") ? "secondary" : "ghost"} size="sm" className="rounded-lg"
-          aria-expanded={wide && !assistantOpen ? withProcess : view === "process"}
-          onClick={() => { if (wide && !assistantOpen) setProcessVisible(!withProcess); else setView(view === "process" ? "outputs" : "process"); }}>
-          <Layers />{t("求解步骤")}</Button>
-        {active ? <Button variant="outline" size="sm" className="rounded-lg" disabled={stopping} onClick={() => void stop()}>
-          {stopping ? <Spinner /> : <Square className="fill-current" />}{stopping ? t("正在停止") : t("停止")}</Button> : <>
-          {["failed", "error", "timeout", "interrupted"].includes(state) ? <Button variant="outline" size="sm" className="rounded-lg"
-            disabled={busy || !values.description} title={t("用同样的问题和设置再求解一次")} onClick={() => void rerun()}>
-            {busy ? <Spinner /> : <RefreshCw />}{t("重新求解")}</Button> : null}
-          {hasSolution(solve) ? <Button variant="outline" size="sm" className="size-8 rounded-lg p-0 sm:w-auto sm:px-3" aria-label={t("导出 Excel")}
-            title={t("导出 Excel")} disabled={exporting} onClick={() => void exportExcel()}>
-            {exporting ? <Spinner /> : <FileDown />}<span className="hidden sm:inline">{t("导出表格")}</span></Button> : null}
-        </>}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" className="rounded-lg" disabled={busy} aria-label={t("更多操作")} title={t("更多操作")}><MoreHorizontal /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 rounded-xl">
-            <DropdownMenuItem disabled={active || busy || !values.description} onClick={() => void rerun()}><RefreshCw />{t("重新求解一次")}</DropdownMenuItem>
-            <DropdownMenuItem disabled={!values.description} onClick={() => onEdit(draft())}>
-              <Pencil />{t("编辑原问题")}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void copyText(href).then(() => toast.success(t("已复制链接。")), () => toast.error(t("无法复制，请手动复制地址栏中的链接。")))}>
-              <Link2 />{t("复制分享链接")}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setNoting(true)}><NotebookPen />{t("备注与标签")}</DropdownMenuItem>
-            <DropdownMenuItem disabled={!values.description} onClick={() => download(`${(meta.title || "run").slice(0, 40).replace(/[\\/:*?"<>|]/g, "_")}.md`,
-              report(meta, values, options, href))}><FileDown />{t("导出完整报告（MD）")}</DropdownMenuItem>
-            {/* A saved plan's thread may hold later runs; deleting it from a fixed view would remove them too. */}
-            {source ? null : <><DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={() => onDelete(meta)}><Trash2 />{t("删除此记录")}</DropdownMenuItem></>}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      {headerActions}
     </header>
 
     <div className="shrink-0 px-4 pt-3.5 sm:px-5">

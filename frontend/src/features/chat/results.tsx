@@ -62,7 +62,7 @@ function Plans({ artifact, onOpenPlan, onCompare }: ResultProps) {
     {plans.map(plan => <div key={sourceKey(plan.source)} className="min-w-0 rounded-2xl border border-border/80 bg-card p-4 text-xs shadow-xs transition-colors hover:border-primary/30">
       <div className="flex items-start justify-between gap-2"><p className="min-w-0 break-words text-sm font-semibold">{plan.name}</p>
         <StatusBadge status={plan.failure ? "failed" : plan.status ?? "unknown"} /></div>
-      <p className="mt-1 break-words leading-relaxed text-muted-foreground">{plan.instruction}</p>
+      <p title={plan.instruction} className="mt-1 line-clamp-2 break-words leading-relaxed text-muted-foreground">{plan.instruction}</p>
       {plan.pareto?.total ? <div className="mt-2.5 space-y-1">
         <p className="break-words">{t("多目标 Pareto 前沿")} <strong className="text-sm font-bold text-foreground tabular-nums">{t("{count} 个 Pareto 解", { count: plan.pareto.total })}</strong></p>
         {plan.pareto.knee?.length ? <p className="text-muted-foreground tabular">{t("推荐折中解：")}{plan.pareto.objectives.map((obj, idx) =>

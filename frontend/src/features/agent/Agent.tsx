@@ -203,7 +203,25 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
     </header>} />;
 
   const empty = !threadId && !messages.length && !failure && !busy && !settings && !Object.keys(data).length;
-  const chat = <section aria-label={t("优化对话")} className={cn("flex h-full min-h-0 min-w-0 flex-col", empty && "justify-center", workspace && pane === "workspace" && "hidden lg:flex")}>
+  const hasConversation = !!threadId || messages.length > 0 || !!meta?.title || plans.length > 0 || !!currentPlan || !!task || workspace;
+  const chatHeader = <header className={cn(
+    "flex h-12 shrink-0 items-center gap-2 px-4",
+    hasConversation ? "border-b border-border/70 bg-background/80 backdrop-blur-md"
+      : sidebarCollapsed ? "bg-transparent" : "border-b border-border/70 bg-background/80 backdrop-blur-md xl:hidden",
+  )}>
+    <Button variant="ghost" size="icon-sm" aria-label={t("打开菜单")} className="-ml-2 xl:hidden" onClick={onMenu}><Menu /></Button>
+    {sidebarCollapsed && onExpandSidebar ? <Button variant="ghost" size="icon-sm" aria-label={t("展开侧边栏")} title={t("展开侧边栏")}
+      className="-ml-1 hidden rounded-lg text-muted-foreground hover:text-foreground xl:inline-flex" onClick={onExpandSidebar}>
+      <PanelLeftOpen className="size-4" />
+    </Button> : null}
+    <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/90">{hasConversation ? (meta?.title || t("智能优化对话")) : ""}</h1>
+    {!workspace && (plans.length > 0 || !!currentPlan || !!task) ? <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => { setWorkspace(true); setPane("workspace"); }}>
+      <Columns2 className="size-3.5" />{t("方案面板")}
+    </Button> : null}
+  </header>;
+  const chat = <section aria-label={t("优化对话")} className={cn("flex h-full min-h-0 min-w-0 flex-col", workspace && pane === "workspace" && "hidden lg:flex")}>
+    {chatHeader}
+    <div className={cn("flex min-h-0 flex-1 flex-col", empty && "justify-center")}>
     <div className={cn("relative flex min-h-0 flex-col", !empty && "flex-1")}>
       <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className={cn("min-h-0 chat-scroll overflow-y-auto overscroll-contain px-4 md:px-8", empty ? "max-h-[60vh]" : "flex-1")}>
         <div ref={content} className="grid min-h-full grid-cols-1">
@@ -344,22 +362,24 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
         finally { field.value = ""; setReading(false); }
       }} />
     </div>
+    </div>
   </section>;
 
+  const showPlanPicker = plans.length > 1 || (!!task && plans.length > 0);
+  const activePlanName = task?.name ?? plans.find(plan => viewing && sameSource(plan.source, viewing))?.name ?? t("方案面板");
   const workbench = workspace ? <aside aria-label={t("方案面板")} className={cn("flex h-full min-h-0 min-w-0 flex-col border-l border-border/70 bg-card", pane !== "workspace" && "hidden lg:flex")}>
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/70 bg-muted/15 px-3.5">
-      <h2 className="shrink-0 text-xs font-semibold text-muted-foreground">{t("方案面板")}</h2>
-      {plans.length ? <Select value={task ? "live" : viewing ? sourceKey(viewing) : ""} onValueChange={id => {
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/70 bg-background/80 px-4">
+      {showPlanPicker ? <Select value={task ? "live" : viewing ? sourceKey(viewing) : ""} onValueChange={id => {
         const chosen = plans.find(plan => sourceKey(plan.source) === id)?.source;
         if (chosen) { setViewed(chosen); setLiveTask(undefined); }
       }}>
-        <SelectTrigger size="sm" aria-label={t("查看计算方案")} className="min-w-0 flex-1 border-0 shadow-none"><SelectValue /></SelectTrigger>
-        <SelectContent>{task ? <SelectItem value="live">{task.name}</SelectItem> : null}{plans.map(plan => <SelectItem key={sourceKey(plan.source)} value={sourceKey(plan.source)}>{plan.name}{sameSource(plan.source, currentPlan) ? ` · ${t("当前讨论方案")}` : ""}</SelectItem>)}</SelectContent>
-      </Select> : <span className="min-w-0 flex-1 truncate text-xs font-medium">{task?.name}</span>}
-      {shown && !task ? <Button variant="ghost" size="icon-xs" aria-label={t("打开完整运行")} title={t("独立页面查看")} onClick={() => onOpen(shown)}><ArrowUpRight /></Button> : null}
-      <Button variant="ghost" size="icon-xs" aria-label={t("收起方案面板")} onClick={() => { setWorkspace(false); setPane("chat"); }}><X /></Button>
+        <SelectTrigger size="sm" aria-label={t("查看计算方案")} className="min-w-0 flex-1 border-0 bg-transparent px-0 text-sm font-semibold shadow-none"><SelectValue /></SelectTrigger>
+        <SelectContent>{task ? <SelectItem value="live">{task.name}</SelectItem> : null}{plans.map(plan => <SelectItem key={sourceKey(plan.source)} value={sourceKey(plan.source)}>{plan.name}{sameSource(plan.source, currentPlan) ? ` · ${t("当前")}` : ""}</SelectItem>)}</SelectContent>
+      </Select> : <h2 className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{activePlanName}</h2>}
+      {shown && !task ? <Button variant="ghost" size="icon-xs" aria-label={t("打开完整运行")} title={t("独立页面查看")} className="text-muted-foreground hover:text-foreground" onClick={() => onOpen(shown)}><ArrowUpRight /></Button> : null}
+      <Button variant="ghost" size="icon-xs" aria-label={t("收起方案面板")} className="text-muted-foreground hover:text-foreground" onClick={() => { setWorkspace(false); setPane("chat"); }}><X /></Button>
     </div>
-    {!task && shown && currentPlan && !sameSource(shown, currentPlan) ? <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/30 px-3.5 py-2 text-xs" aria-label={t("方案上下文")}>
+    {!task && shown && currentPlan && !sameSource(shown, currentPlan) ? <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/30 px-4 py-1.5 text-xs" aria-label={t("方案上下文")}>
       <Badge variant="outline">{t("正在查看历史方案")}</Badge>
       <Button variant="link" size="xs" className="h-auto p-0" onClick={() => setViewed(undefined)}>{t("返回当前讨论方案")}</Button>
     </div> : null}
@@ -367,23 +387,7 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
       : <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">{t("开始求解后，最优决策方案、数学模型与计算代码将实时呈现在这里。")}</div>}</div>
   </aside> : null;
 
-  const hasConversation = !!threadId || messages.length > 0 || !!meta?.title || plans.length > 0 || !!currentPlan || !!task || workspace;
   return <div className="flex h-full min-h-0 flex-col">
-    <header className={cn(
-      "flex h-12 shrink-0 items-center gap-2 px-4",
-      hasConversation ? "border-b border-border/70 bg-background/80 backdrop-blur-md"
-        : sidebarCollapsed ? "bg-transparent" : "border-b border-border/70 bg-background/80 backdrop-blur-md xl:hidden",
-    )}>
-      <Button variant="ghost" size="icon-sm" aria-label={t("打开菜单")} className="-ml-2 xl:hidden" onClick={onMenu}><Menu /></Button>
-      {sidebarCollapsed && onExpandSidebar ? <Button variant="ghost" size="icon-sm" aria-label={t("展开侧边栏")} title={t("展开侧边栏")}
-        className="-ml-1 hidden rounded-lg text-muted-foreground hover:text-foreground xl:inline-flex" onClick={onExpandSidebar}>
-        <PanelLeftOpen className="size-4" />
-      </Button> : null}
-      <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/90">{hasConversation ? (meta?.title || t("智能优化对话")) : ""}</h1>
-      {(plans.length > 0 || !!currentPlan || !!task || workspace) ? <Button variant={workspace ? "secondary" : "ghost"} size="sm" className="h-8 rounded-lg text-xs" aria-pressed={workspace} onClick={() => { setWorkspace(!workspace); setPane("workspace"); }}>
-        <Columns2 className="size-3.5" />{t("方案面板")}
-      </Button> : null}
-    </header>
     {workspace ? <div className="flex shrink-0 border-b lg:hidden">
       <Button variant={pane === "chat" ? "secondary" : "ghost"} className="flex-1 rounded-none" onClick={() => setPane("chat")}>{t("对话")}</Button>
       <Button variant={pane === "workspace" ? "secondary" : "ghost"} className="flex-1 rounded-none" onClick={() => setPane("workspace")}>{t("方案面板")}</Button>

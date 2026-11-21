@@ -32,7 +32,7 @@ function when(created: string): string {
 /** Concise, user-friendly outcome summary without developer jargon. */
 export function resultText(entry: Entry): string {
   if (!isRunEntry(entry) && ["pending", "interrupted", "error", "timeout"].includes(entry.state)) return STATUS[entry.state];
-  if (entry.meta.kind === "optimization") return entry.state === "running" ? t("正在规划…") : entry.failure ? t("对话中断") : t("对话规划");
+  if (entry.meta.kind === "optimization") return entry.state === "running" ? t("正在求解…") : entry.failure ? t("对话中断") : "";
   if (entry.meta.kind === "solution_chat") return entry.state === "running" ? t("正在解答…") : entry.failure ? t("问答中断") : t("方案追问");
   if (entry.meta.kind === "requirements") return entry.state === "running" ? t("正在梳理…")
     : entry.failure ? t("梳理中断") : t("需求梳理");
@@ -72,23 +72,30 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
   }
   const preset = presets[0];
 
-  const row = (entry: Entry) => {
+  const row = (entry: Entry, related: Entry[] = []) => {
     const selectedItem = entry.id === current;
     const comparison = isRunEntry(entry) ? entry.meta.group : null;
+    const primaryRun = entry.meta.kind === "optimization" && entry.state !== "running" && !entry.failure
+      ? related.find(isRunEntry) : undefined;
+    const summarySource = primaryRun ?? entry;
+    const summaryText = resultText(summarySource);
+    const summaryTone = TONE[tone(summarySource.state)].text;
     return <div className="group/item relative">
       <button onClick={() => onOpen(entry)} title={entry.meta.title} aria-current={selectedItem ? "page" : undefined}
         className={cn("flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors duration-150 hover:bg-sidebar-accent/70",
           selectedItem && "bg-sidebar-accent ring-1 ring-primary/15")}>
         <span className="flex min-w-0 items-center gap-2 pr-5 [@media(hover:hover)]:pr-0 [@media(hover:hover)]:group-hover/item:pr-6 [@media(hover:hover)]:group-focus-within/item:pr-6">
-          {!isRunEntry(entry) ? <MessageSquareText className={cn("size-3.5 shrink-0", selectedItem ? "text-primary" : "text-muted-foreground")} />
+          {!isRunEntry(entry) ? (primaryRun ? <StatusIcon status={primaryRun.state} className="size-3.5 shrink-0" />
+            : <MessageSquareText className={cn("size-3.5 shrink-0", selectedItem ? "text-primary" : "text-muted-foreground")} />)
             : <StatusIcon status={entry.state} className="size-3.5 shrink-0" />}
           <span className={cn("min-w-0 flex-1 truncate text-[13px] leading-5", selectedItem ? "font-medium text-foreground" : "text-foreground/90")}>{entry.meta.title}</span>
+          {!summaryText ? <span className="shrink-0 text-[11px] tabular text-muted-foreground/70 transition-opacity [@media(hover:hover)]:group-hover/item:opacity-0 [@media(hover:hover)]:group-focus-within/item:opacity-0">{when(entry.created)}</span> : null}
         </span>
-        <span className="flex min-w-0 items-center gap-1.5 pl-[22px] text-[11px] leading-4 text-muted-foreground">
-          <span className={cn("min-w-0 truncate tabular", TONE[tone(entry.state)].text)}>{resultText(entry)}</span>
+        {summaryText ? <span className="flex min-w-0 items-center gap-1.5 pl-[22px] text-[11px] leading-4 text-muted-foreground">
+          <span className={cn("min-w-0 truncate tabular", summaryTone)}>{summaryText}</span>
           {comparison ? <Columns3 className="size-3 shrink-0 text-muted-foreground/70" aria-label={isRunEntry(entry) && entry.meta.scenario ? t("多情景对比") : t("多方案对比")} /> : null}
           <span className="ml-auto shrink-0 tabular text-muted-foreground/70 transition-opacity [@media(hover:hover)]:group-hover/item:opacity-0 [@media(hover:hover)]:group-focus-within/item:opacity-0">{when(entry.created)}</span>
-        </span>
+        </span> : null}
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -156,11 +163,12 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
           <ul className="flex flex-col gap-0.5">{items.map(({ entry, related }) => {
             const hasActiveOrMatchingChild = related.some(item => item.id === current)
               || (!!query.trim() && related.some(item => matches(item, query, methodName)));
+            const showRelated = related.length > 0 && (entry.meta.kind !== "optimization" || related.length > 1 || hasActiveOrMatchingChild);
             const open = (!!query.trim() && related.some(item => matches(item, query, methodName)))
               || (expanded[entry.id] ?? hasActiveOrMatchingChild);
             return <li key={entry.id}>
-              {row(entry)}
-              {related.length ? <>
+              {row(entry, related)}
+              {showRelated ? <>
                 <Button variant="ghost" size="xs" aria-expanded={open} className="mb-1 ml-[22px] h-6 gap-1 rounded-md px-1.5 text-[11px] font-normal text-muted-foreground"
                   aria-label={t("相关记录：{title}", { title: entry.meta.title })}
                   onClick={() => setExpanded(value => ({ ...value, [entry.id]: !open }))}>

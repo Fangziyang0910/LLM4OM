@@ -1081,6 +1081,7 @@ export const en: Record<string, string> = {
   "点击任意散点或行可查看对应决策明细。": "Click any point or row to inspect its decisions.",
   "同一问题可指定或并排对比多种建模方法、AI 模型与求解器。": "Pick or compare multiple modeling methods, AI models, and solvers side by side.",
   "快速示例": "Quick Examples",
+  "当前": "Current",
 };
 
 /** Step titles with numbers in them. */
