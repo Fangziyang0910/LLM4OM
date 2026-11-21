@@ -1,4 +1,21 @@
-export function solveExample(kind, { cutting = 8, minimumB = 0, change = false } = {}) {
+// Exact finite examples + verified multi-objective GPU scheduling Pareto front for the interactive landing showcase.
+export const PARETO_FRONT = [
+  { id: 1, tag: "cost", cost: 272.5, risk: 18.49, loads: [80, 89, 75, 14], caps: [80, 90, 75, 85] },
+  { id: 2, tag: null, cost: 274.7, risk: 18.00, loads: [79, 90, 70, 19], caps: [80, 90, 75, 85] },
+  { id: 3, tag: null, cost: 277.6, risk: 17.34, loads: [80, 88, 63, 27], caps: [80, 90, 75, 85] },
+  { id: 4, tag: null, cost: 280.9, risk: 16.58, loads: [78, 90, 54, 36], caps: [80, 90, 75, 85] },
+  { id: 5, tag: null, cost: 283.5, risk: 15.98, loads: [80, 89, 47, 42], caps: [80, 90, 75, 85] },
+  { id: 6, tag: "knee", cost: 286.4, risk: 15.36, loads: [80, 90, 40, 48], caps: [80, 90, 75, 85] },
+  { id: 7, tag: null, cost: 290.2, risk: 14.52, loads: [77, 90, 31, 60], caps: [80, 90, 75, 85] },
+  { id: 8, tag: null, cost: 294.8, risk: 13.51, loads: [72, 90, 22, 74], caps: [80, 90, 75, 85] },
+  { id: 9, tag: "risk", cost: 299.6, risk: 12.48, loads: [69, 89, 15, 85], caps: [80, 90, 75, 85] },
+];
+
+export function solveExample(kind, { cutting = 8, minimumB = 0, change = false, paretoIndex = 5 } = {}) {
+  if (kind === "pareto") {
+    const idx = Math.max(0, Math.min(PARETO_FRONT.length - 1, Math.round(paretoIndex)));
+    return { index: idx, totalSolutions: 200, point: PARETO_FRONT[idx], front: PARETO_FRONT };
+  }
   if (kind === "production") {
     if (!Number.isInteger(cutting) || cutting < 8 || cutting > 12 || ![0, 3, 5].includes(minimumB)) throw new RangeError("Invalid example conditions");
     let best = null;

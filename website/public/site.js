@@ -2,32 +2,57 @@ import { copy } from "./translations.js";
 import { solveExample } from "./examples.mjs";
 
 let language = document.documentElement.lang === "en" ? "en" : "zh";
-let kind = "production";
-let conditions = { cutting: 8, minimumB: 0, change: false };
-let feature = "plan";
+let kind = "pareto";
+let conditions = { cutting: 8, minimumB: 0, change: false, paretoIndex: 5 };
 let view = "plan";
-let result;
+let result = null;
 let progress = 1;
 let playing = false;
 let paused = false;
 let elapsed = 0;
 let previousFrame = 0;
 let frame;
-let autoplayStarted = false;
-const duration = 4600;
+let activeShot = "pareto";
+const duration = 3600;
 const motionPreference = matchMedia("(prefers-reduced-motion: reduce)");
 const studio = document.querySelector("#studio");
 const $ = selector => document.querySelector(selector);
 const t = (key, values = {}) => {
-  if (!copy[key]) throw new Error(`Missing website text: ${key}`);
-  return copy[key][language === "en" ? 1 : 0].replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match);
+  const pair = copy[key];
+  if (!pair) return key;
+  return pair[language === "en" ? 1 : 0].replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match);
 };
+
+function workbenchUrl() {
+  const host = location.hostname;
+  if (!host || host.endsWith("github.io")) return null;
+  if (location.port === "8831" || host === "127.0.0.1" || host === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    return `${location.protocol}//${host}:8767/`;
+  }
+  return null;
+}
+
+function syncWorkbenchLinks() {
+  const live = workbenchUrl();
+  for (const link of document.querySelectorAll(".workbench-link")) {
+    if (live) {
+      link.href = live;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+    } else {
+      const slug = link.dataset.docsFallback || "quickstart";
+      link.href = `docs/${language}/${slug}/`;
+      link.removeAttribute("target");
+      link.removeAttribute("rel");
+    }
+  }
+}
 
 function question() {
   let text = t(`${kind}Question`);
   if (kind === "production" && conditions.cutting !== 8) text += `\n${t("productionAdjustment", { cutting: conditions.cutting })}`;
   if (kind === "production" && conditions.minimumB) text += `\n${t("productionMinimum", { minimum: conditions.minimumB })}`;
-  if (kind !== "production" && conditions.change) text += `\n${t(`${kind}Change`)}`;
+  if ((kind === "shifts" || kind === "delivery") && conditions.change) text += `\n${t(`${kind}Change`)}`;
   return text;
 }
 
@@ -40,13 +65,11 @@ function updatePlayback() {
 }
 
 function renderTimeline() {
-  const phase = progress < .36 ? "input" : progress < .59 ? "model" : progress < .78 ? "solve" : "complete";
-  const previousPhase = studio.dataset.phase;
+  const phase = progress < 0.34 ? "input" : progress < 0.6 ? "model" : progress < 0.82 ? "solve" : "complete";
   studio.dataset.phase = phase;
   studio.setAttribute("aria-busy", String(progress < 1));
   const text = question();
-  $("#demo-question").textContent = text.slice(0, Math.max(1, Math.ceil(text.length * Math.min(progress / .36, 1))));
-  $("#demo-question").setAttribute("aria-label", text);
+  $("#demo-question").textContent = text.slice(0, Math.max(1, Math.ceil(text.length * Math.min(progress / 0.34, 1))));
   const step = phase === "input" ? 0 : phase === "model" ? 1 : phase === "solve" ? 2 : 3;
   for (const [index, node] of [...document.querySelectorAll("[data-stage]")].entries()) {
     node.classList.toggle("is-current", index === step);
@@ -54,18 +77,6 @@ function renderTimeline() {
     node.querySelector("i").textContent = index < step ? "✓" : String(index + 1);
   }
   $("#playback-progress").style.width = `${progress * 100}%`;
-  $("#demo-objective").textContent = phase === "complete" && result ? result.total : "—";
-  if (kind === "production" && result) {
-    $("#bar-a").style.width = `${phase === "complete" ? result.quantities[0] / 6 * 100 : 0}%`;
-    $("#bar-b").style.width = `${phase === "complete" ? result.quantities[1] / 6 * 100 : 0}%`;
-  }
-  if (phase === "complete" && previousPhase !== "complete" && result && !motionPreference.matches) {
-    $("#plan-content").animate([{ opacity: .3, transform: "translateY(18px) scale(.985)" }, { opacity: 1, transform: "translateY(0) scale(1)" }], { duration: 650, easing: "cubic-bezier(.16,1,.3,1)" });
-  }
-}
-
-function announce() {
-  $("#demo-announcement").textContent = result ? `${t(`${kind}Metric`)} ${result.total} ${t("currencyUnit")}. ${$("#result-description").textContent}` : t("conflictExplanation");
 }
 
 function tick(now) {
@@ -78,8 +89,21 @@ function tick(now) {
     playing = false;
     paused = false;
     updatePlayback();
-    announce();
-  } else frame = requestAnimationFrame(tick);
+  } else {
+    frame = requestAnimationFrame(tick);
+  }
+}
+
+function play(resume = false) {
+  if (motionPreference.matches) { complete(); return; }
+  cancelAnimationFrame(frame);
+  if (!resume) { elapsed = 0; progress = 0; }
+  previousFrame = 0;
+  playing = true;
+  paused = false;
+  renderTimeline();
+  updatePlayback();
+  frame = requestAnimationFrame(tick);
 }
 
 function pause() {
@@ -101,18 +125,6 @@ function complete() {
   updatePlayback();
 }
 
-function play(resume = false) {
-  if (motionPreference.matches) { complete(); announce(); return; }
-  cancelAnimationFrame(frame);
-  if (!resume) { elapsed = 0; progress = 0; }
-  previousFrame = 0;
-  playing = true;
-  paused = false;
-  renderTimeline();
-  updatePlayback();
-  frame = requestAnimationFrame(tick);
-}
-
 function selectTabs(selector, selected) {
   for (const button of document.querySelectorAll(selector)) {
     const current = button === selected;
@@ -121,207 +133,358 @@ function selectTabs(selector, selected) {
   }
 }
 
-function renderRoutes(animate) {
-  const svgNS = "http://www.w3.org/2000/svg";
-  const make = (tag, attributes, text) => {
-    const node = document.createElementNS(svgNS, tag);
-    for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
-    if (text) node.textContent = text;
-    return node;
-  };
-  const path = (source, target) => `M105 ${40 + source * 75} C240 ${40 + source * 75},360 ${40 + target * 75},495 ${40 + target * 75}`;
-  const background = $("#route-background");
-  const active = $("#route-active");
-  const nodes = $("#route-nodes");
-  background.replaceChildren(); active.replaceChildren(); nodes.replaceChildren();
-  for (let source = 0; source < 3; source++) {
-    for (let target = 0; target < 3; target++) background.append(make("path", { d: path(source, target), class: "route-background" }));
-    const line = make("path", { d: path(source, result.destinations[source]), class: "route-active", pathLength: "1" });
-    active.append(line);
-    if (animate && !motionPreference.matches) {
-      line.style.strokeDasharray = "1";
-      line.animate([{ strokeDashoffset: "1" }, { strokeDashoffset: "0" }], { duration: 650, delay: source * 70, easing: "cubic-bezier(.16,1,.3,1)", fill: "both" });
-    }
-    for (const side of [0, 1]) {
-      const x = side ? 515 : 85, y = 40 + source * 75;
-      nodes.append(make("circle", { cx: x, cy: y, r: 22, class: side ? "destination" : "source" }));
-      nodes.append(make("text", { x, y: y + 1 }, side ? String(source + 1) : "ABC"[source]));
-    }
-  }
-  $("#route-summary").replaceChildren(...result.destinations.map((target, source) => {
-    const item = document.createElement("span");
-    item.textContent = `${t("warehouse")} ${"ABC"[source]} → ${t("store")} ${target + 1}`;
-    return item;
-  }));
+function renderPareto(solved) {
+  const { front, index, point } = solved;
+  const tagText = point.tag === "knee" ? t("paretoKneeTag")
+    : point.tag === "cost" ? t("paretoCostTag")
+      : point.tag === "risk" ? t("paretoRiskTag")
+        : t("paretoCustomTag");
+
+  $("#pareto-cost").textContent = point.cost.toFixed(1);
+  $("#pareto-risk").textContent = point.risk.toFixed(2);
+  $("#pareto-point-label").textContent = `#${point.id} · ${tagText}`;
+  $("#pareto-slider").value = String(index);
+  $("#demo-comparison").textContent = tagText;
+  $("#demo-comparison").classList.toggle("is-changed", index !== 5);
+  $("#result-description").textContent = t("paretoDesc", {
+    id: point.id, tag: tagText, cost: point.cost.toFixed(1), risk: point.risk.toFixed(2),
+  });
+
+  // Render crisp interactive SVG scatter plot
+  const svg = $("#pareto-svg");
+  const W = 460, H = 156, padL = 44, padR = 16, padT = 16, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const minC = 270, maxC = 302, minR = 12, maxR = 19;
+  const sx = c => padL + ((c - minC) / (maxC - minC)) * plotW;
+  const sy = r => padT + plotH - ((r - minR) / (maxR - minR)) * plotH;
+
+  const linePath = front.map((p, i) => `${i === 0 ? "M" : "L"}${sx(p.cost).toFixed(1)},${sy(p.risk).toFixed(1)}`).join(" ");
+  const grid = [12, 15.5, 19].map(r => {
+    const y = sy(r).toFixed(1);
+    return `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="currentColor" stroke-opacity="0.1" stroke-dasharray="3 3"/>` +
+      `<text x="${padL - 7}" y="${Number(y) + 3}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="var(--mono)">${r}</text>`;
+  }).join("");
+  const xTicks = [272, 286, 300].map(c => {
+    const x = sx(c).toFixed(1);
+    return `<text x="${x}" y="${H - 8}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="var(--mono)">${c}</text>`;
+  }).join("");
+  const dots = front.map((p, i) => {
+    const cx = sx(p.cost).toFixed(1), cy = sy(p.risk).toFixed(1);
+    const active = i === index;
+    const knee = p.tag === "knee";
+    return `<g class="pareto-dot" data-pidx="${i}" style="cursor:pointer">` +
+      `<circle cx="${cx}" cy="${cy}" r="11" fill="transparent"/>` +
+      (active ? `<circle cx="${cx}" cy="${cy}" r="10" fill="var(--brand)" fill-opacity="0.18"/><circle cx="${cx}" cy="${cy}" r="6.5" fill="none" stroke="var(--brand)" stroke-width="2"/>` : "") +
+      `<circle cx="${cx}" cy="${cy}" r="${active ? 4.4 : knee ? 4.2 : 3.5}" fill="${active || knee ? "var(--brand)" : "var(--text-secondary)"}" fill-opacity="${active ? 1 : knee ? 0.85 : 0.55}"/>` +
+      `</g>`;
+  }).join("");
+
+  svg.innerHTML = `${grid}${xTicks}<path d="${linePath}" fill="none" stroke="var(--brand)" stroke-opacity="0.35" stroke-width="1.8"/>${dots}`;
+  svg.querySelectorAll(".pareto-dot").forEach(el => {
+    el.addEventListener("click", () => {
+      conditions.paretoIndex = Number(el.dataset.pidx);
+      renderCase();
+    });
+  });
+
+  // Render 4 GPU cluster load bars
+  $("#cluster-bars").innerHTML = point.loads.map((load, idx) => {
+    const cap = point.caps[idx];
+    const pct = Math.min(100, Math.round((load / cap) * 100));
+    return `<div class="cluster-row">
+      <div class="cluster-meta"><span>${t("paretoCluster", { n: idx })}</span><span>${load}/${cap} (${pct}%)</span></div>
+      <div class="cluster-track"><div class="cluster-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join("");
 }
 
-function renderExample(animate = false) {
-  const oldPositions = new Map([...document.querySelectorAll("[data-person]")].map(node => [node, node.getBoundingClientRect()]));
+function renderDelivery(destinations) {
+  const costs = [[4, 8, 6], [7, 3, 9], [5, 6, 2]];
+  const left = [[92, 42], [92, 110], [92, 178]];
+  const right = [[508, 42], [508, 110], [508, 178]];
+  const path = (a, b) => `M${a[0]} ${a[1]} C250 ${a[1]} 350 ${b[1]} ${b[0]} ${b[1]}`;
+  $("#route-background").innerHTML = left.flatMap((a, i) => right.map((b, j) => {
+    const blocked = conditions.change && i === 1 && j === 1;
+    return `<path class="route-background" d="${path(a, b)}"${blocked ? ' stroke-dasharray="4 5" opacity="0.3"' : ""}/>`;
+  })).join("");
+  $("#route-active").innerHTML = destinations.map((dst, src) => `<path class="route-active" d="${path(left[src], right[dst])}"/>`).join("");
+  $("#route-nodes").innerHTML =
+    left.map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="22"/><text x="${x}" y="${y}">W${i + 1}</text>`).join("") +
+    right.map(([x, y], i) => `<circle class="destination" cx="${x}" cy="${y}" r="22"/><text x="${x}" y="${y}">S${i + 1}</text>`).join("");
+  const routeList = destinations.map((dst, src) => `W${src + 1}→S${dst + 1} (¥${costs[src][dst]})`);
+  $("#route-summary").innerHTML = routeList.map(item => `<span>${item}</span>`).join("");
+  return routeList.join(" · ");
+}
+
+function renderCase() {
   result = solveExample(kind, conditions);
-  const baseline = solveExample(kind);
-  const changed = kind === "production" ? conditions.cutting !== 8 || conditions.minimumB !== 0 : conditions.change;
-  selectTabs("[data-case]", $(`#case-${kind}`));
-  $("#demo-body").setAttribute("aria-labelledby", `case-${kind}`);
+  const isPareto = kind === "pareto";
+  const isProd = kind === "production";
+  const isShifts = kind === "shifts";
+  const isDelivery = kind === "delivery";
+
+  $("#demo-engine").textContent = t(`${kind}Engine`);
+  $("#demo-file").textContent = t(`${kind}File`);
   $("#plan-title").textContent = t(`${kind}Title`);
   $("#metric-label").textContent = t(`${kind}Metric`);
-  $("#demo-file").textContent = t(`${kind}File`);
-  $("#condition-label").textContent = t(`${kind}Change`);
-  $("#change-condition").disabled = kind === "production" ? conditions.cutting === 10 && conditions.minimumB === 0 : conditions.change;
-  $("#infeasible-condition").hidden = kind !== "production";
-  $("#reset-condition").hidden = !changed;
-  for (const name of ["production", "shifts", "delivery"]) $(`#${name}-plot`).hidden = name !== kind || !result;
-  $("#conflict-message").hidden = Boolean(result);
-  $("#demo-status").textContent = t(result ? "optimal" : "infeasible");
-  $("#demo-status").classList.toggle("is-infeasible", !result);
-  $(".currency").hidden = !result;
-  $("#demo-comparison").textContent = !result ? "" : changed ? t("comparison", { difference: `${result.total > baseline.total ? "+" : result.total < baseline.total ? "−" : ""}${Math.abs(result.total - baseline.total)}` }) : t("baseline");
-  $("#demo-comparison").classList.toggle("is-changed", Boolean(changed && result));
+  $("#metric-currency").hidden = isPareto || !result;
+
+  $("#pareto-plot").hidden = !isPareto;
+  $("#production-plot").hidden = !isProd || !result;
+  $("#shifts-plot").hidden = !isShifts;
+  $("#delivery-plot").hidden = !isDelivery;
+  $("#conflict-message").hidden = !!result;
   $("#download-plan").disabled = !result;
-  if (kind === "production") {
-    $("#cutting-capacity").value = conditions.cutting;
-    $("#capacity-value").textContent = `${conditions.cutting} ${t("resourceUnits")}`;
-    if (result) {
-      $("#quantity-a").textContent = `${result.quantities[0]} ${t("pieces")}`;
-      $("#quantity-b").textContent = `${result.quantities[1]} ${t("pieces")}`;
+
+  // Follow-up buttons
+  const condBtn = $("#change-condition");
+  const secBtn = $("#secondary-condition");
+  const resetBtn = $("#reset-condition");
+
+  if (isPareto) {
+    $("#condition-label").textContent = t("paretoBtnCost");
+    secBtn.hidden = false;
+    secBtn.textContent = t("paretoBtnRisk");
+    resetBtn.hidden = conditions.paretoIndex === 5;
+    $("#demo-objective").textContent = t("paretoCount");
+    $("#demo-status").textContent = t("paretoStatus");
+    $("#demo-status").className = "status-badge";
+    renderPareto(result);
+  } else if (isProd) {
+    $("#condition-label").textContent = t("productionChange");
+    secBtn.hidden = false;
+    secBtn.textContent = t("productionConflict");
+    resetBtn.hidden = conditions.cutting === 8 && conditions.minimumB === 0;
+    $("#capacity-value").textContent = t("hours", { n: conditions.cutting });
+    $("#cutting-capacity").value = String(conditions.cutting);
+    if (!result) {
+      $("#demo-objective").textContent = "—";
+      $("#demo-status").textContent = t("infeasible");
+      $("#demo-status").className = "status-badge is-infeasible";
+      $("#demo-comparison").textContent = t("infeasible");
+      $("#demo-comparison").className = "comparison";
+      $("#result-description").textContent = t("conflictExplanation");
+    } else {
+      const [a, b] = result.quantities;
+      $("#demo-objective").textContent = String(result.total);
+      $("#demo-status").textContent = t("optimal");
+      $("#demo-status").className = "status-badge";
+      const diff = result.total - 13;
+      $("#demo-comparison").textContent = diff === 0 ? (conditions.cutting === 8 && !conditions.minimumB ? t("baseline") : t("unchanged")) : t("changedDelta", { delta: `${diff > 0 ? "+" : ""}¥${diff}` });
+      $("#demo-comparison").classList.toggle("is-changed", diff !== 0);
+      $("#quantity-a").textContent = t("units", { n: a });
+      $("#quantity-b").textContent = t("units", { n: b });
+      $("#bar-a").style.width = `${(a / 6) * 100}%`;
+      $("#bar-b").style.width = `${(b / 6) * 100}%`;
+      $("#result-description").textContent = t("productionResult", { a, b, total: result.total });
     }
+  } else if (isShifts) {
+    $("#condition-label").textContent = t("shiftsChange");
+    secBtn.hidden = true;
+    resetBtn.hidden = !conditions.change;
+    $("#demo-objective").textContent = String(result.total);
+    $("#demo-status").textContent = t("optimal");
+    $("#demo-status").className = "status-badge";
+    const diff = result.total - 6;
+    $("#demo-comparison").textContent = conditions.change ? t("changedDelta", { delta: `+¥${diff}` }) : t("baseline");
+    $("#demo-comparison").classList.toggle("is-changed", conditions.change);
+    const mon = [], tue = [];
+    result.days.forEach((day, idx) => {
+      const card = document.querySelector(`.person[data-person="${idx}"]`);
+      const name = t(`person${idx}`);
+      if (day === 0) { mon.push(name); card.style.gridColumn = "1"; card.style.gridRow = String(mon.length + 1); }
+      else { tue.push(name); card.style.gridColumn = "2"; card.style.gridRow = String(tue.length + 1); }
+    });
+    $("#result-description").textContent = t("shiftsResult", { mon: mon.join("、"), tue: tue.join("、"), total: result.total });
+  } else if (isDelivery) {
+    $("#condition-label").textContent = t("deliveryChange");
+    secBtn.hidden = true;
+    resetBtn.hidden = !conditions.change;
+    $("#demo-objective").textContent = String(result.total);
+    $("#demo-status").textContent = t("optimal");
+    $("#demo-status").className = "status-badge";
+    const diff = result.total - 9;
+    $("#demo-comparison").textContent = conditions.change ? t("changedDelta", { delta: `+¥${diff}` }) : t("baseline");
+    $("#demo-comparison").classList.toggle("is-changed", conditions.change);
+    const summary = renderDelivery(result.destinations);
+    $("#result-description").textContent = t("deliveryResult", { routes: summary, total: result.total });
   }
-  if (kind === "shifts") {
-    const rows = [2, 2];
-    for (const node of document.querySelectorAll("[data-person]")) {
-      for (const animation of node.getAnimations()) animation.cancel();
-      const day = result.days[Number(node.dataset.person)];
-      node.style.gridColumn = String(day + 1);
-      node.style.gridRow = String(rows[day]++);
-      if (animate && !motionPreference.matches) {
-        const before = oldPositions.get(node), after = node.getBoundingClientRect();
-        if (before.width > 0) node.animate([{ transform: `translate(${before.x - after.x}px,${before.y - after.y}px)` }, { transform: "translate(0,0)" }], { duration: 600, easing: "cubic-bezier(.16,1,.3,1)" });
-      }
-    }
-  }
-  if (kind === "delivery") renderRoutes(animate);
-  const quantities = result?.quantities ?? [0, 0];
-  $("#result-description").textContent = result ? t(`${kind}Result`, { a: quantities[0], b: quantities[1], cutting: conditions.cutting, cuttingUsed: 2 * quantities[0] + quantities[1], finishingUsed: quantities[0] + 2 * quantities[1] }) : t("conflictExplanation");
+
+  // Math Model tab
   $("#model-intro").textContent = t(`${kind}ModelIntro`);
-  $("#example-model").textContent = t(`${kind}Model`, {
-    cutting: conditions.cutting,
-    minimum: conditions.minimumB ? t("minimumB", { minimum: conditions.minimumB }) : "",
-    extra: conditions.change ? t(`${kind}Extra`) : "",
-  });
+  if (isProd) {
+    const minLine = conditions.minimumB ? t("productionMinConstraint", { minimum: conditions.minimumB }) : "";
+    $("#example-model").textContent = t("productionModelCode", { cutting: conditions.cutting, minLine });
+  } else if (isShifts || isDelivery) {
+    $("#example-model").textContent = t(`${kind}ModelCode`, { extra: conditions.change ? t(`${kind}Extra`) : "" });
+  } else {
+    $("#example-model").textContent = t("paretoModelCode");
+  }
   $("#model-data").textContent = t(`${kind}ModelData`);
   renderTimeline();
-  updatePlayback();
-  if (animate && !motionPreference.matches && result) $("#demo-objective").animate([{ opacity: .3, transform: "translateY(8px)" }, { opacity: 1, transform: "translateY(0)" }], { duration: 500, easing: "cubic-bezier(.16,1,.3,1)" });
 }
 
-function renderFeature() {
-  selectTabs("[data-feature]", $(`#feature-${feature}`));
-  $("#feature-panel").setAttribute("aria-labelledby", `feature-${feature}`);
-  $("#feature-description").dataset.i18n = `${feature}FeatureDescription`;
-  $("#feature-description").textContent = t(`${feature}FeatureDescription`);
-  const image = $("#feature-image");
-  const source = `assets/screens/${language}/${feature}${document.documentElement.dataset.theme === "light" ? "-light" : ""}.png`;
-  const stage = $(".photo-stage");
-  image.alt = t(`${feature}Alt`);
-  stage.dataset.loading = "true";
-  const loaded = () => {
-    if (image.getAttribute("src") === source) { stage.style.aspectRatio = `${image.naturalWidth} / ${image.naturalHeight}`; stage.dataset.loading = "false"; }
-  };
-  image.onload = loaded;
-  image.src = source;
-  if (image.complete && image.naturalWidth > 0) loaded();
-  $("#dialog-image").src = source;
-  $("#dialog-image").alt = image.alt;
+function setView(next) {
+  view = next;
+  selectTabs(".plan-tabs button", document.querySelector(`.plan-tabs button[data-view="${next}"]`));
+  $("#plan-content").hidden = next !== "plan";
+  $("#model-content").hidden = next !== "model";
+}
+
+function setShot(shot) {
+  activeShot = shot;
+  selectTabs(".showcase-tabs button", document.querySelector(`.showcase-tabs button[data-shot="${shot}"]`));
+  const img = $("#sc1-image");
+  const light = `assets/screens/live/${shot}-light.png`;
+  const dark = `assets/screens/live/${shot}-dark.png`;
+  img.dataset.lightSrc = light;
+  img.dataset.darkSrc = dark;
+  img.src = document.documentElement.dataset.theme === "dark" ? dark : light;
 }
 
 function applyLanguage() {
-  complete();
   document.documentElement.lang = language === "en" ? "en" : "zh-CN";
-  for (const node of document.querySelectorAll("[data-i18n]")) node.textContent = t(node.dataset.i18n);
-  for (const node of document.querySelectorAll("[data-i18n-label]")) node.setAttribute("aria-label", t(node.dataset.i18nLabel));
-  for (const node of document.querySelectorAll("[data-docs]")) node.href = `docs/${language}/${node.dataset.docs}/`;
   document.title = t("pageTitle");
-  $("meta[name='description']").content = t("pageDescription");
-  $("meta[property='og:title']").content = t("pageTitle");
-  $("meta[property='og:description']").content = t("pageDescription");
-  $("#language-name").textContent = language === "zh" ? "EN" : "中文";
-  $("#language-toggle").setAttribute("aria-label", language === "zh" ? "Switch to English" : "切换为中文");
-  renderExample();
-  renderFeature();
-  announce();
+  const desc = document.querySelector('meta[name="description"]');
+  if (desc) desc.content = t("pageDescription");
+  $("#language-name").textContent = language === "en" ? "中文" : "EN";
+  $("#language-toggle").setAttribute("aria-label", language === "en" ? "切换到中文" : "Switch to English");
+  for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
+  for (const el of document.querySelectorAll("[data-i18n-label]")) el.setAttribute("aria-label", t(el.dataset.i18nLabel));
+  for (const link of document.querySelectorAll("a[data-docs]")) link.href = `docs/${language}/${link.dataset.docs}/`;
+  syncWorkbenchLinks();
+  updatePlayback();
+  renderCase();
 }
 
-function bindTabs(selector, select) {
-  const buttons = [...document.querySelectorAll(selector)];
-  for (const [index, button] of buttons.entries()) {
-    button.addEventListener("click", () => select(button));
-    button.addEventListener("keydown", event => {
-      if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
-      event.preventDefault();
-      const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
-      select(buttons[next]);
-      buttons[next].focus();
-    });
-  }
-}
-
-bindTabs("[data-case]", button => {
-  complete(); kind = button.dataset.case; conditions = { cutting: 8, minimumB: 0, change: false }; renderExample(true); autoplayStarted = true; announce();
-});
-bindTabs("[data-feature]", button => { feature = button.dataset.feature; renderFeature(); });
-bindTabs("[data-view]", button => {
-  view = button.dataset.view; selectTabs("[data-view]", button);
-  $("#plan-content").hidden = view !== "plan"; $("#model-content").hidden = view !== "model";
-});
-$("#demo-data").addEventListener("click", () => { complete(); $("#view-model").click(); $("#view-model").focus(); });
-
-$("#language-toggle").addEventListener("click", () => {
-  language = language === "zh" ? "en" : "zh";
-  try { localStorage.setItem("llm4om-site-language", language); } catch { /* The language switch also works without storage. */ }
-  const url = new URL(location.href); url.searchParams.set("lang", language); history.replaceState(null, "", url);
-  applyLanguage();
-});
-$("#play-demo").addEventListener("click", () => { autoplayStarted = true; if (playing) pause(); else play(paused); });
-$("#skip-demo").addEventListener("click", () => { complete(); announce(); });
-$("#change-condition").addEventListener("click", () => {
-  complete(); conditions = kind === "production" ? { cutting: 10, minimumB: 0, change: false } : { ...conditions, change: true }; renderExample(true); announce();
-});
-$("#infeasible-condition").addEventListener("click", () => { complete(); conditions.minimumB = 5; renderExample(true); announce(); });
-function reset() { complete(); conditions = { cutting: 8, minimumB: 0, change: false }; renderExample(true); announce(); }
-$("#reset-condition").addEventListener("click", reset);
-$("#resolve-conflict").addEventListener("click", reset);
-$("#cutting-capacity").addEventListener("input", event => { complete(); conditions.cutting = Number(event.target.value); conditions.minimumB = 0; renderExample(); announce(); });
-
-$("#download-plan").addEventListener("click", () => {
+function downloadCsv() {
   if (!result) return;
-  let rows = [[t(`${kind}Title`), ""], [t(`${kind}Metric`) + " (CNY)", result.total]];
-  if (kind === "production") rows.push([t("productA"), result.quantities[0]], [t("productB"), result.quantities[1]], [t("cuttingCapacity"), conditions.cutting]);
-  if (kind === "shifts") rows.push(...result.days.map((day, person) => [t(`person${person}`), t(day ? "tuesday" : "monday")]));
-  if (kind === "delivery") rows.push(...result.destinations.map((store, warehouse) => [`${t("warehouse")} ${"ABC"[warehouse]}`, `${t("store")} ${store + 1}`]));
-  const csv = "\uFEFF" + rows.map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\r\n");
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const anchor = document.createElement("a"); anchor.href = url; anchor.download = `llm4om-${kind}-${language}.csv`; document.body.append(anchor); anchor.click(); anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  let csv = "";
+  if (kind === "pareto") {
+    csv = "solution,tag,total_electricity_cost,total_fault_risk,cluster_0,cluster_1,cluster_2,cluster_3\n" +
+      result.front.map(p => `${p.id},${p.tag || ""},${p.cost},${p.risk},${p.loads.join(",")}`).join("\n");
+  } else if (kind === "production") {
+    csv = `product,quantity\nA,${result.quantities[0]}\nB,${result.quantities[1]}\ntotal_profit,${result.total}\n`;
+  } else if (kind === "shifts") {
+    csv = "employee,day\n" + result.days.map((d, i) => `${t(`person${i}`)},${d === 0 ? t("monday") : t("tuesday")}`).join("\n");
+  } else {
+    csv = "warehouse,store\n" + result.destinations.map((dst, src) => `W${src + 1},S${dst + 1}`).join("\n");
+  }
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `gios-${kind}-solution.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// Event bindings
+document.querySelectorAll(".case-tabs button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    kind = btn.dataset.case;
+    conditions = { cutting: 8, minimumB: 0, change: false, paretoIndex: 5 };
+    selectTabs(".case-tabs button", btn);
+    setView("plan");
+    complete();
+    renderCase();
+  });
+});
+
+document.querySelectorAll(".plan-tabs button").forEach(btn => {
+  btn.addEventListener("click", () => setView(btn.dataset.view));
+});
+$("#demo-data").addEventListener("click", () => setView("model"));
+
+$("#pareto-slider").addEventListener("input", event => {
+  conditions.paretoIndex = Number(event.target.value);
+  renderCase();
+});
+$("#cutting-capacity").addEventListener("input", event => {
+  conditions.cutting = Number(event.target.value);
+  conditions.minimumB = 0;
+  renderCase();
+});
+
+$("#change-condition").addEventListener("click", () => {
+  if (kind === "pareto") conditions.paretoIndex = 0;
+  else if (kind === "production") { conditions.cutting = 10; conditions.minimumB = 0; }
+  else conditions.change = true;
+  setView("plan");
+  renderCase();
+});
+$("#secondary-condition").addEventListener("click", () => {
+  if (kind === "pareto") conditions.paretoIndex = 8;
+  else if (kind === "production") { conditions.cutting = 8; conditions.minimumB = 5; }
+  setView("plan");
+  renderCase();
+});
+$("#reset-condition").addEventListener("click", () => {
+  conditions = { cutting: 8, minimumB: 0, change: false, paretoIndex: 5 };
+  renderCase();
+});
+$("#resolve-conflict").addEventListener("click", () => {
+  conditions = { cutting: 8, minimumB: 0, change: false, paretoIndex: 5 };
+  renderCase();
+});
+
+$("#play-demo").addEventListener("click", () => {
+  if (playing) pause();
+  else play(paused);
+});
+$("#skip-demo").addEventListener("click", complete);
+$("#download-plan").addEventListener("click", downloadCsv);
+
+document.querySelectorAll(".showcase-tabs button").forEach(btn => {
+  btn.addEventListener("click", () => setShot(btn.dataset.shot));
 });
 
 const dialog = $("#photo-dialog");
-document.addEventListener("llm4om:themechange", renderFeature);
-$("#enlarge-photo").addEventListener("click", () => dialog.showModal());
+document.querySelectorAll("[data-zoom-target]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const srcImg = document.getElementById(btn.dataset.zoomTarget);
+    if (!srcImg) return;
+    $("#dialog-image").src = srcImg.src;
+    $("#dialog-image").alt = srcImg.alt;
+    dialog.showModal();
+  });
+});
 $("#close-photo").addEventListener("click", () => dialog.close());
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
-document.addEventListener("visibilitychange", () => { if (document.hidden && playing) pause(); });
-motionPreference.addEventListener("change", () => { if (motionPreference.matches) { complete(); document.body.classList.remove("motion-ready"); } });
+
+$("#language-toggle").addEventListener("click", () => {
+  language = language === "en" ? "zh" : "en";
+  try { localStorage.setItem("llm4om-site-language", language); } catch {}
+  applyLanguage();
+});
+
+document.addEventListener("llm4om:themechange", () => setShot(activeShot));
+
+// Smooth scroll reveal (pre-reveals ahead of viewport + passive scroll fallback)
+if (!motionPreference.matches && "IntersectionObserver" in window) {
+  document.documentElement.classList.add("motion-ready");
+  const reveals = [...document.querySelectorAll(".reveal")];
+  const show = el => el.classList.add("is-visible");
+  const revealInView = () => {
+    const cutoff = window.innerHeight + 160;
+    for (const el of reveals) {
+      if (!el.classList.contains("is-visible") && el.getBoundingClientRect().top <= cutoff) {
+        show(el);
+      }
+    }
+  };
+  const io = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        show(entry.target);
+        io.unobserve(entry.target);
+      }
+    }
+  }, { threshold: 0.01, rootMargin: "160px 0px" });
+  reveals.forEach(el => io.observe(el));
+  window.addEventListener("scroll", revealInView, { passive: true });
+  window.addEventListener("resize", revealInView, { passive: true });
+  window.addEventListener("hashchange", () => setTimeout(revealInView, 50));
+  revealInView();
+}
 
 applyLanguage();
-if ("IntersectionObserver" in window) {
-  if (!motionPreference.matches) {
-    const reveals = new IntersectionObserver(entries => {
-      for (const entry of entries) if (entry.isIntersecting) { entry.target.classList.add("is-visible"); reveals.unobserve(entry.target); }
-    }, { threshold: .06 });
-    document.body.classList.add("motion-ready");
-    for (const node of document.querySelectorAll(".reveal")) reveals.observe(node);
-  }
-  new IntersectionObserver(entries => {
-    if (entries[0].isIntersecting && !autoplayStarted && !motionPreference.matches) { autoplayStarted = true; play(); }
-    else if (!entries[0].isIntersecting && playing) pause();
-  }, { threshold: .2 }).observe(studio);
-}
