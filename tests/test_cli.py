@@ -62,7 +62,9 @@ def test_host_cli_can_exit_and_resume_in_new_processes(tmp_path: Path) -> None:
 def test_cli_discovers_methods_and_prints_native_contracts(capsys: Any) -> None:
     assert main(["methods"]) == 0
     catalog = json.loads(capsys.readouterr().out)
-    assert len(catalog) == 13 and all(len(item["languages"]) == 9 for item in catalog)
+    assert len(catalog) == 14
+    assert all(len(item["languages"]) == 9 for item in catalog if item["id"] != "autoco")
+    assert next(item for item in catalog if item["id"] == "autoco")["languages"] == []
     assert main(["target", "--language", "ortools", "--solver", "CP_SAT"]) == 0
     prompt = capsys.readouterr().out
     assert "build_model(data)" in prompt and "CpModel" in prompt

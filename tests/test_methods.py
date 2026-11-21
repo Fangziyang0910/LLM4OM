@@ -208,8 +208,9 @@ def test_direct_writes_cpmpy_for_cp_sat(run_method: Any) -> None:
 def test_builtin_methods_do_not_restrict_modeling_libraries() -> None:
     from llm4om.methods import methods
 
-    assert len(methods()) == 13
-    assert all(method.languages is None for method in methods().values())
+    assert len(methods()) == 14
+    assert all(method.languages is None for method in methods().values() if not method.builtin_solver)
+    assert methods()["autoco"].builtin_solver and methods()["autoco"].languages == frozenset()
     assert {method.id for method in methods().values() if method.linear_only} == {
         "optimus", "coe", "optitree", "or_llm_agent", "autoformulation", "sac_opt",
     }

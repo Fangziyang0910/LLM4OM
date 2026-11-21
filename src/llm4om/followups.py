@@ -116,7 +116,16 @@ async def explain_result(context: Context, problem: str, formulation: str | None
                       + parser.get_format_instructions()),
         HumanMessage(json.dumps({"problem": problem, "formulation": formulation, "code": code,
                                  "status": solve["status"], "objective": solve.get("objective"),
-                                 "variables": shown, "total_variables": len(variables)}, ensure_ascii=False)),
+                                 "variables": shown, "total_variables": len(variables),
+                                 **({"pareto": {
+                                     "objectives": solve["pareto"].get("objectives"),
+                                     "total": solve["pareto"].get("total"),
+                                     "sample_solutions": [
+                                         {"objectives": item.get("objectives"), "knee": bool(item.get("knee")),
+                                          **({"decoded": item["decoded"]} if "decoded" in item else {})}
+                                         for item in (solve["pareto"].get("solutions") or [])[:15]
+                                     ],
+                                 }} if solve.get("pareto") else {})}, ensure_ascii=False)),
     ])
     explanation = parser.parse(reply.text)
     names = [decision.variable for decision in explanation.decisions]

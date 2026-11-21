@@ -64,7 +64,7 @@ def test_host_repairs_with_real_solver_feedback_across_restarts(tmp_path: Path, 
     assert (directory / "model.py").read_text().strip() == PRODUCTION_CODE.strip()
 
 
-@pytest.mark.parametrize("method", list(methods()))
+@pytest.mark.parametrize("method", [name for name, item in methods().items() if not item.builtin_solver])
 @pytest.mark.parametrize("language", list(LANGUAGES))
 def test_host_runs_every_method_with_every_library(tmp_path: Path, preset: Any, method: str, language: str) -> None:
     preset("AUTOFORMULATION", n_used_gpt=1, n_top=1, n_reward=1, total_rollouts=1)

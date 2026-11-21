@@ -97,6 +97,16 @@ class AutoFormulation:
     limits: Limits = field(default_factory=lambda: Limits(max_llm_calls=20000, max_solves=1000, run_timeout=6 * 3600))
 
 
+@dataclass(frozen=True)
+class AutoCO:
+    temperature: float = 0.0
+    max_modeling_revisions: int = 1
+    max_instantiate_attempts: int = 3
+    max_kg_steps: int = 6
+    enable_pilot: bool = True
+    seed: int = 42
+
+
 FEEDBACK_REPAIR = FeedbackRepair()
 TRIVAL = TriVAL()
 OPTIMUS = OptiMUS()
@@ -109,3 +119,4 @@ LLMOPT = LLMOpt()
 SAC_OPT = SACOpt()
 BIND = BIND()
 OPTIMIND = OptiMind()
+AUTOCO = AutoCO()

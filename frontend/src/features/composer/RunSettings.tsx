@@ -23,8 +23,11 @@ import type { BackendCatalog, Draft, Method, Options, Preset } from "@/types";
 export const DRAFT_KEY = "llm4om-draft";
 const MAX_COMPARED = 12;
 
+/** Self-contained methods ship their own built-in solver pool and need no external modeling library. */
+const isSelfContained = (method: Method) => !!method.builtin_solver;
 /** Methods declare the modeling libraries they support. */
-const unsupported = (method: Method, language: string) => !!method.languages && !method.languages.includes(language);
+const unsupported = (method: Method, language: string) =>
+  !method.builtin_solver && !!method.languages && !method.languages.includes(language);
 
 function revealMethod(list: HTMLElement | null) {
   const selected = list?.querySelector<HTMLElement>('[data-state="checked"]')?.closest("label");
@@ -74,28 +77,30 @@ export function useRunLauncher({
   const preset = presets.find(item => item.id === draft.preset) ?? presets[0];
   const providerLabel = (id: string) => options.providers.find(item => item.id === id)?.label ?? id;
   const method = options.methods.find(item => item.id === draft.method) ?? options.methods[0];
-  const supports = (language: string) => comparing || !unsupported(method, language);
+  const selfContained = isSelfContained(method);
+  const supports = (language: string) => comparing || selfContained || !unsupported(method, language);
   const language = options.languages.find(item => item.id === draft.language && supports(item.id))
     ?? options.languages.find(item => supports(item.id))!;
   const backend = draft.solver ?? "AUTO";
   const catalog = useQuery({ queryKey: ["backends"], queryFn: () => api<BackendCatalog>("/api/backends"), staleTime: Infinity, retry: false });
   const backends = catalog.data?.libraries[language.id];
-  const backendUnavailable = !!backends && !backends.some(item => item.id === backend && item.available);
+  const backendUnavailable = (!selfContained || comparing) && !!backends && !backends.some(item => item.id === backend && item.available);
   const compared = options.methods.filter(item => draft.methods?.includes(item.id) && !unsupported(item, language.id));
   const comparedPresets = presets.filter(item => draft.presets?.includes(item.id));
   const runs = compared.flatMap(item => (comparedPresets.length ? comparedPresets : preset ? [preset] : [])
     .map(chosen => ({ method: item.id, preset: chosen })));
 
   useEffect(() => {
-    if (method.id !== draft.method || language.id !== draft.language) {
+    const nextLanguage = selfContained && !comparing ? draft.language : language.id;
+    if (method.id !== draft.method || nextLanguage !== draft.language) {
       setDraft(current => ({
         ...current,
         method: method.id,
-        language: language.id,
-        solver: language.id !== current.language ? undefined : current.solver,
+        language: nextLanguage,
+        solver: nextLanguage !== current.language ? undefined : current.solver,
       }));
     }
-  }, [method.id, language.id, draft.method, draft.language, setDraft]);
+  }, [method.id, language.id, selfContained, comparing, draft.method, draft.language, setDraft]);
   useEffect(() => {
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* storage may be unavailable or full */ }
   }, [draft]);
@@ -120,8 +125,8 @@ export function useRunLauncher({
         data: problem.data,
         origin: problem.origin,
         method: method.id,
-        language: language.id,
-        solver: backend,
+        language: !comparing && selfContained ? method.id : language.id,
+        solver: !comparing && selfContained ? "AUTO" : backend,
         preset: preset.id,
       };
       setDraft(request);
@@ -150,7 +155,9 @@ export function useRunLauncher({
     ? t("多方案对比（{count}）", { count: runs.length })
     : isDefaultConfig
       ? t("智能推荐配置")
-      : `${method.name} · ${language.name}`;
+      : selfContained
+        ? method.name
+        : `${method.name} · ${language.name}`;
 
   const label = reviewFirst ? t("检查需求稿") : reading ? t("正在读取数据……") : busy ? t("正在启动求解…")
     : comparing ? t("开始对比（{count} 个方案）", { count: runs.length }) : t("立即求解");
@@ -166,7 +173,8 @@ export function useRunLauncher({
         : <RadioGroupItem id={id} value={item.id} />}
       <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
       {item.id === "direct" && !comparing ? <Badge variant="secondary" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-primary">{t("默认")}</Badge>
-        : item.linear_only ? <Badge variant="outline" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-muted-foreground">{t("线性/整数")}</Badge> : null}
+        : isSelfContained(item) ? <Badge variant="outline" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-primary/80">{t("智能优化")}</Badge>
+          : item.linear_only ? <Badge variant="outline" className="h-4.5 shrink-0 px-1.5 text-[10px] font-normal text-muted-foreground">{t("线性/整数")}</Badge> : null}
     </Label>;
   });
   const methodListClass = "grid grid-cols-1 gap-1.5 sm:grid-cols-2";
@@ -251,36 +259,41 @@ export function useRunLauncher({
 
             <section aria-labelledby="libraries-label" className="min-w-0 px-5 py-4 lg:border-t">
               <h3 id="libraries-label" className="mb-3 text-xs font-semibold text-foreground/80">{t("底层求解引擎（专业项）")}</h3>
-              <RadioGroup value={language.id} onValueChange={value => set({ language: value, solver: undefined })} aria-label={t("建模求解器")}
-                className="grid grid-cols-3 gap-1.5">
-                {options.languages.map(item => {
-                  const allowed = supports(item.id);
-                  const tile = <Label htmlFor={`language-${item.id}`} className={cn(choiceClass, "h-full justify-center px-1.5 text-center",
-                    item.id === language.id && "border-primary/50 bg-primary/8 shadow-2xs hover:bg-primary/10", !allowed && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
-                    <RadioGroupItem id={`language-${item.id}`} value={item.id} disabled={!allowed} className="sr-only" />
-                    <span className="text-xs font-medium sm:text-[13px]">{item.name}</span>
-                  </Label>;
-                  return allowed ? <div key={item.id}>{tile}</div> : <Tooltip key={item.id}>
-                    <TooltipTrigger asChild><div>{tile}</div></TooltipTrigger>
-                    <TooltipContent>{t("{method}：当前策略暂不支持该求解引擎", { method: method.name })}</TooltipContent>
-                  </Tooltip>;
-                })}
-              </RadioGroup>
-              <div className="mt-3.5 flex flex-col gap-1.5">
-                <Label htmlFor="solver-backend" className="text-xs text-muted-foreground">{t("数值计算器")}</Label>
-                <Select value={backend} onValueChange={value => set({ solver: value })}>
-                  <SelectTrigger id="solver-backend" aria-label={t("求解后端")} className="w-full rounded-xl"><SelectValue /></SelectTrigger>
-                  <SelectContent>{(backends
-                    ? (backends.some(item => item.id === backend) ? backends : [{ id: backend, available: false, detail: "" }, ...backends])
-                    : [{ id: backend, available: true, detail: "" }]).map(item =>
-                    <SelectItem key={item.id} value={item.id} disabled={!item.available} title={item.detail}>
-                      {item.id === "AUTO" ? t("自动匹配最优计算器") : item.id}{!item.available ? ` · ${t("当前环境未安装")}` : ""}
-                    </SelectItem>)}</SelectContent>
-                </Select>
-                {catalog.isPending ? <p className="text-xs text-muted-foreground">{t("正在检查可用计算器……")}</p> : null}
-                {catalog.error ? <p className="text-xs text-destructive">{errorText(catalog.error)}</p> : null}
-                {backendUnavailable ? <p className="text-xs text-destructive">{t("所选计算器在当前环境不可用，请切换为自动匹配或其他选项。")}</p> : null}
-              </div>
+              {selfContained && !comparing ? <div className="rounded-xl border border-primary/25 bg-primary/5 p-3.5 text-xs leading-relaxed text-muted-foreground">
+                <p className="font-medium text-foreground">{t("{method} 内置智能优化算法池", { method: method.name })}</p>
+                <p className="mt-1">{t("内置 12 类启发式与进化算法（SA、TS、ILS、LNS、GA、CMA-ES、DE、PSO、ACO 及多目标 NSGA-II、MOEA/D、NSGA-III），由特征知识图谱与沙箱试跑自动选配，无需选择外部建模求解器。")}</p>
+              </div> : <>
+                <RadioGroup value={language.id} onValueChange={value => set({ language: value, solver: undefined })} aria-label={t("建模求解器")}
+                  className="grid grid-cols-3 gap-1.5">
+                  {options.languages.map(item => {
+                    const allowed = supports(item.id);
+                    const tile = <Label htmlFor={`language-${item.id}`} className={cn(choiceClass, "h-full justify-center px-1.5 text-center",
+                      item.id === language.id && "border-primary/50 bg-primary/8 shadow-2xs hover:bg-primary/10", !allowed && "cursor-not-allowed opacity-45 hover:bg-transparent")}>
+                      <RadioGroupItem id={`language-${item.id}`} value={item.id} disabled={!allowed} className="sr-only" />
+                      <span className="text-xs font-medium sm:text-[13px]">{item.name}</span>
+                    </Label>;
+                    return allowed ? <div key={item.id}>{tile}</div> : <Tooltip key={item.id}>
+                      <TooltipTrigger asChild><div>{tile}</div></TooltipTrigger>
+                      <TooltipContent>{t("{method}：当前策略暂不支持该求解引擎", { method: method.name })}</TooltipContent>
+                    </Tooltip>;
+                  })}
+                </RadioGroup>
+                <div className="mt-3.5 flex flex-col gap-1.5">
+                  <Label htmlFor="solver-backend" className="text-xs text-muted-foreground">{t("数值计算器")}</Label>
+                  <Select value={backend} onValueChange={value => set({ solver: value })}>
+                    <SelectTrigger id="solver-backend" aria-label={t("求解后端")} className="w-full rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>{(backends
+                      ? (backends.some(item => item.id === backend) ? backends : [{ id: backend, available: false, detail: "" }, ...backends])
+                      : [{ id: backend, available: true, detail: "" }]).map(item =>
+                      <SelectItem key={item.id} value={item.id} disabled={!item.available} title={item.detail}>
+                        {item.id === "AUTO" ? t("自动匹配最优计算器") : item.id}{!item.available ? ` · ${t("当前环境未安装")}` : ""}
+                      </SelectItem>)}</SelectContent>
+                  </Select>
+                  {catalog.isPending ? <p className="text-xs text-muted-foreground">{t("正在检查可用计算器……")}</p> : null}
+                  {catalog.error ? <p className="text-xs text-destructive">{errorText(catalog.error)}</p> : null}
+                  {backendUnavailable ? <p className="text-xs text-destructive">{t("所选计算器在当前环境不可用，请切换为自动匹配或其他选项。")}</p> : null}
+                </div>
+              </>}
             </section>
           </div>
         </Card>

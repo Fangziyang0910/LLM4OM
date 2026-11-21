@@ -96,7 +96,7 @@ class Context:
     recorder: Recorder
     sandbox: Sandbox
     chat_model: Callable[[str], BaseChatModel]  # role -> a chat model whose calls the recorder records
-    target: CodeTarget
+    target: CodeTarget | None
     data: dict[str, str]
     solved: dict[str, SolveResult] = field(default_factory=dict, init=False)  # latest result for each solved code
     _models: dict[str, BaseChatModel] = field(default_factory=dict, init=False, repr=False)
@@ -112,15 +112,20 @@ class Context:
             self._models[role] = self.chat_model(role)
         return self._models[role]
 
-    async def solve(self, code: str, *, title: str = "求解") -> SolveResult:
+    async def solve(self, code: str, *, title: str = "求解", language: str | None = None,
+                    solver: str | None = None, time_limit: float | None = None) -> SolveResult:
         """Build the model from `code` in the sandbox and solve it with the selected language's solver."""
         recorder = self.recorder
         recorder.count("solves")
+        lang = language or (self.target.language if self.target is not None else None)
+        if not lang:
+            raise ValueError("No modeling language or built-in solver was selected.")
+        chosen_solver = solver if solver is not None else (self.target.solver if self.target is not None else None)
+        limit = recorder.limits.solve_time_limit if time_limit is None else time_limit
         start = time.monotonic()
         id = recorder.step("solve", title, code=code, running=True)
         try:
-            result = await self.sandbox.solve(code, self.data, self.target.language, recorder.limits.solve_time_limit,
-                                              solver=self.target.solver)
+            result = await self.sandbox.solve(code, self.data, lang, limit, solver=chosen_solver)
         except BaseException as error:
             recorder.step("solve", title, f"{type(error).__name__}: {error}", id=id, running=False, failed=True,
                           seconds=round(time.monotonic() - start, 1))

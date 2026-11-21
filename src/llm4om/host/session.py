@@ -17,7 +17,6 @@ from langgraph.types import Command
 
 from llm4om.host.model import HostChatModel, validate_responses
 from llm4om.host.records import Records, open_records
-from llm4om.languages import CodeTarget
 from llm4om.method_steps import NodeSteps, latest_artifacts
 from llm4om.methods import Method, methods
 from llm4om.problem import problem_text, validate_data_files, validate_description
@@ -31,9 +30,10 @@ CHECKPOINT_TYPES = [("llm4om.sandbox", "SolveResult"),
 
 
 @task
-async def solve_code(code: str, title: str) -> SolveResult:
+async def solve_code(code: str, title: str, language: str | None = None,
+                     solver: str | None = None, time_limit: float | None = None) -> SolveResult:
     context = get_runtime().context
-    return await context.records.execute(context, code, title)
+    return await context.records.execute(context, code, title, language=language, solver=solver, time_limit=time_limit)
 
 
 @task
@@ -48,14 +48,19 @@ async def run_script(script: str) -> SolveResult:
 
 
 class HostContext(Context):
-    def __init__(self, records: Records, spec: dict[str, Any]) -> None:
+    def __init__(self, records: Records, spec: dict[str, Any], method: Method) -> None:
         self.records = records
+        self.spec = spec
         super().__init__(records.restore(Limits(**spec["limits"])), Sandbox(spec["sandbox"]),
-                         lambda role: HostChatModel(role=role), CodeTarget(spec["language"], spec["solver"]), spec["data"])
+                         lambda role: HostChatModel(role=role),
+                         method.code_target(spec["language"], spec["solver"]), spec["data"])
         self.solved.update(records.solved())
 
-    async def solve(self, code: str, *, title: str = "Solve") -> SolveResult:
-        result = await solve_code(code, title)
+    async def solve(self, code: str, *, title: str = "Solve", language: str | None = None,
+                    solver: str | None = None, time_limit: float | None = None) -> SolveResult:
+        lang = language or (self.target.language if self.target is not None else self.spec.get("language"))
+        chosen = solver if solver is not None else (self.target.solver if self.target is not None else self.spec.get("solver"))
+        result = await solve_code(code, title, lang, chosen, time_limit)
         self.solved[code] = result
         return result
 
@@ -131,7 +136,7 @@ async def drive(directory: Path, *, initial: bool = False, responses: dict[str, 
         method = available[spec["method"]]
         if spec["version"] != version("llm4om") or spec["parameters"] != method.parameters():
             raise ValueError("The installed version or method parameters changed. Start a new host session.")
-        context = HostContext(records, spec)
+        context = HostContext(records, spec, method)
         graph = host_graph(method)
         async with AsyncSqliteSaver.from_conn_string(str(directory / "checkpoints.sqlite")) as saver:
             saver.serde = JsonPlusSerializer(allowed_msgpack_modules=CHECKPOINT_TYPES)
@@ -201,9 +206,10 @@ async def start(directory: str | Path, description: str, *, method: str = "direc
     try:
         records.put("spec", {"version": version("llm4om"), "model": "host", "method": method,
                              "source": selected.source, "parameters": selected.parameters(), "limits": asdict(limits),
-                             "description": description, "data": data or {}, "language": target.language,
-                             "solver": target.solver, "sandbox": sandbox, "worker_image": runner.image
-                             if sandbox == "docker" else None})
+                             "description": description, "data": data or {},
+                             "language": target.language if target is not None else selected.id,
+                             "solver": target.solver if target is not None else "AUTO",
+                             "sandbox": sandbox, "worker_image": runner.image if sandbox == "docker" else None})
     finally:
         records.db.close()
     return await drive(directory, initial=True)

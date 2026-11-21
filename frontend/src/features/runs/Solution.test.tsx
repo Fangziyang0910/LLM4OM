@@ -59,3 +59,31 @@ test("null variable values render cleanly without crashing", () => {
   expect(screen.getByRole("cell", { name: "y" })).toBeTruthy();
   expect(screen.getByRole("cell", { name: "—" })).toBeTruthy();
 });
+
+test("multi-objective pareto front renders knee badge, switches active row details and exports CSV", () => {
+  render(<Solution solve={{
+    status: "feasible",
+    objective: null,
+    variables: { x: 1 },
+    output: "",
+    error: null,
+    solver: "MOEA/D",
+    pareto: {
+      objectives: [{ name: "cost", sense: "min" }, { name: "risk", sense: "min" }],
+      total: 2,
+      solutions: [
+        { objectives: [0.25, 2.25], knee: false, variables: { x: 0.5 }, decoded: { x: 0.5, label: "low-cost" } },
+        { objectives: [1, 1], knee: true, variables: { x: 1 }, decoded: { x: 1, label: "balanced" } },
+      ],
+    },
+  }} />);
+  expect(screen.getByText("多目标 Pareto 前沿")).toBeTruthy();
+  expect(screen.getByText("共 2 个非支配解")).toBeTruthy();
+  expect(screen.getByText(/"label": "balanced"/)).toBeTruthy();
+  fireEvent.click(screen.getByText("#1"));
+  expect(screen.getByText(/"label": "low-cost"/)).toBeTruthy();
+  fireEvent.click(screen.getByLabelText("导出 Pareto CSV"));
+  const csv = vi.mocked(download).mock.lastCall![1];
+  expect(csv).toContain("cost (min),risk (min)");
+  expect(csv).toContain("2,yes,1,1");
+});

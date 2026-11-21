@@ -1103,7 +1103,39 @@ def describe_error(error, filename="model.py"):
     return "".join(traceback.format_list(own) + traceback.format_exception_only(error)).rstrip()
 
 
+def _ensure_autoco_path():
+    base = os.path.dirname(os.path.abspath(__file__))
+    if base not in sys.path:
+        sys.path.insert(0, base)
+
+
+def run_autoco(request):
+    """Build and solve one AutoCO Problem using the bundled 12-family intelligent optimization pool."""
+    _ensure_autoco_path()
+    result = {"status": "error", "objective": None, "variables": {}, "output": "", "error": None, "diagnosis": None,
+              "solver": request.get("solver") or "AUTO", "pareto": None}
+    output = io.StringIO()
+    try:
+        from autoco.runner import solve_problem
+
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+            solved = solve_problem(request["code"], request.get("data") or {}, request.get("solver"),
+                                   request.get("time_limit", 60))
+        result.update(solved)
+        printed = output.getvalue().strip()
+        if printed:
+            result["output"] = ((result.get("output") or "") + ("\n" if result.get("output") else "") + printed)[-MAX_OUTPUT_CHARS:]
+        else:
+            result["output"] = (result.get("output") or "")[-MAX_OUTPUT_CHARS:]
+    except BaseException as error:
+        result["error"] = "[solve] " + describe_error(error)
+        result["output"] = output.getvalue()[-MAX_OUTPUT_CHARS:]
+    return result
+
+
 def run(request):
+    if request.get("language") == "autoco":
+        return run_autoco(request)
     result = {"status": "error", "objective": None, "variables": {}, "output": "", "error": None, "diagnosis": None,
               "solver": request['solver']}
     output = io.StringIO()
@@ -1149,6 +1181,7 @@ def run(request):
 
 def run_script(request):
     """Run a method's own check script as __main__; stdout and the traceback form its output, like `python script.py`."""
+    _ensure_autoco_path()
     output = io.StringIO()
     error = None
     with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):

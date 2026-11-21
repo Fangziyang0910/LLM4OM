@@ -17,6 +17,7 @@
     "sac_opt": "llm4om.server.graphs:sac_opt",
     "bind": "llm4om.server.graphs:bind",
     "optimind": "llm4om.server.graphs:optimind",
+    "autoco": "llm4om.server.graphs:autoco",
     "requirements": "llm4om.server.graphs:requirements",
     "solution_chat": "llm4om.server.graphs:solution_chat",
     "optimization": "llm4om.server.graphs:optimization"

@@ -505,7 +505,8 @@ def _build_tools_and_middleware(
         Consult this before choosing a non-default method, library or explicit backend. A library is not a backend.
         """
         return {"methods": [{"id": item.id, "name": item.name, "description": item.description,
-            "linear_only": item.linear_only, "languages": sorted(item.languages) if item.languages is not None else None}
+            "linear_only": item.linear_only, "builtin_solver": item.builtin_solver,
+            "languages": sorted(item.languages) if item.languages is not None else None}
             for item in methods().values()],
             "libraries": [{"id": key, "name": item.name} for key, item in LANGUAGES.items()],
             "backends": await session.resources.sandbox.catalog()}
@@ -534,7 +535,9 @@ def _build_tools_and_middleware(
         library = next((item.id for item in LANGUAGES.values()
                         if request["language"].strip().casefold() in (item.id, item.name.casefold())), request["language"])
         target = selected.code_target(library, request["solver"])
-        request = {**request, "method": selected.id, "language": target.language, "solver": target.solver}
+        request = {**request, "method": selected.id,
+                   "language": target.language if target is not None else selected.id,
+                   "solver": target.solver if target is not None else "AUTO"}
         session.pending_model = request
         identity = json.dumps(request, sort_keys=True, ensure_ascii=False)
         identifier = str(uuid5(NAMESPACE_URL, f"{runtime.config['configurable']['thread_id']}:{identity}"))

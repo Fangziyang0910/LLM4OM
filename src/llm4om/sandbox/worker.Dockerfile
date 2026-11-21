@@ -3,7 +3,7 @@ FROM python:3.12-slim AS core
 RUN python -m pip install --no-cache-dir Pyomo==6.10.1 highspy==1.12.0 ortools==9.15.6755 cpmpy==1.1.0 gurobipy==13.0.3 \
     PuLP==3.3.2 cvxpy==1.8.2 clarabel==0.11.1 scipy==1.18.1 osqp==1.1.3 scs==3.3.1 \
     pyscipopt==6.3.0 casadi==3.8.1 coptpy==8.0.7 Mosek==11.2.6 \
-    numpy==2.3.4 pandas==2.3.3 sympy==1.14.0 z3-solver==5.1.0.0 \
+    numpy==2.3.4 pandas==2.3.3 sympy==1.14.0 z3-solver==5.1.0.0 cma==4.6.0 pymoo==0.6.2 \
     && python -m pip uninstall -y pip
 
 FROM python:3.12-slim
@@ -26,5 +26,7 @@ RUN mkdir /tmp/gcs-json && tar -xzf /tmp/gcs-json.tar.gz --strip-components=1 -C
     && python -m pip uninstall -y pip \
     && rm -rf /tmp/gcs-json /tmp/gcs-json.tar.gz
 COPY --chmod=644 worker.py /opt/llm4om/worker.py
+COPY autoco /opt/llm4om/autoco
+RUN chmod -R a+rX /opt/llm4om
 USER 65532:65532
 WORKDIR /tmp

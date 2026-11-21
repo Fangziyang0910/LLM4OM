@@ -47,13 +47,15 @@ def test_options_list_methods_languages_and_providers(tmp_path: Path, monkeypatc
     with client(tmp_path) as api:
         options = api.get("/api/options").json()
     assert options["search_configured"] is True and "server-search-secret" not in str(options)
-    assert {"direct", "trival", "optimus", "coe", "optitree", "or_llm_agent", "autoformulation"} <= {m["id"] for m in options["methods"]}
+    assert {"direct", "trival", "optimus", "coe", "optitree", "or_llm_agent", "autoformulation", "autoco"} <= {m["id"] for m in options["methods"]}
     assert {item["id"] for item in options["languages"]} == {
         "pyomo", "gurobipy", "ortools", "cpmpy", "pulp", "cvxpy", "pyscipopt", "casadi", "coptpy",
     }
     optimus = next(m for m in options["methods"] if m["id"] == "optimus")
-    assert optimus["languages"] is None and optimus["linear_only"]
-    assert all(item["languages"] is None for item in options["methods"])
+    autoco = next(m for m in options["methods"] if m["id"] == "autoco")
+    assert optimus["languages"] is None and optimus["linear_only"] and not optimus["builtin_solver"]
+    assert autoco["languages"] == [] and not autoco["linear_only"] and autoco["builtin_solver"]
+    assert all(item["languages"] is None for item in options["methods"] if item["id"] != "autoco")
     assert all('interfaces' not in item and item['solver'] == 'AUTO' for item in options['languages'])
 
 

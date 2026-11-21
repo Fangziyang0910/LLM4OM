@@ -27,9 +27,12 @@ class Method:
     limits: Limits | None = None  # replaces the service limits for methods that need many more calls
     parameters: Callable[[], dict[str, Any]] = dict  # snapshot the parameters used by this method
     linear_only: bool = False  # problem scope; independent of the modeling library
+    builtin_solver: bool = False  # method ships its own solver engine instead of using the nine modeling libraries
 
-    def code_target(self, language: str, solver: str | None = None) -> CodeTarget:
+    def code_target(self, language: str, solver: str | None = None) -> CodeTarget | None:
         """Build this method's code target, rejecting a library it does not support; None means all, an empty set none."""
+        if self.builtin_solver:
+            return None
         target = CodeTarget(language, solver)
         if self.languages is not None and target.language not in self.languages:
             raise ValueError(f"{self.name} does not support {target.language}; choose a supported modeling library.")
@@ -39,6 +42,7 @@ class Method:
 def methods() -> dict[str, Method]:
     """Built-in methods plus any installed under the `llm4om.methods` entry-point group."""
     from llm4om.methods import (
+        autoco,
         autoformulation,
         bind,
         coe,
@@ -55,6 +59,6 @@ def methods() -> dict[str, Method]:
 
     found = [direct.DIRECT, direct.FEEDBACK_REPAIR, trival.TRIVAL, optimus.OPTIMUS, coe.COE, optitree.OPTITREE,
              or_llm_agent.OR_LLM_AGENT, orthought.ORTHOUGHT, llmopt.LLMOPT, autoformulation.AUTOFORMULATION,
-             sac_opt.SAC_OPT, bind.BIND, optimind.OPTIMIND]
+             sac_opt.SAC_OPT, bind.BIND, optimind.OPTIMIND, autoco.AUTOCO]
     found += [entry.load() for entry in entry_points(group="llm4om.methods")]
     return {method.id: method for method in found}

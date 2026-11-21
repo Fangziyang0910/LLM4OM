@@ -64,7 +64,7 @@ def method_script(method: str, library: str) -> Any:
     return by_role(replies[method])
 
 
-@pytest.mark.parametrize('method', list(methods()))
+@pytest.mark.parametrize('method', [name for name, item in methods().items() if not item.builtin_solver])
 @pytest.mark.parametrize('library', list(LANGUAGES))
 def test_every_method_can_use_every_modeling_library(run_method: Any, preset: Any, method: str, library: str) -> None:
     preset('AUTOFORMULATION', n_used_gpt=1, n_top=1, n_reward=1, total_rollouts=1)

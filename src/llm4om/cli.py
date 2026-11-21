@@ -135,6 +135,11 @@ def _build_worker(args: argparse.Namespace) -> int:
     with tempfile.TemporaryDirectory() as directory:
         for name in ("worker.Dockerfile", "worker.py"):
             (Path(directory) / name).write_text(sandbox.joinpath(name).read_text("utf-8"), encoding="utf-8")
+        autoco_dir = Path(directory) / "autoco"
+        autoco_dir.mkdir()
+        for item in sandbox.joinpath("autoco").iterdir():
+            if item.is_file() and item.name.endswith(".py"):
+                (autoco_dir / item.name).write_text(item.read_text("utf-8"), encoding="utf-8")
         return subprocess.run(["docker", "build", "-f", str(Path(directory) / "worker.Dockerfile"), "-t", args.tag, directory]).returncode
 
 
@@ -210,7 +215,8 @@ def main(argv: list[str] | None = None) -> int:
             from llm4om.methods import methods
 
             _json([{"id": method.id, "name": method.name, "source": method.source,
-                    "linear_only": method.linear_only, "parameters": method.parameters(),
+                    "linear_only": method.linear_only, "builtin_solver": method.builtin_solver,
+                    "parameters": method.parameters(),
                     "languages": sorted(LANGUAGES if method.languages is None else method.languages)} for method in methods().values()])
             return 0
         if args.command == "target":

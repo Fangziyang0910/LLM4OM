@@ -2,7 +2,7 @@
 
 方法负责建模流程：调用 LLM、输出中间产物、请求求解、根据反馈修正。平台提供 LLM、代码契约和求解沙箱。接口见[架构](architecture.md#方法接口)。
 
-每个方法都是一张 LangGraph 图，即使只有一个节点。13 个方法均开放 Pyomo、gurobipy、OR-Tools、CPMpy、PuLP、CVXPY、PySCIPOpt、CasADi、coptpy 九个建模库。代码提示和组件组装共享库指引，库内 API 由代码表达，平台识别原生模型。OptiMUS、CoE、OptiTree、OR-LLM-Agent、AutoFormulation、SAC-Opt 保留 LP/MILP 建模范围；它与库选择独立。所选库及后端仍须能够表达并求解该数学问题。
+每个方法都是一张 LangGraph 图，即使只有一个节点。前 13 个方法开放 Pyomo、gurobipy、OR-Tools、CPMpy、PuLP、CVXPY、PySCIPOpt、CasADi、coptpy 九个建模库；第 14 个方法 AutoCO 为内置求解器方法（`languages=frozenset()`），自带 12 类启发式与进化算法池并在隔离沙箱中完成代码体检、短时试跑与正式求解。代码提示和组件组装共享库指引，库内 API 由代码表达，平台识别原生模型。OptiMUS、CoE、OptiTree、OR-LLM-Agent、AutoFormulation、SAC-Opt 保留 LP/MILP 建模范围；它与库选择独立。所选库及后端仍须能够表达并求解该数学问题。
 
 ## 方法一览
 
@@ -21,6 +21,7 @@
 | `sac_opt` | SAC-Opt | 锚点 → 分项生成 → 约束回译/比较/选择性修正 → 组装 → 求解/调试 | `temperature`=0，解析 5 次、语义 5 轮、执行 3 次 |
 | `bind` | BIND | schema → 生成 → 求解 → 错误反馈修正 | `temperature`=0、`top_p`=1、`max_rounds`=3 |
 | `optimind` | OptiMind | 分类 → 提示 → 生成 → 求解反馈 → 反思 | `temperature`=0.6、`top_p`=0.95、`max_turns`=5 |
+| `autoco` | AutoCO | `semantic_grounding → formulate ⇄ review_formulation → instantiate（沙箱体检）→ select_algorithm（知识图谱 + 沙箱试跑）→ solve_problem` | `max_modeling_revisions`=1、`max_instantiate_attempts`=3、`max_kg_steps`=6、`enable_pilot`=true、`seed`=42 |
 
 参数全部集中在 [`src/llm4om/methods/presets.py`](../src/llm4om/methods/presets.py)，每个方法一个不可变的 dataclass。移植方法的取值依据上游固定提交，部署适配差异另行说明。运行时不能改参数：命令行、Python 接口和页面都不接受方法参数；要换参数，改这个文件。
 

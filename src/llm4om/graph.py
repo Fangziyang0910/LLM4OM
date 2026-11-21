@@ -159,7 +159,8 @@ def platform_graph(method: Method) -> Any:
             return {**fresh, "failure": str(error)}
         spec = {"version": version("llm4om"), "method": method.id, "source": method.source,
                 "parameters": method.parameters(), "limits": asdict(method.limits or resources.limits),
-                "language": target.language, "solver": target.solver,
+                "language": target.language if target is not None else method.id,
+                "solver": target.solver if target is not None else "AUTO",
                 "preset": preset, "preset_name": preset_name,
                 "llm": settings.public(),
                 "explain": choice.explain,
@@ -231,10 +232,14 @@ def platform_graph(method: Method) -> Any:
     async def solve(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
         """Solve the final code in the sandbox when the method did not."""
         run = context(state, runtime)
+        spec = state.get("spec") or {}
         async with save_progress(runtime.store, thread_id(), state, run.recorder):
             try:
-                solved = await asyncio.wait_for(run.solve(state.get("code") or "", title="求解最终代码"),
-                                                state["_deadline"] - time.time())
+                solved = await asyncio.wait_for(
+                    run.solve(state.get("code") or "", title="求解最终代码",
+                              language=None if run.target is not None else spec.get("language"),
+                              solver=None if run.target is not None else spec.get("solver")),
+                    state["_deadline"] - time.time())
                 result = {"solve": asdict(solved)}
             except Exception as error:
                 result = failure(error, run.recorder)

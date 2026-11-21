@@ -1003,6 +1003,27 @@ export const en: Record<string, string> = {
   "模型列表暂不可用，请重试加载。": "Model presets are currently unavailable. Please retry.",
   "请填写不小于 0 的数字。": "Enter a number greater than or equal to 0.",
   "请填写不小于 1 的整数。": "Enter an integer greater than or equal to 1.",
+  "智能优化": "Metaheuristics",
+  "{method} 内置智能优化算法池": "{method} Built-In Metaheuristic Pool",
+  "内置 12 类启发式与进化算法（SA、TS、ILS、LNS、GA、CMA-ES、DE、PSO、ACO 及多目标 NSGA-II、MOEA/D、NSGA-III），由特征知识图谱与沙箱试跑自动选配，无需选择外部建模求解器。": "Includes 12 built-in heuristic and evolutionary algorithms (SA, TS, ILS, LNS, GA, CMA-ES, DE, PSO, ACO, plus multi-objective NSGA-II, MOEA/D, NSGA-III), auto-configured via knowledge graph and sandbox pilot without selecting an external modeling library.",
+  "面向组合与黑盒优化的两阶段紧凑建模、特征知识图谱与沙箱试跑选配，并调用内置 12 类智能优化算法求解。": "Two-stage compact combinatorial modeling, feature knowledge graph & sandbox pilot configuration, and a built-in 12-family intelligent optimization solver pool.",
+  "语义分析": "Semantic grounding",
+  "四元组建模": "4-tuple formulation",
+  "模型自审": "Formulation review",
+  "编写问题代码": "Instantiate problem code",
+  "知识图谱选配算法": "KG algorithm configuration",
+  "智能优化求解": "Metaheuristic solve",
+  "多目标 Pareto 前沿": "Multi-Objective Pareto Front",
+  "Pareto 前沿": "Pareto Front",
+  "共 {total} 个非支配解": "{total} non-dominated solutions",
+  "已展示 {shown} 个代表解": "Showing {shown} representative solutions",
+  "导出 Pareto CSV": "Export Pareto CSV",
+  "以下为多目标权衡的非支配解集，带“推荐折中”标记的为归一化拐点方案；点击任意一行可查看对应决策明细。": "Non-dominated trade-off solutions; the highlighted row marks the normalized knee compromise. Click any row to inspect its decisions.",
+  "方案编号": "Solution",
+  "推荐折中": "Knee",
+  "推荐折中解：": "Knee compromise: ",
+  "方案 #{index} 决策明细": "Solution #{index} Decisions",
+  "提示：已求得满足全部约束的可行方案；如需核对业务假设，可在“数学模型”标签页查看完整公式。": "Note: Found a feasible plan satisfying all constraints. Review full equations under Mathematical Model to confirm business assumptions.",
 };
 
 /** Step titles with numbers in them. */
@@ -1013,4 +1034,5 @@ export const patterns: [RegExp, string][] = [
   [/^执行代码（调试 (\d+)）$/, "Run code (debug $1)"],
   [/^求解完整模型（节点 (\d+)）$/, "Solve the complete model (node $1)"],
   [/^测试代码（第 (\d+) 轮）$/, "Test code (trial $1)"],
+  [/^AutoCO 求解（(.+)）$/, "AutoCO solve ($1)"],
 ];

@@ -16,8 +16,8 @@ from typing import Any
 
 WORKER = Path(__file__).with_name("worker.py")
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
-# The image contains worker.py, so a change to worker.py or worker.Dockerfile needs a new tag (and compose.yaml's).
-WORKER_IMAGE = "llm4om-worker:14"
+# The image contains worker.py and autoco/, so a change to them or worker.Dockerfile needs a new tag (and compose.yaml's).
+WORKER_IMAGE = "llm4om-worker:15"
 START_MARGIN = 60  # seconds beyond the time limit for starting the sandbox, importing libraries and building the model
 MAX_STDOUT_BYTES = 32 * 1024 * 1024
 MAX_STDERR_BYTES = 1 * 1024 * 1024
@@ -34,6 +34,7 @@ class SolveResult:
     # and only the project's Feedback Repair opts in. Published methods keep their original feedback.
     diagnosis: dict[str, Any] | None = None
     solver: str | None = None  # actual backend, also when the library selected it automatically
+    pareto: dict[str, Any] | None = None  # multi-objective Pareto front: {objectives, solutions, total}
 
     @property
     def executed(self) -> bool:
@@ -43,7 +44,7 @@ class SolveResult:
     @property
     def has_solution(self) -> bool:
         """A solution was found; a satisfaction problem (CPMpy without objective) has no objective value."""
-        return self.objective is not None or (self.status == "feasible" and bool(self.variables))
+        return self.objective is not None or (self.status == "feasible" and (bool(self.variables) or bool(self.pareto)))
 
     def feedback(self, max_variables: int = 60) -> str:
         """Plain-text execution feedback for prompts."""
@@ -52,6 +53,14 @@ class SolveResult:
             lines.append("Error:\n" + self.error)
         if self.objective is not None:
             lines.append(f"Objective value: {self.objective:g}")
+        if self.pareto and self.pareto.get("solutions"):
+            objs = self.pareto.get("objectives") or []
+            lines.append(f"Pareto front: {self.pareto.get('total', len(self.pareto['solutions']))} non-dominated solutions")
+            knee = next((item for item in self.pareto["solutions"] if item.get("knee")), self.pareto["solutions"][0])
+            pairs = ", ".join(f"{meta.get('name', f'f{idx + 1}')} = {val:g}"
+                              for idx, (meta, val) in enumerate(zip(objs, knee.get("objectives") or [])) if val is not None)
+            if pairs:
+                lines.append(f"Knee compromise objectives: {pairs}")
         if self.has_solution:
             nonzero = [(name, value) for name, value in self.variables.items() if value]
             shown = "\n".join(f"  {name} = {value:g}" for name, value in nonzero[:max_variables])
@@ -89,6 +98,14 @@ class Sandbox:
     async def solve(self, code: str, data: dict[str, str], language: str, time_limit: float, *,
                     solver: str | None = None) -> SolveResult:
         """Build the model from `code` with `data` and solve it with the language's solver, within `time_limit`."""
+        if language == "autoco":
+            import re
+
+            chosen = solver or "AUTO"
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_./:-]*", chosen):
+                raise ValueError("Use a valid AutoCO algorithm identifier.")
+            return self._to_result(await self._run({"code": code, "data": data, "language": "autoco",
+                                                    "solver": chosen, "time_limit": time_limit}, time_limit))
         from llm4om.languages import CodeTarget
 
         target = CodeTarget(language, solver)

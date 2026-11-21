@@ -62,7 +62,8 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
     def options() -> dict[str, Any]:
         return {
             "methods": [{"id": m.id, "name": m.name, "description": m.description, "source": m.source,
-                         "linear_only": m.linear_only, "languages": sorted(m.languages) if m.languages is not None else None}
+                         "linear_only": m.linear_only, "builtin_solver": m.builtin_solver,
+                         "languages": sorted(m.languages) if m.languages is not None else None}
                         for m in methods().values()],
             "languages": [{"id": item.id, "name": item.name, "solver": "AUTO"}
                           for item in LANGUAGES.values()],

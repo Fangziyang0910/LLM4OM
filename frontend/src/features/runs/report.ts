@@ -76,6 +76,16 @@ export function report(meta: RunMeta, values: RunValues, options: Options, link?
         + `| ${t("变量")} | ${t("取值")} |\n|---|---:|\n` + nonzero.slice(0, 500).map(([name, value]) => `| ${inlineCode(name, true)} | ${value} |`).join("\n");
       if (nonzero.length > 500) text += `\n\n${t("报告只列出前 500 个非零变量；完整结果可下载 CSV。")}`;
     }
+    if (solve.pareto?.solutions.length) {
+      const headers = [t("方案编号"), ...solve.pareto.objectives.map(obj => `${obj.name} (${obj.sense})`)];
+      const rows = solve.pareto.solutions.map((sol, idx) => [
+        `#${idx + 1}${sol.knee ? ` (${t("推荐折中")})` : ""}`,
+        ...sol.objectives.map(val => val == null ? "—" : String(val)),
+      ]);
+      text += `\n\n### ${t("多目标 Pareto 前沿")} (${t("共 {total} 个非支配解", { total: solve.pareto.total })})\n\n`
+        + `| ${headers.join(" | ")} |\n|${headers.map((_, i) => i ? "---:" : "---").join("|")}|\n`
+        + rows.map(row => `| ${row.join(" | ")} |`).join("\n");
+    }
     if (solve.diagnosis?.items.length) {
       text += `\n\n${t("冲突的约束（{tool}）", { tool: solve.diagnosis.tool })}${COLON}\n\n` + solve.diagnosis.items.map(item => `- ${inlineCode(item)}`).join("\n");
     }

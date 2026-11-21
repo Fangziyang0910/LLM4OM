@@ -10,9 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { toCsv } from "@/lib/csv";
-import { STATUS, formatNumber, tone } from "@/format";
+import { STATUS, formatNumber } from "@/format";
 import { t } from "@/i18n";
 import { asMatrix, groupVariables, type VariableGroup } from "@/features/runs/tables";
+import { ParetoFront } from "@/features/runs/ParetoFront";
 import type { Diagnosis, Solve } from "@/features/runs/types";
 import { Plain, download } from "@/components/Content";
 
@@ -21,7 +22,7 @@ const value = (number: number | null) => number == null
   : <span className={cn("font-mono tabular", number === 0 && "text-muted-foreground/50")}>{formatNumber(number)}</span>;
 
 /** A solve result: status and objective, the variables (grouped into matrices where they have two indices), and the log. */
-export function Solution({ solve }: { solve: Solve }) {
+export function Solution({ solve, showPareto = true }: { solve: Solve; showPareto?: boolean }) {
   const [zeros, setZeros] = useState(false);
   const [filter, setFilter] = useState("");
   const [layout, setLayout] = useState<"grouped" | "list">("grouped");
@@ -43,6 +44,7 @@ export function Solution({ solve }: { solve: Solve }) {
     {solve.error ? <Alert variant="destructive"><TriangleAlert /><AlertTitle>{t("模型计算出错")}</AlertTitle>
       <AlertDescription><Plain tone="bad" className="mt-1 w-full">{solve.error}</Plain></AlertDescription></Alert> : null}
     {solve.diagnosis ? <Conflict diagnosis={solve.diagnosis} /> : null}
+    {showPareto && solve.pareto?.solutions.length ? <ParetoFront pareto={solve.pareto} /> : null}
 
     {entries.length ? <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -84,8 +86,10 @@ export function Solution({ solve }: { solve: Solve }) {
         <ChevronDown className="size-3.5 -rotate-90 transition-transform group-data-[state=open]/output:rotate-0" />{t("查看求解引擎日志")}</CollapsibleTrigger>
       <CollapsibleContent className="pt-2"><Plain>{solve.output}</Plain></CollapsibleContent>
     </Collapsible> : null}
-    {tone(solve.status) === "good" ? <p className="text-xs leading-relaxed text-muted-foreground">
-      {t("提示：求解引擎已证明当前数学模型达到{status}；如需核对业务假设，可在“数学模型”标签页查看完整公式。", { status: STATUS[solve.status] })}</p> : null}
+    {solve.status === "optimal" ? <p className="text-xs leading-relaxed text-muted-foreground">
+      {t("提示：求解引擎已证明当前数学模型达到{status}；如需核对业务假设，可在“数学模型”标签页查看完整公式。", { status: STATUS[solve.status] })}</p>
+      : solve.status === "feasible" ? <p className="text-xs leading-relaxed text-muted-foreground">
+        {t("提示：已求得满足全部约束的可行方案；如需核对业务假设，可在“数学模型”标签页查看完整公式。")}</p> : null}
   </div>;
 }
 

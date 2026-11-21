@@ -7,10 +7,23 @@ export type Step = {
 };
 /** The constraints of an infeasible model that cannot hold together, found by `tool`. */
 export type Diagnosis = { tool: string; items: string[]; total: number; error: string | null };
+export type ParetoObjective = { name: string; sense: "min" | "max" };
+export type ParetoSolution = {
+  objectives: (number | null)[];
+  knee?: boolean;
+  variables?: Record<string, number | null>;
+  decoded?: unknown;
+};
+export type ParetoFront = {
+  objectives: ParetoObjective[];
+  solutions: ParetoSolution[];
+  total: number;
+};
 export type Solve = {
   status: string; objective: number | null; variables: Record<string, number | null>; output: string; error: string | null;
   diagnosis?: Diagnosis | null;
   solver?: string | null;
+  pareto?: ParetoFront | null;
 };
 export type Usage = { llm_calls: number; solves: number; input_tokens: number; output_tokens: number };
 export type Timing = { started_at: number; elapsed: number; finished_at?: number };

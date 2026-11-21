@@ -1,4 +1,7 @@
-export type Method = { id: string; name: string; description: string; source: string | null; languages: string[] | null; linear_only?: boolean };
+export type Method = {
+  id: string; name: string; description: string; source: string | null; languages: string[] | null;
+  linear_only?: boolean; builtin_solver?: boolean;
+};
 export type Language = { id: string; name: string; solver: string };
 export type Backend = { id: string; available: boolean; detail: string };
 export type BackendCatalog = { libraries: Record<string, Backend[]> };

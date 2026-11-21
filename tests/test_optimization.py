@@ -329,8 +329,9 @@ def test_available_methods_and_backends_come_from_the_registry(make_resources, s
         if messages[-1].type == "human":
             return tool_call("modeling_capabilities")
         facts = json.loads(messages[-1].text)
-        assert len(facts["methods"]) == 13 and len(facts["libraries"]) == 9
+        assert len(facts["methods"]) == 14 and len(facts["libraries"]) == 9
         assert next(m for m in facts["methods"] if m["id"] == "optimus")["linear_only"]
+        assert next(m for m in facts["methods"] if m["id"] == "autoco")["builtin_solver"]
         assert "backends" in facts
         return "可以选择十三种方法和九个建模库。"
 

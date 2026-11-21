@@ -81,14 +81,19 @@ class Records:
                 for request, result in self.db.execute(
                     "SELECT request, result FROM host_operations WHERE kind = 'solve' AND result IS NOT NULL ORDER BY rowid")}
 
-    async def execute(self, context: Any, code: str, title: str) -> SolveResult:
+    async def execute(self, context: Any, code: str, title: str, *, language: str | None = None,
+                      solver: str | None = None, time_limit: float | None = None) -> SolveResult:
         id, cached = self.begin("solve", {"code": code, "title": title})
         if cached is not None:
             return SolveResult(**cached)
+        lang = language or (context.target.language if context.target is not None else None)
+        if not lang:
+            raise ValueError("No modeling language or built-in solver was selected.")
+        chosen_solver = solver if solver is not None else (context.target.solver if context.target is not None else None)
+        limit = self.recorder.limits.solve_time_limit if time_limit is None else time_limit
         started = time.monotonic()
         try:
-            result = await context.sandbox.solve(code, context.data, context.target.language,
-                                                 self.recorder.limits.solve_time_limit, solver=context.target.solver)
+            result = await context.sandbox.solve(code, context.data, lang, limit, solver=chosen_solver)
         except BaseException as error:
             self.recorder.step("solve", title, f"{type(error).__name__}: {error}", id=id, running=False, failed=True)
             raise

@@ -128,3 +128,41 @@ test("Ctrl+Enter does nothing while the launcher is disabled (such as on a faile
   fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
   expect(onStart).not.toHaveBeenCalled();
 });
+
+test("selecting a self-contained method like AutoCO displays its built-in solver pool and launches with its own id", async () => {
+  const onStart = vi.fn(async () => {});
+  function AutoCOLauncher() {
+    const [draft, setDraft] = useState(initialDraft);
+    const { settingsTrigger, startButton, settingsDialog } = useRunLauncher({
+      options: {
+        methods: [
+          { id: "direct", name: "Direct", description: "", source: null, languages: null },
+          { id: "autoco", name: "AutoCO", description: "metaheuristic pool", source: null, languages: [], builtin_solver: true },
+        ],
+        languages: [{ id: "pyomo", name: "Pyomo", solver: "highs" }],
+        providers: [],
+        datasets: [],
+      },
+      presets: [{ id: "p1", source: "saved", provider: "deepseek", model: "m1", base_url: "", temperature: null, max_tokens: null, extra_body: {}, tokens_today: 0 }],
+      draft,
+      setDraft,
+      onStart,
+      onCompare: vi.fn(),
+      openPresets: vi.fn(),
+      problem: { description: "Solve a vehicle routing problem.", data: {} },
+    });
+    return <>{settingsTrigger}{startButton}{settingsDialog}</>;
+  }
+  render(<QueryClientProvider client={new QueryClient()}><AutoCOLauncher /></QueryClientProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "查看运行设置" }));
+  fireEvent.click(screen.getByRole("radio", { name: /AutoCO/ }));
+  expect(screen.getByText("AutoCO 内置智能优化算法池")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "完成" }));
+  expect(screen.getByRole("button", { name: "查看运行设置" }).textContent).toBe("AutoCO");
+  fireEvent.click(screen.getByRole("button", { name: "立即求解" }));
+  await waitFor(() => expect(onStart).toHaveBeenCalledWith(expect.objectContaining({
+    method: "autoco",
+    language: "autoco",
+    solver: "AUTO",
+  })));
+});

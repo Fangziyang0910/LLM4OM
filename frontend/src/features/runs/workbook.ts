@@ -20,7 +20,7 @@ const chunkRows = (text: string): Row[] =>
 
 export function hasSolution(solve: Solve | null | undefined): solve is Solve {
   return !!solve && !solve.error && ["optimal", "feasible", "locally_optimal", "time_limit", "iteration_limit"].includes(solve.status)
-    && (solve.objective != null || Object.keys(solve.variables).length > 0);
+    && (solve.objective != null || Object.keys(solve.variables).length > 0 || !!solve.pareto?.solutions.length);
 }
 
 /** A business plan with every actual value, plus the problem and settings that produced it. */
@@ -72,8 +72,30 @@ function solutionWorkbook(meta: RunMeta, values: RunValues, options: Options, li
   ].join("\n"));
   if (meta.note) section(t("备注"), meta.note);
   const columns = [{ width: 40 }, { width: 20 }, { width: 12 }, { width: 34 }];
-  return [{ sheet: t("求解方案"), data: plan, columns, stickyRowsCount, showGridLines: false },
-    { sheet: t("问题与条件"), data: problem, columns, showGridLines: false }];
+  const sheets: Sheet<Blob>[] = [
+    { sheet: t("求解方案"), data: plan, columns, stickyRowsCount, showGridLines: false },
+    { sheet: t("问题与条件"), data: problem, columns, showGridLines: false },
+  ];
+  if (solve.pareto?.solutions.length) {
+    const paretoRows: Row[] = [
+      [cell(t("多目标 Pareto 前沿"), { fontSize: 16, fontWeight: "bold", columnSpan: solve.pareto.objectives.length + 2, height: 36 })],
+      [],
+      [t("方案编号"), t("推荐折中"), ...solve.pareto.objectives.map(obj => `${obj.name} (${obj.sense})`)].map(label => cell(label, header)),
+      ...solve.pareto.solutions.map((sol, idx) => [
+        cell(idx + 1, { align: "right" }),
+        cell(sol.knee ? t("推荐折中") : ""),
+        ...sol.objectives.map(val => val == null ? cell("—", { align: "right" }) : cell(val, { align: "right" })),
+      ]),
+    ];
+    sheets.splice(1, 0, {
+      sheet: t("Pareto 前沿"),
+      data: paretoRows,
+      columns: [{ width: 12 }, { width: 14 }, ...solve.pareto.objectives.map(() => ({ width: 20 }))],
+      stickyRowsCount: 3,
+      showGridLines: false,
+    });
+  }
+  return sheets;
 }
 
 export async function exportSolution(meta: RunMeta, values: RunValues, options: Options, link?: string): Promise<Blob> {

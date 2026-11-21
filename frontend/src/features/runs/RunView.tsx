@@ -389,15 +389,26 @@ function Summary({ state, values, steps, error, active, elapsed, onTab, actions 
     : solve.status === "unbounded" ? t("优化目标可以无限放大或缩小，通常是因为缺少上限或预算等约束条件。")
     : STATUS[solve.status] ?? solve.status;
 
+  const pareto = solve.pareto?.solutions.length ? solve.pareto : null;
+  const knee = pareto ? (pareto.solutions.find(item => item.knee) ?? pareto.solutions[0]) : null;
   return frame(kind, kind === "good" ? <CircleCheck /> : <TriangleAlert />, <div className="flex flex-col gap-1">
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      {solve.objective != null ? <span className="flex flex-wrap items-baseline gap-2">
+      {pareto ? <span className="flex flex-wrap items-baseline gap-2">
+        <span className="text-xs font-medium text-muted-foreground">{t("多目标 Pareto 前沿")}</span>
+        <span className="text-xl font-bold tracking-tight tabular sm:text-2xl">{t("共 {total} 个非支配解", { total: pareto.total })}</span>
+      </span> : solve.objective != null ? <span className="flex flex-wrap items-baseline gap-2">
         <span className="text-xs font-medium text-muted-foreground">{values.explanation?.objective_label || t("最优目标值")}</span>
         <span className="text-2xl font-bold tracking-tight tabular sm:text-3xl">{formatNumber(solve.objective)}</span>
         {values.explanation?.objective_unit ? <span className="text-xs font-medium text-muted-foreground">{values.explanation.objective_unit}</span> : null}
       </span> : <span className="font-semibold">{STATUS[solve.status] ?? solve.status}</span>}
       <StatusBadge status={solve.status} />
     </div>
+    {pareto && knee ? <p className="text-xs text-muted-foreground tabular">
+      {t("推荐折中解：")}{pareto.objectives.map((obj, idx) => {
+        const val = knee.objectives[idx];
+        return `${obj.name} = ${val == null ? "—" : formatNumber(val)}`;
+      }).join(" · ")}
+    </p> : null}
     {explain ? <p className="text-sm leading-relaxed text-muted-foreground">{explain}</p> : null}
   </div>, actions);
 }

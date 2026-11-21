@@ -70,8 +70,9 @@ src/llm4om/
 ├── budget.py            每个预设的每日 token 预算
 ├── progress.py          可展示进度的保存、取消时刷新和执行计时
 ├── sandbox/             沙箱
-│   ├── __init__.py      Sandbox（solve、run_script）与 SolveResult
+│   ├── __init__.py      Sandbox（solve、run_script）与 SolveResult（含可选多目标 pareto）
 │   ├── worker.py        沙箱内的独立脚本；不导入 llm4om
+│   ├── autoco/          AutoCO 内置 12 类智能优化算法池与沙箱运行器（随 worker 打包）
 │   └── worker.Dockerfile
 ├── runtime.py           运行中的状态：Limits、Recorder（计数、上限、步骤、推送）、方法使用的 Context
 ├── methods/             建模方法：Method、methods()、各方法的图

@@ -14,6 +14,7 @@ export function normalizeTarget(language?: string, solver?: string): { language:
 export function targetLabel(options: Options, meta: Pick<RunMeta, "language" | "solver">, actualSolver?: string | null): string {
   const normalized = normalizeTarget(meta.language, meta.solver);
   const library = options.languages.find(item => item.id === normalized.language);
+  const label = library?.name ?? (normalized.language === "autoco" ? "AutoCO" : normalized.language);
   const solver = actualSolver ?? normalized.solver ?? library?.solver;
-  return [library?.name ?? normalized.language, solver === "AUTO" ? undefined : solver].filter(Boolean).join(" · ");
+  return [label, solver === "AUTO" ? undefined : solver].filter(Boolean).join(" · ");
 }
