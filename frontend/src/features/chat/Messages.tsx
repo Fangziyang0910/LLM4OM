@@ -1,5 +1,5 @@
 import type { Message } from "@langchain/langgraph-sdk";
-import { memo, useState } from "react";
+import { memo, type ReactNode, useState } from "react";
 import { Brain, ChevronRight, RefreshCw, TriangleAlert } from "lucide-react";
 import { CopyButton, Markdown } from "@/components/Content";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,14 @@ function ToolResult({ message, onOpenPlan, onCompare }: {
   const type = resultType(artifact, message.name);
   const Result = Object.hasOwn(resultViews, type) ? resultViews[type] : undefined;
   return Result ? <Result artifact={artifact} onOpenPlan={onOpenPlan} onCompare={onCompare} /> : null;
+}
+
+export function ThreadLoadError({ error, onReload, header }: { error: unknown; onReload: () => void; header?: ReactNode }) {
+  const body = <div role="alert" className="flex h-full flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-destructive">
+    <p>{errorText(error)}</p>
+    <Button variant="outline" onClick={onReload}><RefreshCw />{t("重试")}</Button>
+  </div>;
+  return header ? <div className="flex h-full flex-col">{header}{body}</div> : body;
 }
 
 export function ChatMessages({ messages, loading, label, failure, disabled, onRetry, progress, onOpenPlan, onCompare, tasks, onShowTask }: {

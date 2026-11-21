@@ -30,6 +30,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.methods import Method, presets
+from llm4om.methods.common import python_code_blocks
 from llm4om.methods.llmopt import prompts
 from llm4om.runtime import Context, ModelingState
 
@@ -115,9 +116,7 @@ async def write_code(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     if reply.strip().startswith(MISSING_DATA):
         raise ValueError("LLMOPT cannot generate code without the required source data: "
                          + reply.strip()[len(MISSING_DATA):].strip())
-    blocks = list(re.finditer(r"^[ \t]*```([^\r\n`]*)\r?\n(.*?)```", reply, re.S | re.M))
-    python = [match for match in blocks if match.group(1).strip().lower() in ("python", "py", "python3")]
-    matches = python or [match for match in blocks if not match.group(1).strip()]
+    matches = python_code_blocks(reply)
     code = textwrap.dedent(matches[-1].group(2).strip("\r\n")).strip() if matches else ""
     if not code:
         raise ValueError("The reply contains no ```python code block.")

@@ -30,12 +30,11 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.methods import Method, presets
-from llm4om.methods.common import TWO_PARTS
+from llm4om.methods.common import TWO_PARTS, python_code_blocks
 from llm4om.methods.optitree.prompts import CLASSIFY_PROMPT, INSPECTOR_PROMPT, MILP, REASON_PROMPT
 from llm4om.runtime import Context, ModelingState
 
 ROOT_TYPE = "Mixed Integer Programming"
-CODE_MARKERS = ["```python", "```Python", "```"]
 
 
 @cache
@@ -49,15 +48,9 @@ def _tree() -> tuple[dict[int, dict[str, Any]], dict[str, list[int]]]:
     return templates, json_repair.loads(root.joinpath("tree.json").read_text("utf-8"))
 
 
-def get_template_id(problem_type: str) -> int | None:
-    return next((key for key, template in _tree()[0].items() if template["problem_type"] == problem_type), None)
-
-
 def extract_code(text: str) -> str | None:
     """Upstream extract_and_execute_code, without the execution: the first fenced block, or None."""
-    blocks = list(re.finditer(r"^[ \t]*```([^\r\n`]*)\r?\n(.*?)(?:```|\Z)", text, re.S | re.M))
-    python = [match for match in blocks if match.group(1).strip().lower() in ("python", "py", "python3")]
-    matches = python or [match for match in blocks if not match.group(1).strip()]
+    matches = python_code_blocks(text, allow_unclosed=True)
     if not matches:
         return None
     code = textwrap.dedent(matches[0].group(2).strip("\r\n")).strip()

@@ -131,8 +131,3 @@ def extract_code_from_end(text: str) -> str:
     # llm4om: strip only the fence's language label, not identifiers or string contents.
     code = re.sub(r"^(?:python3?|py)[ \t]*\r?\n", "", code.lstrip("\r\n"), flags=re.I)
     return textwrap.dedent(code.strip("\r\n")).strip()
-
-
-def extract_debugged_code(text: str) -> str:
-    """execute_code.extract_code."""
-    return extract_code_from_end(text)

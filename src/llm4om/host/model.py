@@ -19,8 +19,7 @@ async def request_answer(request: dict[str, Any]) -> dict[str, Any]:
     id, cached = records.begin("llm", request)
     if cached is not None:
         return cached
-    replayed = context.pop_replay(request["role"])
-    reply = replayed if replayed is not None else interrupt(request)
+    reply = interrupt(request)
     records.complete(id, reply)
     calls = [f"{call['name']}({json.dumps(call['args'], ensure_ascii=False)})" for call in reply.get("tool_calls", [])]
     records.recorder.step("llm", request["role"], "\n\n".join([reply.get("content", ""), *calls]).strip(),

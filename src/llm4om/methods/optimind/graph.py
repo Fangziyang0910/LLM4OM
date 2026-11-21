@@ -1,7 +1,6 @@
 """OptiMind: select published hints, generate, execute and reflect (one trajectory, up to five turns)."""
 
 import json
-import re
 from dataclasses import asdict
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -9,7 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.methods import Method, presets
-from llm4om.methods.common import ask, split_formulation_and_code
+from llm4om.methods.common import ask, split_formulation_and_code, strip_json_fence
 from llm4om.methods.optimind.prompts import FEEDBACK, SYSTEM, hint_bank, hints
 from llm4om.runtime import Context, ModelingState
 
@@ -28,9 +27,7 @@ async def classify(state: State, runtime: Runtime[Context]) -> dict:
     reply = await ask(runtime.context, "optimind_classify",
                       'Choose applicable problem classes. Reply only with a JSON array of exact class names, '
                       'or [] if none applies. Available classes: ' + ", ".join(hint_bank()), state["problem"])
-    text = reply.strip()
-    fenced = re.fullmatch(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n?```", text, re.S | re.I)
-    classes = json.loads(fenced[1] if fenced else text)
+    classes = json.loads(strip_json_fence(reply))
     if not isinstance(classes, list) or any(not isinstance(name, str) or name not in hint_bank() for name in classes):
         raise ValueError("OptiMind classification must be an array of published hint class names.")
     classes = list(dict.fromkeys(classes))

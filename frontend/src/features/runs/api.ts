@@ -129,16 +129,13 @@ export async function createSolutionChat(run: string | SourceRun): Promise<strin
 
 const comparisonId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, "0")).join("");
 
-/** Every alternative starts from one frozen source, including when the source is rerun during the batch. */
-export async function startScenarios(threadId: string, scenarios: { name: string; instruction: string }[], presets: Preset[], source?: SourceRun) {
-  if (scenarios.length < 2 || scenarios.length > 6 || scenarios.some(item => !item.name.trim() || !item.instruction.trim()))
-    throw new Error(t("请填写 2 至 6 个完整的场景。"));
-  const base = await revisionSource(threadId, presets, source), group = comparisonId();
+async function startBatch<T>(items: T[], launch: (item: T, group: string) => Promise<string>):
+    Promise<{ group: string; started: number; error: unknown }> {
+  // crypto.randomUUID needs HTTPS; the workbench is often opened over plain HTTP on the network.
+  const group = comparisonId();
   let started = 0;
   try {
-    for (const scenario of scenarios) {
-      await startRun(base.draft, base.preset, group, { ...scenario, source: base.source }); started++;
-    }
+    for (const item of items) { await launch(item, group); started++; }
   } catch (error) {
     if (!started) throw error;
     return { group, started, error };
@@ -146,20 +143,19 @@ export async function startScenarios(threadId: string, scenarios: { name: string
   return { group, started, error: null };
 }
 
+/** Every alternative starts from one frozen source, including when the source is rerun during the batch. */
+export async function startScenarios(threadId: string, scenarios: { name: string; instruction: string }[], presets: Preset[], source?: SourceRun) {
+  if (scenarios.length < 2 || scenarios.length > 6 || scenarios.some(item => !item.name.trim() || !item.instruction.trim()))
+    throw new Error(t("请填写 2 至 6 个完整的场景。"));
+  const base = await revisionSource(threadId, presets, source);
+  return startBatch(scenarios, (scenario, group) => startRun(base.draft, base.preset, group, { ...scenario, source: base.source }));
+}
+
 /** Start one run of the same problem for each method and preset, as one comparison. If a start fails after others
  * started, those runs stay in the comparison and `error` says why the rest did not start. */
 export async function startComparison(draft: Draft, runs: { method: string; preset: Preset | undefined }[]):
     Promise<{ group: string; started: number; error: unknown }> {
-  // crypto.randomUUID needs HTTPS; the workbench is often opened over plain HTTP on the network.
-  const group = comparisonId();
-  let started = 0;
-  try {
-    for (const item of runs) { await startRun({ ...draft, method: item.method }, item.preset, group); started++; }
-  } catch (error) {
-    if (!started) throw error;
-    return { group, started, error };
-  }
-  return { group, started, error: null };
+  return startBatch(runs, (item, group) => startRun({ ...draft, method: item.method }, item.preset, group));
 }
 
 /** Merge `change` into a run's metadata: its note and tags. */

@@ -28,7 +28,6 @@ from llm4om.followups import explain_infeasibility, explain_result, revise_probl
 from llm4om.llm import LLMSettings, chat_model
 from llm4om.llm_presets import LLMPresetStore
 from llm4om.method_steps import NodeSteps
-from llm4om.method_steps import render_update as render_update
 from llm4om.methods import Method, methods
 from llm4om.problem import problem_text, validate_data_files, validate_description
 from llm4om.progress import NAMESPACE, save_progress, timing

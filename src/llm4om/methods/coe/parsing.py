@@ -9,14 +9,12 @@ from typing import Any
 
 import json_repair
 
+from llm4om.methods.common import python_code_blocks
+
 
 def extract_code_from_string(text: str) -> str:
     """Upstream utils.extract_code_from_string: all code blocks joined, without pip lines; the text if none."""
-    raw_blocks = re.findall(r'^[ \t]*```([^\r\n`]*)\r?\n(.*?)```', text, re.DOTALL | re.MULTILINE)
-    python = [textwrap.dedent(body.strip("\r\n")).strip()
-              for tag, body in raw_blocks if tag.strip().lower() in ('python', 'py', 'python3')]
-    blocks = python or [textwrap.dedent(body.strip("\r\n")).strip()
-                        for tag, body in raw_blocks if not tag.strip()]
+    blocks = [textwrap.dedent(match.group(2).strip("\r\n")).strip() for match in python_code_blocks(text)]
     if not blocks:
         return text
     if len(blocks) == 1:

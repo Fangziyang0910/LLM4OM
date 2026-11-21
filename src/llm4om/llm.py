@@ -3,6 +3,7 @@
 import math
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any
+from urllib.parse import urlparse
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.language_models import BaseChatModel
@@ -70,13 +71,16 @@ class LLMSettings:
             extra.pop("reasoning_effort", None)
         return replace(self, extra_body=extra)
 
-    def validate(self) -> None:
+    def validate(self, *, require_model: bool = True) -> None:
         if self.provider not in PROVIDERS:
             raise ValueError(f"Unknown LLM provider {self.provider!r}.")
-        if not self.model.strip():
+        if require_model and not self.model.strip():
             raise ValueError("Choose an LLM model.")
         if not self.url:
             raise ValueError("Enter the base URL of the OpenAI-compatible service.")
+        parsed = urlparse(self.url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ValueError("Base URL must be an http:// or https:// address.")
         if not self.api_key.strip():
             raise ValueError(f"Set the API key for {PROVIDERS[self.provider].label}.")
         if self.temperature is not None and not math.isfinite(self.temperature):

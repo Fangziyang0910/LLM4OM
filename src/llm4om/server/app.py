@@ -8,7 +8,6 @@ from dataclasses import asdict
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -104,15 +103,7 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
     async def models(body: PresetBody) -> dict[str, Any]:
         """The provider's model list, read with the key in the request; saved keys are never used here."""
         settings = LLMSettings(**body.model_dump(exclude={"name"}))
-        if settings.provider not in PROVIDERS:
-            raise ValueError(f"Unknown LLM provider {settings.provider!r}.")
-        if not settings.url:
-            raise ValueError("Enter the base URL of the OpenAI-compatible service.")
-        parsed = urlparse(settings.url)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise ValueError("Base URL must be an http:// or https:// address.")
-        if not settings.api_key.strip():
-            raise ValueError("Enter the API key to read the model list.")
+        settings.validate(require_model=False)
         try:
             return {"models": await list_models(settings)}
         except Exception as error:  # report any catalog failure; the user can still type a model ID

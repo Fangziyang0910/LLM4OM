@@ -29,6 +29,11 @@ export function outcome(active: boolean, status: string | undefined, failure: un
   return failure ? "failed" : solveStatus ?? "success";
 }
 
+/** Outcome of a saved checkpoint's values, without an active run object. */
+export function savedRunState(values: { failure?: unknown; solve?: { status?: string } | null; timing?: { finished_at?: number } }): string {
+  return values.failure ? "failed" : values.solve?.status ?? (values.timing?.finished_at ? "success" : "interrupted");
+}
+
 /** An error's message; for an SDK error ("HTTP 429: {\"detail\": ...}"), the server's detail alone. */
 export function errorText(error: unknown): string {
   const message = error instanceof Error ? error.message

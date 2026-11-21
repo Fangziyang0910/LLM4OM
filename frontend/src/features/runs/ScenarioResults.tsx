@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { client } from "@/features/runs/sdk";
 import { StatusBadge } from "@/features/runs/status";
 import { hasSolution } from "@/features/runs/workbook";
-import { errorText, formatNumber } from "@/format";
+import { errorText, formatNumber, savedRunState } from "@/format";
 import { t } from "@/i18n";
 import type { Entry, RunMeta, RunValues, SourceRun } from "@/features/runs/types";
 
@@ -22,7 +22,7 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
     instruction: entry.meta.scenario?.instruction, values: queries[i].data?.values as RunValues | undefined,
     state: entry.state, error: queries[i].error }));
   const plans = [...(previous ? [{ name: t("原方案"), id: source!.thread_id, source, instruction: "", values: previous,
-    state: previous.failure ? "failed" : previous.solve?.status ?? (previous.timing?.finished_at ? "success" : "interrupted"), error: null }] : []), ...records];
+    state: savedRunState(previous), error: null }] : []), ...records];
   const solvedPlans = plans.filter(plan => hasSolution(plan.values?.solve));
   const reference = solvedPlans[0]?.values?.solve?.variables;
   const names = [...new Set(solvedPlans.flatMap(plan => Object.keys(plan.values!.solve!.variables)))];

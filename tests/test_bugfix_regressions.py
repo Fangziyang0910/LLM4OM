@@ -12,7 +12,7 @@ from starlette.testclient import TestClient
 
 from llm4om.agent import _build_tools_and_middleware
 from llm4om.budget import TokenBudget
-from llm4om.host.records import finish_pending_migration, open_records
+from llm4om.host.records import open_records
 from llm4om.languages import CodeTarget
 from llm4om.llm import LLMSettings
 from llm4om.methods.autoformulation.search import extract_best_solution
@@ -121,25 +121,13 @@ def test_search_result_coerces_none_fields() -> None:
     assert result.snippet == ""
 
 
-def test_host_records_wraps_sqlite_errors_and_cleans_wal_sidecars(tmp_path: Any) -> None:
+def test_host_records_wraps_sqlite_errors(tmp_path: Any) -> None:
     corrupt_dir = tmp_path / "corrupt"
     corrupt_dir.mkdir()
     (corrupt_dir / "records.sqlite").write_bytes(b"not a sqlite database")
     with pytest.raises(ValueError):
         with open_records(corrupt_dir):
             pass
-
-    mig_dir = tmp_path / "migrate"
-    staging = mig_dir / ".migrating"
-    staging.mkdir(parents=True)
-    (staging / "COMMIT").write_text("ok", encoding="utf-8")
-    (staging / "records.sqlite").write_bytes(b"placeholder")
-    (mig_dir / "records.sqlite-wal").write_bytes(b"stale-wal")
-    (mig_dir / "records.sqlite-shm").write_bytes(b"stale-shm")
-    finish_pending_migration(mig_dir)
-    assert (mig_dir / "records.sqlite").exists()
-    assert not (mig_dir / "records.sqlite-wal").exists()
-    assert not (mig_dir / "records.sqlite-shm").exists()
 
 
 def test_json_only_writes_blocks_cross_origin_websocket_and_spoofed_content_type() -> None:

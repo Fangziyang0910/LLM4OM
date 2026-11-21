@@ -10,7 +10,7 @@ import { Diff } from "@/components/Content";
 import { client } from "@/features/runs/sdk";
 import { StatusBadge } from "@/features/runs/status";
 import { variableChanges } from "@/features/runs/tables";
-import { errorText, formatNumber } from "@/format";
+import { errorText, formatNumber, savedRunState } from "@/format";
 import { t } from "@/i18n";
 import type { RunValues, SourceRun } from "@/features/runs/types";
 
@@ -33,7 +33,7 @@ export function ScenarioComparison({ source, values, active = false }: { source:
   const difference = previous != null && current != null ? current - previous : null;
   const number = (value: number | undefined | null) => value == null ? "—" : formatNumber(value);
   const statusOf = (result: RunValues, isCurrent: boolean) =>
-    isCurrent && active && !result.solve ? "running" : result.failure ? "failed" : result.solve?.status ?? (result.timing?.finished_at ? "success" : "interrupted");
+    isCurrent && active && !result.solve ? "running" : savedRunState(result);
   const scenarios: [string, RunValues, boolean][] = [[t("调整前（原方案）"), before, false], [t("调整后（新方案）"), values, true]];
 
   return <div className="flex min-w-0 flex-col gap-4">

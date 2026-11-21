@@ -32,7 +32,6 @@ from llm4om.methods import Method, presets
 from llm4om.methods.optimus import prompts as P
 from llm4om.methods.optimus.parsing import (
     extract_code_from_end,
-    extract_debugged_code,
     extract_equal_sign_closed,
     extract_formulation_from_end,
     extract_json_from_end,
@@ -269,7 +268,7 @@ async def debug(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     response = await _ask(runtime.context, "debug", P.EXECUTE_CODE__DEBUG_TEMPLATE.format(
         description=state["problem"], code=state["code"], error=result.error or result.feedback())
         + "\n\n" + runtime.context.target.prompt)  # llm4om: repairs keep the selected library and build-only contract.
-    return {"fixed_code": extract_debugged_code(response) + "\n"}
+    return {"fixed_code": extract_code_from_end(response) + "\n"}
 
 
 def after_execute(state: State) -> str:

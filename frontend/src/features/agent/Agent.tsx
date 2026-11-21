@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import type { Message } from "@langchain/langgraph-sdk";
-import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, CalendarDays, Columns2, Factory, Globe, Menu, Paperclip, RefreshCw, SlidersHorizontal, Sparkles, Truck, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, CalendarDays, Columns2, Factory, Globe, Menu, Paperclip, SlidersHorizontal, Sparkles, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -11,8 +11,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Toggle } from "@/components/ui/toggle";
 import { ChatInput } from "@/features/chat/ChatInput";
-import { ChatMessages, type ChatProgress, type ModelingEvent, type ModelingTask } from "@/features/chat/Messages";
-import { useConversation } from "@/features/chat/conversation";
+import { ChatMessages, ThreadLoadError, type ChatProgress, type ModelingEvent, type ModelingTask } from "@/features/chat/Messages";
+import { useChatModel, useConversation } from "@/features/chat/conversation";
 import { useChatScroll } from "@/features/chat/scroll";
 import { DATA_FILE_ACCEPT, readDataFiles } from "@/features/composer/files";
 import { DataEditor } from "@/features/composer/DataEditor";
@@ -52,13 +52,11 @@ const AGENT_STARTERS = [
 
 export function Agent({ threadId, options, presets, initial, onThread, openPresets, onMenu, onExamples, onFinished, onOpen, onCompare, renderRun }: {
   threadId?: string; options: Options; presets: Preset[]; initial: { description: string; data: Record<string, string> };
-  onThread: (id: string) => void; openPresets: () => void; onManual?: () => void; onMenu: () => void; onExamples: () => void;
+  onThread: (id: string) => void; openPresets: () => void; onMenu: () => void; onExamples: () => void;
   onFinished: () => void; onOpen: (source: SourceRun) => void; onCompare: (id: string) => void; renderRun: (source: SourceRun) => ReactNode;
 }) {
   const desktop = useDesktop();
   const layout = useDefaultLayout({ id: "llm4om-agent", panelIds: ["conversation", "workspace"], onlySaveAfterUserInteractions: true });
-  const [selected, setSelected] = useState<string>();
-  const [thinking, setThinking] = useState<boolean>();
   const [method, setMethod] = useState<string>();
   const [language, setLanguage] = useState<string>();
   const [search, setSearch] = useState<boolean>();
@@ -102,9 +100,7 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
   const { input, setInput } = conversation;
   const messages = conversation.messages;
   const data = files ?? conversation.values.data ?? initial.data;
-  const preset = presets.find(item => item.id === (selected ?? meta?.preset)) ?? presets[0];
-  const presetId = preset?.id;
-  const thinkingMode = preset?.provider === "deepseek" ? thinking ?? meta?.thinking ?? null : null;
+  const { preset, presetId, setSelected, thinkingMode, setThinking } = useChatModel(presets, meta);
   const chosenMethod = method ?? meta?.method ?? "auto";
   const chosenLanguage = language ?? meta?.language ?? "auto";
   const searching = search ?? meta?.search ?? false;
@@ -167,13 +163,10 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
       setFiles(next);
     } finally { setSavingData(false); }
   };
-  if (conversation.thread.error) return <div className="flex h-full flex-col">
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 xl:hidden">
+  if (conversation.thread.error) return <ThreadLoadError error={conversation.thread.error} onReload={conversation.thread.reload}
+    header={<header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 xl:hidden">
       <Button variant="ghost" size="icon" aria-label={t("打开菜单")} onClick={onMenu}><Menu /></Button><span className="text-sm font-medium">{t("对话规划")}</span>
-    </header>
-    <div role="alert" className="grid flex-1 place-content-center gap-3 p-6 text-sm text-destructive">
-      <p>{errorText(conversation.thread.error)}</p><Button variant="outline" onClick={conversation.thread.reload}><RefreshCw />{t("重试")}</Button></div>
-  </div>;
+    </header>} />;
 
   const empty = !threadId && !messages.length && !failure && !busy && !settings && !Object.keys(data).length;
   const chat = <section aria-label={t("优化对话")} className={cn("flex h-full min-h-0 min-w-0 flex-col", empty && "justify-center", workspace && pane === "workspace" && "hidden lg:flex")}>

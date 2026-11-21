@@ -4,18 +4,18 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { useDesktop } from "@/lib/useDesktop";
 import { useQuery } from "@tanstack/react-query";
 import type { Message } from "@langchain/langgraph-sdk";
-import { ArrowDown, ArrowUpRight, Columns3, RefreshCw, Sparkles, X } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Columns3, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChatMessages, type ChatProgress } from "@/features/chat/Messages";
+import { ChatMessages, ThreadLoadError, type ChatProgress } from "@/features/chat/Messages";
 import { ChatInput } from "@/features/chat/ChatInput";
-import { useConversation } from "@/features/chat/conversation";
+import { useChatModel, useConversation } from "@/features/chat/conversation";
 import { useChatScroll } from "@/features/chat/scroll";
 import { client } from "@/features/runs/sdk";
 import { StatusBadge } from "@/features/runs/status";
-import { errorText, formatNumber } from "@/format";
+import { errorText, formatNumber, savedRunState } from "@/format";
 import { locale, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 import type { Plan, RunValues, SolutionChatMeta, SourceRun, Usage } from "@/features/runs/types";
@@ -31,8 +31,6 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
   const desktop = useDesktop();
   const layout = useDefaultLayout({ id: "llm4om-discussion", panelIds: ["conversation", "plan"], onlySaveAfterUserInteractions: true });
   const [pane, setPane] = useState("conversation");
-  const [selected, setSelected] = useState<string>();
-  const [thinking, setThinking] = useState<boolean>();
   const [viewed, setViewed] = useState<SourceRun>();
   const { log, content, follow, followLatest } = useChatScroll();
   const [progress, setProgress] = useState<ChatProgress>();
@@ -48,9 +46,7 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
   const summary = useQuery({ queryKey: ["source-run", currentPlan?.thread_id, currentPlan?.checkpoint_id], enabled: !!currentPlan,
     queryFn: () => client.threads.getState<RunValues>(currentPlan!.thread_id, currentPlan!.checkpoint_id), staleTime: Infinity, retry: false });
   const values = summary.data?.values as RunValues | undefined;
-  const preset = presets.find(item => item.id === (selected ?? meta?.preset)) ?? presets[0];
-  const presetId = preset?.id;
-  const thinkingMode = preset?.provider === "deepseek" ? thinking ?? meta?.thinking ?? null : null;
+  const { preset, presetId, setSelected, thinkingMode, setThinking } = useChatModel(presets, meta);
   const busy = conversation.busy;
   const failure = conversation.error || conversation.values.failure;
   const plans = conversation.values.plans ?? [];
@@ -65,8 +61,7 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
       metadata: { preset: preset.id, provider: preset.provider, model: preset.name || preset.model, thinking: thinkingMode } });
   };
   const stop = async () => { if (await conversation.stop()) onFinished(); };
-  if (conversation.thread.error) return <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-destructive">
-    <p>{errorText(conversation.thread.error)}</p><Button variant="outline" onClick={conversation.thread.reload}><RefreshCw />{t("重试")}</Button></div>;
+  if (conversation.thread.error) return <ThreadLoadError error={conversation.thread.error} onReload={conversation.thread.reload} />;
   const shown = viewed ?? currentPlan;
   const plan = <TabsContent value="plan" forceMount className="mt-0 h-full min-h-0 min-w-0 data-[state=inactive]:hidden lg:data-[state=inactive]:block">
     {shown ? renderRun(shown) : <div className="grid h-full place-items-center"><Spinner /></div>}
@@ -83,7 +78,7 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
           <p className="truncate font-medium" title={values.description}>{values.description?.trim().split("\n")[0].replace(/^#{1,6}\s+/, "")}</p>
           <div className="mt-2 flex items-center justify-between gap-2">
             <span>{values.explanation?.objective_label || t("最优目标值")} <strong>{values.solve?.objective == null ? "—" : formatNumber(values.solve.objective)}</strong> {values.explanation?.objective_unit}</span>
-            <StatusBadge status={values.failure ? "failed" : values.solve?.status ?? (values.timing?.finished_at ? "success" : "interrupted")} />
+            <StatusBadge status={savedRunState(values)} />
           </div>
         </>}
         {viewed && !sameSource(viewed, currentPlan) ? <Button variant="link" size="xs" className="mt-2 h-auto p-0" onClick={() => setViewed(undefined)}>{t("返回当前讨论方案")}</Button> : null}

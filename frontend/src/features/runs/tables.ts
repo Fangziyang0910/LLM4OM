@@ -85,12 +85,6 @@ function splitIndexedName(name: string): { base: string; indices: string[] } | n
   return { base, indices: trailing.flatMap(span => splitIndexList(span.content)) };
 }
 
-export function parseVariable(name: string, value: number | null): Variable {
-  const parsed = splitIndexedName(name);
-  if (!parsed) return { name, indices: [], value };
-  return { name, indices: parsed.indices, value };
-}
-
 function compareVariables(a: Variable, b: Variable): number {
   const shared = Math.min(a.indices.length, b.indices.length);
   for (let i = 0; i < shared; i++) {

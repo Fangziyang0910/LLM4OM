@@ -825,7 +825,6 @@ export const en: Record<string, string> = {
   "输入问题描述后，可在此预览排版效果。": "Enter a problem description to preview its formatted layout here.",
   "点击可在线查看或编辑 {name}": "Click to view or edit {name}",
   "支持 Excel (.xlsx)、CSV、TSV、JSON 和文本文件；上传后可直接点击文件名在线编辑。": "Supports Excel (.xlsx), CSV, TSV, JSON, and text files. Click any attached file to view or edit it.",
-  "案例模板": "Templates",
   "支持 Excel、CSV、TSV、JSON、TXT": "Excel, CSV, TSV, JSON, TXT supported",
   "选择或接入用于智能对话与优化建模的 AI 模型，密钥仅加密保存在服务端。": "Select or connect AI models for planning and optimization. API keys are stored securely on the server.",
   " · 系统内置": " · Built-in",

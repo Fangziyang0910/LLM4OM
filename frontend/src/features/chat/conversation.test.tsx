@@ -3,8 +3,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { clearChatDraft } from "@/features/runs/api";
 import { client } from "@/features/runs/sdk";
-import { clearChatDraft, useChatDraft, useConversation } from "./conversation";
+import { useChatDraft, useConversation } from "./conversation";
 
 vi.mock("@/features/runs/sdk", () => ({ client: {
   threads: { get: vi.fn(), update: vi.fn(), create: vi.fn(), updateState: vi.fn() },

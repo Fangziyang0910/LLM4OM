@@ -6,14 +6,22 @@ import type { UseStream } from "@langchain/langgraph-sdk/react";
 import type { BagTemplate, Message, ThreadState } from "@langchain/langgraph-sdk";
 import type { GetConfigurableType, GetCustomEventType, GetUpdateType } from "@langchain/langgraph-sdk/ui";
 import { toast } from "sonner";
-import { chatDraftKey, clearChatDraft, discussSupersteps, saveThreadValues } from "@/features/runs/api";
+import { chatDraftKey, discussSupersteps, saveThreadValues } from "@/features/runs/api";
 import { client } from "@/features/runs/sdk";
 import { errorText } from "@/format";
-
-export { clearChatDraft };
+import type { Preset } from "@/types";
 
 type Pending = { id: string; text: string };
 type ConversationState = Record<string, unknown> & { messages?: Message[] };
+
+/** Shared preset and DeepSeek thinking selection for conversation pages. */
+export function useChatModel(presets: Preset[], meta?: { preset?: string | null; thinking?: boolean | null }) {
+  const [selected, setSelected] = useState<string>();
+  const [thinking, setThinking] = useState<boolean>();
+  const preset = presets.find(item => item.id === (selected ?? meta?.preset)) ?? presets[0];
+  const thinkingMode = preset?.provider === "deepseek" ? thinking ?? meta?.thinking ?? null : null;
+  return { preset, presetId: preset?.id, setSelected, thinkingMode, setThinking };
+}
 
 /** Unsent messages stay in this browser tab and never enter the conversation history. */
 export function useChatDraft(threadId: string, initial = "") {

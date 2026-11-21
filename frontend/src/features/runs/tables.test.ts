@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { asMatrix, groupVariables, parseDelimited, parseVariable, variableChanges } from "@/features/runs/tables";
+import { asMatrix, groupVariables, parseDelimited, variableChanges } from "@/features/runs/tables";
 
-describe("parseVariable", () => {
+describe("groupVariables", () => {
   it.each([
     [`x['North, East',Monday]`, ["North, East", "Monday"]],
     [`x["O'Brien, East",Monday]`, ["O'Brien, East", "Monday"]],
@@ -11,11 +11,9 @@ describe("parseVariable", () => {
     [String.raw`x['West\\East, North',Monday]`, [String.raw`West\East, North`, "Monday"]],
     [`x("North, East", 'Monday, Tuesday')`, ["North, East", "Monday, Tuesday"]],
   ])("preserves string indices in %s", (name, indices) => {
-    expect(parseVariable(name, 3)).toEqual({ name, indices, value: 3 });
+    expect(groupVariables({ [name]: 3 })[0].variables[0]).toEqual({ name, indices, value: 3 });
   });
-});
 
-describe("groupVariables", () => {
   it("groups indexed variables by base name and lays two-index groups out as a matrix", () => {
     const groups = groupVariables({ "x[W2,C1]": 0, "x[W1,C10]": 5, "x[W1,C2]": 3, "y[1]": 1, "total": 9 });
     expect(groups.map(group => [group.base, group.dims])).toEqual([["x", 2], ["y", 1], ["", 0]]);
@@ -60,8 +58,9 @@ it("compares actual variable values without turning missing values into zero", (
 });
 
 it("parses chained and dotted indexed names, rejects malformed brackets, sorts tuples elementwise, and rejects matrix collisions", () => {
-  expect(parseVariable("x[1)", 2).indices).toEqual([]);
-  expect(parseVariable("foo()", 2).indices).toEqual([]);
+  expect(groupVariables({ "x[1)": 2, "foo()": 2 })).toEqual([{
+    base: "", dims: 0, variables: [{ name: "foo()", indices: [], value: 2 }, { name: "x[1)", indices: [], value: 2 }],
+  }]);
   const groups = groupVariables({ "stage[0].flow[A,B]": 5, "x[0][1]": 3, "m[1,10]": 1, "m[11,0]": 2 });
   const stageGroup = groups.find(g => g.base === "stage[0].flow")!;
   expect(stageGroup.variables[0].indices).toEqual(["A", "B"]);

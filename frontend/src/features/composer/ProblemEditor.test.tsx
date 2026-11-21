@@ -13,7 +13,7 @@ function Editor({ initial = source, data = {}, onChangeSpy }: {
   const [value, setValue] = useState(initial);
   const update = (next: string) => { setValue(next); onChangeSpy?.(next); };
   return <ProblemEditor value={value} data={data} onChange={update} onFiles={vi.fn()} onRemove={vi.fn()}
-    onClear={() => update("")} onExamples={vi.fn()} onDataChange={vi.fn()} />;
+    onClear={() => update("")} onDataChange={vi.fn()} />;
 }
 
 test("renders Markdown, tables and math live in one box without edit/preview buttons or altering dollar prices", () => {

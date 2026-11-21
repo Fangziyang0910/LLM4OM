@@ -1,6 +1,5 @@
 """TriVAL workflow: semantic, formulation and code validation on one flat StateGraph."""
 
-import re
 from collections.abc import Callable, Sequence
 from typing import Any, Literal, TypeVar
 
@@ -12,6 +11,7 @@ from langgraph.runtime import Runtime
 from pydantic import BaseModel, Field, ValidationError
 
 from llm4om.methods import presets
+from llm4om.methods.common import strip_json_fence
 from llm4om.methods.trival import prompts as P
 from llm4om.runtime import Context, ModelingState
 
@@ -158,9 +158,8 @@ async def _validate(llm: Any, system_prompt: str, user_content: str, schema: typ
     while True:
         reply, invalid = _strip_invalid_calls(await bound.ainvoke(messages))
         if not reply.tool_calls and not invalid:
-            cleaned = re.sub(r"^```(?:json)?[ \t]*\r?\n?|\r?\n?```$", "", reply.text.strip(), flags=re.I).strip()
             try:
-                return schema.model_validate_json(cleaned)
+                return schema.model_validate_json(strip_json_fence(reply.text))
             except ValidationError:
                 messages.append(reply if reply.text else reply.model_copy(update={"content": "[empty response]"}))
                 messages.append(HumanMessage(f"Call {schema.__name__} once with a valid validation decision."))

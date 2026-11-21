@@ -145,7 +145,7 @@ export default function App() {
   };
   const modelingProps = (options: Options) => ({ options, presets, draft, setDraft, onStart: start, onCompare: compare,
     presetsStatus: presetsQuery.data ? "ready" as const : presetsQuery.error ? "error" as const : "loading" as const,
-    openPresets: () => setPresetsOpen(true), openExamples: () => setExamplesOpen(true) });
+    openPresets: () => setPresetsOpen(true) });
 
   const current = "id" in route ? route.id : null;
   const activeMode = route.name === "agent-new" || route.name === "agent" ? "agent" : "quick";
@@ -192,11 +192,11 @@ export default function App() {
               <Agent key={route.name === "agent" ? route.id : `new-${agentDraft.id}`} threadId={route.name === "agent" ? route.id : undefined}
                 options={options} presets={presets} initial={agentDraft}
                 onThread={id => { setAgentDraft({ id: ++agentDraftSeq.current, description: "", data: {} }); go({ name: "agent", id }); }}
-                openPresets={() => setPresetsOpen(true)} onExamples={() => setExamplesOpen(true)} onManual={() => go({ name: "new" })} onMenu={() => setMenuOpen(true)}
+                openPresets={() => setPresetsOpen(true)} onExamples={() => setExamplesOpen(true)} onMenu={() => setMenuOpen(true)}
                 onFinished={() => void refresh()} onOpen={openRun} onCompare={id => go({ name: "compare", id })} renderRun={source => renderRun(source, false, true)} />
             </Suspense></PageErrorBoundary>
           : route.name === "new"
-            ? <Composer {...modelingProps(options)} onDiscuss={async () => {
+            ? <Composer {...modelingProps(options)} openExamples={() => setExamplesOpen(true)} onDiscuss={async () => {
                 const preset = presets.find(item => item.id === draft.preset) ?? presets[0];
                 const id = await createRequirements({ description: draft.description, data: draft.data }, preset, draft.origin);
                 void refresh(); go({ name: "chat", id });

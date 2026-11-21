@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import type { Message } from "@langchain/langgraph-sdk";
-import { ArrowDown, ArrowRight, CalendarDays, Check, Factory, Globe, MessageSquareText, Paperclip, RefreshCw, Save, Sparkles, Truck } from "lucide-react";
+import { ArrowDown, ArrowRight, CalendarDays, Check, Factory, Globe, MessageSquareText, Paperclip, Save, Sparkles, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -16,9 +16,9 @@ import { locale, t } from "@/i18n";
 import { useDesktop } from "@/lib/useDesktop";
 import { cn } from "@/lib/utils";
 import type { RequirementsMeta, Usage } from "@/features/runs/types";
-import { ChatMessages } from "@/features/chat/Messages";
+import { ChatMessages, ThreadLoadError } from "@/features/chat/Messages";
 import { ChatInput } from "@/features/chat/ChatInput";
-import { useConversation } from "@/features/chat/conversation";
+import { useChatModel, useConversation } from "@/features/chat/conversation";
 import { useChatScroll } from "@/features/chat/scroll";
 
 type Values = Partial<RequirementsDraft> & { messages?: Message[]; usage?: Usage; failure?: string | null };
@@ -31,15 +31,12 @@ const STARTERS = [
 /** Conversation state and checkpoints belong to LangGraph; only unsaved editing lives in React. */
 export function Requirements({ threadId, searchConfigured, onFinished, onUse, ...modeling }: ModelingConfigProps & {
   threadId: string; searchConfigured: boolean; onFinished: () => void; onUse: (draft: RequirementsDraft) => void;
-  openExamples?: () => void;
 }) {
   const { presets, openPresets } = modeling;
   const desktop = useDesktop();
   const layout = useDefaultLayout({ id: "llm4om-requirements", panelIds: ["conversation", "problem"], onlySaveAfterUserInteractions: true });
   const [assistantOpen, setAssistantOpen] = useState(true);
   const [focusPane, setFocusPane] = useState("assistant");
-  const [selected, setSelected] = useState<string>();
-  const [thinking, setThinking] = useState<boolean>();
   const [search, setSearch] = useState<boolean>();
   const [edited, setEdited] = useState<RequirementsDraft | null>(null);
   const conversation = useConversation<Values>({ assistantId: "requirements", threadId,
@@ -65,9 +62,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const inputArea = useRef<HTMLTextAreaElement>(null);
   const draft = edited ?? { description: conversation.values.description ?? "", data: conversation.values.data ?? {} };
   const messages = conversation.messages;
-  const preset = presets.find(item => item.id === (selected ?? meta?.preset)) ?? presets[0];
-  const presetId = preset?.id;
-  const thinkingMode = preset?.provider === "deepseek" ? thinking ?? meta?.thinking ?? null : null;
+  const { preset, presetId, setSelected, thinkingMode, setThinking } = useChatModel(presets, meta);
   const canSearch = searchConfigured || preset?.provider === "deepseek";
   const searchOn = !!canSearch && (search ?? meta?.search ?? false);
   const busy = conversation.busy || action || reading;
@@ -128,8 +123,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   };
   const stop = async () => { if (await conversation.stop()) onFinished(); };
 
-  if (conversation.thread.error) return <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-destructive">
-    <p>{errorText(conversation.thread.error)}</p><Button variant="outline" onClick={conversation.thread.reload}><RefreshCw />{t("重试")}</Button></div>;
+  if (conversation.thread.error) return <ThreadLoadError error={conversation.thread.error} onReload={conversation.thread.reload} />;
 
   const conversationPanel = <TabsContent value="assistant" forceMount className={cn("mt-0 h-full min-h-0 min-w-0 data-[state=inactive]:hidden", assistantOpen ? "lg:data-[state=inactive]:block" : "hidden")}>
     <aside aria-label={t("需求助手")} className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border bg-card shadow-xs">

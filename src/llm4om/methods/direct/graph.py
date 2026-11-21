@@ -1,7 +1,6 @@
 """Direct generation, and bounded repair with execution feedback and semantic review."""
 
 import json
-import re
 from dataclasses import asdict
 from typing import Any, Literal
 
@@ -10,7 +9,7 @@ from langgraph.runtime import Runtime
 from pydantic import BaseModel, Field
 
 from llm4om.methods import Method, presets
-from llm4om.methods.common import ask, split_formulation_and_code
+from llm4om.methods.common import ask, split_formulation_and_code, strip_json_fence
 from llm4om.methods.direct.prompts import REPAIR, REVIEW, SYSTEM
 from llm4om.runtime import Context, ModelingState
 from llm4om.sandbox import SolveResult
@@ -86,9 +85,8 @@ def attempt_feedback(state: State) -> str:
 async def review(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     reply = await ask(runtime.context, "review", REVIEW.format(target=runtime.context.target.prompt),
                       state["problem"] + "\n\n" + attempt_feedback(state))
-    fenced = re.fullmatch(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n?```", reply.strip(), re.S | re.I)
     try:
-        verdict = Review.model_validate_json(fenced[1] if fenced else reply)
+        verdict = Review.model_validate_json(strip_json_fence(reply))
     except ValueError as error:
         return {"failure": f"Could not read the model review: {error}"}
     return {"review": verdict.model_dump()}

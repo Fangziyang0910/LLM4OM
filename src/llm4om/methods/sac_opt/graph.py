@@ -5,7 +5,6 @@ llm4om adaptations (batching, attachments and bounded final validation) are deta
 """
 
 import json
-import re
 import textwrap
 from dataclasses import asdict
 from typing import Annotated, TypeVar
@@ -16,7 +15,7 @@ from langgraph.runtime import Runtime
 from pydantic import AfterValidator, BaseModel, Field
 
 from llm4om.methods import Method, presets
-from llm4om.methods.common import TWO_PARTS, split_formulation_and_code
+from llm4om.methods.common import TWO_PARTS, split_formulation_and_code, strip_json_fence
 from llm4om.model_code import ModelCode
 from llm4om.runtime import Context, ModelingState
 
@@ -98,8 +97,7 @@ async def structured(context: Context, role: str, instruction: str, payload: dic
     for attempt in range(presets.SAC_OPT.max_parse_attempts):
         reply = await context.llm(role).bind(temperature=presets.SAC_OPT.temperature).ainvoke(messages)
         try:
-            cleaned = re.sub(r"^```(?:json)?[ \t]*\r?\n?|\r?\n?```$", "", reply.text.strip(), flags=re.I).strip()
-            parsed = schema.model_validate_json(cleaned)
+            parsed = schema.model_validate_json(strip_json_fence(reply.text))
             if length and len(getattr(parsed, length[0])) != length[1]:
                 raise ValueError(f"{length[0]} must have exactly {length[1]} entries, covering every constraint in order.")
             return parsed
