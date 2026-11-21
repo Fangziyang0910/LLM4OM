@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
-import { ArrowRight, Check, ChevronDown, CircleCheck, Clock, CodeXml, Columns3, Cpu, FileDown, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sparkles, Square, Tag, Trash2, TriangleAlert, Zap } from "lucide-react";
+import { ArrowRight, Check, CircleCheck, Clock, Columns3, FileDown, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sparkles, Square, Tag, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -131,13 +131,11 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const methodText = method?.name ?? meta.method;
   const engineBadge = targetText && !targetText.toLowerCase().startsWith(methodText.toLowerCase())
     ? `${methodText} · ${targetText}` : (targetText || methodText);
-  const facts: [React.ReactNode, React.ReactNode, string?][] = [
-    [<Layers />, methodText, method?.description],
-    [<CodeXml />, targetText],
-    [<Cpu />, meta.model ?? provider?.label, provider?.label],
-    [<Clock />, elapsed == null ? "—" : duration(elapsed)],
-  ];
-  if (calls) facts.push([<Zap />, t("{count} 次推理", { count: calls }) + (tokens ? ` · ${formatTokens(tokens)} token` : "")]);
+  const configDetail = [
+    engineBadge,
+    meta.model ?? provider?.label,
+    calls ? t("{count} 次推理", { count: calls }) + (tokens ? ` · ${formatTokens(tokens)} token` : "") : null,
+  ].filter(Boolean).join(" · ");
 
   const followUpActions = !active && !embedded ? <div role="group" aria-label={t("运行操作")} className="flex flex-wrap items-center gap-2">
     <Button variant="secondary" size="sm" className="rounded-lg shadow-2xs" disabled={busy || !values.description} onClick={() => setRevision("")}>
@@ -153,32 +151,27 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   </div> : null;
 
   return <div className="flex h-full min-h-0 min-w-0 flex-col overflow-y-auto">
-    <header className="flex shrink-0 flex-col gap-2.5 border-b border-border/70 bg-background/80 px-4 py-3 backdrop-blur-md sm:px-5 md:flex-row md:items-center">
+    <header className={cn(
+      "flex shrink-0 flex-col gap-2 border-b border-border/70 bg-background/80 px-4 backdrop-blur-md sm:px-5 md:flex-row md:items-center",
+      embedded ? "py-2" : "py-2.5",
+    )}>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {!embedded && !assistantOpen && (meta.group || meta.conversation) ? <div className="flex flex-wrap items-center gap-3">
           {meta.group ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground hover:text-primary" onClick={() => onCompare(meta.group!)}><Columns3 />{t("返回对比列表")}</Button> : null}
           {meta.conversation ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground hover:text-primary" onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回对话规划")}</Button> : null}
         </div> : null}
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Tooltip>
+          {!embedded ? <Tooltip>
             <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{title}</h1></TooltipTrigger>
             <TooltipContent className="max-w-md whitespace-pre-wrap">{(values.description || title).slice(0, 400)}</TooltipContent>
-          </Tooltip>
-          <span className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+          </Tooltip> : null}
+          <span title={configDetail} className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
             {engineBadge}
           </span>
           {elapsed != null ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/70 px-2 py-0.5 text-[11px] text-muted-foreground tabular">
             <Clock className="size-3" />{duration(elapsed)}
           </span> : null}
         </div>
-        <details className="group/info min-w-0 text-xs text-muted-foreground">
-          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <span>{t("查看求解配置")}</span><ChevronDown className="size-3.5 shrink-0 transition-transform group-open/info:rotate-180" />
-          </summary>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 rounded-xl border border-border/60 bg-muted/20 px-3 py-2 [&_svg]:size-3.5">
-            {facts.filter(([, text]) => text).map(([icon, text, hint], index) => <span key={index} title={hint} className="flex min-w-0 items-center gap-1.5 break-all [&_svg]:shrink-0 [&_svg]:text-muted-foreground">{icon}{text}</span>)}
-          </div>
-        </details>
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5 empty:hidden">
           {meta.tags?.map(tag => <Badge key={tag} variant="secondary" title={tag} className="h-5 max-w-48 gap-1 font-normal"><Tag className="size-3" /><span className="truncate">{tag}</span></Badge>)}
           {meta.note ? <button className="flex max-w-80 items-center gap-1.5 truncate hover:text-foreground" title={meta.note} onClick={() => setNoting(true)}>

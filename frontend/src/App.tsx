@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Menu, Plus, RefreshCw, ServerCrash } from "lucide-react";
+import { Menu, PanelLeftOpen, Plus, RefreshCw, ServerCrash } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -61,6 +61,13 @@ export default function App() {
   const [examplesOpen, setExamplesOpen] = useState(false);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try { return localStorage.getItem("llm4om-sidebar") !== "closed"; } catch { return true; }
+  });
+  const toggleSidebar = (open: boolean) => {
+    setSidebarOpen(open);
+    try { localStorage.setItem("llm4om-sidebar", open ? "open" : "closed"); } catch { /* ignore */ }
+  };
   const [search, setSearch] = useState("");
   const [confirm, setConfirm] = useState<Confirm | null>(null);
 
@@ -148,27 +155,32 @@ export default function App() {
     openPresets: () => setPresetsOpen(true) });
 
   const current = "id" in route ? route.id : null;
-  const activeMode = route.name === "agent-new" || route.name === "agent" ? "agent" : "quick";
-  const sidebar = <Sidebar entries={entries} current={current} activeMode={activeMode} options={options} presets={presets} onNew={newProblem} onAgent={openAgent}
-    query={search} onQuery={setSearch}
-    hasMore={historyQuery.hasNextPage} loading={historyQuery.isFetching} error={historyQuery.error ? errorText(historyQuery.error) : null}
-    onLoadMore={() => void historyQuery.fetchNextPage()} onRetry={() => void historyQuery.refetch()}
-    onOpen={entry => go({ name: entry.meta.kind === "optimization" ? "agent" : entry.meta.kind === "solution_chat" ? "discussion" : entry.meta.kind === "requirements" ? "chat" : "run", id: entry.id })}
-    onCompare={group => go({ name: "compare", id: group })} onDelete={remove}
-    onExamples={() => { setExamplesOpen(true); setMenuOpen(false); }} onPresets={() => { setPresetsOpen(true); setMenuOpen(false); }} />;
+  const activeMode: "quick" | "agent" = route.name === "agent-new" || route.name === "agent" ? "agent" : "quick";
+  const sidebarProps = { entries, current, activeMode, options, presets, onNew: newProblem, onAgent: openAgent,
+    query: search, onQuery: setSearch,
+    hasMore: historyQuery.hasNextPage, loading: historyQuery.isFetching, error: historyQuery.error ? errorText(historyQuery.error) : null,
+    onLoadMore: () => void historyQuery.fetchNextPage(), onRetry: () => void historyQuery.refetch(),
+    onOpen: (entry: Entry) => go({ name: entry.meta.kind === "optimization" ? "agent" : entry.meta.kind === "solution_chat" ? "discussion" : entry.meta.kind === "requirements" ? "chat" : "run", id: entry.id }),
+    onCompare: (group: string) => go({ name: "compare", id: group }), onDelete: remove,
+    onExamples: () => { setExamplesOpen(true); setMenuOpen(false); }, onPresets: () => { setPresetsOpen(true); setMenuOpen(false); } };
 
   return <div className="flex h-dvh overflow-hidden bg-background">
-    <aside aria-label={t("导航")} className="hidden w-68 shrink-0 border-r border-sidebar-border xl:block">{sidebar}</aside>
+    {sidebarOpen ? <aside aria-label={t("导航")} className="hidden w-64 shrink-0 border-r border-sidebar-border xl:block">
+      <Sidebar {...sidebarProps} onCollapse={() => toggleSidebar(false)} />
+    </aside> : null}
     <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
       <SheetContent side="left" className="w-72 gap-0 p-0" aria-describedby={undefined}>
         <SheetTitle className="sr-only">{t("导航")}</SheetTitle>
-        {sidebar}
+        <Sidebar {...sidebarProps} />
       </SheetContent>
     </Sheet>
 
     <div className="ambient-canvas flex min-w-0 flex-1 flex-col">
-      {(route.name !== "agent-new" && route.name !== "agent" || !options || optionsQuery.error) ? <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-background/80 px-2.5 backdrop-blur-md xl:hidden">
-        <Button variant="ghost" size="icon-sm" aria-label={t("打开菜单")} onClick={() => setMenuOpen(true)}><Menu /></Button>
+      {(route.name !== "agent-new" && route.name !== "agent" || !options || optionsQuery.error) ? <header className={sidebarOpen
+        ? "flex h-12 shrink-0 items-center gap-2 border-b bg-background/80 px-2.5 backdrop-blur-md xl:hidden"
+        : "flex h-12 shrink-0 items-center gap-2 border-b bg-background/80 px-2.5 backdrop-blur-md"}>
+        <Button variant="ghost" size="icon-sm" aria-label={t("打开菜单")} className="xl:hidden" onClick={() => setMenuOpen(true)}><Menu /></Button>
+        {!sidebarOpen ? <Button variant="ghost" size="icon-sm" aria-label={t("展开侧边栏")} title={t("展开侧边栏")} className="hidden xl:inline-flex" onClick={() => toggleSidebar(true)}><PanelLeftOpen /></Button> : null}
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? t("多方案对比")
           : route.name === "agent-new" || route.name === "agent" ? t("智能优化对话") : route.name === "chat" ? t("需求梳理") : route.name === "discussion" ? t("方案追问") : route.name === "compare" ? t("方案对比") : t("求解结果")}</span>
         <Button variant="ghost" size="icon-sm" aria-label={t("新建优化任务")} title={t("新建优化任务")} onClick={openAgent}><Plus /></Button>
@@ -191,6 +203,7 @@ export default function App() {
             ? <PageErrorBoundary key={route.name === "agent" ? route.id : `new-${agentDraft.id}`}><Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
               <Agent key={route.name === "agent" ? route.id : `new-${agentDraft.id}`} threadId={route.name === "agent" ? route.id : undefined}
                 options={options} presets={presets} initial={agentDraft}
+                sidebarCollapsed={!sidebarOpen} onExpandSidebar={() => toggleSidebar(true)}
                 onThread={id => { setAgentDraft({ id: ++agentDraftSeq.current, description: "", data: {} }); go({ name: "agent", id }); }}
                 openPresets={() => setPresetsOpen(true)} onExamples={() => setExamplesOpen(true)} onMenu={() => setMenuOpen(true)}
                 onFinished={() => void refresh()} onOpen={openRun} onCompare={id => go({ name: "compare", id })} renderRun={source => renderRun(source, false, true)} />

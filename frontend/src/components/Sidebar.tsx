@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, ChartSpline, ChevronDown, Columns3, Cpu, History, MessageSquareText, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
+import { BookOpen, ChartSpline, ChevronDown, Columns3, Cpu, History, MessageSquareText, MoreHorizontal, PanelLeftClose, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -54,12 +54,12 @@ export function matches(entry: Entry, query: string, methodName: (id: string) =>
 }
 
 export function Sidebar({ entries, current, activeMode = "quick", options, presets, query, onQuery, hasMore, loading, error, onLoadMore, onRetry,
-  onNew, onAgent, onOpen, onCompare, onDelete, onExamples, onPresets }: {
+  onNew, onAgent, onOpen, onCompare, onDelete, onExamples, onPresets, onCollapse }: {
   entries: Entry[]; current: string | null; activeMode?: "quick" | "agent"; options: Options | null; presets: Preset[];
   query: string; onQuery: (query: string) => void;
   hasMore: boolean; loading: boolean; error: string | null; onLoadMore: () => void; onRetry: () => void;
   onNew: () => void; onAgent: () => void; onOpen: (entry: Entry) => void; onCompare: (group: string) => void; onDelete: (entry: Entry) => void;
-  onExamples: () => void; onPresets: () => void;
+  onExamples: () => void; onPresets: () => void; onCollapse?: () => void;
 }) {
   const methodName = (id: string) => options?.methods.find(item => item.id === id)?.name ?? id;
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -77,25 +77,23 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
     const comparison = isRunEntry(entry) ? entry.meta.group : null;
     return <div className="group/item relative">
       <button onClick={() => onOpen(entry)} title={entry.meta.title} aria-current={selectedItem ? "page" : undefined}
-        className={cn("flex w-full flex-col gap-1 rounded-xl px-2.5 py-2 pr-8 text-left transition-all duration-150 hover:bg-sidebar-accent/70",
-          selectedItem && "bg-sidebar-accent shadow-2xs ring-1 ring-primary/15")}>
-        <span className="flex items-center gap-2">
+        className={cn("flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors duration-150 hover:bg-sidebar-accent/70",
+          selectedItem && "bg-sidebar-accent ring-1 ring-primary/15")}>
+        <span className="flex min-w-0 items-center gap-2 pr-5 [@media(hover:hover)]:pr-0 [@media(hover:hover)]:group-hover/item:pr-6 [@media(hover:hover)]:group-focus-within/item:pr-6">
           {!isRunEntry(entry) ? <MessageSquareText className={cn("size-3.5 shrink-0", selectedItem ? "text-primary" : "text-muted-foreground")} />
             : <StatusIcon status={entry.state} className="size-3.5 shrink-0" />}
-          <span className={cn("truncate text-[13px]", selectedItem ? "font-semibold text-foreground" : "text-foreground/90")}>{entry.meta.title}</span>
+          <span className={cn("min-w-0 flex-1 truncate text-[13px] leading-5", selectedItem ? "font-medium text-foreground" : "text-foreground/90")}>{entry.meta.title}</span>
         </span>
-        <span className="flex items-center gap-1.5 pl-5.5 text-[11px] text-muted-foreground">
-          <span className={cn("truncate font-medium tabular", TONE[tone(entry.state)].text)}>{resultText(entry)}</span>
-          {comparison ? <span className="inline-flex shrink-0 items-center gap-0.5 text-muted-foreground/80" title={isRunEntry(entry) && entry.meta.scenario ? t("多情景对比") : t("多方案对比")}>
-            <span>·</span><Columns3 className="size-3" aria-label={isRunEntry(entry) && entry.meta.scenario ? t("多情景对比") : t("多方案对比")} />
-          </span> : null}
-          <span className="ml-auto shrink-0 tabular text-muted-foreground/80">{when(entry.created)}</span>
+        <span className="flex min-w-0 items-center gap-1.5 pl-[22px] text-[11px] leading-4 text-muted-foreground">
+          <span className={cn("min-w-0 truncate tabular", TONE[tone(entry.state)].text)}>{resultText(entry)}</span>
+          {comparison ? <Columns3 className="size-3 shrink-0 text-muted-foreground/70" aria-label={isRunEntry(entry) && entry.meta.scenario ? t("多情景对比") : t("多方案对比")} /> : null}
+          <span className="ml-auto shrink-0 tabular text-muted-foreground/70 transition-opacity [@media(hover:hover)]:group-hover/item:opacity-0 [@media(hover:hover)]:group-focus-within/item:opacity-0">{when(entry.created)}</span>
         </span>
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label={t("更多操作：{title}", { title: entry.meta.title })}
-            className="absolute top-1.5 right-1 size-7 rounded-lg opacity-100 [@media(hover:hover)]:opacity-0 group-hover/item:opacity-100 group-focus-within/item:opacity-100 data-[state=open]:opacity-100">
+          <Button variant="ghost" size="icon-xs" aria-label={t("更多操作：{title}", { title: entry.meta.title })}
+            className="absolute top-1.5 right-1.5 size-6 rounded-md opacity-100 [@media(hover:hover)]:opacity-0 group-hover/item:opacity-100 group-focus-within/item:opacity-100 data-[state=open]:opacity-100">
             <MoreHorizontal className="size-3.5" /></Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" side="right">
@@ -107,27 +105,30 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
   };
 
   return <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground select-none">
-    <div className="flex flex-col gap-3 p-3.5 pb-2.5">
-      <a className="group flex items-center gap-2.5 rounded-xl px-1.5 py-1 transition-colors hover:bg-sidebar-accent/50" href="/"
-        title={t("通用智能优化求解器 — 求解各种复杂优化问题的通用求解器")} onClick={event => { event.preventDefault(); onAgent(); }}>
-        <span className="grid size-8.5 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-xs transition-transform duration-200 group-hover:scale-105">
-          <ChartSpline className="size-4.5" />
-        </span>
-        <span className="flex min-w-0 flex-col leading-tight">
-          <span className="truncate text-[14px] font-semibold tracking-tight">{t("通用智能优化求解器")}</span>
-          <span className="truncate text-[11px] text-muted-foreground">{t("自然语言建模与智能求解")}</span>
-        </span>
-      </a>
+    <div className="flex flex-col gap-2.5 px-3 pt-3 pb-2.5">
+      <div className="flex items-center gap-1">
+        <a className="group flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1 transition-colors hover:bg-sidebar-accent/50" href="/"
+          title={t("通用智能优化求解器 — 求解各种复杂优化问题的通用求解器")} onClick={event => { event.preventDefault(); onAgent(); }}>
+          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground shadow-2xs">
+            <ChartSpline className="size-4" />
+          </span>
+          <span className="min-w-0 truncate text-[14px] font-semibold tracking-tight">{t("通用智能优化求解器")}</span>
+        </a>
+        {onCollapse ? <Button type="button" variant="ghost" size="icon-sm" aria-label={t("收起侧边栏")} title={t("收起侧边栏")}
+          className="size-7 shrink-0 rounded-lg text-muted-foreground hover:text-foreground" onClick={onCollapse}>
+          <PanelLeftClose className="size-4" />
+        </Button> : null}
+      </div>
 
-      <Button type="button" onClick={onAgent} className="h-9.5 w-full justify-center gap-1.5 rounded-xl text-[13px] font-medium shadow-xs">
+      <Button type="button" onClick={onAgent} className="h-9 w-full justify-center gap-1.5 rounded-lg text-[13px] font-medium shadow-2xs">
         <Plus className="size-4" />
         <span>{t("新建优化任务")}</span>
       </Button>
 
       {entries.length > 0 || query ? <div className="relative">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input aria-label={t("搜索记录")} placeholder={t("搜索历史问题或标签…")} value={query} onChange={event => onQuery(event.target.value)}
-          className="h-8.5 rounded-xl bg-background/80 pr-8 pl-8 text-xs shadow-none" />
+        <Input aria-label={t("搜索记录")} placeholder={t("搜索历史记录…")} value={query} onChange={event => onQuery(event.target.value)}
+          className="h-8 rounded-lg bg-background/80 pr-7 pl-8 text-xs shadow-none" />
         {query ? <Button variant="ghost" size="icon-xs" aria-label={t("清除搜索")} className="absolute top-1/2 right-1 -translate-y-1/2" onClick={() => onQuery("")}><X /></Button> : null}
       </div> : null}
 
@@ -144,15 +145,14 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
     </div>
 
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <nav aria-label={t("运行记录")} className="px-2.5 pb-3">
-        {!entries.length && !loading && !error ? <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed bg-background/40 px-4 py-8 mx-1 mt-2 text-center text-xs text-muted-foreground">
-          <History className="size-5 text-muted-foreground/60" />
+      <nav aria-label={t("运行记录")} className="px-3 pb-3">
+        {!entries.length && !loading && !error ? <div className="mt-2 flex flex-col items-center gap-1.5 rounded-lg border border-dashed bg-background/40 px-4 py-7 text-center text-xs text-muted-foreground">
+          <History className="size-4 text-muted-foreground/60" />
           <p className="font-medium text-foreground/75">{t("暂无求解记录")}</p>
-          <p className="text-[11px] leading-relaxed">{t("每次求解的问题、方案与对话都会自动保存在这里。")}</p>
         </div> : null}
-        {entries.length && !shown.length ? <p className="px-3 py-6 text-center text-xs text-muted-foreground">{t("没有找到匹配的记录。")}</p> : null}
-        {[...groups].map(([label, items]) => <section key={label} className="mt-2 first:mt-0.5">
-          <h2 className="px-2.5 py-1.5 text-[11px] font-medium tracking-wide text-muted-foreground/80">{label}</h2>
+        {entries.length && !shown.length ? <p className="px-2.5 py-6 text-center text-xs text-muted-foreground">{t("没有找到匹配的记录。")}</p> : null}
+        {[...groups].map(([label, items]) => <section key={label} className="mt-3 first:mt-1">
+          <h2 className="px-2.5 pb-1 text-[11px] font-medium text-muted-foreground/75">{label}</h2>
           <ul className="flex flex-col gap-0.5">{items.map(({ entry, related }) => {
             const hasActiveOrMatchingChild = related.some(item => item.id === current)
               || (!!query.trim() && related.some(item => matches(item, query, methodName)));
@@ -161,7 +161,7 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
             return <li key={entry.id}>
               {row(entry)}
               {related.length ? <>
-                <Button variant="ghost" size="xs" aria-expanded={open} className="mb-1 ml-6 h-6 gap-1 rounded-lg text-[11px] font-normal text-muted-foreground"
+                <Button variant="ghost" size="xs" aria-expanded={open} className="mb-1 ml-[22px] h-6 gap-1 rounded-md px-1.5 text-[11px] font-normal text-muted-foreground"
                   aria-label={t("相关记录：{title}", { title: entry.meta.title })}
                   onClick={() => setExpanded(value => ({ ...value, [entry.id]: !open }))}>
                   <ChevronDown className={cn("size-3 transition-transform duration-150", !open && "-rotate-90")} />{t("{count} 条衍生方案", { count: related.length })}
@@ -171,37 +171,31 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
             </li>;
           })}</ul>
         </section>)}
-        {error ? <div className="p-3 text-xs text-destructive"><p>{error}</p><Button variant="link" size="sm" onClick={onRetry}>{t("重试")}</Button></div> : null}
-        {hasMore ? <div className="p-2 text-center">
+        {error ? <div className="p-2.5 text-xs text-destructive"><p>{error}</p><Button variant="link" size="sm" className="px-0" onClick={onRetry}>{t("重试")}</Button></div> : null}
+        {hasMore ? <div className="pt-2 text-center">
           {query ? <p className="mb-1 text-xs text-muted-foreground">{t("正在搜索已加载的 {count} 条记录", { count: entries.length })}</p> : null}
-          <Button variant="outline" size="sm" className="w-full rounded-xl" disabled={loading} onClick={onLoadMore}>
+          <Button variant="outline" size="sm" className="w-full rounded-lg" disabled={loading} onClick={onLoadMore}>
             {loading ? t("正在加载……") : t("加载更早的记录")}</Button>
         </div> : null}
       </nav>
     </div>
 
-    <div className="flex flex-col gap-1 border-t bg-sidebar/80 p-2.5">
+    <div className="flex flex-col gap-0.5 border-t border-sidebar-border/80 bg-sidebar/80 p-3 py-2">
       <Button variant={activeMode === "quick" && !current ? "secondary" : "ghost"}
-        className="h-9 justify-start gap-2.5 rounded-xl px-2.5 text-[13px] font-normal text-foreground/85 hover:bg-sidebar-accent"
+        className="h-8.5 justify-start gap-2.5 rounded-lg px-2.5 text-[13px] font-normal text-foreground/85 hover:bg-sidebar-accent"
         title={t("同一问题并排体验多种建模方法、模型或求解器")}
         onClick={onNew}>
-        <Columns3 className="size-4 text-primary/80" />{t("多方案对比")}
+        <Columns3 className="size-4 shrink-0 text-muted-foreground" />{t("多方案对比")}
       </Button>
-      <Button variant="ghost" className="h-9 justify-start gap-2.5 rounded-xl px-2.5 text-[13px] font-normal text-foreground/85 hover:bg-sidebar-accent" onClick={onExamples}>
-        <BookOpen className="size-4 text-primary/80" />{t("案例模板库")}
+      <Button variant="ghost" className="h-8.5 justify-start gap-2.5 rounded-lg px-2.5 text-[13px] font-normal text-foreground/85 hover:bg-sidebar-accent" onClick={onExamples}>
+        <BookOpen className="size-4 shrink-0 text-muted-foreground" />{t("案例模板库")}
       </Button>
       <div className="flex items-center gap-1">
-        <Button variant="ghost" className="h-auto min-w-0 flex-1 justify-start gap-2.5 rounded-xl px-2.5 py-1.5 font-normal hover:bg-sidebar-accent" onClick={onPresets}>
+        <Button variant="ghost" className="h-8.5 min-w-0 flex-1 justify-start gap-2.5 rounded-lg px-2.5 text-[13px] font-normal text-foreground/85 hover:bg-sidebar-accent"
+          title={preset ? `${preset.name || preset.model}` : t("点击配置可用模型")} onClick={onPresets}>
           <Cpu className="size-4 shrink-0 text-muted-foreground" />
-          <span className="flex min-w-0 flex-col items-start leading-tight">
-            <span className="flex items-center gap-1.5 text-[13px]">
-              <span>{t("AI 模型设置")}</span>
-              <span className={cn("size-1.5 rounded-full", preset ? "bg-success" : "bg-destructive")} />
-            </span>
-            <span className={cn("max-w-full truncate text-[11px]", preset ? "text-muted-foreground" : "text-destructive")}>
-              {preset ? presets.length > 1 ? t("{model} 等 {count} 个可用", { model: preset.name || preset.model, count: presets.length }) : preset.name || preset.model : t("点击配置可用模型")}
-            </span>
-          </span>
+          <span className="truncate">{t("AI 模型")}</span>
+          <span className={cn("ml-auto size-1.5 shrink-0 rounded-full", preset ? "bg-success" : "bg-destructive")} />
         </Button>
         <ThemeMenu />
       </div>

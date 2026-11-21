@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, BookOpen, Factory, GitFork, Sparkles, Truck } from "lucide-react";
+import { ArrowRight, Factory, GitFork, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { t } from "@/i18n";
@@ -66,7 +66,7 @@ export type ComposerProps = ModelingConfigProps & {
   onDiscuss?: () => Promise<void>;
 };
 
-export function Composer({ openExamples, ...modeling }: ComposerProps) {
+export function Composer({ ...modeling }: ComposerProps) {
   const { draft, setDraft, options } = modeling;
   const [reading, setReading] = useState(false);
   const set = (change: Partial<Draft>) => setDraft(current => ({ ...current, ...change }));
@@ -87,24 +87,9 @@ export function Composer({ openExamples, ...modeling }: ComposerProps) {
   return <div className="flex h-full flex-col">
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex min-h-full max-w-5xl flex-col gap-4 p-4 sm:px-6 sm:py-5 lg:h-full">
-        <header className="animate-fade-up flex shrink-0 flex-col gap-2">
-          <div className="hidden flex-wrap items-center gap-2 text-xs text-muted-foreground sm:flex" aria-label={t("使用步骤")}>
-            <span className="inline-flex items-center gap-1.5 rounded-full border bg-card/80 px-2.5 py-0.5 font-medium text-foreground/85 shadow-2xs">
-              <span className="grid size-4 place-items-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">1</span>{t("描述目标与条件")}
-            </span>
-            <span className="text-muted-foreground/50">→</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border bg-card/80 px-2.5 py-0.5">
-              <span className="grid size-4 place-items-center rounded-full bg-muted text-[10px] font-semibold">2</span>{t("上传表格（可选）")}
-            </span>
-            <span className="text-muted-foreground/50">→</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border bg-card/80 px-2.5 py-0.5">
-              <span className="grid size-4 place-items-center rounded-full bg-muted text-[10px] font-semibold">3</span>{t("自动求得最优方案")}
-            </span>
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("你想解决什么优化问题？")}</h1>
-            <p className="mt-1 hidden text-[13px] leading-relaxed text-muted-foreground sm:block">{t("无需编写公式或代码：用日常语言说明目标（如降低成本、提高利润、合理排班）与限制条件，系统将自动完成数学建模并算出最优方案。")}</p>
-          </div>
+        <header className="animate-fade-up flex shrink-0 flex-col gap-1">
+          <h1 className="text-lg font-semibold tracking-tight sm:text-xl">{t("多方案对比")}</h1>
+          <p className="text-xs text-muted-foreground sm:text-[13px]">{t("同一问题可指定或并排对比多种建模方法、AI 模型与求解器。")}</p>
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col gap-5">
@@ -121,11 +106,9 @@ export function Composer({ openExamples, ...modeling }: ComposerProps) {
               const data = { ...current.data }; delete data[name]; return { ...current, data };
             })} />
 
-          {!draft.description ? <section className="animate-fade-up flex shrink-0 flex-col gap-2.5">
-            <div className="flex items-center justify-between gap-2 px-0.5">
-              <h2 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Sparkles className="size-3.5 text-primary/80" />{t("不知道怎么写？点选常见场景立即体验")}</h2>
-            </div>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {!draft.description ? <section className="animate-fade-up flex shrink-0 flex-col gap-2">
+            <h2 className="px-0.5 text-xs font-medium text-muted-foreground">{t("快速示例")}</h2>
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
               {STARTERS.map(item => {
                 const Icon = item.icon;
                 const targetMethod = item.method && options.methods.some(m => m.id === item.method) ? item.method : undefined;
@@ -133,33 +116,18 @@ export function Composer({ openExamples, ...modeling }: ComposerProps) {
                   description: t(item.description), data: item.data ?? {}, origin: undefined,
                   ...(targetMethod ? { method: targetMethod, comparing: false } : {}),
                 })}
-                  className="group flex min-w-0 items-start gap-3 rounded-2xl border bg-card/90 p-3.5 text-left shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-sm">
-                  <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                    <Icon className="size-4.5" />
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="flex items-center gap-2 text-sm">
-                      <span className="font-semibold text-foreground">{t(item.title)}</span>
-                      <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-[11px] font-normal">{t(item.tag)}</Badge>
-                      <ArrowRight className="ml-auto size-3.5 text-muted-foreground/60 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
+                  className="group flex min-w-0 flex-col gap-2 rounded-xl border bg-card/90 p-3.5 text-left transition-all duration-150 hover:border-primary/40 hover:bg-card hover:shadow-xs">
+                  <span className="flex items-center gap-2 text-sm">
+                    <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                      <Icon className="size-3.5" />
                     </span>
-                    <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t(item.summary)}</span>
+                    <span className="truncate font-medium text-foreground">{t(item.title)}</span>
+                    <Badge variant="secondary" className="h-4.5 shrink-0 rounded px-1.5 text-[10px] font-normal">{t(item.tag)}</Badge>
+                    <ArrowRight className="ml-auto size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-all group-hover:translate-x-0.5 group-hover:text-primary group-hover:opacity-100" />
                   </span>
+                  <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t(item.summary)}</span>
                 </button>;
               })}
-              <button type="button" onClick={openExamples}
-                className="group flex min-w-0 items-start gap-3 rounded-2xl border border-dashed bg-card/50 p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-sm">
-                <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-accent text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                  <BookOpen className="size-4.5" />
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <span>{t("浏览案例模板库")}</span>
-                    <ArrowRight className="ml-auto size-3.5 text-muted-foreground/60 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
-                  </span>
-                  <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t("涵盖生产制造、仓储配送、排班调度等真实优化场景，一键填入修改。")}</span>
-                </span>
-              </button>
             </div>
           </section> : null}
         </div>

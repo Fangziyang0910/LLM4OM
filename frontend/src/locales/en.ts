@@ -1073,6 +1073,14 @@ export const en: Record<string, string> = {
   "删除第 {row} 行": "Delete row {row}",
   "删除这一行": "Delete this row",
   "右侧方案面板正在实时展示求解进度…": "Live solving progress is shown in the plan panel on the right…",
+  "收起侧边栏": "Collapse sidebar",
+  "展开侧边栏": "Expand sidebar",
+  "搜索历史记录…": "Search history…",
+  "想优化什么问题？": "What would you like to optimize?",
+  "用日常语言描述目标和条件，或拖入表格直接求解。": "Describe your goals and constraints in plain language, or drop a spreadsheet to solve.",
+  "点击任意散点或行可查看对应决策明细。": "Click any point or row to inspect its decisions.",
+  "同一问题可指定或并排对比多种建模方法、AI 模型与求解器。": "Pick or compare multiple modeling methods, AI models, and solvers side by side.",
+  "快速示例": "Quick Examples",
 };
 
 /** Step titles with numbers in them. */

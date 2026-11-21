@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDefaultLayout } from "react-resizable-panels";
 import type { Message } from "@langchain/langgraph-sdk";
-import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, CalendarDays, Columns2, Factory, GitFork, Globe, Menu, Paperclip, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, Columns2, Factory, GitFork, Globe, Menu, PanelLeftOpen, Paperclip, SlidersHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
@@ -56,9 +56,10 @@ const AGENT_STARTERS = [
   },
 ] as const;
 
-export function Agent({ threadId, options, presets, initial, onThread, openPresets, onMenu, onExamples, onFinished, onOpen, onCompare, renderRun }: {
+export function Agent({ threadId, options, presets, initial, sidebarCollapsed = false, onExpandSidebar, onThread, openPresets, onMenu, onFinished, onOpen, onCompare, renderRun }: {
   threadId?: string; options: Options; presets: Preset[]; initial: { description: string; data: Record<string, string> };
-  onThread: (id: string) => void; openPresets: () => void; onMenu: () => void; onExamples: () => void;
+  sidebarCollapsed?: boolean; onExpandSidebar?: () => void;
+  onThread: (id: string) => void; openPresets: () => void; onMenu: () => void; onExamples?: () => void;
   onFinished: () => void; onOpen: (source: SourceRun) => void; onCompare: (id: string) => void; renderRun: (source: SourceRun) => ReactNode;
 }) {
   const desktop = useDesktop();
@@ -211,54 +212,30 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
             activeTaskId={desktop && workspace ? liveTask : undefined}
             onShowTask={id => { setLiveTask(id); setWorkspace(true); setPane("workspace"); }}
             onOpenPlan={source => { setViewed(source); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} />
-            : <div className="animate-fade-up mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-5 py-6">
-              <div className="space-y-2">
-                <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/8 px-3 py-1 text-xs font-medium text-primary">
-                  <Sparkles className="size-3.5" />
-                  <span>{t("对话式需求梳理与智能求解")}</span>
-                </div>
-                <h2 className="text-2xl font-semibold tracking-tight sm:text-[1.7rem]">{t("聊聊你想解决什么问题")}</h2>
-                <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  {t("哪怕只有初步想法也没关系。告诉我你的业务目标和限制条件，我会一步步帮你理清需求、自动建模并求得最优方案。")}
-                </p>
+            : <div className="animate-fade-up mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-6 py-6">
+              <div className="space-y-1.5 text-center">
+                <h2 className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]">{t("想优化什么问题？")}</h2>
+                <p className="text-sm text-muted-foreground">{t("用日常语言描述目标和条件，或拖入表格直接求解。")}</p>
               </div>
-              <div className="grid gap-2.5 sm:grid-cols-2">
+              <div className="grid gap-2.5 sm:grid-cols-3">
                 {AGENT_STARTERS.map(item => {
                   const Icon = item.icon;
                   return <button
                     key={item.title}
                     type="button"
                     onClick={() => { setInput(t(item.prompt)); inputArea.current?.focus(); }}
-                    className="group flex items-start gap-3 rounded-2xl border border-border/80 bg-card/85 p-3.5 text-left shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="group flex flex-col gap-2 rounded-xl border border-border/80 bg-card/85 p-3.5 text-left transition-all duration-150 hover:border-primary/35 hover:bg-card hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                      <Icon className="size-4" />
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium">{t(item.title)}</span>
-                        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0.5 group-hover:text-primary group-hover:opacity-100" />
-                      </div>
-                      <p className="line-clamp-1 text-xs text-muted-foreground">{t(item.summary)}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                        <Icon className="size-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{t(item.title)}</span>
+                      <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-all group-hover:translate-x-0.5 group-hover:text-primary group-hover:opacity-100" />
                     </div>
+                    <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t(item.summary)}</p>
                   </button>;
                 })}
-                <button
-                  type="button"
-                  onClick={onExamples}
-                  className="group flex items-start gap-3 rounded-2xl border border-dashed border-border bg-muted/25 p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground transition-colors group-hover:bg-primary/15 group-hover:text-primary">
-                    <BookOpen className="size-4" />
-                  </span>
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium">{t("浏览案例模板库")}</span>
-                      <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-                    </div>
-                    <p className="line-clamp-1 text-xs text-muted-foreground">{t("查看真实行业优化案例并一键带入")}</p>
-                  </div>
-                </button>
               </div>
             </div>}
         </div>
@@ -390,13 +367,21 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
       : <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">{t("开始求解后，最优决策方案、数学模型与计算代码将实时呈现在这里。")}</div>}</div>
   </aside> : null;
 
+  const hasConversation = !!threadId || messages.length > 0 || !!meta?.title || plans.length > 0 || !!currentPlan || !!task || workspace;
   return <div className="flex h-full min-h-0 flex-col">
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/70 bg-background/80 px-4 backdrop-blur-md">
+    <header className={cn(
+      "flex h-12 shrink-0 items-center gap-2 px-4",
+      hasConversation ? "border-b border-border/70 bg-background/80 backdrop-blur-md"
+        : sidebarCollapsed ? "bg-transparent" : "border-b border-border/70 bg-background/80 backdrop-blur-md xl:hidden",
+    )}>
       <Button variant="ghost" size="icon-sm" aria-label={t("打开菜单")} className="-ml-2 xl:hidden" onClick={onMenu}><Menu /></Button>
-      <Sparkles className="hidden size-4 text-primary sm:block" />
-      <h1 className="min-w-0 flex-1 truncate text-sm font-semibold">{meta?.title || t("对话规划")}</h1>
-      {(plans.length > 0 || !!currentPlan || !!task || workspace) ? <Button variant={workspace ? "secondary" : "ghost"} size="sm" className="rounded-lg" aria-pressed={workspace} onClick={() => { setWorkspace(!workspace); setPane("workspace"); }}>
-        <Columns2 />{t("方案面板")}
+      {sidebarCollapsed && onExpandSidebar ? <Button variant="ghost" size="icon-sm" aria-label={t("展开侧边栏")} title={t("展开侧边栏")}
+        className="-ml-1 hidden rounded-lg text-muted-foreground hover:text-foreground xl:inline-flex" onClick={onExpandSidebar}>
+        <PanelLeftOpen className="size-4" />
+      </Button> : null}
+      <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/90">{hasConversation ? (meta?.title || t("智能优化对话")) : ""}</h1>
+      {(plans.length > 0 || !!currentPlan || !!task || workspace) ? <Button variant={workspace ? "secondary" : "ghost"} size="sm" className="h-8 rounded-lg text-xs" aria-pressed={workspace} onClick={() => { setWorkspace(!workspace); setPane("workspace"); }}>
+        <Columns2 className="size-3.5" />{t("方案面板")}
       </Button> : null}
     </header>
     {workspace ? <div className="flex shrink-0 border-b lg:hidden">
@@ -442,7 +427,7 @@ function LiveWorkspace({ task, data, options }: { task: ModelingTask; data: Reco
       </div>
     </div>
     <div className="min-h-0 flex-1">
-      {view === "steps" ? <Timeline steps={task.steps} live={{}} active onShow={(key, id) => { setPicked(current => ({ ...current, [key]: id })); setTab(key); setView("outputs"); }} />
+      {view === "steps" ? <Timeline steps={task.steps} live={{}} active hideHeader onShow={(key, id) => { setPicked(current => ({ ...current, [key]: id })); setTab(key); setView("outputs"); }} />
         : <Outputs values={values} steps={task.steps} active tab={tab} setTab={setTab} picked={picked}
           setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))}
           language={options.languages.find(item => item.id === task.language)} finished={false} onAdjust={() => undefined} />}

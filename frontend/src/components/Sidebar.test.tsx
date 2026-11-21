@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { Sidebar, resultText } from "./Sidebar";
 import type { Entry } from "@/features/runs/types";
@@ -42,4 +42,13 @@ test("non-optimal solved runs keep their true solver status label instead of Opt
   expect(resultText(runEntry)).toBe("可行解 · 13");
   expect(resultText({ ...runEntry, state: "locally_optimal" })).toBe("局部最优 · 13");
   expect(resultText({ ...runEntry, state: "optimal" })).toBe("最优 · 13");
+});
+
+test("collapse button invokes onCollapse when provided", () => {
+  const onCollapse = vi.fn();
+  render(<Sidebar entries={[]} current={null} options={null} presets={[]} query="" hasMore={false} loading={false} error={null}
+    onQuery={vi.fn()} onLoadMore={vi.fn()} onRetry={vi.fn()} onNew={vi.fn()} onAgent={vi.fn()} onOpen={vi.fn()}
+    onCompare={vi.fn()} onDelete={vi.fn()} onExamples={vi.fn()} onPresets={vi.fn()} onCollapse={onCollapse} />);
+  fireEvent.click(screen.getByRole("button", { name: "收起侧边栏" }));
+  expect(onCollapse).toHaveBeenCalledOnce();
 });

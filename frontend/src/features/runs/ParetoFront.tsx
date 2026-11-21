@@ -167,8 +167,8 @@ export function ParetoFront({ pareto }: { pareto: ParetoFrontData }) {
       <Button variant="ghost" size="sm" className="ml-auto rounded-lg text-muted-foreground" aria-label={t("导出 Pareto CSV")} onClick={exportCsv}>
         <Download />{t("导出 Pareto CSV")}
       </Button>
-      <p className="w-full text-xs leading-relaxed text-muted-foreground">
-        {t("以下为多目标权衡的非支配解集，带“推荐折中”标记的为归一化拐点方案；点击任意一行可查看对应决策明细。")}
+      <p className="w-full text-xs text-muted-foreground">
+        {t("点击任意散点或行可查看对应决策明细。")}
       </p>
     </CardHeader>
     <CardContent className="flex min-w-0 flex-col gap-3.5 px-5">

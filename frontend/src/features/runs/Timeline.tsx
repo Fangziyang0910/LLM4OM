@@ -14,8 +14,8 @@ import { Code, Markdown, Plain } from "@/components/Content";
 import { StatusBadge, TONE } from "@/features/runs/status";
 
 /** The modeling process as phases: each intermediate result, solve or error with the AI reasoning logs folded cleanly. */
-export function Timeline({ steps, live, active, onShow }: {
-  steps: Step[]; live: Live; active: boolean; onShow: (tab: "formulation" | "code", id: string) => void;
+export function Timeline({ steps, live, active, hideHeader = false, onShow }: {
+  steps: Step[]; live: Live; active: boolean; hideHeader?: boolean; onShow: (tab: "formulation" | "code", id: string) => void;
 }) {
   const items = phases(steps);
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -37,14 +37,14 @@ export function Timeline({ steps, live, active, onShow }: {
   const milestones = items.filter(item => item.kind !== "working");
   const allOpen = milestones.length > 0 && milestones.every(item => open.has(item.id));
   return <div className="flex h-full min-h-0 flex-col">
-    <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border/70 bg-muted/15 px-4">
+    {!hideHeader ? <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border/70 bg-muted/15 px-4">
       <h2 className="shrink-0 text-sm font-semibold">{t("求解步骤")}</h2>
       <span className="min-w-0 truncate text-xs text-muted-foreground tabular">
         {t("{phases} 个步骤", { phases: milestones.length })}</span>
       {milestones.length ? <Button variant="ghost" size="xs" className="ml-auto text-muted-foreground"
         onClick={() => setOpen(allOpen ? new Set() : new Set(milestones.map(item => item.id)))}>
         {allOpen ? <ChevronsDownUp /> : <ChevronsUpDown />}{allOpen ? t("全部收起") : t("全部展开")}</Button> : null}
-    </div>
+    </div> : null}
     <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
       {!items.length ? <Empty className="h-full border-0">
         <EmptyHeader>
@@ -84,14 +84,16 @@ function PhaseItem({ phase, index, last, live, active, open, onOpenChange, onSho
   const markerTone = state === "done" ? "border-primary/25 bg-primary/10 text-primary" : state === "live" ? TONE.live.soft
     : state === "idle" ? TONE.idle.soft : TONE[state as "good" | "bad" | "warn"].soft;
 
+  const hasWorkingContent = phase.kind === "working" && calls.some(call => !call.running || !!live[call.id]);
+  const showContent = phase.kind === "working" ? hasWorkingContent : open;
   return <li className="relative flex gap-3 pb-3">
     {!last ? <span aria-hidden className="absolute top-7 bottom-0 left-3 w-px bg-border" /> : null}
     <span aria-hidden className={cn("relative z-10 mt-1.5 grid size-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold tabular [&_svg]:size-3", markerTone)}>
       {running ? <Spinner className="size-3" /> : state === "bad" ? <X /> : phase.kind === "solve" ? <Play className="fill-current" />
         : phase.kind === "working" ? <Ellipsis /> : index}
     </span>
-    <Collapsible open={open} onOpenChange={onOpenChange} disabled={phase.kind === "working"}
-      className={cn("min-w-0 flex-1 rounded-xl border border-border/80 bg-background transition-all", open ? "shadow-xs" : "hover:border-primary/30",
+    <Collapsible open={showContent} onOpenChange={onOpenChange} disabled={phase.kind === "working"}
+      className={cn("min-w-0 flex-1 rounded-xl border border-border/80 bg-background transition-all", showContent ? "shadow-xs" : "hover:border-primary/30",
         running && "border-primary/35")}>
       <CollapsibleTrigger title={title} className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left disabled:cursor-default">
         <span className={cn("min-w-0 flex-1 truncate text-[13px] font-medium", phase.kind === "working" && "text-muted-foreground")}>{title}</span>
@@ -99,7 +101,7 @@ function PhaseItem({ phase, index, last, live, active, open, onOpenChange, onSho
         {meta ? <span className="shrink-0 text-[11px] text-muted-foreground tabular">{meta}</span> : null}
         {phase.kind !== "working" ? <ChevronDown className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} /> : null}
       </CollapsibleTrigger>
-      {!open && summary ? <p className="-mt-1 truncate px-3.5 pb-2.5 text-xs text-muted-foreground">{summary}</p> : null}
+      {!showContent && summary ? <p className="-mt-1 truncate px-3.5 pb-2.5 text-xs text-muted-foreground">{summary}</p> : null}
       <CollapsibleContent className="flex flex-col gap-3 border-t border-border/60 px-3.5 py-3">
         {phase.kind === "artifact" ? <>
           <Clipped><Markdown text={step!.content} /></Clipped>
