@@ -189,16 +189,20 @@ export async function history(metadata?: Record<string, unknown>, offset = 0): P
   const client = await sdk();
   const threads = await client.threads.search({ limit: PAGE_SIZE, offset, sortBy: "created_at", sortOrder: "desc", metadata,
     select: ["thread_id", "created_at", "updated_at", "status", "metadata"],
-    extract: { objective: "values.solve.objective", pareto_total: "values.solve.pareto.total", solved: "values.solve.status", failure: "values.failure", usage: "values.usage",
-      elapsed: "values.timing.elapsed", finished_at: "values.timing.finished_at", spec: "values.spec", actual_solver: "values.solve.solver",
-      last_message_type: "values.messages[-1].type", last_message_tools: "values.messages[-1].tool_calls" } });
+    // LangGraph's /threads/search schema caps `extract` at 10 properties (`maxProperties: 10`).
+    extract: { objective: "values.solve.objective", pareto_total: "values.solve.pareto.total", solved: "values.solve.status",
+      failure: "values.failure", usage: "values.usage", timing: "values.timing", spec: "values.spec",
+      actual_solver: "values.solve.solver", last_message_type: "values.messages[-1].type", last_message_tools: "values.messages[-1].tool_calls" } });
   const entries = (await Promise.all(threads.filter(thread => thread.metadata?.title).map(async thread => {
     const extracted = (thread as unknown as { extracted?: Record<string, unknown> }).extracted ?? {};
+    const timing = (extracted.timing && typeof extracted.timing === "object" ? extracted.timing : null) as Record<string, unknown> | null;
+    const finishedAt = timing?.finished_at ?? extracted.finished_at;
+    const elapsed = timing?.elapsed ?? extracted.elapsed;
     const conversation = ["requirements", "solution_chat", "optimization"].includes(String(thread.metadata?.kind));
     // Cancellation can leave the thread idle. Only its run distinguishes a stopped turn from a completed one.
     // Finished replies and completed modeling runs already have their outcome in the extracted state.
     const unfinished = conversation ? extracted.last_message_type !== "ai"
-      || (Array.isArray(extracted.last_message_tools) && extracted.last_message_tools.length > 0) : !extracted.solved || !extracted.finished_at;
+      || (Array.isArray(extracted.last_message_tools) && extracted.last_message_tools.length > 0) : !extracted.solved || !finishedAt;
     let latest;
     if (thread.status === "busy" || (thread.status === "idle" && unfinished)) {
       try {
@@ -218,7 +222,7 @@ export async function history(metadata?: Record<string, unknown>, offset = 0): P
     return { id: thread.thread_id, created: thread.created_at, updated: thread.updated_at, meta, state,
       objective: typeof extracted.objective === "number" ? extracted.objective : null,
       paretoTotal: typeof extracted.pareto_total === "number" ? extracted.pareto_total : undefined,
-      elapsed: extracted.finished_at && typeof extracted.elapsed === "number" ? extracted.elapsed : null,
+      elapsed: finishedAt && typeof elapsed === "number" ? elapsed : null,
       failure: typeof extracted.failure === "string" ? extracted.failure : null, usage: (extracted.usage as Usage | undefined) ?? null } as Entry;
   }))).filter((entry): entry is Entry => entry !== null);
   return { entries, nextOffset: threads.length === PAGE_SIZE ? offset + PAGE_SIZE : undefined };

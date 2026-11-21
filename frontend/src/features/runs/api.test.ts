@@ -150,11 +150,13 @@ test("recorded configuration wins over editable metadata, preserving notes and l
 
 test("history pages use all server rows for offsets and keep execution time after edits", async () => {
   const thread = { thread_id: "one", created_at: "2026-01-01", updated_at: "2026-10-01", status: "idle",
-    metadata: { title: "run" }, extracted: { elapsed: 12, finished_at: 12, solved: "optimal", objective: 1 } };
+    metadata: { title: "run" }, extracted: { timing: { elapsed: 12, finished_at: 12 }, solved: "optimal", objective: 1 } };
   threads.search.mockResolvedValueOnce([...Array.from({ length: 99 }, (_, index) => ({ ...thread, thread_id: String(index) })),
     { ...thread, metadata: {} }] as never).mockResolvedValueOnce([{ ...thread, thread_id: "earlier",
-      extracted: { elapsed: 0.01 } }] as never);
+      extracted: { timing: { elapsed: 0.01 } } }] as never);
   const first = await history();
+  const extract = (threads.search.mock.calls[0][0] as { extract?: Record<string, string> })?.extract ?? {};
+  expect(Object.keys(extract).length).toBeLessThanOrEqual(10);
   expect(first.nextOffset).toBe(100);
   expect(first.entries).toHaveLength(99);
   expect(first.entries[0].elapsed).toBe(12);
