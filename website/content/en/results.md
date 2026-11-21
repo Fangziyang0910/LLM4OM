@@ -20,6 +20,10 @@ The production example has A=3, B=2 and profit 13. Labels connect quantities to 
 
 Two-index variables form matrices, useful for employee-by-day or warehouse-by-store plans. List view exposes original names. Filtering helps locate a person, product or time period.
 
+For multi-objective runs solved with [AutoCO](../autoco/) (`NSGA-II`, `MOEA/D`, or `NSGA-III`), the results view renders an **interactive Pareto front scatter plot** highlighting the recommended **Knee Point**. Click any point on the chart or row in the table to inspect its decoded decisions and export them.
+
+![Interactive multi-objective Pareto front and decision breakdown](../../../assets/screens/live/pareto-light.png)
+
 ## Choose an export
 
 | Export | Contents | Use |

@@ -24,7 +24,7 @@
     root.dataset.theme = theme;
     root.dataset.themePreference = preference;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = light ? "#faf9fc" : "#101014";
+    if (meta) meta.content = light ? "#f7f7f5" : "#0b0c0f";
     labels();
     for (const image of document.querySelectorAll("img[data-light-src]")) image.src = light ? image.dataset.lightSrc : image.dataset.darkSrc;
     for (const figure of document.querySelectorAll(".doc-diagram[data-light-src]")) figure.dataset.src = light ? figure.dataset.lightSrc : figure.dataset.darkSrc;

@@ -1,8 +1,8 @@
-Open Chat Agent from “Optimization chat” in the sidebar. Start with an idea, add data, compute a plan, then continue asking questions and revising the same task.
+Chat Agent is the default workbench homepage (`/`). Describe an optimization problem in plain language and attach Excel, CSV, or JSON files — the platform automatically routes between exact solvers and the AutoCO metaheuristic engine while rendering live results, interactive Pareto trade-offs, and mathematical models side by side.
 
 ## Send the first message
 
-Choose an LLM preset and describe the problem. Attach CSV, JSON or Excel beside the message. Defaults are Direct, Pyomo and AUTO. Modeling preferences can fix a method and library; messages can also specify them.
+Just type your problem and press Enter. By default, **Auto** mode sends tractable exact problems to exact solvers and routes multi-objective trade-offs, large combinatorial tasks, or metaheuristic requests to [AutoCO](../autoco/). Whenever you want manual control, click the strategy button in the composer to pin any of the 14 methods, modeling libraries, or solver backends.
 
 ```text
 Plan next week's store staffing. Each day needs at least 3 people.
@@ -72,6 +72,6 @@ Optimization chat waits for attachments to finish reading and saving before enab
 
 ## Everyday controls and recovery
 
-Enter sends; Shift+Enter adds a line. Drag the divider, or focus it with Tab and use arrow keys, to resize the conversation. Scrolling upward pauses following; “Back to latest” resumes it.
+Enter sends; Shift+Enter adds a line. On desktop, collapse or expand the left sidebar anytime, and drag the divider (or focus it with Tab and use arrow keys) to resize the conversation and workspace panels. Scrolling upward pauses following; “Back to latest” resumes it.
 
-Refresh reconnects to active server runs. Saved plans open from cards or history. Stop and retry preserve turn context. DeepSeek's thinking toggle controls the conversation reply; modeling tools use the run preset parameters.
+Refresh reconnects to active server runs. Saved plans open from chat cards or sidebar history. Stop and retry preserve turn context. DeepSeek's thinking toggle controls the conversation reply; modeling tools use the run preset parameters.

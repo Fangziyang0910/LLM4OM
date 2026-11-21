@@ -18,10 +18,10 @@ flowchart TB
 
 | 名称 | 具体作用 | 例子 |
 |---|---|---|
-| 建模方法 | 编排生成、检查和修复 | Direct、TriVAL、BIND |
-| 模型预设 | 保存模型服务与请求配置 | 团队的服务地址和模型ID |
-| 建模库 | 表达变量、目标与约束 | Pyomo、CPMpy、CVXPY |
-| 后端 | 执行数学计算 | HiGHS、CP-SAT、Gurobi、Ipopt |
+| 建模方法 | 编排生成、验证、修复或启发式选型 | Direct、Feedback Repair、TriVAL、AutoCO |
+| 模型预设 | 保存模型服务与请求配置 | 团队的服务地址和模型 ID |
+| 建模库 | 精确引擎的原生模型表达（AutoCO 无需选库） | Pyomo、CPMpy、CVXPY、gurobipy |
+| 求解引擎 | 执行精确求解或 12 类智能优化计算 | HiGHS、CP-SAT、Gurobi、NSGA-II、SA |
 
 一份配置可写成“Feedback Repair + 团队模型 + Pyomo + HiGHS”。运行信息保存这组选择与实际后端。
 

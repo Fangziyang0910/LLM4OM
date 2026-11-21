@@ -1,14 +1,16 @@
-General Intelligent Optimization Solver is a general solver for complex optimization problems, turning natural-language problems and business data into mathematical optimization models and calling solvers to compute optimal plans. Describe requirements, inspect decisions and the modeling process, then revise conditions, compare alternatives and export results.
+General Intelligent Optimization Solver is a natural-language-driven **dual-engine optimization platform (Exact Solvers × AutoCO Metaheuristics)**. Describe your business goals and drop spreadsheets — the platform automatically routes between **9 exact mathematical modeling frameworks** and **AutoCO's 12-family metaheuristic pool**, running inside an isolated sandbox to return verified optima and multi-objective Pareto fronts.
 
 ## Choose an entry point
 
 | Entry | Starting point | Next actions |
 |---|---|---|
-| [Optimization chat](../chat-agent/) | Send a problem or idea | Clarify, compute, query, revise and compare scenarios |
-| [Manual modeling](../run-settings/) | A prepared statement and data | Edit inputs, choose settings and follow execution |
-| [Requirements assistant](../requirements/) | A developing business idea | Create an editable statement and attachments |
+| [Optimization chat](../chat-agent/) (default `/` workbench) | Send a plain-language problem or drop Excel/CSV | Zero-config dual-engine routing, side-by-side Pareto/plan analysis, follow-up revisions and scenarios |
+| [Multi-strategy comparison & manual setup](../run-settings/) (`/model`) | Prepared statement needing explicit strategy control | Switch across all 14 methods, 9 modeling libraries and solvers, or benchmark up to 12 runs side by side |
+| [Requirements assistant](../requirements/) | A developing business idea | Structure a clear problem statement and attachments before solving |
 
-First-time users can complete the production [quickstart](../quickstart/). To run a service, see [installation](../installation/).
+![General Intelligent Optimization Solver workbench: conversational planning and interactive Pareto front](../../../assets/screens/live/pareto-light.png)
+
+First-time users can complete the production [quickstart](../quickstart/). To run your own service, see [installation](../installation/).
 
 ## From requirements to a usable plan
 
@@ -36,9 +38,9 @@ A run retains statement, attachments, configuration, formulation, code, values a
 
 ## Understand modeling and computation
 
-[Methods](../methods/) covers 13 workflows with mechanisms, Mermaid diagrams, step-by-step examples and current parameters: generation, feedback repair, layered validation, type retrieval, component search and data binding.
+[Methods](../methods/) covers **14 workflows**: the core exact strategies (Direct, Feedback Repair, TriVAL), the **[AutoCO metaheuristic engine](../autoco/)** for large combinatorial and multi-objective Pareto tasks, plus 10 research methods — each with mechanisms, Mermaid diagrams, interactive step-by-step walkthroughs and live preset parameters.
 
-[Libraries and solvers](../solvers/) covers nine libraries, native interfaces, backends and complete code. Production, staffing, assignment, convex quadratic and nonlinear examples help select a computation path.
+[Libraries and solvers](../solvers/) covers **9 exact modeling libraries** (Pyomo, gurobipy, OR-Tools, CPMpy, PuLP, CVXPY, PySCIPOpt, CasADi, coptpy), native interfaces, backend compatibility and complete runnable examples.
 
 ## Watch and interact
 

@@ -329,8 +329,8 @@
         "Choose a modeling method"
       ],
       "summary": [
-        "比较 13 种方法的流程、问题范围和使用方式。",
-        "Compare the workflows, scope and configuration of 13 methods."
+        "比较 14 种策略的流程、适用范围与双引擎选择（精确求解 × AutoCO）。",
+        "Compare the workflows, scope and dual-engine choices across 14 methods."
       ],
       "sources": [
         "docs/methods.md",
@@ -386,6 +386,23 @@
       "sources": [
         "docs/methods.md",
         "src/llm4om/methods/trival/README.md"
+      ]
+    },
+    {
+      "id": "autoco",
+      "group": "methods",
+      "method": "autoco",
+      "title": [
+        "AutoCO",
+        "AutoCO"
+      ],
+      "summary": [
+        "面向大规模组合优化、非线性黑盒与多目标 Pareto 权衡的 12 类智能优化引擎。",
+        "12-family metaheuristic engine for large combinatorial, black-box nonlinear, and multi-objective Pareto problems."
+      ],
+      "sources": [
+        "src/llm4om/methods/autoco/graph.py",
+        "src/llm4om/methods/autoco/knowledge.py"
       ]
     },
     {

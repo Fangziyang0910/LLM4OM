@@ -14,15 +14,15 @@ const config = {
   fontFamily: "Inter, Arial, sans-serif", deterministicIds: true,
   flowchart: { htmlLabels: false, curve: "basis", nodeSpacing: 22, rankSpacing: 26, padding: 12 },
   themeVariables: {
-    darkMode: true, background: "#19161f", primaryColor: "#282137", primaryTextColor: "#eee5fc",
-    primaryBorderColor: "#82709f", lineColor: "#ae99ce", secondaryColor: "#20352f", tertiaryColor: "#35283c",
-    edgeLabelBackground: "#19161f", fontSize: "15px", clusterBkg: "#211c29", clusterBorder: "#635271"
+    darkMode: true, background: "#14171f", primaryColor: "#1b2436", primaryTextColor: "#f3f4f8",
+    primaryBorderColor: "#3b82f6", lineColor: "#7c8ba6", secondaryColor: "#142923", tertiaryColor: "#1c202b",
+    edgeLabelBackground: "#14171f", fontSize: "15px", clusterBkg: "#11131a", clusterBorder: "#2c3446"
   }
 };
 const lightConfig = { ...config, themeVariables: {
-  ...config.themeVariables, darkMode: false, background: "#ffffff", primaryColor: "#f1e9fa", primaryTextColor: "#30203f",
-  primaryBorderColor: "#9b7fba", lineColor: "#7c6199", secondaryColor: "#e5f3ec", tertiaryColor: "#f6eafa",
-  edgeLabelBackground: "#ffffff", clusterBkg: "#f7f3fb", clusterBorder: "#c8b4dd"
+  ...config.themeVariables, darkMode: false, background: "#ffffff", primaryColor: "#eff6ff", primaryTextColor: "#111318",
+  primaryBorderColor: "#2563eb", lineColor: "#64748b", secondaryColor: "#ecfdf5", tertiaryColor: "#f7f7f5",
+  edgeLabelBackground: "#ffffff", clusterBkg: "#fafaf8", clusterBorder: "#cbd5e1"
 } };
 export const diagramHash = (source, theme = "dark") => createHash("sha256").update(JSON.stringify(theme === "light" ? lightConfig : config) + "12.2.0" + source).digest("hex");
 const server = http.createServer(async (request, response) => {

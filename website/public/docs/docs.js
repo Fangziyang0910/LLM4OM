@@ -18,6 +18,19 @@ const syncLanguageAnchor = () => { const target = new URL(languageLink.href); ta
 syncLanguageAnchor();
 addEventListener("hashchange", syncLanguageAnchor);
 
+// Auto-connect workbench button on live servers (:8831 / localhost / IP); keep quickstart fallback on github.io
+(() => {
+  const wbLink = document.querySelector(".docs-workbench-link");
+  if (!wbLink) return;
+  const host = location.hostname;
+  if (!host || host.endsWith("github.io")) return;
+  if (location.port === "8831" || host === "127.0.0.1" || host === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    wbLink.href = `${location.protocol}//${host}:8767/`;
+    wbLink.target = "_blank";
+    wbLink.rel = "noopener noreferrer";
+  }
+})();
+
 function openSearch() {
   if (!searchDialog.open) searchDialog.showModal();
   searchInput.focus();

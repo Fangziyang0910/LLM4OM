@@ -18,10 +18,10 @@ Attachments map file names to complete text. `build_model(data)` parses inputs a
 
 | Term | Role | Example |
 |---|---|---|
-| Method | Generation, checking and repair orchestration | Direct, TriVAL, BIND |
+| Method | Generation, validation, repair, or metaheuristic selection | Direct, Feedback Repair, TriVAL, AutoCO |
 | LLM preset | Service and request configuration | Team endpoint and model ID |
-| Library | Variables, objective and constraints | Pyomo, CPMpy, CVXPY |
-| Backend | Mathematical computation | HiGHS, CP-SAT, Gurobi, Ipopt |
+| Library | Native model API for exact solvers (not needed for AutoCO) | Pyomo, CPMpy, CVXPY, gurobipy |
+| Engine / Backend | Executes exact math solving or 12-family metaheuristics | HiGHS, CP-SAT, Gurobi, NSGA-II, SA |
 
 One configuration might be “Feedback Repair + team preset + Pyomo + HiGHS.” Run information retains selections and the actual engine.
 

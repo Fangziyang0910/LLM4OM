@@ -10,7 +10,7 @@ const output = path.join(__dirname, "../artifacts/website/docs");
 
 (async () => {
   const { articles } = JSON.parse(await fs.readFile(path.join(__dirname, "docs-manifest.json"), "utf8"));
-  assert.equal(articles.filter(a => a.method).length, 13);
+  assert.equal(articles.filter(a => a.method).length, 14);
   assert.equal(articles.filter(a => a.library).length, 9);
   const headingCounts = new Map();
   for (const [languageIndex, locale] of ["zh", "en"].entries()) {
@@ -71,7 +71,7 @@ const output = path.join(__dirname, "../artifacts/website/docs");
     await page.goto(`${base}docs/`);
     await expect(page).toHaveURL(/docs\/en\/introduction\/$/);
 
-    for (const [locale, query, id] of [["en", "BIND", "bind"], ["zh", "无解", "conflicts"], ["en", "CP-SAT", "ortools"], ["en", "Bradley", "autoformulation"], ["zh", "单件利润", "attachments"]]) {
+    for (const [locale, query, id] of [["en", "AutoCO", "autoco"], ["zh", "Pareto", "autoco"], ["en", "BIND", "bind"], ["zh", "无解", "conflicts"], ["en", "CP-SAT", "ortools"], ["en", "Bradley", "autoformulation"], ["zh", "单件利润", "attachments"]]) {
       await page.goto(`${base}docs/${locale}/introduction/`);
       await page.keyboard.press("Control+k");
       await expect(page.locator("#docs-search")).toHaveJSProperty("open", true);
@@ -99,8 +99,8 @@ const output = path.join(__dirname, "../artifacts/website/docs");
     await expect(snippet.locator("button")).toHaveText("Copied");
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), expected);
     await page.goto(`${base}?lang=en`);
-    await expect(page.locator('[data-docs="introduction"]')).toHaveAttribute("href", /docs\/en\/introduction\/$/);
-    await page.locator('[data-docs="introduction"]').click();
+    await expect(page.locator('[data-docs="introduction"]').first()).toHaveAttribute("href", /docs\/en\/introduction\/$/);
+    await page.locator('[data-docs="introduction"]').first().click();
     await expect(page.locator("h1")).toHaveText("General Intelligent Optimization Solver documentation");
 
     for (const width of [1440, 1280, 768, 390, 360, 320]) {
@@ -148,7 +148,7 @@ const output = path.join(__dirname, "../artifacts/website/docs");
     await noScript.locator("#docs-language").click();
     await expect(noScript.locator("h1")).toHaveText("完成第一个方案");
     assert.deepEqual(errors, []);
-    console.log(`PASS: ${articles.length * 2} pages, internal links and anchors, translation parity, 13 method presets, 9 libraries; bilingual search, keyboard/dialogs, clipboard, index recovery, no-JS reading and six viewport sizes.`);
+    console.log(`PASS: ${articles.length * 2} pages, internal links and anchors, translation parity, 14 method presets, 9 libraries; bilingual search, keyboard/dialogs, clipboard, index recovery, no-JS reading and six viewport sizes.`);
     console.log(`Screenshots: ${output}`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

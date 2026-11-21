@@ -28,11 +28,14 @@ For production/transport LP/MILP, start with compatible Pyomo or PuLP backends. 
 
 | Task | Method | Library / backend | Inspect |
 |---|---|---|---|
-| First production run | Direct | Pyomo / AUTO | Formulation, quantities and profit |
-| Inspect layered business-rule checks | TriVAL | Mathematically suitable library / AUTO | Stage artifacts and validation feedback |
+| First exact production run | Direct | Pyomo / AUTO | Formulation, quantities and profit |
+| Inspect layered business-rule checks | TriVAL | Mathematically suitable library / AUTO | Semantic, formulation and code validation artifacts |
+| Multi-objective or large combinatorial task | [AutoCO](../autoco/) | Built-in 12-family metaheuristic pool | KG algorithm selection, pilot trials and Pareto front |
 | Large JSON/CSV | BIND | Pyomo or another compatible library / AUTO | Schema and data-reading code |
 
-Each method article lists current preset parameters, which are saved with runs. Method-specific parameters are set in deployment presets. The UI selects the method and execution environment.
+![Settings panel showing the 4 core strategies, 10 additional research methods, LLM presets and solver backends](../../../assets/screens/live/compare-light.png)
+
+The settings modal places the **4 core strategies** (Direct, Feedback Repair, TriVAL, AutoCO) upfront, with the remaining 10 research methods expandable on demand. Each method article lists current preset parameters, which are saved with every run.
 
 ## Start and follow progress
 
