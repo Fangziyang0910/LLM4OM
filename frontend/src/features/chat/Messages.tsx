@@ -7,6 +7,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { errorText } from "@/format";
 import { t } from "@/i18n";
 import type { SourceRun, Step } from "@/features/runs/types";
+import { phases } from "@/features/runs/steps";
 import { Timeline } from "@/features/runs/Timeline";
 import { activity, resultType, resultViews, type ToolArtifact } from "./results";
 
@@ -69,10 +70,10 @@ export function ThreadLoadError({ error, onReload, header }: { error: unknown; o
   return header ? <div className="flex h-full flex-col">{header}{body}</div> : body;
 }
 
-export function ChatMessages({ messages, loading, label, failure, disabled, onRetry, progress, onOpenPlan, onCompare, tasks, onShowTask }: {
+export function ChatMessages({ messages, loading, label, failure, disabled, onRetry, progress, onOpenPlan, onCompare, tasks, activeTaskId, onShowTask }: {
   messages: Message[]; loading: boolean; label: string; failure?: unknown; disabled?: boolean; onRetry: () => void;
   progress?: ChatProgress; onOpenPlan?: (source: SourceRun) => void; onCompare?: (group: string) => void;
-  tasks?: Record<string, ModelingTask>; onShowTask?: (id: string) => void;
+  tasks?: Record<string, ModelingTask>; activeTaskId?: string; onShowTask?: (id: string) => void;
 }) {
   const completed = new Set(messages.filter(message => message.type === "tool").map(message => message.tool_call_id));
   const last = messages.at(-1);
@@ -110,19 +111,27 @@ export function ChatMessages({ messages, loading, label, failure, disabled, onRe
       </article>;
     })}
     {loading && !(pending && messageReasoning(pending) && !messageText(pending) && !calls.length) ? <div role="status" className="flex min-w-0 flex-col gap-2.5 text-xs text-muted-foreground">
-      {calls.length ? calls.map(call => <div key={call.id ?? call.name} className="flex min-w-0 flex-col gap-2">
-        <div className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-foreground/90">
-          <Spinner aria-hidden="true" role="presentation" className="mt-0.5 shrink-0 text-primary" /><div className="min-w-0"><p className="font-medium">{activity(call.name)}</p>
-            {progress && progress.tool_call_id === call.id ? <p className="mt-1 break-words text-muted-foreground">{t("方案 {index}/{total}：{name}", { index: progress.index, total: progress.total, name: progress.name })} · {stages[progress.stage]}</p>
-              : call.name === "web_search" && typeof call.args?.query === "string" ? <p className="mt-1 break-words text-muted-foreground">{call.args.query}</p> : null}
-          </div></div>
-        {call.id && tasks?.[call.id] ? <details className="min-w-0 overflow-hidden rounded-2xl border border-border/80 bg-card shadow-xs" open>
-          <summary className="cursor-pointer bg-muted/20 px-3.5 py-2.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{tasks[call.id].name}</summary>
-          <div className="h-64 border-t"><Timeline steps={tasks[call.id].steps} live={{}} active={loading}
-            onShow={() => onShowTask?.(call.id!)} /></div>
-          <div className="border-t px-3 py-1.5"><Button variant="link" size="sm" className="px-0" onClick={() => onShowTask?.(call.id!)}>{t("在方案面板中查看详情")}</Button></div>
-        </details> : null}
-      </div>) : <p className="flex items-center gap-2"><Spinner aria-hidden="true" role="presentation" className="text-primary" />{pending && messageText(pending) ? t("正在输出……") : t("正在准备回复……")}</p>}
+      {calls.length ? calls.map(call => {
+        const live = call.id ? tasks?.[call.id] : undefined;
+        const shownInPanel = !!call.id && activeTaskId === call.id;
+        const currentStep = live ? phases(live.steps).at(-1)?.step?.title : undefined;
+        return <div key={call.id ?? call.name} className="flex min-w-0 flex-col gap-2">
+          <div className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-foreground/90">
+            <Spinner aria-hidden="true" role="presentation" className="mt-0.5 shrink-0 text-primary" /><div className="min-w-0 flex-1"><p className="font-medium">{live?.name || activity(call.name)}</p>
+              {progress && progress.tool_call_id === call.id ? <p className="mt-1 break-words text-muted-foreground">{t("方案 {index}/{total}：{name}", { index: progress.index, total: progress.total, name: progress.name })} · {stages[progress.stage]}</p>
+                : shownInPanel ? <p className="mt-0.5 break-words text-muted-foreground">{currentStep ? t("正在执行：{step}…", { step: t(currentStep) }) : t("右侧方案面板正在实时展示求解进度…")}</p>
+                  : call.name === "web_search" && typeof call.args?.query === "string" ? <p className="mt-1 break-words text-muted-foreground">{call.args.query}</p> : null}
+            </div>
+            {live && !shownInPanel && onShowTask ? <Button variant="link" size="xs" className="h-auto shrink-0 p-0 text-xs" onClick={() => onShowTask(call.id!)}>{t("查看详情")}</Button> : null}
+          </div>
+          {live && !shownInPanel ? <details className="min-w-0 overflow-hidden rounded-2xl border border-border/80 bg-card shadow-xs">
+            <summary className="cursor-pointer bg-muted/20 px-3.5 py-2.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{live.name}</summary>
+            <div className="h-64 border-t"><Timeline steps={live.steps} live={{}} active={loading}
+              onShow={() => onShowTask?.(call.id!)} /></div>
+            <div className="border-t px-3 py-1.5"><Button variant="link" size="sm" className="px-0" onClick={() => onShowTask?.(call.id!)}>{t("在方案面板中查看详情")}</Button></div>
+          </details> : null}
+        </div>;
+      }) : <p className="flex items-center gap-2"><Spinner aria-hidden="true" role="presentation" className="text-primary" />{pending && messageText(pending) ? t("正在输出……") : t("正在准备回复……")}</p>}
     </div> : failed || stopped || unanswered ? <div className="min-w-0 rounded-2xl border border-border/80 bg-muted/30 p-3.5 text-xs" role={failed ? "alert" : "status"}>
       <p className="font-medium">{failed ? t("这轮回复未完成，可以重试。") : t("这轮回复已停止，可以重新回答。")}</p>
       <p className="mt-1 text-muted-foreground">{canRetry ? t("重试使用原问题，输入框中的草稿会保留。") : t("请从输入框重新发送，草稿会保留。")}</p>

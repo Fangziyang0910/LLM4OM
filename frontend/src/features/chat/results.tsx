@@ -9,6 +9,7 @@ import { t } from "@/i18n";
 
 type ComputedPlan = Plan & {
   status?: string | null; objective?: number | null; failure?: string | null; explanation?: Explanation | null;
+  pareto?: { total: number; objectives: { name: string; sense: string }[]; knee?: (number | null)[] | null } | null;
   configuration?: { method?: string; language?: string; actual_solver?: string | null };
 };
 
@@ -62,7 +63,11 @@ function Plans({ artifact, onOpenPlan, onCompare }: ResultProps) {
       <div className="flex items-start justify-between gap-2"><p className="min-w-0 break-words text-sm font-semibold">{plan.name}</p>
         <StatusBadge status={plan.failure ? "failed" : plan.status ?? "unknown"} /></div>
       <p className="mt-1 break-words leading-relaxed text-muted-foreground">{plan.instruction}</p>
-      {plan.objective != null ? <p className="mt-2.5 break-words">{plan.explanation?.objective_label || t("目标值")} <strong className="text-base font-bold text-foreground tabular-nums">{formatNumber(plan.objective)}</strong> {plan.explanation?.objective_unit}</p> : null}
+      {plan.pareto?.total ? <div className="mt-2.5 space-y-1">
+        <p className="break-words">{t("多目标 Pareto 前沿")} <strong className="text-sm font-bold text-foreground tabular-nums">{t("{count} 个 Pareto 解", { count: plan.pareto.total })}</strong></p>
+        {plan.pareto.knee?.length ? <p className="text-muted-foreground tabular">{t("推荐折中解：")}{plan.pareto.objectives.map((obj, idx) =>
+          `${obj.name} = ${plan.pareto!.knee?.[idx] == null ? "—" : formatNumber(plan.pareto!.knee![idx]!)}`).join(" · ")}</p> : null}
+      </div> : plan.objective != null ? <p className="mt-2.5 break-words">{plan.explanation?.objective_label || t("目标值")} <strong className="text-base font-bold text-foreground tabular-nums">{formatNumber(plan.objective)}</strong> {plan.explanation?.objective_unit}</p> : null}
       {onOpenPlan ? <Button variant="link" size="xs" className="mt-2 h-auto p-0 font-medium" onClick={() => onOpenPlan(plan.source)}>{t("查看计算方案")}<ArrowUpRight /></Button> : null}
     </div>)}
     {plans.length > 1 && plans[0].group && onCompare ? <Button variant="outline" size="sm" className="self-start rounded-lg" onClick={() => onCompare(plans[0].group!)}>{t("对比本轮方案")}</Button> : null}

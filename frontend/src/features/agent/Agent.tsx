@@ -208,6 +208,7 @@ export function Agent({ threadId, options, presets, initial, onThread, openPrese
         <div ref={content} className="grid min-h-full grid-cols-1">
           {messages.length || failure ? <ChatMessages messages={messages} loading={conversation.loading} label={t("优化助手")}
             failure={failure} disabled={busy || dataPending} onRetry={() => void submit(true)} progress={progress} tasks={tasks}
+            activeTaskId={desktop && workspace ? liveTask : undefined}
             onShowTask={id => { setLiveTask(id); setWorkspace(true); setPane("workspace"); }}
             onOpenPlan={source => { setViewed(source); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} />
             : <div className="animate-fade-up mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-5 py-6">

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ArrowDown, ArrowUp, Download, GitFork, Sparkles } from "lucide-react";
+import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip as RechartsTooltip, XAxis, YAxis } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,9 @@ import { toCsv } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 import type { ParetoFront as ParetoFrontData, ParetoObjective, ParetoSolution } from "@/features/runs/types";
 
-/** Lightweight zero-dependency interactive 2D SVG trade-off plot synced with the Pareto table. */
+type PlotPoint = { idx: number; x: number; y: number; knee: boolean };
+
+/** Interactive 2D Pareto trade-off scatter chart powered by Recharts, synced with the table selection. */
 function TradeoffPlot({
   objectives,
   solutions,
@@ -30,28 +33,10 @@ function TradeoffPlot({
 
   const xi = xAxis < objectives.length ? xAxis : 0;
   const yi = yAxis < objectives.length && yAxis !== xi ? yAxis : (xi === 0 ? 1 : 0);
-  const points = solutions
+  const points: PlotPoint[] = solutions
     .map((sol, idx) => ({ idx, x: sol.objectives[xi], y: sol.objectives[yi], knee: !!sol.knee }))
-    .filter((pt): pt is { idx: number; x: number; y: number; knee: boolean } => pt.x != null && pt.y != null);
+    .filter((pt): pt is PlotPoint => pt.x != null && pt.y != null);
   if (points.length < 2) return null;
-
-  const xMin = Math.min(...points.map(p => p.x));
-  const xMax = Math.max(...points.map(p => p.x));
-  const yMin = Math.min(...points.map(p => p.y));
-  const yMax = Math.max(...points.map(p => p.y));
-  const xSpan = xMax - xMin || 1;
-  const ySpan = yMax - yMin || 1;
-
-  const W = 520;
-  const H = 190;
-  const padL = 58;
-  const padR = 18;
-  const padT = 14;
-  const padB = 34;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-  const sx = (v: number) => padL + ((v - xMin) / xSpan) * plotW;
-  const sy = (v: number) => padT + plotH - ((v - yMin) / ySpan) * plotH;
 
   const xObj = objectives[xi];
   const yObj = objectives[yi];
@@ -72,53 +57,72 @@ function TradeoffPlot({
         </Select>
       </div> : null}
     </div>
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("目标权衡图")} className="h-44 w-full select-none">
-      {/* Subtle gridlines */}
-      {[0, 0.5, 1].map(frac => {
-        const y = padT + plotH * (1 - frac);
-        const val = yMin + ySpan * frac;
-        return <g key={`y-${frac}`}>
-          <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="currentColor" strokeOpacity="0.1" strokeDasharray="3 3" />
-          <text x={padL - 6} y={y + 3} textAnchor="end" fontSize="9.5" className="fill-muted-foreground font-mono">
-            {formatNumber(Number(val.toPrecision(4)))}
-          </text>
-        </g>;
-      })}
-      {[0, 0.5, 1].map(frac => {
-        const x = padL + plotW * frac;
-        const val = xMin + xSpan * frac;
-        return <g key={`x-${frac}`}>
-          <line x1={x} y1={padT} x2={x} y2={padT + plotH} stroke="currentColor" strokeOpacity="0.08" strokeDasharray="3 3" />
-          <text x={x} y={H - 17} textAnchor="middle" fontSize="9.5" className="fill-muted-foreground font-mono">
-            {formatNumber(Number(val.toPrecision(4)))}
-          </text>
-        </g>;
-      })}
-      <line x1={padL} y1={padT + plotH} x2={W - padR} y2={padT + plotH} stroke="currentColor" strokeOpacity="0.25" />
-      <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="currentColor" strokeOpacity="0.25" />
-      <text x={padL + plotW / 2} y={H - 3} textAnchor="middle" fontSize="10" className="fill-muted-foreground font-medium">
-        {xObj.name} ({xObj.sense === "max" ? "↑" : "↓"})
-      </text>
-      <text x={11} y={padT + plotH / 2} textAnchor="middle" fontSize="10" transform={`rotate(-90 11 ${padT + plotH / 2})`} className="fill-muted-foreground font-medium">
-        {yObj.name} ({yObj.sense === "max" ? "↑" : "↓"})
-      </text>
-      {points.map(pt => {
-        const isSel = pt.idx === activeIndex;
-        const cx = sx(pt.x);
-        const cy = sy(pt.y);
-        return <g key={pt.idx} className="cursor-pointer" onClick={() => onSelect(pt.idx)}>
-          <title>{`#${pt.idx + 1}${pt.knee ? ` (${t("推荐折中")})` : ""}: ${xObj.name}=${formatNumber(pt.x)}, ${yObj.name}=${formatNumber(pt.y)}`}</title>
-          {isSel || pt.knee ? <circle cx={cx} cy={cy} r={isSel ? 8 : 6.5} fill="none" stroke="var(--primary)" strokeWidth={isSel ? 2 : 1.5} strokeOpacity={isSel ? 0.9 : 0.45} /> : null}
-          <circle
-            cx={cx}
-            cy={cy}
-            r={isSel ? 4.5 : pt.knee ? 4 : 3}
-            fill={isSel || pt.knee ? "var(--primary)" : "currentColor"}
-            fillOpacity={isSel ? 1 : pt.knee ? 0.9 : 0.45}
+    <div role="img" aria-label={t("目标权衡图")} className="h-56 w-full select-none">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 520, height: 224 }}>
+        <ScatterChart margin={{ top: 10, right: 16, bottom: 22, left: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.1} />
+          <XAxis
+            type="number"
+            dataKey="x"
+            name={xObj.name}
+            domain={["auto", "auto"]}
+            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+            tickFormatter={v => formatNumber(Number(Number(v).toPrecision(4)))}
+            label={{ value: `${xObj.name} (${xObj.sense === "max" ? "↑" : "↓"})`, position: "insideBottom", offset: -14, fontSize: 11, fill: "var(--muted-foreground)" }}
           />
-        </g>;
-      })}
-    </svg>
+          <YAxis
+            type="number"
+            dataKey="y"
+            name={yObj.name}
+            domain={["auto", "auto"]}
+            width={56}
+            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+            tickFormatter={v => formatNumber(Number(Number(v).toPrecision(4)))}
+            label={{ value: `${yObj.name} (${yObj.sense === "max" ? "↑" : "↓"})`, angle: -90, position: "insideLeft", offset: 4, style: { textAnchor: "middle" }, fontSize: 11, fill: "var(--muted-foreground)" }}
+          />
+          <RechartsTooltip
+            cursor={{ strokeDasharray: "3 3", strokeOpacity: 0.35 }}
+            content={({ active: show, payload }) => {
+              const pt = payload?.[0]?.payload as PlotPoint | undefined;
+              if (!show || !pt) return null;
+              return <div className="rounded-xl border border-border/80 bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
+                <div className="mb-1 flex items-center gap-1.5 font-semibold">
+                  <span>#{pt.idx + 1}</span>
+                  {pt.knee ? <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">{t("推荐折中")}</span> : null}
+                </div>
+                <div className="space-y-0.5 font-mono text-[11px] tabular">
+                  <div>{xObj.name}: <strong>{formatNumber(pt.x)}</strong></div>
+                  <div>{yObj.name}: <strong>{formatNumber(pt.y)}</strong></div>
+                </div>
+              </div>;
+            }}
+          />
+          <Scatter
+            data={points}
+            isAnimationActive={false}
+            onClick={entry => {
+              const pt = (entry?.payload ?? entry) as PlotPoint | undefined;
+              if (pt && typeof pt.idx === "number") onSelect(pt.idx);
+            }}
+            shape={(props: unknown) => {
+              const { cx, cy, payload } = props as { cx?: number; cy?: number; payload?: PlotPoint };
+              if (cx == null || cy == null || !payload) return <g />;
+              const isSel = payload.idx === activeIndex;
+              return <g className="cursor-pointer" onClick={() => onSelect(payload.idx)}>
+                {isSel || payload.knee ? <circle cx={cx} cy={cy} r={isSel ? 8.5 : 6.5} fill="none" stroke="var(--primary)" strokeWidth={isSel ? 2 : 1.5} strokeOpacity={isSel ? 0.9 : 0.45} /> : null}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={isSel ? 4.8 : payload.knee ? 4.2 : 3.4}
+                  fill={isSel || payload.knee ? "var(--primary)" : "currentColor"}
+                  fillOpacity={isSel ? 1 : payload.knee ? 0.9 : 0.48}
+                />
+              </g>;
+            }}
+          />
+        </ScatterChart>
+      </ResponsiveContainer>
+    </div>
   </div>;
 }
 

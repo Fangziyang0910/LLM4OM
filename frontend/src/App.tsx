@@ -173,11 +173,11 @@ export default function App() {
           : route.name === "agent-new" || route.name === "agent" ? t("智能优化对话") : route.name === "chat" ? t("需求梳理") : route.name === "discussion" ? t("方案追问") : route.name === "compare" ? t("方案对比") : t("求解结果")}</span>
         <Button variant="ghost" size="icon-sm" aria-label={t("新建优化任务")} title={t("新建优化任务")} onClick={openAgent}><Plus /></Button>
       </header> : null}
-      {presetsQuery.error ? <div role="alert" className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive sm:px-6">
+      {presetsQuery.error ? <div role="alert" className="flex w-full items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive sm:px-6">
         <span>{t("模型配置加载失败：{error}", { error: errorText(presetsQuery.error) })}</span>
         <Button variant="outline" size="sm" disabled={presetsQuery.isFetching} onClick={() => void presetsQuery.refetch()}><RefreshCw />{t("重试")}</Button>
       </div> : null}
-      <main className="mx-auto min-h-0 w-full max-w-[1600px] flex-1">
+      <main className="min-h-0 w-full flex-1">
         {optionsQuery.error ? <Empty className="h-full">
           <EmptyHeader>
             <EmptyMedia variant="icon"><ServerCrash /></EmptyMedia>

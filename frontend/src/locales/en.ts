@@ -1072,6 +1072,7 @@ export const en: Record<string, string> = {
   "多目标方案包含一组权衡解，可切换至“最优方案”标签页查看完整的 Pareto 前沿图与折中解。": "Multi-objective runs produce a set of trade-off solutions; switch to the Optimal Plan tab to inspect the full Pareto front and knee solution.",
   "删除第 {row} 行": "Delete row {row}",
   "删除这一行": "Delete this row",
+  "右侧方案面板正在实时展示求解进度…": "Live solving progress is shown in the plan panel on the right…",
 };
 
 /** Step titles with numbers in them. */
