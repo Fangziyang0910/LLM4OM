@@ -97,7 +97,8 @@ const output = path.join(__dirname, "../artifacts/website/docs");
     const expected = await snippet.locator("code").textContent();
     await snippet.locator("button").click();
     await expect(snippet.locator("button")).toHaveText("Copied");
-    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), expected);
+    // Windows clipboard text uses CRLF; compare content independently of the OS line endings.
+    assert.equal((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, "\n"), expected.replace(/\r\n/g, "\n"));
     await page.goto(`${base}?lang=en`);
     await expect(page.locator('[data-docs="introduction"]').first()).toHaveAttribute("href", /docs\/en\/introduction\/$/);
     await page.locator('[data-docs="introduction"]').first().click();

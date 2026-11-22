@@ -11,7 +11,7 @@ from langgraph.runtime import Runtime
 
 from llm4om.methods import Method, presets
 from llm4om.methods.bind.schema import describe_data
-from llm4om.methods.common import TWO_PARTS, split_formulation_and_code
+from llm4om.methods.common import TWO_PARTS, output_language, split_formulation_and_code
 from llm4om.runtime import Context, ModelingState
 
 
@@ -34,7 +34,8 @@ def prepare(state: State, runtime: Runtime[Context]) -> dict:
         "Do not relax the problem to obtain a feasible answer. " + TWO_PARTS + "\n\n" + context.target.prompt
     )
     return {"data_schema": data_schema, "rounds": 0,
-            "messages": [SystemMessage(system), HumanMessage(description + "\n\nData schema:\n" + data_schema)]}
+            "messages": [SystemMessage(system + output_language(context)),
+                         HumanMessage(description + "\n\nData schema:\n" + data_schema)]}
 
 
 async def generate(state: State, runtime: Runtime[Context]) -> dict:

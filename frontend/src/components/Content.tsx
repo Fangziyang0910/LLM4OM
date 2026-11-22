@@ -13,7 +13,8 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { Button } from "@/components/ui/button";
-import { t } from "@/i18n";
+import { locale, t } from "@/i18n";
+import { expertLabel, modelFieldText, modelLabel, typedModelLabel } from "@/locales/modeling";
 import { cn } from "@/lib/utils";
 
 hljs.registerLanguage("python", python);
@@ -21,12 +22,15 @@ hljs.registerLanguage("json", json);
 
 // Convert LLM math delimiters outside code; use Markdown's parser to locate code spans and blocks.
 function normalizeMath(text: string, singleDollarMath: boolean): string {
-  if (!/\\[[(]|\$/.test(text)) return text;
-  const replace = (part: string) => part.replace(
-    /\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]|\\\(([\s\S]*?)\\\)|(?<![\\$\w])\$(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?=$|[，。；;：:!?！？）)\]}]|(?:\.(?!\d))|(?:,(?!\d))|\s+(?![+\-*/=<>\\^_|]|\((?!\$)))|(?<![\\$])\$(?![\s$])((?:\\\$|[^\n$])*?(?:\\\$|[^\s$]))\$(?![\d$])/g,
-    (match, dollars, brackets, inline, single, offset: number, source: string) => {
-      if (dollars !== undefined || brackets !== undefined) {
-        const body = (dollars ?? brackets).trim();
+  if (!/\\[[(]|\\begin\{|\\item\b|\$/.test(text)) return text;
+  const replace = (part: string) => part
+    .replace(/^[ \t]*\\(?:begin|end)\{itemize\}[ \t]*\r?$/gm, "\n")
+    .replace(/^[ \t]*\\item[ \t]+/gm, "- ")
+    .replace(
+    /\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]|\\\(([\s\S]*?)\\\)|\\begin\{(align\*?|alignat\*?|equation\*?|gather\*?)\}[\s\S]*?\\end\{\4\}|(?<![\\$])\$(?!\$)([^\n$]*?\\(?:mathrm|mathbb|frac|sum|sqrt|mathbf|mathit)\b[^\n$]*?)\$(?![\d$])|(?<![\\$\w])\$(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?=$|[，。；;：:!?！？）)\]}]|(?:\.(?!\d))|(?:,(?!\d))|\s+(?![+\-*/=<>\\^_|]|\((?!\$)))|(?<![\\$])\$(?![\s$])((?:\\\$|[^\n$])*?(?:\\\$|[^\s$]))\$(?![\d$])/g,
+    (match, dollars, brackets, inline, environment, explicit, single, offset: number, source: string) => {
+      if (dollars !== undefined || brackets !== undefined || environment !== undefined) {
+        const body = (dollars ?? brackets ?? match).trim();
         if (!match.includes("\n")) {
           const lineStart = source.lastIndexOf("\n", offset - 1) + 1;
           const nextBreak = source.indexOf("\n", offset + match.length);
@@ -37,7 +41,7 @@ function normalizeMath(text: string, singleDollarMath: boolean): string {
         }
         return `\n\n$$\n${body}\n$$\n\n`;
       }
-      if (inline !== undefined) return `$$${inline}$$`;
+      if (inline !== undefined || explicit !== undefined) return `$$${inline ?? explicit}$$`;
       if (single !== undefined) return singleDollarMath ? `$$${single}$$` : match;
       return match;
     });
@@ -118,12 +122,82 @@ const markdownComponents: Components = {
   pre: ({ children }) => <>{children}</>,
 };
 
-export const Markdown = memo(function Markdown({ text, className, singleDollarMath = true }: {
+const label = (children: React.ReactNode) => typeof children === "string" ? modelLabel(children) : children;
+const formulationComponents: Components = {
+  ...markdownComponents,
+  h2: ({ children }) => <h2>{label(children)}</h2>,
+  h3: ({ children }) => <h3>{label(children)}</h3>,
+  h4: ({ children }) => <h4>{label(children)}</h4>,
+  strong: ({ children }) => <strong>{label(children)}</strong>,
+  p: ({ children }) => <p>{typeof children === "string" ? expertLabel(children) : children}</p>,
+};
+
+// AutoCO serializes a typed model into fixed Markdown fields. Match that structure before changing display labels.
+function localizeTypedModel(tree: Nodes) {
+  if (locale !== "zh" || tree.type !== "root") return;
+  let typed = false, section = "";
+  for (const block of tree.children) {
+    if (block.type === "heading" && block.depth <= 2) {
+      const title = block.children.length === 1 && block.children[0].type === "text" ? block.children[0] : null;
+      const scale = title && /^Parameters \(scale: (small|medium|large)\)$/.exec(title.value);
+      if (title && scale) {
+        typed = true; section = "Parameters";
+        title.value = `参数（规模：${typedModelLabel("scale", scale[1])}）`;
+      } else if (typed && title && ["Variables", "Objectives", "Constraints"].includes(title.value)) section = title.value;
+      else { typed = false; section = ""; }
+      continue;
+    }
+    if (!typed || block.type !== "list") continue;
+    for (const item of block.children) {
+      const paragraph = item.children[0];
+      if (paragraph?.type !== "paragraph") continue;
+      const nodes = paragraph.children;
+      if (section === "Variables" && nodes[0]?.type === "inlineCode" && nodes[1]?.type === "text"
+          && nodes[2]?.type === "inlineCode" && nodes[3]?.type === "text" && nodes[3].value === ", shape "
+          && nodes[4]?.type === "inlineCode" && nodes[5]?.type === "text" && nodes[5].value.startsWith("): ")) {
+        const type = /^ \((binary|integer|continuous|permutation|assignment), domain $/.exec(nodes[1].value);
+        if (type) {
+          nodes[1].value = `（${typedModelLabel("variable", type[1])}，取值域 `;
+          nodes[3].value = "，形状 "; nodes[5].value = "）：" + nodes[5].value.slice(3);
+        }
+      } else if (section === "Objectives" && nodes[0]?.type === "strong" && nodes[0].children.length === 1
+          && nodes[0].children[0].type === "text" && /^(min|max)$/.test(nodes[0].children[0].value)
+          && nodes[1]?.type === "text" && nodes[1].value === " " && nodes[2]?.type === "inlineCode"
+          && nodes[3]?.type === "text" && nodes[4]?.type === "inlineCode" && nodes[5]?.type === "text" && nodes[5].value.startsWith(" — ")) {
+        const form = /^ \((linear|quadratic|nonlinear|minmax)\): $/.exec(nodes[3].value);
+        if (form) {
+          nodes[0].children[0].value = typedModelLabel("sense", nodes[0].children[0].value);
+          nodes[3].value = `（${typedModelLabel("objective", form[1])}）：`;
+        }
+      } else if (section === "Constraints" && nodes[0]?.type === "inlineCode" && nodes[1]?.type === "text"
+          && nodes[2]?.type === "inlineCode" && nodes[3]?.type === "text" && nodes[3].value.startsWith(" — ")) {
+        const category = /^ \((bound|capacity|precedence|conflict|equality|nonlinear)\): $/.exec(nodes[1].value);
+        if (category) nodes[1].value = `（${typedModelLabel("constraint", category[1])}）：`;
+      } else if (section === "Constraints" && nodes.length === 1 && nodes[0].type === "text" && nodes[0].value === "(unconstrained)") {
+        nodes[0].value = `（${typedModelLabel("constraint", "unconstrained")}）`;
+      }
+    }
+  }
+}
+
+function localizeModelFields() {
+  return (tree: Nodes) => {
+    localizeTypedModel(tree);
+    function visit(node: Nodes) {
+      if (node.type === "text") node.value = modelFieldText(node.value);
+      else if ("children" in node) node.children.forEach(visit);
+    }
+    visit(tree);
+  };
+}
+
+export const Markdown = memo(function Markdown({ text, className, singleDollarMath = true, modelSections = false }: {
   // Problems contain dollar prices; explicit math delimiters keep those views unambiguous.
-  text: string; className?: string; singleDollarMath?: boolean;
+  text: string; className?: string; singleDollarMath?: boolean; modelSections?: boolean;
 }) {
   return <div className={cn("markdown", className)}>
-    <ReactMarkdown remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }]]} components={markdownComponents}>
+    <ReactMarkdown remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }], ...(modelSections ? [localizeModelFields] : [])]}
+      components={modelSections ? formulationComponents : markdownComponents}>
       {normalizeMath(text, singleDollarMath)}
     </ReactMarkdown>
   </div>;
@@ -145,21 +219,33 @@ export function Plain({ children, className, tone }: { children: React.ReactNode
     tone === "bad" && "border-destructive/25 bg-destructive/5 text-destructive", className)}>{children}</pre>;
 }
 
-/** Line changes from `before` to `after`, as a unified view. */
-export function Diff({ before, after }: { before: string; after: string }) {
+/** Compare complete Markdown documents or inspect their literal line changes. */
+export function Diff({ before, after, format = "text", singleDollarMath = true, modelSections = false }: {
+  before: string; after: string; format?: "text" | "markdown"; singleDollarMath?: boolean; modelSections?: boolean;
+}) {
+  const [source, setSource] = useState(false);
   const parts = useMemo(() => diffLines(before, after), [before, after]);
   const added = parts.filter(part => part.added).reduce((total, part) => total + (part.count ?? 0), 0);
   const removed = parts.filter(part => part.removed).reduce((total, part) => total + (part.count ?? 0), 0);
   return <div className="overflow-hidden rounded-lg border">
-    <div className="flex gap-3 border-b bg-muted/40 px-3 py-1.5 text-xs">
+    <div className="flex flex-wrap items-center gap-3 border-b bg-muted/40 px-3 py-1.5 text-xs">
       <span className="text-success">+{t("{count} 行", { count: added })}</span><span className="text-destructive">−{t("{count} 行", { count: removed })}</span>
+      {format === "markdown" ? <div role="group" aria-label={t("对照显示方式")} className="ml-auto flex gap-1">
+        <Button type="button" variant={source ? "ghost" : "secondary"} size="xs" aria-pressed={!source} onClick={() => setSource(false)}>{t("阅读对照")}</Button>
+        <Button type="button" variant={source ? "secondary" : "ghost"} size="xs" aria-pressed={source} onClick={() => setSource(true)}>{t("文本差异")}</Button>
+      </div> : null}
     </div>
-    <pre className="overflow-x-auto py-2 font-mono text-[12.5px] leading-relaxed">
+    {format === "markdown" && !source ? <div className="grid min-w-0 gap-4 p-3 xl:grid-cols-2">
+      {[[t("修改前"), before], [t("修改后"), after]].map(([label, text]) => <section key={label} aria-label={label} className="min-w-0">
+        <h3 className="mb-3 border-b pb-2 text-xs font-medium text-muted-foreground">{label}</h3>
+        <div className="overflow-x-auto"><Markdown text={text} singleDollarMath={singleDollarMath} modelSections={modelSections} /></div>
+      </section>)}
+    </div> : <pre className="overflow-x-auto py-2 font-mono text-[12.5px] leading-relaxed">
       {parts.flatMap((part, index) => part.value.replace(/\n$/, "").split("\n").map((line, number) =>
         <div key={`${index}-${number}`} className={cn("px-3", part.added && "bg-success/10 text-success",
           part.removed && "bg-destructive/10 text-destructive")}>
           <span className="mr-3 inline-block w-3 text-muted-foreground select-none">{part.added ? "+" : part.removed ? "−" : " "}</span>{line || " "}
         </div>))}
-    </pre>
+    </pre>}
   </div>;
 }

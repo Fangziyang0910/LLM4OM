@@ -19,6 +19,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.methods import Method, presets
+from llm4om.methods.common import FORMULATION_FORMAT, output_language
 from llm4om.methods.orthought import prompts
 from llm4om.runtime import Context, ModelingState
 
@@ -46,7 +47,9 @@ class State(ModelingState, total=False):
 
 async def _ask(context: Context, role: str, prompt: str) -> str:
     model = context.llm(role).bind(temperature=presets.ORTHOUGHT.temperature)
-    return (await model.ainvoke([HumanMessage(prompt.replace("Gurobipy", context.target.library))])).text
+    # llm4om: model and debug prose follow the run locale; protocol tags and code stay intact.
+    prompt = prompt.replace("Gurobipy", context.target.library) + output_language(context)
+    return (await model.ainvoke([HumanMessage(prompt)])).text
 
 
 def _code(reply: str) -> str | None:
@@ -89,6 +92,8 @@ async def model(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     context = runtime.context
     prompt = prompts.formalized_solution_path_prompt.format(nlp=state["problem"]).replace(
         UPSTREAM_CODE_SECTION, CODE_SECTION.format(contract=context.target.prompt))
+    # llm4om: retain solution_path/model/python boundaries while requesting web-renderable math and domains.
+    prompt += FORMULATION_FORMAT
     reply = await _ask(context, "model", prompt)
     found = re.search(r"```(?:model|latex|markdown)[ \t]*\r?\n(.*?)\r?\n?[ \t]*```", reply, re.S | re.I)
     return {"solution_path": _target_text(reply, "solution_path") or "",

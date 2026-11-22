@@ -10,7 +10,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field, ValidationError
 
-from llm4om.methods.common import strip_json_fence
+from llm4om.methods.common import output_language, strip_json_fence
 from llm4om.runtime import Context
 
 T = TypeVar("T", bound=BaseModel)
@@ -167,7 +167,8 @@ async def ask_schema(context: Context, role: str, system_prompt: str, user_promp
     """Query `context.llm(role)` for a JSON object matching `schema`, retrying up to 3 times on parse errors."""
     parser = PydanticOutputParser(pydantic_object=schema)
     messages: list[BaseMessage] = [
-        SystemMessage(system_prompt + "\n\nReturn ONLY a valid JSON object matching this schema:\n" + parser.get_format_instructions()),
+        SystemMessage(system_prompt + "\n\nReturn ONLY a valid JSON object matching this schema:\n"
+                      + parser.get_format_instructions() + output_language(context)),
         HumanMessage(user_prompt),
     ]
     llm = context.llm(role)

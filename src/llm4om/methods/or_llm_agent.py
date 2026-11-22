@@ -19,6 +19,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.methods import Method, presets
+from llm4om.methods.common import output_language
 from llm4om.runtime import Context, ModelingState
 
 MODELING_SYSTEM = (
@@ -64,7 +65,8 @@ async def _query(context: Context, role: str, messages: list[BaseMessage]) -> st
 
 async def math_model(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     context = runtime.context
-    messages: list[BaseMessage] = [SystemMessage(MODELING_SYSTEM.replace("Gurobi", context.target.library)),
+    messages: list[BaseMessage] = [SystemMessage(MODELING_SYSTEM.replace("Gurobi", context.target.library)
+                                              + output_language(context)),
                                    HumanMessage(state["problem"])]
     model = await _query(context, "math_model", messages)
     request = CODE_REQUEST.format(contract=context.target.prompt)

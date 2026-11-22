@@ -11,7 +11,7 @@ from langgraph.runtime import Runtime
 from pydantic import BaseModel, Field, ValidationError
 
 from llm4om.methods import presets
-from llm4om.methods.common import strip_json_fence
+from llm4om.methods.common import output_language, strip_json_fence
 from llm4om.methods.trival import prompts as P
 from llm4om.runtime import Context, ModelingState
 
@@ -213,7 +213,7 @@ def _expert_instruction(state: State) -> str:
 def _expert_node(name: str, system_prompt: str, field: str) -> Callable[[State, Runtime[Context]], Any]:
     async def run_expert(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
         reply = await runtime.context.llm(f"trival.{name}").ainvoke(
-            [SystemMessage(system_prompt), HumanMessage(_expert_instruction(state))]
+            [SystemMessage(system_prompt + output_language(runtime.context)), HumanMessage(_expert_instruction(state))]
         )
         return {field: reply.text}
 
@@ -270,7 +270,7 @@ async def semantic_fact_extractor(state: State, runtime: Runtime[Context]) -> di
 
     await _run_tools(
         runtime.context.llm("trival.semantic_fact_extractor"),
-        P.SEMANTIC_FACT_EXTRACTOR_SYSTEM_PROMPT,
+        P.SEMANTIC_FACT_EXTRACTOR_SYSTEM_PROMPT + output_language(runtime.context),
         user_content,
         [write_semantic_facts, write_semantic_ambiguities],
     )
@@ -288,7 +288,7 @@ async def ambiguity_resolver(state: State, runtime: Runtime[Context]) -> dict[st
         "Complete semantic ambiguity resolution based on the above materials."
     )
     reply = await runtime.context.llm("trival.ambiguity_resolver").ainvoke(
-        [SystemMessage(P.AMBIGUITY_RESOLVER_SYSTEM_PROMPT), HumanMessage(user_content)]
+        [SystemMessage(P.AMBIGUITY_RESOLVER_SYSTEM_PROMPT + output_language(runtime.context)), HumanMessage(user_content)]
     )
     return {"ambiguity_resolutions": reply.text}
 
@@ -303,7 +303,7 @@ async def semantic_validator(state: State, runtime: Runtime[Context]) -> dict[st
     )
     verdict = await _validate(
         runtime.context.llm("trival.semantic_validator"),
-        P.SEMANTIC_VALIDATOR_SYSTEM_PROMPT,
+        P.SEMANTIC_VALIDATOR_SYSTEM_PROMPT + output_language(runtime.context),
         user_content,
         SemanticValidationOutput,
     )
@@ -355,7 +355,7 @@ async def formulation_selector(state: State, runtime: Runtime[Context]) -> dict[
     )
     await _run_tools(
         runtime.context.llm("trival.formulation_selector"),
-        P.FORMULATION_SELECTOR_SYSTEM_PROMPT,
+        P.FORMULATION_SELECTOR_SYSTEM_PROMPT + output_language(runtime.context),
         user_content,
         [select_formulation],
         require_done=lambda: bool(chosen["formulation"].strip()),
@@ -373,7 +373,7 @@ async def formulation_validator(state: State, runtime: Runtime[Context]) -> dict
     user_content = f"{_semantic_context(state)}\n\n## Selected Formulation\n{state.get('formulation', '')}\n"
     verdict = await _validate(
         runtime.context.llm("trival.formulation_validator"),
-        P.FORMULATION_VALIDATOR_SYSTEM_PROMPT,
+        P.FORMULATION_VALIDATOR_SYSTEM_PROMPT + output_language(runtime.context),
         user_content,
         FormulationValidationOutput,
     )
@@ -402,7 +402,7 @@ async def revise_formulation(state: State, runtime: Runtime[Context]) -> dict[st
 
     await _run_tools(
         runtime.context.llm("trival.revise_formulation"),
-        P.FORMULATION_REVISION_SYSTEM_PROMPT,
+        P.FORMULATION_REVISION_SYSTEM_PROMPT + output_language(runtime.context),
         "\n\n".join(parts),
         [write_formulation],
     )
@@ -484,7 +484,7 @@ async def code_agent(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
 
     await _run_tools(
         runtime.context.llm("trival.code_agent"),
-        P.CODE_AGENT_SYSTEM_PROMPT + "\n\n" + runtime.context.target.prompt,
+        P.CODE_AGENT_SYSTEM_PROMPT + "\n\n" + runtime.context.target.prompt + output_language(runtime.context),
         content,
         [write_code, edit_code, read_code],
     )
@@ -524,7 +524,7 @@ async def code_validator(state: State, runtime: Runtime[Context]) -> dict[str, A
     )
     verdict = await _validate(
         runtime.context.llm("trival.code_validator"),
-        P.CODE_VALIDATOR_SYSTEM_PROMPT,
+        P.CODE_VALIDATOR_SYSTEM_PROMPT + output_language(runtime.context),
         user_content,
         CodeValidationOutput,
     )

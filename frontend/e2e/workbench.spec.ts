@@ -10,7 +10,7 @@ async function open(page: Page) {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(String(error)));
   page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
-  await page.goto("/");
+  await page.goto("/model");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("textbox", { name: "问题描述" }).waitFor();
@@ -29,7 +29,7 @@ test("an accepted run survives a lost start response and an ordinary attachment 
     accepted = route.request().url().split("/").at(-2)!;
     await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ detail: "The run is already active." }) });
   });
-  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.getByRole("button", { name: /^立即求解/ }).click();
   await page.waitForURL(/\/run\//);
   expect(page.url().endsWith(accepted)).toBe(true);
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible({ timeout: 60_000 });
@@ -42,7 +42,7 @@ test("a run shows the solution, keeps a note and tags, and exports a report", as
   const errors = await open(page);
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
   await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue(PRODUCTION);
-  await page.getByRole("button", { name: "开始建模" }).click();
+  await page.getByRole("button", { name: "立即求解" }).click();
   await page.waitForURL(/\/run\//);
   await page.getByRole("button", { name: "导出 Excel" }).waitFor({ timeout: 60_000 });
   await expect(page.getByText("总利润", { exact: true }).locator("..")).toContainText("13");
@@ -63,14 +63,14 @@ test("a run shows the solution, keeps a note and tags, and exports a report", as
   await page.getByRole("button", { name: "导出 Excel" }).waitFor();
   const after = (await (await page.request.get(`/threads/${threadId}`)).json()).values.timing;
   expect(after).toEqual(before);
-  await page.getByRole("textbox", { name: "搜索运行" }).fill("#e2e");
+  await page.getByRole("textbox", { name: "搜索记录" }).fill("#e2e");
   await expect(page.getByRole("navigation", { name: "运行记录" }).getByText(/工厂生产/)).toHaveCount(1);
-  await page.getByRole("textbox", { name: "搜索运行" }).fill("#nosuch");
+  await page.getByRole("textbox", { name: "搜索记录" }).fill("#nosuch");
   await expect(page.getByRole("navigation", { name: "运行记录" }).getByText(/工厂生产/)).toHaveCount(0);
 
   await page.getByRole("button", { name: "更多操作", exact: true }).click();
   const [download] = await Promise.all([page.waitForEvent("download"),
-    page.getByRole("menuitem", { name: "导出报告（Markdown）" }).click()]);
+    page.getByRole("menuitem", { name: "导出完整报告（MD）" }).click()]);
   const report = await readFile(await download.path(), "utf-8");
   expect(download.suggestedFilename()).toMatch(/\.md$/);
   expect(report).toMatch(/目标值：13/);
@@ -87,15 +87,16 @@ test("a cancelled method keeps its draft after reloading without an event stream
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   await page.locator("#method-feedback_repair").click();
   await page.getByRole("button", { name: "完成", exact: true }).click();
-  await page.getByRole("button", { name: "开始建模" }).click();
+  await page.getByRole("button", { name: "立即求解" }).click();
   await page.waitForURL(/\/run\//);
-  await expect(page.getByText(/LLM 正在处理：repair/)).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("tab", { name: "求解代码", exact: true }).click();
+  await expect(page.getByRole("tabpanel", { name: "求解代码", exact: true })).toContainText("return m.missing", { timeout: 60_000 });
   await page.getByRole("button", { name: "停止", exact: true }).click();
-  await expect(page.getByText("运行已停止", { exact: true })).toBeVisible();
+  await expect(page.getByText("已停止求解", { exact: true })).toBeVisible();
   let streamRequests = 0;
   await page.route(/\/runs\/[^/]+\/stream/, route => { streamRequests++; return route.abort(); });
   await page.reload();
-  await expect(page.getByText("停止前已保存的过程和产物仍可查看。", { exact: true })).toBeVisible();
+  await expect(page.getByText("停止前已生成的中间模型与记录仍可查看。", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "求解代码", exact: true }).click();
   await expect(page.getByRole("tabpanel")).toContainText("return m.missing");
   expect(streamRequests).toBe(0);
@@ -108,7 +109,7 @@ test("a closed progress stream offers reconnect without creating another run", a
     status: 200, contentType: "text/event-stream", body: "",
   }));
   await page.getByRole("textbox", { name: "问题描述" }).fill("E2E_AGENT_PAUSE 工厂生产计划");
-  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.getByRole("button", { name: /^立即求解/ }).click();
   await page.waitForURL(/\/run\//);
   const originalUrl = page.url();
   const threadId = originalUrl.split("/").at(-1)!;
@@ -131,13 +132,13 @@ test("stopping after a lost progress stream shows the stopped run without a manu
     status: 200, contentType: "text/event-stream", body: "",
   }));
   await page.getByRole("textbox", { name: "问题描述" }).fill("E2E_AGENT_PAUSE 工厂生产计划");
-  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.getByRole("button", { name: /^立即求解/ }).click();
   await page.waitForURL(/\/run\//);
   const originalUrl = page.url();
   const threadId = originalUrl.split("/").at(-1)!;
   await expect(page.getByText("实时连接已断开，服务器仍在运行。", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "停止", exact: true }).click();
-  await expect(page.getByText("运行已停止", { exact: true })).toBeVisible();
+  await expect(page.getByText("已停止求解", { exact: true })).toBeVisible();
   expect(page.url()).toBe(originalUrl);
   const runs = await (await page.request.get(`/threads/${threadId}/runs`)).json();
   expect(runs).toHaveLength(1);
@@ -147,16 +148,16 @@ test("stopping after a lost progress stream shows the stopped run without a manu
 test("a failed run can be retried directly while preserving its original record and settings", async ({ page }) => {
   await open(page);
   await page.getByRole("textbox", { name: "问题描述" }).fill("E2E_PAUSE_REPAIR 工厂生产计划");
-  await page.getByRole("button", { name: "开始建模", exact: true }).click();
+  await page.getByRole("button", { name: "立即求解", exact: true }).click();
   await page.waitForURL(/\/run\//);
   const originalUrl = page.url();
   const threadId = originalUrl.split("/").at(-1)!;
-  const retry = page.getByRole("button", { name: "再运行一次", exact: true });
+  const retry = page.getByRole("button", { name: "重新求解", exact: true });
   await expect(retry).toBeVisible({ timeout: 60_000 });
   const before = await (await page.request.get(`/threads/${threadId}`)).json();
   await retry.click();
   await expect(page).not.toHaveURL(originalUrl);
-  await expect(page.getByRole("button", { name: "再运行一次", exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("button", { name: "重新求解", exact: true })).toBeVisible({ timeout: 60_000 });
   const retried = await (await page.request.get(`/threads/${page.url().split("/").at(-1)}`)).json();
   expect(retried.values.description).toBe(before.values.description);
   expect(retried.values.spec).toMatchObject({ method: before.values.spec.method, language: before.values.spec.language,
@@ -168,8 +169,8 @@ test("a failed run can be retried directly while preserving its original record 
 
 test("a named DeepSeek preset keeps its native provider, custom endpoint and actual model ID", async ({ page }) => {
   const errors = await open(page);
-  await page.getByRole('button', { name: /预设模型/ }).click();
-  const dialog = page.getByRole('dialog', { name: '预设模型', exact: true });
+  await page.getByRole('button', { name: /^AI 模型设置/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'AI 模型设置', exact: true });
   await expect(dialog.getByRole('heading', { name: 'deepseek-v4.1 flash-1017' })).toBeVisible();
   await expect(dialog.getByText('mock-model', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: '添加预设', exact: true }).click();
@@ -192,7 +193,9 @@ test("a named DeepSeek preset keeps its native provider, custom endpoint and act
 
 test("new methods expose supported solver choices and BIND runs through the workbench", async ({ page }) => {
   const errors = await open(page);
+  await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
+  await page.getByRole("button", { name: /^更多研究方法/ }).click();
   await page.locator("#method-sac_opt").click();
   await expect(page.locator("#language-pyomo")).toBeChecked();
   await expect(page.locator("#language-gurobipy")).toBeEnabled();
@@ -206,8 +209,7 @@ test("new methods expose supported solver choices and BIND runs through the work
   await page.locator('label[for="language-ortools"]').click();
   await page.locator('label[for="language-pyomo"]').click();
   await page.getByRole("button", { name: "完成", exact: true }).click();
-  await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
-  await page.getByRole("button", { name: "开始建模" }).click();
+  await page.getByRole("button", { name: "立即求解" }).click();
   await page.waitForURL(/\/run\//);
   await page.getByRole("button", { name: "导出 Excel" }).waitFor({ timeout: 60_000 });
   await expect(page.getByText("总利润", { exact: true }).locator("..")).toContainText("13");
@@ -226,7 +228,7 @@ test("native APIs run without an interface setting and a library can use differe
   await page.getByRole('option', { name: 'CP_SAT', exact: true }).click();
   await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole('main').getByRole('button', { name: /^生产计划/ }).click();
-  await page.getByRole('button', { name: '开始建模' }).click();
+  await page.getByRole('button', { name: '立即求解' }).click();
   await page.waitForURL(/\/run\//);
   await page.getByRole('button', { name: '导出 Excel' }).waitFor({ timeout: 60_000 });
   let state = (await (await page.request.get(`/threads/${page.url().split('/').at(-1)}`)).json()).values;
@@ -234,7 +236,7 @@ test("native APIs run without an interface setting and a library can use differe
   expect(state.solve.objective).toBe(13);
 
   for (const solver of ['OSQP', 'SCS']) {
-    await page.goto('/');
+    await page.goto('/model');
     await page.getByRole('textbox', { name: '问题描述' }).fill('连续变量 x,y>=0，x+y<=2。最小化(x-1)^2+(y-2)^2。');
     await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
     await page.locator('label[for="language-cvxpy"]').click();
@@ -242,7 +244,7 @@ test("native APIs run without an interface setting and a library can use differe
     await page.getByRole('combobox', { name: '求解后端', exact: true }).click();
     await page.getByRole('option', { name: solver, exact: true }).click();
     await page.getByRole("button", { name: "完成", exact: true }).click();
-    await page.getByRole('button', { name: '开始建模' }).click();
+    await page.getByRole('button', { name: '立即求解' }).click();
     await page.waitForURL(/\/run\//);
     await page.getByRole('button', { name: '导出 Excel' }).waitFor({ timeout: 60_000 });
     state = (await (await page.request.get(`/threads/${page.url().split('/').at(-1)}`)).json()).values;
@@ -264,7 +266,7 @@ test("history can load records beyond the first two hundred", async ({ page }) =
       ids.push((await response.json()).thread_id);
     }
     await open(page);
-    await page.getByRole("textbox", { name: "搜索运行" }).fill("pagination-first");
+    await page.getByRole("textbox", { name: "搜索记录" }).fill("pagination-first");
     const history = page.getByRole("navigation", { name: "运行记录" });
     await expect(history.getByText("pagination-first", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "加载更早的运行" }).click();
@@ -274,7 +276,7 @@ test("history can load records beyond the first two hundred", async ({ page }) =
     await page.goto(`/run/${ids[1]}`);
     await expect(history.getByText("pagination-1", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "更多操作", exact: true }).click();
-    await page.getByRole("menuitem", { name: "删除这次运行" }).click();
+    await page.getByRole("menuitem", { name: "删除此记录" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "删除", exact: true }).click();
     await page.waitForURL("/");
     expect((await page.request.get(`/threads/${ids[1]}`)).status()).toBe(404);
@@ -295,7 +297,7 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
   await page.getByRole("switch", { name: "对比多个方法" }).click();
   await page.locator("#compare-feedback_repair").click();
   await page.getByRole("button", { name: "完成", exact: true }).click();
-  await page.getByRole("button", { name: "开始对比（2 个运行）" }).click();
+  await page.getByRole("button", { name: "开始对比（2 个方案）" }).click();
   await page.waitForURL(/\/compare\//);
   await expect(page.getByText("2 个有解的运行目标值一致")).toBeVisible({ timeout: 60_000 });
   const rows = page.getByRole("row");
@@ -314,8 +316,8 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
     expect((await panel.boundingBox())!.height).toBeGreaterThan(240);
   }
   await page.getByRole("button", { name: "更多操作", exact: true }).click();
-  await page.getByRole("menuitem", { name: "复制链接" }).click();
-  await page.locator("[data-sonner-toast]").filter({ hasText: "已复制链接。" }).waitFor();
+  await page.getByRole("menuitem", { name: "复制分享链接" }).click();
+  await page.locator("[data-sonner-toast]").filter({ hasText: "已复制分享链接。" }).waitFor();
   await page.getByRole("button", { name: "查看对比", exact: true }).click();
   await page.waitForURL(/\/compare\//);
   expect(errors).toEqual([]);
@@ -325,10 +327,10 @@ test("an infeasible model shows the constraints that conflict", async ({ page })
   const errors = await open(page);
   await page.getByRole("textbox", { name: "问题描述" }).fill(
     "工厂生产 A、B 两种产品。合同要求 A、B 各至少生产 5 件。A 消耗 2 单位切割资源，B 消耗 1 单位，切割资源共 8 单位。使利润 3A+2B 最大。");
-  await page.getByRole("button", { name: "开始建模" }).click();
+  await page.getByRole("button", { name: "立即求解" }).click();
   await page.waitForURL(/\/run\//);
-  await expect(page.getByText("求解器判定模型不可行", { exact: false })).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("tab", { name: "解", exact: true }).click();
+  await expect(page.getByText(/当前条件存在冲突|当前约束条件之间存在矛盾/)).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("tab", { name: "最优方案", exact: true }).click();
   const conflict = page.getByRole("heading", { name: /不能同时满足的约束/ }).locator("..");
   await expect(conflict).toContainText("cutting");
   await expect(conflict).toContainText("contract");
@@ -347,8 +349,8 @@ test("the workbench switches to English and stays in English", async ({ page }) 
   await open(page);
   await page.getByRole("button", { name: "外观与语言" }).last().click();
   await page.getByRole("menuitemradio", { name: "English" }).click();
-  await expect(page.getByRole("heading", { name: "Describe an optimization problem" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Problem description", exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("button", { name: "Start modeling" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Solve Now", exact: true })).toBeVisible();
   await expect(page.getByText("建模方法")).toHaveCount(0);
 });

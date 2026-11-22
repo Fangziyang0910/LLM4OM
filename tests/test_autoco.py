@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import os
 from typing import Any
 
 import pytest
@@ -143,7 +144,9 @@ def test_sandbox_solves_autoco_single_objective_with_data_attachment() -> None:
 
 def test_sandbox_solves_autoco_multi_objective_pareto_front() -> None:
     alg = "NSGA-II" if has_pymoo else "MOEA/D"
-    result = asyncio.run(Sandbox("local").solve(MULTI_OBJ_CODE, {}, "autoco", time_limit=1.2, solver=alg))
+    # Native optimizer imports consume the wall-clock budget on Windows; retain the same quality assertions.
+    budget = 5.5 if os.name == "nt" else 1.2
+    result = asyncio.run(Sandbox("local").solve(MULTI_OBJ_CODE, {}, "autoco", time_limit=budget, solver=alg))
     assert result.error is None, result.error
     assert result.status == "feasible"
     assert result.solver == alg
@@ -169,7 +172,8 @@ def build_model(data):
         senses=["min"],
     )
 '''
-    result = asyncio.run(Sandbox("local").solve(code, {}, "autoco", time_limit=1.5, solver="CMA-ES"))
+    budget = 5.5 if os.name == "nt" else 1.5
+    result = asyncio.run(Sandbox("local").solve(code, {}, "autoco", time_limit=budget, solver="CMA-ES"))
     assert result.error is None, result.error
     assert result.status == "feasible" and result.solver == "CMA-ES"
     assert result.objective is not None and result.objective < 1e-2

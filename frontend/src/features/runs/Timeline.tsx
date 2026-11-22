@@ -7,7 +7,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/u
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { STATUS, duration, formatNumber, formatTokens, tone } from "@/format";
-import { phases, preview, roleName, type Phase } from "@/features/runs/steps";
+import { phases, preview, roleLabel, type Phase } from "@/features/runs/steps";
 import type { Step } from "@/features/runs/types";
 import type { Live } from "@/features/runs/useRun";
 import { Code, Markdown, Plain } from "@/components/Content";
@@ -76,7 +76,7 @@ function PhaseItem({ phase, index, last, live, active, open, onOpenChange, onSho
   const title = phase.kind === "working"
     ? (running ? t("正在智能分析与推理…") : active ? t("正在准备下一步…") : t("附加分析记录"))
     : t(step!.title);
-  const summary = phase.kind === "artifact" ? preview(step!.content)
+  const summary = phase.kind === "artifact" ? preview(step!.content, 160, !!(step!.node || step!.formulation))
     : phase.kind === "solve" && !running ? ((step!.failed || step!.status === "error") ? step!.content.split("\n").find(line => line && !line.startsWith("Status"))
       : step!.objective != null ? t("目标值 {value}", { value: formatNumber(step!.objective) }) : STATUS[step!.status ?? ""])
     : phase.kind === "error" ? step!.content.trim().split("\n").pop() : "";
@@ -104,7 +104,7 @@ function PhaseItem({ phase, index, last, live, active, open, onOpenChange, onSho
       {!showContent && summary ? <p className="-mt-1 truncate px-3.5 pb-2.5 text-xs text-muted-foreground">{summary}</p> : null}
       <CollapsibleContent className="flex flex-col gap-3 border-t border-border/60 px-3.5 py-3">
         {phase.kind === "artifact" ? <>
-          <Clipped><Markdown text={step!.content} /></Clipped>
+          <Clipped><Markdown text={step!.content} modelSections={!!(step!.node || step!.formulation)} /></Clipped>
           {step!.formulation || step!.code ? <div className="flex flex-wrap gap-2">
             {step!.formulation ? <Button variant="secondary" size="xs" className="rounded-lg" onClick={() => onShow("formulation", step!.id)}><Sigma />{t("查看此版数学模型")}</Button> : null}
             {step!.code ? <Button variant="secondary" size="xs" className="rounded-lg" onClick={() => onShow("code", step!.id)}><CodeXml />{t("查看此版代码")}</Button> : null}
@@ -139,18 +139,27 @@ function Call({ call, live }: { call: Step; live?: Live[string] }) {
   const tokens = call.output_tokens != null ? `${formatTokens(call.input_tokens ?? 0)} → ${formatTokens(call.output_tokens)}` : "";
   const meta = [tokens, call.seconds != null ? duration(call.seconds) : ""].filter(Boolean).join(" · ");
   if (call.running) return <li className="rounded-xl border border-primary/25 bg-primary/5 p-2.5">
-    <div className="flex items-center gap-2 text-xs"><Spinner className="size-3 text-primary" /><span className="font-medium">{t("正在生成内容…")}</span></div>
-    <LiveText live={live} />
+    <div className="flex items-center gap-2 text-xs"><Spinner className="size-3 text-primary" /><span className="font-medium">{roleLabel(call.title)}</span></div>
+    <Collapsible className="group/raw mt-2">
+      <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <ChevronDown className="size-3.5 -rotate-90 transition-transform group-data-[state=open]/raw:rotate-0" />{t("查看模型原始输出")}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <p className="pt-1.5 text-xs text-muted-foreground">{t("原始输出可能包含英文、代码或工具字段。")}</p>
+        <LiveText live={live} />
+      </CollapsibleContent>
+    </Collapsible>
   </li>;
   return <li>
     <Collapsible className={cn("group/call rounded-lg border border-border/70", call.failed && "border-destructive/30")}>
       <CollapsibleTrigger className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-muted/50">
         {call.failed ? <TriangleAlert className="size-3.5 text-destructive" /> : <Bot className="size-3.5 text-muted-foreground" />}
-        <span className="font-medium">{roleName(call.title)}</span>
+        <span className="font-medium" title={call.title}>{roleLabel(call.title)}</span>
         <span className="ml-auto text-muted-foreground tabular">{meta}</span>
         <ChevronDown className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]/call:rotate-180" />
       </CollapsibleTrigger>
       <CollapsibleContent className="border-t p-2.5">
+        <p className="mb-2 text-xs text-muted-foreground">{t("原始输出可能包含英文、代码或工具字段。")}</p>
         {call.content ? <Plain className="border-0 bg-transparent p-0">{call.content}</Plain>
           : <p className="text-xs text-muted-foreground">{t("（无文本记录）")}</p>}
       </CollapsibleContent>

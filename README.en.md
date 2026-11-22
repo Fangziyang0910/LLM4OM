@@ -29,7 +29,7 @@
 
 **General Intelligent Optimization Solver** (**通用智能优化求解器**) is a general solver for complex optimization problems across scheduling, supply chains, vehicle routing, resource allocation, network flows and nonlinear programming. Configure runs directly in the workbench, or chat with the optimization assistant and attach business data. The agent invokes a complete modeling workflow to formulate the mathematical model, write solver code and compute optimal solutions inside an isolated container. Inspect actual steps, formulations, code and results in the workspace alongside chat, and continue the conversation to revise constraints.
 
-The platform integrates **13 intelligent modeling methods** (including two in-house methods, Direct and Feedback Repair, plus eleven methods from public research) and **9 modeling libraries**. Enter a complex optimization problem, run modeling and solving, and inspect verifiable models and solutions without writing solver code yourself.
+The platform integrates **14 modeling strategies**: 13 exact-modeling workflows and the AutoCO metaheuristic engine, alongside **9 modeling libraries**. Enter an optimization problem, run modeling and solving, and inspect models and computed solutions without writing solver code yourself.
 
 <p align="center">
   <img src="docs/assets/demo.gif" alt="Demo: ordinary chat, arithmetic and the Agent modeling workspace" width="100%">
@@ -41,7 +41,7 @@ The platform integrates **13 intelligent modeling methods** (including two in-ho
 | Feature | What you get |
 |---|---|
 | 💬 **Model through conversation** | Discuss an idea, calculate a first plan, inspect results and revise conditions in one agent. Specify methods and libraries in chat, or use the retained manual workbench |
-| 🧠 **13 modeling methods** | Direct, Feedback Repair, TriVAL, SAC-Opt, BIND, OptiMind and more; each has its own LangGraph |
+| 🧠 **14 modeling strategies** | Direct, Feedback Repair, TriVAL, SAC-Opt, BIND, OptiMind, AutoCO and more; each has its own LangGraph |
 | 🧩 **9 modeling libraries** | Native modeling APIs, with backend discovery through each library’s own plugin registry |
 | 📝 **Requirements chat** | Clarify the decision, objectives and conditions, including open questions and conflicts; review the editable draft before handing it to a modeling method |
 | 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
@@ -54,7 +54,7 @@ The platform integrates **13 intelligent modeling methods** (including two in-ho
 | 👥 **Team deployment** | One `docker compose up`; preset keys never leave the server; optional HTTPS and usage limits |
 | 🌗 **A workbench people like** | Export Excel plans with business labels, units and all actual values; notes and tags, Markdown reports, Excel import, 2,033 public problems, Chinese and English, dark mode |
 
-The original workbench remains the desktop home page. A separate “Optimization chat” entry opens `/agent`. Describe a problem or attach data; the assistant asks focused questions when needed and calls a complete modeling workflow. Defaults are Direct, Pyomo and automatic backend selection. Specify alternatives in chat or pin them under modeling preferences. Actual steps stream to a task card; the modeling workspace shows the mathematical model, code and results. Each plan is saved independently. Plan views, links, exports and revisions from a conversation use its saved checkpoint, so later thread updates do not replace an earlier plan. Both interfaces remain available and share the same modeling methods and independently saved runs.
+Optimization chat is the default workbench at `/`; manual modeling and method comparisons are available at `/model`. Describe a problem or attach data; the assistant asks focused questions when needed and calls a complete modeling workflow. Specify a method or library in chat. Exact modeling and AutoCO use their respective solving paths, with actual settings retained in the run. Actual steps stream to a task card; the modeling workspace shows the mathematical model, code and results. Each plan is saved independently. Plan views, links, exports and revisions from a conversation use its saved checkpoint, so later thread updates do not replace an earlier plan. Both interfaces remain available and share the same modeling methods and independently saved runs.
 
 The agent also handles ordinary questions, writing, code explanations, supplied material and arithmetic without starting a modeling run. For plan discussions, a calculator reads all saved decision values to check costs, remaining capacity and ratios. Say “use the second plan” or “return to the original” to change the baseline for later discussion without solving again. Browsing a historical plan still only changes the view.
 
@@ -134,7 +134,7 @@ You need Python 3.11–3.13, [uv](https://docs.astral.sh/uv/) and Docker:
 
 ```bash
 uv sync --extra web
-uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:14
+uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:16
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
@@ -172,6 +172,7 @@ print(state["failure"] or state["solve"]["objective"])
 |---|---|---|
 | Direct | One call writes the formulation and the code | Baseline |
 | Feedback Repair | Generates, solves and checks against the problem; repairs format, execution or modeling errors | In-house method |
+| AutoCO | Runs heuristic and evolutionary search in an isolated sandbox, including multi-objective Pareto candidates | [Implementation and algorithm pool](src/llm4om/methods/autoco/graph.py) |
 | TriVAL | Validates semantics, formulation and code in three stages; each stage builds, validates and revises | [Code](https://github.com/SCUT-EIPI/TriVAL/tree/380a529) |
 | OptiMUS 0.3 | Extracts parameters, objective and constraints; models and codes each one; assembles and debugs | [v0.3 paper](https://arxiv.org/abs/2407.19633) · [Code](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) |
 | Chain-of-Experts | A conductor picks experts one by one; a reducer writes the code; optional backward reflection | [ICLR 2024](https://openreview.net/forum?id=HobyL1B9CZ) · [Code](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) |
@@ -184,7 +185,7 @@ print(state["failure"] or state["solve"]["objective"])
 | BIND | Prompt with schemas; read full attachments in code; repair execution failures | [Paper](https://arxiv.org/abs/2605.21751) · [Adaptation](src/llm4om/methods/bind/README.md) |
 | OptiMind | Public class hints, modeling, execution feedback and iterative review | [Paper](https://arxiv.org/abs/2509.22979) · [Public scope](src/llm4om/methods/optimind/README.md) |
 
-Each method records its reference commit and adaptations. SAC-Opt is independently implemented; BIND uses no benchmark reference answers; OptiMind integrates the public inference workflow and the published TSP hint subset, not trained weights. All 13 methods accept the nine modeling libraries. Some methods retain an LP/MILP scope; the library and backend must support the problem. See [methods](docs/methods.md).
+Each method records its reference commit and adaptations. SAC-Opt is independently implemented; BIND uses no benchmark reference answers; OptiMind integrates the public inference workflow and the published TSP hint subset, not trained weights. All 13 exact-modeling workflows accept the nine modeling libraries. Some retain an LP/MILP scope; the library and backend must support the problem. AutoCO uses its built-in algorithm pool; heuristic results do not guarantee global optimality. See [methods](docs/methods.md).
 
 ## Modeling libraries and backends
 

@@ -24,7 +24,7 @@ from llm4om.methods.autoco.modeling import (
     SemanticSpec,
     ask_schema,
 )
-from llm4om.methods.common import python_code_blocks
+from llm4om.methods.common import output_language, python_code_blocks
 from llm4om.runtime import Context, ModelingState
 from llm4om.sandbox.autoco.specs import ALGORITHM_SPECS, canonical_algorithm
 
@@ -225,7 +225,7 @@ async def instantiate(state: State, runtime: Runtime[Context]) -> dict[str, Any]
     attempts = max(1, presets.AUTOCO.max_instantiate_attempts)
     for _ in range(attempts):
         reply = await context.llm("instantiate").ainvoke([
-            SystemMessage(INSTANTIATE_PROBLEM_PROMPT),
+            SystemMessage(INSTANTIATE_PROBLEM_PROMPT + output_language(context)),
             HumanMessage(prompt),
         ])
         code = _extract_code(reply.text)
@@ -307,7 +307,7 @@ async def select_algorithm(state: State, runtime: Runtime[Context]) -> dict[str,
     bound = context.llm("kg_agent").bind_tools(tools)
 
     messages: list[BaseMessage] = [
-        SystemMessage(KG_AGENT_PROMPT),
+        SystemMessage(KG_AGENT_PROMPT + output_language(context)),
         HumanMessage(
             f"## Main Solve Budget: {time_limit:.1f}s (Pilot budget cap: {max_pilot_budget:.1f}s)\n\n"
             f"## Explicit Problem Features\n{json.dumps(feats, ensure_ascii=False, indent=2)}\n"

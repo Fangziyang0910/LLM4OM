@@ -205,7 +205,7 @@ CPMpy 和原生 CP 接口允许无目标的可满足性模型，成功时保存�
 
 `Sandbox.solve(code, data, language, time_limit, solver=...)` 构建并求解模型；`run_script` 运行方法的检查脚本；`catalog` 在同一执行环境读取并缓存后端能力。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。所有运行共享服务的 Sandbox，`solve` 和 `run_script` 共用并发额度，默认最多 4 个，由 `LLM4OM_SANDBOX_JOBS` 设置。排队仍计入运行总时限，单次沙箱超时从取得额度后开始。`--jobs` 单独控制并发运行数。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:14` 中运行 Worker。容器使用只读根文件系统和 `tmpfs` 工作目录，禁用网络和全部 capability，以非 root 用户运行。镜像包含 `worker.py`。修改 `worker.py` 或 `worker.Dockerfile` 时同步更新 `WORKER_IMAGE` 和 `compose.yaml` 中的标签。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件。超时、取消或标准输出超过 32 MiB 时，沙箱先停止子进程，再等待 `docker rm --force` 清理容器。
+`Sandbox("docker")` 在镜像 `llm4om-worker:16` 中运行 Worker。容器使用只读根文件系统和 `tmpfs` 工作目录，禁用网络和全部 capability，以非 root 用户运行。镜像包含 `worker.py` 与 AutoCO 运行代码。修改 Worker 代码或 `worker.Dockerfile` 时同步更新 `WORKER_IMAGE` 和 `compose.yaml` 中的标签。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件。超时、取消或标准输出超过 32 MiB 时，沙箱先停止子进程，再等待 `docker rm --force` 清理容器。
 
 求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CPMpy 模型用 CPMpy 的 MUS，CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。`feedback()` 不包含诊断，已移植的研究方法继续使用原反馈；本项目的 Feedback Repair 单独读取诊断，用于对照题面复核。Gurobi 预求解把模型判为“不可行或无界”时，Worker 关闭对偶约简（`DualReductions=0`）再求解一次，得到确定的状态。
 
@@ -303,7 +303,7 @@ frontend/src/
 
 各页共用最大 1600 像素的内容宽度。导航在 1280 像素以上常驻；编辑页在 1024 像素以上按需并排显示主要内容与助手，窄窗口使用页签。长题面、方法列表和短屏设置使用各自的滚动区域，不把开始按钮推到屏外。
 
-问题预览和运行题面共用 `Content.Markdown`，只渲染原文，不改变提交内容。题面关闭单美元符号公式，避免价格被当成数学表达式；显式公式分隔符继续支持。生成的数学模型和建模步骤保留原有公式语法。
+问题预览和运行题面共用 `Content.Markdown`，显示处理不改变提交内容。题面关闭单美元符号公式，避免价格被当成数学表达式；显式公式分隔符继续支持。运行题面及模型可通过 `ReadingTranslation` 显示缓存阅读译文，原文继续用于复制、下载、版本文本差异及后续建模。模型阅读视图按界面语言显示已知字段标签，公式与代码节点保留原文；模型原始流按需展开，其中可能包含英文协议字段。生成的数学模型和建模步骤保留原有公式语法。
 
 | 需要 | 使用 |
 |---|---|

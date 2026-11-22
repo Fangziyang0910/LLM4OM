@@ -76,7 +76,7 @@ export function ScenarioComparison({ source, values, active = false }: { source:
         </div>
         <details className="min-w-0 rounded-xl border border-border/70 bg-muted/15 p-3.5">
           <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">{t("查看问题描述修改对照")}</summary>
-          <div className="mt-3 min-w-0"><Diff before={before.description ?? ""} after={values.description ?? ""} /></div>
+          <div className="mt-3 min-w-0"><Diff before={before.description ?? ""} after={values.description ?? ""} format="markdown" singleDollarMath={false} /></div>
         </details>
       </CardContent>
     </Card>

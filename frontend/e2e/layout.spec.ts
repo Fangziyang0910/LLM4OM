@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("the result tab strip does not create a vertical scrollbar", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
   await page.getByRole("button", { name: /^立即求解/ }).click();
   await page.waitForURL(/\/run\//);
@@ -34,7 +34,7 @@ test("the result tab strip does not create a vertical scrollbar", async ({ page 
 
 test("the data editor has one scroll viewport and keeps its column headers visible", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
-  await page.goto("/");
+  await page.goto("/model");
   const csv = [Array.from({ length: 12 }, (_, i) => `column${i}`),
     ...Array.from({ length: 60 }, (_, row) => Array.from({ length: 12 }, (_, column) => `${row}-${column}`))]
     .map(row => row.join(",")).join("\n");
@@ -60,11 +60,12 @@ test("the data editor has one scroll viewport and keeps its column headers visib
 
 test("settings scroll as one form and reveal the saved method", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 600 });
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
-  const methods = page.getByRole("radiogroup", { name: "建模策略", exact: true });
+  const methods = page.getByRole("radiogroup", { name: "建模方法", exact: true });
   expect(await methods.evaluate(node => node.scrollHeight - node.clientHeight)).toBe(0);
-  const selected = methods.getByRole("radio", { name: "OptiMind", exact: true });
+  await page.getByRole("button", { name: /^更多研究方法/ }).click();
+  const selected = methods.getByRole("radio", { name: /^OptiMind/ });
   await selected.check();
   await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
@@ -83,7 +84,7 @@ test("long catalog names wrap within the desktop navigation", async ({ page }) =
     options.datasets[0].license = "LongLicenseIdentifier".repeat(8);
     await route.fulfill({ json: options });
   });
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "案例模板库", exact: true }).click();
   const nav = page.getByRole("navigation", { name: "案例分类", exact: true });
   expect(await nav.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);

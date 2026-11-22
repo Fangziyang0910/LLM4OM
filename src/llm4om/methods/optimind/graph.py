@@ -8,7 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.methods import Method, presets
-from llm4om.methods.common import ask, split_formulation_and_code, strip_json_fence
+from llm4om.methods.common import ask, output_language, split_formulation_and_code, strip_json_fence
 from llm4om.methods.optimind.prompts import FEEDBACK, SYSTEM, hint_bank, hints
 from llm4om.runtime import Context, ModelingState
 
@@ -33,7 +33,8 @@ async def classify(state: State, runtime: Runtime[Context]) -> dict:
     classes = list(dict.fromkeys(classes))
     context = runtime.context
     return {"classes": classes, "turns": 0, "messages": [SystemMessage(SYSTEM.format(
-        library=context.target.library, target=context.target.prompt)), HumanMessage(state["problem"] + "\n\n" + hints(classes))]}
+        library=context.target.library, target=context.target.prompt) + output_language(context)),
+        HumanMessage(state["problem"] + "\n\n" + hints(classes))]}
 
 
 async def generate(state: State, runtime: Runtime[Context]) -> dict:

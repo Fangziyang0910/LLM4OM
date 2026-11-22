@@ -19,6 +19,7 @@ import { ParetoFront } from "@/features/runs/ParetoFront";
 import { Explanation } from "@/features/runs/Explanation";
 import { Infeasibility } from "@/features/runs/Infeasibility";
 import { ScenarioComparison } from "@/features/runs/ScenarioComparison";
+import { ReadingTranslation } from "@/components/ReadingTranslation";
 
 export type Tab = "solution" | "formulation" | "code" | "problem" | "comparison";
 const TABS: [Tab, string, LucideIcon][] = [
@@ -76,14 +77,14 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
         : <Blank icon={Sparkles} text={active ? t("正在计算最优方案，求解完成后将展示在这里…") : values.failure ? t("本次求解未能生成方案。") : finished ? t("暂无求解结果。") : t("求解尚未完成。")} />
         : null}
       {tab === "formulation" ? <Versioned key="formulation" items={formulations} picked={picked.formulation} pick={id => setPicked("formulation", id)}
-        noun={t("数学模型")} active={active} file="formulation.md"
+        noun={t("数学模型")} active={active} file="formulation.md" diffFormat="markdown" modelSections
         empty={active ? t("正在整理数学优化模型，稍后显示在这里…") : t("当前求解模式直接生成了求解程序，可在“求解代码”中查看。")}
-        render={text => <Markdown text={text} />} /> : null}
+        render={text => <ReadingTranslation text={text} active={active} render={value => <Markdown text={value} modelSections />} />} /> : null}
       {tab === "code" ? <Versioned key="code" items={codes} picked={picked.code} pick={id => setPicked("code", id)}
         noun={t("代码")} active={active} file="model.py" extra={language?.name}
         empty={active ? t("正在编写求解程序，稍后显示在这里…") : t("暂无求解程序。")}
         render={text => <Code text={text} />} /> : null}
-      {tab === "problem" ? <Problem values={values} /> : null}
+      {tab === "problem" ? <Problem values={values} active={active} /> : null}
       {tab === "comparison" && source ? <ScenarioComparison source={source} values={values} active={active} /> : null}
     </TabsContent>
   </Tabs>;
@@ -96,9 +97,9 @@ function Blank({ icon: BlankIcon, text }: { icon: LucideIcon; text: string }) {
 }
 
 /** One output in every version the method wrote: step through them, compare with the previous one, copy or download. */
-function Versioned({ items, picked, pick, noun, active, file, extra, empty, render }: {
+function Versioned({ items, picked, pick, noun, active, file, extra, empty, render, diffFormat, modelSections }: {
   items: Version[]; picked?: string; pick: (id: string | undefined) => void; noun: string; active: boolean; file: string;
-  extra?: string; empty: string; render: (text: string) => React.ReactNode;
+  extra?: string; empty: string; render: (text: string) => React.ReactNode; diffFormat?: "text" | "markdown"; modelSections?: boolean;
 }) {
   const [compare, setCompare] = useState(false);
   if (!items.length) return <Blank icon={noun === t("代码") ? CodeXml : Sigma} text={empty} />;
@@ -130,11 +131,11 @@ function Versioned({ items, picked, pick, noun, active, file, extra, empty, rend
     {!latest ? <Alert className="py-2"><AlertDescription className="flex flex-wrap items-center gap-x-2 text-xs">
       {t(active ? "这是第 {number} 版，不是目前的{noun}。" : "这是第 {number} 版，不是最终的{noun}。", { number: position + 1, noun })}
       <Button variant="link" size="xs" className="h-auto p-0" onClick={() => pick(undefined)}>{t("看最新一版")}</Button></AlertDescription></Alert> : null}
-    {compare && previous ? <Diff before={previous.text} after={current.text} /> : render(current.text)}
+    {compare && previous ? <Diff before={previous.text} after={current.text} format={diffFormat} modelSections={modelSections} /> : render(current.text)}
   </div>;
 }
 
-function Problem({ values }: { values: RunValues }) {
+function Problem({ values, active }: { values: RunValues; active: boolean }) {
   const files = Object.entries(values.data ?? {});
   return <div className="flex flex-col gap-4">
     <Card className="gap-3 rounded-2xl border-border/80 py-4 shadow-2xs">
@@ -142,7 +143,8 @@ function Problem({ values }: { values: RunValues }) {
         <CardTitle className="text-sm font-semibold">{t("问题描述")}</CardTitle>
         <CopyButton text={values.description ?? ""} label={t("复制问题")} className="ml-auto" />
       </CardHeader>
-      <CardContent className="min-w-0 px-5"><Markdown text={values.description ?? ""} singleDollarMath={false} /></CardContent>
+      <CardContent className="min-w-0 px-5"><ReadingTranslation text={values.description ?? ""} active={active}
+        render={text => <Markdown text={text} singleDollarMath={false} />} /></CardContent>
     </Card>
     {files.map(([name, content]) => <DataFile key={name} name={name} content={content} />)}
     {values.spec ? <details className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3 text-xs text-muted-foreground">

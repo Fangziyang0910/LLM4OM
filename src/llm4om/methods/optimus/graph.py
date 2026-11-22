@@ -29,6 +29,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.methods import Method, presets
+from llm4om.methods.common import output_language
 from llm4om.methods.optimus import prompts as P
 from llm4om.methods.optimus.parsing import (
     extract_code_from_end,
@@ -66,7 +67,8 @@ class State(ModelingState, total=False):
 
 async def _ask(context: Context, role: str, prompt: str) -> str:
     """Upstream get_response: one user message."""
-    return (await context.llm(role).bind(temperature=presets.OPTIMUS.temperature).ainvoke([HumanMessage(prompt)])).text
+    return (await context.llm(role).bind(temperature=presets.OPTIMUS.temperature).ainvoke(
+        [HumanMessage(prompt + output_language(context))])).text
 
 
 def _dump(value: Any) -> str:

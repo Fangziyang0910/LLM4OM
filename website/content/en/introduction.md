@@ -10,7 +10,13 @@ General Intelligent Optimization Solver is a natural-language-driven **dual-engi
 
 ![General Intelligent Optimization Solver workbench: conversational planning and interactive Pareto front](../../../assets/screens/live/pareto-light.png)
 
-First-time users can complete the production [quickstart](../quickstart/). To run your own service, see [installation](../installation/).
+## Start here
+
+1. **You have access to a service**: complete the production [quickstart](../quickstart/), then check its formulation and known result.
+2. **You need to host a service**: [install and start it](../installation/), configure a [model preset](../model-presets/), then follow the quickstart.
+3. **You are preparing a business problem**: identify decisions, objectives, constraints, units and data sources. Use the [requirements assistant](../requirements/) to resolve missing information before modeling.
+
+For page or run failures, use the symptom-based [troubleshooting guide](../troubleshooting/).
 
 ## From requirements to a usable plan
 
@@ -24,6 +30,10 @@ flowchart TB
 ```
 
 A run retains statement, attachments, configuration, formulation, code, values and steps. Original and revised plans remain connected to their inputs.
+
+The model translates the problem into a formulation and code. By default, a Docker Worker executes that code and calls the solver. An “optimal” status applies to the mathematical model that was solved; check that it captures the business rules. Interactive documentation examples compute small, bounded problems and do not establish platform-wide performance or correctness guarantees.
+
+AutoCO returns the heuristic results and Pareto candidates found within its search budget; it does not guarantee global optimality or a complete Pareto front. Check the algorithm, objective directions, constraint handling and actual result status before using a plan.
 
 ## Everyday features
 
@@ -47,6 +57,8 @@ A run retains statement, attachments, configuration, formulation, code, values a
 Docs include localized workbench recordings, screenshots and interactive examples. Download quickstart data, step through method artifacts, or change solver-example parameters and inspect computed results.
 
 The interface supports Chinese, English and light/dark/system themes. Desktop dividers resize work areas; narrow screens use tabs for main content and assistants.
+
+New runs request explanatory prose in the selected interface language. Foreign-language problem statements and historical formulations can use cached reading translations. Changing language does not rewrite source statements, code or saved records. Live stages use localized labels; raw model output is available on demand and may contain English, code or tool fields. See [language and display issues](../troubleshooting/).
 
 ## Teams and scripts
 
