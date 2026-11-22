@@ -134,7 +134,7 @@ You need Python 3.11–3.13, [uv](https://docs.astral.sh/uv/) and Docker:
 
 ```bash
 uv sync --extra web
-uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:13
+uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:14
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 

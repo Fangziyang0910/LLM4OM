@@ -14,7 +14,7 @@
 ```bash
 git clone https://github.com/Fangziyang0910/LLM4OM.git && cd LLM4OM
 uv sync --extra web
-uv run llm4om build-worker          # 构建沙箱镜像 llm4om-worker:13
+uv run llm4om build-worker          # 构建沙箱镜像 llm4om-worker:14
 cp .env.example .env                # 填写默认预设，供真实运行使用
 ```
 
@@ -35,6 +35,22 @@ LLM4OM/
 模块图、依赖方向和接口统一维护于[架构](docs/architecture.md#模块)。
 
 ## 本地开发
+
+### 多人并行开发与提交
+
+每个独立任务使用自己的分支和 worktree，避免多人切换同一个工作目录的分支或共用暂存区。开始前记录 `git status --short`、`git rev-parse HEAD` 和 `git worktree list`，确认基线与已有改动的归属。
+
+```bash
+git worktree add runs/worktrees/my-task -b feature/my-task
+```
+
+`runs/` 已被 Git 忽略。进入新 worktree 后再修改、测试和提交。已有未提交工作需先保存快照，按文件清单迁入任务 worktree；保留原目录，不用 `reset --hard`、`clean` 或覆盖文件来清理他人的工作。
+
+- 并行前约定每个成员可写的文件；同一文件由一人负责，其他成员提供只读审查意见。代码生成、构建产物由指定的集成人统一更新。
+- 子任务只交付变更和验证结果，由集成人核对后暂存和提交。不要在另一个成员的 worktree 中执行 Git 写操作。
+- 使用明确路径暂存，再检查 `git diff --cached --stat` 和 `git diff --cached --check`。密钥、许可证、浏览器轨迹和运行数据不提交。
+- 功能修复、构建产物和产品文档按可审查的逻辑组织提交。记录确定性测试、真实模型接入证据和已知限制。
+- 提交保留在任务分支。推送、创建 PR 或合并共享分支按任务授权另行处理；集成前重新核对目标分支，并在发生冲突时重新验证。
 
 后端：
 

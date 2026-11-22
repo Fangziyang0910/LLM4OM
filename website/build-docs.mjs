@@ -25,7 +25,7 @@ await fs.mkdir(path.join(directory, "public/assets/katex"), { recursive: true })
 await fs.copyFile(path.join(root, "frontend/node_modules/katex/dist/katex.min.css"), path.join(directory, "public/assets/katex/katex.min.css"));
 await fs.copyFile(path.join(root, "frontend/node_modules/katex/LICENSE"), path.join(directory, "public/assets/katex/LICENSE"));
 await fs.cp(path.join(root, "frontend/node_modules/katex/dist/fonts"), path.join(directory, "public/assets/katex/fonts"), { recursive: true });
-const facts = JSON.parse(execFileSync(path.join(root, ".venv/bin/python"), ["-c", `
+const facts = JSON.parse(execFileSync("uv", ["run", "--no-sync", "python", "-c", `
 import json
 from llm4om.methods import methods
 from llm4om.languages import LANGUAGES

@@ -134,7 +134,7 @@ docker compose up -d --build
 
 ```bash
 uv sync --extra web
-uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:13
+uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:14
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 

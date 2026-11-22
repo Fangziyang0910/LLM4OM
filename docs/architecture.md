@@ -212,7 +212,7 @@ CPMpy 和原生 CP 接口允许无目标的可满足性模型，成功时保存�
 
 `Sandbox.solve(code, data, language, time_limit, solver=...)` 构建并求解模型；`run_script` 运行方法的检查脚本；`catalog` 在同一执行环境读取并缓存后端能力。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。所有运行共享服务的 Sandbox，`solve` 和 `run_script` 共用并发额度，默认最多 4 个，由 `LLM4OM_SANDBOX_JOBS` 设置。排队仍计入运行总时限，单次沙箱超时从取得额度后开始。`--jobs` 单独控制并发运行数。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:13` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件；不挂载 COPT 整个目录。超时或取消时等待 `docker rm --force` 完成，确保容器已删除才释放并发额度。
+`Sandbox("docker")` 在镜像 `llm4om-worker:14` 中运行 Worker：无网络、只读根文件系统、`tmpfs` 工作目录、去除全部 capability、非 root 用户。`worker.py` 构建进镜像，不在运行时挂载，因此平台本身在容器中运行时也能使用；修改 `worker.py` 或 `worker.Dockerfile` 时要同时更新镜像标签（`WORKER_IMAGE` 与 `compose.yaml`）。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件；不挂载 COPT 整个目录。超时或取消时等待 `docker rm --force` 完成，确保容器已删除才释放并发额度。
 
 求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CPMpy 模型用 CPMpy 的 MUS，CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。`feedback()` 不包含诊断，已移植的研究方法继续使用原反馈；本项目的 Feedback Repair 单独读取诊断，用于对照题面复核。Gurobi 预求解把模型判为“不可行或无界”时，Worker 关闭对偶约简（`DualReductions=0`）再求解一次，得到确定的状态。
 
