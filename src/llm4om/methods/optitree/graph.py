@@ -28,7 +28,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.methods import Method, presets
-from llm4om.methods.common import TWO_PARTS
+from llm4om.methods.common import TWO_PARTS, output_language
 from llm4om.methods.optitree.prompts import CLASSIFY_PROMPT, INSPECTOR_PROMPT, MILP, REASON_PROMPT
 from llm4om.runtime import Context, ModelingState
 
@@ -79,7 +79,8 @@ class State(ModelingState, total=False):
 
 
 async def _reply(context: Context, role: str, system: str, user: str) -> str:
-    return (await context.llm(role).bind(temperature=presets.OPTITREE.temperature).ainvoke([SystemMessage(system), HumanMessage(user)])).text
+    return (await context.llm(role).bind(temperature=presets.OPTITREE.temperature).ainvoke(
+        [SystemMessage(system + output_language(context)), HumanMessage(user)])).text
 
 
 async def classify(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
@@ -134,7 +135,7 @@ async def inspect(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
             """
     messages = state["_inspector"] + [HumanMessage(request)]
     reply = (await context.llm("inspector").bind(temperature=presets.OPTITREE.temperature).ainvoke(
-        [SystemMessage(INSPECTOR_PROMPT + "\n" + context.target.prompt), *messages])).text
+        [SystemMessage(INSPECTOR_PROMPT + "\n" + context.target.prompt + output_language(context)), *messages])).text
     return {"reply": reply, "code": extract_code(reply), "inspections": state["inspections"] + 1,
             "_inspector": messages + [AIMessage(reply)]}
 

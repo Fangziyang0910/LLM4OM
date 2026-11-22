@@ -15,7 +15,7 @@ from langgraph.runtime import Runtime
 from pydantic import AfterValidator, BaseModel, Field
 
 from llm4om.methods import Method, presets
-from llm4om.methods.common import TWO_PARTS, split_formulation_and_code
+from llm4om.methods.common import TWO_PARTS, output_language, split_formulation_and_code
 from llm4om.model_code import ModelCode
 from llm4om.runtime import Context, ModelingState
 
@@ -85,11 +85,20 @@ class State(ModelingState, total=False):
 T = TypeVar("T", bound=BaseModel)
 
 
+ANCHOR_FORMAT = """
+Write each anchor as a Markdown description. Use LaTeX math delimiters ($...$ inline or $$...$$ display)
+for mathematical symbols, subscripts, domains, values and bounds, including expressions within prose.
+For example, write $x_A$ rather than bare x_A. Escape LaTeX backslashes correctly in JSON strings.
+Keep the problem's mathematical meaning, variable types and bounds unchanged; formatting adds no assumptions.
+"""
+
+
 async def structured(context: Context, role: str, instruction: str, payload: dict, schema: type[T],
                      *, length: tuple[str, int] | None = None) -> T:
     if length:
         instruction += f"\nThe {length[0]} list must contain exactly {length[1]} entries, one per supplied anchor, in order."
-    messages = [SystemMessage(instruction + "\nReturn only JSON matching this schema:\n" + json.dumps(schema.model_json_schema())),
+    messages = [SystemMessage(instruction + "\nReturn only JSON matching this schema:\n"
+                             + json.dumps(schema.model_json_schema()) + output_language(context)),
                 HumanMessage(json.dumps(payload, ensure_ascii=False))]
     for attempt in range(presets.SAC_OPT.max_parse_attempts):
         reply = await context.llm(role).bind(temperature=presets.SAC_OPT.temperature).ainvoke(messages)
@@ -106,7 +115,7 @@ async def structured(context: Context, role: str, instruction: str, payload: dic
 
 
 async def extract_elements(state: State, context: Context, kind: str, instruction: str) -> list[str]:
-    result = await structured(context, "sac_" + kind, instruction, {"problem": state["problem"],
+    result = await structured(context, "sac_" + kind, instruction + ANCHOR_FORMAT, {"problem": state["problem"],
                               "parameters": state.get("parameters", []), "variables": state.get("variables", []),
                               "objective": state.get("objective", "")}, Elements)
     kept = []
@@ -129,7 +138,7 @@ async def extract_elements(state: State, context: Context, kind: str, instructio
             revised = await structured(context, "sac_revise_constraint",
                                        "Check this doubtful constraint against the problem. Return its corrected description; "
                                        "return an empty list only if it is not required. Do not drop a required constraint "
-                                       "merely because it needs auxiliary variables or a linear reformulation.",
+                                       "merely because it needs auxiliary variables or a linear reformulation." + ANCHOR_FORMAT,
                                        {"problem": state["problem"], "constraint": item, "feedback": confidence.reason}, Elements)
             kept.extend(revised.items)
     return kept
@@ -151,7 +160,7 @@ async def variables(state: State, runtime: Runtime[Context]) -> dict:
 
 
 async def objective(state: State, runtime: Runtime[Context]) -> dict:
-    result = await structured(runtime.context, "sac_objective", "Describe the objective, including direction, units and terms.",
+    result = await structured(runtime.context, "sac_objective", "Describe the objective, including direction, units and terms." + ANCHOR_FORMAT,
                               {"problem": state["problem"], "parameters": state["parameters"], "variables": state["variables"]}, Objective)
     return {"objective": result.text}
 
@@ -233,7 +242,7 @@ def assemble(state: State, runtime: Runtime[Context]) -> dict:
     components = state["components"]
     pieces = [components["objective"], *components["constraints"]]
     code = ModelCode(runtime.context.target).assemble([components['setup'], *[p['code'] for p in pieces]])
-    formulation = ("## Parameters\n" + "\n".join(state["parameters"]) + "\n\n## Variables\n" + "\n".join(state["variables"])
+    formulation = ("## Parameters\n" + "\n\n".join(state["parameters"]) + "\n\n## Variables\n" + "\n\n".join(state["variables"])
                    + "\n\n## Objective and constraints\n" + "\n\n".join(p["formulation"] for p in pieces))
     failure = None if all(state["accepted"]) else "SAC-Opt exhausted semantic checks with unresolved constraint mismatches."
     return {"code": code, "formulation": formulation, "executions": 0, "_semantic_failure": failure, "failure": failure}
@@ -250,7 +259,7 @@ async def debug(state: State, runtime: Runtime[Context]) -> dict:
     user = (state["problem"] + "\n\n" + state["formulation"] + "\n```python\n" + state["code"] + "```\n"
             + state["solve"].feedback())
     reply = await runtime.context.llm("sac_debug").bind(temperature=presets.SAC_OPT.temperature).ainvoke([
-        SystemMessage(system), HumanMessage(user)])
+        SystemMessage(system + output_language(runtime.context)), HumanMessage(user)])
     formulation, code = split_formulation_and_code(reply.text)
     if not formulation or not code.strip():
         raise ValueError("SAC-Opt debugging must return a formulation and nonempty code.")

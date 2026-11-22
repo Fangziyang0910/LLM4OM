@@ -1,7 +1,15 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render, within } from "@testing-library/react";
 import katex from "katex";
 import { expect, test, vi } from "vitest";
-import { Markdown } from "./Content";
+import { t } from "@/i18n";
+import { Diff, Markdown } from "./Content";
+
+test("price protection also applies when a price sentence contains a LaTeX text command", () => {
+  const source = String.raw`Cost is $4 per \text{item} and $8 per box.`;
+  const { container } = render(<Markdown text={source} singleDollarMath={false} />);
+  expect(container.querySelectorAll(".katex-mathml")).toHaveLength(0);
+  expect(container.textContent).toBe(source);
+});
 
 test("Markdown renders LaTeX in both delimiter styles", () => {
   const { container } = render(<Markdown text={"$x_i + \\frac{1}{2}$ and \\(y \\le 3\\)"} />);
@@ -59,5 +67,114 @@ test.each(["```python\n%s\n```", "~~~~\n%s\n~~~~~", "    %s", "``%s``"])(
     const { container } = render(<Markdown text={fence.replace("%s", source) + "\n\n\\(z\\)"} />);
     expect(container.querySelector("code, pre")?.textContent).toBe(source);
     expect(container.querySelectorAll(".katex-mathml")).toHaveLength(1);
+  },
+);
+
+test("Markdown comparison renders complete multiline formulas and can reveal the source changes", () => {
+  const before = String.raw`## Objective
+\[
+\begin{aligned}
+\max\quad & 3x + 2y \\
+\text{s.t.}\quad & 2x + y \le 8
+\end{aligned}
+\]
+The quantities are integers.`;
+  const after = before.replace("\\le 8", "\\le 10");
+  const view = render(<Diff before={before} after={after} format="markdown" />);
+  const content = within(view.container);
+
+  expect(view.container.querySelectorAll(".katex-display")).toHaveLength(2);
+  expect(view.container.querySelectorAll("h2")).toHaveLength(2);
+  expect(content.getAllByText("The quantities are integers.")).toHaveLength(2);
+  expect(view.container.querySelector(".katex-error")).toBeNull();
+
+  fireEvent.click(content.getByRole("button", { name: t("文本差异") }));
+  expect(view.container.querySelector(".katex")).toBeNull();
+  expect(view.container.querySelector("pre")?.textContent).toContain("\\le 8");
+  expect(view.container.querySelector("pre")?.textContent).toContain("\\le 10");
+
+  fireEvent.click(content.getByRole("button", { name: t("阅读对照") }));
+  expect(view.container.querySelectorAll(".katex-display")).toHaveLength(2);
+});
+
+test("problem comparison preserves prices and code while rendering explicit integer-domain math", () => {
+  const source = String.raw`A costs $4 and B costs $8.
+
+\[
+x,y \in \mathbb{Z}_{\ge 0}
+\]
+
+` + "```python\n" + String.raw`pattern = r"\[x\]"` + "\n```";
+  const { container } = render(<Diff before={source} after={source.replace("$4", "$5")}
+    format="markdown" singleDollarMath={false} />);
+
+  expect(container.textContent).toContain("A costs $4 and B costs $8.");
+  expect(container.textContent).toContain("A costs $5 and B costs $8.");
+  expect(container.querySelectorAll(".katex-display")).toHaveLength(2);
+  expect(container.querySelector(".katex-error")).toBeNull();
+  expect(within(container).getAllByText((_, element) => element?.tagName === "CODE" && element.textContent === String.raw`pattern = r"\[x\]"`)).toHaveLength(2);
+});
+
+test("code comparison defaults to literal line changes without mathematical rendering", () => {
+  const before = String.raw`pattern = r"\[x\]"`;
+  const after = String.raw`pattern = r"\[y\]"`;
+  const view = render(<Diff before={before} after={after} />);
+
+  expect(view.container.querySelector("pre")?.textContent).toContain(before);
+  expect(view.container.querySelector("pre")?.textContent).toContain(after);
+  expect(view.container.querySelector(".katex")).toBeNull();
+  expect(within(view.container).queryByRole("button", { name: t("阅读对照") })).toBeNull();
+});
+
+test.each(["align", "align*", "equation", "equation*"])("LaTeX environment %s renders without outer math delimiters", environment => {
+  const equation = environment.startsWith("align") ? String.raw`x &= 1 \\ y &= 2` : "x = 1";
+  const text = `Before.\n\n\\begin{${environment}}\n${equation}\n\\end{${environment}}\n\nAfter.`;
+  const { container } = render(<Markdown text={text} />);
+
+  expect(container.querySelectorAll(".katex-display")).toHaveLength(1);
+  expect(container.querySelector(".katex-error")).toBeNull();
+  expect(container.textContent).toContain("Before.");
+  expect(container.textContent).toContain("After.");
+});
+
+test("five-element LaTeX lists and standalone constraints remain readable together", () => {
+  const { container } = render(<Markdown text={String.raw`## Sets:
+\begin{itemize}
+    \item $Cities=\{A,B\}$: cities.
+\end{itemize}
+
+## Parameters:
+\begin{itemize}
+    \item $c$: cost per package.
+    \[
+    c=1
+    \]
+\end{itemize}
+
+## Constraints:
+\begin{align}
+x &\le 10 \\
+x &\ge 0
+\end{align}`} />);
+
+  expect(container.querySelectorAll("li")).toHaveLength(2);
+  expect(container.querySelectorAll(".katex-mathml")).toHaveLength(4);
+  expect(container.querySelectorAll(".katex-display")).toHaveLength(2);
+  expect(container.querySelector(".katex-error")).toBeNull();
+  expect(container.textContent).not.toContain("\\begin{itemize}");
+  expect(container.textContent).not.toContain("\\item");
+});
+
+test.each(["```text\n%s\n```", "~~~~\n%s\n~~~~~", "    %s", "``%s``"])(
+  "LaTeX environment recognition preserves code in %s", fence => {
+    const source = String.raw`pattern = r"\begin{align} \item x \end{align}"`;
+    const { container } = render(<Markdown text={fence.replace("%s", source) + String.raw`
+
+\begin{equation}
+z=3
+\end{equation}`} />);
+
+    expect(container.querySelector("code, pre")?.textContent).toBe(source);
+    expect(container.querySelectorAll(".katex-display")).toHaveLength(1);
   },
 );

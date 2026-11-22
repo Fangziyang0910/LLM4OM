@@ -7,6 +7,7 @@ from langchain.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
+from llm4om.methods.common import output_language
 from llm4om.methods.trival.schema import ContextSchema, logger
 from llm4om.methods.trival.state import State
 
@@ -74,7 +75,10 @@ Complete semantic ambiguity resolution based on the above materials."""
         tools=[],
         state_schema=State,
         context_schema=ContextSchema,
-        system_prompt=AMBIGUITY_RESOLVER_SYSTEM_PROMPT,
+        system_prompt=(
+            AMBIGUITY_RESOLVER_SYSTEM_PROMPT
+            + output_language(runtime.context)
+        ),
         name="ambiguity_resolver",
     )
 

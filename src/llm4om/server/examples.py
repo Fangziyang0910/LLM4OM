@@ -29,3 +29,11 @@ def cases(dataset_id: str, offset: int = 0, limit: int = 20) -> dict[str, Any]:
     return {"total": len(_cases(dataset_id)), "cases": [
         {"id": case["case_id"], "sample_id": case["sample_id"], "subset": case["subset"], "description": case["description"]}
         for case in selected]}
+
+
+def case(dataset_id: str, case_id: str) -> dict[str, Any]:
+    """Look up a bundled case without accepting client-supplied source text."""
+    for item in _cases(dataset_id):
+        if item["case_id"] == case_id:
+            return item
+    raise KeyError(case_id)

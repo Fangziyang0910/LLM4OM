@@ -9,6 +9,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
+from llm4om.methods.common import output_language
 from llm4om.methods.trival.schema import ContextSchema, logger
 from llm4om.methods.trival.state import State
 
@@ -136,7 +137,10 @@ Generate semantic specification: extract semantic facts and ambiguities.
         tools=[write_semantic_facts, write_semantic_ambiguities],
         state_schema=State,
         context_schema=ContextSchema,
-        system_prompt=SEMANTIC_FACT_EXTRACTOR_SYSTEM_PROMPT,
+        system_prompt=(
+            SEMANTIC_FACT_EXTRACTOR_SYSTEM_PROMPT
+            + output_language(runtime.context)
+        ),
         name="semantic_fact_extractor",
     )
 

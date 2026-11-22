@@ -1,4 +1,5 @@
 import { t } from "@/i18n";
+import { expertLabel, methodRoleLabel, modelLabel } from "@/locales/modeling";
 import type { Step } from "@/features/runs/types";
 
 /**
@@ -34,20 +35,34 @@ export function phases(steps: Step[]): Phase[] {
 export function working(calls: Step[]): string | null {
   const running = calls.filter(call => call.running);
   if (!running.length) return null;
-  if (running.length === 1) return roleName(running[0].title);
-  const roles = [...new Set(running.map(call => roleName(call.title)))];
+  if (running.length === 1) return roleLabel(running[0].title);
+  const roles = [...new Set(running.map(call => roleLabel(call.title)))];
   return t("{count} 个并行调用（{roles}）", { count: running.length, roles: roles.slice(0, 3).join(", ") + (roles.length > 3 ? "…" : "") });
 }
 
 /** The name of an LLM call's role without its method prefix: "trival.code_agent" → "code agent". */
 export const roleName = (role: string) => role.slice(role.lastIndexOf(".") + 1).replace(/_/g, " ");
 
+const ROLE_LABELS: Record<string, string> = {
+  generate: t("生成模型与代码"), model: t("数学模型"), code: t("求解代码"), code_agent: t("求解代码"),
+  five_element: t("五要素模型"), self_correction: t("自我校正"), debug: t("调试代码"),
+  review: t("检查模型"), repair: t("修正模型"),
+};
+
+/** Display labels never participate in matching calls to their modeling nodes. */
+export function roleLabel(role: string): string {
+  const part = role.slice(role.lastIndexOf(".") + 1);
+  return methodRoleLabel(role) ?? (Object.hasOwn(ROLE_LABELS, part) ? ROLE_LABELS[part] : roleName(role));
+}
+
 /** The first readable line of Markdown, for a one-line preview. */
-export function preview(markdown: string, length = 160): string {
+export function preview(markdown: string, length = 160, modelSections = false): string {
   const text = markdown
     .replace(/```[\s\S]*?(```|$)/g, " ")
     .split("\n")
     .map(line => line.replace(/^#+\s*/, "").replace(/^[-*+>]\s+/, "").replace(/^\|.*\|$/, "").replace(/\*\*|__|[`$]/g, "").replace(/\\[()[\]]/g, "").trim())
+    .map(line => modelSections ? line.replace(/^(✅ |❌ )?([^:：]+)([:：].*)?$/,
+      (_, flag, value, suffix) => (flag ?? "") + expertLabel(modelLabel(value)) + (suffix ?? "")) : line)
     .filter(line => line && !/^[-:| ]+$/.test(line))
     .join(" · ");
   return text.length > length ? text.slice(0, length) + "…" : text;

@@ -11,7 +11,7 @@ import json
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, Literal, TypedDict
 from uuid import UUID
 
 from langchain_core.callbacks import BaseCallbackHandler
@@ -96,6 +96,7 @@ class Context:
     chat_model: Callable[[str], BaseChatModel]  # role -> a chat model whose calls the recorder records
     target: CodeTarget
     data: dict[str, str]
+    locale: Literal["zh", "en"] = "zh"  # prose language, separate from the target's code library
     solved: dict[str, SolveResult] = field(default_factory=dict, init=False)  # latest result for each solved code
     _models: dict[str, BaseChatModel] = field(default_factory=dict, init=False, repr=False)
 

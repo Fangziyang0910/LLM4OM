@@ -145,17 +145,18 @@ def diagnose(selection):
 
     import signal
 
-    previous = signal.signal(signal.SIGALRM, stop)
-    signal.alarm(IIS_TIME_LIMIT + 5)  # Gurobi stops itself at IIS_TIME_LIMIT; this bounds the rest
     try:
-        items = find(selection.model)
-        return {"tool": tool, "items": items[:MAX_CONFLICT], "total": len(items), "error": None}
+        # Timer setup and cleanup are optional diagnosis too; neither may replace the solver's infeasible status.
+        with contextlib.ExitStack() as cleanup:
+            previous = signal.signal(signal.SIGALRM, stop)
+            cleanup.callback(signal.signal, signal.SIGALRM, previous)
+            signal.alarm(IIS_TIME_LIMIT + 5)  # Gurobi stops itself at IIS_TIME_LIMIT; this bounds the rest
+            cleanup.callback(signal.alarm, 0)
+            items = find(selection.model)
+            return {"tool": tool, "items": items[:MAX_CONFLICT], "total": len(items), "error": None}
     except BaseException as error:
         lines = str(error).strip().splitlines()
         return {"tool": tool, "items": [], "total": 0, "error": lines[0] if lines else type(error).__name__}
-    finally:
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, previous)
 
 
 class PyomoLibrary:

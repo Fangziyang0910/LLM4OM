@@ -7,6 +7,7 @@ from langchain.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
+from llm4om.methods.common import output_language
 from llm4om.methods.trival.schema import ContextSchema, SemanticValidationOutput, logger, validation_tool
 from llm4om.methods.trival.state import State
 
@@ -110,7 +111,10 @@ Please complete the validation based on the content above.
         tools=[validation_tool(SemanticValidationOutput)],
         state_schema=State,
         context_schema=ContextSchema,
-        system_prompt=SEMANTIC_VALIDATOR_SYSTEM_PROMPT + "\nSubmit your decision using SemanticValidationOutput.",
+        system_prompt=(
+            SEMANTIC_VALIDATOR_SYSTEM_PROMPT + "\nSubmit your decision using SemanticValidationOutput."
+            + output_language(runtime.context)
+        ),
         name="semantic_validator",
     )
 

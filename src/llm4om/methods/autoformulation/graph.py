@@ -64,6 +64,7 @@ from llm4om.methods.autoformulation.upstream.utils_prompt import (
     obtain_new_prompt,
     update_rank,
 )
+from llm4om.methods.common import output_language
 from llm4om.model_code import ModelCode
 from llm4om.runtime import Context, ModelingState
 
@@ -86,7 +87,8 @@ class State(ModelingState, total=False):
 async def _sample(context: Context, role: str, prompt: str, n: int) -> list[str]:
     """Upstream chat_gpt with n_used: n completions of one user message."""
     model = context.llm(role).bind(temperature=presets.AUTOFORMULATION.temperature)
-    return [reply.text for reply in await _gather(*(model.ainvoke([HumanMessage(prompt)]) for _ in range(n)))]
+    return [reply.text for reply in await _gather(*(
+        model.ainvoke([HumanMessage(prompt + output_language(context))]) for _ in range(n)))]
 
 
 async def _gather(*calls: Coroutine[Any, Any, Any]) -> list[Any]:

@@ -12,6 +12,10 @@ CONTRACT = """\
 When no file is attached, `data` is empty; take the numbers from the problem description.
 - Do not solve the model and do not print the solution. The platform solves it with {solver} and reports the result.
 - Do not read files, environment variables or the network.
+- Preserve required variable domains, decision units and constraint senses. Do not relax integer or binary domains, \
+replace equalities with inequalities, or round continuous decisions to satisfy whole-item requirements.
+- If the selected backend cannot express or solve the required model, report the incompatibility explicitly \
+instead of changing the mathematics or silently selecting another backend.
 - {objective} Python control flow must not depend on variable values.
 - Where the native API supports explicit names, give variables readable indexed names. Otherwise use the native \
 variable order and explain its components in the formulation; do not invent unsupported name arguments."""

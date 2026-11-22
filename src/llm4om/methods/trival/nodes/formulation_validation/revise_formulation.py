@@ -7,6 +7,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
+from llm4om.methods.common import output_language
 from llm4om.methods.trival.schema import ContextSchema, logger
 from llm4om.methods.trival.state import State
 
@@ -91,7 +92,10 @@ async def revise_formulation(
         tools=[write_formulation],
         state_schema=State,
         context_schema=ContextSchema,
-        system_prompt=FORMULATION_REVISION_SYSTEM_PROMPT,
+        system_prompt=(
+            FORMULATION_REVISION_SYSTEM_PROMPT
+            + output_language(runtime.context)
+        ),
         name="revise_formulation",
     )
 

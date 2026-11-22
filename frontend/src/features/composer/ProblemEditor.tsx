@@ -103,7 +103,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
         <Button variant="outline" size="sm" asChild className="h-8 rounded-xl bg-background/80 text-xs font-normal shadow-2xs">
           <label title={t("支持 Excel (.xlsx)、CSV、TSV、JSON 和文本文件；上传后可直接点击文件名在线编辑。")}
             className={cn("cursor-pointer", locked && "pointer-events-none opacity-50")}>
-            {reading ? <Spinner /> : <Paperclip className="size-3.5 text-primary/80" />}{t(reading ? "正在读取数据……" : "上传数据表")}
+            {reading ? <Spinner /> : <Paperclip className="size-3.5 text-primary/80" />}{reading ? t("正在读取数据……") : t("上传数据表")}
             <input type="file" multiple disabled={locked} accept={DATA_FILE_ACCEPT} className="sr-only"
               onChange={event => { onFiles(event.target.files); event.target.value = ""; }} />
           </label>

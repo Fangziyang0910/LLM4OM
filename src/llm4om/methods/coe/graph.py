@@ -23,6 +23,7 @@ from langgraph.runtime import Runtime
 from llm4om.methods import Method, presets
 from llm4om.methods.coe.parsing import extract_code_from_string, parse_json_from_string
 from llm4om.methods.coe.prompts import CONDUCTOR, EXPERTS, EXPERTS_BY_NAME, REDUCER, Expert
+from llm4om.methods.common import output_language
 from llm4om.runtime import Context, ModelingState
 from llm4om.sandbox import SolveResult
 
@@ -36,7 +37,7 @@ def _comment_text(comments: list[tuple[str, str]]) -> str:
 
 async def _predict(context: Context, role: str, template: str, bind: dict[str, Any] | None = None, **values: Any) -> str:
     """Upstream PromptModelChain: the formatted template as one user message, temperature 0."""
-    prompt = PromptTemplate.from_template(template).invoke(values)
+    prompt = PromptTemplate.from_template(template + output_language(context)).invoke(values)
     return (await context.llm(role).bind(temperature=presets.COE.temperature, **(bind or {})).ainvoke(prompt)).text
 
 

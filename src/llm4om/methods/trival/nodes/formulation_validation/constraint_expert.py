@@ -4,6 +4,7 @@ from langchain.agents import create_agent
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
+from llm4om.methods.common import output_language
 from llm4om.methods.trival.schema import ContextSchema, logger
 from llm4om.methods.trival.state import State
 
@@ -44,7 +45,10 @@ async def constraint_expert(
         model=runtime.context.llm("trival.constraint_expert"),
         state_schema=State,
         context_schema=ContextSchema,
-        system_prompt=system_prompt,
+        system_prompt=(
+            system_prompt
+            + output_language(runtime.context)
+        ),
         name="constraint_expert",
     )
 

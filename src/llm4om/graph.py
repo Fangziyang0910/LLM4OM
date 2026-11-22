@@ -128,7 +128,7 @@ def platform_graph(method: Method) -> Any:
             return resources.model_factory(settings, callbacks=[recorder.callback], metadata={"llm4om_role": role})
 
         return Context(recorder, resources.sandbox, model, method.code_target(choice.language, choice.solver),
-                       state.get("data") or {})
+                       state.get("data") or {}, locale=choice.locale)
 
     def thread_id() -> str | None:
         return get_config().get("configurable", {}).get("thread_id")

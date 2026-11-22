@@ -5,6 +5,7 @@ from langchain.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
+from llm4om.methods.common import output_language
 from llm4om.methods.trival.schema import ContextSchema, FormulationValidationOutput, logger, validation_tool
 from llm4om.methods.trival.state import State
 
@@ -85,7 +86,10 @@ async def formulation_validator(
         tools=[validation_tool(FormulationValidationOutput)],
         state_schema=State,
         context_schema=ContextSchema,
-        system_prompt=FORMULATION_VALIDATOR_SYSTEM_PROMPT + "\nSubmit your decision using FormulationValidationOutput.",
+        system_prompt=(
+            FORMULATION_VALIDATOR_SYSTEM_PROMPT + "\nSubmit your decision using FormulationValidationOutput."
+            + output_language(runtime.context)
+        ),
         name="formulation_validator",
     )
 

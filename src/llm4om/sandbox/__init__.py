@@ -9,6 +9,7 @@ import contextlib
 import json
 import os
 import sys
+import tempfile
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,7 +18,7 @@ from typing import Any
 WORKER = Path(__file__).with_name("worker.py")
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
 # The image contains worker.py, so a change to worker.py or worker.Dockerfile needs a new tag (and compose.yaml's).
-WORKER_IMAGE = "llm4om-worker:13"
+WORKER_IMAGE = "llm4om-worker:14"
 START_MARGIN = 60  # seconds beyond the time limit for starting the sandbox, importing libraries and building the model
 
 
@@ -130,6 +131,8 @@ class Sandbox:
                if key in os.environ} if self.kind == "local" else None
         if env is not None:
             env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="2")
+        # Windows asyncio pipes initialize tempfile; keep its first filesystem access off the event loop.
+        await asyncio.to_thread(tempfile.gettempdir)
         process = await asyncio.create_subprocess_exec(*self._command(name), stdin=asyncio.subprocess.PIPE,
                                                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env)
         try:

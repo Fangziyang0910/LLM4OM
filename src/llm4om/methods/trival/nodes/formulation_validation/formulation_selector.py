@@ -7,6 +7,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
+from llm4om.methods.common import output_language
 from llm4om.methods.trival.schema import ContextSchema, logger
 from llm4om.methods.trival.state import State
 
@@ -125,7 +126,10 @@ Analyze these candidates thoroughly and select the highest-quality one using the
         tools=[select_formulation],
         state_schema=State,
         context_schema=ContextSchema,
-        system_prompt=FORMULATION_SELECTOR_SYSTEM_PROMPT,
+        system_prompt=(
+            FORMULATION_SELECTOR_SYSTEM_PROMPT
+            + output_language(runtime.context)
+        ),
         name="formulation_selector",
     )
 

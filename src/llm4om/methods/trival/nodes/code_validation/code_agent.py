@@ -5,6 +5,7 @@ from langchain.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 
+from llm4om.methods.common import output_language
 from llm4om.methods.trival.schema import ContextSchema, logger
 from llm4om.methods.trival.state import State
 
@@ -47,7 +48,10 @@ async def code_agent(
         middleware=[apply_code_tool_calls],
         state_schema=State,
         context_schema=ContextSchema,
-        system_prompt=CODE_AGENT_SYSTEM_PROMPT + "\n\n" + runtime.context.target.prompt,
+        system_prompt=(
+            CODE_AGENT_SYSTEM_PROMPT + "\n\n" + runtime.context.target.prompt
+            + output_language(runtime.context)
+        ),
         name="code_agent",
     )
 

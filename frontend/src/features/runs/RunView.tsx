@@ -129,7 +129,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
     finished={finished} source={meta.parent} onAdjust={setRevision} setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))} />;
   const title = meta.title || (values.description ?? "").trim().split("\n")[0] || t("未命名方案");
   const facts: [React.ReactNode, React.ReactNode, string?][] = [
-    [<Layers />, method?.name ?? meta.method, method?.description],
+    [<Layers />, method?.name ?? meta.method, method?.description ? t(method.description) : undefined],
     [<CodeXml />, targetLabel(options, meta, solve?.solver)],
     [<Cpu />, meta.model ?? provider?.label, provider?.label],
     [<Clock />, elapsed == null ? "—" : duration(elapsed)],

@@ -29,6 +29,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from llm4om.methods import Method, presets
+from llm4om.methods.common import FORMULATION_FORMAT, output_language
 from llm4om.methods.llmopt import prompts
 from llm4om.runtime import Context, ModelingState
 
@@ -53,7 +54,8 @@ class State(ModelingState, total=False):
 
 
 async def _ask(context: Context, role: str, prompt: str) -> str:
-    return (await context.llm(role).ainvoke([HumanMessage(prompt)])).text
+    # llm4om: localize prose on every attempt while preserving upstream headings and verdict lines.
+    return (await context.llm(role).ainvoke([HumanMessage(prompt + output_language(context))])).text
 
 
 SECTIONS = ("## Sets", "## Parameters", "## Variables", "## Objective", "## Constraints")
@@ -81,6 +83,8 @@ def _five_element(reply: str) -> str:
 
 async def define(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     prompt = prompts.Q2F(_source_problem(state, runtime.context)) + SOURCE_RULES
+    # llm4om: retain the five-section/fence protocol while requesting web-renderable math and explicit domains.
+    prompt += FORMULATION_FORMAT
     prompt += ("\nKeep the supplied numerical values explicit in the Parameters section, or reference the supplied "
                "file and its exact fields. Do not replace a necessary data table with an ellipsis or a reference "
                "to an unavailable table. Identify essential missing data without inventing it.")

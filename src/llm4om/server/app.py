@@ -3,16 +3,17 @@
 Runs, threads and streaming come from the LangGraph server itself (`/threads`, `/runs`, `/assistants`).
 """
 
+import asyncio
 import os
 from dataclasses import asdict
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from llm4om.budget import TokenBudget
 from llm4om.graph import default_resources
@@ -20,8 +21,10 @@ from llm4om.languages import LANGUAGES
 from llm4om.llm import PROVIDERS, LLMSettings, list_models
 from llm4om.llm_presets import LLMPresetStore
 from llm4om.methods import methods
+from llm4om.runtime import LimitExceeded
 from llm4om.server import examples
 from llm4om.server.middleware import JsonOnlyWrites, RunRateLimit, ThreadCleanup
+from llm4om.server.translations import ExampleTranslations, TranslationError
 
 ASSETS = Path(str(files("llm4om.server").joinpath("web_assets")))
 PAGES = ("/", "/model", "/agent", "/agent/{thread_id}", "/run/{thread_id}", "/compare/{group}", "/chat/{thread_id}", "/discussion/{thread_id}")
@@ -38,6 +41,16 @@ class PresetBody(BaseModel):
     extra_body: dict[str, Any] = {}
 
 
+class TranslationBody(BaseModel):
+    case_id: str
+    locale: Literal["zh", "en"] = "zh"
+
+
+class ReadingTranslationBody(BaseModel):
+    text: str = Field(min_length=1, max_length=100000)
+    locale: Literal["zh", "en"] = "zh"
+
+
 def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None = None, runs_per_hour: int | None = None,
                trust_proxy: bool | None = None) -> FastAPI:
     """The platform routes. Settings left out come from the service resources and LLM4OM_RUNS_PER_HOUR and
@@ -51,6 +64,7 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
                        if trust_proxy is None else trust_proxy)
     store = presets or default_resources().presets
     budget = budget or (default_resources().budget if presets is None else None)
+    translations = ExampleTranslations(store, budget)
 
     @app.exception_handler(ValueError)
     async def bad_input(_: Request, error: ValueError) -> JSONResponse:
@@ -118,6 +132,30 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
             return examples.cases(dataset_id, offset, limit)
         except KeyError:
             raise HTTPException(404, "This dataset does not exist.") from None
+
+    async def reading_translation(text: str, locale: Literal["zh", "en"]) -> dict[str, Any]:
+        try:
+            return await translations.translate(text, locale)
+        except LimitExceeded as error:
+            raise HTTPException(429, str(error)) from None
+        except TranslationError as error:
+            raise HTTPException(502, str(error)) from None
+        except OSError:
+            raise HTTPException(503, "The translation cache is unavailable. Please retry.") from None
+
+    @app.post("/api/translations")
+    async def translate_reading(body: ReadingTranslationBody) -> dict[str, Any]:
+        if not body.text.strip():
+            raise HTTPException(400, "Provide text to translate.")
+        return await reading_translation(body.text, body.locale)
+
+    @app.post("/api/datasets/{dataset_id}/translation")
+    async def translate_example(dataset_id: str, body: TranslationBody) -> dict[str, Any]:
+        try:
+            original = await asyncio.to_thread(examples.case, dataset_id, body.case_id)
+        except KeyError:
+            raise HTTPException(404, "This example does not exist.") from None
+        return {"id": body.case_id, **await reading_translation(original["description"], body.locale)}
 
     if (ASSETS / "index.html").is_file():
         app.mount("/assets", StaticFiles(directory=ASSETS / "assets"), name="assets")

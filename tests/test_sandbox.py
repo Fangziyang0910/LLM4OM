@@ -2,6 +2,8 @@
 
 import asyncio
 import importlib.util
+import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -203,6 +205,21 @@ def test_code_without_build_model_is_rejected() -> None:
 def test_a_script_runs_as_main_and_reports_its_output() -> None:
     result = asyncio.run(Sandbox("local").run_script("if __name__ == '__main__':\n    print(6 * 7)\n", time_limit=10))
     assert result.executed and result.output.strip() == "42"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows asyncio pipes initialize the temporary directory.")
+def test_a_worker_starts_with_blocking_detection_and_a_cold_temp_directory(monkeypatch: pytest.MonkeyPatch) -> None:
+    from blockbuster import blockbuster_ctx
+
+    monkeypatch.setattr(tempfile, "tempdir", None)
+
+    async def check() -> None:
+        with blockbuster_ctx():
+            result = await Sandbox("local").run_script("print(6 * 7)", time_limit=5)
+        assert result.executed, result.error
+        assert result.output.strip() == "42"
+
+    asyncio.run(check())
 
 
 def test_printed_output_does_not_break_the_result() -> None:

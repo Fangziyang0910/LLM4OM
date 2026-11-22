@@ -16,7 +16,15 @@ from llm4om.languages import LANGUAGES, CodeTarget
 from llm4om.llm import LLMSettings
 from llm4om.model_code import ModelCode
 from llm4om.runtime import Limits
-from tests.conftest import ACCEPT_REVIEW, FORMULATION, PRODUCTION_CODE, TWO_PART_REPLY, ScriptedChat, tool_call
+from tests.conftest import (
+    ACCEPT_REVIEW,
+    FORMULATION,
+    PRODUCTION_CODE,
+    PRODUCTION_PROBLEM,
+    TWO_PART_REPLY,
+    ScriptedChat,
+    tool_call,
+)
 
 BROKEN_CODE = PRODUCTION_CODE.replace("return m", "return m.missing")
 CODE_BLOCK = f"```python\n{PRODUCTION_CODE}```"
@@ -294,6 +302,79 @@ def test_orthought_debugs_code_that_does_not_run(run_method: Any) -> None:
     assert "Pyomo" in seen[0] and "Gurobipy" not in seen[0] and "build_model" in seen[0]
     assert "missing" in seen[1] and FORMULATION in seen[1]  # the debug prompt carries the model and the error
     assert [e["status"] for e in record["steps"] if e["type"] == "solve"] == ["error", "optimal"]
+
+
+@pytest.mark.parametrize("method,model_role", [("llmopt", "five_element"), ("orthought", "model")])
+def test_mathematical_presentation_keeps_method_protocol_and_solving(run_method: Any, method: str, model_role: str) -> None:
+    formulation = ("## Sets:\n$P=\\{A,B\\}$\n\n## Parameters:\n$p_A=3, p_B=2$\n\n"
+                   "## Variables:\n$x_A,x_B\\in\\mathbb{Z}_{\\ge0}$\n\n## Objective:\n$$\\max 3x_A+2x_B$$\n\n"
+                   "## Constraints:\n$2x_A+x_B\\le8$, $x_A+2x_B\\le8$.")
+    calls: list[str] = []
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        calls.append(role)
+        if role == model_role:
+            prompt = messages[-1].text
+            assert "Markdown lists" in prompt and "$...$" in prompt and "$$...$$" in prompt
+            assert "continuous, integer or binary" in prompt
+            if method == "llmopt":
+                assert all(section in prompt for section in ("## Sets", "## Parameters", "## Variables", "## Objective", "## Constraints"))
+                return f"```text\n{formulation}\n```"
+            assert "<solution_path>" in prompt and "```model" in prompt and "```python" in prompt
+            return f"<solution_path>\nMaximize profit.\n</solution_path>\n```model\n{formulation}\n```\n{CODE_BLOCK}"
+        return CODE_BLOCK if role == "code" else JUDGED.format(five="True", code="True")
+
+    record = run_method(method, script)
+    assert_solved(record)
+    assert record["formulation"] == formulation
+    assert calls == (["five_element", "code", "self_correction"] if method == "llmopt" else ["model"])
+    assert record["usage"]["solves"] == 1
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_domain_contract_preserves_required_domains_and_constraint_senses(language: str) -> None:
+    prompt = CodeTarget(language).prompt
+    assert "Do not relax integer or binary domains" in prompt
+    assert "equalities with inequalities" in prompt
+    assert "incompatibility" in prompt
+
+
+@pytest.mark.parametrize("method", ["llmopt", "orthought"])
+@pytest.mark.parametrize("locale,output_language", [("zh", "Simplified Chinese"), ("en", "English")])
+def test_method_output_locale_survives_code_repair(make_resources: Any, method: str,
+                                                  locale: str, output_language: str) -> None:
+    formulation = ("## Sets:\n$P=\\{A,B\\}$\n\n## Parameters:\n$p_A=3, p_B=2$\n\n"
+                   "## Variables:\n$x_A,x_B\\in\\mathbb{Z}_{\\ge0}$\n\n## Objective:\n$$\\max 3x_A+2x_B$$\n\n"
+                   "## Constraints:\n$2x_A+x_B\\le8$, $x_A+2x_B\\le8$.")
+    calls: list[str] = []
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        prompt = messages[-1].text
+        assert f"Write explanatory prose in {output_language}" in prompt
+        assert "Do not translate required section headings" in prompt
+        calls.append(role)
+        if role == "five_element":
+            assert "## Sets" in prompt and "## Constraints" in prompt
+            return f"```text\n{formulation}\n```"
+        if role == "model":
+            assert "<solution_path>" in prompt and "```model" in prompt
+            return f"<solution_path>\nMaximize profit.\n</solution_path>\n```model\n{formulation}\n```\n```python\n{BROKEN_CODE}```"
+        if role == "code":
+            return f"```python\n{BROKEN_CODE if calls.count('code') == 1 else PRODUCTION_CODE}```"
+        if role == "debug":
+            assert "Traceback" in prompt or "missing" in prompt
+            return f"<code>\n{PRODUCTION_CODE}</code>"
+        assert role == "self_correction"
+        return JUDGED.format(five="True", code="False" if calls.count(role) == 1 else "True")
+
+    record = asyncio.run(run(PRODUCTION_PROBLEM,
+                             method=method, resources=make_resources(script), locale=locale))
+    assert_solved(record)
+    assert record["spec"]["locale"] == locale
+    assert record["formulation"] == formulation
+    assert record["usage"]["solves"] == 2
+    assert calls == (["five_element", "code", "self_correction", "code", "self_correction"]
+                     if method == "llmopt" else ["model", "debug"])
 
 
 GUROBIPY_PARAMS = {"Profit": {"shape": "[2]", "definition": "profit per unit", "type": "float", "value": [3, 2]},
