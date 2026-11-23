@@ -12,16 +12,6 @@ def build_model(data):
     m.objective = pmo.objective(m.x)
     return m
 Use kernel blocks, variables and constraints consistently; do not mix kernel and environ components.''',
-    "gurobipy.matrix": '''import gurobipy as gp
-from gurobipy import GRB
-import numpy as np
-def build_model(data):
-    m = gp.Model()
-    x = m.addMVar(2, lb=0, vtype=GRB.INTEGER, name="x")
-    m.addConstr(np.array([[2,1],[1,2]]) @ x <= np.array([8,8]))
-    m.setObjective(np.array([3,2]) @ x, GRB.MAXIMIZE)
-    return m
-The matrix and scalar APIs can be combined. General, quadratic and nonlinear constraints use the native API.''',
     "ortools.model_builder": '''from ortools.linear_solver.python import model_builder
 def build_model(data):
     m = model_builder.ModelBuilder()
@@ -31,27 +21,6 @@ def build_model(data):
     return m
 Return ModelBuilder. Bounds use float("inf") or finite numbers; ModelBuilder has no infinity() method.
 Do not instantiate ModelSolver or solve the model.''',
-    "cpmpy.solver": '''import cpmpy as cp
-def build_model(data):
-    x = cp.intvar(0, 10, shape=2, name="x")
-    s = cp.SolverLookup.get("{solver}")
-    s += 2*x[0]+x[1] <= 8
-    s += x[0]+2*x[1] <= 8
-    s.maximize(3*x[0]+2*x[1])
-    return s
-Return the selected CPMpy SolverInterface without solving. Scalar/array variables and global constraints
-are supported through the selected backend's native CPMpy transformations. A model can have no objective.''',
-    "pulp.column": '''import pulp
-def build_model(data):
-    m = pulp.LpProblem("column_model", pulp.LpMinimize)
-    obj = pulp.LpConstraintVar("objective")
-    row = pulp.LpConstraintVar("demand", pulp.LpConstraintGE, 2)
-    m.setObjective(obj)
-    m += row
-    pulp.LpVariable("x", lowBound=0, e=3*obj + row)
-    return m
-Return LpProblem. LpConstraintVar and the variable's e argument implement PuLP's column-oriented API.
-Do not call solve().''',
     "cvxpy.dgp": '''import cvxpy as cp
 def build_model(data):
     x = cp.Variable(pos=True, name="x")
@@ -113,15 +82,4 @@ def build_model(data):
 Return the sparsity structure and numeric conic arguments. The QP objective is 0.5*x.T@h@x + g.T@x.
 Use native SOC/SDP structures only if the selected plugin supports them. Results use x[i] in decision-vector order;
 optional options contains native plugin options. Do not create or call a solver.''',
-    "coptpy.matrix": '''import coptpy as cp
-from coptpy import COPT
-import numpy as np
-def build_model(data):
-    m = cp.Envr().createModel("production")
-    x = m.addMVar(2, lb=0, vtype=COPT.INTEGER, nameprefix="x")
-    m.addMConstr(np.array([[2,1],[1,2]]), x, COPT.LESS_EQUAL, np.array([8,8]))
-    m.setObjective(np.array([3,2]) @ x, COPT.MAXIMIZE)
-    return m
-Return coptpy.Model. Scalar and matrix APIs can be mixed. Use native quadratic/conic constraints when needed.
-Do not call solve().''',
 }

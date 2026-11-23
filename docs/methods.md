@@ -2,26 +2,21 @@
 
 方法负责建模流程：调用 LLM、输出中间产物、请求求解、根据反馈修正。平台提供 LLM、代码契约和求解沙箱。接口见[架构](architecture.md#方法接口)。
 
-每个方法都是一张 LangGraph 图，即使只有一个节点。前 13 个方法开放 Pyomo、gurobipy、OR-Tools、CPMpy、PuLP、CVXPY、PySCIPOpt、CasADi、coptpy 九个建模库；第 14 个方法 AutoCO 为内置求解器方法（`languages=frozenset()`），自带 12 类启发式与进化算法池并在隔离沙箱中完成代码体检、短时试跑与正式求解。代码提示和组件组装共享库指引，库内 API 由代码表达，平台识别原生模型。OptiMUS、CoE、OptiTree、OR-LLM-Agent、AutoFormulation、SAC-Opt 保留 LP/MILP 建模范围；它与库选择独立。所选库及后端仍须能够表达并求解该数学问题。
+每个方法都是一张 LangGraph 图，即使只有一个节点。前 8 个精确建模方法开放 Pyomo、OR-Tools、CVXPY、PySCIPOpt、CasADi 五个建模库；第 9 个方法 AutoCO 为内置求解器方法（`languages=frozenset()`），自带 12 类启发式与进化算法池并在隔离沙箱中完成代码体检、短时试跑与正式求解。代码提示和组件组装共享库指引，库内 API 由代码表达，平台识别原生模型。OptiMUS、CoE、OptiTree、OR-LLM-Agent 保留 LP/MILP 建模范围；它与库选择独立。所选库及后端仍须能够表达并求解该数学问题。
 
 ## 方法一览
 
 | id | 名称 | 图 | 预设参数 |
 |---|---|---|---|
 | `direct` | Direct | `generate`；校验数学模型与代码均存在，平台求解最终代码 | — |
-| `feedback_repair` | Feedback Repair | `generate → solve → review → finish`；格式错误、执行错误或具体建模问题进入 `repair` 后重新求解与复核 | `max_repairs`=3 |
-| `trival` | TriVAL | 语义验证 → 数学模型验证 → 代码验证；每阶段构建、验证、修订；代码缺陷可回溯到数学模型 | 每阶段最多验证 5 轮（`max_validations`），代码最多执行 20 次（`max_code_executions`） |
-| `optimus` | OptiMUS 0.3 | `parameters → objective → constraints → check_constraints → formulate_constraints → formulate_objective → write_code → assemble → execute →（debug → use_fix → execute）*`，最多 3 次执行 | `temperature`=1.0、`max_debug_tries`=3 |
-| `coe` | Chain-of-Experts | `start_trial → conductor ⇄ expert → reducer →（evaluate → backward）→ finish`；协调者逐个选专家，专家依次评论，汇总器写代码；开启反思时，代码出错则从最后一位专家向前询问责任 | `temperature`=0、`max_collaborate_nums`=3、`enable_reflection`=false、`max_trials`=3 |
-| `optitree` | OptiTree | `classify*（逐层匹配问题类型）→ retrieve → reason → execute →（inspect → execute）*`，最多检查 4 次 | `temperature`=0、`max_inspections`=4 |
 | `or_llm_agent` | OR-LLM-Agent | `math_model → write_code → execute →（fix → execute）* → end_round`，再按结果做一轮不可行检查或模型复查 | `temperature`=0.2；主轮 3 次、不可行检查 1 次、复查 2 次（`attempts`） |
-| `orthought` | ORThought | `model → execute →（debug → execute）*`；一次写出求解思路、数学模型和代码，代码无法运行时带上模型和错误调试 | `temperature`=0、`debug_max_try`=3 |
 | `llmopt` | LLMOPT | `define → write_code → execute →（self_correct →（define 或 write_code）→ execute）*`；五要素模型 → 代码 → 执行，LLM 分别判断模型和代码对错，回到错的一步重写 | `max_resolves`=12 |
-| `autoformulation` | AutoFormulation | `start → expand*（深度优先建树）→ rollout*（MCTS）→ select` | `n_used_gpt`=8、`n_top`=3、`n_reward`=5、`total_rollouts`=16；其余搜索常数和运行上限见预设文件 |
-| `sac_opt` | SAC-Opt | 锚点 → 分项生成 → 约束回译/比较/选择性修正 → 组装 → 求解/调试 | `temperature`=0，解析 5 次、语义 5 轮、执行 3 次 |
+| `trival` | TriVAL | 语义验证 → 数学模型验证 → 代码验证；每阶段构建、验证、修订；代码缺陷可回溯到数学模型 | 每阶段最多验证 5 轮（`max_validations`），代码最多执行 20 次（`max_code_executions`） |
 | `bind` | BIND | schema → 生成 → 求解 → 错误反馈修正 | `temperature`=0、`top_p`=1、`max_rounds`=3 |
-| `optimind` | OptiMind | 分类 → 提示 → 生成 → 求解反馈 → 反思 | `temperature`=0.6、`top_p`=0.95、`max_turns`=5 |
 | `autoco` | AutoCO | `semantic_grounding → formulate ⇄ review_formulation → instantiate（沙箱体检）→ select_algorithm（知识图谱 + 沙箱试跑）→ solve_problem` | `max_modeling_revisions`=1、`max_instantiate_attempts`=3、`max_kg_steps`=6、`enable_pilot`=true、`seed`=42 |
+| `optitree` | OptiTree | `classify*（逐层匹配问题类型）→ retrieve → reason → execute →（inspect → execute）*`，最多检查 4 次 | `temperature`=0、`max_inspections`=4 |
+| `coe` | Chain-of-Experts | `start_trial → conductor ⇄ expert → reducer →（evaluate → backward）→ finish`；协调者逐个选专家，专家依次评论，汇总器写代码；开启反思时，代码出错则从最后一位专家向前询问责任 | `temperature`=0、`max_collaborate_nums`=3、`enable_reflection`=false、`max_trials`=3 |
+| `optimus` | OptiMUS 0.3 | `parameters → objective → constraints → check_constraints → formulate_constraints → formulate_objective → write_code → assemble → execute →（debug → use_fix → execute）*`，最多 3 次执行 | `temperature`=1.0、`max_debug_tries`=3 |
 
 参数全部集中在 [`src/llm4om/methods/presets.py`](../src/llm4om/methods/presets.py)，每个方法一个不可变的 dataclass。移植方法的取值依据上游固定提交，部署适配差异另行说明。运行时不能改参数：命令行、Python 接口和页面都不接受方法参数；要换参数，改这个文件。
 
@@ -29,41 +24,17 @@
 
 共享代码契约要求保留题意中的变量域、决策单位和约束方向。后端不能表达或求解所需模型时，生成代码应明确报告不兼容，不得通过放松整数域、改动等式或事后取整来适配后端。Worker 也会拒绝将已声明整数变量的 OR-Tools 模型交给连续后端。生成提示不能证明原题已被正确建模，数量是否可分仍应在需求和数学模型中明确。
 
-13 种精确建模方法的运行上下文接收 `locale`，与选择建模库的 `language` 分开。`zh` 要求说明正文使用简体中文，`en` 使用英文。语言要求追加在各方法原有的消息或代理系统提示中，不改变研究流程、温度、搜索参数或停止条件。BIND、OptiMind 和 OR-LLM-Agent 在初始系统消息中追加一次，使后续历史继续沿用；其余独立调用分别追加。TriVAL 的语义、数学模型及代码验证代理均传递该要求。
+8 种精确建模方法的运行上下文接收 `locale`，与选择建模库的 `language` 分开。`zh` 要求说明正文使用简体中文，`en` 使用英文。语言要求追加在各方法原有的消息或代理系统提示中，不改变研究流程、温度、搜索参数或停止条件。BIND 和 OR-LLM-Agent 在初始系统消息中追加一次，使后续历史继续沿用；其余独立调用分别追加。TriVAL 的语义、数学模型及代码验证代理均传递该要求。
 
 五要素固定标题、判断行、代码围栏标签、JSON 键及枚举值、分类名称、工具标识和数据仍按原协议保留，说明性字段可使用所选语言。数学模型页面、阅读对照和方法过程产物仅在显示时翻译已知标题、状态标签和专家名称；步骤关联仍使用原始角色标识，未知扩展名称保持原文。JSON、代码、原始运行记录、文本差异、复制和下载保留生成原文。已有记录的正文不会因切换界面语言而重新生成，语言要求也不能保证模型每次均遵守，需结合真实运行检查。
 
-## Direct 与 Feedback Repair
+## Direct
 
-这两种方法由本项目维护，共用 `methods/direct/prompts.py` 中的生成提示和 `graph.py` 中的生成节点。Direct 保留一次 LLM 调用：明确变量域、目标方向、单位、索引、数据来源和每条约束，输出数学模型和完整代码。格式不完整时报告失败，不把空代码交给求解器。附件预览可能截断，代码通过 `build_model(data)` 读取完整数据。
-
-Feedback Repair 在此基础上使用以下 LangGraph 图：
-
-```mermaid
-flowchart LR
-    generate[生成模型与代码] -->|格式完整| solve[求解]
-    generate -->|格式错误| repair[按具体反馈修正]
-    solve -->|执行完成| review[对照题面复核]
-    solve -->|执行错误| repair
-    review -->|具体建模错误| repair
-    repair -->|格式完整| solve
-    repair -->|格式错误且还有次数| repair
-    review -->|通过| finish[结束]
-    generate -->|修正次数用尽| finish
-    solve -->|执行错误且次数用尽| finish
-    repair -->|格式错误且次数用尽| finish
-    review -->|问题未解决或复核格式错误| finish
-```
-
-复核读取原题、数学模型、代码、求解反馈和可用的冲突诊断，返回 `accept` 或 `repair` 及原因。求得最优仍需复核目标系数、变量域、约束和数据绑定。真实不可行或无界可以正常结束；超时、仅有可行解、可满足性问题没有目标值，都不能单独成为改模型的理由。
-
-最多修正三次，格式、执行和建模修正共享这个上限。复核仍发现问题时，保留产物并记录失败。若后续生成格式不完整，保留最后一次已求解的数学模型、代码和结果；不按目标值或求解状态把不同模型排成“最好的一次”。复核响应无法解析或调用失败时，同样保留已完成结果并报告失败。
-
-无修正时，Feedback Repair 使用两次 LLM 调用和一次求解。复核是额外检查，不是正确性证明。它没有移植 SAC-Opt 的语义锚点或 OptiMind 的专家提示库。新增方法的实际接入范围见本文末节，来源调查见[接入调查](references/methods-solvers.md)。
+该方法由本项目维护，位于 `methods/direct/`。Direct 保留一次 LLM 调用：明确变量域、目标方向、单位、索引、数据来源和每条约束，输出数学模型和完整代码。格式不完整时报告失败，不把空代码交给求解器。附件预览可能截断，代码通过 `build_model(data)` 读取完整数据。
 
 ## 固定来源与实现方式
 
-原有八种研究方法的核心建模逻辑忠实移植：编排、提示、解析和停止条件来自上游。新增 SAC-Opt、BIND、OptiMind 的独立实现或部署适配另见文末，不将它们一概描述为逐字移植。目标不是逐行复刻上游的工程代码（文件输出、日志、命令行），而是让建模过程与上游一致。改动只有三类：
+既有研究方法的核心建模逻辑忠实移植：编排、提示、解析和停止条件来自上游。BIND 的部署适配另见文末，不将其描述为逐字移植。目标不是逐行复刻上游的工程代码（文件输出、日志、命令行），而是让建模过程与上游一致。改动只有三类：
 
 - **适配**：接入平台所必需，例如由平台提供 LLM、在沙箱中执行、按代码写法替换库名。
 - **避错**：避免明显的运行失败，不改变机制。
@@ -74,15 +45,13 @@ flowchart LR
 | 方法 | 固定来源 | 实现方式 |
 |---|---|---|
 | TriVAL | [SCUT-EIPI/TriVAL@380a529](https://github.com/SCUT-EIPI/TriVAL/tree/380a529) | 移植原 LangGraph 图、节点、提示和循环上限 |
-| OptiMUS 0.3 | [teshnizi/OptiMUS@e182e9e](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) | 上游 README 标注为 v0.3；`main.py` 流程改写为图；提示逐字提取（`optimus/prompts.py`，MIT）；保留上游输出格式并修正解析；代码示例按库组装（`optimus/graph.py`），共享原生代码生成（`model_code.py`） |
+| OptiMUS 0.3 | [teshnizi/OptiMUS@e182e9e](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) | 上游 README 标注为 v0.3；`main.py` 流程改写为图；提示逐字提取（`optimus/prompts.py`，MIT）；保留上游输出格式并强化解析/格式重试；代码示例按库组装（`optimus/graph.py`），共享原生代码生成（`model_code.py`） |
 | CoE | [xzymustbexzy/Chain-of-Experts@afb89bf](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) | `main.py` 的 `chain_of_experts` 改写为图；七位专家、协调者和汇总器的提示逐字保留 |
 | OptiTree | [MIRALab-USTC/OptiTree@2e70ecf](https://github.com/MIRALab-USTC/OptiTree/tree/2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9) | `Reasoner.reason_run` 改写为图；分类、推理、检查三组提示逐字提取（`optitree/prompts.py`）；随包分发原问题类型树和思路模板（`optitree/source/`，MIT） |
 | OR-LLM-Agent | [bwz96sco/or_llm_agent@5dccdaa](https://github.com/bwz96sco/or_llm_agent/tree/5dccdaab89ab91c3cb28066fe849423dc124d287) | `or_llm_eval.py` 的 `or_llm_agent` 改写为图；提示逐字保留，代码请求改为平台契约 |
-| ORThought | [BeinuoYang/ORThought@5293e24](https://github.com/BeinuoYang/ORThought/tree/5293e24861a65d1e4a2f61f4fad0a81de901ee38) | `workflow.py` 的 `ORThoughtModelAgent`（`formalized` 模式）与 `ORThoughtSolveAgent` 改写为图；`prompt.py` 逐字收录（`orthought/prompts.py`）。论文见 [arXiv 2508.14410](https://arxiv.org/abs/2508.14410) |
 | LLMOPT | [antgroup/LLMOPT@1492dd3](https://github.com/antgroup/LLMOPT/tree/1492dd33e39ea13f1afe32a0adc13d4217334195) | `inference/inference_q2f2c.py` 的 Q2F → F2C → 执行改写为图，加上论文的自我校正循环；`prompts/generate_prompt.py` 与 `prompts/self_correction_prompt.py` 逐字收录（`llmopt/prompts.py`）。论文见 [ICLR 2025](https://arxiv.org/abs/2410.13213) |
-| AutoFormulation | [jumpynitro/AutoFormulator@5214801](https://github.com/jumpynitro/AutoFormulator/tree/52148018d04de23dc2d36d4281eb6244c2a42ffc) | `MCTS_used.py` 的建树与 `many_rollouts` 改写为图；`prompts.py` 和 `utils_*` 的解析与等价判断放在 `autoformulation/upstream/`；代码生成按写法组装（`autoformulation/codegen.py`）。论文见 [ICML 2025](https://proceedings.mlr.press/v267/astorga25a.html) |
 
-这些实现使用你配置的通用 LLM，没有复现论文的模型、数据或运行条件。采样温度沿用上游：OR-LLM-Agent 0.2；ORThought 0；CoE 0（协调者 `max_tokens=10`）；OptiTree 0；OptiMUS 和 AutoFormulation 上游不设温度，这里用 OpenAI 默认值 1.0。
+这些实现使用你配置的通用 LLM，没有复现论文的模型、数据或运行条件。采样温度沿用上游：OR-LLM-Agent 0.2；CoE 0（协调者 `max_tokens=10`）；OptiTree 0；OptiMUS 上游不设温度，这里用 OpenAI 默认值 1.0。
 
 ### TriVAL
 
@@ -92,7 +61,7 @@ flowchart LR
 |---|---|---|
 | 各节点通过 `context.llm("trival.<节点>")` 取得模型 | 适配 | LLM 由平台配置 |
 | `code_executor` 改为调用 `context.solve()` | 适配 | 代码在平台沙箱中构建和求解 |
-| 代码智能体提示中的求解器选择和 OR-Tools/CP-SAT/CVXPY 语法段落，替换为平台代码契约（包括 CPMpy 写法） | 适配 | 代码写法由用户选择 |
+| 代码智能体提示中的求解器选择和 OR-Tools/CP-SAT/CVXPY 语法段落，替换为平台代码契约 | 适配 | 代码写法由用户选择 |
 | 代码验证提示删去“代码是否打印可解释的求解结果”一条 | 适配 | 平台契约要求代码只构建模型，结果由 Worker 输出 |
 | `messages[-1].content` 改为 `.text` | 避错 | Anthropic 等模型返回分块内容 |
 | agent 节点和多工具编辑中间件使用异步调用；工具声明 `ToolRuntime[ContextSchema]` | 避错 | 取消可沿调用链传播；工具上下文按实际类型序列化，无需全局屏蔽警告 |
@@ -110,16 +79,17 @@ TriVAL 的三阶段验证器通过普通结构化工具提交原有验证结果�
 | 改动 | 类型 | 原因 |
 |---|---|---|
 | 上游从 `params.json` 读取参数和取值。附带同格式 `params.json` 时照此使用；否则运行上游的参数提取提示，并在输出格式中加一个 `value` 字段 | 适配 | 平台输入是自然语言，参数取值必须来自题面 |
-| 保留上游建模提示；代码提示嵌入共享库指引和原生示例。变量、约束、目标、返回对象通过 `ModelCode` 组装，支持九个库 | 适配 | 代码写法由用户选择 |
+| 保留上游建模提示；代码提示嵌入共享库指引和原生示例。变量、约束、目标、返回对象通过 `ModelCode` 组装，支持五个库 | 适配 | 代码写法由用户选择 |
 | 整段调试提示也嵌入所选库与后端的完整代码契约 | 适配 | 调试调用独立于组件生成，仍需知道 `build_model(data)` 的返回类型和只构建不求解的约定 |
 | 组装结果包装为 `build_model(data)`，参数取值写入代码；删去 `model.optimize()` 和结果打印 | 适配 | 平台契约只构建模型 |
 | 约束检查走上游的 `ask_LLM` 分支；参数的人工确认（`input()`）不执行 | 适配 | 平台运行没有人工交互；上游 `main.py` 本身也不运行参数提取 |
 | 解析时把五个以上连续的 `=` 视为一个 `=====` 分隔符 | 避错 | 上游在 `=======` 内部找到“闭合”分隔符，取出空代码。DeepSeek 实测这样写，目标函数代码因此丢失，模型以目标值 0 “最优”结束 |
 | 读取分隔符内的全文，不额外跳过首字符；只删除代码块开头的语言标签 | 避错 | 分隔符后没有换行时首字符丢失；全局删除 `python` 会破坏变量名和字符串 |
 | 缺少完整分隔符或 Python 代码块时报解析错误 | 避错 | 不再用负索引截取无效代码 |
-| 回复没有 `=====` 分隔符时，读取最后一个完整 Python/无语言标签 Markdown 代码块（上游取第一个）；调试复用同一解析入口 | 避错 | 模型常先写表达式片段，最后才写完整语句；真实 PuLP 调用也会省略语言标签 |
-| JSON 对象和数组由同一个解析器读取，保留转义和嵌套结构，只清理字符串外的行注释 | 避错 | 原解析器会破坏转义，并在含 URL 且没有后续换行时无限循环；删除备用解析器 |
-| 参数提取与约束冗余检查的解析重试继续传递原生 `GraphBubbleUp` | 适配 | 宿主模型通过 LangGraph 暂停交接任务，暂停不是解析失败；不改变重试次数与方法流程 |
+| 回复没有 `=====` 分隔符时，代码读取最后一个完整 Markdown 代码块；目标与目标公式支持 Markdown 围栏、`OBJECTIVE:` 行或闭合 LaTeX 分隔符回退 | 避错 | 模型常省略 `=====` 或先写片段再写完整语句 |
+| JSON 对象和数组按顶层配对边界解析，清理字符串外行注释并在未转义 LaTeX/尾逗号等情况下调用 `json_repair`；约束公式支持键名大小写归一及可选字段（`NEW VARIABLES`、`AUXILIARY CONSTRAINTS`）缺省 | 避错 | 解决通用 LLM 在 JSON 中漏转义 LaTeX 反斜杠或省略空可选字段导致的解析崩断 |
+| 变量元信息缺失 `shape` 默认标量 `[]`，缺失或非法 `type` 显式报错并触发节点级格式修复重试（最多 3 次），不静默放宽为连续变量；重复声明既有变量自动跳过 | 避错 | 避免缺字段崩溃同时坚守“不静默放松变量域”的平台契约 |
+| 全部解析重试继续传递原生 `GraphBubbleUp` 与 `LimitExceeded` | 适配 | 宿主模型通过 LangGraph 暂停交接任务，暂停或预算超限不是解析失败 |
 
 调试以“求解状态为最优”为成功条件；支持 CasADi 等原生后端报告的 `locally_optimal`，保留其局部含义。因此不可行或无界的模型也会进入调试。
 
@@ -154,19 +124,6 @@ TriVAL 的三阶段验证器通过普通结构化工具提交原有验证结果�
 
 修复对话只保留在副本中，只有最后一次代码进入主对话，与上游 `generate_or_code_solver` 一致。上游在最后一次修复后不再执行；平台把这段未执行代码作为中间产物输出，最终结果取最后一次实际执行的代码。
 
-### ORThought
-
-上游流程：`formalized_solution_path_prompt` 让 LLM 按专家建模的顺序写出求解思路（理解问题：目标、决策变量、约束；再逐步建立变量、目标和约束），然后汇总数学模型并写出代码，三部分分别放在 `<solution_path>`、```` ```model ```` 和 ```` ```python ```` 中。代码执行出错时，`debug_prompt` 读问题、数学模型、代码和错误信息，返回改正的代码，最多 `debug_max_try` 次（上游 `main.sh` 为 3）。代码能运行但无可行解时不调试。论文报告的多智能体对照和 LogiOR 数据集不在平台中。
-
-| 改动 | 类型 | 原因 |
-|---|---|---|
-| 两条代码要求（“带默认参数的可调用函数，返回最优目标值或 `None`”）改为平台代码契约；“Gurobipy”换成所选写法的库名 | 适配 | 代码写法由用户选择；平台读取模型而不是函数返回值 |
-| 建模请求追加 Markdown 列表、LaTeX 数学分隔符和显式变量域的展示约定；保留 `<solution_path>`、`model` 和 `python` 边界 | 适配 | 原模型汇总没有限定内部排版，通用模型可能生成无法排版的缩进纯文本；不新增调用或改变调试路线 |
-| “执行出错”定义为沙箱没有得到求解状态；错误信息是沙箱反馈。上游判断返回值是否为含 “Error” 的字符串 | 适配 | 代码在平台沙箱中执行 |
-| 代码块取最长的 ```` ```python ```` 块，不再要求超过 400 个字符 | 避错 | 上游的长度门槛针对带默认参数和数据的函数；`build_model(data)` 常常更短，按原门槛会被当成“没有代码” |
-
-求解思路作为 `solution_path` 产物显示在过程中。仓库没有声明许可证，提示仅用于研究复现（见 NOTICE）。
-
 ### LLMOPT
 
 上游流程：`Q2F` 让 LLM 按模板写出五要素模型（Sets、Parameters、Variables、Objective、Constraints），`F2C` 只根据五要素模型写代码，然后执行。论文第 3.4 节在测试时加入自我校正：`self_correction` 提示把问题、五要素模型、代码和运行信息交给 LLM，分别判断五要素模型和代码是否正确；第 4.1 节规定最多重解 12 次。
@@ -191,37 +148,9 @@ LLMOPT 的主要贡献是微调模型（多指令 SFT 加 KTO 对齐），发布
 
 `prompts.py` 保留上游原文，`graph.py` 组合原题与五要素并附加上述数据要求，仍作为单条用户消息发送，不加系统消息，不设温度。没有新增 LLM 调用、修改自检路由或重解上限。明确的数据缺失回答保留缺失原因；其他代码回答没有 ```` ```python ```` 块时同样失败。仓库没有声明许可证，上游提示仅用于研究用途（见 NOTICE）。
 
-### AutoFormulation
-
-上游流程：`MCTS.dfs_from_scratch` 深度优先建树。每个节点为下一个组件（参数、决策变量、目标、等式约束、不等式约束）采样 `n_used_gpt` 个回答；去掉空回答；对可执行的组件运行检查脚本；去除等价候选（参数取众数，决策变量由 LLM 分组 8 次取多数，其余用 SymPy/Z3 脚本判断）；LLM 排名打分，保留前 `n_top` 个。然后 `MCTS.many_rollouts(global_scoring="ranking")`：UCT（`w_exp=1`、`λ=0.5`）选出完整模型；前 3 个有解的完整模型作为基线（奖励 0.5）；之后的完整模型与每个基线双向比较（每次 5 个判断），胜率作为奖励回传；Bradley-Terry 给出全局排名。
-
-图中 `expand` 每步展开一个节点，`rollout` 每步完成一次有效 rollout（到达未评估过的完整模型），`select` 取排名最高的有解模型。`upstream/` 中保留 `prompts.py`、`utils_prompt.py`、`utils_general.py` 和 `utils_diff.py`（改动处标注 `# llm4om:`）；`search.py` 逐行移植 `MCTS_used.py` 与 `utils_metrics.py` 中不依赖文件的函数。
-
-上游辅助函数只保留当前流程使用的部分；纳入 Ruff 检查，清理导入和裸 except。删除未调用函数、被后续定义覆盖的重复函数，以及失败后原样重复调用同一函数的兜底。
-
-| 改动 | 类型 | 原因 |
-|---|---|---|
-| 检查脚本和完整模型由 `codegen.py` 调用共享 `ModelCode` 生成；九个库使用相同的表达式、索引空间和变量域 | 适配 | 代码写法由用户选择 |
-| 决策变量类型指引替换为 CONTINUOUS/INTEGER/BINARY 和可选上下界；完整模型比较提示使用所选库名 | 适配 | 同上 |
-| 检查脚本和等价判断脚本通过 `context.run_script` 在沙箱中运行；检查脚本以退出状态判断成功，避免把依赖库警告误判为执行失败；完整模型由平台求解 | 适配 | 生成代码不在主机执行 |
-| “有解”定义为求解器返回目标值。上游从 Gurobi 日志解析 “Best objective” | 适配 | 求解器由写法决定 |
-| 入口：建树之后直接运行 `many_rollouts` 并取排名第一的有解模型 | 适配 | 上游发布的入口 `run_NL4OPT.py` 只建树；排名选择在 `many_rollouts` 中 |
-| 等式约束的边界变量：上游在主机进程中 `exec` LLM 生成的参数代码来判断索引是否越界；这里生成带成员检查的代码，在沙箱中运行时判断 | 避错 | 不在主机执行生成代码，判断结果相同 |
-| 变量的 `iteration_space` 除 `[i for i in I]` 外，也接受 `i for i in I`、`for i in I`、生成器表达式和索引集本身 | 避错 | 上游只解析列表推导式，其他写法会让索引变量被建成标量，整个分支被剪掉。DeepSeek 实测会写成 `products` 或 `for p in products` |
-| 边界字段保留迭代变量名称；约束提示明确“表达式在前、外层 for 在后”，无此类约束使用 `{None: None}` | 适配 | 按索引变化的界需要读取正确参数；减少与组件解析格式不一致的回答 |
-| SMT 等价脚本中 `Reals(...)` 的取值与括号 | 避错 | 上游生成的脚本在单变量时语法错误 |
-| 两两比较的解析失败时最多重试 5 次（上游无限重试）；决策变量分组全部无法解析时保留全部候选（上游抛出异常） | 避错 | 防止运行卡死或中断 |
-| 只有两个有解模型时，上游把被判更差的一个排在前面，与其 Bradley-Terry 分支相反；这里把被判更好的排在前面 | 修正 | `pairwise[1][0]` 是模型 1 的胜率，上游写反了比较方向 |
-| 字典抽取使用 Python tokenizer 跳过字符串内的花括号 | 避错 | 参数文本中的花括号不再截断字典 |
-| 参数代码和表达式字典用 `repr()` 转义字符串 | 避错 | 引号、换行和反斜杠不再生成无效 Python；不改变参数取值或候选选择 |
-| 并发采样和沙箱检查在出错或取消时，取消并等待同批其他任务；成功结果保持输入顺序 | 避错 | 运行返回后不再启动或遗留同批任务，计数不会在写回后继续变化 |
-
-注意事项：
-
-- **成本**：这里的“调用”指单个回答（补全）。上游一次请求用 `n` 取多个回答；这里每个回答单独请求，回答数与上游相同，请求数更多。默认参数下，建树最多约 540 个回答（上游约 80 次请求）；前 3 次 rollout 只作基线，之后每次最多 30 个回答。候选等价时会被剪掉，简单问题实际少得多。要试用，可在 `presets.py` 中临时减小这些值，例如 `n_used_gpt=8 n_top=2 n_reward=2 total_rollouts=2`（约 50 次调用）。`n_used_gpt` 太小时，候选可能全部因代码错误被剪掉。
-- **简单问题**：候选全部等价时树只有一个完整模型，rollout 阶段没有比较；`many_rollouts` 在 1000 次无效 rollout 后停止，这一步不调用 LLM。
-
 ## 验证
+
+> 注：下方按日期归档的验证记录保留当时版本的方法与建模库集合（后续精简已移除部分方法与库）。
 
 ### 宿主模型与本地 CLI（2026-10-24）
 
@@ -374,20 +303,14 @@ LLMOPT 第一次真实运行暴露了两个适配问题（见上文 LLMOPT 改�
 同日在 Docker 部署上检查：经 Caddy 的 HTTPS 访问和流式输出正常；设置预算后，用完预算的预设在第一次 LLM 调用前停止；同一地址第 3 次发起运行得到 429；正常重启后运行记录数量不变（61 条）；`docker compose cp` 备份得到完整的 `.langgraph_api/` 与 `.private/`。恢复命令与迁移命令相同，本次没有在生产数据上执行。LangSmith 追踪没有实际接入验证。
 
 
-## SAC-Opt、BIND 与 OptiMind
+## BIND
 
-三种方法均注册为独立 LangGraph 图，参数来自 `methods/presets.py`，在页面、CLI、Python 与 LangGraph 服务中可用。
+BIND 注册为独立 LangGraph 图，参数来自 `methods/presets.py`，在页面、CLI、Python 与 LangGraph 服务中可用。
 
 | 方法 | 固定参考提交 | 图与公开范围 |
 |---|---|---|
-| SAC-Opt | [`ec0ddb5`](https://github.com/Forrest-Stone/SAC-Opt/tree/ec0ddb544ae6b70714181740ebbba16027df50e4) | 四类锚点 → 分项代码 → 约束回译 → 语义比较 → 仅修正未通过约束 → 组装 → 求解/调试。独立实现与自写提示，通过共享组件指引支持九个库 |
 | BIND | [`1dac06b`](https://github.com/SprocketLab/Text2Opt-Bench/tree/1dac06be656c41d827ef20987cf8af0b48d382a2) | 数据结构 → 生成 → 求解 → 错误反馈 → 重新生成；最多 3 次，JSON/CSV 内容留在求解环境 |
-| OptiMind | [`419cf7b`](https://github.com/microsoft/OptiGuide/tree/419cf7b9eee20b6af036abf15152fa775b20c951/optimind) | 类型分类 → 公开提示 → 生成 → 求解 → 反思；最多 5 次生成，一条轨迹，专项提示仅有 TravelingSalesman |
-
-SAC-Opt 的核心是按约束进行选择性修正；已通过约束不会再次改写。默认温度 0、解析 5 次、语义比较 5 轮、执行 3 次。它检查约束代码的回译一致性，不额外宣称独立验证了目标。批量组件处理、附件绑定、结束时保留未解决失败等差异见 [SAC-Opt 说明](../src/llm4om/methods/sac_opt/README.md)。上游未声明许可证，因此本实现不复制其提示和代码。
 
 BIND 默认温度 0、top_p 1。平台没有参考最优值或参考模型，删除了上游基准评分作为修复条件的依赖，只以真实执行状态决定是否调试。不可行是有效求解状态，不会据此改松约束。题面应说明数据字段语义；只有完整附件在代码执行时解析。细节见 [BIND 说明](../src/llm4om/methods/bind/README.md)。
 
-OptiMind 默认温度 0.6、top_p 0.95，成功求解后仍给出反馈。LLM 可以提供修正版，或用不含代码的最终回答结束。分类节点只匹配公开库中的类别，没有匹配则使用通用提示。没有下载训练模型、引入多数投票或补造未公开提示。细节与原文件哈希见 [OptiMind 说明](../src/llm4om/methods/optimind/README.md)。
-
-这些实现改变了执行环境和部分输出契约，不能直接宣称复现论文成绩。求解器能力和方法的建模范围分别限制支持的组合；九个库通过共享指引接入；库的数学表达能力与方法的问题范围仍需满足。
+该实现改变了执行环境和部分输出契约，不能直接宣称复现论文成绩。五个建模库通过共享指引接入；库的数学表达能力与方法的问题范围仍需满足。

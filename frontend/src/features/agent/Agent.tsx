@@ -30,7 +30,7 @@ import { errorText } from "@/format";
 import { locale, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 
-const CORE_METHODS = new Set(["direct", "feedback_repair", "trival", "autoco"]);
+const CORE_METHODS = new Set(["direct", "or_llm_agent", "llmopt", "trival", "bind", "autoco"]);
 
 type Values = { messages?: Message[]; description?: string; data?: Record<string, string>; source?: SourceRun;
   current?: SourceRun; plans?: Plan[]; usage?: Usage; failure?: string | null };

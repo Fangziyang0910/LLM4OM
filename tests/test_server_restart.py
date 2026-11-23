@@ -60,13 +60,13 @@ def test_cancelled_method_survives_a_server_restart(tmp_path: Path) -> None:
     with server([str(ROOT / "frontend/e2e/mock_llm.py"), str(llm_port)], llm_port, "/v1/models", env, tmp_path / "llm.log"):
         with server(command, port, "/api/options", env, tmp_path / "first.log") as client:
             thread = client.post("/threads", json={"metadata": {"title": "restart-test"}}).json()["thread_id"]
-            run = client.post(f"/threads/{thread}/runs", json={"assistant_id": "feedback_repair",
+            run = client.post(f"/threads/{thread}/runs", json={"assistant_id": "or_llm_agent",
                 "input": {"description": "E2E_PAUSE_REPAIR"}, "context": {"language": "pyomo", "preset": "env"}}).json()
             query = {"namespace": "llm4om.progress", "key": thread}
 
             def repairing() -> bool:
                 saved = client.get("/store/items", params=query).json()
-                return bool(saved and any(step["title"] == "repair" for step in saved["value"]["steps"]))
+                return bool(saved and any(step["title"] == "debug" for step in saved["value"]["steps"]))
 
             until(repairing)
             response = client.post(f"/threads/{thread}/runs/{run['run_id']}/cancel", params={"wait": "true"})
@@ -84,7 +84,7 @@ def test_cancelled_method_survives_a_server_restart(tmp_path: Path) -> None:
             assert client.delete(f"/threads/{thread}").status_code == 404
 
             thread = client.post("/threads", json={}).json()["thread_id"]
-            client.post(f"/threads/{thread}/runs", json={"assistant_id": "feedback_repair",
+            client.post(f"/threads/{thread}/runs", json={"assistant_id": "or_llm_agent",
                 "input": {"description": "E2E_PAUSE_REPAIR"}, "context": {"language": "pyomo", "preset": "env"}}).raise_for_status()
             query = {"namespace": "llm4om.progress", "key": thread}
             until(repairing)

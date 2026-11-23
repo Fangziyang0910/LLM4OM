@@ -14,7 +14,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from llm4om import agent
 from llm4om.agent import AgentContext, Conversation, optimization_graph
-from tests.conftest import ACCEPT_REVIEW, PRODUCTION_CODE, PRODUCTION_PROBLEM, TWO_PART_REPLY, tool_call
+from tests.conftest import PRODUCTION_CODE, PRODUCTION_PROBLEM, TWO_PART_REPLY, tool_call
 from tests.test_followups import EXPLANATION, REVISED_REPLY
 from tests.test_sandbox import ORTOOLS_CODE
 
@@ -296,7 +296,7 @@ def test_a_first_solve_is_saved_and_later_changes_use_its_frozen_result(make_res
 def test_pinned_configuration_wins_over_agent_arguments(make_resources, saved_plans):
     def reply(role, messages, tools):
         if role == "optimization":
-            return (tool_call("model_and_solve", description=PRODUCTION_PROBLEM, name="生产计划", method="trival", language="gurobipy")
+            return (tool_call("model_and_solve", description=PRODUCTION_PROBLEM, name="生产计划", method="trival", language="ortools")
                     if messages[-1].type == "human" else "实际求解完成。")
         return EXPLANATION if role == "explain_result" else TWO_PART_REPLY
 
@@ -310,15 +310,15 @@ def test_pinned_configuration_wins_over_agent_arguments(make_resources, saved_pl
 
 
 @pytest.mark.parametrize("method, expected, library, code", [("Direct", "direct", "Pyomo", TWO_PART_REPLY),
-    ("Feedback Repair", "feedback_repair", "Pyomo", TWO_PART_REPLY),
+    ("BIND", "bind", "Pyomo", TWO_PART_REPLY),
     ("Direct", "direct", "OR-Tools", TWO_PART_REPLY.replace(PRODUCTION_CODE, ORTOOLS_CODE))],
-    ids=["direct-pyomo", "feedback-repair-pyomo", "direct-ortools"])
+    ids=["direct-pyomo", "bind-pyomo", "direct-ortools"])
 def test_tool_arguments_accept_registered_display_names_and_save_canonical_ids(make_resources, saved_plans, method, expected, library, code):
     def reply(role, messages, tools):
         if role == "optimization":
             return (tool_call("model_and_solve", description=PRODUCTION_PROBLEM, name="生产计划", method=method, language=library)
                     if messages[-1].type == "human" else "实际求解完成。")
-        return EXPLANATION if role == "explain_result" else ACCEPT_REVIEW if role == "review" else code
+        return EXPLANATION if role == "explain_result" else code
 
     result = asyncio.run(optimization_graph().ainvoke({"messages": [("human", "请计算")]},
         {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
@@ -333,11 +333,11 @@ def test_available_methods_and_backends_come_from_the_registry(make_resources, s
         if messages[-1].type == "human":
             return tool_call("modeling_capabilities")
         facts = json.loads(messages[-1].text)
-        assert len(facts["methods"]) == 14 and len(facts["libraries"]) == 9
+        assert len(facts["methods"]) == 9 and len(facts["libraries"]) == 5
         assert next(m for m in facts["methods"] if m["id"] == "optimus")["linear_only"]
         assert next(m for m in facts["methods"] if m["id"] == "autoco")["builtin_solver"]
         assert "backends" in facts
-        return "可以选择十三种方法和九个建模库。"
+        return "可以选择九种方法和五个建模库。"
 
     resources = make_resources(reply)
     resources.sandbox.catalog = AsyncMock(return_value={"libraries": {"pyomo": []}})
@@ -346,6 +346,26 @@ def test_available_methods_and_backends_come_from_the_registry(make_resources, s
     assert result["failure"] is None
     resources.sandbox.catalog.assert_awaited_once()
     saved_plans[1].threads.create.assert_not_called()
+
+
+def test_auto_selection_policy_and_large_attachment_stats_enter_agent_context(make_resources, saved_plans):
+    seen_system: list[str] = []
+    big_csv = "item,cost\n" + "\n".join(f"item_{i},{i}" for i in range(40))
+
+    def reply(role, messages, tools):
+        seen_system.append(messages[0].text)
+        return "收到大表格，可以采用 BIND 自动建模。"
+
+    result = asyncio.run(optimization_graph().ainvoke(
+        {"messages": [("human", "请先看看附件")], "data": {"items.csv": big_csv}},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}},
+    ))
+    assert result["failure"] is None
+    system = seen_system[0]
+    assert 'method="autoco"' in system and 'method="bind"' in system and 'method="llmopt"' in system
+    assert 'language="pyomo"' in system and 'language="ortools"' in system and 'language="cvxpy"' in system
+    assert 'language="casadi"' in system and 'language="pyscipopt"' in system
+    assert "Attachment stats:" in system and '"large_structured": true' in system
 
 
 def test_rejected_input_does_not_become_a_frozen_modeling_baseline(make_resources, saved_plans):

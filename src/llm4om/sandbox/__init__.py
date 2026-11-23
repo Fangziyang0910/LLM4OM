@@ -19,7 +19,7 @@ from typing import Any
 WORKER = Path(__file__).with_name("worker.py")
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
 # The image contains worker.py and autoco/, so a change to them or worker.Dockerfile needs a new tag (and compose.yaml's).
-WORKER_IMAGE = "llm4om-worker:16"
+WORKER_IMAGE = "llm4om-worker:17"
 START_MARGIN = 60  # seconds beyond the time limit for starting the sandbox, importing libraries and building the model
 MAX_STDOUT_BYTES = 32 * 1024 * 1024
 MAX_STDERR_BYTES = 1 * 1024 * 1024
@@ -32,8 +32,7 @@ class SolveResult:
     variables: dict[str, float] = field(default_factory=dict)
     output: str = ""
     error: str | None = None
-    # For an infeasible model: {tool, items, total, error}. feedback() leaves it out; the platform explains it,
-    # and only the project's Feedback Repair opts in. Published methods keep their original feedback.
+    # For an infeasible model: {tool, items, total, error}. feedback() leaves it out; the platform explains it.
     diagnosis: dict[str, Any] | None = None
     solver: str | None = None  # actual backend, also when the library selected it automatically
     pareto: dict[str, Any] | None = None  # multi-objective Pareto front: {objectives, solutions, total}
@@ -45,7 +44,7 @@ class SolveResult:
 
     @property
     def has_solution(self) -> bool:
-        """A solution was found; a satisfaction problem (CPMpy without objective) has no objective value."""
+        """A solution was found; a satisfaction problem (OR-Tools CP-SAT without objective) has no objective value."""
         return self.objective is not None or (self.status == "feasible" and (bool(self.variables) or bool(self.pareto)))
 
     def feedback(self, max_variables: int = 60) -> str:
@@ -135,17 +134,6 @@ class Sandbox:
             license_file = os.environ.get(variable)
             if license_file and Path(license_file).is_file():
                 command += ["-v", f"{Path(license_file).resolve()}:{destination}:ro", "-e", f"{variable}={destination}"]
-        # Mount only COPT's two license files, never the entire installation or home directory.
-        license_dir = os.environ.get("COPT_LICENSE_DIR")
-        if license_dir:
-            mounted = False
-            for filename in ("license.dat", "license.key"):
-                path = Path(license_dir, filename)
-                if path.is_file():
-                    command += ["-v", f"{path.resolve()}:/opt/copt/{filename}:ro"]
-                    mounted = True
-            if mounted:
-                command += ["-e", "COPT_LICENSE_DIR=/opt/copt"]
         return command + [self.image, "python", "-I", "/opt/llm4om/worker.py"]
 
     @staticmethod
@@ -190,7 +178,7 @@ class Sandbox:
             timeout = time_limit + START_MARGIN
             name = "llm4om-" + uuid.uuid4().hex[:12]
             env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "GRB_LICENSE_FILE",
-                                                   "MOSEKLM_LICENSE_FILE", "COPT_LICENSE_DIR")
+                                                   "MOSEKLM_LICENSE_FILE")
                    if key in os.environ} if self.kind == "local" else None
             if env is not None:
                 env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="2")

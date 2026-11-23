@@ -23,7 +23,7 @@ solve：方法没有求解最终代码时，在沙箱中求解一次
 
 条件调整的 `revise` 和结果解读的 `explain` 位于方法图外。它们复用本次运行的 LLM、预算、步骤和持久化，不改变方法内部编排或提示。
 
-优化对话注册为 `optimization` 图，与 `solution_chat` 共用 `agent.py` 的 LangChain Agent 编排。它允许无原方案启动，使用 `model_and_solve` 把完整题面和当前附件交给任意已注册方法的平台图。`modeling_capabilities` 从既有方法注册表、九个建模库及沙箱原生后端目录读取能力；固定配置优先于工具参数。未指定时为 Direct、Pyomo 和自动后端。后续通过既有查询和场景工具继续讨论。首次建模与条件调整均独立保存结果并在原生会话状态中记录引用；`pending_model` 固定重试请求，已保存方案在最终回复失败后继续可读。
+优化对话注册为 `optimization` 图，与 `solution_chat` 共用 `agent.py` 的 LangChain Agent 编排。它允许无原方案启动，使用 `model_and_solve` 把完整题面和当前附件交给任意已注册方法的平台图。`modeling_capabilities` 从既有方法注册表、五个建模库及沙箱原生后端目录读取能力；固定配置优先于工具参数。未固定配置时按两步自动选择策略：先按数学结构在 `autoco` 与五个精确建模库（`pyomo` / `ortools` / `cvxpy` / `casadi` / `pyscipopt`）中选定求解路径，精确路径再结合附件体量统计（`Attachment stats`）与复杂度在 `bind`、`direct`、`or_llm_agent`、`llmopt`、`trival` 间匹配；代码缺省兜底仍为 Direct、Pyomo 和自动后端。后续通过既有查询和场景工具继续讨论。首次建模与条件调整均独立保存结果并在原生会话状态中记录引用；`pending_model` 固定重试请求，已保存方案在最终回复失败后继续可读。
 
 LangChain 工具中间件在每轮允许一次方案变更调用（建模、场景计算或选择已存方案），避免并行调用重复求解或冲突写入当前方案。多个业务场景仍在一次 `solve_scenarios` 调用内计算；选择并修改条件时直接传 `base_plan_id`。查询和表达式计算不受这项限制，其输入错误作为原生错误工具消息返回，供模型在本轮修正。
 
@@ -62,7 +62,7 @@ src/llm4om/
 ├── host/                宿主模型适配、本地方法会话与执行记录，不连接平台 LLM 或 Web 服务
 ├── method_steps.py      平台、进度保存与宿主模式共用的方法产物记录
 ├── problem.py           题面判空、附件名校验与有限提示预览；附件原文独立传入 Context.data
-├── languages.py         九个建模库、官方接口代码参考、原生代码契约和 CodeTarget
+├── languages.py         五个建模库、官方接口代码参考、原生代码契约和 CodeTarget
 ├── model_code.py        原生变量、约束、目标和函数组装，供组件式方法复用
 ├── llm.py               服务商列表、LLMSettings、chat_model()
 ├── llm_presets.py       预设读写、迁移和环境预设；同一事务内读取并原子替换
@@ -77,7 +77,7 @@ src/llm4om/
 ├── runtime.py           运行中的状态：Limits、Recorder（计数、上限、步骤、推送）、方法使用的 Context
 ├── methods/             建模方法：Method、methods()、各方法的图
 │   ├── presets.py       全部方法的参数，每次运行都用这一套
-│   ├── direct/          Direct 与 Feedback Repair 共用生成节点和提示，分别编译为图
+│   ├── direct/          Direct 的单步生成节点与提示
 │   └── <method>/        复杂方法：__init__.py 导出入口，graph.py 编排，提示/解析/搜索各归其位
 ├── graph.py             平台图 platform_graph(method)、RunState、RunContext、Resources、进程内运行 run()
 ├── followups.py         完整题面整理、方案与无解解释、实际变量及冲突证据引用校验
@@ -100,7 +100,7 @@ storage → llm_presets · budget ───────────────�
 runtime → progress ─────────────────────────────────┘
 ```
 
-`languages`、`llm`、`sandbox` 互不依赖。问题校验与预览在 `problem` 共用，宿主执行不再为它们导入平台图。`Method.code_target` 集中处理建模库兼容与既有代码写法归一化；`languages=None` 表示全部，空集合表示均不支持。方法只依赖 `runtime`、`languages`、`sandbox` 和 `methods` 本身，不依赖平台图或服务器。`sandbox/worker.py` 在沙箱中独立运行，因此不导入任何平台模块；它按库调用原生接口与插件注册表。`languages.py` 只描述九个库和生成代码的契约，不复制后端插件名单。
+`languages`、`llm`、`sandbox` 互不依赖。问题校验与预览在 `problem` 共用，宿主执行不再为它们导入平台图。`Method.code_target` 集中处理建模库兼容与既有代码写法归一化；`languages=None` 表示全部，空集合表示均不支持。方法只依赖 `runtime`、`languages`、`sandbox` 和 `methods` 本身，不依赖平台图或服务器。`sandbox/worker.py` 在沙箱中独立运行，因此不导入任何平台模块；它按库调用原生接口与插件注册表。`languages.py` 只描述五个库和生成代码的契约，不复制后端插件名单。
 
 ## 平台图
 
@@ -122,9 +122,9 @@ Excel 导出由 `frontend/src/features/runs/workbook.ts` 完成。工作簿从�
 
 `prepare` 校验请求，失败时记录 `failure` 并结束。有效请求记录内部截止时间 `_deadline` 和不含密钥的 `spec`，包括平台版本、方法来源与参数、限制、LLM 设置、代码写法、求解器和沙箱镜像。调整题面、建模、求解和结果解读共用阶段执行逻辑，按同一截止时间运行，并保存计数和进度。建模或求解失败时保留已完成的产物，并结束本次运行。解读失败单独记录，已求出的解仍可查看。`finish` 固定从开始校验到结束的用时。服务端排队发生在校验之前。对比表读取已完成的计时，中断详情读取进度快照。
 
-Web/API 模式的方法图在 `model` 节点内运行，平台不为它保存检查点（`checkpointer = False`）：AutoFormulation 这类方法的内部状态很大，逐步保存的代价高于收益。平台图本身由服务器保存检查点。`progress.save_progress` 在方法执行期间合并公开步骤和产物，每秒至多一次写入原生 Store，取消时立即刷新；不保存内部搜索树或密钥。正常完成后删除临时进度，最终状态成为唯一结果。
+Web/API 模式的方法图在 `model` 节点内运行，平台不为它保存检查点（`checkpointer = False`）：部分多阶段方法的内部状态较大，逐步保存的代价高于收益。平台图本身由服务器保存检查点。`progress.save_progress` 在方法执行期间合并公开步骤和产物，每秒至多一次写入原生 Store，取消时立即刷新；不保存内部状态或密钥。正常完成后删除临时进度，最终状态成为唯一结果。
 
-方法返回的 `failure` 即使已有代码也会保留，例如 Feedback Repair 达到修正上限但仍有建模问题。后续节点抛出异常时，平台保留已完成的数学模型、代码和对应求解结果。
+方法返回的 `failure` 即使已有代码也会保留，例如 TriVAL 达到验证上限但仍有未通过阶段。后续节点抛出异常时，平台保留已完成的数学模型、代码和对应求解结果。
 
 进程内运行（命令行、测试、`run_problem`）通过 `config["configurable"]["llm4om_resources"]` 传入 `Resources`，替换预设模型、沙箱、上限或聊天模型工厂。服务器从环境变量 `LLM4OM_WORKSPACE`、`LLM4OM_SANDBOX` 读取默认资源。
 
@@ -146,7 +146,7 @@ LangGraph 就是平台的方法抽象。每个方法是一张编译好的 LangGr
 | 运行时 | 图以 `context_schema=Context` 编译；节点签名为 `node(state, runtime: Runtime[Context])` |
 | 步骤 | `Method.titles` 把节点名映射为步骤标题。只有列出的节点显示为步骤；每次更新渲染为 Markdown（文本原样、`code` 和 `*_code` 为代码块、其他为 JSON） |
 | 隐藏 | 以 `_` 开头的状态键、`problem`、`solve`、`messages`、`failure`，以及 `Method.hidden` 中的键，不显示 |
-| 上限 | `Method.limits` 覆盖默认上限（AutoFormulation 的搜索需要数千次调用） |
+| 上限 | `Method.limits` 覆盖默认上限 |
 | 写法 | `Method.languages` 声明建模库；原生 API 的选择在代码中表达 |
 
 ```python
@@ -168,10 +168,10 @@ class Method:
 | `Context` 成员 | 用途 |
 |---|---|
 | `data` | 数据文件名到文本内容；问题全文在状态的 `problem` 中 |
-| `target.language` | 所选九个建模库之一；OR-Tools 的规范 ID 为 `ortools` |
+| `target.language` | 所选五个建模库之一；OR-Tools 的规范 ID 为 `ortools` |
 | `target.solver` | 原生后端标识，默认 AUTO |
 | `target.prompt` | 所选写法的代码契约，直接拼接到生成代码的提示中 |
-| `target.library` | 代码所用的库名（`Pyomo`、`Gurobi`、`OR-Tools` 等九个库），用于替换原提示中写死的库名 |
+| `target.library` | 代码所用的库名（`Pyomo`、`OR-Tools`、`CVXPY`、`PySCIPOpt`、`CasADi` 五个库），用于替换原提示中写死的库名 |
 | `llm(role)` | 配置好的 LangChain 聊天模型。`role` 写入调用元数据，用于在过程列表中命名调用 |
 | `solve(code, title)` | 在沙箱中构建并求解，返回 `SolveResult`；`feedback()` 给出可交给 LLM 的文本 |
 | `run_script(script)` | 在沙箱中把脚本作为 `__main__` 运行，返回标准输出和异常栈。不计入求解次数，但共用沙箱并发额度。供原方法自己的检查脚本使用 |
@@ -179,17 +179,17 @@ class Method:
 
 方法图结束后，平台图取最终状态的代码，只从 `Context.solved` 读取这份代码实际执行过的结果。新版代码尚未执行就中断时，不关联上一版的解；旧结果仍在过程步骤中。没有失败且最终代码尚未执行时，`solve` 节点求解一次。
 
-新方法放在 `methods/` 并加入 `methods()`，或在其他包中注册 `llm4om.methods` 入口点。简单方法保留单文件；复杂方法的包入口只导出方法对象与图工厂。AutoFormulation 的候选节点、UCT 和排名归入 `search.py`；CoE 的专家提示和输出解析分别放在 `prompts.py`、`parsing.py`。图节点只组织执行，上游提示与研究流程不变。平台在准备运行时调用 `Method.parameters()` 记录参数，不根据方法 ID 猜测 `presets.py` 中的变量名；无参数的方法默认返回空字典。
+新方法放在 `methods/` 并加入 `methods()`，或在其他包中注册 `llm4om.methods` 入口点。简单方法保留单文件；复杂方法的包入口只导出方法对象与图工厂。CoE 的专家提示和输出解析分别放在 `prompts.py`、`parsing.py`。图节点只组织执行，上游提示与研究流程不变。平台在准备运行时调用 `Method.parameters()` 记录参数，不根据方法 ID 猜测 `presets.py` 中的变量名；无参数的方法默认返回空字典。
 
 ## 可插拔的代码提示
 
-生成代码的提示在方法调用处组装，13 个内置方法均可选择九个库：
+生成代码的提示在方法调用处组装，8 个内置精确建模方法均可选择五个库：
 
 - `CodeTarget.prompt` 统一提供库的原生 API 参考、返回类型和可选后端要求。整段代码生成方法把它嵌入原提示，替换写死的库名，不改建模和修正流程。
 - CoE 的代码示例直接使用同一份原生参考，不另建空模型模板；避免指定 CP-SAT 时，示例仍初始化 MPSolver。OptiMUS 的整段调试也嵌入完整契约。
-- OptiMUS、SAC-Opt、AutoFormulation 生成组件或表达式。`ModelCode` 提供同一套原生变量声明、约束、目标和 `build_model(data)` 组装；对应组件提示也由这些代码片段生成。它没有引入模型中间表示，也不在库之间翻译模型。
-- 索引变量使用标量或元组键的字典。变量类型、上下界保留数学含义；CPMpy/CP-SAT 的整数边界必须由问题推导，不补造大数，不把连续变量改成整数或把整数放松为连续变量。CasADi 整数域用 `set_domain` 和 Bonmin，最大化的符号在结果中恢复。
-- `Method.linear_only` 描述 LP/MILP 问题范围。它不限制建模库。`Method.languages` 留给外部方法声明确有必要的库限制；内置方法不使用该白名单。
+- OptiMUS 生成组件或表达式。`ModelCode` 提供同一套原生变量声明、约束、目标和 `build_model(data)` 组装；对应组件提示也由这些代码片段生成。它没有引入模型中间表示，也不在库之间翻译模型。
+- 索引变量使用标量或元组键的字典。变量类型、上下界保留数学含义；CP-SAT 的整数边界必须由问题推导，不补造大数，不把连续变量改成整数或把整数放松为连续变量。CasADi 整数域用 `set_domain` 和 Bonmin，最大化的符号在结果中恢复。
+- `Method.linear_only` 描述 LP/MILP 问题范围。它不限制建模库。`Method.languages` 留给外部方法声明确有必要的库限制；内置精确建模方法不使用该白名单。
 
 ## 代码契约
 
@@ -197,21 +197,21 @@ class Method:
 
 `build_model(data)` 只构建原生模型。需要端点、变量集合或底层符号/数值输入的接口返回规定的字典。Worker 调用所选原生后端，不跨库翻译数学模型。MPSolver 自身绑定后端，所以使用其原生 protobuf 在该接口内部转入指定引擎，并拒绝把整数模型交给 LP 引擎求连续松弛。
 
-`CodeTarget` 负责库与原生 API 代码契约；后端名单由执行环境的原生注册表提供。组件组装复用 `ModelCode`，不再按方法维护四种方言表。
+`CodeTarget` 负责库与原生 API 代码契约；后端名单由执行环境的原生注册表提供。组件组装复用 `ModelCode`，不再按方法维护多套方言表。
 
-CPMpy 和原生 CP 接口允许无目标的可满足性模型，成功时保存变量但目标值为空。CVXPY AUTO 走原生 solver_path，并把真正使用的引擎写入 SolveResult.solver；显式后端不会自动替换。Routing 启发式结果是 feasible，非凸 NLP 的局部结果使用 locally_optimal/locally_infeasible。原生接口的安装、模型兼容性和商业许可分别对待。
+OR-Tools CP-SAT 和原生 CP 接口允许无目标的可满足性模型，成功时保存变量但目标值为空。CVXPY AUTO 走原生 solver_path，并把真正使用的引擎写入 SolveResult.solver；显式后端不会自动替换。Routing 启发式结果是 feasible，非凸 NLP 的局部结果使用 locally_optimal/locally_infeasible。原生接口的安装、模型兼容性和商业许可分别对待。
 
 ## 沙箱
 
 `Sandbox.solve(code, data, language, time_limit, solver=...)` 构建并求解模型；`run_script` 运行方法的检查脚本；`catalog` 在同一执行环境读取并缓存后端能力。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。所有运行共享服务的 Sandbox，`solve` 和 `run_script` 共用并发额度，默认最多 4 个，由 `LLM4OM_SANDBOX_JOBS` 设置。排队仍计入运行总时限，单次沙箱超时从取得额度后开始。`--jobs` 单独控制并发运行数。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:16` 中运行 Worker。容器使用只读根文件系统和 `tmpfs` 工作目录，禁用网络和全部 capability，以非 root 用户运行。镜像包含 `worker.py` 与 AutoCO 运行代码。修改 Worker 代码或 `worker.Dockerfile` 时同步更新 `WORKER_IMAGE` 和 `compose.yaml` 中的标签。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE`、`MOSEKLM_LICENSE_FILE` 或 `COPT_LICENSE_DIR` 时只读挂载对应许可证文件。超时、取消或标准输出超过 32 MiB 时，沙箱先停止子进程，再等待 `docker rm --force` 清理容器。
+`Sandbox("docker")` 在镜像 `llm4om-worker:17` 中运行 Worker。容器使用只读根文件系统和 `tmpfs` 工作目录，禁用网络和全部 capability，以非 root 用户运行。镜像包含 `worker.py` 与 AutoCO 运行代码。修改 Worker 代码或 `worker.Dockerfile` 时同步更新 `WORKER_IMAGE` 和 `compose.yaml` 中的标签。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE` 或 `MOSEKLM_LICENSE_FILE` 时只读挂载对应许可证文件。超时、取消或标准输出超过 32 MiB 时，沙箱先停止子进程，再等待 `docker rm --force` 清理容器。
 
-求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CPMpy 模型用 CPMpy 的 MUS，CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。`feedback()` 不包含诊断，已移植的研究方法继续使用原反馈；本项目的 Feedback Repair 单独读取诊断，用于对照题面复核。Gurobi 预求解把模型判为“不可行或无界”时，Worker 关闭对偶约简（`DualReductions=0`）再求解一次，得到确定的状态。
+求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。`feedback()` 不包含诊断，研究方法继续使用原反馈。Gurobi 预求解把模型判为“不可行或无界”时，Worker 关闭对偶约简（`DualReductions=0`）再求解一次，得到确定的状态。
 
 `Sandbox("local")` 用本机子进程运行同一脚本，只用于开发和测试。子进程只继承路径、语言、临时目录和 Gurobi 许可证位置等必要环境变量，不继承 API 密钥。超时或取消后等待子进程退出。
 
-Worker 保留单脚本交付，九个原生库各自集中模型识别、默认后端、求解、后端探测和诊断。共同入口只执行代码、调用选中的求解动作并整理 JSON 结果；`Selection` 保存原生模型、实际后端、求解动作和可选冲突查找器。后端目录逐库查询原生插件注册表，不再另外维护模型识别与求解分发的中央表。
+Worker 保留单脚本交付，五个原生库各自集中模型识别、默认后端、求解、后端探测和诊断。共同入口只执行代码、调用选中的求解动作并整理 JSON 结果；`Selection` 保存原生模型、实际后端、求解动作和可选冲突查找器。后端目录逐库查询原生插件注册表，不再另外维护模型识别与求解分发的中央表。
 
 求解结果保留所有变量；前端按需显示更多、按完整数据筛选和导出 CSV。给 LLM 的反馈仍只展示有限的非零变量，保持原方法的反馈格式。
 
@@ -336,8 +336,6 @@ Docker 部署（`Dockerfile`、`compose.yaml`）把服务器放进 `app` 容器�
 `Limits` 给出每次运行的 LLM 调用数、求解次数、单次求解时限和总时长。超过时方法抛出 `LimitExceeded`，运行记为失败。预设的每日 token 预算用同一个异常停止运行；最后一次调用可能略超预算。
 
 
-## 新方法的数据边界
+## BIND 的数据边界
 
 `ModelingState.description` 保留不含附件预览的题面；`problem` 保留现有题面加预览语义。BIND 只读取前者与完整附件的结构，避免先拼接长数据再从字符串剥离。其他方法继续使用 `problem`。完整附件始终从 `Context.data` 传入沙箱的 `build_model(data)`。
-
-SAC-Opt 在图状态中保留原约束、组件、回译、逐项比较和已通过标志。回译不读取原约束；已通过组件不进入下一轮修正。最终语义未通过仍保留求解结果和失败标记。OptiMind 的发布提示在包内固定存储；分类只选择这些类型，执行反馈不含基准真值。

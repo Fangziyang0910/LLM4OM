@@ -43,22 +43,17 @@ def methods() -> dict[str, Method]:
     """Built-in methods plus any installed under the `llm4om.methods` entry-point group."""
     from llm4om.methods import (
         autoco,
-        autoformulation,
         bind,
         coe,
         direct,
         llmopt,
-        optimind,
         optimus,
         optitree,
         or_llm_agent,
-        orthought,
-        sac_opt,
         trival,
     )
 
-    found = [direct.DIRECT, direct.FEEDBACK_REPAIR, trival.TRIVAL, optimus.OPTIMUS, coe.COE, optitree.OPTITREE,
-             or_llm_agent.OR_LLM_AGENT, orthought.ORTHOUGHT, llmopt.LLMOPT, autoformulation.AUTOFORMULATION,
-             sac_opt.SAC_OPT, bind.BIND, optimind.OPTIMIND, autoco.AUTOCO]
+    found = [direct.DIRECT, or_llm_agent.OR_LLM_AGENT, llmopt.LLMOPT, trival.TRIVAL, bind.BIND,
+             autoco.AUTOCO, optitree.OPTITREE, coe.COE, optimus.OPTIMUS]
     found += [entry.load() for entry in entry_points(group="llm4om.methods")]
     return {method.id: method for method in found}

@@ -77,7 +77,7 @@ test("changing run settings outside Composer persists to localStorage without ov
       options: {
         methods: [
           { id: "direct", name: "Direct", description: "", source: null, languages: null },
-          { id: "optimind", name: "OptiMind", description: "", source: null, languages: null },
+          { id: "optitree", name: "OptiTree", description: "", source: null, languages: null },
         ],
         languages: [{ id: "pyomo", name: "Pyomo", solver: "highs" }],
         providers: [],
@@ -96,10 +96,10 @@ test("changing run settings outside Composer persists to localStorage without ov
   render(<QueryClientProvider client={new QueryClient()}><StandaloneLauncher /></QueryClientProvider>);
   fireEvent.click(screen.getByRole("button", { name: "查看运行设置" }));
   fireEvent.click(screen.getByRole("button", { name: /更多研究方法/ }));
-  fireEvent.click(screen.getByRole("radio", { name: "OptiMind" }));
+  fireEvent.click(screen.getByRole("radio", { name: "OptiTree" }));
   expect(JSON.parse(localStorage.getItem("llm4om-draft")!)).toMatchObject({
     description: "quick-solve text",
-    method: "optimind",
+    method: "optitree",
   });
 });
 

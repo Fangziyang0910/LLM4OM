@@ -85,12 +85,12 @@ test("a cancelled method keeps its draft after reloading without an event stream
   const errors = await open(page);
   await page.getByRole("textbox", { name: "问题描述" }).fill("E2E_PAUSE_REPAIR 工厂生产计划");
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
-  await page.locator("#method-feedback_repair").click();
+  await page.locator("#method-or_llm_agent").click();
   await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole("button", { name: "立即求解" }).click();
   await page.waitForURL(/\/run\//);
-  await page.getByRole("tab", { name: "求解代码", exact: true }).click();
-  await expect(page.getByRole("tabpanel", { name: "求解代码", exact: true })).toContainText("return m.missing", { timeout: 60_000 });
+  await page.getByRole("tab", { name: /^求解代码/ }).click();
+  await expect(page.getByRole("tabpanel", { name: /^求解代码/ })).toContainText("return m.missing", { timeout: 60_000 });
   await page.getByRole("button", { name: "停止", exact: true }).click();
   await expect(page.getByText("已停止求解", { exact: true })).toBeVisible();
   let streamRequests = 0;
@@ -169,11 +169,11 @@ test("a failed run can be retried directly while preserving its original record 
 
 test("a named DeepSeek preset keeps its native provider, custom endpoint and actual model ID", async ({ page }) => {
   const errors = await open(page);
-  await page.getByRole('button', { name: /^AI 模型设置/ }).click();
+  await page.getByRole('button', { name: 'AI 模型', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'AI 模型设置', exact: true });
   await expect(dialog.getByRole('heading', { name: 'deepseek-v4.1 flash-1017' })).toBeVisible();
   await expect(dialog.getByText('mock-model', { exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: '添加预设', exact: true }).click();
+  await dialog.getByRole('button', { name: '添加模型', exact: true }).click();
   await dialog.getByRole('combobox', { name: '服务商', exact: true }).click();
   await page.getByRole('option', { name: 'DeepSeek', exact: true }).click();
   await dialog.getByLabel('接口地址', { exact: true }).fill('http://127.0.0.1:8796/v1');
@@ -191,21 +191,18 @@ test("a named DeepSeek preset keeps its native provider, custom endpoint and act
   expect(errors).toEqual([]);
 });
 
-test("new methods expose supported solver choices and BIND runs through the workbench", async ({ page }) => {
+test("methods expose supported solver choices and BIND runs through the workbench", async ({ page }) => {
   const errors = await open(page);
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   await page.getByRole("button", { name: /^更多研究方法/ }).click();
-  await page.locator("#method-sac_opt").click();
+  await page.locator("#method-optimus").click();
   await expect(page.locator("#language-pyomo")).toBeChecked();
-  await expect(page.locator("#language-gurobipy")).toBeEnabled();
-  await page.locator("#method-optimind").click();
   await expect(page.locator("#language-pyscipopt")).toBeEnabled();
-  await expect(page.locator("#language-cpmpy")).toBeEnabled();
   await page.locator("#method-bind").click();
   await expect(page.locator("#language-casadi")).toBeEnabled();
   await expect(page.locator("#language-cvxpy")).toBeEnabled();
-  await expect(page.locator('[id^="language-"]')).toHaveCount(9);
+  await expect(page.locator('[id^="language-"]')).toHaveCount(5);
   await page.locator('label[for="language-ortools"]').click();
   await page.locator('label[for="language-pyomo"]').click();
   await page.getByRole("button", { name: "完成", exact: true }).click();
@@ -240,7 +237,7 @@ test("native APIs run without an interface setting and a library can use differe
     await page.getByRole('textbox', { name: '问题描述' }).fill('连续变量 x,y>=0，x+y<=2。最小化(x-1)^2+(y-2)^2。');
     await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
     await page.locator('label[for="language-cvxpy"]').click();
-    await expect(page.locator('[id^="language-"]')).toHaveCount(9);
+    await expect(page.locator('[id^="language-"]')).toHaveCount(5);
     await page.getByRole('combobox', { name: '求解后端', exact: true }).click();
     await page.getByRole('option', { name: solver, exact: true }).click();
     await page.getByRole("button", { name: "完成", exact: true }).click();
@@ -269,8 +266,8 @@ test("history can load records beyond the first two hundred", async ({ page }) =
     await page.getByRole("textbox", { name: "搜索记录" }).fill("pagination-first");
     const history = page.getByRole("navigation", { name: "运行记录" });
     await expect(history.getByText("pagination-first", { exact: true })).toHaveCount(0);
-    await page.getByRole("button", { name: "加载更早的运行" }).click();
-    await page.getByRole("button", { name: "加载更早的运行" }).click();
+    await page.getByRole("button", { name: "加载更早的记录" }).click();
+    await page.getByRole("button", { name: "加载更早的记录" }).click();
     await expect(history.getByText("pagination-first", { exact: true })).toBeVisible();
     // Opening an old record directly does not load its row into the first history page.
     await page.goto(`/run/${ids[1]}`);
@@ -295,18 +292,18 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   await page.getByRole("switch", { name: "对比多个方法" }).click();
-  await page.locator("#compare-feedback_repair").click();
+  await page.locator("#compare-or_llm_agent").click();
   await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole("button", { name: "开始对比（2 个方案）" }).click();
   await page.waitForURL(/\/compare\//);
-  await expect(page.getByText("2 个有解的运行目标值一致")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/交叉验证一致：2 组已求得最优解的方案目标值完全相同/)).toBeVisible({ timeout: 60_000 });
   const rows = page.getByRole("row");
   await expect(rows.filter({ hasText: "Direct" })).toContainText("13");
-  await expect(rows.filter({ hasText: "Feedback Repair" })).toContainText("13");
-  await rows.filter({ hasText: "Feedback Repair" }).click();
+  await expect(rows.filter({ hasText: "OR-LLM-Agent" })).toContainText("13");
+  await rows.filter({ hasText: "OR-LLM-Agent" }).click();
   await page.waitForURL(/\/run\//);
   await page.setViewportSize({ width: 320, height: 740 });
-  await expect(page.getByRole("button", { name: "查看对比", exact: true })).toBeInViewport();
+  await expect(page.getByRole("button", { name: "返回对比列表", exact: true })).toBeInViewport();
   expect(await page.getByRole("main").evaluate(main => main.scrollWidth <= main.clientWidth)).toBe(true);
   for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(viewport);
@@ -317,8 +314,8 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
   }
   await page.getByRole("button", { name: "更多操作", exact: true }).click();
   await page.getByRole("menuitem", { name: "复制分享链接" }).click();
-  await page.locator("[data-sonner-toast]").filter({ hasText: "已复制分享链接。" }).waitFor();
-  await page.getByRole("button", { name: "查看对比", exact: true }).click();
+  await page.locator("[data-sonner-toast]").filter({ hasText: "已复制链接。" }).waitFor();
+  await page.getByRole("button", { name: "返回对比列表", exact: true }).click();
   await page.waitForURL(/\/compare\//);
   expect(errors).toEqual([]);
 });
@@ -331,7 +328,7 @@ test("an infeasible model shows the constraints that conflict", async ({ page })
   await page.waitForURL(/\/run\//);
   await expect(page.getByText(/当前条件存在冲突|当前约束条件之间存在矛盾/)).toBeVisible({ timeout: 60_000 });
   await page.getByRole("tab", { name: "最优方案", exact: true }).click();
-  const conflict = page.getByRole("heading", { name: /不能同时满足的约束/ }).locator("..");
+  const conflict = page.getByRole("heading", { name: /冲突约束定位/ }).locator("..");
   await expect(conflict).toContainText("cutting");
   await expect(conflict).toContainText("contract");
   expect(errors).toEqual([]);

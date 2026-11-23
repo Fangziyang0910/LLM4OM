@@ -14,7 +14,7 @@
 ```bash
 git clone https://github.com/Fangziyang0910/LLM4OM.git && cd LLM4OM
 uv sync --extra web
-uv run llm4om build-worker          # 构建沙箱镜像 llm4om-worker:16
+uv run llm4om build-worker          # 构建沙箱镜像 llm4om-worker:17
 cp .env.example .env                # 填写默认预设，供真实运行使用
 ```
 
@@ -73,9 +73,9 @@ npm --prefix frontend run build     # 输出到 src/llm4om/server/web_assets/，
 | 前端单元测试 | `npm --prefix frontend test` | 步骤分组、断流恢复、公式渲染、解的表格、报告、Excel、译文完整、发起运行 |
 | 浏览器测试 | `npm --prefix frontend run e2e` | 真实页面上的运行、对比、不可行诊断、备注、报告、Excel 和英文界面 |
 
-Python 测试不调用真实 LLM，也不需要 Docker。方法使用脚本化聊天模型，求解使用本机 Worker（需要 `solve` 可选依赖）。AutoFormulation 的等价判断测试需要 `autoformulation` 可选依赖。完整测试环境使用 `uv sync --all-extras`；部分求解器有平台限制，例如 Exact 2.2.1 不提供 macOS 安装包，不能在所有系统上安装全部扩展。只修改 Web 界面或使用 Docker 沙箱时，保留上述 Web 依赖即可。
+Python 测试不调用真实 LLM，也不需要 Docker。方法使用脚本化聊天模型，求解使用本机 Worker（需要 `solve` 可选依赖）。完整测试环境使用 `uv sync --all-extras`。只修改 Web 界面或使用 Docker 沙箱时，保留上述 Web 依赖即可。
 
-`tests/test_host.py` 通过公开宿主接口逐次打开本地检查点，覆盖 13 种方法与 9 种建模库、复杂搜索、工具循环、重试和预算。CLI 的跨进程回归验证无需 Web 与平台模型配置。基础包只安装宿主 CLI 依赖；开发依赖包含 `web`，原有服务与模型测试仍可直接运行。单独使用宿主模式时可执行 `uv tool install .`。
+`tests/test_host.py` 通过公开宿主接口逐次打开本地检查点，覆盖全部精确建模方法与 5 种建模库、工具循环、重试和预算。CLI 的跨进程回归验证无需 Web 与平台模型配置。基础包只安装宿主 CLI 依赖；开发依赖包含 `web`，原有服务与模型测试仍可直接运行。单独使用宿主模式时可执行 `uv tool install .`。
 
 浏览器测试使用构建好的页面，并需要 `solve` 和 `gurobi` 可选依赖（`uv sync --all-extras` 已包含）。第一次运行前安装浏览器：
 
@@ -131,7 +131,7 @@ MY_METHOD = Method("my_method", "我的方法", "一句话说明。", my_graph, 
 1. 在 `src/llm4om/methods/` 中写成 LangGraph 图，定义 `Method`，加入 `methods()` 和 `langgraph.json`。
 2. 记录固定的上游提交，填入 `Method.source`。
 3. 忠实移植核心建模逻辑：编排、提示、解析和停止条件。只做适配、避错和必要的修正，在[建模方法](docs/methods.md)和源码的 `llm4om:` 注释中逐条记录。论文与代码冲突时，以代码为准。
-4. 原提示写死某个库时，为每种代码写法准备方言，gurobipy 方言保留原文。方法只覆盖部分写法时（例如原提示要求 MILP），设置 `Method.languages`。
+4. 原提示写死某个库时，复用 `CodeTarget.prompt` 与共享 `ModelCode` 适配所选建模库。方法只覆盖部分写法时，设置 `Method.languages`。
 5. 内置方法参数写入 `methods/presets.py`，由 `Method(parameters=lambda: asdict(presets.MY_METHOD))` 暴露快照。外部方法提供自己的参数函数，无需修改平台。
 6. 在 `tests/test_methods.py` 中用脚本化模型跑通主要路径。
 7. 在 `frontend/src/locales/en.ts` 中加方法说明和步骤标题的英文。
@@ -141,7 +141,7 @@ MY_METHOD = Method("my_method", "我的方法", "一句话说明。", my_graph, 
 
 ## 增加建模接口或求解后端
 
-先读 [ADR 0013](docs/adr/0013-modeling-libraries.md)。只配置九个建模库与可选原生后端；库内 API 由代码表达：
+先读 [ADR 0013](docs/adr/0013-modeling-libraries.md)。只配置五个建模库与可选原生后端；库内 API 由代码表达：
 
 1. 同一种原生模型的新写法通常不需要适配，只需补充数值集成测试。示例放在 `tests/modeling_examples.py`；确有必要的生成指引才进入生产代码。
 2. 原生模型类型或结果确实不同时，在 `sandbox/worker.py` 自动识别并读取。后端使用库自己的插件注册表与分发入口，不建立接口配置层或方法兼容矩阵。

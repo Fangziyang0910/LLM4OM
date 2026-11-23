@@ -113,7 +113,7 @@ test("a requirements conversation persists its editable draft and hands only the
   await expect(page.getByLabel("问题描述")).toHaveValue(edited);
   expect((await (await page.request.get(`/threads/${id}/runs`)).json()).length).toBe(2);
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
-  await page.getByRole("radio", { name: "Feedback Repair", exact: true }).check();
+  await page.getByRole("radio", { name: "OR-LLM-Agent", exact: true }).check();
   await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole("button", { name: /^开始建模/ }).click();
   await page.waitForURL(/\/run\//);

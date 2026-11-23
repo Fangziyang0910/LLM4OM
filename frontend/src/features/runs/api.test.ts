@@ -39,14 +39,14 @@ test("a revision pins the source checkpoint and inherits its recorded choices an
   threads.get.mockResolvedValue({ status: "idle", metadata: { title: "生产计划", method: "old", language: "old", group: "method-comparison" } } as never);
   threads.getState.mockResolvedValue({ checkpoint: { checkpoint_id: "saved-checkpoint" }, values: {
     description: "原问题", data: { "data.csv": "a,b\n1,2" },
-    spec: { method: "feedback_repair", language: "ortools", solver: "CP_SAT", preset: null,
+    spec: { method: "llmopt", language: "ortools", solver: "CP_SAT", preset: null,
       llm: { provider: "deepseek", model: "saved-model" } },
   } } as never);
   await startRevision("original-thread", " B 至少生产 3 件 ", []);
-  expect(threads.create).toHaveBeenCalledWith({ metadata: expect.objectContaining({ method: "feedback_repair", language: "ortools",
+  expect(threads.create).toHaveBeenCalledWith({ metadata: expect.objectContaining({ method: "llmopt", language: "ortools",
     parent: { thread_id: "original-thread", checkpoint_id: "saved-checkpoint" } }) });
   expect(threads.create.mock.calls[0][0]?.metadata).not.toHaveProperty("group");
-  expect(runs.create).toHaveBeenCalledWith("thread-1", "feedback_repair", expect.objectContaining({
+  expect(runs.create).toHaveBeenCalledWith("thread-1", "llmopt", expect.objectContaining({
     input: { description: "原问题", data: { "data.csv": "a,b\n1,2" }, change: "B 至少生产 3 件" },
     context: { language: "ortools", solver: "CP_SAT", preset: null, explain: true, locale: "zh" },
   }));

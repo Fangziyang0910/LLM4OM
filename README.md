@@ -29,7 +29,7 @@
 
 **通用智能优化求解器**（General Intelligent Optimization Solver）是一个求解各种复杂优化问题的通用求解器。面向生产排程、供应链规划、车辆路径、资源配置、网络流与非线性规划等各类复杂优化场景，你可以在工作台直接配置运行，也可以与优化助手对话、上传业务数据，由 Agent 调用完整建模方法，自动构建数学模型和求解代码，并在隔离容器中计算最优解。实际步骤、模型、代码和结果可在旁边的建模工作区随时核对，也可以继续对话调整约束条件。
 
-平台内置 **14 种智能建模策略**：13 种精确建模流程与 AutoCO 智能优化引擎，配合 **9 种建模求解库**。你不需要手写求解代码，可以直接输入复杂优化问题、运行建模求解，再查看可核对的模型和结果。
+平台内置 **9 种智能建模策略**：8 种精确建模流程与 AutoCO 智能优化引擎，配合 **5 种建模求解库**。你不需要手写求解代码，可以直接输入复杂优化问题、运行建模求解，再查看可核对的模型和结果。
 
 <p align="center">
   <img src="docs/assets/demo.gif" alt="演示：普通对话、计算与 Agent 建模工作区" width="100%">
@@ -41,15 +41,15 @@
 | 能力 | 说明 |
 |---|---|
 | 💬 **对话完成建模** | 从想法沟通到首次求解、结果讨论和条件调整，在同一个 Agent 中完成；可直接指定方法和建模库，手动配置入口仍保留 |
-| 🧠 **14 种建模策略** | Direct、Feedback Repair、TriVAL、SAC-Opt、BIND、OptiMind、AutoCO 等；每种方法都有独立 LangGraph 图 |
-| 🧩 **9 种建模求解器** | 支持各库原生 API 与多种求解后端，覆盖数学规划、约束规划、路径、网络流和非线性优化 |
+| 🧠 **9 种建模策略** | Direct、OR-LLM-Agent、LLMOPT、TriVAL、BIND、AutoCO、OptiTree、Chain-of-Experts、OptiMUS 0.3；每种方法都有独立 LangGraph 图 |
+| 🧩 **5 种建模求解器** | Pyomo、OR-Tools、CVXPY、PySCIPOpt、CasADi；覆盖线性规划、约束规划、路径、网络流、凸锥优化、连续非线性与 MINLP |
 | 📝 **需求对话** | 围绕要做的决定、目标和条件追问，梳理待确认事项与冲突；确认可编辑需求稿后，交给任意建模方法 |
 | 🔍 **全过程可见** | 每次 LLM 调用实时显示；保留中断前已完成的步骤和产物；历史可分页，运行配置固定记录 |
 | ⚖️ **多方法对比** | 同一问题一次运行最多 12 个方法或模型，并排比较目标值、用时和 token |
 | 💬 **方案解读与条件调整** | 先回答具体安排、选址、数量和费用或收益，再展示实际决策明细；一句话修改条件，重新建模并与原方案对比，保留原运行 |
 | 🔄 **方案对话与业务场景** | 围绕实际结果多轮追问；改条件时显示实际建模进度和结果卡片，多个场景共用固定基准并排比较 |
 | 📊 **建模前检查数据** | 直接编辑 CSV、TSV、JSON 和文本；Excel 转换后可检查表格、补充列名及单位，保存后再建模 |
-| 🧯 **无解原因与调整** | 根据实际冲突约束解释业务矛盾；选择并编辑候选调整，再重新建模验证（Gurobi IIS / CPMpy MUS） |
+| 🧯 **无解原因与调整** | 根据实际冲突约束解释业务矛盾；选择并编辑候选调整，再重新建模验证（Gurobi IIS） |
 | 🔒 **隔离沙箱** | 生成代码在无网络、只读、非 root 的容器中运行，用完即删 |
 | 👥 **团队部署** | 一条 `docker compose up` 启动；预设模型的密钥不出服务器；可选 HTTPS 和用量上限 |
 | 🌗 **好用的工作台** | 导出含业务名称、单位和完整数值的 Excel 方案；备注与标签、Markdown 报告、Excel 导入、2033 道公开题、中英文界面、深色模式 |
@@ -100,7 +100,7 @@ Agent 也可以回答普通问题、帮助写作、解释代码、整理资料�
 
 ### 在 Codex / Claude Code 中使用当前模型
 
-Skill 将对话、建模、代码生成和结果解读交给当前宿主模型。CLI 复用现有 13 种方法图及求解环境，不调用平台 LLM，不需要启动 Web 服务。
+Skill 将对话、建模、代码生成和结果解读交给当前宿主模型。CLI 复用现有 9 种方法图及求解环境，不调用平台 LLM，不需要启动 Web 服务。
 
 无需克隆仓库。准备好 [uv](https://docs.astral.sh/uv/getting-started/installation/)、Git、已启动的 Docker，以及 Node.js 22.20 或更新版本。以下命令固定安装 v0.43.0，uv 使用 Python 3.12：
 
@@ -134,7 +134,7 @@ docker compose up -d --build
 
 ```bash
 uv sync --extra web
-uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:16
+uv run llm4om build-worker      # 构建求解沙箱镜像 llm4om-worker:17
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
@@ -158,13 +158,13 @@ uv run llm4om serve --workspace runs/web --port 8767
 也可以在命令行或 Python 中运行：
 
 ```bash
-uv run llm4om run --problem "……" --method orthought --language pyomo
+uv run llm4om run --problem "……" --method or_llm_agent --language pyomo
 ```
 
 ```python
 from llm4om import run_problem
 
-state = run_problem("……", method="optimus", language="gurobipy")
+state = run_problem("……", method="optimus", language="pyomo")
 print(state["failure"] or state["solve"]["objective"])
 ```
 
@@ -175,37 +175,28 @@ print(state["failure"] or state["solve"]["objective"])
 | 方法 | 流程 | 来源 |
 |---|---|---|
 | Direct | 一次调用，同时给出数学模型和代码 | 基线 |
-| Feedback Repair | 生成、求解、复核题意一致性，按格式、执行或建模问题修正 | 自有方法 |
-| AutoCO | 在隔离沙箱中执行启发式与进化搜索，支持多目标 Pareto 候选 | [实现与算法池](src/llm4om/methods/autoco/graph.py) |
-| TriVAL | 语义、数学模型、代码三阶段验证；每阶段构建、验证、修订 | [代码](https://github.com/SCUT-EIPI/TriVAL/tree/380a529) |
-| OptiMUS 0.3 | 提取参数、目标和约束，逐条建模和写代码，组装后调试 | [v0.3 论文](https://arxiv.org/abs/2407.19633) · [代码](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) |
-| Chain-of-Experts | 协调者逐个选择专家，汇总器写代码；可选反向反思 | [ICLR 2024](https://openreview.net/forum?id=HobyL1B9CZ) · [代码](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) |
-| OptiTree | 在问题类型树中匹配建模思路，再生成模型和代码 | [NeurIPS 2025](https://arxiv.org/abs/2510.22192) · [代码](https://github.com/MIRALab-USTC/OptiTree/tree/2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9) |
 | OR-LLM-Agent | 先数学建模，再生成代码，按执行错误调试，最后检查不可行 | [arXiv](https://arxiv.org/abs/2503.10009) · [代码](https://github.com/bwz96sco/or_llm_agent/tree/5dccdaab89ab91c3cb28066fe849423dc124d287) |
-| ORThought | 按专家建模思路写出求解思路、数学模型和代码；出错时带上模型和错误调试 | [arXiv](https://arxiv.org/abs/2508.14410) · [代码](https://github.com/BeinuoYang/ORThought/tree/5293e24861a65d1e4a2f61f4fad0a81de901ee38) |
 | LLMOPT | 先写五要素模型，再写代码；LLM 判断对错，回到错的一步重写 | [ICLR 2025](https://arxiv.org/abs/2410.13213) · [代码](https://github.com/antgroup/LLMOPT/tree/1492dd33e39ea13f1afe32a0adc13d4217334195) |
-| AutoFormulation | 逐层采样并剪枝建树，再用 MCTS 和两两比较排名（调用量很大） | [ICML 2025](https://arxiv.org/abs/2411.01679) · [代码](https://github.com/jumpynitro/AutoFormulator/tree/52148018d04de23dc2d36d4281eb6244c2a42ffc) |
-| SAC-Opt | 语义锚点提取、约束代码回译、比较与选择性修正（独立实现） | [论文](https://proceedings.mlr.press/v306/zhang26cb.html) · [适配说明](src/llm4om/methods/sac_opt/README.md) |
+| TriVAL | 语义、数学模型、代码三阶段验证；每阶段构建、验证、修订 | [代码](https://github.com/SCUT-EIPI/TriVAL/tree/380a529) |
 | BIND | 提示只读附件结构，代码读取完整数据，执行失败时修正 | [论文](https://arxiv.org/abs/2605.21751) · [适配说明](src/llm4om/methods/bind/README.md) |
-| OptiMind | 公开类型提示、建模、求解反馈与多轮检查 | [论文](https://arxiv.org/abs/2509.22979) · [公开范围](src/llm4om/methods/optimind/README.md) |
+| AutoCO | 在隔离沙箱中执行启发式与进化搜索，支持多目标 Pareto 候选 | [实现与算法池](src/llm4om/methods/autoco/graph.py) |
+| OptiTree | 在问题类型树中匹配建模思路，再生成模型和代码 | [NeurIPS 2025](https://arxiv.org/abs/2510.22192) · [代码](https://github.com/MIRALab-USTC/OptiTree/tree/2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9) |
+| Chain-of-Experts | 协调者逐个选择专家，汇总器写代码；可选反向反思 | [ICLR 2024](https://openreview.net/forum?id=HobyL1B9CZ) · [代码](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) |
+| OptiMUS 0.3 | 提取参数、目标和约束，逐条建模和写代码，组装后调试 | [v0.3 论文](https://arxiv.org/abs/2407.19633) · [代码](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) |
 
-各方法固定参考提交并记录差异。SAC-Opt 根据公开算法独立实现；BIND 不使用基准参考答案；OptiMind 接入公开推理流程，提示库目前只有旅行商问题。13 种精确建模流程均可选择九个建模库；部分方法保留 LP/MILP 问题范围，库与后端须支持该数学问题。AutoCO 使用内置算法池，启发式结果不保证全局最优。详见[建模方法](docs/methods.md)。
+各方法固定参考提交并记录差异；BIND 不使用基准参考答案。8 种精确建模流程均可选择五个建模库；部分方法保留 LP/MILP 问题范围，库与后端须支持该数学问题。AutoCO 使用内置算法池，启发式结果不保证全局最优。详见[建模方法](docs/methods.md)。
 
 ## 建模求解器与后端
 
-一个建模库只算一种建模求解器。只需选择这九个库之一，后端默认自动选择，也可指定。库内 API 由代码表达，平台自动识别原生模型，不需要再选建模接口。后端列表从实际沙箱的原生插件注册表读取，并显示安装状态；增加后端不会增加一级分类。
+一个建模库只算一种建模求解器。只需选择这五个库之一，后端默认自动选择，也可指定。库内 API 由代码表达，平台自动识别原生模型，不需要再选建模接口。后端列表从实际沙箱的原生插件注册表读取，并显示安装状态；增加后端不会增加一级分类。
 
 | 建模求解器 | 原生 API | 后端接入方式 |
 |---|---|---|
 | Pyomo | Algebraic（ConcreteModel、AbstractModel）、Kernel | 原生 SolverFactory 适配器，包括 HiGHS、CBC、GLPK、Gurobi、SCIP、CPLEX 等 |
-| gurobipy | 标量/表达式、矩阵 | Gurobi 原生引擎 |
 | OR-Tools | MPSolver、MathOpt、CP-SAT、ModelBuilder、Routing、Constraint Solver、最大流、最小费用流、指派、背包 | 各接口原生支持的引擎和算法 |
-| CPMpy | Model、SolverInterface | SolverLookup 注册的 CP、SAT、SMT、MIP、MaxSAT、知识编译等后端及子求解器 |
-| PuLP | 行式、列式建模 | 原生 getSolver 注册的 Python、命令行及动态库适配器 |
 | CVXPY | DCP、DGP、DQCP | 原生求解器注册表；AUTO 使用 solver_path 选择可执行后端，记录实际引擎 |
 | PySCIPOpt | 标量/表达式、矩阵 | SCIP 原生引擎 |
 | CasADi | Opti NLP、Opti Conic、nlpsol、qpsol、conic | Nlpsol/Conic 原生插件，包括 Ipopt、SQP、QP 和其他可加载插件 |
-| coptpy | 标量/表达式、矩阵 | COPT 原生引擎 |
 
 生成代码定义 `build_model(data)`。常规接口返回原生模型；Routing、网络流端点、Knapsack 和 CasADi 底层接口按约定返回模型或问题参数字典。Worker 调用对应库的原生求解接口，统一读取结果。明确选择的后端不可用时会报错，不会换引擎或放松变量域。
 
@@ -254,8 +245,8 @@ print(state["failure"] or state["solve"]["objective"])
 
 ## 许可
 
-代码采用 [Apache-2.0](LICENSE)。随包分发的第三方提示、代码和数据保留原许可，见 [NOTICE](NOTICE)。LLMOPT 和 ORThought 的上游仓库在固定提交上没有声明许可证，其提示收录在本仓库中仅用于研究。
+代码采用 [Apache-2.0](LICENSE)。随包分发的第三方提示、代码和数据保留原许可，见 [NOTICE](NOTICE)。LLMOPT 的上游仓库在固定提交上没有声明许可证，其提示收录在本仓库中仅用于研究。
 
 ## 致谢
 
-感谢各研究方法的作者公开代码和提示，感谢 [LangChain](https://github.com/langchain-ai/langchain)、[LangGraph](https://github.com/langchain-ai/langgraph)、[HiGHS](https://highs.dev)、[OR-Tools](https://developers.google.com/optimization)、[CPMpy](https://github.com/CPMpy/cpmpy)、[CVXPY](https://www.cvxpy.org) 等开源项目。
+感谢各研究方法的作者公开代码和提示，感谢 [LangChain](https://github.com/langchain-ai/langchain)、[LangGraph](https://github.com/langchain-ai/langgraph)、[Pyomo](https://www.pyomo.org)、[HiGHS](https://highs.dev)、[OR-Tools](https://developers.google.com/optimization)、[CVXPY](https://www.cvxpy.org)、[PySCIPOpt](https://github.com/scipopt/PySCIPOpt)、[CasADi](https://web.casadi.org) 等开源项目。

@@ -19,7 +19,7 @@ General Intelligent Optimization Solver is a general solver for complex optimiza
 Start the selected graph:
 
 ```bash
-llm4om host start --file problem.md --method feedback_repair --language pyomo --session runs/host/plan-a
+llm4om host start --file problem.md --method llmopt --language pyomo --session runs/host/plan-a
 ```
 
 Add `--data path/to/file.csv` for each attachment. Use `--solver NAME` only when a specific native backend is needed. Docker is the default; `--sandbox local` executes in the CLI's Python environment and is intended for development in a trusted environment.

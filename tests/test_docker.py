@@ -7,16 +7,16 @@ import pytest
 
 from llm4om.sandbox import Sandbox
 from tests.conftest import PRODUCTION_CODE
-from tests.test_new_solvers import COPT_CODE, IPOPT_CODE, SCIP_CODE
-from tests.test_sandbox import CPMPY_CODE, CVXPY_CODE, GUROBIPY_CODE, ORTOOLS_CODE, PULP_CODE
+from tests.test_new_solvers import IPOPT_CODE, SCIP_CODE
+from tests.test_sandbox import CP_SAT_CODE, CVXPY_CODE, ORTOOLS_CODE
 
 pytestmark = [pytest.mark.docker, pytest.mark.skipif(os.environ.get("LLM4OM_TEST_DOCKER") != "1",
                                                   reason="set LLM4OM_TEST_DOCKER=1 with the worker image built")]
 
 
 @pytest.mark.parametrize("language,code,objective", [("pyomo", PRODUCTION_CODE, 13), ("pywraplp", ORTOOLS_CODE, 13),
-    ("cpmpy", CPMPY_CODE, 13), ("pulp", PULP_CODE, 13), ("gurobipy", GUROBIPY_CODE, 13), ("cvxpy", CVXPY_CODE, 0.5),
-    ("pyscipopt", SCIP_CODE, 13), ("coptpy", COPT_CODE, 13), ("casadi", IPOPT_CODE, 0),
+    ("ortools", CP_SAT_CODE, 13), ("cvxpy", CVXPY_CODE, 0.5),
+    ("pyscipopt", SCIP_CODE, 13), ("casadi", IPOPT_CODE, 0),
     ("cvxpy_osqp", CVXPY_CODE, 0.5), ("cvxpy_scs", CVXPY_CODE, 0.5)])
 def test_worker_solves_each_language(language: str, code: str, objective: float) -> None:
     result = asyncio.run(Sandbox().solve(code, {}, language, 10))

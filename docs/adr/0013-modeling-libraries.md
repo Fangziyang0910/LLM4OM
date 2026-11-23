@@ -1,13 +1,14 @@
-# 九个建模库与原生求解后端
+# 五个正交建模库与原生求解后端
 
 ## 背景
 
-本决定取代 [0008](0008-code-language.md) 中把建模库与后端绑定为一个代码写法的规则。“建模求解器”指代码建模库。CVXPY 的后端和 OR-Tools 的不同 API 都不增加建模库的数量。
+本决定在 [0008](0008-code-language.md) 基础上，将建模库收口为五个按数学家族正交划分的开源代表库。CVXPY 的后端和 OR-Tools 的不同 API 都不增加建模库的数量。
 
 ## 决定
 
-- 建模库固定为 Pyomo、gurobipy、OR-Tools、CPMpy、PuLP、CVXPY、PySCIPOpt、CasADi、coptpy 九类。
-- 用户选择建模库，可选原生后端；默认 AUTO。库内的标量、矩阵、行式、列式和专用 API 都是代码写法，不另设接口选项，不建立方法与接口的兼容矩阵。
+- 建模库固定为 Pyomo（LP/MILP）、OR-Tools（CP-SAT/Routing/图论）、CVXPY（凸优化与锥规划）、PySCIPOpt（MINLP）与 CasADi（光滑连续 NLP）五类。
+- 移除 PuLP、coptpy、gurobipy 与 CPMpy 四个冗余或高重叠的一级建模库选项（Pyomo/CVXPY 持证时仍可挂载 Gurobi 后端；Worker 内保留 `gurobipy` 仅用于线性模型的 Gurobi IIS 冲突诊断）。
+- 用户选择建模库，可选原生后端；默认 AUTO。库内的标量、矩阵和专用 API 都是代码写法，不另设接口选项，不建立方法与接口的兼容矩阵。
 - 生成代码定义 `build_model(data)`。平台识别其返回的原生模型，调用原生求解并读取结果。Routing、网络流和 CasADi 底层 API 等还需要原生参数时，返回模型/问题与参数字典。
 - 不在库之间转换模型，不自建通用数学表达语言。原生插件注册表决定后端清单；记录实际使用的后端。
 - 明确选择的后端不可用或不支持当前模型时，保留错误反馈。AUTO 使用模型自身的后端或库的默认后端；CVXPY 使用其原生 solver_path。

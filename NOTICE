@@ -5,17 +5,9 @@ This repository contains the implementation and documentation of General
 Intelligent Optimization Solver, a general solver for complex optimization
 problems.
 
-OptiMind's public hints and adapted inference prompts are from Microsoft
-OptiGuide/optimind, commit 419cf7b9eee20b6af036abf15152fa775b20c951.
-Copyright (c) 2025 Microsoft, MIT license. The original hint CSV, license,
-source paths and hashes are retained in methods/optimind/source/.
 BIND's workflow is adapted from SprocketLab/Text2Opt-Bench, commit
 1dac06be656c41d827ef20987cf8af0b48d382a2, Copyright (c) 2026 SprocketLab,
 MIT license, retained in methods/bind/LICENSE.txt.
-The SAC-Opt integration is an independent implementation with newly written
-prompts based on the published algorithm and reference commit
-ec0ddb544ae6b70714181740ebbba16027df50e4 of Forrest-Stone/SAC-Opt.
-No source code or prompt text from that unlicensed repository is bundled.
 
 OptiTree's fixed public modeling-thought library and tree mapping are bundled
 under their original MIT license in src/llm4om/methods/optitree/source/.
@@ -32,15 +24,9 @@ license; the original license is retained in optimus/LICENSE.txt.
 
 The Chain-of-Experts (https://github.com/xzymustbexzy/Chain-of-Experts,
 commit afb89bf) and OR-LLM-Agent (https://github.com/bwz96sco/or_llm_agent,
-commit 5dccdaa) adapters reproduce upstream prompt text. The AutoFormulation
-adapter includes upstream source files from
-https://github.com/jumpynitro/AutoFormulator (commit 5214801) in
-src/llm4om/methods/autoformulation/upstream/, and ports further upstream
-functions in autoformulation/search.py and autoformulation/codegen.py. The
-LLMOPT prompt text in src/llm4om/methods/llmopt/prompts.py is copied verbatim
-from https://github.com/antgroup/LLMOPT (commit 1492dd3), and the ORThought
-prompt text in src/llm4om/methods/orthought/prompts.py from
-https://github.com/BeinuoYang/ORThought (commit 5293e24). These repositories state no
+commit 5dccdaa) adapters reproduce upstream prompt text. The LLMOPT prompt text
+in src/llm4om/methods/llmopt/prompts.py is copied verbatim from
+https://github.com/antgroup/LLMOPT (commit 1492dd3). These repositories state no
 license at the fixed commits; their text is included for research
 reproduction only and must not be redistributed without the authors'
 permission.

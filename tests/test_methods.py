@@ -9,7 +9,6 @@ from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
 
 from llm4om.graph import run
 from llm4om.languages import LANGUAGES, CodeTarget
@@ -17,7 +16,6 @@ from llm4om.llm import LLMSettings
 from llm4om.model_code import ModelCode
 from llm4om.runtime import Limits
 from tests.conftest import (
-    ACCEPT_REVIEW,
     FORMULATION,
     PRODUCTION_CODE,
     PRODUCTION_PROBLEM,
@@ -61,166 +59,43 @@ def test_direct_reports_incomplete_outputs_without_solving(run_method: Any, repl
     assert record["usage"]["llm_calls"] == 1 and record["usage"]["solves"] == 0
 
 
-def test_feedback_repair_uses_the_solver_error(run_method: Any) -> None:
-    seen: list[str] = []
-
-    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
-        seen.append(messages[-1].text)
-        if role == "review":
-            return ACCEPT_REVIEW
-        return TWO_PART_REPLY.replace(PRODUCTION_CODE, BROKEN_CODE) if role == "generate" else TWO_PART_REPLY
-
-    record = run_method("feedback_repair", script)
-    assert_solved(record)
-    assert "missing" in seen[1]  # the repair prompt carries the execution error
-    assert [event["status"] for event in record["steps"] if event["type"] == "solve"] == ["error", "optimal"]
-
-
-def test_feedback_repair_recovers_a_malformed_reply(run_method: Any) -> None:
-    seen = []
-
-    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
-        seen.append((role, messages[-1].text))
-        return {"generate": "The reply was cut off before the code block.", "repair": TWO_PART_REPLY,
-                "review": ACCEPT_REVIEW}[role]
-
-    record = run_method("feedback_repair", script)
-    assert_solved(record)
-    assert "Output format error" in seen[1][1] and "cut off" in seen[1][1]
-    assert [role for role, _ in seen] == ["generate", "repair", "review"]
-    assert record["usage"]["solves"] == 1
-
-
-def test_feedback_repair_checks_semantics_even_after_an_optimal_solve(run_method: Any) -> None:
-    wrong = TWO_PART_REPLY.replace('3 * m.x["A"]', '6 * m.x["A"]')
-    reviews = iter(['{"action":"repair","reason":"The code uses profit 6 for A, but the problem states 3."}', ACCEPT_REVIEW])
-    repair_prompts = []
-
-    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
-        if role == "generate":
-            return wrong
-        if role == "review":
-            return next(reviews)
-        repair_prompts.append(messages[-1].text)
-        return TWO_PART_REPLY
-
-    record = run_method("feedback_repair", script)
-    assert_solved(record)
-    assert [step["objective"] for step in record["steps"] if step["type"] == "solve"] == [24, 13]
-    assert "profit 6" in repair_prompts[0] and "## Model review" in repair_prompts[0]
-
-
-def test_feedback_repair_stops_when_output_format_cannot_be_repaired(run_method: Any, preset: Any) -> None:
-    preset("FEEDBACK_REPAIR", max_repairs=1)
-    record = run_method("feedback_repair", by_role({"generate": "No code.", "repair": "Still no code."}))
-    assert "Output format could not be repaired" in record["failure"]
-    assert not record["code"] and not record["solve"]
-    assert record["usage"]["llm_calls"] == 2 and record["usage"]["solves"] == 0
-
-
-def test_feedback_repair_accepts_a_faithful_infeasible_model(run_method: Any) -> None:
-    infeasible = TWO_PART_REPLY.replace("<= 8)", "<= -8)", 1)
-    record = run_method("feedback_repair", by_role({"generate": infeasible, "review": ACCEPT_REVIEW}),
-                        problem="Use the same production model, but cutting capacity is -8, so it is infeasible.")
-    assert not record["failure"] and record["solve"]["status"] == "infeasible"
-    assert record["usage"]["llm_calls"] == 2 and record["usage"]["solves"] == 1
-    assert record["code"] in infeasible
-
-
-@pytest.mark.parametrize("status,objective", [("time_limit", None), ("time_limit", 12), ("unbounded", None), ("feasible", None)])
-def test_feedback_repair_does_not_rewrite_for_solver_status_alone(make_resources: Any, status: str, objective: Any) -> None:
-    from llm4om.sandbox import Sandbox, SolveResult
-
-    class StatusSandbox(Sandbox):
-        async def solve(self, *args: Any, **kwargs: Any) -> SolveResult:
-            return SolveResult(status, objective, {"x": 1} if status == "feasible" or objective else {})
-
-    resources = make_resources(by_role({"generate": TWO_PART_REPLY, "review": ACCEPT_REVIEW}))
-    resources.sandbox = StatusSandbox("local")
-    record = asyncio.run(run("test", method="feedback_repair", resources=resources))
-    assert not record["failure"] and record["solve"]["status"] == status
-    assert record["usage"]["llm_calls"] == 2 and record["usage"]["solves"] == 1
-
-
-def test_feedback_repair_keeps_unresolved_review_as_a_failure(run_method: Any, preset: Any) -> None:
-    preset("FEEDBACK_REPAIR", max_repairs=1)
-    wrong = TWO_PART_REPLY.replace('3 * m.x["A"]', '6 * m.x["A"]')
-    record = run_method("feedback_repair", by_role({"generate": wrong, "repair": wrong,
-                         "review": '{"action":"repair","reason":"Wrong profit coefficient for A."}'}))
-    assert "Wrong profit" in record["failure"]
-    assert record["solve"]["objective"] == 24 and record["code"] in wrong
-    assert record["usage"]["llm_calls"] == 4 and record["usage"]["solves"] == 2
-
-
-def test_feedback_repair_keeps_the_last_evaluated_attempt_when_repair_is_malformed(run_method: Any, preset: Any) -> None:
-    preset("FEEDBACK_REPAIR", max_repairs=1)
-    record = run_method("feedback_repair", by_role({"generate": TWO_PART_REPLY.replace(PRODUCTION_CODE, BROKEN_CODE),
-                                                   "repair": "An incomplete response without code."}))
-    assert "Output format could not be repaired" in record["failure"]
-    assert record["code"].strip() == BROKEN_CODE.strip() and record["solve"]["status"] == "error"
-    assert record["usage"]["llm_calls"] == 2 and record["usage"]["solves"] == 1
-
-
-@pytest.mark.parametrize("reply", ["Not JSON", '{"action":"maybe","reason":"Unknown"}', '{"action":"accept"}'])
-def test_feedback_repair_does_not_accept_an_invalid_review(run_method: Any, reply: str) -> None:
-    record = run_method("feedback_repair", by_role({"generate": TWO_PART_REPLY, "review": reply}))
-    assert "Could not read the model review" in record["failure"]
-    assert record["solve"]["objective"] == 13 and record["usage"]["solves"] == 1
-
-
-def test_feedback_repair_can_read_a_fenced_json_review(run_method: Any) -> None:
-    record = run_method("feedback_repair", by_role({"generate": TWO_PART_REPLY,
-                                                   "review": f"```json\n{ACCEPT_REVIEW}\n```"}))
-    assert_solved(record)
-
-
-def test_feedback_repair_keeps_solved_artifacts_when_review_call_fails(run_method: Any) -> None:
-    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
-        if role == "review":
-            raise RuntimeError("Review provider unavailable")
-        return TWO_PART_REPLY
-
-    record = run_method("feedback_repair", script)
-    assert "Review provider unavailable" in record["failure"]
-    assert record["solve"]["objective"] == 13 and record["code"].strip() == PRODUCTION_CODE.strip()
-    assert record["usage"]["solves"] == 1
-
-
-CPMPY_REPLY = """### Formulation
+CP_SAT_REPLY = """### Formulation
 $$\\max 3x_A + 2x_B$$
 
 ```python
-import cpmpy as cp
+from ortools.sat.python import cp_model
 
 def build_model(data):
-    x = cp.intvar(0, 10, shape=2, name="x")
-    m = cp.Model(2 * x[0] + x[1] <= 8, x[0] + 2 * x[1] <= 8)
+    m = cp_model.CpModel()
+    x = [m.new_int_var(0, 10, f"x[{i}]") for i in range(2)]
+    m.add(2 * x[0] + x[1] <= 8)
+    m.add(x[0] + 2 * x[1] <= 8)
     m.maximize(3 * x[0] + 2 * x[1])
     return m
 ```"""
 
 
-def test_direct_writes_cpmpy_for_cp_sat(run_method: Any) -> None:
+def test_direct_writes_ortools_cp_sat(run_method: Any) -> None:
     prompts: list[str] = []
 
     def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
         prompts.append(messages[0].text)
-        return CPMPY_REPLY
+        return CP_SAT_REPLY
 
-    record = run_method("direct", script, language="cpmpy")
+    record = run_method("direct", script, language="ortools")
     assert not record.get("failure"), record.get("failure")
     assert record["solve"]["objective"] == 13
-    assert "CPMpy reference" in prompts[0] and "CP-SAT" in prompts[0]
+    assert "OR-Tools" in prompts[0] and "CpModel" in prompts[0]
 
 
 def test_builtin_methods_do_not_restrict_modeling_libraries() -> None:
     from llm4om.methods import methods
 
-    assert len(methods()) == 14
+    assert len(methods()) == 9
     assert all(method.languages is None for method in methods().values() if not method.builtin_solver)
     assert methods()["autoco"].builtin_solver and methods()["autoco"].languages == frozenset()
     assert {method.id for method in methods().values() if method.linear_only} == {
-        "optimus", "coe", "optitree", "or_llm_agent", "autoformulation", "sac_opt",
+        "optimus", "coe", "optitree", "or_llm_agent",
     }
 
 
@@ -286,27 +161,7 @@ def test_llmopt_stops_after_twelve_re_solves(run_method: Any) -> None:
     assert "self-correction" in record["failure"] and "12 re-solves" in record["failure"]
 
 
-ORTHOUGHT_REPLY = ("## 1. Solution Path\n<solution_path>\nMaximize profit.\n</solution_path>\n\n## 2. Summary\n"
-                   f"```model\n{FORMULATION}\n```\n\n## 3. Code\n```python\n{BROKEN_CODE}```")
-
-
-def test_orthought_debugs_code_that_does_not_run(run_method: Any) -> None:
-    seen: list[str] = []
-
-    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
-        seen.append(messages[-1].text)
-        return ORTHOUGHT_REPLY if role == "model" else f"Fixed the attribute.\n<code>\n{PRODUCTION_CODE}</code>"
-
-    record = run_method("orthought", script)
-    assert not record.get("failure") and record["formulation"] == FORMULATION
-    assert any("Maximize profit." in step["content"] for step in record["steps"] if step["type"] == "artifact")
-    assert "Pyomo" in seen[0] and "Gurobipy" not in seen[0] and "build_model" in seen[0]
-    assert "missing" in seen[1] and FORMULATION in seen[1]  # the debug prompt carries the model and the error
-    assert [e["status"] for e in record["steps"] if e["type"] == "solve"] == ["error", "optimal"]
-
-
-@pytest.mark.parametrize("method,model_role", [("llmopt", "five_element"), ("orthought", "model")])
-def test_mathematical_presentation_keeps_method_protocol_and_solving(run_method: Any, method: str, model_role: str) -> None:
+def test_mathematical_presentation_keeps_method_protocol_and_solving(run_method: Any) -> None:
     formulation = ("## Sets:\n$P=\\{A,B\\}$\n\n## Parameters:\n$p_A=3, p_B=2$\n\n"
                    "## Variables:\n$x_A,x_B\\in\\mathbb{Z}_{\\ge0}$\n\n## Objective:\n$$\\max 3x_A+2x_B$$\n\n"
                    "## Constraints:\n$2x_A+x_B\\le8$, $x_A+2x_B\\le8$.")
@@ -314,21 +169,18 @@ def test_mathematical_presentation_keeps_method_protocol_and_solving(run_method:
 
     def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
         calls.append(role)
-        if role == model_role:
+        if role == "five_element":
             prompt = messages[-1].text
             assert "Markdown lists" in prompt and "$...$" in prompt and "$$...$$" in prompt
             assert "continuous, integer or binary" in prompt
-            if method == "llmopt":
-                assert all(section in prompt for section in ("## Sets", "## Parameters", "## Variables", "## Objective", "## Constraints"))
-                return f"```text\n{formulation}\n```"
-            assert "<solution_path>" in prompt and "```model" in prompt and "```python" in prompt
-            return f"<solution_path>\nMaximize profit.\n</solution_path>\n```model\n{formulation}\n```\n{CODE_BLOCK}"
+            assert all(section in prompt for section in ("## Sets", "## Parameters", "## Variables", "## Objective", "## Constraints"))
+            return f"```text\n{formulation}\n```"
         return CODE_BLOCK if role == "code" else JUDGED.format(five="True", code="True")
 
-    record = run_method(method, script)
+    record = run_method("llmopt", script)
     assert_solved(record)
     assert record["formulation"] == formulation
-    assert calls == (["five_element", "code", "self_correction"] if method == "llmopt" else ["model"])
+    assert calls == ["five_element", "code", "self_correction"]
     assert record["usage"]["solves"] == 1
 
 
@@ -340,10 +192,8 @@ def test_domain_contract_preserves_required_domains_and_constraint_senses(langua
     assert "incompatibility" in prompt
 
 
-@pytest.mark.parametrize("method", ["llmopt", "orthought"])
 @pytest.mark.parametrize("locale,output_language", [("zh", "Simplified Chinese"), ("en", "English")])
-def test_method_output_locale_survives_code_repair(make_resources: Any, method: str,
-                                                  locale: str, output_language: str) -> None:
+def test_method_output_locale_survives_code_repair(make_resources: Any, locale: str, output_language: str) -> None:
     formulation = ("## Sets:\n$P=\\{A,B\\}$\n\n## Parameters:\n$p_A=3, p_B=2$\n\n"
                    "## Variables:\n$x_A,x_B\\in\\mathbb{Z}_{\\ge0}$\n\n## Objective:\n$$\\max 3x_A+2x_B$$\n\n"
                    "## Constraints:\n$2x_A+x_B\\le8$, $x_A+2x_B\\le8$.")
@@ -357,44 +207,28 @@ def test_method_output_locale_survives_code_repair(make_resources: Any, method: 
         if role == "five_element":
             assert "## Sets" in prompt and "## Constraints" in prompt
             return f"```text\n{formulation}\n```"
-        if role == "model":
-            assert "<solution_path>" in prompt and "```model" in prompt
-            return f"<solution_path>\nMaximize profit.\n</solution_path>\n```model\n{formulation}\n```\n```python\n{BROKEN_CODE}```"
         if role == "code":
             return f"```python\n{BROKEN_CODE if calls.count('code') == 1 else PRODUCTION_CODE}```"
-        if role == "debug":
-            assert "Traceback" in prompt or "missing" in prompt
-            return f"<code>\n{PRODUCTION_CODE}</code>"
         assert role == "self_correction"
         return JUDGED.format(five="True", code="False" if calls.count(role) == 1 else "True")
 
     record = asyncio.run(run(PRODUCTION_PROBLEM,
-                             method=method, resources=make_resources(script), locale=locale))
+                             method="llmopt", resources=make_resources(script), locale=locale))
     assert_solved(record)
     assert record["spec"]["locale"] == locale
     assert record["formulation"] == formulation
     assert record["usage"]["solves"] == 2
-    assert calls == (["five_element", "code", "self_correction", "code", "self_correction"]
-                     if method == "llmopt" else ["model", "debug"])
+    assert calls == ["five_element", "code", "self_correction", "code", "self_correction"]
 
 
-GUROBIPY_PARAMS = {"Profit": {"shape": "[2]", "definition": "profit per unit", "type": "float", "value": [3, 2]},
-                   "Capacity": {"shape": "[]", "definition": "units of each resource", "type": "float", "value": 8}}
+OPTIMUS_PARAMS = {"Profit": {"shape": "[2]", "definition": "profit per unit", "type": "float", "value": [3, 2]},
+                  "Capacity": {"shape": "[]", "definition": "units of each resource", "type": "float", "value": 8}}
 OPTIMUS_CODE = {
     language: {"constraints": [code.constraint("2 * x[0] + x[1] <= Capacity"),
                                 code.constraint("x[0] + 2 * x[1] <= Capacity")],
                "objective": code.objective("quicksum(Profit[i] * x[i] for i in range(2))", "max")}
     for language in [*LANGUAGES, "pywraplp"] for code in [ModelCode(CodeTarget(language))]
 }
-GUROBIPY_CODE = """from gurobipy import Model, GRB, quicksum
-
-def build_model(data):
-    model = Model("fixed")
-    x = model.addVars(2, vtype=GRB.INTEGER, name="x")
-    model.addConstr(2 * x[0] + x[1] <= 8)
-    model.addConstr(x[0] + 2 * x[1] <= 8)
-    model.setObjective(3 * x[0] + 2 * x[1], GRB.MAXIMIZE)
-    return model"""
 
 
 def optimus_script(language: str, constraint_codes: list[str] | None = None, prompts: dict[str, str] | None = None) -> Any:
@@ -409,23 +243,22 @@ def optimus_script(language: str, constraint_codes: list[str] | None = None, pro
         if role == "constraint_code":
             return f"CODE\n=====\n{codes.pop(0)}\n====="
         return {
-            "parameters": json.dumps(GUROBIPY_PARAMS),
+            "parameters": json.dumps(OPTIMUS_PARAMS),
             "objective": "=====\nOBJECTIVE: Maximize the total profit\n=====",
             "constraints": '["cutting capacity", "machining capacity"]',
             "constraints_redundancy": 'No redundancy.\n["cutting capacity", "machining capacity"]',
             "constraint_check": "It is a constraint. 5 OUT OF 5",
             "objective_model": "=====\n$\\max 3 x[0] + 2 x[1]$\n=====",
             "objective_code": f"CODE\n=====\n{OPTIMUS_CODE[language]['objective']}\n=====",
-            "debug": "=====\n" + GUROBIPY_CODE + "\n=====",
+            "debug": "=====\n" + PRODUCTION_CODE + "\n=====",
         }[role]
     return script
 
 
 @pytest.mark.parametrize("language,library,add", [("pyomo", "Pyomo", "constraints.add"),
-    ("gurobipy", "gurobipy", "addConstr"), ("pywraplp", "OR-Tools", "model.Add("), ("pulp", "PuLP", "addConstraint")])
+    ("pywraplp", "OR-Tools", "model.Add("), ("cvxpy", "CVXPY", "_constraints.append"),
+    ("pyscipopt", "PySCIPOpt", "model.addCons(")])
 def test_optimus_assembles_clause_code_for_each_language(run_method: Any, language: str, library: str, add: str) -> None:
-    if language == "gurobipy":
-        pytest.importorskip("gurobipy")
     prompts: dict[str, str] = {}
     record = run_method("optimus", optimus_script(language, prompts=prompts), language=language)
     assert not record.get("failure"), (language, record.get("failure"))
@@ -437,12 +270,56 @@ def test_optimus_assembles_clause_code_for_each_language(run_method: Any, langua
 
 
 def test_optimus_debugs_non_optimal_results(run_method: Any) -> None:
-    pytest.importorskip("gurobipy")
-    record = run_method("optimus", optimus_script("gurobipy", ["model.addConstr(2 * x[0] + x[1] <= -Capacity)",
-                                                       "model.addConstr(x[0] + 2 * x[1] <= Capacity)"]), language="gurobipy")
+    record = run_method("optimus", optimus_script("pyomo", [
+        "model.constraints.add(2 * x[0] + x[1] <= -Capacity)",
+        "model.constraints.add(x[0] + 2 * x[1] <= Capacity)",
+    ]), language="pyomo")
     statuses = [e["status"] for e in record["steps"] if e["type"] == "solve"]
     assert statuses[0].startswith("infeasible") and statuses[1:] == ["optimal"]
-    assert record["code"].strip() == GUROBIPY_CODE.strip()
+    assert record["code"].strip() == PRODUCTION_CODE.strip()
+
+
+def test_optimus_recovers_missing_fences_optional_fields_and_missing_var_type(run_method: Any) -> None:
+    from llm4om.methods.optimus.parsing import (
+        extract_formulation_from_end,
+        extract_objective,
+        extract_objective_formulation,
+    )
+
+    assert extract_objective("Reasoning...\nOBJECTIVE: Maximize profit") == "Maximize profit"
+    assert extract_objective_formulation("Therefore the objective is $$\\max 3x_0 + 2x_1$$") == "$$\\max 3x_0 + 2x_1$$"
+    # Unescaped LaTeX backslashes, alternate casing, and omitted optional keys.
+    form, new_vars, aux = extract_formulation_from_end(
+        '{"formulation": "$2 x_0 + x_1 \\leq 8$", "new_variables": {"x": {"type": "integer"}}}'
+    )
+    assert form == "$2 x_0 + x_1 \\leq 8$" and new_vars == {"x": {"type": "integer"}} and aux == []
+
+    # Missing required variable type triggers a format retry instead of relaxing to continuous.
+    base = optimus_script("pyomo")
+    model_calls = 0
+
+    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
+        nonlocal model_calls
+        if role == "objective":
+            return "OBJECTIVE: Maximize total profit"  # omitted ===== fences
+        if role == "objective_model":
+            return "Objective: $\\max 3x[0] + 2x[1]$"  # omitted ===== fences
+        if role == "constraint_model":
+            model_calls += 1
+            if model_calls == 1:
+                return '{"FORMULATION": "$2x[0]+x[1] \\leq 8$", "NEW VARIABLES": {"x": {"shape": "[2]"}}}'
+            if model_calls == 2:
+                assert "missing required field 'type'" in messages[-1].text
+                return '{"FORMULATION": "$2x[0]+x[1] \\leq 8$", "NEW VARIABLES": {"x": {"shape": "[2]", "type": "integer"}}}'
+            # Re-declaring an existing variable and omitting AUXILIARY CONSTRAINTS must not crash.
+            return '{"FORMULATION": "$x[0]+2x[1] \\leq 8$", "NEW VARIABLES": {"x": {"shape": "[2]", "type": "integer"}}}'
+        return base(role, messages, tools)
+
+    record = run_method("optimus", script, language="pyomo")
+    assert not record.get("failure"), record.get("failure")
+    assert record["solve"]["objective"] == 13
+    assert all(value == round(value) for value in record["solve"]["variables"].values())
+    assert model_calls == 3
 
 
 def test_optimus_reads_long_fences() -> None:
@@ -538,82 +415,6 @@ def test_optitree_follows_the_tree_and_inspects_failing_code(run_method: Any) ->
     assert "pyomo code" in prompts["reasoner"][0] and "build_model" in prompts["reasoner"][0]
     assert "missing" in prompts["inspector"][0]
     assert [e["status"] for e in record["steps"] if e["type"] == "solve"] == ["error", "optimal"]
-
-
-AF_PARAMETERS = "formalization_dict['parameters'] = {\n    # profit per unit\n    'profit': [3, 2],\n    'cut': [2, 1],\n" \
-                "    'mach': [1, 2],\n    # capacity of each resource\n    'cap': 8\n}"
-AF_OBJECTIVES = ["formalization_dict['objective'] = {'max': 'sum(profit[i] * x[i] for i in range(2))'}",
-                 "formalization_dict['objective'] = {'max': 'profit[0] * x[0] + profit[1] * x[1]'}"]
-AF_INEQUALITIES = ["formalization_dict['inequality_constraints'] = {'cutting': 'sum(cut[i] * x[i] for i in range(2)) <= cap', "
-                   "'machining': 'sum(mach[i] * x[i] for i in range(2)) <= cap'}",
-                   "formalization_dict['inequality_constraints'] = {'cutting': 'sum(cut[i] * x[i] for i in range(2)) <= cap'}"]
-
-
-def autoformulation_script(vtype: str, calls: list[tuple[str, str]]) -> Any:
-    """Two samples per step: equal parameters, equal variables, equivalent objectives, two different constraint sets."""
-    counters: dict[str, int] = {}
-
-    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
-        prompt = messages[-1].text
-        calls.append((role, prompt))
-        count = counters[role] = counters.get(role, 0) + 1
-        if role == "generate.parameters":
-            return AF_PARAMETERS
-        if role == "generate.decision_variables":
-            return ("formalization_dict['decision_variables'] = {'x': {'description': 'units of each product', "
-                    f"'type': '{vtype}', 'upper_bound': 'cap', 'iteration_space': '[i for i in range(2)]'}}}}")
-        if role == "generate.objective":
-            return AF_OBJECTIVES[count % 2]
-        if role == "generate.equality_constraints":
-            return "formalization_dict['equality_constraints'] = {None: None}"
-        if role == "generate.inequality_constraints":
-            return AF_INEQUALITIES[count % 2]
-        if role == "group_decision_variables":
-            return "groups = {1: ['decision_variables_0', 'decision_variables_1']}"
-        if role == "rank.inequality_constraints":  # the candidate with both constraints first
-            first = "inequality_constraints_0" if "machining" in prompt.split("inequality_constraints_1")[0] else "inequality_constraints_1"
-            other = "inequality_constraints_1" if first.endswith("0") else "inequality_constraints_0"
-            return f"rank = {{1: '{first}', 2: '{other}'}}"
-        if role == "compare":  # prefer the formulation with both constraints
-            solution_a = prompt.split("solution_A =")[1].split("solution_B =")[0]
-            return "best_solution = {1: 'solution_A'}" if "machining" in solution_a else "best_solution = {1: 'solution_B'}"
-        raise AssertionError(f"unexpected role {role}")
-    return script
-
-
-def test_autoformulation_searches_the_tree_and_ranks_leaves(run_method: Any, preset: Any) -> None:
-    calls: list[tuple[str, str]] = []
-    preset("AUTOFORMULATION", n_used_gpt=2, n_top=2, n_reward=1, total_rollouts=2)
-    record = run_method("autoformulation", autoformulation_script("pyo.NonNegativeIntegers", calls))
-    assert not record.get("failure"), record.get("failure")
-    assert record["solve"]["objective"] == 13  # the preferred leaf, not the looser one (objective 16)
-    assert "def build_model(data):" in record["code"] and "_new_var(" in record["code"]
-    roles = [role for role, _ in calls]
-    assert roles.count("group_decision_variables") == 8 and roles.count("rank.objective") == 0  # equivalent objectives
-    assert roles.count("compare") == 2 * 5  # the second leaf against the first, in both orders
-    generate_dv = next(prompt for role, prompt in calls if role == "generate.decision_variables")
-    assert "CONTINUOUS, INTEGER or BINARY" in generate_dv and "GRB.INTEGER" not in generate_dv
-    assert "using Pyomo" in next(prompt for role, prompt in calls if role == "compare")
-    objectives = sorted(e["objective"] for e in record["steps"] if e["type"] == "solve")
-    assert objectives == [13, 16]
-    steps = [e["title"] for e in record["steps"] if e["type"] == "artifact"]
-    assert steps.count("扩展建模树") == 5 and steps.count("MCTS rollout") == 2 and "选中的数学模型" in steps
-
-
-@pytest.mark.parametrize("language,vtype,expected", [("gurobipy", "GRB.INTEGER", "_new_var('GRB.INTEGER'"),
-    ("pywraplp", "integer", "_new_var('integer'"), ("pulp", "Integer", "_new_var('Integer'")])
-def test_autoformulation_writes_each_languages_code(run_method: Any, preset: Any, language: str, vtype: str,
-                                                   expected: str) -> None:
-    if language == "gurobipy":
-        pytest.importorskip("gurobipy")
-    calls: list[tuple[str, str]] = []
-    preset("AUTOFORMULATION", n_used_gpt=1, n_top=1, n_reward=1, total_rollouts=1)
-    record = run_method("autoformulation", autoformulation_script(vtype, calls), language=language)
-    assert not record.get("failure"), (language, record.get("failure"))
-    assert expected in record["code"]
-    assert record["solve"]["objective"] in (13, 16)
-    prompt = next(prompt for role, prompt in calls if role == "generate.decision_variables")
-    assert "CONTINUOUS, INTEGER or BINARY" in prompt and "lower_bound" in prompt
 
 
 def trival_script(code_reviews: list[dict[str, Any]], formulation_reviews: list[dict[str, Any]],
@@ -835,54 +636,3 @@ def test_trival_timeout_stops_the_agent_loop(make_resources: Any) -> None:
         assert len(calls) == count, "the agent kept starting calls after its run ended"
 
     asyncio.run(check())
-
-
-def test_autoformulation_failure_cancels_other_samples(make_resources: Any, preset: Any) -> None:
-    preset("AUTOFORMULATION", n_used_gpt=3)
-    started, finished, cancelled = [], [], []
-
-    class SamplingChat(ScriptedChat):
-        async def _agenerate(self, *args: Any, **kwargs: Any) -> ChatResult:
-            index = len(started)
-            started.append(index)
-            if index == 0:
-                await asyncio.sleep(0.01)
-                raise RuntimeError("provider failed")
-            try:
-                await asyncio.sleep(0.1)
-            except asyncio.CancelledError:
-                cancelled.append(index)
-                raise
-            finished.append(index)
-            return ChatResult(generations=[ChatGeneration(message=AIMessage("unused"))])
-
-    async def check() -> None:
-        resources = make_resources(lambda *_: "unused")
-        resources.model_factory = lambda settings, **kwargs: SamplingChat(script=None, **kwargs)
-        result = await run("test", method="autoformulation", resources=resources)
-        await asyncio.sleep(0.15)
-        assert "provider failed" in result["failure"]
-        assert started == [0, 1, 2] and sorted(cancelled) == [1, 2] and not finished
-
-    asyncio.run(check())
-
-
-@pytest.mark.parametrize('value', ['a}b', 'a{b', 'escaped\\"quote', {'nested': '{value}'}])
-def test_autoformulation_dictionary_values_keep_braces_and_quotes(value: Any) -> None:
-    from llm4om.methods.autoformulation.upstream.utils_prompt import extract_dict_from_string
-
-    expected = {'label': value}
-    _, parsed = extract_dict_from_string(f"formalization_dict['parameters'] = {expected!r}", 'parameters')
-    assert parsed == expected
-
-
-@pytest.mark.parametrize("value", ['a"b', "a'b", "line 1\nline 2\\tail"])
-def test_autoformulation_generated_literals_preserve_parameter_text(value: str) -> None:
-    import ast
-
-    from llm4om.methods.autoformulation.search import parse_dict_with_comments
-    from llm4om.methods.autoformulation.upstream.utils_general import get_param_code_str
-
-    assignment = ast.parse(get_param_code_str({"parameters": {"label": value}})).body[0]
-    assert isinstance(assignment, ast.Assign) and ast.literal_eval(assignment.value) == value
-    assert ast.literal_eval(parse_dict_with_comments({"label": value}, [""])) == {"label": value}

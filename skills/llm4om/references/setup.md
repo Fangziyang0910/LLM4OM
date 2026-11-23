@@ -24,7 +24,7 @@ Keep the skill and CLI on the same published revision. Host sessions also record
 
 The base CLI needs no LLM provider package, API key, model preset, Node build, Web server, or listening port. `llm4om[llm]` enables the separate API-model `run` command. `llm4om[web]` enables the existing Web workbench. Neither extra is needed for this skill.
 
-If Docker is unavailable, a developer can install the `solve` and `autoformulation` extras into the CLI's Python environment and use `--sandbox local`. This runs generated code without container isolation. All libraries used by the code and all selected solver plugins must exist in that environment. Commercial solver licensing follows the same rules as the existing worker.
+If Docker is unavailable, a developer can install the `solve` extra into the CLI's Python environment and use `--sandbox local`. This runs generated code without container isolation. All libraries used by the code and all selected solver plugins must exist in that environment. Commercial solver licensing follows the same rules as the existing worker.
 
 Install the skill from a local checkout:
 

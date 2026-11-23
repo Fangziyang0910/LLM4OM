@@ -1,4 +1,4 @@
-"""Real native SCIP, Ipopt, COPT and CVXPY solver paths."""
+"""Real native SCIP, Ipopt and CVXPY solver paths."""
 
 import asyncio
 import os
@@ -19,16 +19,6 @@ def build_model(data):
     m.addCons(x["A"]+2*x["B"]<=8)
     return m
 '''
-COPT_CODE = '''import coptpy as cp
-from coptpy import COPT
-def build_model(data):
-    m = cp.Envr().createModel()
-    x = m.addVars(["A", "B"], vtype=COPT.INTEGER, lb=0, nameprefix="x")
-    m.setObjective(3*x["A"]+2*x["B"], COPT.MAXIMIZE)
-    m.addConstr(2*x["A"]+x["B"]<=8)
-    m.addConstr(x["A"]+2*x["B"]<=8)
-    return m
-'''
 IPOPT_CODE = '''import casadi as ca
 def build_model(data):
     m = ca.Opti()
@@ -40,7 +30,7 @@ def build_model(data):
 '''
 
 
-@pytest.mark.parametrize("language,code", [("pyscipopt", SCIP_CODE), ("coptpy", COPT_CODE)])
+@pytest.mark.parametrize("language,code", [("pyscipopt", SCIP_CODE)])
 def test_native_milp_solvers(language: str, code: str) -> None:
     result = solve(code, language)
     assert (result.status, result.objective) == ("optimal", 13), result.error
@@ -49,7 +39,6 @@ def test_native_milp_solvers(language: str, code: str) -> None:
 
 @pytest.mark.parametrize("language,code,extra", [
     ("pyscipopt", SCIP_CODE, "m.addCons(x['A'] >= 10)"),
-    ("coptpy", COPT_CODE, "m.addConstr(x['A'] >= 10)"),
     ("casadi", IPOPT_CODE, "m.subject_to(x[0] >= 10)"),
 ])
 def test_infeasibility_is_distinguished_from_execution_errors(language: str, code: str, extra: str) -> None:
@@ -120,15 +109,14 @@ def test_licensed_mosek_solves_convex_problem() -> None:
 
 def test_license_mounts_are_readonly_and_only_include_license_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     gurobi, mosek = tmp_path / "gurobi.lic", tmp_path / "mosek.lic"
-    for path in (gurobi, mosek, tmp_path / "license.dat", tmp_path / "license.key", tmp_path / "private.txt"):
+    for path in (gurobi, mosek, tmp_path / "private.txt"):
         path.write_text("synthetic")
     monkeypatch.setenv("GRB_LICENSE_FILE", str(gurobi))
     monkeypatch.setenv("MOSEKLM_LICENSE_FILE", str(mosek))
-    monkeypatch.setenv("COPT_LICENSE_DIR", str(tmp_path))
     command = Sandbox()._command("test")
     mounts = [command[i + 1] for i, arg in enumerate(command) if arg == "-v"]
-    assert len(mounts) == 4 and all(mount.endswith(":ro") for mount in mounts)
+    assert len(mounts) == 2 and all(mount.endswith(":ro") for mount in mounts)
     assert not any("private" in mount or mount.startswith(str(tmp_path) + ":") for mount in mounts)
-    result = asyncio.run(Sandbox("local").run_script("import os\nassert os.environ['COPT_LICENSE_DIR']\n"
+    result = asyncio.run(Sandbox("local").run_script("import os\nassert os.environ['GRB_LICENSE_FILE']\n"
                                                    "assert os.environ['MOSEKLM_LICENSE_FILE']\n", 5))
     assert result.executed

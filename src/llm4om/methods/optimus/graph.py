@@ -19,11 +19,12 @@ Adaptations:
 
 import json
 import re
+from collections.abc import Callable
 from dataclasses import asdict
 from pprint import pformat
-from typing import Any
+from typing import Any, TypeVar
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langgraph.errors import GraphBubbleUp
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
@@ -33,14 +34,16 @@ from llm4om.methods.common import output_language
 from llm4om.methods.optimus import prompts as P
 from llm4om.methods.optimus.parsing import (
     extract_code_from_end,
-    extract_equal_sign_closed,
     extract_formulation_from_end,
     extract_json_from_end,
     extract_objective,
+    extract_objective_formulation,
     shape_string_to_list,
 )
 from llm4om.model_code import ModelCode
 from llm4om.runtime import Context, LimitExceeded, ModelingState
+
+T = TypeVar("T")
 
 PARAMS_PROMPT = P.PARAMETERS__PROMPT_PARAMS.replace(
     '        "type": "TYPE"\n    }}\n}}',
@@ -53,6 +56,11 @@ PARAMS_PROMPT = P.PARAMETERS__PROMPT_PARAMS.replace(
     '"definition": "The value of each item in the inventory",\n        "type": "float"',
     '"definition": "The value of each item in the inventory",\n        "type": "float",\n        "value": [2.5, 4.0, 1.5]')
 
+_VALID_VAR_TYPES = {
+    "b", "bool", "boolean", "binary",
+    "i", "int", "integer", "integers", "nonnegativeintegers",
+    "c", "float", "real", "reals", "continuous", "nonnegativereals",
+}
 
 
 class State(ModelingState, total=False):
@@ -71,8 +79,46 @@ async def _ask(context: Context, role: str, prompt: str) -> str:
         [HumanMessage(prompt + output_language(context))])).text
 
 
+async def _ask_parsed(context: Context, role: str, prompt: str, parse: Callable[[str], T],
+                      *, attempts: int = 3) -> T:
+    """llm4om: retry format/field parse failures with the specific error message without altering normal 1-call flow."""
+    messages: list[BaseMessage] = [HumanMessage(prompt + output_language(context))]
+    for attempt in range(attempts):
+        reply = (await context.llm(role).bind(temperature=presets.OPTIMUS.temperature).ainvoke(messages)).text
+        try:
+            return parse(reply)
+        except (GraphBubbleUp, LimitExceeded):
+            raise
+        except Exception as error:
+            if attempt + 1 >= attempts:
+                raise
+            messages += [
+                AIMessage(reply or "[empty response]"),
+                HumanMessage(
+                    f"The previous response could not be parsed ({error}). "
+                    "Return the answer in the exact required format with all required fields and fences."
+                ),
+            ]
+    raise AssertionError("Unreachable")
+
+
 def _dump(value: Any) -> str:
     return json.dumps(value, indent=4)
+
+
+def _normalize_variable_meta(symbol: str, meta: Any) -> dict[str, Any]:
+    if not isinstance(meta, dict):
+        raise ValueError(f"Variable {symbol!r} metadata must be a JSON object.")
+    normalized = dict(meta)
+    raw_type = normalized.get("type")
+    if raw_type is None or not str(raw_type).strip():
+        raise ValueError(f"Variable {symbol!r} is missing required field 'type' (continuous, integer, or binary).")
+    clean_type = str(raw_type).strip().lower().rsplit(".", 1)[-1]
+    if clean_type not in _VALID_VAR_TYPES:
+        raise ValueError(f"Variable {symbol!r} has unsupported type {raw_type!r}; use continuous, integer, or binary.")
+    normalized["type"] = str(raw_type).strip()
+    normalized["shape"] = shape_string_to_list(normalized.get("shape"))
+    return normalized
 
 
 async def parameters(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
@@ -100,16 +146,22 @@ async def parameters(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
 
 
 async def objective(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
-    res = await _ask(runtime.context, "objective", P.OBJECTIVE__PROMPT_OBJECTIVE.format(
-        description=state["problem"], params=_dump(state["parameters"]), rag=""))
-    return {"objective": {"description": extract_objective(res), "formulation": None, "code": None}}
+    description = await _ask_parsed(
+        runtime.context, "objective",
+        P.OBJECTIVE__PROMPT_OBJECTIVE.format(description=state["problem"], params=_dump(state["parameters"]), rag=""),
+        extract_objective,
+    )
+    return {"objective": {"description": description, "formulation": None, "code": None}}
 
 
 async def constraints(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """constraint.get_constraints up to the redundancy check (k = 5 tries)."""
     context, desc, params = runtime.context, state["problem"], state["parameters"]
-    res = await _ask(context, "constraints", P.CONSTRAINT__PROMPT_CONSTRAINTS.format(description=desc, params=_dump(params), rag=""))
-    found = extract_json_from_end(res, list)
+    found = await _ask_parsed(
+        context, "constraints",
+        P.CONSTRAINT__PROMPT_CONSTRAINTS.format(description=desc, params=_dump(params), rag=""),
+        lambda text: extract_json_from_end(text, list),
+    )
     k = 5
     while True:
         try:
@@ -186,20 +238,30 @@ async def formulate_constraints(state: State, runtime: Runtime[Context]) -> dict
     formulated = []
     for c in state["constraints"]:
         c = dict(c)
-        res = await _ask(runtime.context, "constraint_model", P.CONSTRAINT_MODEL__PROMPT_CONSTRAINTS_MODEL.format(
-            description=state["problem"], params=_dump(params), vars=_dump(variables), constraint=c, rag="")
-            + "\n" + ModelCode(runtime.context.target).variable_rules)
-        formulation, new_variables, aux_constraints = extract_formulation_from_end(res)
-        tmp_vars = variables.copy()
-        for v in new_variables:
-            if v in tmp_vars:
-                raise Exception(f"Variable {v} already exists")
-            new_variables[v]["shape"] = shape_string_to_list(new_variables[v]["shape"])
-            tmp_vars[v] = new_variables[v]
+
+        def parse_step(res: str) -> tuple[str, dict[str, Any], list[str]]:
+            formulation, new_variables, aux_constraints = extract_formulation_from_end(res)
+            normalized = {}
+            for v, meta in new_variables.items():
+                if v in variables:
+                    # llm4om: ignore harmless re-declarations of already defined variables instead of failing the run.
+                    continue
+                normalized[v] = _normalize_variable_meta(v, meta)
+            return formulation, normalized, aux_constraints
+
+        prompt = (
+            P.CONSTRAINT_MODEL__PROMPT_CONSTRAINTS_MODEL.format(
+                description=state["problem"], params=_dump(params), vars=_dump(variables), constraint=c, rag="",
+            )
+            + "\n" + ModelCode(runtime.context.target).variable_rules
+        )
+        formulation, new_variables, aux_constraints = await _ask_parsed(
+            runtime.context, "constraint_model", prompt, parse_step,
+        )
+        variables = {**variables, **new_variables}
         c["formulation"] = formulation
         formulated.append(c)
         formulated += [{"description": "auxiliary constraint", "formulation": aux} for aux in aux_constraints]
-        variables = tmp_vars
     # Upstream also asks qs[0] about every formulation here, but its handler is a dummy that discards the answer.
     return {"constraints": formulated, "variables": variables}
 
@@ -207,9 +269,15 @@ async def formulate_constraints(state: State, runtime: Runtime[Context]) -> dict
 async def formulate_objective(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """objective_model.get_objective_formulation; the formulation so far becomes the method's formulation."""
     description = state["objective"]["description"]
-    res = await _ask(runtime.context, "objective_model", P.OBJECTIVE_MODEL__PROMPT_OBJECTIVE_MODEL.format(
-        description=state["problem"], params=_dump(state["parameters"]), vars=_dump(state["variables"]), objective=description))
-    objective = {"description": description, "formulation": extract_equal_sign_closed(res), "code": None}
+    formulation = await _ask_parsed(
+        runtime.context, "objective_model",
+        P.OBJECTIVE_MODEL__PROMPT_OBJECTIVE_MODEL.format(
+            description=state["problem"], params=_dump(state["parameters"]), vars=_dump(state["variables"]),
+            objective=description,
+        ),
+        extract_objective_formulation,
+    )
+    objective = {"description": description, "formulation": formulation, "code": None}
     return {"objective": objective, "formulation": _formulation({**state, "objective": objective})}
 
 
@@ -229,16 +297,25 @@ async def write_code(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     )
     coded = []
     for c in state["constraints"]:
-        res = await _ask(context, "constraint_code", constraint_template.format(
-            solver=context.target.library, description=desc, params=_dump(params), vars=_dump(variables), constraint=_dump(c),
-            directions=code.prompt))
-        coded.append({**c, "code": extract_code_from_end(res)})
+        snippet = await _ask_parsed(
+            context, "constraint_code",
+            constraint_template.format(
+                solver=context.target.library, description=desc, params=_dump(params), vars=_dump(variables),
+                constraint=_dump(c), directions=code.prompt,
+            ),
+            extract_code_from_end,
+        )
+        coded.append({**c, "code": snippet})
     objective = state["objective"]
-    res = await _ask(context, "objective_code", objective_template.format(
-        solver=context.target.library, description=desc, params=_dump(params), vars=_dump(variables), objective=_dump(objective),
-        directions=code.prompt))
-    return {"constraints": coded, "objective": {**objective, "code": extract_code_from_end(res)}}
-
+    obj_snippet = await _ask_parsed(
+        context, "objective_code",
+        objective_template.format(
+            solver=context.target.library, description=desc, params=_dump(params), vars=_dump(variables),
+            objective=_dump(objective), directions=code.prompt,
+        ),
+        extract_code_from_end,
+    )
+    return {"constraints": coded, "objective": {**objective, "code": obj_snippet}}
 
 
 def assemble(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
@@ -267,10 +344,14 @@ async def debug(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     """execute_code.execute_and_debug: ask for a fix after every failed run, including the last one."""
     result = state["solve"]
     assert result is not None
-    response = await _ask(runtime.context, "debug", P.EXECUTE_CODE__DEBUG_TEMPLATE.format(
-        description=state["problem"], code=state["code"], error=result.error or result.feedback())
-        + "\n\n" + runtime.context.target.prompt)  # llm4om: repairs keep the selected library and build-only contract.
-    return {"fixed_code": extract_code_from_end(response) + "\n"}
+    fixed = await _ask_parsed(
+        runtime.context, "debug",
+        P.EXECUTE_CODE__DEBUG_TEMPLATE.format(
+            description=state["problem"], code=state["code"], error=result.error or result.feedback())
+        + "\n\n" + runtime.context.target.prompt,  # llm4om: repairs keep the selected library and build-only contract.
+        extract_code_from_end,
+    )
+    return {"fixed_code": fixed + "\n"}
 
 
 def after_execute(state: State) -> str:

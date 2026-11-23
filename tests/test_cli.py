@@ -36,7 +36,7 @@ def test_cli_solves_code_without_model_settings(tmp_path: Path, capsys: Any) -> 
 
 
 def test_host_cli_can_exit_and_resume_in_new_processes(tmp_path: Path) -> None:
-    from tests.conftest import ACCEPT_REVIEW, PRODUCTION_PROBLEM, TWO_PART_REPLY
+    from tests.conftest import PRODUCTION_PROBLEM, TWO_PART_REPLY
 
     environment = {key: value for key, value in os.environ.items() if not key.startswith("LLM4OM_LLM_")}
     environment["LANGSMITH_TRACING"] = "false"
@@ -49,21 +49,21 @@ def test_host_cli_can_exit_and_resume_in_new_processes(tmp_path: Path) -> None:
 
     directory = tmp_path / "session"
     result = invoke("host", "start", "--session", str(directory), "--problem", PRODUCTION_PROBLEM,
-                    "--method", "feedback_repair", "--sandbox", "local")
+                    "--method", "bind", "--sandbox", "local")
     assert invoke("host", "status", "--session", str(directory))["pending"] == result["pending"]
-    for reply in (TWO_PART_REPLY, ACCEPT_REVIEW):
+    for reply in (TWO_PART_REPLY.replace("return m", "return m.missing"), TWO_PART_REPLY):
         responses = tmp_path / "responses.json"
         responses.write_text(json.dumps({result["pending"][0]["id"]: {"content": reply}}))
         result = invoke("host", "resume", "--session", str(directory), "--responses", str(responses))
     assert result["status"] == "completed" and result["solve"]["objective"] == 13
-    assert result["usage"]["llm_calls"] == 2 and result["usage"]["solves"] == 1
+    assert result["usage"]["llm_calls"] == 2 and result["usage"]["solves"] == 2
 
 
 def test_cli_discovers_methods_and_prints_native_contracts(capsys: Any) -> None:
     assert main(["methods"]) == 0
     catalog = json.loads(capsys.readouterr().out)
-    assert len(catalog) == 14
-    assert all(len(item["languages"]) == 9 for item in catalog if item["id"] != "autoco")
+    assert len(catalog) == 9
+    assert all(len(item["languages"]) == 5 for item in catalog if item["id"] != "autoco")
     assert next(item for item in catalog if item["id"] == "autoco")["languages"] == []
     assert main(["target", "--language", "ortools", "--solver", "CP_SAT"]) == 0
     prompt = capsys.readouterr().out

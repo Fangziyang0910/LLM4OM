@@ -11,24 +11,18 @@ if TYPE_CHECKING:
 
 IMPORTS = {
     'pyomo': 'import pyomo.environ as pyo\nfrom pyomo.environ import quicksum',
-    'gurobipy': 'import gurobipy as gp\nfrom gurobipy import Model, GRB, quicksum',
     'ortools': 'from ortools.linear_solver import pywraplp\nquicksum = sum',
     'mathopt': 'from ortools.math_opt.python import mathopt\nquicksum = sum',
     'cp_sat': 'from ortools.sat.python import cp_model\nquicksum = sum',
-    'cpmpy': 'import cpmpy as cp\nquicksum = sum',
-    'pulp': 'import pulp\nquicksum = pulp.lpSum',
     'cvxpy': 'import cvxpy as cp\nquicksum = sum',
     'pyscipopt': 'from pyscipopt import Model, quicksum',
     'casadi': 'import casadi as ca\nquicksum = sum',
-    'coptpy': 'import coptpy as cp\nfrom coptpy import COPT\nquicksum = cp.quicksum',
 }
 
 VARIABLES = {
     'pyomo': '''variable = pyo.Var(domain={'CONTINUOUS': pyo.Reals, 'INTEGER': pyo.Integers, 'BINARY': pyo.Binary}[kind], bounds=(lb, ub))
 {model}.add_component('var_' + name, variable)
 return variable''',
-    'gurobipy': '''return {model}.addVar(lb=-GRB.INFINITY if lb is None else lb, ub=GRB.INFINITY if ub is None else ub,
-                          vtype={'CONTINUOUS': GRB.CONTINUOUS, 'INTEGER': GRB.INTEGER, 'BINARY': GRB.BINARY}[kind], name=name)''',
     'ortools': '''factory = {model}.NumVar if kind == 'CONTINUOUS' else {model}.IntVar
 return factory(-{model}.infinity() if lb is None else lb, {model}.infinity() if ub is None else ub, name)''',
     'mathopt': '''return {model}.add_variable(lb=-float('inf') if lb is None else lb, ub=float('inf') if ub is None else ub,
@@ -40,29 +34,6 @@ if lb is None or ub is None or not (math.isfinite(lb) and math.isfinite(ub)):
 if not (float(lb).is_integer() and float(ub).is_integer()):
     raise ValueError('CP-SAT requires integer bounds derived from the problem.')
 return {model}.new_int_var(int(lb), int(ub), name)''',
-    'cpmpy': '''if kind == 'CONTINUOUS':
-    raise ValueError('CPMpy cannot represent continuous decision variables.')
-if lb is None or ub is None or not (math.isfinite(lb) and math.isfinite(ub)):
-    raise ValueError('CPMpy requires finite integer bounds derived from the problem.')
-if not (float(lb).is_integer() and float(ub).is_integer()):
-    raise ValueError('CPMpy requires integer bounds derived from the problem.')
-lb, ub = int(lb), int(ub)
-if kind == 'BINARY':
-    variable = cp.boolvar(name=name)
-    if lb > 0:
-        {model}.add(variable >= lb)
-    if ub < 1:
-        {model}.add(variable <= ub)
-    return variable
-return cp.intvar(lb, ub, name=name)''',
-    'pulp': '''variable = pulp.LpVariable(name, lowBound=lb, upBound=ub,
-                           cat={'CONTINUOUS': 'Continuous', 'INTEGER': 'Integer', 'BINARY': 'Binary'}[kind])
-if kind == 'BINARY':
-    if lb > 0:
-        {model}.addConstraint(variable >= lb)
-    if ub < 1:
-        {model}.addConstraint(variable <= ub)
-return variable''',
     'cvxpy': '''variable = cp.Variable(name=name, integer=kind == 'INTEGER', boolean=kind == 'BINARY')
 if lb is not None:
     {model}_constraints.append(variable >= lb)
@@ -79,8 +50,6 @@ if lb is not None:
 if ub is not None:
     {model}.subject_to(variable <= ub)
 return variable''',
-    'coptpy': '''return {model}.addVar(lb=-COPT.INFINITY if lb is None else lb, ub=COPT.INFINITY if ub is None else ub,
-                          vtype={'CONTINUOUS': COPT.CONTINUOUS, 'INTEGER': COPT.INTEGER, 'BINARY': COPT.BINARY}[kind], name=name)''',
 }
 
 
@@ -107,11 +76,9 @@ class ModelCode:
         model = self.name
         factory = {
             'pyomo': 'pyo.ConcreteModel()\n{model}.constraints = pyo.ConstraintList()',
-            'gurobipy': 'gp.Model("optimization")',
             'ortools': 'pywraplp.Solver.CreateSolver("SCIP")',
             'mathopt': 'mathopt.Model()', 'cp_sat': 'cp_model.CpModel()',
-            'cpmpy': 'cp.Model()', 'pulp': 'pulp.LpProblem("optimization", pulp.LpMinimize)',
-            'pyscipopt': 'Model("optimization")', 'casadi': 'ca.Opti()', 'coptpy': 'cp.Envr().createModel("optimization")',
+            'pyscipopt': 'Model("optimization")', 'casadi': 'ca.Opti()',
         }
         if self.api == 'cvxpy':
             setup = f'{model}_constraints = []\n{model}_objective = cp.Minimize(0)'
@@ -156,12 +123,10 @@ class ModelCode:
 
     def constraint(self, expression: str, name: str = "''") -> str:
         model = self.name
-        templates = {'pyomo': '{model}.constraints.add({expr})', 'gurobipy': '{model}.addConstr({expr}, name={name})',
+        templates = {'pyomo': '{model}.constraints.add({expr})',
                      'ortools': '{model}.Add({expr}, {name})', 'mathopt': '{model}.add_linear_constraint({expr}, name={name})',
-                     'cp_sat': '{model}.add({expr}).with_name({name})', 'cpmpy': '{model}.add({expr})',
-                     'pulp': '{model}.addConstraint({expr}, {name})', 'cvxpy': '{model}_constraints.append({expr})',
-                     'pyscipopt': '{model}.addCons({expr}, name={name})', 'casadi': '{model}.subject_to({expr})',
-                     'coptpy': '{model}.addConstr({expr}, name={name})'}
+                     'cp_sat': '{model}.add({expr}).with_name({name})', 'cvxpy': '{model}_constraints.append({expr})',
+                     'pyscipopt': '{model}.addCons({expr}, name={name})', 'casadi': '{model}.subject_to({expr})'}
         return templates[self.api].format(model=model, expr=expression, name=name)
 
     def objective(self, expression: str, sense: str) -> str:
@@ -175,11 +140,6 @@ class ModelCode:
         model = self.name
         if self.api == 'pyomo':
             return f'{model}.objective = pyo.Objective(expr={expression}, sense=pyo.{"maximize" if maximum else "minimize"})'
-        if self.api in ('gurobipy', 'coptpy'):
-            constant = 'GRB' if self.api == 'gurobipy' else 'COPT'
-            return f'{model}.setObjective({expression}, {constant}.{"MAXIMIZE" if maximum else "MINIMIZE"})'
-        if self.api == 'pulp':
-            return f'{model}.sense = pulp.{"LpMaximize" if maximum else "LpMinimize"}\n{model}.setObjective({expression})'
         if self.api == 'cvxpy':
             return f'{model}_objective = cp.{"Maximize" if maximum else "Minimize"}({expression})'
         if self.api == 'casadi':
@@ -212,7 +172,7 @@ class ModelCode:
                    'bounds mentioned only in description text are not executable. For example: '
                    '{"type": "INTEGER", "lower_bound": "0", "upper_bound": "capacity"}. '
                    'Use actual problem parameters. Do not invent large bounds or discretize real decisions.'
-                   if self.api in ('cpmpy', 'cp_sat') else 'State any bounds required by the problem.'))
+                   if self.api == 'cp_sat' else 'State any bounds required by the problem.'))
 
     @property
     def prompt(self) -> str:

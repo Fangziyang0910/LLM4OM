@@ -70,10 +70,23 @@ for complex optimization problems. Your specialty is turning optimization questi
 and you can also help with ordinary conversation and related tasks. Let the user steer the conversation.
 Explain or help edit code when asked; use the modeling tools when the user wants the platform to actually solve an optimization problem.
 For a first calculation, a different problem, updated attachments or a different method/library, use model_and_solve with
-the complete standalone business problem and actual file names. Defaults are Direct, Pyomo and automatic backend selection.
-When no method is pinned, prefer autoco (built-in metaheuristic/evolutionary pool, no external library needed) for
-multi-objective Pareto trade-off problems or hard nonlinear/combinatorial problems (such as QAP, routing, or complex
-scheduling) where exact MILP solvers struggle; otherwise use Direct with Pyomo.
+the complete standalone business problem and actual file names.
+When configuration is not pinned by the user, apply this two-step automatic selection policy:
+1. Choose the solving path and modeling library by mathematical structure (leave solver as automatic unless a specific backend is required):
+   - Multi-objective Pareto trade-off, black-box/simulation evaluation, or hard nonconvex/large combinatorial problems where exact solvers struggle (e.g., QAP, complex routing/scheduling) -> method="autoco" (built-in 12-family metaheuristic/evolutionary pool; no external library needed).
+   - Otherwise use exact modeling with the matching library:
+     * Linear / mixed-integer linear programming (LP / MILP) -> language="pyomo" (default HiGHS).
+     * Constraint programming / global logic constraints (AllDifferent, shift scheduling, interval/no-overlap scheduling), vehicle routing (VRP), network flows (max flow, min-cost flow), assignment or knapsack -> language="ortools".
+     * Convex quadratic, norm, SOCP, SDP, geometric or quasiconvex programming (DCP / DGP / DQCP) -> language="cvxpy" (AUTO selects Clarabel/OSQP/SCS/SCIP).
+     * Smooth continuous nonlinear optimization without integer variables (nonconvex, trig/exp/ratios) -> language="casadi" (default Ipopt).
+     * Mixed-integer nonlinear constraints (MINLP) requiring an exact global solver -> language="pyscipopt" (SCIP).
+2. For exact modeling, choose the modeling method by data size and complexity (from the 5 primary exact methods):
+   - Large structured CSV/JSON attachments (check Attachment stats: any file >= 30 lines or >= 4000 chars, or truncated preview) -> method="bind".
+   - Very simple, short problem with only a few obvious variables and constraints -> method="direct".
+   - Standard small-to-medium LP/MILP wanting fast execution with error/infeasibility recovery -> method="or_llm_agent" (LP/MILP only).
+   - General medium-to-large or non-LP/MILP exact problem needing structured five-element modeling and self-correction -> method="llmopt".
+   - Complex, multi-stage, ambiguity-prone or high-stakes exact problem requiring rigorous verification -> method="trival".
+Reserve optitree, coe and optimus for explicit user requests or comparisons.
 Use solve_scenarios for changes to an existing plan with unchanged configuration and data.
 Use modeling_capabilities before selecting a non-default method, modeling library or explicit backend; honor linear_only scope.
 Follow explicit user choices; pinned configuration takes priority over tool arguments. Users need not configure technical details.
@@ -196,6 +209,19 @@ class Scenario(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=100, description="A short business name for this scenario")
     instruction: str = Field(min_length=1, description="The user's complete, explicit changes; preserve all other requirements")
+
+
+def _attachment_stats(data: dict[str, str]) -> list[dict[str, Any]]:
+    stats = []
+    for name, content in data.items():
+        lines = content.count("\n") + (1 if content else 0)
+        chars = len(content)
+        structured = name.lower().endswith((".csv", ".tsv", ".json"))
+        stats.append({
+            "name": name, "chars": chars, "lines": lines,
+            "large_structured": structured and (lines >= 30 or chars >= 4000),
+        })
+    return stats
 
 
 def _configuration(values: dict[str, Any]) -> dict[str, Any]:
@@ -605,11 +631,17 @@ def _build_tools_and_middleware(
                     **_solve_summary(saved.get("solve") or {}), "failure": saved.get("failure")})
         sections = []
         if session.optimization:
+            attachments = session.state.get("data") or {}
+            stats_line = (
+                "\nAttachment stats:\n" + json.dumps(_attachment_stats(attachments), ensure_ascii=False)
+                if attachments else ""
+            )
             sections.append(
                 OPTIMIZATION_TOOLS
                 + ("Web search is enabled.\n" if session.choice.search else "Web search is disabled.\n")
                 + "Current editable problem and attachments:\n"
-                + problem_text(session.state.get("description") or "", session.state.get("data") or {})
+                + problem_text(session.state.get("description") or "", attachments)
+                + stats_line
                 + "\nPinned configuration:\n"
                 + json.dumps({"method": session.choice.method, "language": session.choice.language, "solver": session.choice.solver})
             )

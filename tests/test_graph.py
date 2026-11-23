@@ -16,7 +16,7 @@ from llm4om.host import start as host_start
 from llm4om.methods import methods
 from llm4om.runtime import Limits
 from llm4om.sandbox import Sandbox
-from tests.conftest import ACCEPT_REVIEW, PRODUCTION_CODE, TWO_PART_REPLY
+from tests.conftest import PRODUCTION_CODE, TWO_PART_REPLY
 
 BROKEN_CODE = PRODUCTION_CODE.replace("return m", "return m.missing")
 
@@ -83,18 +83,22 @@ def test_an_empty_method_library_set_is_rejected_and_advertised_consistently(mak
 
 
 def test_a_node_update_is_recorded_before_the_next_node_starts(run_method: Any) -> None:
-    broken = TWO_PART_REPLY.replace(PRODUCTION_CODE, BROKEN_CODE)
-    replies = iter([broken, TWO_PART_REPLY, ACCEPT_REVIEW])
-    record = run_method("feedback_repair", lambda *_: next(replies))
+    replies = {
+        "five_element": "```text\nSets:\nParameters:\nVariables:\nObjective:\nConstraints:\n```",
+        "code": f"```python\n{PRODUCTION_CODE}```",
+        "self_correction": "The five-element is True.\nThe code is True.",
+    }
+    record = run_method("llmopt", lambda role, *_: replies[role])
     order = [(step["type"], step["title"]) for step in record["steps"]]
-    assert order == [("llm", "generate"), ("artifact", "生成数学模型和代码"), ("solve", "求解"),
-                     ("llm", "repair"), ("artifact", "按反馈修正模型和代码"), ("solve", "求解（修正 1）"),
-                     ("llm", "review"), ("artifact", "复核模型与求解结果")]
+    assert order == [("llm", "five_element"), ("artifact", "五要素模型"),
+                     ("llm", "code"), ("artifact", "生成代码"),
+                     ("solve", "执行代码"),
+                     ("llm", "self_correction"), ("artifact", "自我校正")]
 
 
 def test_llm_call_limit_stops_the_run(run_method: Any) -> None:
     broken = TWO_PART_REPLY.replace(PRODUCTION_CODE, BROKEN_CODE)
-    record = run_method("feedback_repair", lambda *_: broken, limits=Limits(max_llm_calls=2))
+    record = run_method("bind", lambda *_: broken, limits=Limits(max_llm_calls=2))
     assert "limit of 2 LLM calls" in record["failure"]
     assert record["code"].strip() == BROKEN_CODE.strip() and record["steps"][-1]["type"] == "error"
 

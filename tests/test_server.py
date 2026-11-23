@@ -48,9 +48,9 @@ def test_options_list_methods_languages_and_providers(tmp_path: Path, monkeypatc
     with client(tmp_path) as api:
         options = api.get("/api/options").json()
     assert options["search_configured"] is True and "server-search-secret" not in str(options)
-    assert {"direct", "trival", "optimus", "coe", "optitree", "or_llm_agent", "autoformulation", "autoco"} <= {m["id"] for m in options["methods"]}
+    assert {"direct", "or_llm_agent", "llmopt", "trival", "bind", "autoco", "optitree", "coe", "optimus"} == {m["id"] for m in options["methods"]}
     assert {item["id"] for item in options["languages"]} == {
-        "pyomo", "gurobipy", "ortools", "cpmpy", "pulp", "cvxpy", "pyscipopt", "casadi", "coptpy",
+        "pyomo", "ortools", "cvxpy", "pyscipopt", "casadi",
     }
     optimus = next(m for m in options["methods"] if m["id"] == "optimus")
     autoco = next(m for m in options["methods"] if m["id"] == "autoco")
@@ -257,7 +257,7 @@ def test_a_preset_stops_once_its_daily_token_budget_is_spent(make_resources: Any
     resources = replace(make_resources(lambda *_: broken, llm=None), budget=TokenBudget(tmp_path, daily_limit=20))
     selected = resources.presets.add(LLM)
     # Each call uses 15 tokens: the second call starts at 15, the third finds the budget spent and stops the run.
-    stopped = asyncio.run(run(PRODUCTION_PROBLEM, method="feedback_repair", resources=resources))
+    stopped = asyncio.run(run(PRODUCTION_PROBLEM, method="bind", resources=resources))
     refused = asyncio.run(run(PRODUCTION_PROBLEM, resources=resources))
     assert stopped["usage"]["llm_calls"] == 2 and "daily budget of 20 tokens" in stopped["failure"]
     assert "daily budget" in refused["failure"] and not refused.get("steps")

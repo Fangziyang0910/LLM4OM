@@ -15,7 +15,6 @@ from llm4om.budget import TokenBudget
 from llm4om.host.records import open_records
 from llm4om.languages import CodeTarget
 from llm4om.llm import LLMSettings
-from llm4om.methods.autoformulation.search import extract_best_solution
 from llm4om.methods.coe.parsing import extract_code_from_string
 from llm4om.methods.optitree.graph import extract_code as optitree_extract_code
 from llm4om.model_code import ModelCode
@@ -189,11 +188,10 @@ def test_worker_handles_non_finite_vars_and_complex_cvxpy() -> None:
     json.dumps(solved, allow_nan=False)
 
 
-def test_optitree_and_autoformulation_extractors() -> None:
+def test_optitree_and_coe_extractors() -> None:
     reply = "```text\nnot code\n```\n```python\nline1 = 1\nline2 = 2\n```"
     assert optitree_extract_code(reply) == "line1 = 1\nline2 = 2\n"
     assert extract_code_from_string("```python\npip install gurobipy\n```\n```python\nx = 1\ny = 2\n```") == "x = 1\ny = 2"
-    assert extract_best_solution('best_solution = {"0": "solution_A", "1": "solution_B"}') == {"0": "solution_A", "1": "solution_B"}
 
 
 def test_api_models_validates_scheme_and_redacts_secret(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:

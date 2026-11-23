@@ -25,11 +25,9 @@ dependencies = [
     "langchain-core>=1.6.13,<2",
     "langgraph>=1.2.16,<2",
     "langgraph-checkpoint-sqlite>=3.1.2,<4",
-    # OptiTree parses model replies with json_repair; 0.60.1 is the first release without GHSA-xf7x-x43h-rpqh.
+    # OptiTree, OptiMUS and AutoCO repair malformed JSON replies; 0.60.1 is the first release without GHSA-xf7x-x43h-rpqh.
     "json-repair==0.60.1",
-    # AutoFormulation ranks candidates with numpy and scikit-learn.
     "numpy>=2,<3",
-    "scikit-learn>=1.5,<2",
 ]
 
 [project.optional-dependencies]
@@ -40,16 +38,13 @@ web = ["llm4om[llm]", "langgraph-cli[inmem]>=0.4.37,<0.5", "langgraph-api>=0.16,
        "fastapi>=0.115,<1", "simpleeval==1.0.8"]
 # Host-side solving for `--sandbox local` and tests. The Docker worker installs its own copies.
 # Match the HiGHS ABI bundled with OR-Tools 9.15 (google/or-tools#5246).
-solve = ["Pyomo==6.10.1", "highspy==1.12.0", "ortools==9.15.6755", "cpmpy==1.1.0", "PuLP==3.3.2", "cvxpy==1.8.2",
-         "clarabel==0.11.1", "osqp==1.1.3", "scs==3.3.1", "pyscipopt==6.3.0", "casadi==3.8.1", "coptpy==8.0.7",
-         "Mosek==11.2.6", "cvxopt==1.3.3", "ecos==2.0.14", "cylp==0.94.0", "daqp==0.10.3", "piqp==0.6.4",
-         "proxsuite==0.7.3", "qoco==0.3.2", "qpalm==1.3.0", "python-sat==1.9.dev17", "pysdd==1.0.6",
-         "exact==2.2.1", "pychoco==0.4.0", "pumpkin-solver==0.5.0", "pindakaas==0.6.1", "gcspy==0.1.9",
-         "minizinc==0.10.0", "cplex==22.2.0.1", "xpress==9.9.1", "swiglpk==5.0.13", "docplex>=2.30,<3",
+solve = ["Pyomo==6.10.1", "highspy==1.12.0", "ortools==9.15.6755", "cvxpy==1.8.2",
+         "clarabel==0.11.1", "osqp==1.1.3", "scs==3.3.1", "pyscipopt==6.3.0", "casadi==3.8.1",
+         "Mosek==11.2.6", "cvxopt==1.3.3", "ecos==2.0.14", "daqp==0.10.3", "piqp==0.6.4",
+         "proxsuite==0.7.3", "qoco==0.3.2", "qpalm==1.3.0",
+         "cplex==22.2.0.1", "xpress==9.9.1", "swiglpk==5.0.13", "docplex>=2.30,<3",
          "cma==4.6.0", "pymoo==0.6.2"]
 gurobi = ["gurobipy==13.0.3"]
-# AutoFormulation's equivalence scripts use SymPy and Z3; the Docker worker has them, `--sandbox local` needs these.
-autoformulation = ["z3-solver==5.1.0.0", "sympy>=1.13,<2"]
 
 [dependency-groups]
 dev = ["pytest>=9,<10", "ruff>=0.17,<0.18", "llm4om[web]"]
@@ -67,7 +62,7 @@ llm4om = "llm4om.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-llm4om = ["methods/optitree/source/*", "methods/optimind/source/*", "methods/*/LICENSE.txt", "methods/*/README.md", "server/examples_data/*.json", "server/examples_data/*.txt", "server/web_assets/*", "server/web_assets/**/*", "sandbox/worker.Dockerfile", "sandbox/autoco/*.py"]
+llm4om = ["methods/optitree/source/*", "methods/*/LICENSE.txt", "methods/*/README.md", "server/examples_data/*.json", "server/examples_data/*.txt", "server/web_assets/*", "server/web_assets/**/*", "sandbox/worker.Dockerfile", "sandbox/autoco/*.py"]
 
 [tool.ruff]
 line-length = 120

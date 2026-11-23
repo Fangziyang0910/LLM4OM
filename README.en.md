@@ -29,7 +29,7 @@
 
 **General Intelligent Optimization Solver** (**通用智能优化求解器**) is a general solver for complex optimization problems across scheduling, supply chains, vehicle routing, resource allocation, network flows and nonlinear programming. Configure runs directly in the workbench, or chat with the optimization assistant and attach business data. The agent invokes a complete modeling workflow to formulate the mathematical model, write solver code and compute optimal solutions inside an isolated container. Inspect actual steps, formulations, code and results in the workspace alongside chat, and continue the conversation to revise constraints.
 
-The platform integrates **14 modeling strategies**: 13 exact-modeling workflows and the AutoCO metaheuristic engine, alongside **9 modeling libraries**. Enter an optimization problem, run modeling and solving, and inspect models and computed solutions without writing solver code yourself.
+The platform integrates **9 modeling strategies**: 8 exact-modeling workflows and the AutoCO metaheuristic engine, alongside **5 modeling libraries**. Enter an optimization problem, run modeling and solving, and inspect models and computed solutions without writing solver code yourself.
 
 <p align="center">
   <img src="docs/assets/demo.gif" alt="Demo: ordinary chat, arithmetic and the Agent modeling workspace" width="100%">
@@ -41,15 +41,15 @@ The platform integrates **14 modeling strategies**: 13 exact-modeling workflows 
 | Feature | What you get |
 |---|---|
 | 💬 **Model through conversation** | Discuss an idea, calculate a first plan, inspect results and revise conditions in one agent. Specify methods and libraries in chat, or use the retained manual workbench |
-| 🧠 **14 modeling strategies** | Direct, Feedback Repair, TriVAL, SAC-Opt, BIND, OptiMind, AutoCO and more; each has its own LangGraph |
-| 🧩 **9 modeling libraries** | Native modeling APIs, with backend discovery through each library’s own plugin registry |
+| 🧠 **9 modeling strategies** | Direct, OR-LLM-Agent, LLMOPT, TriVAL, BIND, AutoCO, OptiTree, Chain-of-Experts and OptiMUS 0.3; each has its own LangGraph |
+| 🧩 **5 modeling libraries** | Pyomo, OR-Tools, CVXPY, PySCIPOpt and CasADi, with backend discovery through each library’s own plugin registry |
 | 📝 **Requirements chat** | Clarify the decision, objectives and conditions, including open questions and conflicts; review the editable draft before handing it to a modeling method |
 | 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
 | ⚖️ **Compare methods** | Run up to 12 methods or models on one problem and compare objective, time and tokens |
 | 💬 **Explain and revise plans** | Get a direct answer with actual choices, locations, quantities and cost or profit, followed by decision details; change conditions and compare the new plan with the saved original |
 | 🔄 **Plan chat and business scenarios** | Ask about actual results; condition changes show real modeling progress and result cards, with a fixed baseline for several alternatives |
 | 📊 **Review data before modeling** | Edit CSV, TSV, JSON and text attachments, including converted Excel sheets; clarify column names and units before saving |
-| 🧯 **Explain infeasibility** | Read business explanations grounded in actual conflicting constraints; select and edit a candidate change, then solve a new model to verify it (Gurobi IIS / CPMpy MUS) |
+| 🧯 **Explain infeasibility** | Read business explanations grounded in actual conflicting constraints; select and edit a candidate change, then solve a new model to verify it (Gurobi IIS) |
 | 🔒 **Isolated sandbox** | Generated code runs in a container with no network, a read-only file system and no root, removed after use |
 | 👥 **Team deployment** | One `docker compose up`; preset keys never leave the server; optional HTTPS and usage limits |
 | 🌗 **A workbench people like** | Export Excel plans with business labels, units and all actual values; notes and tags, Markdown reports, Excel import, 2,033 public problems, Chinese and English, dark mode |
@@ -100,7 +100,7 @@ The conversation screenshots use scripted examples and locally solved results.
 
 ### Use the current model in Codex / Claude Code
 
-The skill lets your current coding-agent model handle conversation, modeling, code generation, review, and explanation. The CLI reuses all 13 method graphs and the existing solver runtime. It calls no platform LLM and needs no Web server.
+The skill lets your current coding-agent model handle conversation, modeling, code generation, review, and explanation. The CLI reuses all 9 method graphs and the existing solver runtime. It calls no platform LLM and needs no Web server.
 
 No checkout is needed. Prepare [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, a running Docker installation, and Node.js 22.20 or newer. These commands pin both components to v0.43.0 and select Python 3.12:
 
@@ -134,7 +134,7 @@ You need Python 3.11–3.13, [uv](https://docs.astral.sh/uv/) and Docker:
 
 ```bash
 uv sync --extra web
-uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:16
+uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:17
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
@@ -156,13 +156,13 @@ If you have only an idea, click **Discuss your requirements**. The assistant upd
 You can also run from the command line or Python:
 
 ```bash
-uv run llm4om run --problem "..." --method orthought --language pyomo
+uv run llm4om run --problem "..." --method or_llm_agent --language pyomo
 ```
 
 ```python
 from llm4om import run_problem
 
-state = run_problem("...", method="optimus", language="gurobipy")
+state = run_problem("...", method="optimus", language="pyomo")
 print(state["failure"] or state["solve"]["objective"])
 ```
 
@@ -171,37 +171,28 @@ print(state["failure"] or state["solve"]["objective"])
 | Method | Flow | Source |
 |---|---|---|
 | Direct | One call writes the formulation and the code | Baseline |
-| Feedback Repair | Generates, solves and checks against the problem; repairs format, execution or modeling errors | In-house method |
-| AutoCO | Runs heuristic and evolutionary search in an isolated sandbox, including multi-objective Pareto candidates | [Implementation and algorithm pool](src/llm4om/methods/autoco/graph.py) |
-| TriVAL | Validates semantics, formulation and code in three stages; each stage builds, validates and revises | [Code](https://github.com/SCUT-EIPI/TriVAL/tree/380a529) |
-| OptiMUS 0.3 | Extracts parameters, objective and constraints; models and codes each one; assembles and debugs | [v0.3 paper](https://arxiv.org/abs/2407.19633) · [Code](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) |
-| Chain-of-Experts | A conductor picks experts one by one; a reducer writes the code; optional backward reflection | [ICLR 2024](https://openreview.net/forum?id=HobyL1B9CZ) · [Code](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) |
-| OptiTree | Matches the problem to modeling thoughts in a problem-type tree, then writes the model and code | [NeurIPS 2025](https://arxiv.org/abs/2510.22192) · [Code](https://github.com/MIRALab-USTC/OptiTree/tree/2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9) |
 | OR-LLM-Agent | Formulates, writes code, debugs from execution errors, then checks infeasibility | [arXiv](https://arxiv.org/abs/2503.10009) · [Code](https://github.com/bwz96sco/or_llm_agent/tree/5dccdaab89ab91c3cb28066fe849423dc124d287) |
-| ORThought | Writes a solution path, formulation and code with expert modeling thoughts; debugs with the model and the error | [arXiv](https://arxiv.org/abs/2508.14410) · [Code](https://github.com/BeinuoYang/ORThought/tree/5293e24861a65d1e4a2f61f4fad0a81de901ee38) |
 | LLMOPT | Writes a five-element model, then code; the LLM judges both and rewrites the wrong step | [ICLR 2025](https://arxiv.org/abs/2410.13213) · [Code](https://github.com/antgroup/LLMOPT/tree/1492dd33e39ea13f1afe32a0adc13d4217334195) |
-| AutoFormulation | Builds a tree by sampling and pruning layer by layer, then ranks with MCTS and pairwise comparison (many calls) | [ICML 2025](https://arxiv.org/abs/2411.01679) · [Code](https://github.com/jumpynitro/AutoFormulator/tree/52148018d04de23dc2d36d4281eb6244c2a42ffc) |
-| SAC-Opt | Semantic anchors, constraint backtranslation and selective repair (independent implementation) | [Paper](https://proceedings.mlr.press/v306/zhang26cb.html) · [Adaptation](src/llm4om/methods/sac_opt/README.md) |
+| TriVAL | Validates semantics, formulation and code in three stages; each stage builds, validates and revises | [Code](https://github.com/SCUT-EIPI/TriVAL/tree/380a529) |
 | BIND | Prompt with schemas; read full attachments in code; repair execution failures | [Paper](https://arxiv.org/abs/2605.21751) · [Adaptation](src/llm4om/methods/bind/README.md) |
-| OptiMind | Public class hints, modeling, execution feedback and iterative review | [Paper](https://arxiv.org/abs/2509.22979) · [Public scope](src/llm4om/methods/optimind/README.md) |
+| AutoCO | Runs heuristic and evolutionary search in an isolated sandbox, including multi-objective Pareto candidates | [Implementation and algorithm pool](src/llm4om/methods/autoco/graph.py) |
+| OptiTree | Matches the problem to modeling thoughts in a problem-type tree, then writes the model and code | [NeurIPS 2025](https://arxiv.org/abs/2510.22192) · [Code](https://github.com/MIRALab-USTC/OptiTree/tree/2e70ecfd0a3c8e9c0c16d36d7d498a7344cfdec9) |
+| Chain-of-Experts | A conductor picks experts one by one; a reducer writes the code; optional backward reflection | [ICLR 2024](https://openreview.net/forum?id=HobyL1B9CZ) · [Code](https://github.com/xzymustbexzy/Chain-of-Experts/tree/afb89bf602690ea621f13a23c42722f20f653a43) |
+| OptiMUS 0.3 | Extracts parameters, objective and constraints; models and codes each one; assembles and debugs | [v0.3 paper](https://arxiv.org/abs/2407.19633) · [Code](https://github.com/teshnizi/OptiMUS/tree/e182e9ef5841605c2a7e87467021fd83522b6484) |
 
-Each method records its reference commit and adaptations. SAC-Opt is independently implemented; BIND uses no benchmark reference answers; OptiMind integrates the public inference workflow and the published TSP hint subset, not trained weights. All 13 exact-modeling workflows accept the nine modeling libraries. Some retain an LP/MILP scope; the library and backend must support the problem. AutoCO uses its built-in algorithm pool; heuristic results do not guarantee global optimality. See [methods](docs/methods.md).
+Each method records its reference commit and adaptations. BIND uses no benchmark reference answers. All 8 exact-modeling workflows accept the five modeling libraries. Some retain an LP/MILP scope; the library and backend must support the problem. AutoCO uses its built-in algorithm pool; heuristic results do not guarantee global optimality. See [methods](docs/methods.md).
 
 ## Modeling libraries and backends
 
-Each library counts once. Choose one of these nine libraries; the backend is automatic unless specified. Native API choice stays in the code, and the worker recognizes the returned model. The backend list comes from native registries in the actual sandbox and includes installation status.
+Each library counts once. Choose one of these five libraries; the backend is automatic unless specified. Native API choice stays in the code, and the worker recognizes the returned model. The backend list comes from native registries in the actual sandbox and includes installation status.
 
 | Modeling library | Native APIs | Backend integration |
 |---|---|---|
 | Pyomo | Algebraic (ConcreteModel/AbstractModel), Kernel | Native SolverFactory adapters |
-| gurobipy | Scalar/expression, matrix | Native Gurobi engine |
 | OR-Tools | MPSolver, MathOpt, CP-SAT, ModelBuilder, Routing, Constraint Solver, max flow, min-cost flow, assignment, knapsack | Each interface’s native engines and algorithms |
-| CPMpy | Model, SolverInterface | SolverLookup, including native subsolvers |
-| PuLP | Row-oriented, column-oriented | Native getSolver registry |
 | CVXPY | DCP, DGP, DQCP | Native registry; AUTO uses solver_path and records the actual engine |
 | PySCIPOpt | Scalar/expression, matrix | Native SCIP engine |
 | CasADi | Opti NLP, Opti Conic, nlpsol, qpsol, conic | Native Nlpsol/Conic plugins |
-| coptpy | Scalar/expression, matrix | Native COPT engine |
 
 Generated code defines `build_model(data)`. Ordinary interfaces return native models. Interfaces that need endpoints, bounds or structured problem inputs return the documented dictionaries. The worker uses the selected native API. An explicit unavailable backend fails instead of changing engines or relaxing integer domains.
 
@@ -248,4 +239,4 @@ If you use General Intelligent Optimization Solver in research, please cite this
 
 ## License
 
-The code is licensed under [Apache-2.0](LICENSE). Bundled third-party prompts, code and data keep their original licenses; see [NOTICE](NOTICE). The LLMOPT and ORThought repositories state no license at the pinned commits; their prompts are included for research reproduction only.
+The code is licensed under [Apache-2.0](LICENSE). Bundled third-party prompts, code and data keep their original licenses; see [NOTICE](NOTICE). The LLMOPT repository states no license at the pinned commit; its prompts are included for research reproduction only.

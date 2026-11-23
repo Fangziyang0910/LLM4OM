@@ -1,7 +1,6 @@
 """Presentation languages preserve the methods' source data, repair paths and response protocols."""
 
 import asyncio
-import json
 from typing import Any
 
 import pytest
@@ -17,9 +16,7 @@ from tests.test_method_libraries import method_script
 BROKEN_REPLY = TWO_PART_REPLY.replace("return m", "return m.missing")
 ROLES = {
     "direct": ["generate"],
-    "feedback_repair": ["generate", "repair", "review"],
     "bind": ["bind_generate", "bind_generate"],
-    "optimind": ["optimind_classify", "optimind_generate", "optimind_generate", "optimind_generate"],
 }
 
 
@@ -28,7 +25,6 @@ ROLES = {
 def test_locale_preserves_source_and_protocol_through_repair(make_resources: Any, method: str,
                                                             locale: str, language: str) -> None:
     calls: list[str] = []
-    reason = "模型与题意一致。" if locale == "zh" else "The model matches the problem."
 
     def script(role: str, messages: list[BaseMessage], tools: list[str]) -> str:
         systems = [message.text for message in messages if isinstance(message, SystemMessage)]
@@ -41,19 +37,8 @@ def test_locale_preserves_source_and_protocol_through_repair(make_resources: Any
         assert "Output language:" not in original
         calls.append(role)
 
-        if role == "optimind_classify":
-            assert "JSON array of exact class names" in systems[0]
-            assert "TravelingSalesman" in systems[0]
-            return "[]"
-        if role == "review":
-            return json.dumps({"action": "accept", "reason": reason}, ensure_ascii=False)
         if method == "direct":
             return TWO_PART_REPLY
-        if role == "repair":
-            assert "missing" in messages[-1].text
-            return TWO_PART_REPLY
-        if role == "optimind_generate" and calls.count(role) == 3:
-            return "模型无需进一步修改。" if locale == "zh" else "No further model changes are needed."
         if calls.count(role) == 1:
             return BROKEN_REPLY
         assert "missing" in messages[-1].text
@@ -70,9 +55,6 @@ def test_locale_preserves_source_and_protocol_through_repair(make_resources: Any
     statuses = [step["status"] for step in record["steps"] if step["type"] == "solve"]
     assert statuses == (["optimal"] if method == "direct" else ["error", "optimal"])
     assert record["usage"]["llm_calls"] == len(calls)
-    if method == "feedback_repair":
-        review = next(step for step in record["steps"] if step["type"] == "llm" and step["title"] == "review")
-        assert json.loads(review["content"]) == {"action": "accept", "reason": reason}
 
 
 @pytest.mark.parametrize("method", list(methods()))
@@ -80,8 +62,6 @@ def test_locale_preserves_source_and_protocol_through_repair(make_resources: Any
 def test_every_method_receives_locale_and_preserves_its_protocol(
     make_resources: Any, preset: Any, method: str, locale: str, language: str,
 ) -> None:
-    # Reuse the existing one-candidate test configuration; production search parameters remain unchanged.
-    preset("AUTOFORMULATION", n_used_gpt=1, n_top=1, n_reward=1, total_rollouts=1)
     if method == "autoco":
         preset("AUTOCO", max_modeling_revisions=1, enable_pilot=False)
 
@@ -122,26 +102,3 @@ def test_every_method_receives_locale_and_preserves_its_protocol(
         assert record["spec"]["language"] == "autoco"
         assert record["solve"]["status"] == "feasible" and record["solve"]["solver"] == "GA"
         assert calls == ["semantic_grounding", "formulate", "review_formulation", "instantiate", "kg_agent"]
-
-
-@pytest.mark.parametrize("locale", ["zh", "en"])
-def test_sac_anchor_math_is_requested_and_retained_in_the_final_formulation(make_resources: Any, locale: str) -> None:
-    base = method_script("sac_opt", "pyomo")
-    checked: set[str] = set()
-    variable = r"$x_A$ — quantity; domain: $x_A \in \mathbb{Z}_{\ge 0}$; bound: $x_A \le 4$."
-
-    def script(role: str, messages: list[BaseMessage], tools: list[str]) -> Any:
-        if role in {"sac_parameters", "sac_variables", "sac_constraints", "sac_objective"}:
-            assert "Use LaTeX math delimiters" in messages[0].text
-            assert "subscripts" in messages[0].text and "JSON" in messages[0].text
-            checked.add(role)
-        if role == "sac_variables":
-            return json.dumps({"items": [variable]})
-        return base(role, messages, tools)
-
-    record = asyncio.run(run(PRODUCTION_PROBLEM, method="sac_opt", resources=make_resources(script), locale=locale))
-    assert not record.get("failure"), record.get("failure")
-    assert record["solve"]["objective"] == pytest.approx(13)
-    assert variable in record["formulation"]
-    assert record["spec"]["locale"] == locale
-    assert checked == {"sac_parameters", "sac_variables", "sac_constraints", "sac_objective"}

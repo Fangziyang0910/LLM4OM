@@ -23,7 +23,7 @@ import type { BackendCatalog, Draft, Method, Options, Preset } from "@/types";
 
 export const DRAFT_KEY = "llm4om-draft";
 const MAX_COMPARED = 12;
-const CORE_METHODS = new Set(["direct", "feedback_repair", "trival", "autoco"]);
+const CORE_METHODS = new Set(["direct", "or_llm_agent", "llmopt", "trival", "bind", "autoco"]);
 const TIME_LIMITS = [
   { seconds: 15, label: "15 秒" },
   { seconds: 60, label: "60 秒" },

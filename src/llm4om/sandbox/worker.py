@@ -13,7 +13,6 @@ import json
 import linecache
 import math
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -170,7 +169,12 @@ class PyomoLibrary:
 
         _expect(model, (pyo.Block, pmo.block), "instantiated Pyomo model or kernel block")
         interface = "kernel" if isinstance(model, pmo.block) else "algebraic"
-        backend = ("cbc" if interface == "kernel" else "highs") if backend == "AUTO" else backend
+        if backend == "AUTO":
+            if interface == "kernel":
+                backend = next((name for name in ("cbc", "glpk", "gurobi_direct", "gurobi")
+                                if self._solver(name).available(exception_flag=False)), "cbc")
+            else:
+                backend = "highs"
         return Selection(model, backend, lambda time_limit: self.solve(model, time_limit, interface, backend),
                          ("Gurobi IIS", self.iis))
 
@@ -264,9 +268,6 @@ class PyomoLibrary:
     def _solver(self, backend):
         import pyomo.environ as pyo
 
-        if backend == "cbc" and not shutil.which('cbc'):
-            import pulp
-            return pyo.SolverFactory(backend, executable=pulp.PULP_CBC_CMD().path)
         return pyo.SolverFactory(backend)
 
     def iis(self, model):
@@ -291,43 +292,6 @@ class PyomoLibrary:
                 continue
             rows.append(_entry(name, lambda n=name: self._solver(n).available(exception_flag=False)))
         return _unique(rows)
-
-
-class GurobipyLibrary:
-    """Gurobi's native Python model."""
-
-    name = "gurobipy"
-
-    def recognize(self, model, backend):
-        backend = "gurobi" if backend == "AUTO" else backend
-        return Selection(model, backend, lambda time_limit: self.solve(model, time_limit, backend),
-                         ("Gurobi IIS", gurobi_iis))
-
-    def solve(self, model, time_limit, backend):
-        if backend != "gurobi":
-            raise ModelError(f"gurobipy uses its native gurobi backend; {backend!r} is not supported.")
-        import gurobipy as gp
-
-        _expect(model, gp.Model, "gurobipy Model")
-        model.setParam("OutputFlag", 0)
-        model.setParam("TimeLimit", float(time_limit))
-        model.optimize()
-        if model.Status == gp.GRB.INF_OR_UNBD:
-            # Presolve's dual reductions can leave this open; solving without them tells infeasible from unbounded.
-            model.setParam("DualReductions", 0)
-            model.optimize()
-        status = {
-            gp.GRB.OPTIMAL: "optimal", gp.GRB.INFEASIBLE: "infeasible", gp.GRB.UNBOUNDED: "unbounded",
-            gp.GRB.INF_OR_UNBD: "infeasible_or_unbounded", gp.GRB.TIME_LIMIT: "time_limit",
-            gp.GRB.ITERATION_LIMIT: "iteration_limit", gp.GRB.NODE_LIMIT: "iteration_limit",
-            gp.GRB.SUBOPTIMAL: "feasible",
-        }.get(model.Status, "error")
-        if model.SolCount == 0 or status not in ("optimal", "locally_optimal", "feasible", "time_limit", "iteration_limit"):
-            return status, None, None
-        return status, model.ObjVal, {variable.VarName: variable.X for variable in model.getVars()}
-
-    def catalog(self):
-        return _unique([_entry("gurobi", lambda: __import__("gurobipy") is not None)])
 
 
 class OrtoolsLibrary:
@@ -622,182 +586,6 @@ class OrtoolsLibrary:
             for row in _native(name)])
 
 
-class CpmpyLibrary:
-    """CPMpy models and already-created CPMpy solver interfaces."""
-
-    name = "cpmpy"
-
-    @staticmethod
-    def _interface_name(solver):
-        import cpmpy as cp
-
-        base = next((name for name, cls in cp.SolverLookup.base_solvers() if type(solver) is cls), None)
-        if base is None:
-            return solver.name
-        if ":" in solver.name and solver.name.split(":", 1)[0] == base:
-            return solver.name
-        return base
-
-    def recognize(self, model, backend):
-        import cpmpy as cp
-        from cpmpy.solvers.solver_interface import SolverInterface
-
-        _expect(model, (cp.Model, SolverInterface), "cp.Model or CPMpy SolverInterface")
-        default = self._interface_name(model) if isinstance(model, SolverInterface) else 'ortools'
-        backend = default if backend == "AUTO" else backend
-        conflict = ("CPMpy MUS", self.mus) if isinstance(model, cp.Model) else None
-        return Selection(model, backend, lambda time_limit: self.solve(model, time_limit, backend), conflict)
-
-    def solve(self, model, time_limit, backend):
-        import cpmpy as cp
-        from cpmpy.solvers.solver_interface import ExitStatus, SolverInterface
-        from cpmpy.transformations.get_variables import get_variables_model
-
-        _expect(model, (cp.Model, SolverInterface), "cp.Model or CPMpy SolverInterface")
-        if isinstance(model, cp.Model):
-            variables = get_variables_model(model)
-            solver = cp.SolverLookup.get(backend, model)
-        else:
-            variables = model.user_vars
-            solver = model
-            actual = self._interface_name(solver)
-            if actual.split(':', 1)[0] != backend.split(':', 1)[0] or (
-                    ':' in backend and ':' in actual and actual != backend):
-                raise ModelError(f"Returned CPMpy interface {actual!r} differs from selected backend {backend!r}.")
-        no_interrupt = backend.startswith('pysat') and type(solver.pysat_solver.solver).__name__.startswith(('Cadical', 'Lingeling'))
-        if backend == 'pysdd' or no_interrupt:
-            solver.solve()  # these native APIs have no interrupt timer; the subprocess deadline still applies
-        else:
-            solver.solve(time_limit=float(time_limit))
-        exit_status = solver.status().exitstatus
-        status = {
-            ExitStatus.OPTIMAL: "optimal", ExitStatus.FEASIBLE: "feasible", ExitStatus.UNSATISFIABLE: "infeasible",
-            ExitStatus.UNKNOWN: "time_limit",
-        }.get(exit_status, "error")
-        if exit_status not in (ExitStatus.OPTIMAL, ExitStatus.FEASIBLE):
-            return status, None, None
-        if not solver.has_objective():
-            status = "feasible"
-        objective = solver.objective_value() if solver.has_objective() else None
-        values = {var.name: var.value() for var in variables if var.value() is not None}
-        return status, objective, values
-
-    def mus(self, model):
-        """A minimal unsatisfiable subset of the constraints, found by CPMpy with CP-SAT."""
-        from cpmpy.tools.explain import mus
-        from cpmpy.transformations.normalize import toplevel_list
-
-        return [str(constraint) for constraint in mus(toplevel_list(model.constraints), solver="ortools")]
-
-    def catalog(self):
-        import cpmpy as cp
-
-        rows = []
-        for name, cls in cp.SolverLookup.base_solvers():
-            item = _entry(name, cls.supported)
-            rows.append(item)
-            if item["available"] and hasattr(cls, "solvernames"):
-                for subname in cls.solvernames(installed=True):
-                    rows.append({"id": name+":"+subname, "available": True, "detail": ""})
-        return _unique(rows)
-
-
-class PulpLibrary:
-    """PuLP problems through PuLP's native solver registry and command adapters."""
-
-    name = "pulp"
-
-    def recognize(self, model, backend):
-        backend = "PULP_CBC_CMD" if backend == "AUTO" else backend
-        return Selection(model, backend, lambda time_limit: self.solve(model, time_limit, backend),
-                         ("Gurobi IIS", self.iis))
-
-    def solve(self, problem, time_limit, backend):
-        import pulp
-
-        _expect(problem, pulp.LpProblem, "pulp.LpProblem")
-        if problem.objective is None:
-            raise ModelError("The model has no objective; add one with `problem += expression`.")
-        if backend not in pulp.listSolvers():
-            raise ModelError(f"Unknown PuLP backend {backend!r}.")
-        seconds = max(1, int(time_limit)) if backend == 'GLPK_CMD' else float(time_limit)
-        solver = pulp.getSolver(backend, msg=False, timeLimit=seconds)
-        if not solver.available():
-            raise ModelError(f"PuLP backend {backend!r} requires its optional package or executable.")
-        if backend == 'CyLP':
-            return self._solve_cylp(problem, time_limit)
-        problem.solve(solver)
-        if problem.status == pulp.LpStatusOptimal:
-            status = "feasible" if problem.sol_status == pulp.LpSolutionIntegerFeasible else "optimal"
-        elif problem.status == pulp.LpStatusInfeasible:
-            status = "infeasible"
-        elif problem.status == pulp.LpStatusUnbounded:
-            status = "unbounded"
-        elif problem.status == pulp.LpStatusNotSolved:
-            status = "feasible" if problem.sol_status == pulp.LpSolutionIntegerFeasible else "time_limit"
-        else:
-            status = "error"
-        if status not in ("optimal", "feasible"):
-            return status, None, None
-        values = {variable.name: variable.varValue for variable in problem.variables() if variable.varValue is not None}
-        return status, pulp.value(problem.objective), values
-
-    def _solve_cylp(self, problem, time_limit):
-        """PuLP's CyLP adapter omits status assignment and misreads pure LPs; use its native MPS writer and CLP/CBC."""
-        import pulp
-        from cylp.cy import CyClpSimplex
-
-        native = CyClpSimplex()
-        native.logLevel = 0
-        columns = []
-        with tempfile.TemporaryDirectory() as directory:
-            path = os.path.join(directory, 'model.mps')
-            problem.writeMPS(path, mpsSense=pulp.LpMinimize)
-            seen = set()
-            in_columns = False
-            with open(path, encoding="utf-8") as mps_file:
-                for raw_line in mps_file:
-                    if not raw_line.startswith((" ", "\t")):
-                        in_columns = raw_line.strip() == "COLUMNS"
-                        continue
-                    if in_columns:
-                        parts = raw_line.split()
-                        if len(parts) >= 2 and parts[1] != "'MARKER'" and parts[0] not in seen:
-                            seen.add(parts[0])
-                            columns.append(parts[0])
-            if native.readMps(path):
-                raise ModelError('CyLP could not read the PuLP model.')
-        if problem.isMIP():
-            native = native.getCbcModel()
-            native.logLevel = 0
-            native.maximumSeconds = float(time_limit)
-            native.solve()
-            status = {'solution': 'optimal', 'problem proven infeasible': 'infeasible',
-                      'linear relaxation unbounded': 'unbounded', 'relaxation infeasible': 'infeasible',
-                      'stopped on time': 'time_limit'}.get(native.status, 'error')
-            has_solution = status in ('optimal', 'feasible', 'time_limit') and (
-                status == 'optimal' or native.solutionCount > 0)
-        else:
-            status = {'optimal': 'optimal', 'primal infeasible': 'infeasible', 'dual infeasible': 'unbounded',
-                      'stopped on iterations or time': 'time_limit'}.get(native.initialSolve(), 'error')
-            has_solution = status == 'optimal'
-        if not has_solution:
-            return status, None, None
-        values = {name: float(value) for name, value in zip(columns, native.primalVariableSolution)}
-        problem.assignVarsVals(values)
-        return status, pulp.value(problem.objective), values
-
-    def iis(self, problem):
-        return gurobi_iis(_read_with_gurobi(problem.writeLP))
-
-    def catalog(self):
-        import pulp
-
-        rows = [_entry(name, lambda n=name: pulp.getSolver(n, msg=False).available())
-                for name in dict.fromkeys(pulp.listSolvers())]
-        return _unique(rows)
-
-
 class CvxpyLibrary:
     """CVXPY problems in DCP, DGP or DQCP mode, with CVXPY's own solver selection."""
 
@@ -1042,40 +830,9 @@ class CasadiLibrary:
         return _unique(families['Nlpsol'] + families['Conic'])
 
 
-class CoptpyLibrary:
-    """COPT's native Python model."""
-
-    name = "coptpy"
-
-    def recognize(self, model, backend):
-        backend = "copt" if backend == "AUTO" else backend
-        return Selection(model, backend, lambda time_limit: self.solve(model, time_limit, backend))
-
-    def solve(self, model, time_limit, backend):
-        if backend != "copt":
-            raise ModelError(f"coptpy uses its native copt backend; {backend!r} is not supported.")
-        import coptpy as cp
-
-        _expect(model, cp.Model, "coptpy.Model")
-        model.setParam("Logging", 0)
-        model.setParam("TimeLimit", float(time_limit))
-        model.solve()
-        status = {cp.COPT.OPTIMAL: "optimal", cp.COPT.INFEASIBLE: "infeasible", cp.COPT.UNBOUNDED: "unbounded",
-                  cp.COPT.INF_OR_UNB: "infeasible_or_unbounded", cp.COPT.TIMEOUT: "time_limit",
-                  cp.COPT.LOCAL_OPTIMAL: "locally_optimal",
-                  cp.COPT.LOCAL_INFEASIBLE: "locally_infeasible"}.get(model.status)
-        if not model.hasSol or status not in ("optimal", "locally_optimal", "feasible", "time_limit", "iteration_limit", None):
-            return status or "error", None, None
-        return status or "feasible", model.objval, {v.name: v.x for v in model.getVars()}
-
-    def catalog(self):
-        return _unique([_entry("copt", lambda: __import__("coptpy") is not None)])
-
-
-# The nine native libraries, in the order shown to users. This is the complete set, not a discovery hook.
+# The five native libraries, in the order shown to users. This is the complete set, not a discovery hook.
 LIBRARIES = {library.name: library for library in (
-    PyomoLibrary(), GurobipyLibrary(), OrtoolsLibrary(), CpmpyLibrary(), PulpLibrary(),
-    CvxpyLibrary(), PyscipoptLibrary(), CasadiLibrary(), CoptpyLibrary(),
+    PyomoLibrary(), OrtoolsLibrary(), CvxpyLibrary(), PyscipoptLibrary(), CasadiLibrary(),
 )}
 
 

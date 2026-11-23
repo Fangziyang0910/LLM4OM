@@ -24,9 +24,7 @@ from llm4om.runtime import RECURSION_LIMIT, Context, Limits, ModelingState
 from llm4om.sandbox import Sandbox, SolveResult
 from llm4om.storage import write_private_json
 
-CHECKPOINT_TYPES = [("llm4om.sandbox", "SolveResult"),
-                    ("llm4om.methods.autoformulation.search", "Node"),
-                    ("llm4om.methods.autoformulation.search", "Search")]
+CHECKPOINT_TYPES = [("llm4om.sandbox", "SolveResult")]
 
 
 @task

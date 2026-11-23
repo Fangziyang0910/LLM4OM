@@ -5,7 +5,6 @@
 **通用智能优化求解器（General Intelligent Optimization Solver，简称 GIOS）**：面向各类复杂优化问题的通用求解器，支持通过工作台或对话完成需求梳理、自动优化建模、隔离沙箱求解与结果解读（底层 Python 包与命令行标识保留为 `llm4om`）。
 
 **自动优化建模（Automated Optimization Modeling）**：从自然语言问题和数据形成可求解的优化模型的任务。
-_Avoid_: 与方法名 AutoFormulation 混用。
 
 **问题（Problem）**：用户给出的自然语言描述，加上可选的数据文件。
 
@@ -40,7 +39,7 @@ _Avoid_: LLM 服务设置、profile；不要与方法的预设参数混用。
 
 **代码契约（Code Target）**：所选代码写法对应的代码要求，由平台拼接到方法的代码提示中。
 
-**建模求解器（Modeling Library）**：用户用来表达优化模型的代码建模库，例如 Pyomo、OR-Tools、CPMpy 和 CVXPY。一个库只算一种建模求解器，不因其接口或求解后端的数量增加。
+**建模求解器（Modeling Library）**：用户用来表达优化模型的代码建模库，例如 Pyomo、OR-Tools、CVXPY、PySCIPOpt 和 CasADi。一个库只算一种建模求解器，不因其接口或求解后端的数量增加。
 
 **代码写法（Code Language）**：使用某个建模求解器及其建模接口表达数学模型的方式，不包含求解后端的身份。
 
@@ -53,7 +52,7 @@ _Avoid_: LLM 服务设置、profile；不要与方法的预设参数混用。
 **求解结果（Solve Result）**：一次求解的状态、目标值、变量取值、代码输出和错误。
 _Avoid_: 把 `optimal` 当作建模正确；它只说明当前模型被求到最优。
 
-**冲突约束（Infeasibility Diagnosis）**：模型不可行时，沙箱找出的一组不能同时满足的约束（Gurobi IIS 或 CPMpy MUS）。工作台展示该证据；自有 Feedback Repair 可读取它，已移植的研究方法保留原反馈。
+**冲突约束（Infeasibility Diagnosis）**：模型不可行时，沙箱找出的一组不能同时满足的约束（线性模型使用 Gurobi IIS）。工作台展示该证据，研究方法保留原反馈。
 _Avoid_: 把它当作修正建议；它只说明哪些约束合在一起无解。
 
 **运行（Run）**：一次“问题 + 方法 + LLM + 代码写法”的执行。记录该次执行的配置、步骤、产物和结果。

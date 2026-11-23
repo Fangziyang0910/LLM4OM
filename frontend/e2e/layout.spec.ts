@@ -65,7 +65,7 @@ test("settings scroll as one form and reveal the saved method", async ({ page })
   const methods = page.getByRole("radiogroup", { name: "建模方法", exact: true });
   expect(await methods.evaluate(node => node.scrollHeight - node.clientHeight)).toBe(0);
   await page.getByRole("button", { name: /^更多研究方法/ }).click();
-  const selected = methods.getByRole("radio", { name: /^OptiMind/ });
+  const selected = methods.getByRole("radio", { name: /^OptiMUS 0\.3/ });
   await selected.check();
   await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();

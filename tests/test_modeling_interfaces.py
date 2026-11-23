@@ -12,8 +12,8 @@ from tests.modeling_examples import REFERENCES
 from tests.test_sandbox import ORTOOLS_CODE
 
 
-def test_nine_libraries_keep_api_choice_in_the_code() -> None:
-    assert set(LANGUAGES) == {'pyomo', 'gurobipy', 'ortools', 'cpmpy', 'pulp', 'cvxpy', 'pyscipopt', 'casadi', 'coptpy'}
+def test_five_libraries_keep_api_choice_in_the_code() -> None:
+    assert set(LANGUAGES) == {'pyomo', 'ortools', 'cvxpy', 'pyscipopt', 'casadi'}
     assert all(not hasattr(item, 'interfaces') for item in LANGUAGES.values())
     old = CodeTarget('cvxpy_osqp')
     assert (old.language, old.solver) == ('cvxpy', 'OSQP')
@@ -25,11 +25,11 @@ def test_nine_libraries_keep_api_choice_in_the_code() -> None:
 
 
 @pytest.mark.parametrize('key,objective', [
-    ('pyomo.kernel', 2), ('gurobipy.matrix', 13), ('ortools.mathopt', 13), ('ortools.cp_sat', 13),
+    ('pyomo.kernel', 2), ('ortools.mathopt', 13), ('ortools.cp_sat', 13),
     ('ortools.model_builder', 12), ('ortools.routing', 15), ('ortools.constraint', None),
     ('ortools.max_flow', 3), ('ortools.min_cost_flow', 6), ('ortools.assignment', 8), ('ortools.knapsack', 22),
-    ('cpmpy.solver', 13), ('pulp.column', 6), ('cvxpy.dgp', 1), ('cvxpy.dqcp', 0.5), ('pyscipopt.matrix', 13),
-    ('casadi.opti_conic', 2), ('casadi.nlpsol', 0), ('casadi.qpsol', 2), ('casadi.conic', 2), ('coptpy.matrix', 13),
+    ('cvxpy.dgp', 1), ('cvxpy.dqcp', 0.5), ('pyscipopt.matrix', 13),
+    ('casadi.opti_conic', 2), ('casadi.nlpsol', 0), ('casadi.qpsol', 2), ('casadi.conic', 2),
 ])
 @pytest.mark.parametrize('kind', ['local', pytest.param('docker', marks=[pytest.mark.docker,
     pytest.mark.skipif(not os.environ.get('LLM4OM_TEST_DOCKER'), reason='set LLM4OM_TEST_DOCKER=1')])])
@@ -52,8 +52,8 @@ def test_official_modeling_interfaces(key: str, objective: float | None, kind: s
         assert result.status == 'feasible'  # a short heuristic route is not a proof of optimality
 
 
-@pytest.mark.parametrize('library,interface,backend', [('pyomo','algebraic','missing_solver'),
-    ('cvxpy','dcp','MISSING_SOLVER'), ('pulp','row','MISSING_SOLVER'), ('gurobipy','model','highs')])
+@pytest.mark.parametrize('library,interface,backend', [('pyomo', 'algebraic', 'missing_solver'),
+    ('cvxpy', 'dcp', 'MISSING_SOLVER'), ('pyscipopt', 'model', 'highs')])
 def test_unavailable_or_wrong_backends_are_not_replaced(library: str, interface: str, backend: str) -> None:
     code = 'def build_model(data):\n    return object()\n'
     result = asyncio.run(Sandbox('local').solve(code, {}, library, 5, solver=backend))

@@ -12,9 +12,9 @@ from langchain_core.messages import AIMessage, convert_to_messages
 from llm4om.host import resume, start, status
 from llm4om.languages import LANGUAGES
 from llm4om.methods import methods
-from tests.conftest import ACCEPT_REVIEW, PRODUCTION_CODE, PRODUCTION_PROBLEM, TWO_PART_REPLY
+from tests.conftest import PRODUCTION_CODE, PRODUCTION_PROBLEM, TWO_PART_REPLY
 from tests.test_method_libraries import method_script
-from tests.test_methods import PASS_FORMULATION, autoformulation_script, by_role, trival_script
+from tests.test_methods import PASS_FORMULATION, by_role, trival_script
 
 
 def drive_host(directory: Path, script: Any, *, method: str = "direct", language: str = "pyomo",
@@ -40,24 +40,22 @@ def test_host_repairs_with_real_solver_feedback_across_restarts(tmp_path: Path, 
     monkeypatch.setattr("llm4om.llm.LLMSettings.validate", forbidden)
     monkeypatch.setattr("llm4om.llm_presets.LLMPresetStore.find", forbidden)
     directory = tmp_path / "session"
-    result = asyncio.run(start(directory, PRODUCTION_PROBLEM, method="feedback_repair", sandbox="local"))
+    result = asyncio.run(start(directory, PRODUCTION_PROBLEM, method="bind", sandbox="local"))
     assert result["status"] == "waiting"
-    assert result["pending"][0]["role"] == "generate"
+    assert result["pending"][0]["role"] == "bind_generate"
     assert asyncio.run(status(directory))["pending"] == result["pending"]
 
     def answer(text: str) -> dict[str, Any]:
         return asyncio.run(resume(directory, {result["pending"][0]["id"]: {"content": text}}))
 
     result = answer(TWO_PART_REPLY.replace("return m", "return m.missing"))
-    assert result["pending"][0]["role"] == "repair"
+    assert result["pending"][0]["role"] == "bind_generate"
     assert "missing" in str(result["pending"][0]["messages"])
     result = answer(TWO_PART_REPLY)
-    assert result["pending"][0]["role"] == "review"
-    result = answer(ACCEPT_REVIEW)
     assert result["status"] == "completed"
     assert result["solve"]["objective"] == 13
     assert result["code"].strip() == PRODUCTION_CODE.strip()
-    assert result["usage"]["llm_calls"] == 3
+    assert result["usage"]["llm_calls"] == 2
     assert result["usage"]["solves"] == 2
     assert result["usage"]["input_tokens"] is None
     assert asyncio.run(status(directory))["solve"] == result["solve"]
@@ -66,8 +64,7 @@ def test_host_repairs_with_real_solver_feedback_across_restarts(tmp_path: Path, 
 
 @pytest.mark.parametrize("method", [name for name, item in methods().items() if not item.builtin_solver])
 @pytest.mark.parametrize("language", list(LANGUAGES))
-def test_host_runs_every_method_with_every_library(tmp_path: Path, preset: Any, method: str, language: str) -> None:
-    preset("AUTOFORMULATION", n_used_gpt=1, n_top=1, n_reward=1, total_rollouts=1)
+def test_host_runs_every_method_with_every_library(tmp_path: Path, method: str, language: str) -> None:
     result = drive_host(tmp_path / "session", method_script(method, language), method=method, language=language)
     assert result["status"] == "completed", result.get("failure")
     assert result["solve"]["objective"] == pytest.approx(13), result["solve"]
@@ -75,19 +72,6 @@ def test_host_runs_every_method_with_every_library(tmp_path: Path, preset: Any, 
     assert {"llm", "artifact", "solve"} <= {step["type"] for step in result["steps"]}
     assert all(not step.get("running") for step in result["steps"])
     assert result["usage"]["solves"] == 1
-
-
-def test_host_preserves_parallel_search_voting_and_does_not_repeat_solves(tmp_path: Path, preset: Any) -> None:
-    preset("AUTOFORMULATION", n_used_gpt=2, n_top=2, n_reward=1, total_rollouts=2)
-    calls: list[tuple[str, str]] = []
-    result = drive_host(tmp_path / "session", autoformulation_script("pyo.NonNegativeIntegers", calls),
-                        method="autoformulation")
-    assert result["status"] == "completed", result["failure"]
-    assert result["solve"]["objective"] == 13
-    assert result["usage"]["solves"] == 2
-    assert [role for role, _ in calls].count("compare") == 10
-    assert result["usage"]["llm_calls"] == len(calls) == 29
-    assert sorted(step["objective"] for step in result["steps"] if step["type"] == "solve") == [13, 16]
 
 
 def test_host_rejects_invalid_answers_without_consuming_the_pending_request(tmp_path: Path) -> None:
@@ -103,8 +87,8 @@ def test_host_rejects_invalid_answers_without_consuming_the_pending_request(tmp_
         asyncio.run(resume(directory, {}))
 
 
-def test_host_caps_parallel_requests_before_returning_work_to_the_agent(tmp_path: Path) -> None:
-    result = asyncio.run(start(tmp_path / "session", PRODUCTION_PROBLEM, method="autoformulation", sandbox="local", max_calls=2))
+def test_host_caps_requests_before_returning_work_to_the_agent(tmp_path: Path) -> None:
+    result = drive_host(tmp_path / "session", method_script("optimus", "pyomo"), method="optimus", max_calls=2)
     assert result["status"] == "failed" and "limit" in result["failure"]
     assert result["usage"]["llm_calls"] == 2 and result["usage"]["solves"] == 0
 
@@ -139,9 +123,8 @@ def test_host_trival_backtracks_from_code_validation_to_formulation(tmp_path: Pa
 
 
 def test_host_solve_budget_keeps_results_bound_to_the_code_actually_executed(tmp_path: Path) -> None:
-    script = by_role({"generate": TWO_PART_REPLY.replace("return m", "return m.missing"),
-                      "repair": TWO_PART_REPLY, "review": ACCEPT_REVIEW})
-    result = drive_host(tmp_path / "session", script, method="feedback_repair", max_solves=1)
+    script = by_role({"bind_generate": [TWO_PART_REPLY.replace("return m", "return m.missing"), TWO_PART_REPLY]})
+    result = drive_host(tmp_path / "session", script, method="bind", max_solves=1)
     assert result["status"] == "failed" and "limit" in result["failure"]
     assert result["code"].strip() == PRODUCTION_CODE.strip()
     assert result["solve"] is None and result["usage"]["solves"] == 1
@@ -157,7 +140,7 @@ def test_host_rejects_invalid_limits_before_creating_a_session(tmp_path: Path, l
 
 @pytest.mark.docker
 @pytest.mark.skipif(not os.environ.get("LLM4OM_TEST_DOCKER"), reason="set LLM4OM_TEST_DOCKER=1")
-@pytest.mark.parametrize("method", ["direct", "feedback_repair", "trival"])
+@pytest.mark.parametrize("method", ["direct", "llmopt", "trival"])
 def test_host_executes_the_existing_docker_worker(tmp_path: Path, method: str) -> None:
     result = drive_host(tmp_path / "session", method_script(method, "pyomo"), method=method, sandbox="docker")
     assert result["status"] == "completed", result["failure"]

@@ -32,9 +32,9 @@ llm4om methods
 llm4om backends
 ```
 
-The version should be `LLM4OM 0.43.0`. `methods` lists 13 methods; `backends` queries the actual Docker worker. A listed backend may still need its own commercial license. Start with Pyomo / HiGHS or CPMpy / OR-Tools when no commercial solver is required.
+The version should be `LLM4OM 0.43.0`. `methods` lists 9 methods; `backends` queries the actual Docker worker. A listed backend may still need its own commercial license. Start with Pyomo / HiGHS or OR-Tools / CP-SAT when no commercial solver is required.
 
-版本应为 `LLM4OM 0.43.0`。`methods` 列出 13 种方法；`backends` 查询实际求解镜像。商业后端仍需要其自身许可证，首次可使用 Pyomo / HiGHS 或 CPMpy / OR-Tools。
+版本应为 `LLM4OM 0.43.0`。`methods` 列出 9 种方法；`backends` 查询实际求解镜像。商业后端仍需要其自身许可证，首次可使用 Pyomo / HiGHS 或 OR-Tools / CP-SAT。
 
 Release [v0.43.0](https://github.com/Fangziyang0910/LLM4OM/releases/tag/v0.43.0) also contains a wheel and a separate skill ZIP. If Git cloning is unavailable, replace the first and third commands with these direct downloads, keeping `llm4om build-worker` between them:
 
@@ -53,9 +53,9 @@ Mention `$llm4om` in Codex or invoke `/llm4om` in Claude Code. Describe your pro
 
 For a first run, invoke the skill, then send / 首次可发送：
 
-> Use Feedback Repair and Pyomo with HiGHS. A factory produces nonnegative integer quantities A and B, with profits 3 and 2. Cutting capacity: 2A + B <= 8. Assembly capacity: A + 2B <= 8. Maximize profit. Show the formulation, actual solution, and saved artifacts.
+> Use OR-LLM-Agent and Pyomo with HiGHS. A factory produces nonnegative integer quantities A and B, with profits 3 and 2. Cutting capacity: 2A + B <= 8. Assembly capacity: A + 2B <= 8. Maximize profit. Show the formulation, actual solution, and saved artifacts.
 
-> 使用 Feedback Repair、Pyomo 和 HiGHS。工厂生产 A、B，两者均为非负整数，单件利润分别为 3、2。切割约束为 2A+B≤8，装配约束为 A+2B≤8。请最大化利润，给出数学模型、实际求解结果和保存的文件。
+> 使用 OR-LLM-Agent、Pyomo 和 HiGHS。工厂生产 A、B，两者均为非负整数，单件利润分别为 3、2。切割约束为 2A+B≤8，装配约束为 A+2B≤8。请最大化利润，给出数学模型、实际求解结果和保存的文件。
 
 The expected optimum is A=3, B=2, profit=13. The host performs the reasoning and responds in your language. To use data, give it a local CSV / JSON file and explain the columns and units. To change requirements, ask it to save a new run for comparison.
 
@@ -84,9 +84,9 @@ llm4om build-worker
 npx skills add https://github.com/Fangziyang0910/LLM4OM/tree/v0.43.0/skills/llm4om --skill llm4om -g -a codex -a claude-code
 ```
 
-Keep the CLI and skill on the same release. Start a new modeling session after changing the package version or method parameters; keep old session directories as records. The current source checkout uses `llm4om-worker:16`; the published v0.43.0 release uses `:12`. Build the image with the CLI version you installed.
+Keep the CLI and skill on the same release. Start a new modeling session after changing the package version or method parameters; keep old session directories as records. The current source checkout uses `llm4om-worker:17`; the published v0.43.0 release uses `:12`. Build the image with the CLI version you installed.
 
-CLI 和 Skill 使用同一版本。升级后创建新的建模会话，保留旧目录中的记录。当前源码使用 `llm4om-worker:16`，已发布的 v0.43.0 使用 `:12`；按所安装的 CLI 构建对应镜像。
+CLI 和 Skill 使用同一版本。升级后创建新的建模会话，保留旧目录中的记录。当前源码使用 `llm4om-worker:17`，已发布的 v0.43.0 使用 `:12`；按所安装的 CLI 构建对应镜像。
 
 ```bash
 npx skills remove llm4om -g -a codex -a claude-code
@@ -107,14 +107,14 @@ Uninstalling leaves saved sessions and the Docker worker image intact. Remove th
 | Skill is not visible / 宿主看不到技能 | Open a new session and confirm the installation targets your host / 新开会话并检查对应宿主是否安装 |
 | A backend reports a missing license / 后端缺少许可证 | Choose an available open-source backend or configure that solver's license / 选择可用开源后端或配置许可证 |
 
-Linux installation and Docker execution are verified. Full macOS and Windows installation has not been verified. For trusted development without Docker, install `solve` and `autoformulation` extras into the CLI environment and pass `--sandbox local`; generated code then runs in that Python environment without container isolation.
+Linux installation and Docker execution are verified. Full macOS and Windows installation has not been verified. For trusted development without Docker, install the `solve` extra into the CLI environment and pass `--sandbox local`; generated code then runs in that Python environment without container isolation.
 
 已验证 Linux 安装与 Docker 执行；macOS、Windows 尚未完成整套验证。本机直接执行模式用于可信开发环境，需另装对应求解依赖。
 
 ## Local sessions / 本地会话
 
 ```bash
-llm4om host start --file problem.md --method feedback_repair --language pyomo --session runs/host/example
+llm4om host start --file problem.md --method or_llm_agent --language pyomo --session runs/host/example
 llm4om host resume --session runs/host/example --responses answers.json
 llm4om host status --session runs/host/example
 ```
@@ -129,7 +129,7 @@ The private session directory contains checkpoints, execution records, `result.j
 
 ## Method fidelity / 方法保留范围
 
-All 13 existing method graphs and all nine modeling libraries are available. Prompts, stages, candidate counts, ranking, voting, selective repair, backtracking, and stopping rules are retained. OptiMUS parsing retries propagate native graph pauses rather than treating them as malformed model output. Sessions record the method source and fixed parameters.
+All registered method graphs and all five modeling libraries are available. Prompts, stages, repair loops, backtracking, and stopping rules are retained. OptiMUS parsing retries propagate native graph pauses rather than treating them as malformed model output. Sessions record the method source and fixed parameters.
 
 保留原有方法的搜索、投票、工具、局部修复与回溯。LP/MILP 方法的问题范围不因所选建模库改变。宿主模型的温度和上下文隔离不能由通用 Skill 强制控制；因此保留的是方法流程，而不是原 API 采样分布或论文实验结果。
 

@@ -81,7 +81,7 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
             if messages[-1].get("name") == "select_plan":
                 return "接下来按已选择的方案继续讨论。"
             if "methods" in facts:
-                return "实际注册了十三种建模方法和九个建模库。"
+                return "实际注册了九种建模方法和五个建模库。"
             if "E2E_AGENT_SEARCH" in latest:
                 return "找到了[公开排班参考](https://example.org/shift-guide)，请确认是否采用其中的业务条件。"
             return "实际求解结果：" + str(facts.get("objective"))
@@ -189,7 +189,7 @@ def reply(messages: list[dict], tools: list[dict]) -> str | dict:
     if "E2E_AGENT_PAUSE" in text:
         time.sleep(4)
     if "E2E_PAUSE_REPAIR" in text:
-        if "## Solver feedback" in text:
+        if "## Solver feedback" in text or "Code execution encountered an error" in text:
             time.sleep(30)
         return f"### Formulation\n{FORMULATION}\n\n```python\n{FEASIBLE.replace('return m', 'return m.missing')}```"
     if 'cp_model.CpModel' in text or 'native OR-Tools model' in text:

@@ -36,10 +36,10 @@ test("desktop configuration is compact by default and retains the selected metho
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   const settings = page.getByRole("complementary", { name: "运行设置", exact: true });
   await expect(settings).toBeInViewport();
-  await page.getByRole("radio", { name: "OptiMind", exact: true }).check();
+  await page.getByRole("radio", { name: "OptiMUS 0.3", exact: true }).check();
   await page.reload();
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
-  const selected = page.getByRole("radio", { name: "OptiMind", exact: true });
+  const selected = page.getByRole("radio", { name: "OptiMUS 0.3", exact: true });
   await expect(selected).toBeChecked();
   const box = (await selected.boundingBox())!, list = (await page.getByRole("radiogroup", { name: "建模方法", exact: true }).boundingBox())!;
   expect(box.y).toBeGreaterThanOrEqual(list.y);

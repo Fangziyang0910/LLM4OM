@@ -12,17 +12,6 @@ import pytest
 from llm4om.sandbox import WORKER_IMAGE, Sandbox, SolveResult
 from tests.conftest import PRODUCTION_CODE
 
-GUROBIPY_CODE = '''import gurobipy as gp
-from gurobipy import GRB
-
-def build_model(data):
-    m = gp.Model()
-    x = m.addVars(["A", "B"], vtype=GRB.INTEGER, name="x")
-    m.setObjective(3 * x["A"] + 2 * x["B"], GRB.MAXIMIZE)
-    m.addConstr(2 * x["A"] + x["B"] <= 8)
-    m.addConstr(x["A"] + 2 * x["B"] <= 8)
-    return m
-'''
 ORTOOLS_CODE = '''from ortools.linear_solver import pywraplp
 
 def build_model(data):
@@ -33,23 +22,15 @@ def build_model(data):
     s.Add(x["A"] + 2 * x["B"] <= 8)
     return s
 '''
-CPMPY_CODE = '''import cpmpy as cp
+CP_SAT_CODE = '''from ortools.sat.python import cp_model
 
 def build_model(data):
-    x = cp.intvar(0, 10, shape=2, name="x")
-    m = cp.Model(2 * x[0] + x[1] <= 8, x[0] + 2 * x[1] <= 8)
+    m = cp_model.CpModel()
+    x = [m.new_int_var(0, 10, f"x[{i}]") for i in range(2)]
+    m.add(2 * x[0] + x[1] <= 8)
+    m.add(x[0] + 2 * x[1] <= 8)
     m.maximize(3 * x[0] + 2 * x[1])
     return m
-'''
-PULP_CODE = '''import pulp
-
-def build_model(data):
-    problem = pulp.LpProblem("production", pulp.LpMaximize)
-    x = pulp.LpVariable.dicts("x", ["A", "B"], lowBound=0, cat="Integer")
-    problem += 3 * x["A"] + 2 * x["B"]
-    problem += 2 * x["A"] + x["B"] <= 8, "cutting"
-    problem += x["A"] + 2 * x["B"] <= 8, "machining"
-    return problem
 '''
 CVXPY_CODE = '''import cvxpy as cp
 import numpy as np
@@ -68,10 +49,7 @@ def solve(code: str, language: str = "pyomo", data: dict[str, str] | None = None
 @pytest.mark.parametrize("language,code,names", [
     pytest.param("pyomo", PRODUCTION_CODE, ("x[A]", "x[B]"), id="pyomo-highs"),
     pytest.param("pywraplp", ORTOOLS_CODE, ("x[A]", "x[B]"), id="pywraplp-scip"),
-    pytest.param("cpmpy", CPMPY_CODE, ("x[0]", "x[1]"), id="cpmpy-cpsat"),
-    pytest.param("pulp", PULP_CODE, ("x_A", "x_B"), id="pulp-cbc"),
-    pytest.param("gurobipy", GUROBIPY_CODE, ("x[A]", "x[B]"), id="gurobipy-gurobi",
-                 marks=pytest.mark.skipif(not has_gurobi, reason="gurobipy is not installed"))])
+    pytest.param("ortools", CP_SAT_CODE, ("x[0]", "x[1]"), id="ortools-cpsat")])
 def test_every_language_is_solved_by_its_solver(language: str, code: str, names: tuple[str, str]) -> None:
     result = solve(code, language)
     assert result.error is None, result.error
@@ -96,20 +74,14 @@ def test_clarabel_rejects_integer_variables() -> None:
 
 # Two demands that the capacity cannot both meet; `spare` is a constraint outside the conflict.
 CONFLICTS = {
-    # Gurobi's presolve calls this model "infeasible or unbounded"; the worker settles which.
-    "gurobipy": GUROBIPY_CODE.replace("    return m", "    m.addConstr(x['A'] >= 5, 'needA')\n    m.addConstr(x['B'] >= 5, 'needB')\n"
-                                      "    return m"),
     "pyomo": PRODUCTION_CODE.replace("    return m", "    m.needA = pyo.Constraint(expr=m.x['A'] >= 5)\n"
                                      "    m.needB = pyo.Constraint(expr=m.x['B'] >= 5)\n    return m"),
     "pywraplp": ORTOOLS_CODE.replace("    return s", "    s.Add(x['A'] >= 5, 'needA')\n    s.Add(x['B'] >= 5, 'needB')\n    return s"),
-    "pulp": PULP_CODE.replace("    return problem", "    problem += x['A'] >= 5, 'needA'\n    problem += x['B'] >= 5, 'needB'\n"
-                              "    return problem"),
-    "cpmpy": CPMPY_CODE.replace("    m.maximize", "    m += x[0] >= 5\n    m += x[1] >= 5\n    m.maximize"),
 }
 
 
 @pytest.mark.parametrize("language", [pytest.param(language, marks=pytest.mark.skipif(
-    language != "cpmpy" and not has_gurobi, reason="the IIS of linear models comes from Gurobi")) for language in CONFLICTS])
+    not has_gurobi, reason="the IIS of linear models comes from Gurobi")) for language in CONFLICTS])
 def test_an_infeasible_model_shows_its_conflict_but_feedback_leaves_it_out(language: str) -> None:
     result = solve(CONFLICTS[language], language)
     assert result.status == "infeasible" and result.diagnosis is not None, (result.error, result.output)
@@ -120,15 +92,16 @@ def test_an_infeasible_model_shows_its_conflict_but_feedback_leaves_it_out(langu
         return
     assert result.diagnosis["error"] is None and result.diagnosis["total"] == len(result.diagnosis["items"]) >= 2
     text = " ".join(result.diagnosis["items"])
-    assert ("needA" in text and "needB" in text) if language != "cpmpy" else (">= 5" in text)
+    assert "needA" in text and "needB" in text
     assert "machining" not in text or "cutting" not in text  # one capacity row is enough for the conflict
     assert "needA" not in result.feedback() and "IIS" not in result.feedback()
 
 
-def test_cpmpy_satisfaction_problem_has_a_solution_without_objective() -> None:
-    code = "import cpmpy as cp\n\ndef build_model(data):\n    x = cp.intvar(1, 3, shape=3, name='x')\n" \
-           "    return cp.Model(cp.AllDifferent(x), x[0] > x[1])\n"
-    result = solve(code, "cpmpy")
+def test_cp_sat_satisfaction_problem_has_a_solution_without_objective() -> None:
+    code = "from ortools.sat.python import cp_model\n\ndef build_model(data):\n    m = cp_model.CpModel()\n" \
+           "    x = [m.new_int_var(1, 3, f'x[{i}]') for i in range(3)]\n" \
+           "    m.add_all_different(x)\n    m.add(x[0] > x[1])\n    return m\n"
+    result = solve(code, "ortools")
     assert (result.status, result.objective, result.has_solution) == ("feasible", None, True)
     assert sorted(result.variables.values()) == [1, 2, 3] and "x[0]" in result.feedback()
 

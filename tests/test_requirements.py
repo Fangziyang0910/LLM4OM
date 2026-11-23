@@ -170,7 +170,7 @@ def test_long_conversations_clear_old_tool_payloads_only_for_the_model(make_reso
     assert len(result["messages"]) == len(history) + 2
 
 
-@pytest.mark.parametrize("method,language", [("direct", "pyomo"), ("feedback_repair", "ortools")])
+@pytest.mark.parametrize("method,language", [("direct", "pyomo"), ("bind", "ortools")])
 def test_requirements_hand_off_only_problem_text_and_data(make_resources: Any, method: str, language: str) -> None:
     code = TWO_PART_REPLY if language == "pyomo" else '''### Formulation
 Maximize 3 A + 2 B, using at most 8 units of each resource and integer quantities.
@@ -190,7 +190,7 @@ def build_model(data):
             return ("The business problem is drafted." if messages[-1].type == "tool"
                     else tool_call("update_draft", description=PRODUCTION_PROBLEM))
         assert "CHAT_ONLY_MARKER" not in str(messages)
-        return '{"action":"accept","reason":"Matches the problem."}' if role == "review" else code
+        return code
 
     async def check() -> None:
         resources = make_resources(reply)
