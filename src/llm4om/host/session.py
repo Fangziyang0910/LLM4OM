@@ -30,10 +30,14 @@ CHECKPOINT_TYPES = [("llm4om.sandbox", "SolveResult"),
 
 
 @task
-async def solve_code(code: str, title: str, language: str | None = None,
+async def solve_code(code: str, title: str, language: str,
                      solver: str | None = None, time_limit: float | None = None) -> SolveResult:
     context = get_runtime().context
-    return await context.records.execute(context, code, title, language=language, solver=solver, time_limit=time_limit)
+    records = context.records
+    step_id, cached = records.begin("solve", {"code": code, "title": title})
+    if cached is not None:
+        return SolveResult(**cached)
+    return await context._execute_solve(code, title, language, solver, time_limit, step_id, persist=records.complete)
 
 
 @task
@@ -58,7 +62,7 @@ class HostContext(Context):
 
     async def solve(self, code: str, *, title: str = "Solve", language: str | None = None,
                     solver: str | None = None, time_limit: float | None = None) -> SolveResult:
-        lang = language or (self.target.language if self.target is not None else self.spec.get("language"))
+        lang = language or (self.target.language if self.target is not None else self.spec["language"])
         chosen = solver if solver is not None else (self.target.solver if self.target is not None else self.spec.get("solver"))
         result = await solve_code(code, title, lang, chosen, time_limit)
         self.solved[code] = result
@@ -125,7 +129,7 @@ def _write_outputs(directory: Path, result: dict[str, Any]) -> None:
             (directory / filename).write_text(result[key], encoding="utf-8")
 
 
-async def drive(directory: Path, *, initial: bool = False, responses: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _drive(directory: Path, responses: dict[str, Any] | None = None) -> dict[str, Any]:
     with open_records(directory) as records:
         spec = records.get("spec")
         if not isinstance(spec, dict):
@@ -144,20 +148,15 @@ async def drive(directory: Path, *, initial: bool = False, responses: dict[str, 
             config = {"configurable": {"thread_id": "host"}, "recursion_limit": RECURSION_LIMIT,
                       "callbacks": [NodeSteps(method, context.recorder)]}
             snapshot = await graph.aget_state(config)
-            if initial:
-                inputs: Any = {"problem": problem_text(spec["description"], spec["data"]),
-                               "description": spec["description"]}
-            elif responses is not None:
+            if responses is not None:
                 if records.get("failure") or (not snapshot.next and snapshot.created_at is not None):
                     raise ValueError("This host session has ended. Start a new session for a new attempt.")
+                validated = validate_responses(pending_requests(snapshot), responses)
                 if snapshot.created_at is None:
-                    validate_responses([], responses)
-                    inputs = {"problem": problem_text(spec["description"], spec["data"]),
-                              "description": spec["description"]}
+                    inputs: Any = {"problem": problem_text(spec["description"], spec["data"]),
+                                   "description": spec["description"]}
                 else:
-                    validated = validate_responses(pending_requests(snapshot), responses)
                     inputs = Command(resume=validated) if validated else None
-            if initial or responses is not None:
                 started = time.monotonic()
                 active = records.get("active_seconds", 0)
                 try:
@@ -174,7 +173,7 @@ async def drive(directory: Path, *, initial: bool = False, responses: dict[str, 
                     _finalize_failed_steps(context)
 
         result = result_document(records, snapshot)
-        if initial or responses is not None:
+        if responses is not None:
             _write_outputs(directory, result)
         return result
 
@@ -212,16 +211,16 @@ async def start(directory: str | Path, description: str, *, method: str = "direc
                              "sandbox": sandbox, "worker_image": runner.image if sandbox == "docker" else None})
     finally:
         records.db.close()
-    return await drive(directory, initial=True)
+    return await _drive(directory, {})
 
 
 async def resume(directory: str | Path, responses: dict[str, Any]) -> dict[str, Any]:
     """Validate host answers and continue the original method, including its tools and repair paths."""
     if not isinstance(responses, dict):
         raise ValueError("The response file must contain a JSON object mapping pending IDs to answers.")
-    return await drive(Path(directory).resolve(), responses=responses)
+    return await _drive(Path(directory).resolve(), responses)
 
 
 async def status(directory: str | Path) -> dict[str, Any]:
     """Read the checkpoint, pending requests and actual results without advancing the method."""
-    return await drive(Path(directory).resolve())
+    return await _drive(Path(directory).resolve())

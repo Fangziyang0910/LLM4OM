@@ -10,7 +10,7 @@ sent at once as a custom stream event, so a client sees the run as it happens.
 import json
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Literal, TypedDict
 from uuid import UUID
 
@@ -122,17 +122,26 @@ class Context:
         if not lang:
             raise ValueError("No modeling language or built-in solver was selected.")
         chosen_solver = solver if solver is not None else (self.target.solver if self.target is not None else None)
+        step_id = recorder.step("solve", title, code=code, running=True)
+        return await self._execute_solve(code, title, lang, chosen_solver, time_limit, step_id)
+
+    async def _execute_solve(self, code: str, title: str, language: str, solver: str | None,
+                             time_limit: float | None, step_id: str, *,
+                             persist: Callable[[str, dict[str, Any]], None] | None = None) -> SolveResult:
+        recorder = self.recorder
         limit = recorder.limits.solve_time_limit if time_limit is None else time_limit
-        start = time.monotonic()
-        id = recorder.step("solve", title, code=code, running=True)
+        started = time.monotonic()
         try:
-            result = await self.sandbox.solve(code, self.data, lang, limit, solver=chosen_solver)
+            result = await self.sandbox.solve(code, self.data, language, limit, solver=solver)
         except BaseException as error:
-            recorder.step("solve", title, f"{type(error).__name__}: {error}", id=id, running=False, failed=True,
-                          seconds=round(time.monotonic() - start, 1))
+            recorder.step("solve", title, f"{type(error).__name__}: {error}", id=step_id, running=False, failed=True,
+                          seconds=round(time.monotonic() - started, 1))
             raise
+        if persist is not None:
+            persist(step_id, asdict(result))
         self.solved[code] = result
-        recorder.step("solve", title, result.feedback(), id=id, running=False, seconds=round(time.monotonic() - start, 1),
+        recorder.steps.get(step_id, {}).pop("failed", None)
+        recorder.step("solve", title, result.feedback(), id=step_id, running=False, seconds=round(time.monotonic() - started, 1),
                       status=result.status, objective=result.objective)
         return result
 

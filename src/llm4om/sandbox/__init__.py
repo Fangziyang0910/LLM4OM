@@ -8,6 +8,7 @@ import asyncio
 import contextlib
 import json
 import os
+import re
 import sys
 import tempfile
 import uuid
@@ -91,27 +92,22 @@ class Sandbox:
         filtered = {key: value for key, value in payload.items() if key in allowed}
         if not isinstance(filtered.get("status"), str):
             return SolveResult("error", error="The sandbox returned an invalid result payload.")
-        try:
-            return SolveResult(**filtered)
-        except TypeError as error:
-            return SolveResult("error", error=f"The sandbox returned an invalid result payload: {error}")
+        return SolveResult(**filtered)
 
     async def solve(self, code: str, data: dict[str, str], language: str, time_limit: float, *,
                     solver: str | None = None) -> SolveResult:
         """Build the model from `code` with `data` and solve it with the language's solver, within `time_limit`."""
         if language == "autoco":
-            import re
-
-            chosen = solver or "AUTO"
-            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_./:-]*", chosen):
+            solver = solver or "AUTO"
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_./:-]*", solver):
                 raise ValueError("Use a valid AutoCO algorithm identifier.")
-            return self._to_result(await self._run({"code": code, "data": data, "language": "autoco",
-                                                    "solver": chosen, "time_limit": time_limit}, time_limit))
-        from llm4om.languages import CodeTarget
+        else:
+            from llm4om.languages import CodeTarget
 
-        target = CodeTarget(language, solver)
-        return self._to_result(await self._run({"code": code, "data": data, "language": target.language,
-                                                "solver": target.solver, "time_limit": time_limit}, time_limit))
+            target = CodeTarget(language, solver)
+            language, solver = target.language, target.solver
+        return self._to_result(await self._run({"code": code, "data": data, "language": language,
+                                                "solver": solver, "time_limit": time_limit}, time_limit))
 
     async def run_script(self, script: str, time_limit: float) -> SolveResult:
         """Run a script as __main__; `output` holds what it printed and any traceback."""

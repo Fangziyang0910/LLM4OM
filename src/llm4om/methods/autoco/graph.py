@@ -5,13 +5,12 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import asdict
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_core.tools import StructuredTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from llm4om.methods import Method, presets
 from llm4om.methods.autoco.knowledge import DEFAULT_KG, KG_AGENT_PROMPT, auto_problem_feature_ids, reconcile_features
@@ -26,7 +25,8 @@ from llm4om.methods.autoco.modeling import (
 )
 from llm4om.methods.common import output_language, python_code_blocks
 from llm4om.runtime import Context, ModelingState
-from llm4om.sandbox.autoco.specs import ALGORITHM_SPECS, canonical_algorithm
+from llm4om.sandbox import SolveResult
+from llm4om.sandbox.autoco.specs import canonical_algorithm
 
 _MARKER = "@@AUTOCO_JSON@@"
 
@@ -55,17 +55,22 @@ class State(ModelingState, total=False):
     formulation_data: dict[str, Any]
     review_issues: list[str]
     revision_count: int
-    base_code: str
     problem_meta: dict[str, Any]
     selection: dict[str, Any]
     algorithm_summary: str
 
 
 class _QueryKnowledgeArgs(BaseModel):
+    """Query Problem-Feature <-> Algorithm-Feature relations (SUITS, CONFLICTS_WITH, SYNERGIZES_WITH) and matching pool components."""
+
+    model_config = ConfigDict(title="query_knowledge")
     concepts: list[str] = Field(description="List of pfeat:*, afeat:*, or algorithm names to query.")
 
 
 class _InspectSpecsArgs(BaseModel):
+    """Inspect mechanism features, valid operator slots, and default hyperparameters of candidate algorithms."""
+
+    model_config = ConfigDict(title="inspect_solver_specs")
     algorithms: list[str] = Field(description="Candidate algorithm names to inspect.")
 
 
@@ -76,11 +81,17 @@ class _PilotCandidate(BaseModel):
 
 
 class _PilotVerifyArgs(BaseModel):
+    """Run short empirical trials in the sandbox on 1-2 competing configurations to check feasibility, turnover speed, and stagnation."""
+
+    model_config = ConfigDict(title="pilot_verify")
     candidates: list[_PilotCandidate] = Field(description="1-2 competing configurations to benchmark briefly in the sandbox.")
     trial_seconds: float = Field(default=1.2, description="Seconds per candidate trial.")
 
 
 class _CommitConfigArgs(BaseModel):
+    """Validate feature conflicts & syntax and commit final (algorithm, operators, hyperparameters)."""
+
+    model_config = ConfigDict(title="commit_configuration")
     algorithm: str
     operators: dict[str, str] = Field(default_factory=dict)
     hyperparameters: dict[str, float] = Field(default_factory=dict)
@@ -94,38 +105,25 @@ def _extract_code(text: str) -> str:
     return text.strip() + "\n"
 
 
-def _parse_marker_json(output: str) -> dict[str, Any] | None:
-    for line in reversed(output.splitlines()):
-        if line.startswith(_MARKER):
-            return json.loads(line[len(_MARKER):])
-    return None
-
-
-def _smoke_script(code: str, data: dict[str, str]) -> str:
-    return (
-        "import json\n"
-        "from autoco.runner import smoke_test_problem\n"
-        f"code = {code!r}\n"
-        f"data = {json.dumps(data, ensure_ascii=False)}\n"
-        "meta = smoke_test_problem(code, data)\n"
-        f"print({_MARKER!r} + json.dumps(meta, ensure_ascii=False))\n"
+async def _probe(context: Context, function: Literal["smoke_test_problem", "pilot_trial"],
+                 code: str, *args: Any) -> tuple[SolveResult, dict[str, Any] | None]:
+    arguments = json.dumps([code, context.data, *args], ensure_ascii=False)
+    call = f"{function}(*json.loads({arguments!r}))"
+    payload = f"{{'trials': {call}}}" if function == "pilot_trial" else call
+    result = await context.run_script(
+        f"import json\nfrom autoco.runner import {function}\n"
+        f"print({_MARKER!r} + json.dumps({payload}, ensure_ascii=False))\n"
     )
-
-
-def _pilot_script(code: str, data: dict[str, str], candidates: list[dict[str, Any]], trial_sec: float) -> str:
-    return (
-        "import json\n"
-        "from autoco.runner import pilot_trial\n"
-        f"code = {code!r}\n"
-        f"data = {json.dumps(data, ensure_ascii=False)}\n"
-        f"candidates = {json.dumps(candidates, ensure_ascii=False)}\n"
-        f"trials = pilot_trial(code, data, candidates, {float(trial_sec)!r})\n"
-        f"print({_MARKER!r} + json.dumps({{'trials': trials}}, ensure_ascii=False))\n"
-    )
+    if result.executed:
+        for line in reversed(result.output.splitlines()):
+            if line.startswith(_MARKER):
+                parsed = json.loads(line[len(_MARKER):])
+                return result, parsed if isinstance(parsed, dict) else None
+    return result, None
 
 
 def _strip_invalid_calls(reply: AIMessage) -> tuple[AIMessage, list[dict[str, Any]]]:
-    invalid = list(getattr(reply, "invalid_tool_calls", None) or [])
+    invalid = reply.invalid_tool_calls
     if not invalid:
         return reply, []
     extra = {key: value for key, value in reply.additional_kwargs.items() if key != "tool_calls"}
@@ -178,8 +176,7 @@ async def semantic_grounding(state: State, runtime: Runtime[Context]) -> dict[st
 
 async def formulate(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     context_text = f"## Problem Description\n{state['problem']}\n\n## Semantic Specification\n{state['semantic_md']}"
-    issues = state.get("review_issues") or []
-    if issues and state.get("formulation_data"):
+    if issues := state["review_issues"]:
         current_json = json.dumps(state["formulation_data"], ensure_ascii=False, indent=2)
         prompt = (
             f"{context_text}\n\n## Current Formulation\n{current_json}\n\n"
@@ -196,7 +193,7 @@ async def formulate(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
 
 
 async def review_formulation(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
-    if state.get("revision_count", 0) >= presets.AUTOCO.max_modeling_revisions:
+    if state["revision_count"] >= presets.AUTOCO.max_modeling_revisions:
         return {"review_issues": []}
     context_text = (
         f"## Problem Description\n{state['problem']}\n\n## Semantic Specification\n{state['semantic_md']}\n\n"
@@ -205,7 +202,7 @@ async def review_formulation(state: State, runtime: Runtime[Context]) -> dict[st
     review = await ask_schema(runtime.context, "review_formulation", REVIEW_PROMPT, context_text, FormulationReview)
     if review.passed or not review.issues:
         return {"review_issues": []}
-    return {"review_issues": review.issues, "revision_count": state.get("revision_count", 0) + 1}
+    return {"review_issues": review.issues, "revision_count": state["revision_count"] + 1}
 
 
 def after_review(state: State) -> str:
@@ -230,14 +227,12 @@ async def instantiate(state: State, runtime: Runtime[Context]) -> dict[str, Any]
         ])
         code = _extract_code(reply.text)
         last_code = code
-        check = await context.run_script(_smoke_script(code, context.data))
-        meta = _parse_marker_json(check.output) if check.executed else None
-        if check.executed and isinstance(meta, dict) and meta.get("ok"):
-            return {"base_code": code, "code": code, "problem_meta": meta}
+        check, meta = await _probe(context, "smoke_test_problem", code)
+        if meta and meta.get("ok"):
+            return {"code": code, "problem_meta": meta}
         last_error = check.error or check.output.strip() or "Smoke test returned no metadata."
         prompt = f"{base_prompt}\n\n## Previous Code\n```python\n{code}\n```\n\n## Error to Fix\n{last_error}"
     return {
-        "base_code": last_code,
         "code": last_code or None,
         "failure": f"Failed to instantiate a valid AutoCO Problem after {attempts} attempts:\n{last_error}",
     }
@@ -245,41 +240,6 @@ async def instantiate(state: State, runtime: Runtime[Context]) -> dict[str, Any]
 
 def after_instantiate(state: State) -> str:
     return END if state.get("failure") else "select_algorithm"
-
-
-def _kg_tools(allow_pilot: bool) -> list[StructuredTool]:
-    noop = lambda **kwargs: kwargs  # noqa: E731
-    tools = [
-        StructuredTool.from_function(
-            noop,
-            name="query_knowledge",
-            args_schema=_QueryKnowledgeArgs,
-            description="Query Problem-Feature <-> Algorithm-Feature relations (SUITS, CONFLICTS_WITH, SYNERGIZES_WITH) and matching pool components.",
-        ),
-        StructuredTool.from_function(
-            noop,
-            name="inspect_solver_specs",
-            args_schema=_InspectSpecsArgs,
-            description="Inspect mechanism features, valid operator slots, and default hyperparameters of candidate algorithms.",
-        ),
-        StructuredTool.from_function(
-            noop,
-            name="commit_configuration",
-            args_schema=_CommitConfigArgs,
-            description="Validate feature conflicts & syntax and commit final (algorithm, operators, hyperparameters).",
-        ),
-    ]
-    if allow_pilot:
-        tools.insert(
-            2,
-            StructuredTool.from_function(
-                noop,
-                name="pilot_verify",
-                args_schema=_PilotVerifyArgs,
-                description="Run short empirical trials in the sandbox on 1-2 competing configurations to check feasibility, turnover speed, and stagnation.",
-            ),
-        )
-    return tools
 
 
 def _fallback_algorithm(feats: dict[str, object]) -> str:
@@ -296,14 +256,17 @@ async def select_algorithm(state: State, runtime: Runtime[Context]) -> dict[str,
     context = runtime.context
     formulation = Formulation.model_validate(state["formulation_data"])
     time_limit = float(context.recorder.limits.solve_time_limit)
-    feats = reconcile_features(formulation, state.get("problem_meta"), time_limit=time_limit)
+    feats = reconcile_features(formulation, state["problem_meta"], time_limit=time_limit)
     auto_pfeats = auto_problem_feature_ids(feats)
     kg = DEFAULT_KG
 
-    allow_pilot = bool(presets.AUTOCO.enable_pilot and time_limit >= 5.0 and state.get("base_code"))
+    allow_pilot = presets.AUTOCO.enable_pilot and time_limit >= 5.0
     max_pilot_budget = min(4.0, max(1.2, 0.08 * time_limit)) if allow_pilot else 0.0
     pilot_spent = 0.0
-    tools = _kg_tools(allow_pilot)
+    tools: list[type[BaseModel]] = [_QueryKnowledgeArgs, _InspectSpecsArgs]
+    if allow_pilot:
+        tools.append(_PilotVerifyArgs)
+    tools.append(_CommitConfigArgs)
     bound = context.llm("kg_agent").bind_tools(tools)
 
     messages: list[BaseMessage] = [
@@ -320,8 +283,8 @@ async def select_algorithm(state: State, runtime: Runtime[Context]) -> dict[str,
     trace: list[dict[str, Any]] = []
     active_pfeats: set[str] = set(auto_pfeats)
     warned_once = False
-    last_proposed: dict[str, Any] | None = None
-    committed: dict[str, Any] | None = None
+    proposal: dict[str, Any] | None = None
+    accepted = False
     max_steps = max(1, presets.AUTOCO.max_kg_steps)
 
     for step in range(max_steps):
@@ -340,7 +303,7 @@ async def select_algorithm(state: State, runtime: Runtime[Context]) -> dict[str,
         for idx, call in enumerate(reply.tool_calls):
             call_id = call.get("id") or f"call_{step}_{idx}"
             fn = call["name"]
-            args = call.get("args") if isinstance(call.get("args"), dict) else {}
+            args = call["args"]
             if fn == "query_knowledge":
                 c_list = [str(x) for x in (args.get("concepts") or [])]
                 active_pfeats.update(c for c in kg.resolve_concepts(c_list) if c.startswith("pfeat:"))
@@ -360,10 +323,9 @@ async def select_algorithm(state: State, runtime: Runtime[Context]) -> dict[str,
                     req_s = float(args.get("trial_seconds", 1.2))
                     per_s = max(0.5, min(req_s, min(1.8, rem_pilot / len(cands))))
                     t0 = time.perf_counter()
-                    pilot_res = await context.run_script(_pilot_script(state["base_code"], context.data, cands, per_s))
+                    pilot_res, parsed = await _probe(context, "pilot_trial", state["code"], cands, per_s)
                     pilot_spent += time.perf_counter() - t0
-                    parsed = _parse_marker_json(pilot_res.output) if pilot_res.executed else None
-                    if isinstance(parsed, dict) and isinstance(parsed.get("trials"), list):
+                    if parsed and isinstance(parsed.get("trials"), list):
                         trials = parsed["trials"]
                     else:
                         trials = [{"error": pilot_res.error or pilot_res.output.strip() or "Pilot trial failed."}]
@@ -377,18 +339,17 @@ async def select_algorithm(state: State, runtime: Runtime[Context]) -> dict[str,
                 alg = str(args.get("algorithm", "GA"))
                 ops = {str(k): str(v) for k, v in (args.get("operators") or {}).items()}
                 hps = {str(k): float(v) for k, v in (args.get("hyperparameters") or {}).items() if v is not None}
-                last_proposed = {
+                ok, hard_errs, warnings = kg.validate_configuration(alg, ops, hps, feats, active_pfeats)
+                proposal = {
                     "algorithm": canonical_algorithm(alg),
                     "operators": ops,
                     "hyperparameters": hps,
                     "rationale": str(args.get("rationale", "")),
                     "pilot_sec": round(pilot_spent, 3),
-                }
-                ok, hard_errs, warnings = kg.validate_configuration(alg, ops, hps, feats, active_pfeats)
+                } if ok else None
                 if ok and (not warnings or warned_once or step >= max_steps - 1):
                     trace.append({"step": step + 1, "tool": fn, "accepted": True, "warnings": warnings})
-                    committed = last_proposed
-                    messages.append(ToolMessage(json.dumps({"accepted": True}, ensure_ascii=False), tool_call_id=call_id, name=fn))
+                    accepted = True
                     break
                 if ok and warnings:
                     warned_once = True
@@ -402,43 +363,33 @@ async def select_algorithm(state: State, runtime: Runtime[Context]) -> dict[str,
             else:
                 res = {"error": f"Unknown tool {fn}"}
             messages.append(ToolMessage(json.dumps(res, ensure_ascii=False), tool_call_id=call_id, name=fn))
-        if committed is not None:
+        if accepted:
             break
         if invalid:
             errors = "; ".join(str(bad.get("error") or "invalid JSON arguments") for bad in invalid)
             messages.append(HumanMessage(f"Malformed tool call ({errors}). Retry with valid JSON arguments."))
 
-    if committed is None and last_proposed is not None:
-        ok, _, _ = kg.validate_configuration(
-            str(last_proposed["algorithm"]), last_proposed["operators"], last_proposed["hyperparameters"], feats
-        )
-        if ok:
-            committed = last_proposed
-    if committed is None:
-        committed = {
-            "algorithm": _fallback_algorithm(feats),
-            "operators": {},
-            "hyperparameters": {},
-            "rationale": "Fallback valid configuration selected from problem features.",
-            "pilot_sec": round(pilot_spent, 3),
-        }
+    selection = proposal or {
+        "algorithm": _fallback_algorithm(feats),
+        "operators": {},
+        "hyperparameters": {},
+        "rationale": "Fallback valid configuration selected from problem features.",
+        "pilot_sec": round(pilot_spent, 3),
+    }
 
-    final_code = _compose_final_code(state["base_code"], committed, formulation)
     return {
-        "selection": committed,
-        "algorithm_summary": _format_selection_markdown(committed, trace),
-        "code": final_code,
+        "selection": selection,
+        "algorithm_summary": _format_selection_markdown(selection, trace),
+        "code": _compose_final_code(state["code"], selection, formulation),
     }
 
 
 async def solve_problem(state: State, runtime: Runtime[Context]) -> dict[str, Any]:
     context = runtime.context
     selection = state["selection"]
-    alg = canonical_algorithm(str(selection.get("algorithm", "AUTO")))
-    if alg not in ALGORITHM_SPECS:
-        alg = "AUTO"
+    alg = selection["algorithm"]
     total_budget = float(context.recorder.limits.solve_time_limit)
-    pilot_sec = float(selection.get("pilot_sec", 0.0))
+    pilot_sec = selection["pilot_sec"]
     rem_budget = max(2.0, total_budget - min(pilot_sec, 0.2 * total_budget)) if total_budget >= 5.0 else total_budget
     result = await context.solve(
         state["code"],
@@ -477,7 +428,7 @@ AUTOCO = Method(
         "select_algorithm": "知识图谱选配算法",
         "solve_problem": "智能优化求解",
     },
-    hidden=frozenset({"formulation_data", "review_issues", "revision_count", "base_code", "problem_meta", "selection"}),
+    hidden=frozenset({"formulation_data", "review_issues", "revision_count", "problem_meta", "selection"}),
     languages=frozenset(),
     builtin_solver=True,
     parameters=lambda: asdict(presets.AUTOCO),

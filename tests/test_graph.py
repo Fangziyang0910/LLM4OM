@@ -5,6 +5,7 @@ import json
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
@@ -152,14 +153,19 @@ def test_method_provides_parameters_without_a_platform_naming_convention(make_re
     asyncio.run(check())
 
 
-def test_run_context_time_limit_override_is_validated_and_applied(make_resources: Any) -> None:
+def test_run_context_time_limit_override_is_validated_and_applied(make_resources: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     async def check() -> None:
         graph = platform_graph(methods()["direct"])
-        cfg = {"configurable": {"llm4om_resources": make_resources(lambda *_: TWO_PART_REPLY)}}
+        resources = make_resources(lambda *_: TWO_PART_REPLY)
+        solve = AsyncMock(wraps=resources.sandbox.solve)
+        monkeypatch.setattr(resources.sandbox, "solve", solve)
+        cfg = {"configurable": {"llm4om_resources": resources}}
         ok = await graph.ainvoke({"description": "test"}, cfg, context=RunContext(time_limit=15))
         assert ok["failure"] is None and ok["spec"]["limits"]["solve_time_limit"] == 15.0
+        assert solve.await_args.args[3] == 15.0
         bad = await graph.ainvoke({"description": "test"}, cfg, context=RunContext(time_limit=999))
         assert "between 5 and 300" in bad["failure"]
+        solve.assert_awaited_once()
 
     asyncio.run(check())
 

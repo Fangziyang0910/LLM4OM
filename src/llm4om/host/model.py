@@ -50,7 +50,7 @@ class HostChatModel(BaseChatModel):
 
 
 def validate_responses(pending: list[dict[str, Any]], responses: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    if not isinstance(responses, dict) or set(responses) != {item["id"] for item in pending}:
+    if responses.keys() != {item["id"] for item in pending}:
         raise ValueError("Supply one response for every pending request ID, with no extra IDs.")
     validated = {}
     for request in pending:

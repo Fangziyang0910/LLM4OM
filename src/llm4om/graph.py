@@ -10,8 +10,9 @@ import operator
 import os
 import time
 import traceback
+from collections.abc import Awaitable
 from dataclasses import asdict, dataclass, field, replace
-from functools import cache
+from functools import cache, partial
 from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated, Any, Callable, Literal, TypedDict
@@ -98,12 +99,17 @@ class Resources:
         return lambda tokens: self.budget.charge(preset, tokens)
 
 
+def _resources(workspace: str | Path | None = None, sandbox: str | None = None,
+               llm: LLMSettings | None = None) -> Resources:
+    path = Path(os.environ.get("LLM4OM_WORKSPACE", "runs/web") if workspace is None else workspace)
+    kind = os.environ.get("LLM4OM_SANDBOX", "docker") if sandbox is None else sandbox
+    return Resources(LLMPresetStore(path), Sandbox(kind, max_jobs=int(os.environ.get("LLM4OM_SANDBOX_JOBS") or 4)),
+                     llm=llm, budget=TokenBudget(path, int(os.environ.get("LLM4OM_DAILY_TOKENS") or 0)) if llm is None else None)
+
+
 @cache
 def default_resources() -> Resources:
-    workspace = Path(os.environ.get("LLM4OM_WORKSPACE", "runs/web"))
-    return Resources(LLMPresetStore(workspace), Sandbox(os.environ.get("LLM4OM_SANDBOX", "docker"),
-                     max_jobs=int(os.environ.get("LLM4OM_SANDBOX_JOBS") or 4)),
-                     budget=TokenBudget(workspace, int(os.environ.get("LLM4OM_DAILY_TOKENS") or 0)))
+    return _resources()
 
 
 def get_resources() -> Resources:
@@ -115,58 +121,32 @@ def get_resources() -> Resources:
 def platform_graph(method: Method) -> Any:
     """The compiled platform graph that runs `method` and solves its final code."""
 
-    def resolved_limits(resources: Resources, choice: RunContext, spec: dict[str, Any] | None = None) -> Limits:
-        base = method.limits or resources.limits
-        saved = (spec or {}).get("limits")
-        if isinstance(saved, dict) and "solve_time_limit" in saved:
-            return replace(base, solve_time_limit=float(saved["solve_time_limit"]))
-        if choice.time_limit is None:
-            return base
-        import math
-
-        if not isinstance(choice.time_limit, (int, float)) or isinstance(choice.time_limit, bool) or not math.isfinite(choice.time_limit) or not (5 <= choice.time_limit <= 300):
-            raise ValueError("The solve time limit must be between 5 and 300 seconds.")
-        return replace(base, solve_time_limit=float(choice.time_limit))
-
-    def context(state: RunState, runtime: Runtime[RunContext], settings: LLMSettings | None = None) -> Context:
-        """Continue this run's counts, using the already resolved LLM settings for every role."""
-        resources = get_resources()
-        choice = runtime.context or RunContext()
-        spec = state.get("spec") or {}
-        recorder = Recorder(resolved_limits(resources, choice, spec), state.get("usage"), runtime.stream_writer,
-                            resources.charge(spec.get("preset")),
-                            redact=settings.redact if settings is not None else None)
-
-        def model(role: str) -> BaseChatModel:
-            if settings is None:
-                raise RuntimeError("The modeling node must resolve its LLM before calling it.")
-            return resources.model_factory(settings, callbacks=[recorder.callback], metadata={"llm4om_role": role})
-
-        target = method.code_target(spec.get("language", choice.language), spec.get("solver", choice.solver))
-        return Context(recorder, resources.sandbox, model, target, state.get("data") or {},
-                       locale=spec.get("locale", choice.locale))
-
     def thread_id() -> str | None:
         return get_config().get("configurable", {}).get("thread_id")
 
     async def prepare(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
         """Reject unusable requests before any LLM call; the reason becomes the run's failure."""
         choice = runtime.context or RunContext()
+        description = state.get("description", "")
+        change = state.get("change")
         data = {} if state.get("data") is None else state["data"]
         started = time.time()
         resources = get_resources()
-        deadline = started + (method.limits or resources.limits).run_timeout
+        limits = method.limits or resources.limits
         fresh = {"formulation": None, "code": None, "solve": None, "spec": None, "usage": {},
                  "steps": Overwrite([]), "timing": timing(started), "problem": "", "change": None,
                  "revision": None, "explanation": None, "infeasibility": None, "explanation_error": None}
         if runtime.store and (thread := thread_id()):
             await runtime.store.adelete(NAMESPACE, thread)
         try:
-            validate_description(state.get("description") if "description" in state else "")
-            if state.get("change") is not None and (not isinstance(state["change"], str) or not state["change"].strip()):
+            validate_description(description)
+            if change is not None and (not isinstance(change, str) or not change.strip()):
                 raise ValueError("Describe how you want to change the problem.")
             target = method.code_target(choice.language, choice.solver)
-            limits = resolved_limits(resources, choice)
+            if (seconds := choice.time_limit) is not None:
+                if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not 5 <= seconds <= 300:
+                    raise ValueError("The solve time limit must be between 5 and 300 seconds.")
+                limits = replace(limits, solve_time_limit=float(seconds))
             validate_data_files(data)
             preset, settings, preset_name = await asyncio.to_thread(resources.resolve, choice.preset)
             if charge := resources.charge(preset):
@@ -182,102 +162,85 @@ def platform_graph(method: Method) -> Any:
                 "explain": choice.explain,
                 "locale": choice.locale,
                 "sandbox": resources.sandbox.kind, "worker_image": resources.sandbox.image if resources.sandbox.kind == "docker" else None}
-        return {**fresh, "problem": problem_text(state.get("description", ""), data), "failure": None, "_deadline": deadline,
-                "revision": {"description": state["description"], "instruction": state["change"].strip()} if state.get("change") else None,
+        return {**fresh, "problem": problem_text(description, data), "failure": None, "_deadline": started + limits.run_timeout,
+                "revision": {"description": description, "instruction": change.strip()} if change else None,
                 "spec": spec, "timing": timing(started)}
 
-    def failure(error: Exception, recorder: Recorder) -> dict[str, Any]:
-        message = ("The run exceeded its time limit." if isinstance(error, TimeoutError)
-                   else recorder.redact(f"{type(error).__name__}: {error}"))
-        recorder.step("error", "运行失败", recorder.redact(traceback.format_exc(limit=-8)))
-        return {"failure": message}
+    async def execute(state: RunState, runtime: Runtime[RunContext], *,
+                      work: Callable[[RunState, Context, dict[str, Any]], Awaitable[None]],
+                      uses_llm: bool = True, explanation: bool = False) -> dict[str, Any]:
+        resources = get_resources()
+        spec = state["spec"]
+        recorder = Recorder(Limits(**spec["limits"]), state["usage"], runtime.stream_writer, resources.charge(spec.get("preset")))
+        settings = None
+        result: dict[str, Any] = {}
 
-    async def llm_context(state: RunState, runtime: Runtime[RunContext]) -> Context:
-        _, settings, _ = await asyncio.to_thread(get_resources().resolve, state["spec"]["preset"])
-        if settings.public() != state["spec"]["llm"]:
-            raise ValueError("The LLM preset changed before the next platform step. Start a new run with the intended preset.")
-        return context(state, runtime, settings)
+        def chat(role: str) -> BaseChatModel:
+            if settings is None:
+                raise RuntimeError("This platform node has no LLM.")
+            return resources.model_factory(settings, callbacks=[recorder.callback], metadata={"llm4om_role": role})
 
-    async def revise(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
-        try:
-            run = await llm_context(state, runtime)
-        except ValueError as error:
-            recorder = context(state, runtime).recorder
-            return {**failure(error, recorder), **recorder.update()}
-        async with save_progress(runtime.store, thread_id(), state, run.recorder):
+        async with save_progress(runtime.store, thread_id(), state, recorder):
             try:
-                description = await asyncio.wait_for(revise_problem(run, state["description"], state["revision"]["instruction"]),
-                                                     state["_deadline"] - time.time())
-                run.recorder.step("artifact", "整理调整后的问题", description)
-                result = {"description": description, "problem": problem_text(description, run.data)}
+                if uses_llm:
+                    _, settings, _ = await asyncio.to_thread(resources.resolve, spec["preset"])
+                    recorder.redact = settings.redact
+                    if settings.public() != spec["llm"]:
+                        raise ValueError("The LLM preset changed before the next platform step. Start a new run with the intended preset.")
+                target = method.code_target(spec["language"], spec.get("solver"))
+                run = Context(recorder, resources.sandbox, chat, target, state.get("data") or {},
+                              locale=spec.get("locale", (runtime.context or RunContext()).locale))
+                async with asyncio.timeout(state["_deadline"] - time.time()):
+                    await work(state, run, result)
             except Exception as error:
-                result = failure(error, run.recorder)
-        return {**result, **run.recorder.update()}
+                if explanation:
+                    message = recorder.redact(str(error) or type(error).__name__)
+                    recorder.step("error", "结果解读未完成", message)
+                    result["explanation_error"] = message
+                else:
+                    recorder.step("error", "运行失败", recorder.redact(traceback.format_exc(limit=-8)))
+                    result["failure"] = ("The run exceeded its time limit." if isinstance(error, TimeoutError)
+                                         else recorder.redact(f"{type(error).__name__}: {error}"))
+        return {**result, **recorder.update()}
 
-    async def model(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
+    async def revise(state: RunState, run: Context, result: dict[str, Any]) -> None:
+        description = await revise_problem(run, state["description"], state["revision"]["instruction"])
+        run.recorder.step("artifact", "整理调整后的问题", description)
+        result.update(description=description, problem=problem_text(description, run.data))
+
+    async def model(state: RunState, run: Context, result: dict[str, Any]) -> None:
         """Run the method's graph; each titled node update becomes a step."""
-        try:
-            run = await llm_context(state, runtime)
-        except ValueError as error:
-            recorder = context(state, runtime).recorder
-            return {**failure(error, recorder), **recorder.update()}
-        recorder = run.recorder
         graph = method.graph()
         graph.checkpointer = False  # the method's inner states are not checkpointed; the platform state is
         final: dict[str, Any] = {}
 
-        async def drive() -> None:
-            config: RunnableConfig = {"recursion_limit": RECURSION_LIMIT, "callbacks": [NodeSteps(method, recorder)]}
-            async for values in graph.astream({"problem": state.get("problem", ""),
-                                               "description": state.get("description", "")}, config, context=run,
-                                              stream_mode="values"):
-                final.update(values)
-
-        async with save_progress(runtime.store, thread_id(), state, recorder):
-            try:
-                await asyncio.wait_for(drive(), state["_deadline"] - time.time())
-                result = {"failure": final.get("failure") or (None if final.get("code") else f"{method.name} finished without code.")}
-            except Exception as error:  # Preserve completed artifacts when a later method step fails.
-                result = failure(error, recorder)
+        try:
+            config = {"recursion_limit": RECURSION_LIMIT, "callbacks": [NodeSteps(method, run.recorder)]}
+            async for final in graph.astream({"problem": state["problem"], "description": state["description"]},
+                                            config, context=run, stream_mode="values"):
+                pass
+        finally:
             code = final.get("code")
-            # A replacement can be interrupted before execution; only attach a result for this exact code.
+            # Keep the completed artifacts on failure and associate a result only with its exact code.
             solved = run.solved.get(code) if code else None
             result.update(formulation=final.get("formulation"), code=code, solve=asdict(solved) if solved else None)
-        return {**result, **recorder.update()}
+        result["failure"] = final.get("failure") or (None if code else f"{method.name} finished without code.")
 
-    async def solve(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
+    async def solve(state: RunState, run: Context, result: dict[str, Any]) -> None:
         """Solve the final code in the sandbox when the method did not."""
-        run = context(state, runtime)
-        spec = state.get("spec") or {}
-        async with save_progress(runtime.store, thread_id(), state, run.recorder):
-            try:
-                solved = await asyncio.wait_for(
-                    run.solve(state.get("code") or "", title="求解最终代码",
-                              language=None if run.target is not None else spec.get("language"),
-                              solver=None if run.target is not None else spec.get("solver")),
-                    state["_deadline"] - time.time())
-                result = {"solve": asdict(solved)}
-            except Exception as error:
-                result = failure(error, run.recorder)
-        return {**result, **run.recorder.update()}
+        spec = state["spec"]
+        solved = await run.solve(state["code"], title="求解最终代码",
+                                 language=None if run.target is not None else spec["language"],
+                                 solver=None if run.target is not None else spec.get("solver"))
+        result["solve"] = asdict(solved)
 
-    async def explain(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
-        run = context(state, runtime)
-        try:
-            run = await llm_context(state, runtime)
-            async with save_progress(runtime.store, thread_id(), state, run.recorder):
-                infeasible = state["solve"]["status"] == "infeasible"
-                interpret = explain_infeasibility if infeasible else explain_result
-                explanation = await asyncio.wait_for(interpret(run, state["problem"], state.get("formulation"),
-                                                              state.get("code"), state["solve"], state["spec"]["locale"]),
-                                                     state["_deadline"] - time.time())
-                run.recorder.step("artifact", "解释无解原因" if infeasible else "解读求解结果", explanation["summary"])
-            result = {"infeasibility" if infeasible else "explanation": explanation, "explanation_error": None}
-        except Exception as error:
-            message = run.recorder.redact(str(error) or type(error).__name__)
-            run.recorder.step("error", "结果解读未完成", message)
-            result = {"explanation_error": message}
-        return {**result, **run.recorder.update()}
+    async def explain(state: RunState, run: Context, result: dict[str, Any]) -> None:
+        infeasible = state["solve"]["status"] == "infeasible"
+        interpret = explain_infeasibility if infeasible else explain_result
+        explanation = await interpret(run, state["problem"], state.get("formulation"), state.get("code"), state["solve"], state["spec"]["locale"])
+        run.recorder.step("artifact", "解释无解原因" if infeasible else "解读求解结果", explanation["summary"])
+        result["explanation_error"] = None
+        result["infeasibility" if infeasible else "explanation"] = explanation
 
     async def finish(state: RunState, runtime: Runtime[RunContext]) -> dict[str, Any]:
         if runtime.store and (thread := thread_id()):
@@ -304,10 +267,10 @@ def platform_graph(method: Method) -> Any:
 
     builder = StateGraph(RunState, input_schema=RunInput, context_schema=RunContext)
     builder.add_node("prepare", prepare)
-    builder.add_node("revise", revise)
-    builder.add_node("model", model)
-    builder.add_node("solve", solve)
-    builder.add_node("explain", explain)
+    builder.add_node("revise", partial(execute, work=revise))
+    builder.add_node("model", partial(execute, work=model))
+    builder.add_node("solve", partial(execute, work=solve, uses_llm=False))
+    builder.add_node("explain", partial(execute, work=explain, explanation=True))
     builder.add_node("finish", finish)
     builder.add_edge(START, "prepare")
     builder.add_conditional_edges("prepare", after_prepare, ["model", "revise", "finish"])
@@ -331,14 +294,7 @@ async def run(description: str, *, method: str = "direct", language: str = "pyom
     if method not in available:
         raise ValueError(f"Unknown method {method!r}; choose one of {sorted(available)}.")
     if resources is None and (llm is not None or workspace is not None or sandbox is not None):
-        resolved_workspace = Path(os.environ.get("LLM4OM_WORKSPACE", "runs/web") if workspace is None else workspace)
-        resolved_sandbox = os.environ.get("LLM4OM_SANDBOX", "docker") if sandbox is None else sandbox
-        resources = Resources(
-            LLMPresetStore(resolved_workspace),
-            Sandbox(resolved_sandbox, max_jobs=int(os.environ.get("LLM4OM_SANDBOX_JOBS") or 4)),
-            llm=llm,
-            budget=TokenBudget(resolved_workspace, int(os.environ.get("LLM4OM_DAILY_TOKENS") or 0)) if llm is None else None,
-        )
+        resources = _resources(workspace, sandbox, llm)
     final: dict[str, Any] = {}
     # In-process execution must not inherit a calling conversation's checkpoints, progress key or message stream.
     config: RunnableConfig = {"tags": ["nostream"], "configurable": {"thread_id": None, "llm4om_resources": resources}}

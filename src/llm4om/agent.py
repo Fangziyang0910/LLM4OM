@@ -148,18 +148,11 @@ class PlanDraft(TypedDict):
     name: str
     instruction: str
     group: str | None
-    turn_id: str
 
 
 class Plan(PlanDraft):
     source: SourceRun
-
-
-@dataclass(frozen=True)
-class PlanRun:
-    graph_id: str
-    metadata: dict[str, Any]
-    values: dict[str, Any]
+    turn_id: str
 
 
 class PendingBatch(TypedDict):
@@ -213,29 +206,21 @@ def _configuration(values: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _pareto_summary(solved: dict[str, Any]) -> dict[str, Any] | None:
+def _solve_summary(solved: dict[str, Any]) -> dict[str, Any]:
+    summary = {"status": solved.get("status"), "objective": solved.get("objective")}
     pareto = solved.get("pareto")
-    if not isinstance(pareto, dict):
-        return None
-    solutions = pareto.get("solutions") or []
-    if not solutions:
-        return None
-    knee = next((item for item in solutions if isinstance(item, dict) and item.get("knee")), solutions[0])
-    return {
-        "total": pareto.get("total", len(solutions)),
-        "objectives": pareto.get("objectives") or [],
-        "knee": knee.get("objectives") if isinstance(knee, dict) else None,
-    }
+    if isinstance(pareto, dict) and (solutions := pareto.get("solutions")):
+        knee = next((item for item in solutions if isinstance(item, dict) and item.get("knee")), solutions[0])
+        summary["pareto"] = {"total": pareto.get("total", len(solutions)), "objectives": pareto.get("objectives") or [],
+                             "knee": knee.get("objectives") if isinstance(knee, dict) else None}
+    summary["variables"] = dict(islice((solved.get("variables") or {}).items(), 100))
+    return summary
 
 
 def _plan_result(plan: Plan, values: dict[str, Any]) -> dict[str, Any]:
     solved = values.get("solve") or {}
-    variables = solved.get("variables") or {}
-    pareto = _pareto_summary(solved)
     return {**plan, "description": values["description"], "configuration": _configuration(values),
-            "status": solved.get("status"), "objective": solved.get("objective"),
-            **({"pareto": pareto} if pareto else {}),
-            "variables": dict(islice(variables.items(), 100)), "total_variables": len(variables),
+            **_solve_summary(solved), "total_variables": len(solved.get("variables") or {}),
             "failure": values.get("failure"), "explanation": values.get("explanation"),
             "infeasibility": values.get("infeasibility")}
 
@@ -284,16 +269,15 @@ class Conversation:
                  *, optimization: bool):
         self.state, self.choice, self.resources = state, choice, resources
         self.client, self.optimization = client, optimization
-        self.messages = state["messages"]
+        self.turn_id = state["messages"][-1].id
         self.cache: dict[tuple[str, str], dict[str, Any]] = {}
         self.completed: list[Plan] = []
-        turn = self.messages[-1].id
-        self.recovered = [plan for plan in state.get("plans", []) if plan["turn_id"] == turn]
+        self.recovered = [plan for plan in state.get("plans", []) if plan["turn_id"] == self.turn_id]
         self.pending = state.get("pending")
-        if self.pending and self.pending["turn_id"] != turn:
+        if self.pending and self.pending["turn_id"] != self.turn_id:
             self.pending = None
         self.pending_model = state.get("pending_model")
-        if self.pending_model and self.pending_model["turn_id"] != turn:
+        if self.pending_model and self.pending_model["turn_id"] != self.turn_id:
             self.pending_model = None
         self.change_started = False
         self.selected_plan: SourceRun | None = None
@@ -309,8 +293,9 @@ class Conversation:
             self.cache[key] = snapshot["values"]
         return self.cache[key]
 
-    async def save_plan(self, identifier: str, plan: PlanDraft, *,
-                        run: Callable[[], Awaitable[PlanRun]]) -> tuple[Plan, dict[str, Any]]:
+    async def save_plan(self, identifier: str, plan: PlanDraft, request: dict[str, Any], *,
+                        conversation_id: str, on_step: Callable[[dict[str, Any]], None],
+                        base: SourceRun | None = None) -> tuple[Plan, dict[str, Any]]:
         """Reuse a saved plan's fixed checkpoint, or save the one calculation that backs a new plan."""
         registered: Plan | None = next((item for item in [*self.completed, *(self.state.get("plans") or [])]
                                         if item["source"]["thread_id"] == identifier), None)
@@ -324,15 +309,28 @@ class Conversation:
         except HTTPStatusError as error:
             if error.response.status_code != 404:
                 raise
-            calculated = await run()
-            await self.client.threads.create(thread_id=identifier, graph_id=calculated.graph_id,
-                metadata=calculated.metadata, supersteps=[{"updates": [{"as_node": "finish", "values": calculated.values}]}])
+            configuration = {"method": request["method"], "language": request["language"],
+                             "solver": request["solver"], "preset": request.get("preset")}
+            calculated = await run(request["description"], **configuration, data=request.get("data"),
+                change=plan["instruction"] if base else None, explain=True, locale=self.choice.locale,
+                resources=self.resources, on_step=on_step)
+            spec = request if base else (calculated.get("spec") or {})
+            llm = spec.get("llm", {})
+            metadata = {**configuration, "title": plan["name"], "provider": llm.get("provider"),
+                        "model": spec.get("preset_name") or llm.get("model"), "conversation": conversation_id}
+            if base:
+                metadata.update(parent=base, scenario={"name": plan["name"], "instruction": plan["instruction"]})
+            else:
+                metadata["origin"] = conversation_id
+            if plan["group"]:
+                metadata["group"] = plan["group"]
+            await self.client.threads.create(thread_id=identifier, graph_id=request["method"], metadata=metadata,
+                supersteps=[{"updates": [{"as_node": "finish", "values": calculated}]}])
         snapshot = await self.client.threads.get_state(identifier)
         values = snapshot["values"]
         source: SourceRun = {"thread_id": identifier, "checkpoint_id": snapshot["checkpoint"]["checkpoint_id"]}
         self.cache[(source["thread_id"], source["checkpoint_id"])] = values
-        saved: Plan = {"name": plan["name"], "instruction": plan["instruction"], "source": source,
-                       "group": plan["group"], "turn_id": plan["turn_id"]}
+        saved: Plan = {**plan, "source": source, "turn_id": self.turn_id}
         self.completed.append(saved)
         return saved, values
 
@@ -424,9 +422,12 @@ def _build_tools_and_middleware(
         with the same method, preset, library and attachments.
         A single new plan becomes current; multiple alternatives keep the original current plan.
         """
-        base = session.pending["base"] if session.pending else session.selected_source(base_plan_id, runtime.state["current"])
-        if session.pending:
-            scenarios = [Scenario.model_validate(item) for item in session.pending["scenarios"]]
+        pending = session.pending or {
+            "base": session.selected_source(base_plan_id, runtime.state["current"]),
+            "scenarios": [item.model_dump() for item in scenarios],
+            "turn_id": session.turn_id,
+        }
+        base = pending["base"]
         values = await session.load(base)
         spec = values.get("spec")
         if not spec:
@@ -435,18 +436,20 @@ def _build_tools_and_middleware(
                              or (session.choice.language and session.choice.language != spec["language"])
                              or (session.choice.solver and session.choice.solver != spec["solver"])):
             raise ValueError("Pinned configuration changed; use model_and_solve with the complete revised problem.")
-        turn = next(message.id for message in reversed(runtime.state["messages"]) if message.type == "human")
-        session.pending = {"base": base, "scenarios": [item.model_dump() for item in scenarios], "turn_id": turn}
-        identity = json.dumps({"base": base, "turn": turn, "scenarios": [item.model_dump() for item in scenarios]},
+        session.pending = pending
+        batch = pending["scenarios"]
+        identity = json.dumps({"base": base, "turn": session.turn_id, "scenarios": batch},
                               sort_keys=True, ensure_ascii=False)
-        group = uuid5(NAMESPACE_URL, identity).hex if len(scenarios) > 1 else None
+        group = uuid5(NAMESPACE_URL, identity).hex if len(batch) > 1 else None
+        request = {**spec, "description": values["description"], "data": values.get("data")}
+        conversation_id = runtime.config["configurable"]["thread_id"]
         results = []
-        for index, scenario in enumerate(scenarios):
+        for index, scenario in enumerate(batch):
             stage = None
 
             def progress(step: dict[str, Any]) -> None:
                 nonlocal stage
-                session.stream_step(step, runtime, scenario.name, spec["method"], spec["language"])
+                session.stream_step(step, runtime, scenario["name"], spec["method"], spec["language"])
                 current_stage = ("revise" if step["title"] == "revise_problem" else
                                  "explain" if step["title"] in ("explain_result", "explain_infeasibility") else
                                  "solve" if step["type"] == "solve" else "model")
@@ -454,24 +457,12 @@ def _build_tools_and_middleware(
                     return
                 stage = current_stage
                 runtime.stream_writer({"type": "scenario_progress", "tool_call_id": runtime.tool_call_id,
-                    "name": scenario.name, "index": index + 1, "total": len(scenarios), "stage": stage})
+                    "name": scenario["name"], "index": index + 1, "total": len(batch), "stage": stage})
 
             identifier = str(uuid5(NAMESPACE_URL, f"{identity}:{index}"))
-
-            async def run_plan() -> PlanRun:
-                calculated = await run(values["description"], method=spec["method"], language=spec["language"],
-                    solver=spec["solver"], preset=spec.get("preset"), data=values.get("data"),
-                    change=scenario.instruction, explain=True, locale=session.choice.locale, resources=session.resources, on_step=progress)
-                return PlanRun(spec["method"], {
-                    "title": scenario.name, "method": spec["method"], "language": spec["language"],
-                    "solver": spec["solver"], "preset": spec.get("preset"), "provider": spec["llm"]["provider"],
-                    "model": spec.get("preset_name") or spec["llm"]["model"], "parent": base,
-                    "scenario": scenario.model_dump(), "conversation": runtime.config["configurable"]["thread_id"],
-                    **({"group": group} if group else {}),
-                }, calculated)
-
-            plan, result = await session.save_plan(identifier, {"name": scenario.name, "instruction": scenario.instruction,
-                "group": group, "turn_id": turn}, run=run_plan)
+            plan, result = await session.save_plan(identifier,
+                {"name": scenario["name"], "instruction": scenario["instruction"], "group": group}, request,
+                conversation_id=conversation_id, on_step=progress, base=base)
             results.append(_plan_result(plan, result))
         session.pending = None
         session.pending_model = None
@@ -542,45 +533,34 @@ def _build_tools_and_middleware(
         Attached data comes from this conversation. Defaults are Direct, Pyomo and automatic backend.
         Do not call for ordinary conversation or when a missing business condition changes the answer.
         """
-        validate_description(description)
-        if not name.strip():
-            raise ValueError("Supply a short name for this plan.")
-        request = session.pending_model or {"turn_id": session.messages[-1].id, "description": description.strip(), "name": name.strip(),
-            "method": session.choice.method or method or "direct", "language": session.choice.language or language or "pyomo",
-            "solver": session.choice.solver or solver, "preset": preset, "data": session.state.get("data") or {}}
-        selected = next((item for item in methods().values()
-                         if request["method"].strip().casefold() in (item.id, item.name.casefold())), None)
-        if selected is None:
-            raise ValueError("Choose a registered method from modeling_capabilities.")
-        library = next((item.id for item in LANGUAGES.values()
-                        if request["language"].strip().casefold() in (item.id, item.name.casefold())), request["language"])
-        target = selected.code_target(library, request["solver"])
-        request = {**request, "method": selected.id,
-                   "language": target.language if target is not None else selected.id,
-                   "solver": target.solver if target is not None else "AUTO"}
-        session.pending_model = request
+        request = session.pending_model
+        if request is None:
+            validate_description(description)
+            if not name.strip():
+                raise ValueError("Supply a short name for this plan.")
+            chosen_method = (session.choice.method or method or "direct").strip().casefold()
+            selected = next((item for item in methods().values() if chosen_method in (item.id, item.name.casefold())), None)
+            if selected is None:
+                raise ValueError("Choose a registered method from modeling_capabilities.")
+            chosen_library = session.choice.language or language or "pyomo"
+            library = next((item.id for item in LANGUAGES.values()
+                            if chosen_library.strip().casefold() in (item.id, item.name.casefold())), chosen_library)
+            target = selected.code_target(library, session.choice.solver or solver)
+            request = {"turn_id": session.turn_id, "description": description.strip(), "name": name.strip(),
+                       "method": selected.id, "language": target.language if target is not None else selected.id,
+                       "solver": target.solver if target is not None else "AUTO", "preset": preset,
+                       "data": session.state.get("data") or {}}
+            session.pending_model = request
+        conversation_id = runtime.config["configurable"]["thread_id"]
         identity = json.dumps(request, sort_keys=True, ensure_ascii=False)
-        identifier = str(uuid5(NAMESPACE_URL, f"{runtime.config['configurable']['thread_id']}:{identity}"))
+        identifier = str(uuid5(NAMESPACE_URL, f"{conversation_id}:{identity}"))
 
         def progress(step: dict[str, Any]) -> None:
             session.stream_step(step, runtime, request["name"], request["method"], request["language"])
 
-        async def run_plan() -> PlanRun:
-            calculated = await run(request["description"], method=request["method"], language=request["language"],
-                solver=request["solver"], preset=request["preset"], data=request["data"],
-                explain=True, locale=session.choice.locale, resources=session.resources, on_step=progress)
-            spec = calculated.get("spec") or {}
-            return PlanRun(request["method"], {
-                "title": request["name"], "method": request["method"], "language": request["language"],
-                "solver": request["solver"], "preset": request["preset"],
-                "provider": spec.get("llm", {}).get("provider"),
-                "model": spec.get("preset_name") or spec.get("llm", {}).get("model"),
-                "origin": runtime.config["configurable"]["thread_id"],
-                "conversation": runtime.config["configurable"]["thread_id"],
-            }, calculated)
-
-        plan, result = await session.save_plan(identifier, {"name": request["name"], "instruction": request["description"],
-            "group": None, "turn_id": session.messages[-1].id}, run=run_plan)
+        plan, result = await session.save_plan(identifier,
+            {"name": request["name"], "instruction": request["description"], "group": None}, request,
+            conversation_id=conversation_id, on_step=progress)
         session.pending_model = None
         session.pending = None
         facts = {**_plan_result(plan, result), "method": request["method"], "language": request["language"]}
@@ -611,10 +591,7 @@ def _build_tools_and_middleware(
         facts["source"] = current
         facts["available_plans"] = [{**plan, "current": plan["id"] == (current or {}).get("thread_id"),
             "original": plan["id"] == (session.state.get("source") or {}).get("thread_id")} for plan in available.values()]
-        pareto = _pareto_summary(solved)
-        facts["solve"] = {**{key: solved.get(key) for key in ("status", "objective", "diagnosis", "error")},
-                          **({"pareto": pareto} if pareto else {}),
-                          "variables": dict(islice((solved.get("variables") or {}).items(), 100)),
+        facts["solve"] = {**_solve_summary(solved), "diagnosis": solved.get("diagnosis"), "error": solved.get("error"),
                           "total_variables": len(solved.get("variables") or {})}
         if session.pending:
             facts["unfinished_scenarios"] = session.pending
@@ -624,13 +601,8 @@ def _build_tools_and_middleware(
             facts["already_computed_scenarios"] = []
             for plan in session.recovered:
                 saved = await session.load(plan["source"])
-                result = saved.get("solve") or {}
-                scenario_pareto = _pareto_summary(result)
                 facts["already_computed_scenarios"].append({"name": plan["name"], "instruction": plan["instruction"],
-                    "status": result.get("status"), "objective": result.get("objective"),
-                    **({"pareto": scenario_pareto} if scenario_pareto else {}),
-                    "failure": saved.get("failure"),
-                    "variables": dict(islice((result.get("variables") or {}).items(), 100))})
+                    **_solve_summary(saved.get("solve") or {}), "failure": saved.get("failure")})
         sections = []
         if session.optimization:
             sections.append(

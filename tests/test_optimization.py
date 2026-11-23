@@ -62,6 +62,8 @@ def test_lost_save_response_reuses_the_saved_calculation_on_retry(make_resources
         if role == "optimization":
             if messages[-1].type == "human":
                 if mode == "initial":
+                    if '"unfinished_modeling":' in messages[0].text:
+                        return tool_call("model_and_solve", description="", name="", method="wrong-method")
                     return tool_call("model_and_solve", description=PRODUCTION_PROBLEM, name="production")
                 return tool_call("solve_scenarios", scenarios=[{"name": "B >= 3", "instruction": "B 至少生产 3 件"}])
             return "Saved result is available."
@@ -106,7 +108,7 @@ def test_lost_save_response_reuses_the_saved_calculation_on_retry(make_resources
     asyncio.run(check())
 
 
-def test_a_registered_plan_reuses_its_checkpoint_instead_of_its_threads_latest_values(make_resources):
+def test_a_registered_plan_reuses_its_checkpoint_instead_of_its_threads_latest_values(make_resources, monkeypatch):
     source = {"thread_id": "saved", "checkpoint_id": "original"}
     plan = {"name": "original name", "instruction": "original request", "group": None, "turn_id": "turn", "source": source}
 
@@ -117,8 +119,10 @@ def test_a_registered_plan_reuses_its_checkpoint_instead_of_its_threads_latest_v
     session = Conversation({"messages": [HumanMessage("retry", id="turn")], "plans": [plan]}, AgentContext(),
         make_resources(lambda *_: "unused"), client, optimization=True)
     calculate = AsyncMock()
-    saved, values = asyncio.run(session.save_plan("saved", {"name": "rephrased", "instruction": "rephrased", "group": None,
-        "turn_id": "turn"}, run=calculate))
+    monkeypatch.setattr(agent, "run", calculate)
+    saved, values = asyncio.run(session.save_plan("saved", {"name": "rephrased", "instruction": "rephrased", "group": None},
+        {"description": "rephrased", "method": "direct", "language": "pyomo", "solver": "AUTO"},
+        conversation_id="conversation", on_step=lambda _: None))
     assert saved == plan and values["solve"]["objective"] == 13
     calculate.assert_not_awaited()
     client.threads.get_state.assert_awaited_once_with("saved", checkpoint={"checkpoint_id": "original"})
