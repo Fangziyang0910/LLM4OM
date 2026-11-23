@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("requesting prices with search off finishes instead of repeatedly updating the draft", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   await page.waitForURL(/\/chat\//);
   const id = page.url().split("/").at(-1)!;
@@ -17,7 +17,7 @@ test("requesting prices with search off finishes instead of repeatedly updating 
 });
 
 test("Enter sends a streamed reply, Shift+Enter adds a line, and composition does not submit", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   await page.waitForURL(/\/chat\//);
   const id = page.url().split("/").at(-1)!;
@@ -47,7 +47,7 @@ test("Enter sends a streamed reply, Shift+Enter adds a line, and composition doe
 });
 
 test("web search shows actual tool sources and preserves them on reload without solving", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   await page.waitForURL(/\/chat\//);
   const id = page.url().split("/").at(-1)!;
@@ -77,7 +77,7 @@ test("web search shows actual tool sources and preserves them on reload without 
 test("a requirements conversation persists its editable draft and hands only the problem and files to modeling", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(String(error)));
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   await page.waitForURL(/\/chat\//);
   const chatUrl = page.url();
@@ -108,14 +108,14 @@ test("a requirements conversation persists its editable draft and hands only the
   expect(saved.messages).toHaveLength(8);
   expect(saved.usage.solves).toBe(0);
 
-  await page.getByRole("button", { name: "用于建模", exact: true }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await page.getByRole("button", { name: "带入快速求解", exact: true }).click();
+  await expect(page).toHaveURL(/\/model$/);
   await expect(page.getByLabel("问题描述")).toHaveValue(edited);
   expect((await (await page.request.get(`/threads/${id}/runs`)).json()).length).toBe(2);
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
-  await page.getByRole("radio", { name: "OR-LLM-Agent", exact: true }).check();
+  await page.getByRole("radio", { name: /^OR-LLM-Agent/ }).check();
   await page.getByRole("button", { name: "完成", exact: true }).click();
-  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.getByRole("button", { name: /^立即求解/ }).click();
   await page.waitForURL(/\/run\//);
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible({ timeout: 60_000 });
   const runId = page.url().split("/").at(-1)!;
@@ -127,8 +127,8 @@ test("a requirements conversation persists its editable draft and hands only the
   expect(JSON.stringify(result)).not.toContain("CHAT_ONLY_MARKER");
   expect((await (await page.request.get(`/threads/${id}`)).json()).values).toEqual(saved);
 
-  await page.getByLabel("搜索运行").fill("CHAT_ONLY_MARKER");
-  await page.getByRole("navigation").getByRole("button", { name: /^我想安排.*CHAT_ONLY_MARKER.*需求对话/ }).click();
+  await page.getByLabel("搜索记录").fill("CHAT_ONLY_MARKER");
+  await page.getByRole("navigation").getByRole("button", { name: /^我想安排.*CHAT_ONLY_MARKER.*需求梳理/ }).click();
   await expect(page).toHaveURL(chatUrl);
   await expect(page.getByLabel("问题描述")).toHaveValue(edited);
   expect(errors).toEqual([]);
@@ -136,7 +136,7 @@ test("a requirements conversation persists its editable draft and hands only the
 
 test("the requirements assistant retries a failed turn and keeps the editable problem without starting a solve", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByLabel("问题描述").fill("保留原需求稿");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   await page.waitForURL(/\/chat\//);
@@ -165,15 +165,15 @@ test("the requirements assistant retries a failed turn and keeps the editable pr
   await expect(page.getByLabel("问题描述")).toHaveValue(result.description);
   await expect(page.getByRole("tabpanel", { name: "当前需求稿", exact: true })).toContainText("总利润最大");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.getByRole("tab", { name: "需求助手", exact: true }).click();
-  await page.getByRole("button", { name: "用于建模", exact: true }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await page.getByRole("tab", { name: "对话助手", exact: true }).click();
+  await page.getByRole("button", { name: "带入快速求解", exact: true }).click();
+  await expect(page).toHaveURL(/\/model$/);
   await expect(page.getByLabel("问题描述")).toHaveValue(result.description);
   expect((await (await page.request.get(`/threads/${id}/runs`)).json()).length).toBe(2);
 });
 
 test("a failed draft save keeps the user's edit and prevents handing off stale text", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByLabel("问题描述").fill("原需求稿");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   await page.waitForURL(/\/chat\//);
@@ -184,7 +184,7 @@ test("a failed draft save keeps the user's edit and prevents handing off stale t
     else await route.continue();
   });
   await page.getByLabel("问题描述").fill("人工修改：晚班至少 3 人，不得放宽。");
-  await page.getByRole("button", { name: "用于建模", exact: true }).click();
+  await page.getByRole("button", { name: "带入快速求解", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("需求稿未保存");
   await expect(page).toHaveURL(url);
   await expect(page.getByLabel("问题描述")).toHaveValue("人工修改：晚班至少 3 人，不得放宽。");
@@ -197,7 +197,7 @@ test("a failed draft save keeps the user's edit and prevents handing off stale t
 });
 
 test("stopping a requirements turn keeps the question and draft available after reload", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByLabel("问题描述").fill("原需求稿：整数生产计划");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   await page.waitForURL(/\/chat\//);
@@ -224,7 +224,7 @@ test("stopping a requirements turn keeps the question and draft available after 
 });
 
 test("refreshing during a reply reconnects the same run and keeps the next unsent message", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   await page.waitForURL(/\/chat\//);
   const id = page.url().split("/").at(-1)!;
@@ -242,7 +242,7 @@ test("refreshing during a reply reconnects the same run and keeps the next unsen
 });
 
 test("stopping a queued conversation keeps the question before its first input checkpoint", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   await page.waitForURL(/\/chat\//);
   const id = page.url().split("/").at(-1)!;

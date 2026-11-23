@@ -8,7 +8,7 @@ for (const [width, height] of [[320, 568], [390, 844], [768, 1024], [1024, 768],
   [1366, 768], [1440, 600], [1440, 900], [1920, 1080], [2560, 1440], [3440, 1440]]) {
   test(`the composer fits ${width} × ${height} with a visible start action`, async ({ page }) => {
     await page.setViewportSize({ width, height });
-    await page.goto("/");
+    await page.goto("/model");
     await page.getByRole("textbox", { name: "问题描述" }).fill(problem + "\n\n" + "请保留整数约束。\n\n".repeat(40));
     await expect(page.getByRole("heading", { name: "生产计划", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /^立即求解/ })).toBeInViewport();
@@ -29,7 +29,7 @@ for (const [width, height] of [[320, 568], [390, 844], [768, 1024], [1024, 768],
     else {
       await expect(navigation).toBeHidden();
       await page.getByRole("button", { name: "打开菜单" }).click();
-      await expect(page.getByRole("dialog").getByRole("button", { name: "快速求解", exact: true })).toBeVisible();
+      await expect(page.getByRole("dialog").getByRole("button", { name: "多方案对比", exact: true })).toBeVisible();
     }
   });
 }
@@ -38,7 +38,7 @@ test("a phone can preview Markdown, submit its unchanged source and read the for
   await page.setViewportSize({ width: 390, height: 844 });
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(String(error)));
-  await page.goto("/");
+  await page.goto("/model");
   const input = page.getByRole("textbox", { name: "问题描述" });
   await input.fill(problem);
   await expect(page.getByRole("heading", { name: "生产计划", exact: true })).toBeVisible();

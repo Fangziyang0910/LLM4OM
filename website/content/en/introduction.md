@@ -1,11 +1,11 @@
-General Intelligent Optimization Solver is a natural-language-driven **dual-engine optimization platform (Exact Solvers × AutoCO Metaheuristics)**. Describe your business goals and drop spreadsheets — the platform automatically routes between **9 exact mathematical modeling frameworks** and **AutoCO's 12-family metaheuristic pool**, running inside an isolated sandbox to return verified optima and multi-objective Pareto fronts.
+General Intelligent Optimization Solver is a natural-language-driven **dual-engine optimization platform (Exact Solvers × AutoCO Metaheuristics)**. Describe your business goals and drop spreadsheets — the platform automatically routes between **5 exact mathematical modeling frameworks** and **AutoCO's 12-family metaheuristic pool**, running inside an isolated sandbox to return computed solutions and multi-objective Pareto fronts.
 
 ## Choose an entry point
 
 | Entry | Starting point | Next actions |
 |---|---|---|
 | [Optimization chat](../chat-agent/) (default `/` workbench) | Send a plain-language problem or drop Excel/CSV | Zero-config dual-engine routing, side-by-side Pareto/plan analysis, follow-up revisions and scenarios |
-| [Multi-strategy comparison & manual setup](../run-settings/) (`/model`) | Prepared statement needing explicit strategy control | Switch across all 14 methods, 9 modeling libraries and solvers, or benchmark up to 12 runs side by side |
+| [Multi-strategy comparison & manual setup](../run-settings/) (`/model`) | Prepared statement needing explicit strategy control | Switch across all 9 methods, 5 modeling libraries and solvers, or benchmark up to 12 runs side by side |
 | [Requirements assistant](../requirements/) | A developing business idea | Structure a clear problem statement and attachments before solving |
 
 ![General Intelligent Optimization Solver workbench: conversational planning and interactive Pareto front](../../../assets/screens/live/pareto-light.png)
@@ -48,9 +48,9 @@ AutoCO returns the heuristic results and Pareto candidates found within its sear
 
 ## Understand modeling and computation
 
-[Methods](../methods/) covers **14 workflows**: the core exact strategies (Direct, Feedback Repair, TriVAL), the **[AutoCO metaheuristic engine](../autoco/)** for large combinatorial and multi-objective Pareto tasks, plus 10 research methods — each with mechanisms, Mermaid diagrams, interactive step-by-step walkthroughs and live preset parameters.
+[Methods](../methods/) covers **14 workflows**: Direct, OR-LLM-Agent, LLMOPT, TriVAL and BIND, the **[AutoCO metaheuristic engine](../autoco/)** for large combinatorial and multi-objective Pareto tasks, plus OptiMUS, CoE and OptiTree — each with mechanisms, Mermaid diagrams, interactive step-by-step walkthroughs and live preset parameters.
 
-[Libraries and solvers](../solvers/) covers **9 exact modeling libraries** (Pyomo, gurobipy, OR-Tools, CPMpy, PuLP, CVXPY, PySCIPOpt, CasADi, coptpy), native interfaces, backend compatibility and complete runnable examples.
+[Libraries and solvers](../solvers/) covers **5 exact modeling libraries** (Pyomo, OR-Tools, CVXPY, PySCIPOpt, CasADi), native interfaces, backend compatibility and complete runnable examples.
 
 ## Watch and interact
 

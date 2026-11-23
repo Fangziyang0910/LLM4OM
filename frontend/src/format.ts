@@ -50,8 +50,9 @@ export function errorText(error: unknown): string {
   } catch { return message; }
 }
 
-export const formatNumber = (value: number) =>
-  Number.isInteger(value) ? value.toLocaleString("en-US") : value.toLocaleString("en-US", { maximumSignificantDigits: 8 });
+const integerFormat = new Intl.NumberFormat("en-US");
+const decimalFormat = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 8 });
+export const formatNumber = (value: number) => (Number.isInteger(value) ? integerFormat : decimalFormat).format(value);
 
 export const formatTokens = (count: number) => count < 1000 ? String(count) : `${(count / 1000).toFixed(count < 10000 ? 1 : 0)}k`;
 

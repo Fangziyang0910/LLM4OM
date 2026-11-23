@@ -33,6 +33,7 @@ const fits = async page => assert.equal(await page.evaluate(() => document.docum
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.locator('[data-case="production"]').click();
     await page.locator("#change-condition").click();
     await page.locator("#view-model").click();
     await choose(page, "dark");
@@ -52,19 +53,19 @@ const fits = async page => assert.equal(await page.evaluate(() => document.docum
       await page.goto(`${base}?lang=${locale}`);
       for (const theme of ["light", "dark"]) {
         await choose(page, theme);
-        for (const feature of ["plan", "scenarios", "data"]) {
-          await page.locator(`[data-feature="${feature}"]`).click();
-          await expect(page.locator(".photo-stage")).toHaveAttribute("data-loading", "false");
-          await expect(page.locator("#feature-image")).toHaveAttribute("src", `assets/screens/${locale}/${feature}${theme === "light" ? "-light" : ""}.png`);
-          const brightness = await page.locator("#feature-image").evaluate(img => {
+        for (const feature of ["pareto", "chat"]) {
+          await page.locator(`[data-shot="${feature}"]`).click();
+          await page.locator("#sc1-image").evaluate(image => image.decode());
+          await expect(page.locator("#sc1-image")).toHaveAttribute("src", `assets/screens/live/${feature}-${theme}.png`);
+          const brightness = await page.locator("#sc1-image").evaluate(img => {
             const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
             const ctx = canvas.getContext("2d"); ctx.drawImage(img, 0, 0, 1, 1);
             return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3).reduce((a, b) => a + b) / 3;
           });
           assert.ok(theme === "light" ? brightness > 180 : brightness < 100, `Wrong screenshot appearance: ${theme}/${locale}/${feature}`);
         }
-        await page.locator("#enlarge-photo").click();
-        await expect(page.locator("#photo-dialog img")).toHaveAttribute("src", new RegExp(`/data${theme === "light" ? "-light" : ""}\\.png$`));
+        await page.locator("[data-zoom-target=sc1-image]").click();
+        await expect(page.locator("#photo-dialog img")).toHaveAttribute("src", new RegExp(`/chat-${theme}\\.png$`));
         await page.keyboard.press("Escape");
       }
     }
@@ -167,7 +168,7 @@ const fits = async page => assert.equal(await page.evaluate(() => document.docum
     await expect(privatePage.locator("html")).toHaveAttribute("data-theme", "light");
     await blocked.close();
     assert.deepEqual(errors, []);
-    console.log("PASS: light/dark/system, persistence, OS changes, bilingual keyboard controls, tab sync, blocked storage, preserved demo/stage/video state, matching light media, all 92 Docs in both themes, light assets, diagram fonts and six responsive widths.");
+    console.log("PASS: light/dark/system, persistence, OS changes, bilingual keyboard controls, tab sync, blocked storage, preserved demo/stage/video state, matching light media, all published articles in both themes, light assets, diagram fonts and six responsive widths.");
     console.log(`Screenshots: ${output}`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

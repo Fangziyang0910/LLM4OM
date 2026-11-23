@@ -21,7 +21,7 @@ Repeat `--data` for more files. Code reads text by original file name. `--preset
 | Option | Purpose |
 |---|---|
 | `--problem` / `--file` | Inline statement or UTF-8 file |
-| `--method` | ID such as feedback_repair or sac_opt |
+| `--method` | ID such as direct or llmopt |
 | `--language` | ID such as pyomo, ortools or cvxpy |
 | `--solver` | Native ID; omission uses AUTO |
 | `--workspace` / `--preset` | Preset workspace and ID |

@@ -54,6 +54,6 @@ The model must support tool calling. TriVAL uses the run preset's model and thin
 
 ## Related methods and implementation
 
-[Feedback Repair](../feedback-repair/) reviews the model after solving; TriVAL moves checks into separate levels. [SAC-Opt](../sac-opt/) focuses on the consistency of backtranslated constraint code.
+TriVAL checks interpretation, formulation and code at separate stages. Compare its process with [Direct](../direct/) on the same problem.
 
 The platform ports the [pinned SCUT-EIPI/TriVAL implementation](https://github.com/SCUT-EIPI/TriVAL/tree/380a529), retaining its graph, nodes, prompts and loops. It supplies the LLM and sandbox, maps input and reports unresolved validation at exit.

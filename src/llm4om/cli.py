@@ -108,7 +108,10 @@ def _serve(args: argparse.Namespace) -> int:
 
     from llm4om.methods import methods
 
-    load_dotenv()  # read .env from where the command starts, before moving into the workspace
+    load_dotenv(Path.cwd() / ".env")
+    jobs = args.jobs if args.jobs is not None else int(os.environ.get("LLM4OM_RUN_JOBS") or 4)
+    if jobs < 0:
+        raise ValueError("The run concurrency cannot be negative.")
     workspace = Path(args.workspace).resolve()
     workspace.mkdir(parents=True, exist_ok=True)
     os.environ["LLM4OM_WORKSPACE"] = str(workspace)
@@ -123,7 +126,7 @@ def _serve(args: argparse.Namespace) -> int:
     local = "127.0.0.1" if args.host == "0.0.0.0" else args.host
     reach = "; other machines use this machine's address" if args.host == "0.0.0.0" else ""
     print(f"LLM4OM: http://{local}:{args.port}{reach}  (runs are kept in {workspace})", file=sys.stderr)
-    run_server(host=args.host, port=args.port, graphs=graphs, n_jobs_per_worker=args.jobs, open_browser=False,
+    run_server(host=args.host, port=args.port, graphs=graphs, n_jobs_per_worker=jobs, open_browser=False,
                http={"app": "llm4om.server.app:app", "cors": {"allow_origins": []},
                      "disable_mcp": True, "disable_a2a": True},
                server_level="WARNING")
@@ -191,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--workspace", default="runs/web", help="Directory for LLM presets and run history.")
     serve.add_argument("--host", default="0.0.0.0", help="Address to listen on; 127.0.0.1 keeps the workbench on this machine.")
     serve.add_argument("--port", type=int, default=8767)
-    serve.add_argument("--jobs", type=int, default=4, help="Runs that may execute at the same time.")
+    serve.add_argument("--jobs", type=int, help="Simultaneous runs. Defaults to LLM4OM_RUN_JOBS or 4.")
     serve.add_argument("--sandbox", choices=("docker", "local"), default="docker",
                        help="Where generated code runs; 'local' skips isolation and is for development only.")
 

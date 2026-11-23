@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.staticfiles import StaticFiles
 
 from llm4om.budget import TokenBudget
 from llm4om.graph import default_resources
@@ -23,6 +23,7 @@ from llm4om.llm_presets import LLMPresetStore
 from llm4om.methods import methods
 from llm4om.runtime import LimitExceeded
 from llm4om.server import examples
+from llm4om.server.assets import WorkbenchAssets
 from llm4om.server.middleware import JsonOnlyWrites, RunRateLimit, ThreadCleanup
 from llm4om.server.translations import ExampleTranslations, TranslationError
 
@@ -72,19 +73,21 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
     async def bad_input(_: Request, error: ValueError) -> JSONResponse:
         return JSONResponse({"detail": str(error)}, status_code=400)
 
-    @app.get("/api/options")
-    def options() -> dict[str, Any]:
-        return {
-            "methods": [{"id": m.id, "name": m.name, "description": m.description, "source": m.source,
-                         "linear_only": m.linear_only, "builtin_solver": m.builtin_solver,
-                         "languages": sorted(m.languages) if m.languages is not None else None}
-                        for m in methods().values()],
-            "languages": [{"id": item.id, "name": item.name, "solver": "AUTO"}
-                          for item in LANGUAGES.values()],
-            "providers": [asdict(provider) for provider in PROVIDERS.values()],
-            "datasets": examples.datasets(),
-            "search_configured": bool(os.environ.get("LLM4OM_SEARCH_API_KEY")),
-        }
+    # Installed graphs and their public configuration are fixed when this service starts.
+    options_body = JSONResponse({
+        "methods": [{"id": m.id, "name": m.name, "description": m.description, "source": m.source,
+                     "linear_only": m.linear_only, "builtin_solver": m.builtin_solver,
+                     "languages": sorted(m.languages) if m.languages is not None else None}
+                    for m in methods().values()],
+        "languages": [{"id": item.id, "name": item.name, "solver": "AUTO"} for item in LANGUAGES.values()],
+        "providers": [asdict(provider) for provider in PROVIDERS.values()],
+        "datasets": examples.datasets(),
+        "search_configured": bool(os.environ.get("LLM4OM_SEARCH_API_KEY")),
+    }).body
+
+    @app.get("/api/options", response_model=dict[str, Any])
+    async def options() -> Response:
+        return Response(options_body, media_type="application/json")
 
     @app.get("/api/backends")
     async def backends() -> dict[str, Any]:
@@ -158,9 +161,16 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
         return {"id": body.case_id, **await reading_translation(original["description"], body.locale)}
 
     if (ASSETS / "index.html").is_file():
-        app.mount("/assets", StaticFiles(directory=ASSETS / "assets"), name="assets")
+        app.mount("/assets", WorkbenchAssets(ASSETS / "assets"), name="assets")
+        shell = StaticFiles(directory=ASSETS)
+
+        async def workbench(request: Request) -> Response:
+            response = await shell.get_response("index.html", request.scope)
+            response.headers["cache-control"] = "no-cache"
+            return response
+
         for page in PAGES:
-            app.add_api_route(page, lambda: FileResponse(ASSETS / "index.html"), include_in_schema=False)
+            app.add_api_route(page, workbench, methods=["GET", "HEAD"], include_in_schema=False)
 
     return app
 

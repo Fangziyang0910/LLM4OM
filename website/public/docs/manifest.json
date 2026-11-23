@@ -329,8 +329,8 @@
         "Choose a modeling method"
       ],
       "summary": [
-        "比较 14 种策略的流程、适用范围与双引擎选择（精确求解 × AutoCO）。",
-        "Compare the workflows, scope and dual-engine choices across 14 methods."
+        "比较 9 种策略的流程、适用范围与双引擎选择（精确求解 × AutoCO）。",
+        "Compare the workflows, scope and dual-engine choices across 9 methods."
       ],
       "sources": [
         "docs/methods.md",
@@ -348,23 +348,6 @@
       "summary": [
         "一次生成数学模型与求解代码，再交给求解器计算。",
         "Generate the mathematical model and solver code in one LLM call."
-      ],
-      "sources": [
-        "src/llm4om/methods/direct/graph.py",
-        "docs/methods.md"
-      ]
-    },
-    {
-      "id": "feedback-repair",
-      "group": "methods",
-      "method": "feedback_repair",
-      "title": [
-        "Feedback Repair",
-        "Feedback Repair"
-      ],
-      "summary": [
-        "求解后对照原题复核，并按具体问题修正。",
-        "Review the solved model against the problem and repair specific errors."
       ],
       "sources": [
         "src/llm4om/methods/direct/graph.py",
@@ -474,23 +457,6 @@
       ]
     },
     {
-      "id": "orthought",
-      "group": "methods",
-      "method": "orthought",
-      "title": [
-        "ORThought",
-        "ORThought"
-      ],
-      "summary": [
-        "按建模顺序写出思路、数学模型和代码，并调试执行错误。",
-        "Write a reasoning path, formulation and code, then debug execution errors."
-      ],
-      "sources": [
-        "docs/methods.md",
-        "src/llm4om/methods/orthought/graph.py"
-      ]
-    },
-    {
       "id": "llmopt",
       "group": "methods",
       "method": "llmopt",
@@ -505,40 +471,6 @@
       "sources": [
         "docs/methods.md",
         "src/llm4om/methods/llmopt/graph.py"
-      ]
-    },
-    {
-      "id": "autoformulation",
-      "group": "methods",
-      "method": "autoformulation",
-      "title": [
-        "AutoFormulation",
-        "AutoFormulation"
-      ],
-      "summary": [
-        "搜索多个模型组件，用 MCTS 和两两比较选择完整模型。",
-        "Search candidate components and rank complete models with MCTS and comparisons."
-      ],
-      "sources": [
-        "docs/methods.md",
-        "src/llm4om/methods/autoformulation/search.py"
-      ]
-    },
-    {
-      "id": "sac-opt",
-      "group": "methods",
-      "method": "sac_opt",
-      "title": [
-        "SAC-Opt",
-        "SAC-Opt"
-      ],
-      "summary": [
-        "提取语义锚点，回译约束代码，只修正未通过的组件。",
-        "Extract semantic anchors and selectively repair constraints after backtranslation."
-      ],
-      "sources": [
-        "src/llm4om/methods/sac_opt/README.md",
-        "docs/methods.md"
       ]
     },
     {
@@ -559,23 +491,6 @@
       ]
     },
     {
-      "id": "optimind",
-      "group": "methods",
-      "method": "optimind",
-      "title": [
-        "OptiMind",
-        "OptiMind"
-      ],
-      "summary": [
-        "结合公开类型提示与多轮求解反馈检查模型。",
-        "Combine public problem-type hints with multi-turn solver feedback."
-      ],
-      "sources": [
-        "src/llm4om/methods/optimind/README.md",
-        "docs/methods.md"
-      ]
-    },
-    {
       "id": "solvers",
       "group": "solvers",
       "title": [
@@ -583,8 +498,8 @@
         "Choose a library and solver"
       ],
       "summary": [
-        "了解九个建模库，以及后端能力、AUTO 和实际可用状态。",
-        "Understand the nine libraries, backend capabilities, AUTO and availability."
+        "了解五个建模库，以及后端能力、AUTO 和实际可用状态。",
+        "Understand the five libraries, backend capabilities, AUTO and availability."
       ],
       "sources": [
         "src/llm4om/languages.py",
@@ -609,23 +524,6 @@
       ]
     },
     {
-      "id": "gurobipy",
-      "group": "solvers",
-      "library": "gurobipy",
-      "title": [
-        "gurobipy / Gurobi",
-        "gurobipy / Gurobi"
-      ],
-      "summary": [
-        "使用 Gurobi 的原生 Python 模型、矩阵接口与冲突诊断。",
-        "Use Gurobi's native Python models, matrix API and conflict evidence."
-      ],
-      "sources": [
-        "docs/references/modeling-libraries.md",
-        "docs/deployment.md"
-      ]
-    },
-    {
       "id": "ortools",
       "group": "solvers",
       "library": "ortools",
@@ -636,40 +534,6 @@
       "summary": [
         "覆盖线性、整数、约束、路径与网络流等原生接口。",
         "Use native linear, integer, constraint, routing and network-flow interfaces."
-      ],
-      "sources": [
-        "docs/references/modeling-libraries.md",
-        "src/llm4om/languages.py"
-      ]
-    },
-    {
-      "id": "cpmpy",
-      "group": "solvers",
-      "library": "cpmpy",
-      "title": [
-        "CPMpy",
-        "CPMpy"
-      ],
-      "summary": [
-        "用整数、布尔与全局约束表达离散决策。",
-        "Model discrete decisions with integer, Boolean and global constraints."
-      ],
-      "sources": [
-        "docs/references/modeling-libraries.md",
-        "src/llm4om/languages.py"
-      ]
-    },
-    {
-      "id": "pulp",
-      "group": "solvers",
-      "library": "pulp",
-      "title": [
-        "PuLP",
-        "PuLP"
-      ],
-      "summary": [
-        "表达线性与混合整数模型，连接 CBC 等原生后端。",
-        "Build linear and mixed-integer models with CBC or other native backends."
       ],
       "sources": [
         "docs/references/modeling-libraries.md",
@@ -725,23 +589,6 @@
       "sources": [
         "docs/references/modeling-libraries.md",
         "src/llm4om/languages.py"
-      ]
-    },
-    {
-      "id": "coptpy",
-      "group": "solvers",
-      "library": "coptpy",
-      "title": [
-        "coptpy / COPT",
-        "coptpy / COPT"
-      ],
-      "summary": [
-        "使用 COPT 原生接口，核对模型类型与许可条件。",
-        "Use the native COPT interface and check model and license requirements."
-      ],
-      "sources": [
-        "docs/references/modeling-libraries.md",
-        "docs/deployment.md"
       ]
     },
     {

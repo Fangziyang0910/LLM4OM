@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu, PanelLeftOpen, Plus, RefreshCw, ServerCrash } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,17 +10,18 @@ import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/api";
 import { clearChatDraft, createRequirements, createSolutionChat, deleteRun, getThreadKind, history, startComparison, startRevision, startRun, startScenarios } from "@/features/runs/api";
 import { errorText } from "@/format";
-import { Composer, initialDraft } from "@/features/composer/Composer";
-import { Examples } from "@/features/composer/Examples";
-import { PresetsDialog } from "@/features/presets/PresetsDialog";
+import { initialDraft } from "@/features/composer/draft";
 import { Sidebar } from "@/components/Sidebar";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { t } from "@/i18n";
+import { useDesktop } from "@/lib/useDesktop";
 import type { Entry, SourceRun } from "@/features/runs/types";
 import { sourceKey } from "@/features/runs/types";
 import type { Draft, Options, Preset, Presets } from "@/types";
 
-// Load run pages on demand.
+const Composer = lazy(() => import("@/features/composer/Composer").then(module => ({ default: module.Composer })));
+const Examples = lazy(() => import("@/features/composer/Examples").then(module => ({ default: module.Examples })));
+const PresetsDialog = lazy(() => import("@/features/presets/PresetsDialog").then(module => ({ default: module.PresetsDialog })));
 const RunView = lazy(() => import("@/features/runs/RunView").then(module => ({ default: module.RunView })));
 const Compare = lazy(() => import("@/features/runs/Compare").then(module => ({ default: module.Compare })));
 const Requirements = lazy(() => import("@/features/requirements/Requirements").then(module => ({ default: module.Requirements })));
@@ -46,11 +47,18 @@ export default function App() {
   const optionsQuery = useQuery({ queryKey: ["options"], queryFn: () => api<Options>("/api/options"), staleTime: Infinity });
   const presetsQuery = useQuery({ queryKey: ["presets"], queryFn: () => api<Presets>("/api/presets") });
   const presets = presetsQuery.data?.presets ?? NO_PRESETS;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try { return localStorage.getItem("llm4om-sidebar") !== "closed"; } catch { return true; }
+  });
+  const showSidebar = useDesktop("80rem") && sidebarOpen;
   // Runs started elsewhere (another tab, the CLI against the server) finish without telling this page.
   const historyQuery = useInfiniteQuery({ queryKey: ["history"], initialPageParam: 0,
-    queryFn: ({ pageParam }) => history(undefined, pageParam), getNextPageParam: page => page.nextOffset,
+    enabled: showSidebar || menuOpen,
+    queryFn: ({ pageParam }) => history(undefined, pageParam, queryClient), getNextPageParam: page => page.nextOffset,
     refetchInterval: query => query.state.data?.pages.some(page => page.entries.some(entry => ["running", "pending"].includes(entry.state))) ? 4000 : 10000 });
-  const entries = [...new Map((historyQuery.data?.pages.flatMap(page => page.entries) ?? []).map(entry => [entry.id, entry])).values()];
+  const entries = useMemo(() => [...new Map((historyQuery.data?.pages.flatMap(page => page.entries) ?? [])
+    .map(entry => [entry.id, entry])).values()], [historyQuery.data]);
   const options = optionsQuery.data ?? null;
   const [route, setRoute] = useState<Route>(routeFromUrl);
   const routeRef = useRef(route);
@@ -58,12 +66,8 @@ export default function App() {
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const agentDraftSeq = useRef(0);
   const [agentDraft, setAgentDraft] = useState({ id: 0, description: "", data: {} as Record<string, string> });
-  const [examplesOpen, setExamplesOpen] = useState(false);
+  const [examplesOpen, setExamplesOpen] = useState<boolean | null>(null);
   const [presetsOpen, setPresetsOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    try { return localStorage.getItem("llm4om-sidebar") !== "closed"; } catch { return true; }
-  });
   const toggleSidebar = (open: boolean) => {
     setSidebarOpen(open);
     try { localStorage.setItem("llm4om-sidebar", open ? "open" : "closed"); } catch { /* ignore */ }
@@ -165,7 +169,7 @@ export default function App() {
     onExamples: () => { setExamplesOpen(true); setMenuOpen(false); }, onPresets: () => { setPresetsOpen(true); setMenuOpen(false); } };
 
   return <div className="flex h-dvh overflow-hidden bg-background">
-    {sidebarOpen ? <aside aria-label={t("导航")} className="hidden w-64 shrink-0 border-r border-sidebar-border xl:block">
+    {showSidebar ? <aside aria-label={t("导航")} className="hidden w-64 shrink-0 border-r border-sidebar-border xl:block">
       <Sidebar {...sidebarProps} onCollapse={() => toggleSidebar(false)} />
     </aside> : null}
     <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
@@ -209,11 +213,11 @@ export default function App() {
                 onFinished={() => void refresh()} onOpen={openRun} onCompare={id => go({ name: "compare", id })} renderRun={source => renderRun(source, false, true)} />
             </Suspense></PageErrorBoundary>
           : route.name === "new"
-            ? <Composer {...modelingProps(options)} openExamples={() => setExamplesOpen(true)} onDiscuss={async () => {
+            ? <PageErrorBoundary><Suspense fallback={<Spinner />}><Composer {...modelingProps(options)} openExamples={() => setExamplesOpen(true)} onDiscuss={async () => {
                 const preset = presets.find(item => item.id === draft.preset) ?? presets[0];
                 const id = await createRequirements({ description: draft.description, data: draft.data }, preset, draft.origin);
                 void refresh(); go({ name: "chat", id });
-              }} />
+              }} /></Suspense></PageErrorBoundary>
             : <PageErrorBoundary key={route.id}><Suspense fallback={<div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在加载……")}</div>}>
               {route.name === "compare" ? <Compare key={route.id} group={route.id} options={options} onOpen={openRun} />
                 : route.name === "chat" ? <Requirements key={route.id} threadId={route.id} {...modelingProps(options)} searchConfigured={!!options.search_configured}
@@ -228,8 +232,8 @@ export default function App() {
       </main>
     </div>
 
-    {options ? <>
-      <Examples open={examplesOpen} onClose={() => setExamplesOpen(false)} datasets={options.datasets}
+    {options ? <PageErrorBoundary><Suspense fallback={null}>
+      {examplesOpen !== null ? <Examples open={examplesOpen} onClose={() => setExamplesOpen(false)} datasets={options.datasets}
         onUse={description => {
           if (route.name === "new") {
             setDraft({ ...draft, description, data: {}, origin: undefined });
@@ -240,11 +244,11 @@ export default function App() {
             go({ name: "agent-new" });
           }
           setExamplesOpen(false);
-        }} />
+        }} /> : null}
       {presetsOpen ? <PresetsDialog onClose={() => setPresetsOpen(false)} presets={presets} dailyTokens={presetsQuery.data?.daily_tokens ?? 0}
         providers={options.providers}
         onChange={(value, message) => { queryClient.setQueryData(["presets"], value); toast.success(message); }} /> : null}
-    </> : null}
+    </Suspense></PageErrorBoundary> : null}
     <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
   </div>;
 }

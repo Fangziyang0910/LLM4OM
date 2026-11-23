@@ -14,6 +14,27 @@ import pytest
 from llm4om.cli import _print_step, main
 
 
+@pytest.mark.parametrize(("configured", "arguments", "expected"), [(None, [], 4), ("2", [], 2), ("2", ["--jobs", "3"], 3), (None, ["--jobs", "0"], 0)])
+def test_serve_configures_run_slots(tmp_path: Path, monkeypatch: Any, configured: str | None,
+                                   arguments: list[str], expected: int) -> None:
+    from unittest.mock import Mock
+
+    from dotenv.main import load_dotenv
+
+    launch = Mock()
+    monkeypatch.setattr("dotenv.load_dotenv", load_dotenv)
+    monkeypatch.setattr("langgraph_api.cli.run_server", launch)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("PYTHON_DOTENV_DISABLED", raising=False)
+    monkeypatch.delenv("LLM4OM_RUN_JOBS", raising=False)
+    if configured:
+        (tmp_path / ".env").write_text(f"LLM4OM_RUN_JOBS={configured}\n")
+    monkeypatch.setenv("LLM4OM_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("LLM4OM_SANDBOX", "docker")
+    assert main(["serve", "--workspace", str(tmp_path / "workspace"), *arguments]) == 0
+    assert launch.call_args.kwargs["n_jobs_per_worker"] == expected
+
+
 def test_cli_reports_failed_solve_without_a_status(capsys: Any) -> None:
     _print_step({"type": "solve", "title": "final solve", "running": False, "failed": True})
     assert "final solve" in capsys.readouterr().err

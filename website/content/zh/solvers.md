@@ -4,9 +4,9 @@
 
 | 问题结构 | 数学含义 | 可以先看的组合 |
 |---|---|---|
-| 可分割数量，线性成本与容量 | LP：连续线性规划 | Pyomo / PuLP + HiGHS 或 CBC 等兼容引擎 |
-| 整件、开关、选址，线性约束 | MILP：混合整数线性规划 | Pyomo、PuLP、gurobipy、PySCIPOpt、coptpy；或 OR-Tools 数学规划接口 |
-| 排班、逻辑、互斥、有限域 | CP / SAT 类离散约束 | CPMpy + OR-Tools，或 OR-Tools CP-SAT |
+| 可分割数量，线性成本与容量 | LP：连续线性规划 | Pyomo + HiGHS 或 CBC 等兼容引擎 |
+| 整件、开关、选址，线性约束 | MILP：混合整数线性规划 | Pyomo、PySCIPOpt；或 OR-Tools 数学规划接口 |
+| 排班、逻辑、互斥、有限域 | CP / SAT 类离散约束 | OR-Tools CP-SAT |
 | 凸二次损失、范数、锥约束 | 凸 QP / 锥规划 | CVXPY + 对应的 OSQP、Clarabel、SCS 等 |
 | 光滑非线性、连续控制量 | NLP：非线性规划 | CasADi + Ipopt，或适合该模型的其他原生路径 |
 | 路径、流、指派、背包 | 专门组合结构 | OR-Tools 对应的 Routing、流或组合算法 |
@@ -37,19 +37,15 @@ production
 
 选择适合的模型后，可以在工作台运行相同题面，保存模型、代码与完整结果，再继续调整条件。
 
-## 九个建模库各自擅长表达什么
+## 五个建模库各自擅长表达什么
 
 | 库 | 表达与接口 | 默认或原生计算路径 |
 |---|---|---|
 | [Pyomo](../pyomo/) | 代数、索引模型；Concrete/Abstract 实例、Kernel | 代数默认 HiGHS；Kernel 默认 CBC |
-| [gurobipy](../gurobipy/) | Gurobi 原生标量与矩阵模型 | Gurobi |
 | [OR-Tools](../ortools/) | 数学规划、CP、Routing、网络算法 | 按原生接口；MPSolver 参考默认 SCIP |
-| [CPMpy](../cpmpy/) | 有限域整数、布尔、全局约束 | 默认 OR-Tools CP-SAT |
-| [PuLP](../pulp/) | 线性目标和线性约束 | 默认 CBC；其他原生兼容后端 |
 | [CVXPY](../cvxpy/) | DCP、DGP、DQCP；凸与锥表达 | 按模型与安装路径选择 |
 | [PySCIPOpt](../pyscipopt/) | SCIP 原生线性、整数和非线性约束 | SCIP |
 | [CasADi](../casadi/) | 符号微分、Opti、NLP/Conic 字典 | Opti NLP 默认 Ipopt |
-| [coptpy](../coptpy/) | COPT 原生 LP/MIP、凸二次与锥 | COPT |
 
 ## AUTO 与显式选择
 

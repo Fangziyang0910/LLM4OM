@@ -1,5 +1,6 @@
 /** English for the page's Chinese text; keys are the Chinese exactly as written in t(...). */
 export const en: Record<string, string> = {
+  "找不到这条记录。": "This record could not be found.",
   "查看模型原始输出": "View raw model output",
   "原始输出可能包含英文、代码或工具字段。": "Raw output may include English, code, or tool fields.",
   "正在生成阅读译文……": "Generating a reading translation…",
@@ -870,7 +871,7 @@ export const en: Record<string, string> = {
   "点击可在线查看或编辑 {name}": "Click to view or edit {name}",
   "支持 Excel (.xlsx)、CSV、TSV、JSON 和文本文件；上传后可直接点击文件名在线编辑。": "Supports Excel (.xlsx), CSV, TSV, JSON, and text files. Click any attached file to view or edit it.",
   "支持 Excel、CSV、TSV、JSON、TXT": "Excel, CSV, TSV, JSON, TXT supported",
-  "选择或接入用于智能对话与优化建模的 AI 模型，密钥仅加密保存在服务端。": "Select or connect AI models for planning and optimization. API keys are stored securely on the server.",
+  "选择或接入用于智能对话与优化建模的 AI 模型，密钥仅保存在服务端。": "Select or connect AI models for planning and optimization. API keys are stored only on the server.",
   " · 系统内置": " · Built-in",
   "添加模型": "Add Model",
   "由服务端统一提供，可直接用于对话与求解": "Provided by the server and ready for chat and solving",

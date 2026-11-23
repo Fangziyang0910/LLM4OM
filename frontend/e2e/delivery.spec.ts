@@ -3,14 +3,14 @@ import { readFile } from "node:fs/promises";
 import readXlsxFile from "read-excel-file/node";
 
 test("quoted customer indices survive solving, matrix display, CSV and Excel downloads", async ({ page }, testInfo) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("textbox", { name: "问题描述" }).fill(
     "E2E_QUOTED_INDICES 周一向客户 North, East 发货 3 件，向 West 发货 0 件。数量为非负整数，最小化总发货量。");
-  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.getByRole("button", { name: /^立即求解/ }).click();
   await page.waitForURL(/\/run\//);
   const excel = page.getByRole("button", { name: "导出 Excel", exact: true });
   await expect(excel).toBeVisible({ timeout: 60_000 });
-  await page.getByText("完整变量取值（2 个）", { exact: true }).click();
+  await page.getByText("查看全部决策变量明细（共 2 项）", { exact: true }).click();
   await expect(page.getByRole("columnheader", { name: "Monday", exact: true })).toBeVisible();
   await expect(page.getByRole("rowheader", { name: "North, East", exact: true }).locator("..")).toContainText("3");
   await expect(page.getByRole("rowheader", { name: "West", exact: true }).locator("..")).toContainText("0");
@@ -31,14 +31,14 @@ test("quoted customer indices survive solving, matrix display, CSV and Excel dow
   expect(plan.data).toContainEqual(["x['North, East',Monday] 的生产数量", 3, "件", "x['North, East',Monday]"]);
   expect(plan.data).toContainEqual(["x[West,Monday] 的生产数量", 0, "件", "x[West,Monday]"]);
   await page.reload();
-  await page.getByText("完整变量取值（2 个）", { exact: true }).click();
+  await page.getByText("查看全部决策变量明细（共 2 项）", { exact: true }).click();
   await expect(page.getByRole("rowheader", { name: "North, East", exact: true })).toBeVisible();
 });
 
 test("downloads an Excel business plan with actual values and the source problem", async ({ page }, testInfo) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
-  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.getByRole("button", { name: /^立即求解/ }).click();
   await page.waitForURL(/\/run\//);
   const exportButton = page.getByRole("button", { name: "导出 Excel", exact: true });
   await expect(exportButton).toBeVisible({ timeout: 60_000 });
@@ -58,12 +58,12 @@ test("downloads an Excel business plan with actual values and the source problem
 test("an unverified conflict suggestion opens an editable change request and solves a new plan", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(String(error)));
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("textbox", { name: "问题描述" }).fill(
     "工厂生产 A、B 两种产品。合同要求 A、B 各至少生产 5 件。A 消耗 2 单位切割资源，B 消耗 1 单位，切割资源共 8 单位。使利润 3A+2B 最大。");
-  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.getByRole("button", { name: /^立即求解/ }).click();
   await page.waitForURL(/\/run\//);
-  await expect(page.getByText("为什么无解", { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText("为什么当前条件无解", { exact: true })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("建议尚未验证。选择后可编辑调整要求，再重新建模验证。", { exact: true })).toBeVisible();
   const sourceId = page.url().split("/").at(-1)!;
   const original = (await (await page.request.get(`/threads/${sourceId}`)).json()).values;

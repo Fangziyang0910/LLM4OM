@@ -20,7 +20,7 @@ llm4om build-worker
 npx skills add https://github.com/Fangziyang0910/LLM4OM/tree/v0.43.0/skills/llm4om --skill llm4om -g -a codex -a claude-code
 ```
 
-Confirm `llm4om --version` reports `LLM4OM 0.43.0` and `llm4om backends` can query the worker. Open a new host session and invoke `$llm4om` in Codex or `/llm4om` in Claude Code. Give the agent the production problem from the [quickstart](../quickstart/), optionally requesting Feedback Repair and Pyomo. The expected optimum is A=3, B=2, profit=13.
+Confirm `llm4om --version` reports `LLM4OM 0.43.0` and `llm4om backends` can query the worker. Open a new host session and invoke `$llm4om` in Codex or `/llm4om` in Claude Code. Give the agent the production problem from the [quickstart](../quickstart/), optionally requesting Direct and Pyomo. The expected optimum is A=3, B=2, profit=13.
 
 The current host model performs the reasoning, writes code and explains actual results. The CLI preserves method stages and runs tools and solvers locally. No `.env`, platform model preset or Web server is required. `npx` installs skill files; it does not install the CLI or Docker.
 

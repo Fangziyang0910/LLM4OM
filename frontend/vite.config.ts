@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
@@ -6,7 +7,21 @@ import { defineConfig } from "vitest/config";
 // The build goes into the Python package; the LangGraph server serves it beside its API.
 const server = "http://127.0.0.1:8767";
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), {
+    name: "precompress-workbench",
+    apply: "build",
+    generateBundle: {
+      order: "post",
+      handler(_, bundle) {
+        for (const file of Object.values(bundle)) {
+          if (!/\.(js|css)$/.test(file.fileName)) continue;
+          const source = file.type === "chunk" ? file.code : file.source;
+          if (source.length < 1024) continue;
+          this.emitFile({ type: "asset", fileName: file.fileName + ".gz", source: gzipSync(source, { level: 9 }) });
+        }
+      },
+    },
+  }],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   build: {
     outDir: "../src/llm4om/server/web_assets", emptyOutDir: true, target: "es2022",

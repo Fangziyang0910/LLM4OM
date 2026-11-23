@@ -151,7 +151,7 @@ The repository includes the built frontend, so Node.js is not needed. Solver dep
 
 Click an uploaded file name to review and edit its data. After solving, use **Discuss the plan** to ask questions or request explicit changes, or **Business scenario comparison** below the results to calculate several alternatives from one baseline. Each new outcome comes from real modeling and solving; original records remain intact.
 
-If you have only an idea, click **Discuss your requirements**. The assistant updates an editable draft as you talk. Add data and review the text, then click **Use for modeling** to return to the existing settings. You choose when to click **Start modeling**. Saved conversations can be continued from history. Press Enter to send, or Shift+Enter for a new line. Enable **Web search** to find public references and inspect their sources. DeepSeek presets use their own search endpoint; other models can use a separate server-side search key (see `.env.example`).
+To prepare a separate requirements draft, open **Multi-plan comparison** in the sidebar and click **Discuss your requirements**. The assistant updates an editable draft as you talk. Add data and review the text, then click **Apply to Quick Solve** to return to the editor. Click **Solve Now** to start modeling. Saved conversations can be continued from history. Press Enter to send, or Shift+Enter for a new line. Enable **Web search** to find public references and inspect their sources. DeepSeek presets use their own search endpoint; other models can use a separate server-side search key (see `.env.example`).
 
 You can also run from the command line or Python:
 

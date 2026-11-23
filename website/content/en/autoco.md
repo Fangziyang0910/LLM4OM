@@ -7,7 +7,7 @@ AutoCO (Automated Combinatorial Optimization) is the platform's metaheuristic op
 | Multi-objective trade-offs (e.g., electricity cost vs. fault risk) | **AutoCO** (NSGA-II / MOEA/D / NSGA-III) | Produces a full non-dominated Pareto front and knee recommendation in one run without manual weights |
 | Large quadratic assignment, routing, scheduling, or packing (e.g., QAP-30) | **AutoCO** (SA / TS / ILS / LNS) | Exact branch-and-bound frequently times out; high-throughput neighborhood search reaches near-optimal solutions in seconds |
 | Black-box, piecewise, or nonconvex nonlinear objectives | **AutoCO** (CMA-ES / DE / PSO / GA) | Evaluates `evaluate(x)` directly without Big-M linearization or convexity assumptions |
-| Small-to-medium LP, MILP, or standard convex models | **Exact Solvers** (Direct / Feedback Repair / TriVAL) | Proves global optimality in milliseconds to seconds and provides exact conflict diagnostics |
+| Small-to-medium LP, MILP, or standard convex models | **Exact Solvers** (Direct / TriVAL) | Reports feasibility, optimality and available conflict diagnostics |
 
 In the default **Auto** mode inside [Chat Agent](../chat-agent/), the platform automatically routes multi-objective and metaheuristic requests to AutoCO while keeping exact models on exact solvers. You can also pin `AutoCO` explicitly in the composer or in [Configure a run](../run-settings/).
 
@@ -67,6 +67,6 @@ When a multi-objective run finishes, the workbench renders an interactive **Pare
 
 ## Usage notes and trade-offs
 
-AutoCO requires no commercial solver license and no algebraic modeling library choice. In [Compare methods and LLMs](../method-comparison/), you can run AutoCO directly alongside `Direct`, `Feedback Repair`, `TriVAL`, and other methods on the same task.
+AutoCO requires no commercial solver license and no algebraic modeling library choice. In [Compare methods and LLMs](../method-comparison/), you can run AutoCO directly alongside `Direct`, `TriVAL`, and other methods on the same task.
 
 Keep in mind that metaheuristics search for high-quality feasible solutions and Pareto approximations within a time budget rather than producing a mathematical proof of global optimality. For tractable linear or mixed-integer programs where an optimality certificate matters, use an exact solver workflow.

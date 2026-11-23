@@ -19,16 +19,6 @@
     "sourceHash": "a6c84c9df31d6f81feb34f6f00a21bd5c9441633f720cee9159318aef1c81832",
     "file": "zh-autoco-1-light.svg"
   },
-  "zh-autoformulation-1": {
-    "hash": "dfb1c5958e3b2c1e2c5a730125858d82c278aeeac17caf7388d1d34da2926297",
-    "sourceHash": "af0d0f5fcd60b2a43b845ef3d61f710348122a040def70dd31f87198f2492c74",
-    "file": "zh-autoformulation-1.svg"
-  },
-  "zh-autoformulation-1-light": {
-    "hash": "31a05550f44330ffc051ce36b21f7bd09070f12fe94972920ed928308f71ffdb",
-    "sourceHash": "af0d0f5fcd60b2a43b845ef3d61f710348122a040def70dd31f87198f2492c74",
-    "file": "zh-autoformulation-1-light.svg"
-  },
   "zh-backends-1": {
     "hash": "74b75562dc884a89892317d2d17b75f0574e3bb5a45a49b10ff50567521f55b7",
     "sourceHash": "47de9298966f99f140683aafa7bd5a71c01ff4e25133434438a4871956b3d697",
@@ -109,16 +99,6 @@
     "sourceHash": "0158c341a6741adb8081b63dabe1e7ddc6a5fe8a5a88132f21da462852c51d6f",
     "file": "zh-conflicts-1-light.svg"
   },
-  "zh-cpmpy-1": {
-    "hash": "f3fe1738ec0c3d3115dd08e6449c1f356774a25309215bfc7d42e4746540eaa7",
-    "sourceHash": "3939a60dfee28fe4bd0629288b7f8539431738dbef17acf690eda9e130c41236",
-    "file": "zh-cpmpy-1.svg"
-  },
-  "zh-cpmpy-1-light": {
-    "hash": "e5e081c9be368af33541948c2d85ee3ced85b21d54ffda294e924b2316cc8c0c",
-    "sourceHash": "3939a60dfee28fe4bd0629288b7f8539431738dbef17acf690eda9e130c41236",
-    "file": "zh-cpmpy-1-light.svg"
-  },
   "zh-cvxpy-1": {
     "hash": "5ac39838dc4050bbfdb8072e3c649c97f009ce43fbf3e982620d94f78d8576f8",
     "sourceHash": "41f23b093840b3b2a98344b0ef5e2ffb9729542204a070225e8a65b9f200ab7d",
@@ -138,16 +118,6 @@
     "hash": "a70d11d1abf404545098850cdc5afcacdba607c1a401ccfd5f631aded84338a4",
     "sourceHash": "61670db69c69631f8765ff3163e5936a69fb27a4102924992bd2ba4241f55463",
     "file": "zh-direct-1-light.svg"
-  },
-  "zh-feedback-repair-1": {
-    "hash": "2f96345a9a5c3a35e22257c8e80f0549340f8a251dcbd92b43eaea2267e5122d",
-    "sourceHash": "bf3e121e997f3aa464ed92428d0c0dfe527ddc6a63bde452870b5df65b3c3319",
-    "file": "zh-feedback-repair-1.svg"
-  },
-  "zh-feedback-repair-1-light": {
-    "hash": "247d05eb64646738e55f7292b1c5ef408997051bf6f1baab5bdde3ff67deb674",
-    "sourceHash": "bf3e121e997f3aa464ed92428d0c0dfe527ddc6a63bde452870b5df65b3c3319",
-    "file": "zh-feedback-repair-1-light.svg"
   },
   "zh-introduction-1": {
     "hash": "1de783b8a94e380d4d2c3f0b87acc24d83315ba8cb51a0d8a3cd7dbaca2b7d35",
@@ -179,16 +149,6 @@
     "sourceHash": "ef41942bd456e9e4414fb8233dd1fea8dcbda121405058dd3f9e9582e5103270",
     "file": "zh-methods-1-light.svg"
   },
-  "zh-optimind-1": {
-    "hash": "a2c4ef12038984cb09f9b9ab905a7b9f299f6a76d5d481f7d597d26e383d006c",
-    "sourceHash": "f0dde64ffaa6a53cdb577e2a4523c8ee29aa7856c27e300e6256849ee5e3a84b",
-    "file": "zh-optimind-1.svg"
-  },
-  "zh-optimind-1-light": {
-    "hash": "ce54a1b60a26f990a45be0f5912de4ef6cb75da7f4058fd0467f041a3f5cb263",
-    "sourceHash": "f0dde64ffaa6a53cdb577e2a4523c8ee29aa7856c27e300e6256849ee5e3a84b",
-    "file": "zh-optimind-1-light.svg"
-  },
   "zh-optimus-1": {
     "hash": "eac84242eab1b905e87dd5f4288f081a92c158fe2b8c9c6167fdaf0556b6ec11",
     "sourceHash": "f3791068110a7792899dd36d469480dae574a6213bf233562b041ef070d6c119",
@@ -218,16 +178,6 @@
     "hash": "848233960804a9377784b5a5418840fab2c6b8662b16f186d30ec9c8d224581b",
     "sourceHash": "7688aac5265aade547c9daf8c18a69590e3eaa03e8e46c2791cff143a8be1f24",
     "file": "zh-or-llm-agent-1-light.svg"
-  },
-  "zh-orthought-1": {
-    "hash": "eb5b6fc357b0e9e3b3ac941a9c223970a24500e58d758c45ff91b76683db5be7",
-    "sourceHash": "3be550182262a493e5e43684ba46956e93a1ae8f265af4d2909583dfbd0a5902",
-    "file": "zh-orthought-1.svg"
-  },
-  "zh-orthought-1-light": {
-    "hash": "cb5291adc743597868e483540a080401928add75b7d64269824aed816f4912ca",
-    "sourceHash": "3be550182262a493e5e43684ba46956e93a1ae8f265af4d2909583dfbd0a5902",
-    "file": "zh-orthought-1-light.svg"
   },
   "zh-ortools-1": {
     "hash": "4592b2dde0e92858c8039b8bbadb89df0f194d5bd5b7e8b993557f9c610df120",
@@ -299,16 +249,6 @@
     "sourceHash": "56e888a35cb7de06e6ec66392121da34eb093812ac88a9168894d994b16968f3",
     "file": "zh-run-settings-1-light.svg"
   },
-  "zh-sac-opt-1": {
-    "hash": "b5aa0972eaa124ee6ae3bce8ad21dc9c661153c94b4ef11f4312495da9558e71",
-    "sourceHash": "207cfea31e85986fcb4bcab55679af09c6d2f9d8ec43c7abb4c4712b20bd1084",
-    "file": "zh-sac-opt-1.svg"
-  },
-  "zh-sac-opt-1-light": {
-    "hash": "0c28c73d8e0246fb0138d9dfc5132fef5f91294577d64a1f1a1f6b153210408c",
-    "sourceHash": "207cfea31e85986fcb4bcab55679af09c6d2f9d8ec43c7abb4c4712b20bd1084",
-    "file": "zh-sac-opt-1-light.svg"
-  },
   "zh-scenarios-1": {
     "hash": "a7a3f13f1ef31adf2a387e84db52e3c5738bfa6a6224690dbee8dea6abebe849",
     "sourceHash": "9445dedf850f39c2b850b07e1580f47afe7691783e2f8261a01b60236f17c4f8",
@@ -368,16 +308,6 @@
     "hash": "43b9002231a2c892b78f2f5a2e8a459f66644ef3ab84dfd8e2b327375c0d4c3c",
     "sourceHash": "1a84d890482e5cd0c6fd9c3a7a7e34811c04442bc49b2d9068d18d39402d9815",
     "file": "en-autoco-1-light.svg"
-  },
-  "en-autoformulation-1": {
-    "hash": "3663512e05f32901dd602115dd445b54286fcae1c48235f4fb6f3051246f4b98",
-    "sourceHash": "58d3b98ff8134f59fa8225bd71932ed165044ae87a0c9cd01efa9514f1e9c27d",
-    "file": "en-autoformulation-1.svg"
-  },
-  "en-autoformulation-1-light": {
-    "hash": "9f92b1fe18e6306463ca56dfaad5a405adb399fc3561466866e7a8edbac669c8",
-    "sourceHash": "58d3b98ff8134f59fa8225bd71932ed165044ae87a0c9cd01efa9514f1e9c27d",
-    "file": "en-autoformulation-1-light.svg"
   },
   "en-backends-1": {
     "hash": "062ac26f28772400bb96c704ec7a64ed8f283276848857496e964addf6d8a132",
@@ -459,16 +389,6 @@
     "sourceHash": "279edac90a08ea885757eb277d2fba18713ec083447c2da138b1e209d93e3979",
     "file": "en-conflicts-1-light.svg"
   },
-  "en-cpmpy-1": {
-    "hash": "a859d78ce36f5517438c9e208fce5669a0bcb2f62828cb6b732d781607522536",
-    "sourceHash": "48b553b3b69a9abe7f565d22f0931fea81a75d37e760e0a26dcee649899e477c",
-    "file": "en-cpmpy-1.svg"
-  },
-  "en-cpmpy-1-light": {
-    "hash": "4c52725021912b4ffdc0a6d585f24ea9e08750fbc6b6d11aba213ea80d938668",
-    "sourceHash": "48b553b3b69a9abe7f565d22f0931fea81a75d37e760e0a26dcee649899e477c",
-    "file": "en-cpmpy-1-light.svg"
-  },
   "en-cvxpy-1": {
     "hash": "c249a8e76ae75d35c3187f367dc84efa8a92dc3d9c0f176572f638832f216857",
     "sourceHash": "9fb6c378bf695077b9e4d407674139111421f2030f2055a002a0b117e5838604",
@@ -488,16 +408,6 @@
     "hash": "677be18d151d35ebd8ad9927c1cbe6271552550b50d379a2c622d5bcb4401a7b",
     "sourceHash": "4ae7d0c8b0333cba66a653f902864d204fa621a34e24ca0b5c5148171bc67a60",
     "file": "en-direct-1-light.svg"
-  },
-  "en-feedback-repair-1": {
-    "hash": "33efd04f9f79188ec3730802c76f4c1e57d5b034a0fadba8a00cc1ff6a7141f9",
-    "sourceHash": "14135958a4794e29e42e5a4160047412bd67bbab95ffc219d503c3a92c45ebed",
-    "file": "en-feedback-repair-1.svg"
-  },
-  "en-feedback-repair-1-light": {
-    "hash": "3e812ee12d08016b992966315890bd2a6b55fce53a4f1b4526028faa4184c9a3",
-    "sourceHash": "14135958a4794e29e42e5a4160047412bd67bbab95ffc219d503c3a92c45ebed",
-    "file": "en-feedback-repair-1-light.svg"
   },
   "en-introduction-1": {
     "hash": "4c312a7544fb60fd62deed25d922a2f56979684192a3af9a43acce402c3552c2",
@@ -529,16 +439,6 @@
     "sourceHash": "7d5e5bb2be50b2fe9bf543036c3a134dcde78e5932476191375fdd7bad283b2b",
     "file": "en-methods-1-light.svg"
   },
-  "en-optimind-1": {
-    "hash": "089f6ef50dd78319d510993126671e91c9797ccf642fa2cd5e15eeebebd9e7ba",
-    "sourceHash": "bd10c1c97a4852f121c1309d30a95d24a561054ae9c8f72cf2339cddc8036deb",
-    "file": "en-optimind-1.svg"
-  },
-  "en-optimind-1-light": {
-    "hash": "adf070c7bad4c3d5d906b29cddabc3d767e263667ccd4708d974fa6c8eb65d10",
-    "sourceHash": "bd10c1c97a4852f121c1309d30a95d24a561054ae9c8f72cf2339cddc8036deb",
-    "file": "en-optimind-1-light.svg"
-  },
   "en-optimus-1": {
     "hash": "a6a9fa76ee947f57db64ff9b0ca595afc1ee12f4c38efad7c09462d37a9090cb",
     "sourceHash": "78ed4782bafca6cd741525c6c23c1dd12933b93fdad3a9f6ca44dd2ab6a60450",
@@ -568,16 +468,6 @@
     "hash": "24000fb5858811701a13ba1526f4e2f221622a10f6febc837723f163ca6f073a",
     "sourceHash": "f40a5730a22763e7cc324137ec9603a00c9c8a6e04d8c305ff84e0a96686e2ec",
     "file": "en-or-llm-agent-1-light.svg"
-  },
-  "en-orthought-1": {
-    "hash": "c2f2c294ad4242815013f76b3f88e96e7e83cdf18d9322042b31d88350f43e82",
-    "sourceHash": "e9fb4cf55fde7c8e47efd47572338deedf211179c6f2c2e673b36e4eda197376",
-    "file": "en-orthought-1.svg"
-  },
-  "en-orthought-1-light": {
-    "hash": "fe2453c9f5726a424a400815f69723ba2a8e364e91977e0964ef21d74ba93cfa",
-    "sourceHash": "e9fb4cf55fde7c8e47efd47572338deedf211179c6f2c2e673b36e4eda197376",
-    "file": "en-orthought-1-light.svg"
   },
   "en-ortools-1": {
     "hash": "1d5861c4759745aa8094c067fda3738c1a1fd058bf9186e5c6ff9106c8630be2",
@@ -648,16 +538,6 @@
     "hash": "8c7126fa1b4e67c4d65868258489798f36391a931ad8c55c7094151fec80e6af",
     "sourceHash": "cc476ee9ff252ba503db0bde00cf1be64d31ef638169676b65c82793e78ed952",
     "file": "en-run-settings-1-light.svg"
-  },
-  "en-sac-opt-1": {
-    "hash": "e6e7419fd8cae9e9df87dee7cc585f3ca4400b73c949d6485b07f3d5fda6681d",
-    "sourceHash": "24d37d385fc53ea310ad196ec96b49c0c8e5e79220330d3f5a044e4ac8d55d65",
-    "file": "en-sac-opt-1.svg"
-  },
-  "en-sac-opt-1-light": {
-    "hash": "cc69d75afb0521c4ee7976ba6bae461cf05ad35020bd34efda0a041650c63e05",
-    "sourceHash": "24d37d385fc53ea310ad196ec96b49c0c8e5e79220330d3f5a044e4ac8d55d65",
-    "file": "en-sac-opt-1-light.svg"
   },
   "en-scenarios-1": {
     "hash": "b9b0082f1d38d18cfd843fa27ddadc0a5d8b3f737b36e3c306fdde3fcb19c968",

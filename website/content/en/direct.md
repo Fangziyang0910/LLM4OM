@@ -44,8 +44,8 @@ production
 
 The modeling stage uses one LLM call. Direct has no internal repair loop for reply format, execution or semantic errors. Incomplete replies fail before execution; execution failures retain feedback. Later platform explanations can make additional calls.
 
-Start with Direct for a clear problem and a quick first model. Use [Feedback Repair](../feedback-repair/) for review after solving, [TriVAL](../trival/) for validation at several levels, or [BIND](../bind/) when binding large structured attachments is the central issue.
+Start with Direct for a clear problem and a quick first model. Use [TriVAL](../trival/) for validation at several levels, or [BIND](../bind/) when binding large structured attachments is the central issue.
 
 ## Platform implementation and comparison
 
-This project maintains Direct and its shared Feedback Repair generator. For nonlinear or discrete models, choose the library and backend using the solver guide. Keep the problem, attachments, LLM preset and solver fixed when comparing workflows.
+This project maintains Direct. For nonlinear or discrete models, choose the library and backend using the solver guide. Keep the problem, attachments, LLM preset and solver fixed when comparing workflows.

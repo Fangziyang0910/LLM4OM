@@ -5,6 +5,7 @@ texts always travel separately in `Context.data`; validation here never rewrites
 """
 
 from collections.abc import Mapping
+from hashlib import sha256
 
 MAX_DATA_CHARS = 20000  # preview only; Context.data always carries every attachment in full
 
@@ -33,3 +34,21 @@ def validate_data_files(data: Mapping[str, str]) -> None:
             raise ValueError(f"Invalid data file name {name!r}; supply a single file name without path separators or line breaks.")
         if not isinstance(content, str):
             raise ValueError(f"Invalid content for data file {name!r}; attachment content must be text.")
+
+
+def input_changed(expected: str | None, data: Mapping[str, str], description: str = "") -> bool:
+    """Check the browser-visible inputs against the checkpoint actually selected for this turn."""
+    if expected is None:  # Native clients and previously created runs can omit the check.
+        return False
+    files = []
+    for name, content in data.items():
+        digest = sha256(name.encode("utf-8") + b"\0")
+        digest.update(content.encode("utf-8"))
+        files.append(digest.hexdigest())
+    inputs = sha256(description.encode("utf-8")).hexdigest() + "".join(sorted(files))
+    return sha256(inputs.encode("ascii")).hexdigest() != expected
+
+
+def changed_input_message(locale: str) -> str:
+    return ("另一处已修改本轮输入。请刷新页面，核对最新内容后重试。" if locale == "zh" else
+            "The inputs for this turn changed in another session. Reload, review the latest inputs and retry.")

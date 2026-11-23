@@ -368,7 +368,7 @@ function downloadCsv() {
   } else if (kind === "shifts") {
     csv = "employee,day\n" + result.days.map((d, i) => `${t(`person${i}`)},${d === 0 ? t("monday") : t("tuesday")}`).join("\n");
   } else {
-    csv = "warehouse,store\n" + result.destinations.map((dst, src) => `W${src + 1},S${dst + 1}`).join("\n");
+    csv = "warehouse,store\n" + result.destinations.map((dst, src) => `W${src + 1},S${dst + 1}`).join("\n") + `\ntotal_cost_cny,${result.total}\n`;
   }
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
@@ -376,6 +376,21 @@ function downloadCsv() {
   a.download = `gios-${kind}-solution.csv`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// Keep the roving tab stop reachable with the standard tab-list keys.
+for (const list of document.querySelectorAll('[role="tablist"]')) {
+  list.addEventListener("keydown", event => {
+    const buttons = [...list.querySelectorAll('[role="tab"]')];
+    const index = buttons.indexOf(event.target);
+    if (index < 0) return;
+    const next = { Home: 0, End: buttons.length - 1,
+      ArrowLeft: (index + buttons.length - 1) % buttons.length, ArrowRight: (index + 1) % buttons.length }[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    buttons[next].focus();
+    buttons[next].click();
+  });
 }
 
 // Event bindings

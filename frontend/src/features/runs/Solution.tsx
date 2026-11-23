@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { ChevronDown, Download, Grid3x3, List, Search, SearchX, TriangleAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -27,14 +27,15 @@ export function Solution({ solve, showPareto = true }: { solve: Solve; showParet
   const [filter, setFilter] = useState("");
   const [layout, setLayout] = useState<"grouped" | "list">("grouped");
   const [limit, setLimit] = useState(200);
-  const entries = Object.entries(solve.variables);
+  const entries = useMemo(() => Object.entries(solve.variables), [solve.variables]);
   const groups = useMemo(() => groupVariables(solve.variables), [solve.variables]);
   const query = filter.trim().toLowerCase();
-  const matches = (name: string) => !query || name.toLowerCase().includes(query);
-  const shown = entries.filter(([name, number]) => (zeros || query || (number != null && number !== 0)) && matches(name));
-  const shownGroups = groups.map(group => matches(group.base) ? group : {
-    ...group, variables: group.variables.filter(variable => matches(variable.name)),
-  }).filter(group => group.variables.length);
+  const shown = useMemo(() => layout === "list" ? entries.filter(([name, number]) =>
+    query ? name.toLowerCase().includes(query) : zeros || (number != null && number !== 0)) : [], [entries, layout, query, zeros]);
+  const shownGroups = useMemo(() => !query || layout === "list" ? groups : groups.map(group =>
+    group.base.toLowerCase().includes(query) ? group : {
+      ...group, variables: group.variables.filter(variable => variable.name.toLowerCase().includes(query)),
+    }).filter(group => group.variables.length), [groups, layout, query]);
 
   return <div className="flex flex-col gap-5">
     {solve.status === "locally_optimal" ? <p className="text-sm text-muted-foreground">{t("已找到高质量可行方案（局部最优）；复杂非线性场景下可能仍存在更优解。")}</p> : null}
@@ -107,12 +108,13 @@ function Conflict({ diagnosis }: { diagnosis: Diagnosis }) {
 }
 
 /** One base name: a matrix for two indices, otherwise index → value rows. */
-function Group({ group, includeZeros }: { group: VariableGroup; includeZeros: boolean }) {
+const Group = memo(function Group({ group, includeZeros }: { group: VariableGroup; includeZeros: boolean }) {
   const [limit, setLimit] = useState(200);
-  const matrix = asMatrix(group);
-  const nonzero = group.variables.filter(variable => variable.value != null && variable.value !== 0).length;
+  const matrix = useMemo(() => asMatrix(group), [group]);
+  const nonzero = useMemo(() => group.variables.reduce((n, item) => n + Number(item.value != null && item.value !== 0), 0), [group]);
   const shape = matrix ? `${matrix.rows.length} × ${matrix.columns.length}` : group.dims ? t("{count} 维组合", { count: group.dims }) : t("单项指标");
-  const rows = group.variables.filter(variable => includeZeros || (variable.value != null && variable.value !== 0));
+  const rows = useMemo(() => matrix || includeZeros ? group.variables
+    : group.variables.filter(variable => variable.value != null && variable.value !== 0), [group, includeZeros, matrix]);
   return <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-2xs">
     <div className="flex items-center gap-2 border-b border-border/60 bg-muted/35 px-3.5 py-2 text-xs">
       <span className="font-mono font-semibold">{group.base || t("单项决策")}</span>
@@ -142,4 +144,4 @@ function Group({ group, includeZeros }: { group: VariableGroup; includeZeros: bo
     {(matrix?.rows.length ?? rows.length) > limit ? <Button variant="link" size="sm" className="w-full" onClick={() => setLimit(limit + 200)}>
       {t("再显示 {count} 个（共 {total} 个）", { count: Math.min(200, (matrix?.rows.length ?? rows.length) - limit), total: matrix?.rows.length ?? rows.length })}</Button> : null}
   </div>;
-}
+});

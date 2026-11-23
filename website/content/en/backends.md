@@ -4,16 +4,15 @@ A backend performs mathematical computation. Settings discover native IDs, avail
 
 | Engine | Model direction | Example platform entry |
 |---|---|---|
-| HiGHS, CBC, GLPK | Supported LP/MIP | Compatible Pyomo/PuLP interfaces |
+| HiGHS, CBC, GLPK | Supported LP/MIP | Compatible Pyomo interfaces |
 | SCIP | Linear, integer and native nonlinear constraints | PySCIPOpt, OR-Tools and others |
-| CP-SAT | Finite integers, Booleans and scheduling | OR-Tools, CPMpy |
-| Gurobi, COPT | Native mathematical programming | gurobipy, coptpy and compatible interfaces |
+| CP-SAT | Finite integers, Booleans and scheduling | OR-Tools |
+| Gurobi, COPT | Native mathematical programming | Compatible installed and licensed backends, for example through CVXPY |
 | OSQP | Continuous convex quadratic objectives, linear constraints | CVXPY |
 | Clarabel, SCS | Continuous cones | CVXPY |
 | MOSEK | Supported native mathematics | CVXPY and compatible interfaces |
 | Ipopt | Smooth continuous NLP | CasADi and others |
 | Bonmin | Compatible mixed-integer nonlinear models | CasADi plugin |
-| SAT, SMT, MiniZinc families | Finite domains and logic | CPMpy native backends |
 
 Choose exact IDs from settings. The same engine can have different identifiers across libraries, including separate command-line and Python adapters.
 

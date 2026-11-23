@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { BookOpen, ChartSpline, ChevronDown, Columns3, Cpu, History, MessageSquareText, MoreHorizontal, PanelLeftClose, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -13,6 +13,8 @@ import { StatusIcon, TONE } from "@/features/runs/status";
 import { ThemeMenu } from "@/components/theme";
 
 const DAY = 86_400_000;
+const clockFormat = new Intl.DateTimeFormat(dateLocale, { hour: "2-digit", minute: "2-digit", hour12: false });
+const dayFormat = new Intl.DateTimeFormat(dateLocale, { month: "numeric", day: "numeric" });
 
 function group(created: string): string {
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -25,8 +27,8 @@ function group(created: string): string {
 
 function when(created: string): string {
   const date = new Date(created);
-  return group(created) === t("今天") ? date.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit", hour12: false })
-    : date.toLocaleDateString(dateLocale, { month: "numeric", day: "numeric" });
+  if (Number.isNaN(date.getTime())) return date.toString();
+  return (group(created) === t("今天") ? clockFormat : dayFormat).format(date);
 }
 
 /** Concise, user-friendly outcome summary without developer jargon. */
@@ -63,12 +65,16 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
 }) {
   const methodName = (id: string) => options?.methods.find(item => item.id === id)?.name ?? id;
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const shown = groupHistory(entries).filter(item => [item.entry, ...item.related].some(entry => matches(entry, query, methodName)));
-  const tags = [...new Set(entries.flatMap(entry => entry.meta.tags ?? []))].slice(0, 12);
+  const history = useMemo(() => groupHistory(entries), [entries]);
+  const shown = query.trim() ? history.filter(item => matches(item.entry, query, methodName)
+    || item.related.some(entry => matches(entry, query, methodName))) : history;
+  const tags = useMemo(() => [...new Set(entries.flatMap(entry => entry.meta.tags ?? []))].slice(0, 12), [entries]);
   const groups = new Map<string, HistoryGroup[]>();
   for (const item of shown) {
     const label = group(item.created);
-    groups.set(label, [...(groups.get(label) ?? []), item]);
+    const items = groups.get(label);
+    if (items) items.push(item);
+    else groups.set(label, [item]);
   }
   const preset = presets[0];
 

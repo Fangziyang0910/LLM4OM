@@ -37,7 +37,7 @@ Read the path, retrieved entry and final formulation together. The process shows
 
 ## Scope and related methods
 
-The current workflow targets LP/MILP, uses temperature 0 and permits four code inspections. Use it to study the effect of type retrieval. For component construction see [OptiMUS](../optimus/); for searching multiple complete candidates see [AutoFormulation](../autoformulation/).
+The current workflow targets LP/MILP, uses temperature 0 and permits four code inspections. Use it to study the effect of type retrieval. For component construction see [OptiMUS](../optimus/).
 
 ## Source and platform adaptation
 

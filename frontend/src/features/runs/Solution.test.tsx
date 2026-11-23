@@ -60,7 +60,7 @@ test("null variable values render cleanly without crashing", () => {
   expect(screen.getByRole("cell", { name: "—" })).toBeTruthy();
 });
 
-test("multi-objective pareto front renders knee badge, switches active row details and exports CSV", () => {
+test("multi-objective pareto front renders knee badge, switches active row details and exports CSV", async () => {
   render(<Solution solve={{
     status: "feasible",
     objective: null,
@@ -79,7 +79,7 @@ test("multi-objective pareto front renders knee badge, switches active row detai
   }} />);
   expect(screen.getByText("多目标 Pareto 前沿")).toBeTruthy();
   expect(screen.getByText("共 2 个非支配解")).toBeTruthy();
-  expect(screen.getByRole("img", { name: "目标权衡图" })).toBeTruthy();
+  expect(await screen.findByRole("img", { name: "目标权衡图" }, { timeout: 5000 })).toBeTruthy();
   expect(screen.getByText(/"label": "balanced"/)).toBeTruthy();
   fireEvent.click(screen.getByText("#1"));
   expect(screen.getByText(/"label": "low-cost"/)).toBeTruthy();

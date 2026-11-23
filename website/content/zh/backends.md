@@ -4,18 +4,17 @@
 
 | 引擎 | 常见模型方向 | 平台中的入口示例 |
 |---|---|---|
-| HiGHS、CBC、GLPK | 各自支持的LP/MIP | Pyomo、PuLP等兼容接口 |
+| HiGHS、CBC、GLPK | 各自支持的LP/MIP | Pyomo 等兼容接口 |
 | SCIP | 线性、整数，原生非线性约束 | PySCIPOpt、OR-Tools等 |
-| CP-SAT | 有限整数、布尔、排程 | OR-Tools、CPMpy |
-| Gurobi、COPT | 原生数学规划 | gurobipy、coptpy及兼容接口 |
+| CP-SAT | 有限整数、布尔、排程 | OR-Tools |
+| Gurobi、COPT | 原生数学规划 | 提供相应后端的接口，例如已安装并获授权的 CVXPY 后端 |
 | OSQP | 连续凸二次目标与线性约束 | CVXPY |
 | Clarabel、SCS | 连续锥模型 | CVXPY |
 | MOSEK | 对应原生能力与兼容模型 | CVXPY等支持接口 |
 | Ipopt | 光滑连续NLP | CasADi等 |
 | Bonmin | 兼容混合整数非线性模型 | CasADi插件 |
-| SAT、SMT、MiniZinc等 | 有限域与逻辑 | CPMpy原生后端 |
 
-准确ID从当前设置中选择。同一引擎通过不同库可能有不同原生标识，如PuLP的命令行与Python接口分别列出。
+准确ID从当前设置中选择。同一引擎通过不同库可能有不同原生标识。
 
 ## 发现、选择与执行
 

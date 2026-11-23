@@ -4,7 +4,7 @@ Method and LLM comparison runs one problem with several configurations and align
 
 Enable “Compare,” select methods or presets, and choose a shared library/backend. Up to 12 runs can start together. After confirming inputs, open the comparison page to follow progress.
 
-Try Direct, Feedback Repair and TriVAL with one preset, or hold the method fixed and select two presets. Each row opens its complete run.
+Try Direct, LLMOPT and TriVAL with one preset, or hold the method fixed and select two presets. Each row opens its complete run.
 
 ## Reading the table
 

@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function production(page: Page) {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
-  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.getByRole("button", { name: /^立即求解/ }).click();
   await page.waitForURL(/\/run\//);
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible({ timeout: 60_000 });
   return page.url();
@@ -20,26 +20,26 @@ test("desktop results keep modeling central and present adjustment actions toget
     expect((await page.locator("main header").boundingBox())!.height).toBeLessThan(150);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
-  await page.getByText("运行信息", { exact: true }).click();
-  await expect(page.locator("main header")).toContainText("deepseek-v4.1 flash-1017");
-  await page.getByText("完整变量取值（2 个）", { exact: true }).click();
+  await expect(page.locator("main header").getByTitle(/deepseek-v4\.1 flash-1017/)).toBeVisible();
+  await page.getByText("查看全部决策变量明细（共 2 项）", { exact: true }).click();
   await expect(page.getByLabel("筛选变量")).toBeVisible();
-  await expect(page.getByRole("button", { name: "业务场景对比", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "多场景对比", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "更多操作", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: "再运行一次", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "重新求解一次", exact: true })).toBeVisible();
 });
 
 test("desktop configuration is compact by default and retains the selected method", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
+  await page.goto("/model");
   await expect(page.getByRole("button", { name: "查看运行设置", exact: true })).toBeInViewport();
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   const settings = page.getByRole("complementary", { name: "运行设置", exact: true });
   await expect(settings).toBeInViewport();
-  await page.getByRole("radio", { name: "OptiMUS 0.3", exact: true }).check();
+  await page.getByRole("button", { name: /^更多研究方法/ }).click();
+  await page.getByRole("radio", { name: /^OptiMUS 0\.3/ }).check();
   await page.reload();
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
-  const selected = page.getByRole("radio", { name: "OptiMUS 0.3", exact: true });
+  const selected = page.getByRole("radio", { name: /^OptiMUS 0\.3/ });
   await expect(selected).toBeChecked();
   const box = (await selected.boundingBox())!, list = (await page.getByRole("radiogroup", { name: "建模方法", exact: true }).boundingBox())!;
   expect(box.y).toBeGreaterThanOrEqual(list.y);
@@ -47,7 +47,7 @@ test("desktop configuration is compact by default and retains the selected metho
 });
 
 test("desktop configuration keeps the method, library and model visible together", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "运行设置", exact: true });
   for (const viewport of [{ width: 1440, height: 900 }, { width: 1366, height: 768 }]) {
@@ -64,7 +64,7 @@ test("desktop configuration keeps the method, library and model visible together
 });
 
 test("clearing the problem can be undone with its attachments", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByLabel("问题描述").fill("需要保留的生产计划");
   await page.locator('input[type="file"]').setInputFiles({ name: "costs.csv", mimeType: "text/csv", buffer: Buffer.from("name,cost\nA,3\n") });
   await page.getByRole("button", { name: "清空", exact: true }).click();
@@ -75,7 +75,7 @@ test("clearing the problem can be undone with its attachments", async ({ page })
 });
 
 test("desktop editing renders Markdown live in place and respects composition before Ctrl+Enter", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   const input = page.getByLabel("问题描述");
   await expect(input).toBeFocused();
   await input.fill("# 生产计划\n\n" + Array.from({ length: 35 }, (_, i) => `第 ${i + 1} 项业务条件。`).join("\n"));
@@ -83,7 +83,7 @@ test("desktop editing renders Markdown live in place and respects composition be
   await page.getByRole("heading", { name: "生产计划", exact: true }).click();
   await expect(input).toHaveValue("# 生产计划");
   await input.dispatchEvent("keydown", { key: "Enter", ctrlKey: true, isComposing: true });
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/model$/);
   await input.press("Control+Enter");
   await page.waitForURL(/\/run\//);
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible({ timeout: 60_000 });
@@ -92,7 +92,7 @@ test("desktop editing renders Markdown live in place and respects composition be
 test("desktop panel widths can be adjusted with the keyboard and survive reopening a run", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const url = await production(page);
-  await page.getByRole("button", { name: "建模过程", exact: true }).click();
+  await page.getByRole("button", { name: "求解步骤", exact: true }).click();
   const panels = page.locator('[data-slot="resizable-panel"]');
   const before = (await panels.first().boundingBox())!.width;
   expect((await panels.last().boundingBox())!.width).toBeGreaterThan(before);
@@ -102,16 +102,16 @@ test("desktop panel widths can be adjusted with the keyboard and survive reopeni
   await divider.press("ArrowRight");
   await expect.poll(async () => (await panels.first().boundingBox())!.width).toBeGreaterThan(before + 20);
   const resized = (await panels.first().boundingBox())!.width;
-  await page.goto("/");
+  await page.goto("/model");
   await page.goto(url);
-  await page.getByRole("button", { name: "建模过程", exact: true }).click();
+  await page.getByRole("button", { name: "求解步骤", exact: true }).click();
   await expect.poll(async () => Math.abs((await panels.first().boundingBox())!.width - resized)).toBeLessThan(2);
 });
 
 test("the plan assistant can be widened and keeps that width after reload", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await production(page);
-  await page.getByRole("button", { name: "讨论方案", exact: true }).click();
+  await page.getByRole("button", { name: "对话追问", exact: true }).click();
   const assistant = page.getByRole("complementary", { name: "方案助手", exact: true });
   await expect(assistant).toBeVisible();
   const before = (await assistant.boundingBox())!.width;
@@ -135,11 +135,11 @@ test("the plan assistant can be widened and keeps that width after reload", asyn
 
 test("unsent messages survive navigation and reload and stay separate for each conversation", async ({ page }) => {
   const runUrl = await production(page);
-  await page.getByRole("button", { name: "讨论方案", exact: true }).click();
+  await page.getByRole("button", { name: "对话追问", exact: true }).click();
   await page.waitForURL(/\/discussion\//);
   const discussion = page.url();
   await page.getByLabel("发送给方案助手").fill("方案对话还没发送的条件");
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "通过对话整理需求", exact: true }).click();
   await page.waitForURL(/\/chat\//);
   const chat = page.url();
@@ -154,15 +154,16 @@ test("unsent messages survive navigation and reload and stay separate for each c
   const id = chat.split("/").at(-1)!;
   expect((await (await page.request.get(`/threads/${id}`)).json()).values.messages).toEqual([]);
   await page.goto(runUrl);
-  await page.getByRole("button", { name: "讨论方案", exact: true }).click();
+  await page.getByRole("button", { name: "对话追问", exact: true }).click();
   await expect(page).toHaveURL(discussion);
 });
 
 test("example navigation stays visible without scrolling through the whole page", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("/");
-  await page.getByRole("button", { name: "从题库选题", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "示例题库", exact: true });
+  await page.goto("/model");
+  await page.getByRole("button", { name: "打开菜单", exact: true }).click();
+  await page.getByRole("button", { name: "案例模板库", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "案例模板库", exact: true });
   await expect(dialog.getByRole("button", { name: "下一页", exact: true })).toBeInViewport();
   await dialog.getByRole("button", { name: "下一页", exact: true }).click();
   await expect(dialog).toContainText("21–40");
@@ -170,11 +171,11 @@ test("example navigation stays visible without scrolling through the whole page"
 });
 
 test("a preset can be added with Enter and its submission cannot be interrupted or duplicated", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
-  await page.getByRole("button", { name: "管理", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "预设模型", exact: true });
-  await dialog.getByRole("button", { name: "添加预设", exact: true }).click();
+  await page.getByRole("button", { name: "管理模型", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "AI 模型设置", exact: true });
+  await dialog.getByRole("button", { name: "添加模型", exact: true }).click();
   await page.getByLabel("接口地址", { exact: true }).fill("http://127.0.0.1:8796/v1");
   await page.getByLabel("API 密钥", { exact: true }).fill("test-key");
   await page.getByLabel("预设名称", { exact: true }).fill("Usability test");
@@ -199,21 +200,22 @@ test("a preset loading error can be retried without opening an empty configurati
   let failed = true;
   await page.route("**/api/presets", route => failed
     ? route.fulfill({ status: 503, contentType: "application/json", body: '{"detail":"temporarily unavailable"}' }) : route.continue());
-  await page.goto("/");
-  await expect(page.getByRole("alert")).toContainText("预设模型加载失败", { timeout: 15_000 });
+  await page.goto("/model");
+  await expect(page.getByRole("alert")).toContainText("模型配置加载失败", { timeout: 15_000 });
   await expect(page.getByText("还没有预设模型。", { exact: true })).toHaveCount(0);
   failed = false;
   await page.getByRole("alert").getByRole("button", { name: "重试", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "查看运行设置", exact: true })).toContainText("deepseek-v4.1 flash-1017");
+  await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "预设模型" })).toContainText("deepseek-v4.1 flash-1017");
 });
 
 test("preset parameters are checked before loading models or saving and can be corrected", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
-  await page.getByRole("button", { name: "管理", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "预设模型", exact: true });
-  await dialog.getByRole("button", { name: "添加预设", exact: true }).click();
+  await page.getByRole("button", { name: "管理模型", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "AI 模型设置", exact: true });
+  await dialog.getByRole("button", { name: "添加模型", exact: true }).click();
   await page.getByLabel("接口地址", { exact: true }).fill("http://127.0.0.1:8796/v1");
   await page.getByLabel("API 密钥", { exact: true }).fill("test-key");
   await page.getByLabel("预设名称", { exact: true }).fill("Validated parameters");
@@ -247,11 +249,11 @@ test("changing preset credentials clears old models and a failed lookup preserve
     status: failing ? 401 : 200, contentType: "application/json",
     body: JSON.stringify(failing ? { detail: "Model lookup rejected the test key" } : { models: catalog }),
   }));
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
-  await page.getByRole("button", { name: "管理", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "预设模型", exact: true });
-  await dialog.getByRole("button", { name: "添加预设", exact: true }).click();
+  await page.getByRole("button", { name: "管理模型", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "AI 模型设置", exact: true });
+  await dialog.getByRole("button", { name: "添加模型", exact: true }).click();
   const endpoint = dialog.getByLabel("接口地址", { exact: true });
   const key = dialog.getByLabel("API 密钥", { exact: true });
   const model = dialog.getByLabel("模型 ID", { exact: true });
@@ -287,10 +289,10 @@ test.describe("windowed desktop navigation", () => {
     await production(page);
     await page.getByRole("button", { name: "打开菜单", exact: true }).click();
     const drawer = page.getByRole("dialog", { name: "导航", exact: true });
-    await drawer.getByLabel("搜索运行").fill("Direct");
+    await drawer.getByLabel("搜索记录").fill("Direct");
     await drawer.getByRole("navigation").getByRole("button", { name: /^工厂生产/ }).first().click();
     await page.getByRole("button", { name: "打开菜单", exact: true }).click();
-    await expect(drawer.getByLabel("搜索运行")).toHaveValue("Direct");
+    await expect(drawer.getByLabel("搜索记录")).toHaveValue("Direct");
     const more = drawer.getByRole("button", { name: /^更多操作：/ }).first();
     await more.hover();
     await more.click();
@@ -298,17 +300,17 @@ test.describe("windowed desktop navigation", () => {
     await page.keyboard.press("Escape");
     await expect(drawer).toBeVisible();
     await drawer.getByRole("button", { name: "清除搜索", exact: true }).click();
-    await expect(drawer.getByLabel("搜索运行")).toHaveValue("");
-    await drawer.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(drawer.getByLabel("搜索记录")).toHaveValue("");
+    await drawer.getByRole("button", { name: "关闭", exact: true }).click();
     await expect(drawer).toBeHidden();
     await page.getByRole("button", { name: "打开菜单", exact: true }).click();
-    await expect(drawer.getByLabel("搜索运行")).toHaveValue("");
+    await expect(drawer.getByLabel("搜索记录")).toHaveValue("");
   });
 });
 
 test("a failed page chunk offers a reload and preserves the saved problem", async ({ page }) => {
   await page.route("**/assets/Requirements-*.js", route => route.fulfill({ status: 503, body: "temporarily unavailable" }));
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByLabel("问题描述").fill("已经写好的需求不能因为页面加载失败而丢失");
   await page.getByRole("button", { name: "通过对话整理需求", exact: true }).click();
   await page.waitForURL(/\/chat\//);
@@ -319,7 +321,7 @@ test("a failed page chunk offers a reload and preserves the saved problem", asyn
 });
 
 test("the requirements draft runs in the modeling workbench and related history retains its source", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "通过对话整理需求", exact: true }).click();
   await page.waitForURL(/\/chat\//);
   const chat = page.url().split("/").at(-1)!;
@@ -330,10 +332,10 @@ test("the requirements draft runs in the modeling workbench and related history 
   await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/chat/${chat}$`));
   expect((await (await page.request.get(`/threads/${chat}/runs`)).json()).length).toBe(1);
-  await page.getByRole("button", { name: "收起需求助手", exact: true }).click();
+  await page.getByRole("button", { name: "收起对话助手", exact: true }).click();
   const problem = "# 工作区关联验证\n\n" + await page.getByLabel("问题描述").inputValue();
   await page.getByLabel("问题描述").fill(problem);
-  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.getByRole("button", { name: /^立即求解/ }).click();
   await page.waitForURL(/\/run\//);
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible({ timeout: 60_000 });
   const saved = await (await page.request.get(`/threads/${page.url().split("/").at(-1)}`)).json();
@@ -345,7 +347,7 @@ test("the requirements draft runs in the modeling workbench and related history 
   const related = navigation.getByRole("button", { name: "相关记录：工作区关联验证", exact: true });
   await expect(related).toHaveAttribute("aria-expanded", "false");
   await related.click();
-  await expect(navigation.getByRole("button", { name: /CHAT_WORKSPACE_ONLY.*需求对话/ })).toBeVisible();
+  await expect(navigation.getByRole("button", { name: /CHAT_WORKSPACE_ONLY.*需求梳理/ })).toBeVisible();
   await related.click();
-  await expect(navigation.getByRole("button", { name: /CHAT_WORKSPACE_ONLY.*需求对话/ })).toHaveCount(0);
+  await expect(navigation.getByRole("button", { name: /CHAT_WORKSPACE_ONLY.*需求梳理/ })).toHaveCount(0);
 });

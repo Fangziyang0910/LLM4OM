@@ -10,8 +10,8 @@ const output = path.join(__dirname, "../artifacts/website/docs");
 
 (async () => {
   const { articles } = JSON.parse(await fs.readFile(path.join(__dirname, "docs-manifest.json"), "utf8"));
-  assert.equal(articles.filter(a => a.method).length, 14);
-  assert.equal(articles.filter(a => a.library).length, 9);
+  assert.equal(articles.filter(a => a.method).length, 9);
+  assert.equal(articles.filter(a => a.library).length, 5);
   const headingCounts = new Map();
   for (const [languageIndex, locale] of ["zh", "en"].entries()) {
     const search = JSON.parse(await fs.readFile(path.join(root, `docs/search-${locale}.json`), "utf8"));
@@ -71,7 +71,7 @@ const output = path.join(__dirname, "../artifacts/website/docs");
     await page.goto(`${base}docs/`);
     await expect(page).toHaveURL(/docs\/en\/introduction\/$/);
 
-    for (const [locale, query, id] of [["en", "AutoCO", "autoco"], ["zh", "Pareto", "autoco"], ["en", "BIND", "bind"], ["zh", "无解", "conflicts"], ["en", "CP-SAT", "ortools"], ["en", "Bradley", "autoformulation"], ["zh", "单件利润", "attachments"]]) {
+    for (const [locale, query, id] of [["en", "AutoCO", "autoco"], ["zh", "Pareto", "autoco"], ["en", "BIND", "bind"], ["zh", "无解", "conflicts"], ["en", "CP-SAT", "ortools"], ["en", "LLMOPT", "llmopt"], ["zh", "单件利润", "attachments"]]) {
       await page.goto(`${base}docs/${locale}/introduction/`);
       await page.keyboard.press("Control+k");
       await expect(page.locator("#docs-search")).toHaveJSProperty("open", true);
@@ -107,7 +107,7 @@ const output = path.join(__dirname, "../artifacts/website/docs");
     for (const width of [1440, 1280, 768, 390, 360, 320]) {
       await page.setViewportSize({ width, height: width >= 768 ? 1000 : 844 });
       for (const locale of ["zh", "en"]) {
-        for (const id of ["introduction", "chat-agent", "methods", "autoformulation", "solvers", "configuration"]) {
+        for (const id of ["introduction", "chat-agent", "methods", "llmopt", "solvers", "configuration"]) {
           await page.goto(`${base}docs/${locale}/${id}/`);
           await page.evaluate(() => document.fonts.ready);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `Overflow: ${width} ${locale}/${id}`);
@@ -149,7 +149,7 @@ const output = path.join(__dirname, "../artifacts/website/docs");
     await noScript.locator("#docs-language").click();
     await expect(noScript.locator("h1")).toHaveText("完成第一个方案");
     assert.deepEqual(errors, []);
-    console.log(`PASS: ${articles.length * 2} pages, internal links and anchors, translation parity, 14 method presets, 9 libraries; bilingual search, keyboard/dialogs, clipboard, index recovery, no-JS reading and six viewport sizes.`);
+    console.log(`PASS: ${articles.length * 2} pages, internal links and anchors, translation parity, 9 method presets, 5 libraries; bilingual search, keyboard/dialogs, clipboard, index recovery, no-JS reading and six viewport sizes.`);
     console.log(`Screenshots: ${output}`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

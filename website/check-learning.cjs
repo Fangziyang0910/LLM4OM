@@ -152,7 +152,7 @@ const output = path.resolve(__dirname, "../artifacts/website/docs");
     }
     for (const width of [1440, 768, 390, 320]) for (const locale of ["zh", "en"]) {
       await page.setViewportSize({ width, height: 1000 });
-      for (const id of ["direct", "trival", "autoformulation", "attachments", "cvxpy", "casadi", "quickstart"]) {
+      for (const id of ["direct", "trival", "llmopt", "attachments", "cvxpy", "casadi", "quickstart"]) {
         await page.goto(`${base}docs/${locale}/${id}/`);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `Overflow ${width}/${locale}/${id}`);
       }

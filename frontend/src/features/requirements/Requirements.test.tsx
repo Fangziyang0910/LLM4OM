@@ -8,7 +8,7 @@ import { Requirements } from "./Requirements";
 
 vi.mock("@/api", () => ({ api: vi.fn(async () => ({ libraries: {} })) }));
 vi.mock("@/features/runs/sdk", () => ({
-  client: { threads: { get: vi.fn(), update: vi.fn(), create: vi.fn(), updateState: vi.fn() }, runs: { create: vi.fn(), cancel: vi.fn() } },
+  client: { threads: { get: vi.fn(), search: vi.fn(), update: vi.fn(), create: vi.fn(), updateState: vi.fn() }, runs: { create: vi.fn(), cancel: vi.fn() } },
 }));
 vi.mock("@langchain/langgraph-sdk/react", () => ({
   useStream: vi.fn(() => ({
@@ -22,7 +22,7 @@ vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect()
 afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); });
 
 test("Ctrl+Enter on the Requirements thread-error screen never submits an unrelated quick-solve draft", async () => {
-  vi.mocked(client.threads.get).mockRejectedValueOnce(new Error("thread load failed"));
+  vi.mocked(client.threads.search).mockRejectedValueOnce(new Error("thread load failed"));
   const onStart = vi.fn();
   const query = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Harness() {

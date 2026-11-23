@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function production(page: Page) {
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
-  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.getByRole("button", { name: /^立即求解/ }).click();
   await page.waitForURL(/\/run\//);
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible({ timeout: 60_000 });
   return page.url().split("/").at(-1)!;
@@ -12,16 +12,16 @@ async function production(page: Page) {
 test("a phone opens the requested conversation and shows a chosen plan immediately", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await production(page);
-  await page.getByRole("button", { name: "讨论方案", exact: true }).click();
+  await page.getByRole("button", { name: "对话追问", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "发送给方案助手" })).toBeVisible({ timeout: 2000 });
   await page.getByLabel("已生成的方案").locator("summary").click();
-  await page.getByRole("button", { name: "打开原运行", exact: true }).click();
+  await page.getByRole("button", { name: "查看原方案", exact: true }).click();
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible();
 });
 
 test("a phone reviews the requirements draft before starting a modeling run", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   const input = page.getByRole("textbox", { name: "发送给需求助手" });
   await expect(page.getByRole("button", { name: "查看运行设置" })).toBeHidden();
@@ -33,7 +33,7 @@ test("a phone reviews the requirements draft before starting a modeling run", as
   await page.getByRole("button", { name: "检查需求稿", exact: true }).click({ timeout: 2000 });
   await expect(page.getByRole("textbox", { name: "问题描述" })).toBeVisible();
   await expect(page.getByRole("button", { name: "查看运行设置" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^开始建模/ })).toBeInViewport();
+  await expect(page.getByRole("button", { name: /^立即求解/ })).toBeInViewport();
   expect(await (await page.request.post("/threads/count", { data: {} })).json()).toBe(count);
 });
 
@@ -49,13 +49,13 @@ test("opening the original of a revised plan preserves the displayed baseline ch
     solve: { ...state.values.solve, objective: 99 }, explanation: null,
   } } });
   await page.getByRole("tab", { name: "方案对比", exact: true }).click();
-  await page.getByRole("link", { name: "打开原运行", exact: true }).click();
+  await page.getByRole("link", { name: "查看原方案", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`checkpoint=${state.checkpoint.checkpoint_id}`));
 });
 
 test("requirements keep conversation on the left and retain draft input across layout changes", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
   const input = page.getByRole("textbox", { name: "发送给需求助手" });
   const draft = page.getByRole("textbox", { name: "问题描述" });
@@ -74,14 +74,14 @@ test("requirements keep conversation on the left and retain draft input across l
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("tab", { name: "当前需求稿", exact: true }).click();
   await expect(draft).toBeVisible();
-  await page.getByRole("tab", { name: "需求助手", exact: true }).click();
+  await page.getByRole("tab", { name: "对话助手", exact: true }).click();
   await expect(input).toHaveValue("下一条尚未发送的想法");
 });
 
 test("the original row in a scenario comparison opens its frozen baseline", async ({ page }) => {
   const original = await production(page);
   const state = await (await page.request.get(`/threads/${original}/state`)).json();
-  await page.getByRole("button", { name: "业务场景对比", exact: true }).click();
+  await page.getByRole("button", { name: "多场景对比", exact: true }).click();
   await page.getByRole("textbox", { name: "场景 1 调整要求" }).fill("B 至少生产 3 件");
   await page.getByRole("textbox", { name: "场景 2 调整要求" }).fill("B 至少生产 4 件");
   await page.getByRole("button", { name: "计算并对比" }).click();

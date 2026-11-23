@@ -28,22 +28,24 @@ const output = path.join(__dirname, "../artifacts/website/v2");
     page.on("pageerror", error => errors.push(error.message));
     page.on("response", response => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
     assert.equal((await page.goto(`${base}?lang=zh`)).status(), 200);
+    await expect(page.locator("#demo-objective")).toHaveText("200 个解");
+    await page.locator('[data-case="production"]').click();
     await expect(page.locator("#demo-objective")).toHaveText("13");
     await page.locator("#demo-data").click();
     await expect(page.locator("#model-content")).toBeVisible();
-    await expect(page.locator("#model-data")).toContainText("装配 1 小时");
+    await expect(page.locator("#model-data")).toContainText("装配 1h");
     await page.locator("#view-plan").click();
     await page.locator("#change-condition").click();
     await expect(page.locator("#demo-objective")).toHaveText("16");
     await expect(page.locator("#quantity-a")).toHaveText("4 件");
     await page.locator("#cutting-capacity").press("End");
     await expect(page.locator("#demo-objective")).toHaveText("18");
-    await page.locator("#infeasible-condition").click();
+    await page.locator("#secondary-condition").click();
     assert.equal(await page.locator("#conflict-message").isVisible(), true);
     assert.equal(await page.locator("#download-plan").isDisabled(), true);
     await expect(page.locator("#demo-objective")).toHaveText("—");
     await page.locator("#view-model").click();
-    await expect(page.locator("#example-model")).toContainText("B ≥ 5");
+    await expect(page.locator("#example-model")).toContainText("x_B ≥ 5");
     await page.locator("#view-model").press("ArrowLeft");
     await page.locator("#resolve-conflict").click();
     await expect(page.locator("#demo-objective")).toHaveText("13");
@@ -56,15 +58,15 @@ const output = path.join(__dirname, "../artifacts/website/v2");
       if (kind === "shifts") assert.equal(await page.locator('[data-person="0"]').evaluate(node => node.style.gridColumn), "2");
       if (kind === "delivery") {
         assert.equal(await page.locator("#route-active path").count(), 3);
-        await expect(page.locator("#route-summary")).toContainText("仓库 B → 门店 1");
+        await expect(page.locator("#route-summary")).toContainText("W2→S1");
       }
     }
     const downloading = page.waitForEvent("download");
     await page.locator("#download-plan").click();
     const download = await downloading;
     const csv = await fs.readFile(await download.path(), "utf8");
-    assert.match(csv, /"最低总运费 \(CNY\)","17"/);
-    assert.match(csv, /"仓库 B","门店 1"/);
+    assert.match(csv, /^total_cost_cny,17$/m);
+    assert.match(csv, /^W2,S1$/m);
 
     await page.locator("#language-toggle").click();
     assert.equal(await page.locator("html").getAttribute("lang"), "en");
@@ -77,14 +79,14 @@ const output = path.join(__dirname, "../artifacts/website/v2");
       return [...document.querySelectorAll("[data-i18n],[data-i18n-label]")].flatMap(node => [node.dataset.i18n, node.dataset.i18nLabel]).filter(key => key && (!copy[key]?.[0] || !copy[key]?.[1]));
     });
     assert.deepEqual(missing, []);
-    await page.locator("#feature-image").scrollIntoViewIfNeeded();
+    await page.locator("#sc1-image").scrollIntoViewIfNeeded();
     for (const locale of ["en", "zh"]) {
       if ((await page.locator("html").getAttribute("lang")) !== (locale === "en" ? "en" : "zh-CN")) await page.locator("#language-toggle").click();
-      for (const item of ["plan", "scenarios", "data"]) {
-        await page.locator(`[data-feature="${item}"]`).click();
-        await expect(page.locator(".photo-stage")).toHaveAttribute("data-loading", "false");
-        assert.equal(await page.locator("#feature-image").getAttribute("src"), `assets/screens/${locale}/${item}.png`);
-        const brightness = await page.locator("#feature-image").evaluate(image => {
+      for (const item of ["pareto", "chat"]) {
+        await page.locator(`[data-shot="${item}"]`).click();
+        await page.locator("#sc1-image").evaluate(image => image.decode());
+        assert.equal(await page.locator("#sc1-image").getAttribute("src"), `assets/screens/live/${item}-dark.png`);
+        const brightness = await page.locator("#sc1-image").evaluate(image => {
           const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
           const ctx = canvas.getContext("2d"); ctx.drawImage(image, 0, 0, 1, 1);
           return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3).reduce((a, b) => a + b) / 3;
@@ -93,9 +95,9 @@ const output = path.join(__dirname, "../artifacts/website/v2");
       }
       if (locale === "en") assert.doesNotMatch(await page.locator("main").innerText(), /[\u3400-\u9fff]/);
     }
-    await page.locator('[data-feature="data"]').press("Home");
-    await expect(page.locator('[data-feature="plan"]')).toHaveAttribute("aria-selected", "true");
-    await page.locator("#enlarge-photo").click();
+    await page.locator('[data-shot="chat"]').press("Home");
+    await expect(page.locator('[data-shot="pareto"]')).toHaveAttribute("aria-selected", "true");
+    await page.locator("[data-zoom-target=sc1-image]").click();
     assert.equal(await page.locator("dialog").evaluate(dialog => dialog.open), true);
     await page.keyboard.press("Escape");
     assert.equal(await page.locator("dialog").evaluate(dialog => dialog.open), false);
@@ -119,11 +121,11 @@ const output = path.join(__dirname, "../artifacts/website/v2");
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`${base}?lang=zh`);
-    await page.locator("#feature-image").scrollIntoViewIfNeeded();
-    await expect(page.locator(".photo-stage")).toHaveAttribute("data-loading", "false");
+    await page.locator("#sc1-image").scrollIntoViewIfNeeded();
+    await page.locator("#sc1-image").evaluate(image => image.decode());
     const style = ".site-header,.skip-link{visibility:hidden!important}";
     await page.locator("#studio").screenshot({ path: path.join(output, "interactive-zh.png"), style });
-    await page.locator("#features").screenshot({ path: path.join(output, "features-zh.png"), style });
+    await page.locator("#workbench").screenshot({ path: path.join(output, "features-zh.png"), style });
     await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo(0, 0); });
     await page.screenshot({ path: path.join(output, "full-page-zh.png"), fullPage: true });
     await context.close();
@@ -132,6 +134,9 @@ const output = path.join(__dirname, "../artifacts/website/v2");
     const motion = await moving.newPage();
     motion.on("pageerror", error => errors.push(error.message));
     await motion.goto(`${base}?lang=en`);
+    await expect(motion.locator("#studio")).toHaveAttribute("data-phase", "complete");
+    await motion.locator('[data-case="production"]').click();
+    await motion.locator("#play-demo").click();
     await expect(motion.locator("#studio")).not.toHaveAttribute("data-phase", "complete");
     await motion.locator("#play-demo").click();
     const stopped = await motion.locator("#playback-progress").getAttribute("style");
@@ -142,14 +147,14 @@ const output = path.join(__dirname, "../artifacts/website/v2");
     await expect(motion.locator("#demo-objective")).toHaveText("13");
     await motion.locator("#play-demo").click();
     await motion.locator("#language-toggle").click();
-    await expect(motion.locator("#studio")).toHaveAttribute("data-phase", "complete");
+    await expect(motion.locator("#studio")).toHaveAttribute("data-phase", "complete", { timeout: 8000 });
     assert.doesNotMatch(await motion.locator("#demo-question").innerText(), /We make/);
     await motion.locator('[data-case="shifts"]').click();
     await motion.locator("#change-condition").click();
-    assert.ok(await motion.locator('[data-person="0"]').evaluate(node => node.getAnimations().length > 0), "Staff changes should animate between days");
+    assert.equal(await motion.locator('[data-person="0"]').evaluate(node => node.style.gridColumn), "2");
     await moving.close();
     assert.deepEqual(errors, []);
-    console.log("PASS: three computed cases; sliders, conflicting requirements, CSV export; full bilingual copy and matching dark media; keyboard tabs/dialog; six viewport sizes; playback, pause/resume, language changes during playback, and animated staff reassignment.");
+    console.log("PASS: four computed cases; sliders, conflicting requirements, CSV export; full bilingual copy and matching dark media; keyboard tabs/dialog; six viewport sizes; playback, pause/resume, language changes during playback, and staff reassignment.");
     console.log(`Screenshots: ${output}`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

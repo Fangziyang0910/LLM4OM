@@ -1,3 +1,5 @@
+import type { QueryClient } from "@tanstack/react-query";
+import type { Client, Thread } from "@langchain/langgraph-sdk";
 import { outcome } from "@/format";
 import { locale, t } from "@/i18n";
 import type { Entry, OptimizationMeta, RequirementsMeta, RunMeta, RunSpec, RunValues, SolutionChatMeta, SourceRun, Timing, Usage } from "@/features/runs/types";
@@ -25,8 +27,15 @@ export async function saveThreadValues(threadId: string, values: Record<string, 
   await (await sdk()).threads.updateState(threadId, { values, asNode: "discuss" });
 }
 
+/** Navigation and pinned reads need the thread header. Its latest values may include a different, large result. */
+export async function threadHeader(client: Client, threadId: string, signal?: AbortSignal): Promise<Pick<Thread, "metadata" | "status">> {
+  const [thread] = await client.threads.search({ ids: [threadId], limit: 1, select: ["metadata", "status"], signal });
+  if (!thread) throw new Error(t("找不到这条记录。"));
+  return thread;
+}
+
 export async function getThreadKind(threadId: string): Promise<string | undefined> {
-  const thread = await (await sdk()).threads.get(threadId);
+  const thread = await threadHeader(await sdk(), threadId);
   return thread.metadata?.kind as string | undefined;
 }
 
@@ -59,7 +68,7 @@ export async function startRun(draft: Draft, preset: Preset | undefined, group: 
     });
   } catch (error) {
     // A lost response can hide an accepted run, including a retry rejected because that run is now active.
-    const accepted = await client.runs.list(thread.thread_id, { limit: 1 }).catch(() => null);
+    const accepted = await client.runs.list(thread.thread_id, { limit: 1, select: ["run_id"] }).catch(() => null);
     if (accepted?.length) return thread.thread_id;
     if (accepted && error instanceof Error && "status" in error && typeof error.status === "number"
         && error.status >= 400 && error.status < 500)
@@ -74,7 +83,7 @@ async function loadCheckpoint(threadId: string, source: SourceRun | undefined, b
   const targetId = source?.thread_id ?? threadId;
   const [state, thread] = await Promise.all([
     client.threads.getState<RunValues>(targetId, source?.checkpoint_id),
-    client.threads.get(targetId),
+    threadHeader(client, targetId),
   ]);
   if (!source && thread.status === "busy") throw new Error(busyMessage);
   const values = state.values as RunValues;
@@ -166,7 +175,7 @@ export async function startComparison(draft: Draft, runs: { method: string; lang
 
 /** Merge `change` into a run's metadata: its note and tags. */
 export async function updateMeta(threadId: string, change: Partial<Pick<RunMeta, "note" | "tags">>): Promise<void> {
-  await (await sdk()).threads.update(threadId, { metadata: change });
+  await (await sdk()).threads.update(threadId, { metadata: change, returnMinimal: true });
 }
 
 /** Recorded configuration owns these fields; thread metadata also holds editable notes and legacy records. */
@@ -185,14 +194,14 @@ export async function deleteRun(threadId: string): Promise<void> {
 }
 
 const PAGE_SIZE = 100;
-export async function history(metadata?: Record<string, unknown>, offset = 0): Promise<{ entries: Entry[]; nextOffset: number | undefined }> {
+export async function history(metadata?: Record<string, unknown>, offset = 0, cache?: QueryClient): Promise<{ entries: Entry[]; nextOffset: number | undefined }> {
   const client = await sdk();
   const threads = await client.threads.search({ limit: PAGE_SIZE, offset, sortBy: "created_at", sortOrder: "desc", metadata,
     select: ["thread_id", "created_at", "updated_at", "status", "metadata"],
     // LangGraph's /threads/search schema caps `extract` at 10 properties (`maxProperties: 10`).
     extract: { objective: "values.solve.objective", pareto_total: "values.solve.pareto.total", solved: "values.solve.status",
       failure: "values.failure", usage: "values.usage", timing: "values.timing", spec: "values.spec",
-      actual_solver: "values.solve.solver", last_message_type: "values.messages[-1].type", last_message_tools: "values.messages[-1].tool_calls" } });
+      actual_solver: "values.solve.solver", last_message_type: "values.messages[-1].type", last_tool: "values.messages[-1].tool_calls[0].name" } });
   const entries = (await Promise.all(threads.filter(thread => thread.metadata?.title).map(async thread => {
     const extracted = (thread as unknown as { extracted?: Record<string, unknown> }).extracted ?? {};
     const timing = extracted.timing as Timing | undefined;
@@ -200,17 +209,22 @@ export async function history(metadata?: Record<string, unknown>, offset = 0): P
     // Cancellation can leave the thread idle. Only its run distinguishes a stopped turn from a completed one.
     // Finished replies and completed modeling runs already have their outcome in the extracted state.
     const unfinished = conversation ? extracted.last_message_type !== "ai"
-      || (Array.isArray(extracted.last_message_tools) && extracted.last_message_tools.length > 0) : !extracted.solved || !timing?.finished_at;
+      || extracted.last_tool != null : !extracted.solved || !timing?.finished_at;
     let latest;
     if (thread.status === "busy" || (thread.status === "idle" && unfinished)) {
       try {
-        latest = (await client.runs.list(thread.thread_id, { limit: 1, select: ["status"] }))[0];
+        const readStatus = async () => (await client.runs.list(thread.thread_id, { limit: 1, select: ["status"] }))[0]?.status ?? null;
+        // An idle draft with no run stays empty until the server changes its version or marks it busy.
+        latest = cache && thread.status === "idle" ? await cache.fetchQuery({
+          queryKey: ["idle-run-status", thread.thread_id, thread.updated_at], queryFn: readStatus, retry: false,
+          staleTime: query => query.state.data === null ? Infinity : 0,
+        }) : await readStatus();
       } catch (error) {
         if (error instanceof Error && "status" in error && error.status === 404) return null;
         throw error;
       }
     }
-    const status = latest?.status ?? (thread.status === "idle" ? (conversation || !unfinished ? "success" : "interrupted") : thread.status);
+    const status = latest ?? (thread.status === "idle" ? (conversation || !unfinished ? "success" : "interrupted") : thread.status);
     const state = outcome(latest ? status === "running" : thread.status === "busy", status, extracted.failure,
       extracted.solved as string | undefined);
     const spec = extracted.spec as RunSpec | undefined;

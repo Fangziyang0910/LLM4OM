@@ -8,7 +8,7 @@ import { client } from "@/features/runs/sdk";
 import { useChatDraft, useConversation } from "./conversation";
 
 vi.mock("@/features/runs/sdk", () => ({ client: {
-  threads: { get: vi.fn(), update: vi.fn(), create: vi.fn(), updateState: vi.fn() },
+  threads: { get: vi.fn(), search: vi.fn(), update: vi.fn(), create: vi.fn(), updateState: vi.fn() },
   runs: { create: vi.fn(), cancel: vi.fn(), list: vi.fn() },
 } }));
 vi.mock("@langchain/langgraph-sdk/react", () => ({ useStream: vi.fn() }));
@@ -28,6 +28,7 @@ beforeEach(() => {
   stream.isThreadLoading = false;
   vi.mocked(useStream).mockReturnValue(stream as never);
   threads.get.mockResolvedValue({ metadata: {}, values: { messages: [] } } as never);
+  threads.search.mockResolvedValue([{ metadata: {} }] as never);
   threads.create.mockResolvedValue({ thread_id: "created" } as never);
   threads.updateState.mockResolvedValue({} as never);
   runs.create.mockResolvedValue({ run_id: "first-run" } as never);
@@ -71,6 +72,20 @@ test("receipt acknowledgment survives reload and never clears a newer draft", ()
   expect(sessionStorage.getItem("llm4om-message-chat-pending")).toBeNull();
 });
 
+test("reopening fetches a full snapshot only to confirm a pending message", async () => {
+  const first = conversation();
+  await waitFor(() => expect(first.result.current.busy).toBe(false));
+  expect(threads.get).not.toHaveBeenCalled();
+  first.unmount();
+  sessionStorage.setItem("llm4om-message-chat", "submitted");
+  sessionStorage.setItem("llm4om-message-chat-pending", JSON.stringify({ id: "written", text: "submitted" }));
+  threads.get.mockResolvedValue({ metadata: {}, values: { messages: [{ type: "human", id: "written", content: "submitted" }] } } as never);
+  const reopened = conversation();
+  await waitFor(() => expect(reopened.result.current.input).toBe(""));
+  expect(threads.get).toHaveBeenCalledOnce();
+  expect(sessionStorage.getItem("llm4om-message-chat-pending")).toBeNull();
+});
+
 test("a rejected question save keeps both the pending question and the newer draft", async () => {
   const { result } = renderHook(() => useChatDraft("chat"));
   act(() => result.current.setValue("已提交的问题"));
@@ -88,6 +103,9 @@ test.each(["checkpoint", "finish"])("only persisted %s confirmation acknowledges
   act(() => result.current.setInput("question"));
   await act(() => result.current.send());
   const message = question();
+  await act(async () => { result.current.thread.reload(); });
+  await waitFor(() => expect(threads.search.mock.calls.length).toBeGreaterThan(1));
+  expect(threads.get).not.toHaveBeenCalled();
   stream.messages = [message]; // The SDK may show an optimistic message before the input checkpoint exists.
   rerender();
   expect(result.current.input).toBe("question");

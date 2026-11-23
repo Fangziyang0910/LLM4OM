@@ -15,7 +15,7 @@ from pydantic import StringConstraints
 
 from llm4om.agent import CONVERSATION_STYLE, invoke_turn_agent, prepare_turn_model
 from llm4om.graph import get_resources
-from llm4om.problem import problem_text
+from llm4om.problem import changed_input_message, input_changed, problem_text
 from llm4om.web_search import search_tool
 
 
@@ -36,6 +36,7 @@ class RequirementsContext:
     locale: Literal["zh", "en"] = "zh"
     search: bool = False
     thinking: bool | None = None
+    input_fingerprint: str | None = None
 
 
 class DraftState(AgentState):
@@ -63,6 +64,8 @@ def requirements_graph() -> Any:
         if not messages or messages[-1].type != "human" or not messages[-1].text.strip():
             raise ValueError("Describe what you want to plan or decide.")
         choice = runtime.context or RequirementsContext()
+        if input_changed(choice.input_fingerprint, state.get("data") or {}, state.get("description") or ""):
+            return {"failure": changed_input_message(choice.locale)}
         resources = get_resources()
         _, settings, recorder, model = await prepare_turn_model(resources, choice.preset, choice.thinking, "requirements")
         language = "Simplified Chinese" if choice.locale == "zh" else "English"

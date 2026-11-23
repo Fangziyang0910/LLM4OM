@@ -4,7 +4,7 @@ An infeasible result means the current requirements cannot hold together in the 
 
 Open “Solution” and “Why infeasible.” Expand the referenced constraints to inspect the expressions or bounds behind an explanation. Formulation and code remain in adjacent tabs.
 
-Linear-model diagnosis uses Gurobi IIS; CPMpy uses MUS. Original evidence is retained for tracing business rules to mathematical expressions.
+Linear-model diagnosis uses Gurobi IIS. Original evidence is retained for tracing business rules to mathematical expressions.
 
 ## A concrete conflict
 
@@ -42,4 +42,4 @@ production
 | Native local-infeasibility status | Inspect starts, bounds and native feedback |
 | Code execution error | Locate syntax, data or interface issues in process |
 
-Diagnosis follows interface capabilities. CVXPY retains native status and model; Gurobi linear diagnosis and CPMpy MUS provide conflict evidence. See [backends](../backends/) and [revisions](../revisions/).
+Diagnosis follows interface capabilities. CVXPY retains native status and model; Gurobi linear diagnosis can provide conflict evidence. See [backends](../backends/) and [revisions](../revisions/).

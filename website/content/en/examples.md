@@ -8,7 +8,7 @@ Homepage examples introduce the workflow; public problem collections expose diff
 | Staffing | Employee-by-day assignments | Availability and coverage |
 | Delivery assignment | Vehicle-to-store matching | Disable a route or change costs |
 
-The homepage provides three interactive fixed cases. [Quickstart](../quickstart/) includes the production statement, recording and data. [OR-Tools](../ortools/) supplies staffing code; [CPMpy](../cpmpy/) supplies assignment code.
+The homepage provides three interactive fixed cases. [Quickstart](../quickstart/) includes the production statement, recording and data. [OR-Tools](../ortools/) supplies staffing code.
 
 ## Download production data
 

@@ -6,7 +6,7 @@ import type { UseStream } from "@langchain/langgraph-sdk/react";
 import type { BagTemplate, Message, ThreadState } from "@langchain/langgraph-sdk";
 import type { GetConfigurableType, GetCustomEventType, GetUpdateType } from "@langchain/langgraph-sdk/ui";
 import { toast } from "sonner";
-import { chatDraftKey, discussSupersteps, saveThreadValues } from "@/features/runs/api";
+import { chatDraftKey, discussSupersteps, saveThreadValues, threadHeader } from "@/features/runs/api";
 import { client } from "@/features/runs/sdk";
 import { errorText } from "@/format";
 import type { Preset } from "@/types";
@@ -27,10 +27,11 @@ export function useChatModel(presets: Preset[], meta?: { preset?: string | null;
 export function useChatDraft(threadId: string, initial = "") {
   const key = chatDraftKey(threadId);
   const [value, setValue] = useState(() => { try { return initial || sessionStorage.getItem(key) || ""; } catch { return initial; } });
-  const pending = useRef<Pending | null>(null);
-  if (pending.current === null) {
-    try { pending.current = JSON.parse(sessionStorage.getItem(`${key}-pending`) ?? "null") as Pending | null; } catch { /* storage may be unavailable */ }
-  }
+  const [recovered] = useState<Pending | null>(() => {
+    try { return JSON.parse(sessionStorage.getItem(`${key}-pending`) ?? "null") as Pending | null; }
+    catch { return null; }
+  });
+  const pending = useRef(recovered);
   useEffect(() => {
     try { if (value) sessionStorage.setItem(key, value); else sessionStorage.removeItem(key); } catch { /* storage may be unavailable */ }
   }, [key, value]);
@@ -57,7 +58,7 @@ export function useChatDraft(threadId: string, initial = "") {
     await saveThreadValues(target, { messages: [message] });
     acknowledge([message]);
   };
-  return { value, setValue, prepare, acknowledge, savePending };
+  return { value, setValue, prepare, acknowledge, savePending, needsRecovery: () => !!recovered && pending.current?.id === recovered.id };
 }
 
 export type ConversationTurn<State extends ConversationState, Bag extends BagTemplate = BagTemplate> = {
@@ -102,12 +103,19 @@ export function useConversation<State extends ConversationState, Bag extends Bag
 ) {
   const queryClient = useQueryClient();
   const threadId = options.threadId;
-  const { value: input, setValue: setInput, prepare, acknowledge, savePending } = useChatDraft(
+  const { value: input, setValue: setInput, prepare, acknowledge, savePending, needsRecovery } = useChatDraft(
     threadId ?? `${options.assistantId}-new`, threadId ? "" : options.initialInput);
   const thread = useQuery({
     queryKey: ["conversation", options.assistantId, threadId],
     enabled: !!threadId,
-    queryFn: () => client.threads.get<State>(threadId!),
+    queryFn: async ({ signal }) => {
+      if (needsRecovery()) {
+        const snapshot = await client.threads.get<State>(threadId!, { signal });
+        return { metadata: snapshot.metadata, messages: snapshot.values?.messages };
+      }
+      const { metadata } = await threadHeader(client, threadId!, signal);
+      return { metadata, messages: undefined };
+    },
   });
   const [sending, setSending] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -152,7 +160,7 @@ export function useConversation<State extends ConversationState, Bag extends Bag
   // The thread query is also the confirmation that survives a reload. A new draft is never cleared here: the
   // draft module compares the acknowledged message ID with the text it is still holding. Do not confirm from
   // `stream.values`: an optimistic message is not persisted and must not clear the draft.
-  const persisted = thread.data?.values?.messages;
+  const persisted = thread.data?.messages;
   useEffect(() => { acknowledge(persisted); }, [persisted, acknowledge]);
 
   const reconnect = useCallback(async (run: string) => {
@@ -172,7 +180,7 @@ export function useConversation<State extends ConversationState, Bag extends Bag
     // A later message must never cancel or join the finished run that came before it.
     runId.current = null;
     try {
-      if (turn.metadata) await client.threads.update(active, { metadata: turn.metadata });
+      if (turn.metadata) await client.threads.update(active, { metadata: turn.metadata, returnMinimal: true });
       const message = question ?? prepare(input);
       // `GetUpdateType` is conditional on the page's Bag and stays unresolved inside this generic hook.
       const update = { ...turn.values, messages: [message] } as unknown as GetUpdateType<Bag, State>;
@@ -226,7 +234,7 @@ export function useConversation<State extends ConversationState, Bag extends Bag
         try { activeRunId = sessionStorage.getItem(`lg:stream:${active}`); } catch { /* storage may be unavailable */ }
       }
       if (!activeRunId) {
-        const [latest] = await client.runs.list(active, { limit: 1 });
+        const [latest] = await client.runs.list(active, { limit: 1, select: ["run_id", "status"] });
         if (latest && (latest.status === "pending" || latest.status === "running")) activeRunId = latest.run_id;
       }
       if (activeRunId) {

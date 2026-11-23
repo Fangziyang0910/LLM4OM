@@ -52,7 +52,7 @@ Generation receives schema; execution reads complete attachments. Later feedback
 
 ## When to use it and what to check
 
-Use it for structured data too large to transcribe conveniently when rules are clear. Inspect file names, fields, matrix orientation, units and iteration over all records. For semantic review of complex rules, compare with [Feedback Repair](../feedback-repair/) or [TriVAL](../trival/).
+Use it for structured data too large to transcribe conveniently when rules are clear. Inspect file names, fields, matrix orientation, units and iteration over all records. For semantic review of complex rules, compare with [TriVAL](../trival/).
 
 ## Source and platform adaptation
 

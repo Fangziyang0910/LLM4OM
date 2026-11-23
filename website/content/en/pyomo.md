@@ -55,4 +55,4 @@ production
 
 ## Selection and references
 
-Start here for indexed algebraic rules and readable mathematical structure. [PuLP](../pulp/) also fits small linear models; [CPMpy](../cpmpy/) suits richer discrete logic; [CasADi](../casadi/) supports smooth nonlinear modeling. See the [official Pyomo modeling guide](https://pyomo.readthedocs.io/en/stable/explanation/modeling/index.html).
+Start here for indexed algebraic rules and readable mathematical structure. [OR-Tools](../ortools/) suits richer discrete logic; [CasADi](../casadi/) supports smooth nonlinear modeling. See the [official Pyomo modeling guide](https://pyomo.readthedocs.io/en/stable/explanation/modeling/index.html).

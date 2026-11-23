@@ -3,7 +3,7 @@ export const copy = {
   pageTitle: ["通用智能优化求解器 — 自然语言驱动的双引擎优化平台", "GIOS — Natural-Language Dual-Engine Optimization Platform"],
   pageDescription: [
     "用日常语言描述业务目标与约束，自动在精确求解器与 AutoCO 智能优化算法池间选配，输出可验证的最优方案与多目标 Pareto 前沿。",
-    "Describe business goals and constraints in plain language. Automatically route across exact solvers and the AutoCO metaheuristic pool for verified optimal plans and multi-objective Pareto fronts.",
+    "Describe business goals and constraints in plain language. Automatically route across exact solvers and the AutoCO metaheuristic pool for computed solutionsl plans and multi-objective Pareto fronts.",
   ],
   skip: ["跳到主要内容", "Skip to main content"],
   homeLabel: ["通用智能优化求解器首页", "GIOS Home"],
@@ -20,8 +20,8 @@ export const copy = {
   heroLine1: ["用自然语言，", "Solve complex optimization"],
   heroLine2: ["求解一切复杂优化问题。", "through plain language."],
   heroDescription: [
-    "无需编写公式或求解器代码。描述目标并上传表格，系统自动在 9 大精确框架与 AutoCO 算法池间路由，输出沙箱验证的最优解与 Pareto 前沿。",
-    "No equations or solver scripts required. Describe your goals and drop spreadsheets — the platform routes across 9 exact modeling frameworks and AutoCO's 12-family metaheuristic pool to return sandbox-verified optima and Pareto fronts.",
+    "无需编写公式或求解器代码。描述目标并上传表格，系统自动在 5 大精确框架与 AutoCO 算法池间路由，输出沙箱计算的方案与 Pareto 前沿。",
+    "No equations or solver scripts required. Describe your goals and drop spreadsheets — the platform routes across 5 exact modeling frameworks and AutoCO's 12-family metaheuristic pool to return solver results and Pareto fronts.",
   ],
   heroPrimaryCta: ["立即体验工作台", "Open Workbench"],
   heroDocsCta: ["阅读文档", "Read Docs"],
@@ -166,9 +166,9 @@ export const copy = {
   deliveryModelData: ["运费矩阵：W1 [4,8,6] · W2 [7,3,9] · W3 [5,6,2]", "Cost matrix: W1 [4,8,6] · W2 [7,3,9] · W3 [5,6,2]"],
 
   // Metrics Strip
-  stat1Num: ["14 种", "14"],
+  stat1Num: ["9 种", "9"],
   stat1Label: ["内置建模与求解策略", "Modeling & solving strategies"],
-  stat2Num: ["9 大", "9"],
+  stat2Num: ["5 大", "5"],
   stat2Label: ["精确数学建模框架", "Exact modeling libraries"],
   stat3Num: ["12 类", "12"],
   stat3Label: ["AutoCO 智能优化算法", "AutoCO metaheuristic families"],
@@ -191,7 +191,7 @@ export const copy = {
   sc2Title: ["精确求解 × AutoCO，单目标到多目标全覆盖。", "Exact Solvers × AutoCO: from proven MILP optima to Pareto fronts."],
   sc2Desc: ["传统大模型优化工具只能生成线性规划代码，一遇到大规模组合优化、非线性黑盒或多目标权衡就会超时甚至报错。平台将数学规划与 AutoCO 智能优化算法池合二为一，按问题特征自动选配最优引擎。", "Traditional LLM-for-OR tools stall on large combinatorial, black-box nonlinear, or multi-objective tasks. Our platform unifies exact mathematical programming with AutoCO's 12-family metaheuristic pool — automatically choosing the right engine for every problem."],
   engExactTitle: ["精确求解引擎", "Exact Mathematical Solvers"],
-  engExactDesc: ["Pyomo · Gurobi · OR-Tools · SCIP · CVXPY · COPT · PuLP · CPMpy · CasADi", "Pyomo · Gurobi · OR-Tools · SCIP · CVXPY · COPT · PuLP · CPMpy · CasADi"],
+  engExactDesc: ["Pyomo · OR-Tools · CVXPY · PySCIPOpt · CasADi", "Pyomo · OR-Tools · CVXPY · PySCIPOpt · CasADi"],
   engExactBadge: ["LP / MILP / 凸优化 / 约束规划", "LP / MILP / Convex / CP"],
   engAutocoTitle: ["AutoCO 智能优化算法池", "AutoCO Metaheuristic Pool"],
   engAutocoDesc: ["SA · TS · ILS · LNS · GA · CMA-ES · DE · PSO · ACO · NSGA-II · MOEA/D · NSGA-III", "SA · TS · ILS · LNS · GA · CMA-ES · DE · PSO · ACO · NSGA-II · MOEA/D · NSGA-III"],
@@ -212,8 +212,8 @@ export const copy = {
 
   // Showcase 3
   sc3Eyebrow: ["全量方法自由体验", "Full Control When Needed"],
-  sc3Title: ["平时零配置，需要时 14 种策略与求解器随时切换。", "Effortless by default. Full method & solver control in one click."],
-  sc3Desc: ["日常使用保持“自动求解”即可；研究者或运筹工程师点一下就能体验 Direct、Feedback Repair、TriVAL、AutoCO 等 14 种建模方法，指定具体大模型与求解器，并在同一问题上并排横评结果。", "Stay on Auto for everyday work, or open settings to explore all 14 modeling strategies (Direct, Feedback Repair, TriVAL, AutoCO, and 10 research workflows), pin any LLM or solver backend, and benchmark them side by side."],
+  sc3Title: ["平时零配置，需要时 9 种策略与求解器随时切换。", "Effortless by default. Full method & solver control in one click."],
+  sc3Desc: ["日常使用保持“自动求解”即可；研究者或运筹工程师点一下就能体验 Direct、OR-LLM-Agent、TriVAL、AutoCO 等 9 种建模方法，指定具体大模型与求解器，并在同一问题上并排横评结果。", "Stay on Auto for everyday work, or open settings to explore all 9 modeling strategies (including Direct, OR-LLM-Agent, TriVAL and AutoCO), pin any LLM or solver backend, and benchmark them side by side."],
   sc3Bullet1: ["4 大常用策略前置 + 10 种学术方法按需展开", "4 core strategies upfront + 10 research methods on demand"],
   sc3Bullet2: ["同一问题并行跑多策略/多模型，自动交叉核对", "Run multiple strategies or LLMs in parallel and cross-check"],
   sc3Bullet3: ["完整保留数学模型、执行代码与多版本 Diff", "Inspect mathematical formulations, code, and version diffs"],

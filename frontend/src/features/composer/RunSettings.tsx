@@ -21,7 +21,8 @@ import { errorText } from "@/format";
 import { t } from "@/i18n";
 import type { BackendCatalog, Draft, Method, Options, Preset } from "@/types";
 
-export const DRAFT_KEY = "llm4om-draft";
+import { DRAFT_KEY } from "./draft";
+
 const MAX_COMPARED = 12;
 const CORE_METHODS = new Set(["direct", "or_llm_agent", "llmopt", "trival", "bind", "autoco"]);
 const TIME_LIMITS = [
@@ -95,7 +96,9 @@ export function useRunLauncher({
   const language = options.languages.find(item => item.id === draft.language && supports(item.id))
     ?? options.languages.find(item => supports(item.id))!;
   const backend = draft.solver ?? "AUTO";
-  const catalog = useQuery({ queryKey: ["backends"], queryFn: () => api<BackendCatalog>("/api/backends"), staleTime: Infinity, retry: false });
+  const catalog = useQuery({ queryKey: ["backends"], queryFn: () => api<BackendCatalog>("/api/backends"),
+    enabled: (!selfContained || comparing) && (settingsOpen || !!problem.description.trim() || backend !== "AUTO"),
+    staleTime: Infinity, retry: false });
   const backends = catalog.data?.libraries[language.id];
   const backendUnavailable = (!selfContained || comparing) && !!backends && !backends.some(item => item.id === backend && item.available);
   const compared = options.methods.filter(item => draft.methods?.includes(item.id) && !unsupported(item, language.id));

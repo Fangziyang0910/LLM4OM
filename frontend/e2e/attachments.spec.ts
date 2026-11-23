@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import writeExcelFile from "write-excel-file/node";
 
 test("data rows can be added, saved and cancelled without editing CSV syntax", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   await page.locator('input[type="file"]').setInputFiles({ name: "demand.csv", mimeType: "text/csv", buffer: Buffer.from("客户,需求量\n门店A,003\n") });
   await page.getByRole("button", { name: "编辑 demand.csv", exact: true }).click();
   const dialog = page.getByRole("dialog");
@@ -28,7 +28,7 @@ test("data rows can be added, saved and cancelled without editing CSV syntax", a
 });
 
 test("dragging text into the problem preserves native insertion and file imports", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/model");
   const input = page.getByRole("textbox", { name: "问题描述", exact: true });
   await input.fill("");
   await input.evaluate(node => {
@@ -61,7 +61,7 @@ test("dragging text into the problem preserves native insertion and file imports
 for (const language of ["zh", "en"]) {
   test(`invalid imports explain rejected files and keep valid data (${language})`, async ({ page }) => {
     await page.addInitScript(language => localStorage.setItem("llm4om-locale", language), language);
-    await page.goto("/");
+    await page.goto("/model");
     const input = page.getByRole("textbox", { name: language === "zh" ? "问题描述" : "Problem description", exact: true });
     const dropped = await page.evaluateHandle(() => {
       const files = new DataTransfer();
@@ -92,5 +92,35 @@ for (const language of ["zh", "en"]) {
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("llm4om-draft")!).data)).toEqual({
       "prices.CSV": "name,price\nA,003\n", "transport-costs.csv": expect.any(String), "transport-notes.csv": expect.any(String),
     });
+  });
+}
+
+for (const kind of ["requirements", "optimization"] as const) {
+  test(`${kind} checks the inputs shown in this tab before using another tab's changes`, async ({ page, context }) => {
+    const draft = { description: "生产计划", messages: [], data: { "cost.csv": "容量\n10\n" } };
+    const created = await page.request.post("/threads", { data: { metadata: { graph_id: kind, kind, preset: "env", title: "多窗口附件" },
+      supersteps: [{ updates: [{ as_node: "discuss", values: draft }] }] } });
+    expect(created.ok()).toBe(true);
+    const id = (await created.json()).thread_id as string;
+    const url = `/${kind === "requirements" ? "chat" : "agent"}/${id}`;
+    const name = kind === "requirements" ? "发送给需求助手" : "发送给优化助手";
+    const other = await context.newPage();
+    await page.goto(url);
+    await expect(page.getByRole("button", { name: /cost\.csv/ }).first()).toBeVisible();
+    await other.goto(url);
+    const edit = kind === "requirements" ? "编辑 cost.csv" : "cost.csv";
+    await other.getByRole("button", { name: edit, exact: true }).click();
+    await other.getByLabel("第 1 行，第 1 列", { exact: true }).fill("20");
+    await other.getByRole("button", { name: "保存数据", exact: true }).click();
+    await expect(other.getByRole("dialog")).toHaveCount(0);
+    await page.getByRole("textbox", { name }).fill("按表格里的容量计算。");
+    await page.getByRole("textbox", { name }).press("Enter");
+    await expect(page.getByRole("log")).toContainText("请刷新页面，核对最新内容后重试");
+    const state = (await (await page.request.get(`/threads/${id}`)).json()).values;
+    expect(state.data["cost.csv"].trim()).toBe("容量\n20");
+    expect(state.usage?.llm_calls ?? 0).toBe(0);
+    await page.reload();
+    await page.getByRole("button", { name: edit, exact: true }).click();
+    await expect(page.getByLabel("第 1 行，第 1 列", { exact: true })).toHaveValue("20");
   });
 }

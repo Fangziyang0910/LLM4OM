@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import type { RequirementsMeta, Usage } from "@/features/runs/types";
 import { ChatMessages, ThreadLoadError } from "@/features/chat/Messages";
 import { ChatInput } from "@/features/chat/ChatInput";
+import { inputFingerprint } from "@/features/chat/inputFingerprint";
 import { useChatModel, useConversation } from "@/features/chat/conversation";
 import { useChatScroll } from "@/features/chat/scroll";
 
@@ -104,8 +105,9 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
       await save();
       const shouldTitle = !messages.length && (!meta?.title || meta.title === t("新需求对话"));
       const firstLine = input.trim().split(/\r?\n/).map(line => line.replace(/^#+\s*/, "").trim()).find(Boolean) ?? "";
-      await conversation.send({ retry, context: { preset: preset.id, locale, search: searchOn, thinking: thinkingMode },
-        values: draft, metadata: { preset: preset.id, provider: preset.provider, model: preset.name || preset.model,
+      await conversation.send({ retry, context: { preset: preset.id, locale, search: searchOn, thinking: thinkingMode,
+        input_fingerprint: inputFingerprint(draft.data, draft.description) },
+        metadata: { preset: preset.id, provider: preset.provider, model: preset.name || preset.model,
           thinking: thinkingMode, search: searchOn, ...(shouldTitle && firstLine ? { title: firstLine.slice(0, 120) } : {}) } });
     } catch (error) { toast.error(errorText(error)); }
     finally { setAction(false); }

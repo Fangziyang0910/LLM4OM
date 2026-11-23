@@ -95,19 +95,20 @@ LLM4OM_TRUST_PROXY=1                # 按代理转发的客户端地址计算运
 
 批量发起运行时，每项都计入每小时上限，超限的整批请求会被拒绝。
 
+Docker 构建将锁定的 Web 依赖和工作台 wheel 分层。更新页面或业务代码时，可以复用依赖镜像层。
+
 ### 并发
 
-一个工作区只供一个服务进程使用。
+一个工作区使用一个服务进程。Compose 和本地服务都从 `.env` 读取以下两项。两项默认都是 4，必须为正整数。
 
-同时执行的运行数由 `llm4om serve --jobs` 控制，默认是 4，其余运行排队。Docker 部署中，在 `compose.override.yaml` 里改 `app` 的 `command`：
+| 配置 | 占用一个名额的操作 | 名额用完时 |
+|---|---|---|
+| `LLM4OM_RUN_JOBS` | 一次完整的对话或建模运行，包括等待模型回复的时间 | 后续运行在服务端排队。显式传入的 `llm4om serve --jobs` 优先。设为 0 可暂停执行并查阅历史 |
+| `LLM4OM_SANDBOX_JOBS` | 一次沙箱求解、检查脚本或首次后端探测 | 运行等待空闲沙箱，等待时间计入运行总时限 |
 
-```yaml
-services:
-  app:
-    command: ["llm4om", "serve", "--workspace", "/data", "--port", "8767", "--jobs", "8"]
-```
+每个 Docker 沙箱最多使用 2 个 CPU 和 2 GiB 内存，退出即释放。按默认 4 个沙箱估算，求解容器合计上限为 8 个 CPU 和 8 GiB，主服务和系统另计。先用代表性模型测单次求解的峰值内存，再增加同时求解数，观察队列等待和达到运行时限的比例。以等待外部模型为主的工作负载可以让运行名额多于沙箱名额。服务使用默认的单事件循环。
 
-沙箱另有总并发上限：在 `.env` 设置 `LLM4OM_SANDBOX_JOBS=4`（默认 4，必须大于 0）。它同时覆盖所有运行的求解和检查脚本。等候沙箱仍计入运行总时限。服务使用默认的单事件循环；不设置 `BG_JOB_ISOLATED_LOOPS`。
+新安装只需工作台/API 时，运行 `docker compose up -d --build app` 即可构建 Worker 并启动工作台。需要双语文档站时再启动 `website` 服务。
 
 ## Gurobi 许可证
 
@@ -159,7 +160,7 @@ docker compose stop app && docker compose cp runs/web/. app:/data/ && docker com
 ```bash
 uv sync --extra web
 uv run llm4om build-worker
-uv run llm4om serve --workspace /srv/llm4om --port 8767 --jobs 4
+uv run llm4om serve --workspace /srv/llm4om --port 8767
 ```
 
 服务默认监听 `0.0.0.0`。用 systemd 等工具让它开机启动。沙箱仍然需要 Docker，求解依赖随 Worker 镜像安装，不需要在宿主机安装 `solve` 扩展。

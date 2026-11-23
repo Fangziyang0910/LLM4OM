@@ -1,11 +1,11 @@
-通用智能优化求解器（General Intelligent Optimization Solver）是自然语言驱动的**精确求解 × AutoCO 智能优化双引擎平台**。直接用日常语言描述业务目标与约束并拖入表格，系统自动在 **9 大精确数学建模框架**与 **AutoCO 12 类智能优化算法池**之间路由，在隔离沙箱内实算并返回可验证的最优解与多目标 Pareto 前沿。
+通用智能优化求解器（General Intelligent Optimization Solver）是自然语言驱动的**精确求解 × AutoCO 智能优化双引擎平台**。直接用日常语言描述业务目标与约束并拖入表格，系统自动在 **5 大精确数学建模框架**与 **AutoCO 12 类智能优化算法池**之间路由，在隔离沙箱内实算并返回求解结果与多目标 Pareto 前沿。
 
 ## 选择你的使用入口
 
 | 入口 | 适合怎样开始 | 接下来能做什么 |
 |---|---|---|
 | [优化对话](../chat-agent/)（工作台默认首页 `/`） | 直接发送问题或拖入 Excel/CSV | 零配置自动路由双引擎、实时联动 Pareto/方案解读、追问调整与多场景对比 |
-| [多方案对比与手动建模](../run-settings/)（`/model`） | 已有明确题面，想指定方法或并行横评 | 自由切换 14 种建模策略、9 大建模库与求解器，一次并排跑最多 12 组对比 |
+| [多方案对比与手动建模](../run-settings/)（`/model`） | 已有明确题面，想指定方法或并行横评 | 自由切换 9 种建模策略、5 大建模库与求解器，一次并排跑最多 12 组对比 |
 | [需求助手](../requirements/) | 业务想法仍在整理 | 形成结构化需求稿与附件，再一键交给求解引擎 |
 
 ![通用智能优化求解器工作台：自然语言对话与多目标 Pareto 前沿](../../../assets/screens/live/pareto-light.png)
@@ -48,9 +48,9 @@ AutoCO 的启发式结果和 Pareto 候选以本次预算内实际搜索所得�
 
 ## 理解平台怎样建模和计算
 
-[建模方法](../methods/)介绍 **14 种策略**：包括三大核心精确工作流（Direct、Feedback Repair、TriVAL）、面向大规模组合与多目标权衡的 **[AutoCO 智能优化引擎](../autoco/)**，以及 10 种学术前沿方法。每篇均提供机制说明、Mermaid 流程图、可逐步点击的案例与当前参数。
+[建模方法](../methods/)介绍 **9 种策略**：包括 Direct、OR-LLM-Agent、LLMOPT、TriVAL、BIND，面向大规模组合与多目标权衡的 **[AutoCO 智能优化引擎](../autoco/)**，以及 OptiMUS、CoE 和 OptiTree。每篇均提供机制说明、Mermaid 流程图、可逐步点击的案例与当前参数。
 
-[建模库与求解器](../solvers/)按数学结构介绍 **9 个精确建模库**（Pyomo、gurobipy、OR-Tools、CPMpy、PuLP、CVXPY、PySCIPOpt、CasADi、coptpy）、原生接口、后端选择与完整代码。
+[建模库与求解器](../solvers/)按数学结构介绍 **5 个精确建模库**（Pyomo、OR-Tools、CVXPY、PySCIPOpt、CasADi）、原生接口、后端选择与完整代码。
 
 ## 看实际操作，也可以动手尝试
 

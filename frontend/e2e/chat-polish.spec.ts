@@ -19,16 +19,17 @@ test("the agent keeps following after the workspace changes the rendered message
   await input.fill("请计算工厂的生产计划");
   await input.press("Enter");
   await expect(log).toContainText("实际求解结果：13");
-  const panel = page.getByRole("button", { name: "方案面板", exact: true });
-  await expect(panel).toHaveAttribute("aria-pressed", "true");
-  await panel.click();
+  const panel = page.getByRole("complementary", { name: "方案面板", exact: true });
+  const toggle = (open: boolean) => page.getByRole("button", { name: open ? "方案面板" : "收起方案面板", exact: true }).click();
+  await expect(panel).toBeVisible();
+  await toggle(false);
   await input.fill("E2E_POLISH_STREAM：请解释生产计划的资源约束。");
   await input.press("Enter");
   await expect(log).toContainText("流式公式回复已完成。");
   await expect(page.getByRole("button", { name: "发送", exact: true })).toBeVisible();
   for (const open of [true, false, true]) {
-    await panel.click();
-    await expect(panel).toHaveAttribute("aria-pressed", String(open));
+    await toggle(open);
+    await expect(panel).toBeVisible({ visible: open });
     await expect.poll(() => log.evaluate(node => node.scrollHeight - node.scrollTop - node.clientHeight)).toBeLessThan(2);
     await expect(page.getByRole("button", { name: "回到最新消息", exact: true })).toHaveCount(0);
   }
@@ -36,8 +37,8 @@ test("the agent keeps following after the workspace changes the rendered message
   await page.mouse.wheel(0, -await log.evaluate(node => node.scrollHeight / 2));
   await expect(page.getByRole("button", { name: "回到最新消息", exact: true })).toBeVisible();
   for (const open of [false, true]) {
-    await panel.click();
-    await expect(panel).toHaveAttribute("aria-pressed", String(open));
+    await toggle(open);
+    await expect(panel).toBeVisible({ visible: open });
     await expect.poll(() => log.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
     await expect(page.getByRole("button", { name: "回到最新消息", exact: true })).toBeVisible();
   }
@@ -51,16 +52,16 @@ for (const kind of ["optimization", "requirements", "solution_chat"]) {
     let label = "发送给优化助手";
     if (kind === "optimization") await page.goto("/agent");
     else if (kind === "requirements") {
-      await page.goto("/");
+      await page.goto("/model");
       await page.getByRole("button", { name: "通过对话整理需求" }).click();
       label = "发送给需求助手";
     } else {
-      await page.goto("/");
+      await page.goto("/model");
       await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
-      await page.getByRole("button", { name: /^开始建模/ }).click();
+      await page.getByRole("button", { name: /^立即求解/ }).click();
       await page.waitForURL(/\/run\//);
       await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible({ timeout: 60_000 });
-      await page.getByRole("button", { name: "讨论方案", exact: true }).click();
+      await page.getByRole("button", { name: "对话追问", exact: true }).click();
       label = "发送给方案助手";
     }
     await page.getByRole("combobox", { name: "对话模型", exact: true }).click();

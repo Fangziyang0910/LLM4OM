@@ -18,12 +18,12 @@ Attachments map file names to complete text. `build_model(data)` parses inputs a
 
 | Term | Role | Example |
 |---|---|---|
-| Method | Generation, validation, repair, or metaheuristic selection | Direct, Feedback Repair, TriVAL, AutoCO |
+| Method | Generation, validation, repair, or metaheuristic selection | Direct, OR-LLM-Agent, TriVAL, AutoCO |
 | LLM preset | Service and request configuration | Team endpoint and model ID |
-| Library | Native model API for exact solvers (not needed for AutoCO) | Pyomo, CPMpy, CVXPY, gurobipy |
+| Library | Native model API for exact solvers (not needed for AutoCO) | Pyomo, OR-Tools, CVXPY |
 | Engine / Backend | Executes exact math solving or 12-family metaheuristics | HiGHS, CP-SAT, Gurobi, NSGA-II, SA |
 
-One configuration might be “Feedback Repair + team preset + Pyomo + HiGHS.” Run information retains selections and the actual engine.
+One configuration might be “Direct + team preset + Pyomo + HiGHS.” Run information retains selections and the actual engine.
 
 ## Four types of model information
 

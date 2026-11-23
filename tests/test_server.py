@@ -60,6 +60,39 @@ def test_options_list_methods_languages_and_providers(tmp_path: Path, monkeypatc
     assert all('interfaces' not in item and item['solver'] == 'AUTO' for item in options['languages'])
 
 
+def test_workbench_serves_cacheable_negotiated_assets(tmp_path: Path) -> None:
+    import re
+
+    with client(tmp_path) as api:
+        page = api.get("/model")
+        path = re.search(r'src="(/assets/[^"]+\.js)"', page.text)[1]
+        plain = api.get(path, headers={"Accept-Encoding": "gzip;q=0, *;q=1"})
+        zipped = api.get(path, headers={"Accept-Encoding": "gzip"})
+        assert zipped.headers.get("content-encoding") == "gzip"
+        assert "content-encoding" not in plain.headers and plain.content == zipped.content
+        assert int(zipped.headers["content-length"]) < len(plain.content)
+        assert zipped.headers["content-type"] == plain.headers["content-type"]
+        assert zipped.headers["etag"] != plain.headers["etag"]
+        for response in (zipped, plain):
+            assert "immutable" in response.headers["cache-control"]
+            assert "accept-encoding" in response.headers["vary"].lower()
+        cached = api.get(path, headers={"If-None-Match": zipped.headers["etag"], "Accept-Encoding": "gzip"})
+        assert cached.status_code == 304 and not cached.content
+        assert "immutable" in cached.headers["cache-control"] and "accept-encoding" in cached.headers["vary"].lower()
+        assert api.head(path, headers={"Accept-Encoding": "gzip"}).headers["content-length"] == zipped.headers["content-length"]
+        assert page.headers["cache-control"] == "no-cache"
+        shell = api.get("/model", headers={"If-None-Match": page.headers["etag"]})
+        assert shell.status_code == 304 and not shell.content and shell.headers["cache-control"] == "no-cache"
+        assert api.head("/").headers["etag"] == page.headers["etag"]
+        for rejected in ("gzip;q=0, identity;q=0", "*;q=0"):
+            assert api.get(path, headers={"Accept-Encoding": rejected}).status_code == 406
+        byte_ranges = "bytes=0-1,12-15"
+        partial = api.get(path, headers={"Accept-Encoding": "identity", "Range": byte_ranges})
+        assert partial.status_code == 206 and b"bytes 12-15" in partial.content
+        complete = api.get(path, headers={"Accept-Encoding": "gzip, identity;q=0", "Range": byte_ranges})
+        assert complete.status_code == 200 and complete.content == plain.content
+
+
 def test_presets_never_return_their_keys_and_cannot_be_changed(tmp_path: Path) -> None:
     with client(tmp_path) as api:
         add_preset(api)

@@ -4,7 +4,7 @@ Run settings select the modeling workflow, code library, computation engine and 
 
 | Setting | Role | Production example |
 |---|---|---|
-| Method | Generation, validation and revision workflow | Feedback Repair |
+| Method | Generation, validation and revision workflow | Direct |
 | Modeling library | Native model expressed in code | Pyomo |
 | Backend | Computation engine | highs or AUTO |
 | LLM preset | Service used for generation and checking | Saved team preset |
@@ -22,7 +22,7 @@ flowchart TB
   Preset --> Start["Start and save configuration"]
 ```
 
-For production/transport LP/MILP, start with compatible Pyomo or PuLP backends. Inspect CPMpy/OR-Tools for scheduling and logic, CVXPY for convex quadratic structure, and CasADi for smooth nonlinear models. See [solver selection](../solvers/).
+For production/transport LP/MILP, start with compatible Pyomo backends. Inspect OR-Tools for scheduling and logic, CVXPY for convex quadratic structure, and CasADi for smooth nonlinear models. See [solver selection](../solvers/).
 
 ## Three configurations to try
 
@@ -33,9 +33,9 @@ For production/transport LP/MILP, start with compatible Pyomo or PuLP backends. 
 | Multi-objective or large combinatorial task | [AutoCO](../autoco/) | Built-in 12-family metaheuristic pool | KG algorithm selection, pilot trials and Pareto front |
 | Large JSON/CSV | BIND | Pyomo or another compatible library / AUTO | Schema and data-reading code |
 
-![Settings panel showing the 4 core strategies, 10 additional research methods, LLM presets and solver backends](../../../assets/screens/live/compare-light.png)
+![Settings panel showing modeling strategies, LLM presets and solver backends](../../../assets/screens/live/compare-light.png)
 
-The settings modal places the **4 core strategies** (Direct, Feedback Repair, TriVAL, AutoCO) upfront, with the remaining 10 research methods expandable on demand. Each method article lists current preset parameters, which are saved with every run.
+The settings modal places the **6 primary strategies** (Direct, OR-LLM-Agent, LLMOPT, TriVAL, BIND, AutoCO) upfront, with the remaining 3 research methods expandable on demand. Each method article lists current preset parameters, which are saved with every run.
 
 ## Start and follow progress
 

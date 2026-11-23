@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDefaultLayout } from "react-resizable-panels";
 import type { Message } from "@langchain/langgraph-sdk";
@@ -13,23 +13,24 @@ import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Toggle } from "@/components/ui/toggle";
 import { ChatInput } from "@/features/chat/ChatInput";
-import { ChatMessages, ThreadLoadError, type ChatProgress, type ModelingEvent, type ModelingTask } from "@/features/chat/Messages";
+import type { ChatProgress, ModelingEvent, ModelingTask } from "@/features/chat/Messages";
+import { inputFingerprint } from "@/features/chat/inputFingerprint";
 import { useChatModel, useConversation } from "@/features/chat/conversation";
 import { useChatScroll } from "@/features/chat/scroll";
 import { DATA_FILE_ACCEPT, readDataFiles } from "@/features/composer/files";
 import { DataEditor } from "@/features/composer/DataEditor";
-import { Outputs, type Tab } from "@/features/runs/Outputs";
-import { Timeline } from "@/features/runs/Timeline";
-import { phases } from "@/features/runs/steps";
 import { saveThreadValues } from "@/features/runs/api";
 import { client } from "@/features/runs/sdk";
-import type { OptimizationMeta, Plan, RunValues, SourceRun, Usage } from "@/features/runs/types";
+import type { OptimizationMeta, Plan, SourceRun, Usage } from "@/features/runs/types";
 import { sameSource, sourceKey } from "@/features/runs/types";
 import type { BackendCatalog, Options, Preset } from "@/types";
 import { errorText } from "@/format";
 import { locale, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 
+const ChatMessages = lazy(() => import("@/features/chat/Messages").then(module => ({ default: module.ChatMessages })));
+const ThreadLoadError = lazy(() => import("@/features/chat/Messages").then(module => ({ default: module.ThreadLoadError })));
+const LiveWorkspace = lazy(() => import("./LiveWorkspace"));
 const CORE_METHODS = new Set(["direct", "or_llm_agent", "llmopt", "trival", "bind", "autoco"]);
 
 type Values = { messages?: Message[]; description?: string; data?: Record<string, string>; source?: SourceRun;
@@ -120,7 +121,7 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
   const catalog = useQuery({
     queryKey: ["backends"],
     queryFn: () => api<BackendCatalog>("/api/backends"),
-    enabled: settings || chosenLanguage !== "auto",
+    enabled: settings && chosenLanguage !== "auto",
     staleTime: Infinity,
     retry: false,
   });
@@ -161,7 +162,7 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
       pendingRun = sessionStorage.getItem(`llm4om-agent-run-${threadId}`);
       if (pendingRun) sessionStorage.removeItem(`llm4om-agent-run-${threadId}`);
     } catch { /* storage may be unavailable */ }
-    void client.runs.list(threadId, { limit: 1 }).then(runs => {
+    void client.runs.list(threadId, { limit: 1, select: ["run_id", "status"] }).then(runs => {
       if (disposed) return;
       const active = runs[0];
       if (active && (active.status === "pending" || active.status === "running")) return reconnect.current(active.run_id);
@@ -177,7 +178,7 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
     if (busy || dataPending || (!retry && !input.trim())) return;
     if (!preset) { toast.error(t("请先配置可用的 AI 模型。")); openPresets(); return; }
     followLatest(); setViewed(undefined); setLiveTask(undefined); setProgress(undefined); setTasks({});
-    const context = { preset: preset.id, locale, search: searching && canSearch, thinking: thinkingMode,
+    const context = { input_fingerprint: inputFingerprint(data), preset: preset.id, locale, search: searching && canSearch, thinking: thinkingMode,
       method: chosenMethod === "auto" ? null : chosenMethod,
       language: chosenLanguage === "auto" ? null : chosenLanguage,
       solver: chosenSolver === "AUTO" ? null : chosenSolver };
@@ -187,7 +188,7 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
       const created = await conversation.startThread({ context, metadata: { ...metadata, kind: "optimization",
         title: input.trim().split("\n")[0].slice(0, 120) }, values: { data } });
       if (created && mounted.current) { onThread(created); onFinished(); }
-    } else await conversation.send({ retry, context, values: { data }, metadata });
+    } else await conversation.send({ retry, context, metadata });
   };
   const stop = async () => { if (await conversation.stop()) { setLiveTask(undefined); onFinished(); } };
   const saveData = async (next: Record<string, string>) => {
@@ -225,11 +226,11 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
     <div className={cn("relative flex min-h-0 flex-col", !empty && "flex-1")}>
       <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className={cn("min-h-0 chat-scroll overflow-y-auto overscroll-contain px-4 md:px-8", empty ? "max-h-[60vh]" : "flex-1")}>
         <div ref={content} className="grid min-h-full grid-cols-1">
-          {messages.length || failure ? <ChatMessages messages={messages} loading={conversation.loading} label={t("优化助手")}
+          {messages.length || failure ? <Suspense fallback={<Spinner />}><ChatMessages messages={messages} loading={conversation.loading} label={t("优化助手")}
             failure={failure} disabled={busy || dataPending} onRetry={() => void submit(true)} progress={progress} tasks={tasks}
             activeTaskId={desktop && workspace ? liveTask : undefined}
             onShowTask={id => { setLiveTask(id); setWorkspace(true); setPane("workspace"); }}
-            onOpenPlan={source => { setViewed(source); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} />
+            onOpenPlan={source => { setViewed(source); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} /></Suspense>
             : <div className="animate-fade-up mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-6 py-6">
               <div className="space-y-1.5 text-center">
                 <h2 className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]">{t("想优化什么问题？")}</h2>
@@ -383,7 +384,7 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
       <Badge variant="outline">{t("正在查看历史方案")}</Badge>
       <Button variant="link" size="xs" className="h-auto p-0" onClick={() => setViewed(undefined)}>{t("返回当前讨论方案")}</Button>
     </div> : null}
-    <div className="min-h-0 flex-1">{task ? <LiveWorkspace key={liveTask} task={task} data={data} options={options} /> : shown ? renderRun(shown)
+    <div className="min-h-0 flex-1">{task ? <Suspense fallback={<Spinner />}><LiveWorkspace key={liveTask} task={task} data={data} options={options} /></Suspense> : shown ? renderRun(shown)
       : <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">{t("开始求解后，最优决策方案、数学模型与计算代码将实时呈现在这里。")}</div>}</div>
   </aside> : null;
 
@@ -401,40 +402,5 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
     </ResizablePanelGroup> : <div className="grid min-h-0 flex-1 grid-cols-1">{chat}{workbench}</div>}
     {editing && data[editing] != null ? <DataEditor key={editing} name={editing} content={data[editing]} onClose={() => setEditing(undefined)}
       onSave={content => saveData({ ...data, [editing]: content })} /> : null}
-  </div>;
-}
-
-function LiveWorkspace({ task, data, options }: { task: ModelingTask; data: Record<string, string>; options: Options }) {
-  const [view, setView] = useState<"steps" | "outputs">("steps");
-  const [tab, setTab] = useState<Tab>("formulation");
-  const [picked, setPicked] = useState<Partial<Record<"formulation" | "code", string>>>({});
-  const values: RunValues = { data, ...Object.assign({}, ...task.steps.filter(step => step.type === "artifact").map(step => ({
-    ...(step.formulation ? { formulation: step.formulation } : {}), ...(step.code ? { code: step.code } : {}),
-  }))) };
-  const all = phases(task.steps);
-  const currentTitle = all.at(-1)?.step?.title;
-  return <div className="flex h-full min-h-0 flex-col">
-    <div className="flex shrink-0 items-center gap-2 border-b bg-primary/5 px-3.5 py-2 text-xs">
-      <Spinner className="size-3.5 text-primary" />
-      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-        {currentTitle ? t("正在执行：{step}…", { step: t(currentTitle) }) : t("正在准备求解流程…")}
-      </span>
-      <div className="flex shrink-0 rounded-lg border bg-background p-0.5">
-        <button type="button" onClick={() => setView("steps")}
-          className={cn("rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors", view === "steps" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
-          {t("求解步骤")}
-        </button>
-        <button type="button" onClick={() => setView("outputs")}
-          className={cn("rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors", view === "outputs" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
-          {t("模型与代码")}
-        </button>
-      </div>
-    </div>
-    <div className="min-h-0 flex-1">
-      {view === "steps" ? <Timeline steps={task.steps} live={{}} active hideHeader onShow={(key, id) => { setPicked(current => ({ ...current, [key]: id })); setTab(key); setView("outputs"); }} />
-        : <Outputs values={values} steps={task.steps} active tab={tab} setTab={setTab} picked={picked}
-          setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))}
-          language={options.languages.find(item => item.id === task.language)} finished={false} onAdjust={() => undefined} />}
-    </div>
   </div>;
 }

@@ -100,7 +100,7 @@ export function PresetsDialog({ onClose, presets, dailyTokens, providers, onChan
           <span className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary"><Cpu className="size-4" /></span>
           {t("AI 模型设置")}
         </DialogTitle>
-        <DialogDescription>{t("选择或接入用于智能对话与优化建模的 AI 模型，密钥仅加密保存在服务端。")}</DialogDescription>
+        <DialogDescription>{t("选择或接入用于智能对话与优化建模的 AI 模型，密钥仅保存在服务端。")}</DialogDescription>
       </DialogHeader>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <nav aria-label={t("预设列表")} className="flex min-h-0 shrink-0 gap-1.5 overflow-auto border-b bg-muted/15 p-2.5 md:w-56 md:flex-col md:border-r md:border-b-0">

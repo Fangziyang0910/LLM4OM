@@ -50,11 +50,18 @@ class ExampleTranslations:
         source_hash = hashlib.sha256(original.encode("utf-8")).hexdigest()
         key = hashlib.sha256(f"v2\0{locale}\0{source_hash}\0{INSTRUCTIONS}".encode("utf-8")).hexdigest()
         path = self.directory / (key + ".json")
-        async with self._lock:
+        response = {"original": original, "source_hash": source_hash, "locale": locale}
+
+        async def cached() -> dict[str, Any] | None:
             saved = await asyncio.to_thread(self._read, path, locale, source_hash)
-            if saved is not None:
-                return {"original": original, "translation": saved["translation"], "source_hash": source_hash,
-                        "locale": locale, "cached": True}
+            return {**response, "translation": saved["translation"], "cached": True} if saved else None
+
+        if hit := await cached():
+            return hit
+        async with self._lock:
+            # Another request may have paid for this same translation while we waited.
+            if hit := await cached():
+                return hit
             preset = await asyncio.to_thread(self.presets.find)
             if self.budget:
                 self.budget.charge(preset.id)
@@ -75,5 +82,4 @@ class ExampleTranslations:
                 raise TranslationError("The translation was empty. Please retry.")
             saved = {"version": 2, "source_hash": source_hash, "locale": locale, "translation": translated}
             await asyncio.to_thread(write_private_json, path, saved)
-            return {"original": original, "translation": translated, "source_hash": source_hash,
-                    "locale": locale, "cached": False}
+            return {**response, "translation": translated, "cached": False}

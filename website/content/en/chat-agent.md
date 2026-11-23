@@ -2,7 +2,7 @@ Chat Agent is the default workbench homepage (`/`). Describe an optimization pro
 
 ## Send the first message
 
-Just type your problem and press Enter. By default, **Auto** mode sends tractable exact problems to exact solvers and routes multi-objective trade-offs, large combinatorial tasks, or metaheuristic requests to [AutoCO](../autoco/). Whenever you want manual control, click the strategy button in the composer to pin any of the 14 methods, modeling libraries, or solver backends.
+Just type your problem and press Enter. By default, **Auto** mode sends tractable exact problems to exact solvers and routes multi-objective trade-offs, large combinatorial tasks, or metaheuristic requests to [AutoCO](../autoco/). Whenever you want manual control, click the strategy button in the composer to pin any of the 9 methods, modeling libraries, or solver backends.
 
 ```text
 Plan next week's store staffing. Each day needs at least 3 people.

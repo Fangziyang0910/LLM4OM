@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Run } from "@langchain/langgraph-sdk";
 import { client } from "@/features/runs/sdk";
-import { runMeta } from "@/features/runs/api";
+import { runMeta, threadHeader } from "@/features/runs/api";
 import { errorText } from "@/format";
 import { t } from "@/i18n";
 import type { RunMeta, RunValues, SourceRun, Step } from "@/features/runs/types";
@@ -10,7 +10,7 @@ import type { RunMeta, RunValues, SourceRun, Step } from "@/features/runs/types"
 export type Live = Record<string, { text: string; reasoning: string }>;
 export type RunData = {
   meta: RunMeta | null; values: RunValues; steps: Step[]; live: Live;
-  run: Run | null; streaming: boolean; error: string | null;
+  run: Pick<Run, "run_id" | "status"> | null; streaming: boolean; error: string | null;
 };
 
 const EMPTY: RunData = { meta: null, values: {}, steps: [], live: {}, run: null, streaming: false, error: null };
@@ -33,8 +33,8 @@ export function useRun(run: string | SourceRun, onFinished: () => void, refresh 
         try {
           // Thread metadata names the run and joins it to a comparison; the plan's values come from the checkpoint.
           const [thread, state] = await Promise.all([
-            client.threads.get<RunValues>(threadId),
-            client.threads.getState<RunValues>(threadId, checkpointId),
+            threadHeader(client, threadId, controller.signal),
+            client.threads.getState<RunValues>(threadId, checkpointId, { signal: controller.signal }),
           ]);
           if (controller.signal.aborted) return;
           const values = (state.values ?? {}) as RunValues;
@@ -65,7 +65,9 @@ export function useRun(run: string | SourceRun, onFinished: () => void, refresh 
     };
 
     const load = async () => {
-      const [thread, runs] = await Promise.all([client.threads.get<RunValues>(threadId), client.runs.list(threadId, { limit: 1 })]);
+      const { signal } = controller;
+      const [thread, runs] = await Promise.all([client.threads.get<RunValues>(threadId, { signal }),
+        client.runs.list(threadId, { limit: 1, select: ["run_id", "status"], signal })]);
       const latestRun = runs[0] ?? null;
       const saved = latestRun && latestRun.status !== "success" ? await client.store.getItem(["llm4om", "progress"], threadId,
         { signal: controller.signal }) : null;
@@ -87,7 +89,7 @@ export function useRun(run: string | SourceRun, onFinished: () => void, refresh 
       if (!inputRead) {
         // The thread's values follow the run only when it ends; its latest checkpoint has the input from the first step on.
         inputRead = true;
-        void client.threads.getState<RunValues>(threadId).then(state => {
+        void client.threads.getState<RunValues>(threadId, undefined, { signal: controller.signal }).then(state => {
           if (!controller.signal.aborted) setData(current => ({ ...current,
             values: { ...(state.values as RunValues ?? {}), ...current.values } }));
         }).catch(() => undefined);
@@ -105,7 +107,9 @@ export function useRun(run: string | SourceRun, onFinished: () => void, refresh 
         const before = live[id] ?? { text: "", reasoning: "" };
         live = { ...live, [id]: { text: before.text + text, reasoning: before.reasoning + reasoning } };
       }
-      setData(current => ({ ...current, steps: [...steps.values()], live }));
+      const nextSteps = event.step ? [...steps.values()] : null;
+      const nextLive = live;
+      setData(current => ({ ...current, steps: nextSteps ?? current.steps, live: nextLive }));
     };
     const replay = async (active: Run, resetSteps = false) => {
       const resetFlag = { pending: resetSteps };

@@ -38,9 +38,9 @@ Constraint confidence uses five-point judgments with bounded retries. Low-confid
 
 ## How its repair differs
 
-Execution debugging treats optimality as success and also preserves explicitly local optimality from compatible backends. Infeasible and unbounded models can therefore enter debugging. [Feedback Repair](../feedback-repair/) instead permits a reviewed, genuinely infeasible model to end normally.
+Execution debugging treats optimality as success and also preserves explicitly local optimality from compatible backends. Infeasible and unbounded models can therefore enter debugging.
 
-When infeasibility is plausible, check whether debugging changes a hard requirement. For checking code against individual constraint meanings, see [SAC-Opt](../sac-opt/).
+When infeasibility is plausible, check whether debugging changes a hard requirement.
 
 ## Scope and reading a run
 

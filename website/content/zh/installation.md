@@ -20,7 +20,7 @@ llm4om build-worker
 npx skills add https://github.com/Fangziyang0910/LLM4OM/tree/v0.43.0/skills/llm4om --skill llm4om -g -a codex -a claude-code
 ```
 
-运行 `llm4om --version` 确认显示 `LLM4OM 0.43.0`，运行 `llm4om backends` 检查求解镜像。安装后新开宿主会话，在 Codex 中输入 `$llm4om`，或在 Claude Code 中输入 `/llm4om`。发送[快速开始](../quickstart/)的生产题，可指定 Feedback Repair 和 Pyomo；该例应得到 A=3、B=2、利润=13。
+运行 `llm4om --version` 确认显示 `LLM4OM 0.43.0`，运行 `llm4om backends` 检查求解镜像。安装后新开宿主会话，在 Codex 中输入 `$llm4om`，或在 Claude Code 中输入 `/llm4om`。发送[快速开始](../quickstart/)的生产题，可指定 Direct 和 Pyomo；该例应得到 A=3、B=2、利润=13。
 
 宿主当前模型负责理解、建模、写代码和解释实际结果。CLI 保留方法阶段，在本机执行工具与求解。不需要配置 `.env`、平台预设模型或 Web 服务。`npx` 安装技能文件，CLI 与 Docker 仍需分别准备。
 

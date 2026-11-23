@@ -52,8 +52,9 @@ try {
   try { previous = JSON.parse(await fs.readFile(path.join(output, "manifest.json"), "utf8")); } catch (error) { if (error.code !== "ENOENT") throw error; }
   const manifest = {};
   let rendered = 0;
+  const { articles } = JSON.parse(await fs.readFile(path.join(directory, "docs-manifest.json"), "utf8"));
   for (const locale of ["zh", "en"]) {
-    for (const name of (await fs.readdir(path.join(directory, "content", locale))).filter(file => file.endsWith(".md")).sort()) {
+    for (const name of articles.map(article => article.id + ".md").sort()) {
       const markdown = await fs.readFile(path.join(directory, "content", locale, name), "utf8");
       let number = 0;
       for (const match of markdown.matchAll(/^```mermaid\n([\s\S]*?)^```/gm)) {

@@ -54,6 +54,6 @@ flowchart TB
 
 ## 与其他方法及原始实现的关系
 
-[Feedback Repair](../feedback-repair/) 在求解后整体复核；TriVAL 把检查前移并分层。[SAC-Opt](../sac-opt/) 聚焦约束代码的回译一致性，检查粒度不同。
+TriVAL 分层核对需求、公式和代码。可与 [Direct](../direct/) 在同一题目上的执行过程对照。
 
 平台移植 [SCUT-EIPI/TriVAL 的固定实现](https://github.com/SCUT-EIPI/TriVAL/tree/380a529)，保留图、节点、提示和循环，接入平台 LLM 与沙箱，并增加输入映射和未解决验证的退出报告。

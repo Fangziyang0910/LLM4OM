@@ -184,6 +184,15 @@ for (const [index, locale] of ["zh", "en"].entries()) {
     searchDocument.querySelectorAll("p,h2,h3,li,td,th,pre,summary,output,label").forEach(node => node.append(" "));
     search.push({ id: article.id, title: title(article), description: summary(article), group: title(group), text: searchDocument.body.textContent.replace(/\s+/g, " ").trim(), headings });
   }
+  const retired = { methods: ["feedback-repair", "orthought", "autoformulation", "sac-opt", "optimind"], solvers: ["gurobipy", "cpmpy", "pulp", "coptpy"] };
+  for (const [catalog, oldPages] of Object.entries(retired)) {
+    const label = title(articles.find(article => article.id === catalog));
+    for (const id of oldPages) {
+      const folder = path.join(output, locale, id);
+      await fs.mkdir(folder, { recursive: true });
+      await fs.writeFile(path.join(folder, "index.html"), `<!doctype html><html lang="${locale}"><meta charset="utf-8"><title>${escape(label)}</title><meta http-equiv="refresh" content="0; url=../${catalog}/"><a href="../${catalog}/">${escape(label)}</a></html>\n`);
+    }
+  }
   await fs.writeFile(path.join(output, `search-${locale}.json`), JSON.stringify(search) + "\n");
 }
 await fs.writeFile(path.join(output, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");

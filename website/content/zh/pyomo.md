@@ -55,4 +55,4 @@ production
 
 ## 选型与资料
 
-规则适合代数与索引表达、希望保持数学结构清楚时，可从 Pyomo 开始。纯线性小模型也可用 [PuLP](../pulp/)；逻辑和全局约束较多时查看 [CPMpy](../cpmpy/)；光滑非线性可比较 [CasADi](../casadi/)。接口细节见 [Pyomo 官方建模文档](https://pyomo.readthedocs.io/en/stable/explanation/modeling/index.html)。
+规则适合代数与索引表达、希望保持数学结构清楚时，可从 Pyomo 开始。逻辑和全局约束较多时查看 [OR-Tools](../ortools/)；光滑非线性可比较 [CasADi](../casadi/)。接口细节见 [Pyomo 官方建模文档](https://pyomo.readthedocs.io/en/stable/explanation/modeling/index.html)。

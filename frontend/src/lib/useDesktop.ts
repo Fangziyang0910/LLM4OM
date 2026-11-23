@@ -1,17 +1,10 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 
-const DESKTOP = "(min-width: 1024px)";
-
-function subscribe(change: () => void) {
-  const query = matchMedia(DESKTOP);
-  query.addEventListener("change", change);
-  return () => query.removeEventListener("change", change);
-}
-
-function getSnapshot() {
-  return matchMedia(DESKTOP).matches;
-}
-
-export function useDesktop(): boolean {
-  return useSyncExternalStore(subscribe, getSnapshot);
+export function useDesktop(minWidth = "1024px"): boolean {
+  const query = useMemo(() => matchMedia(`(min-width: ${minWidth})`), [minWidth]);
+  const subscribe = useCallback((change: () => void) => {
+    query.addEventListener("change", change);
+    return () => query.removeEventListener("change", change);
+  }, [query]);
+  return useSyncExternalStore(subscribe, () => query.matches);
 }

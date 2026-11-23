@@ -1,5 +1,6 @@
 """Example translations preserve their source and reuse paid results across app instances."""
 
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -12,6 +13,7 @@ from langchain_core.messages import AIMessage
 from llm4om.budget import TokenBudget
 from llm4om.llm_presets import LLMPresetStore
 from llm4om.server.app import create_app
+from llm4om.server.translations import ExampleTranslations
 from tests.conftest import LLM
 
 SOURCE = "Ship 10 whole packages from A to B at $2 each. Minimize cost."
@@ -61,6 +63,34 @@ def test_translation_preserves_source_and_reuses_cache_after_restart(setup: Any)
     assert LLM.api_key not in str(messages) + str(first.json()) + str(cached.json())
     cache_files = list((setup.path / ".private" / "translations").glob("*.json"))
     assert cache_files and all(LLM.api_key not in path.read_text(encoding="utf-8") for path in cache_files)
+
+
+def test_cached_translations_read_through_an_unrelated_paid_call(setup: Any) -> None:
+    async def check() -> None:
+        translations = ExampleTranslations(setup.store, setup.budget)
+        setup.budget.daily_limit = 0
+        await translations.translate(SOURCE, "zh")
+        started, finish = asyncio.Event(), asyncio.Event()
+
+        async def slow_reply(_: Any) -> AIMessage:
+            started.set()
+            await finish.wait()
+            return reply("第二题")
+
+        setup.invoke.side_effect = slow_reply
+        slow = asyncio.create_task(translations.translate("another case", "zh"))
+        await asyncio.wait_for(started.wait(), 2)
+        duplicate = asyncio.create_task(translations.translate("another case", "zh"))
+        try:
+            hit = await asyncio.wait_for(translations.translate(SOURCE, "zh"), 1)
+            assert hit["cached"] and hit["translation"] == TRANSLATION
+        finally:
+            finish.set()
+            first, second = await asyncio.gather(slow, duplicate)
+        assert not first["cached"] and second["cached"]
+        assert setup.invoke.await_count == 2 and setup.budget.used() == {setup.preset.id: 30}
+
+    asyncio.run(check())
 
 
 def test_empty_translation_is_not_cached_but_accounts_for_the_call(setup: Any) -> None:

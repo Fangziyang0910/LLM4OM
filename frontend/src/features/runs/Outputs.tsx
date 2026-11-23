@@ -67,12 +67,7 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
         {values.infeasibility ? <Infeasibility explanation={values.infeasibility} onAdjust={active ? undefined : onAdjust} /> : null}
         {values.explanation_error ? <Alert><AlertDescription>{t("通俗解读暂未生成，您仍可直接查看下方详细决策数值。")}</AlertDescription></Alert> : null}
         {values.explanation && values.solve.pareto?.solutions.length ? <ParetoFront pareto={values.solve.pareto} /> : null}
-        {values.explanation ? <details className="group/vars rounded-2xl border border-border/80 bg-card p-4 shadow-2xs">
-          <summary className="flex cursor-pointer items-center justify-between text-sm font-medium">
-            <span>{t("查看全部决策变量明细（共 {count} 项）", { count: Object.keys(values.solve.variables).length })}</span>
-          </summary>
-          <div className="mt-4 border-t border-border/60 pt-4"><Solution solve={values.solve} showPareto={false} /></div>
-        </details> : <Solution solve={values.solve} />}
+        {values.explanation ? <VariableDetails solve={values.solve} /> : <Solution solve={values.solve} />}
       </div>
         : <Blank icon={Sparkles} text={active ? t("正在计算最优方案，求解完成后将展示在这里…") : values.failure ? t("本次求解未能生成方案。") : finished ? t("暂无求解结果。") : t("求解尚未完成。")} />
         : null}
@@ -88,6 +83,18 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
       {tab === "comparison" && source ? <ScenarioComparison source={source} values={values} active={active} /> : null}
     </TabsContent>
   </Tabs>;
+}
+
+function VariableDetails({ solve }: { solve: NonNullable<RunValues["solve"]> }) {
+  const [visited, setVisited] = useState(false);
+  const count = useMemo(() => Object.keys(solve.variables).length, [solve.variables]);
+  return <details className="group/vars rounded-2xl border border-border/80 bg-card p-4 shadow-2xs"
+    onToggle={event => { if (event.currentTarget.open) setVisited(true); }}>
+    <summary className="flex cursor-pointer items-center justify-between text-sm font-medium">
+      <span>{t("查看全部决策变量明细（共 {count} 项）", { count })}</span>
+    </summary>
+    {visited ? <div className="mt-4 border-t border-border/60 pt-4"><Solution solve={solve} showPareto={false} /></div> : null}
+  </details>;
 }
 
 function Blank({ icon: BlankIcon, text }: { icon: LucideIcon; text: string }) {

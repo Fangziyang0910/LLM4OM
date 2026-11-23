@@ -4,7 +4,7 @@
 
 | 设置 | 作用 | 一个生产计划配置 |
 |---|---|---|
-| 建模方法 | 如何生成、验证和修订模型 | Feedback Repair |
+| 建模方法 | 如何生成、验证和修订模型 | Direct |
 | 建模库 | 代码中的原生模型表达 | Pyomo |
 | 求解后端 | 实际计算引擎 | highs 或 AUTO |
 | 预设模型 | 生成与检查使用的模型服务 | 团队已保存预设 |
@@ -22,7 +22,7 @@ flowchart TB
   Preset --> Start["开始建模并保存配置"]
 ```
 
-生产、运输等 LP/MILP 可从 Pyomo 或 PuLP 的兼容后端开始；排班与逻辑可查看 CPMpy、OR-Tools；凸二次可查看 CVXPY；光滑非线性可查看 CasADi。详细组合见[求解器指南](../solvers/)。
+生产、运输等 LP/MILP 可从 Pyomo 的兼容后端开始；排班与逻辑可查看 OR-Tools；凸二次可查看 CVXPY；光滑非线性可查看 CasADi。详细组合见[求解器指南](../solvers/)。
 
 ## 三个可直接尝试的配置
 
@@ -33,9 +33,9 @@ flowchart TB
 | 多目标权衡或大规模组合调度 | [AutoCO](../autoco/) | 内置 12 类智能优化算法池 | 知识图谱选型、预试验与 Pareto 前沿 |
 | 使用大份 JSON/CSV | BIND | Pyomo 等兼容库 / AUTO | schema 和数据读取代码 |
 
-![14 种建模策略、AI 模型与求解引擎设置面板](../../../assets/screens/live/compare-light.png)
+![9 种建模策略、AI 模型与求解引擎设置面板](../../../assets/screens/live/compare-light.png)
 
-面板顶部优先展示 **4 大核心策略**（Direct、Feedback Repair、TriVAL、AutoCO），点开「更多学术方法」即可按需选用全部 14 种策略。每种方法的当前参数在其文章末尾列出，并随运行保存。
+面板顶部优先展示 **6 种常用策略**（Direct、OR-LLM-Agent、LLMOPT、TriVAL、BIND、AutoCO），点开「更多研究方法」即可按需选用全部 9 种策略。每种方法的当前参数在其文章末尾列出，并随运行保存。
 
 ## 启动与查看进度
 

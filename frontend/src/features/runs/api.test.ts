@@ -1,3 +1,4 @@
+import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, expect, test, vi } from "vitest";
 import { createSolutionChat, deleteRun, history, runMeta, startComparison, startRevision, startRun, startScenarios } from "@/features/runs/api";
 import { errorText } from "@/format";
@@ -36,7 +37,7 @@ test("problem provenance is recorded as metadata and never enters modeling input
 });
 
 test("a revision pins the source checkpoint and inherits its recorded choices and files", async () => {
-  threads.get.mockResolvedValue({ status: "idle", metadata: { title: "生产计划", method: "old", language: "old", group: "method-comparison" } } as never);
+  threads.search.mockResolvedValue([{ status: "idle", metadata: { title: "生产计划", method: "old", language: "old", group: "method-comparison" } }] as never);
   threads.getState.mockResolvedValue({ checkpoint: { checkpoint_id: "saved-checkpoint" }, values: {
     description: "原问题", data: { "data.csv": "a,b\n1,2" },
     spec: { method: "llmopt", language: "ortools", solver: "CP_SAT", preset: null,
@@ -53,7 +54,7 @@ test("a revision pins the source checkpoint and inherits its recorded choices an
 });
 
 test("a revision cannot silently replace a deleted model preset", async () => {
-  threads.get.mockResolvedValue({ status: "idle", metadata: { title: "原方案" } } as never);
+  threads.search.mockResolvedValue([{ status: "idle", metadata: { title: "原方案" } }] as never);
   threads.getState.mockResolvedValue({ checkpoint: { checkpoint_id: "saved" }, values: { description: "原问题",
     spec: { method: "direct", language: "pyomo", preset: "deleted", llm: { provider: "deepseek", model: "old" } } } } as never);
   await expect(startRevision("source", "改预算", [])).rejects.toThrow("原预设已删除");
@@ -62,12 +63,11 @@ test("a revision cannot silently replace a deleted model preset", async () => {
 
 test("revisions, scenarios and discussions keep an explicit old checkpoint even during a later run", async () => {
   const source = { thread_id: "source", checkpoint_id: "old-checkpoint" };
-  threads.get.mockResolvedValue({ status: "busy", metadata: { title: "new title", method: "new-method" } } as never);
+  threads.search.mockImplementation(async query => query?.ids ? [{ status: "busy", metadata: { title: "new title", method: "new-method" } }] as never : []);
   threads.getState.mockImplementation(async (_, checkpoint) => ({ checkpoint: { checkpoint_id: checkpoint ?? "new-checkpoint" },
     values: { description: checkpoint ? "old problem" : "new problem", data: { "source.csv": "original data" },
       spec: { method: "direct", language: "pyomo", solver: "highs", preset: null, llm: { provider: "saved", model: "saved" } } },
   }) as never);
-  threads.search.mockResolvedValue([]);
   await startRevision("source", "change", [], source);
   const scenarios = [{ name: "one", instruction: "first change" }, { name: "two", instruction: "second change" }];
   await startScenarios("source", scenarios, [], source);
@@ -82,7 +82,7 @@ test("revisions, scenarios and discussions keep an explicit old checkpoint even 
 });
 
 test("a scenario batch freezes the baseline once and keeps successful starts when a later start is rejected", async () => {
-  threads.get.mockResolvedValue({ status: "idle", metadata: { title: "原方案" } } as never);
+  threads.search.mockResolvedValue([{ status: "idle", metadata: { title: "原方案" } }] as never);
   threads.getState.mockResolvedValue({ checkpoint: { checkpoint_id: "frozen" }, values: { description: "原问题", data: { "costs.csv": "a,b\n1,2" },
     spec: { method: "direct", language: "pyomo", solver: "highs", preset: null, llm: { provider: "deepseek", model: "saved" } } } } as never);
   runs.create.mockResolvedValueOnce({} as never).mockRejectedValueOnce(limited);
@@ -174,7 +174,7 @@ test("idle history uses the latest run for unfinished conversations and unsolved
     { ...base, thread_id: "failed", metadata: { title: "failed" }, extracted: {} },
     { ...base, thread_id: "complete", metadata: { kind: "requirements", title: "complete" }, extracted: { last_message_type: "ai" } },
     { ...base, thread_id: "tool", metadata: { kind: "solution_chat", title: "tool" },
-      extracted: { last_message_type: "ai", last_message_tools: [{ id: "pending-tool" }] } },
+      extracted: { last_message_type: "ai", last_tool: "pending-tool" } },
     { ...base, thread_id: "explaining", metadata: { title: "explaining" }, extracted: { solved: "optimal" } },
     { ...base, thread_id: "queued", status: "busy", metadata: { kind: "optimization", title: "queued" }, extracted: {} },
   ] as never);
@@ -219,4 +219,22 @@ test("blank Markdown headings still yield a visible title and deleted threads do
   runs.list.mockRejectedValueOnce(Object.assign(new Error("not found"), { status: 404 }));
   const page = await history();
   expect(page.entries.map(item => item.id)).toEqual(["ok"]);
+});
+
+test("unchanged idle drafts reuse an empty run lookup and still follow a run started elsewhere", async () => {
+  const cache = new QueryClient();
+  const draft = { thread_id: "draft", updated_at: "first", status: "idle", metadata: { title: "draft", kind: "requirements" } };
+  threads.search.mockResolvedValue([draft] as never);
+  runs.list.mockResolvedValue([]);
+  await history(undefined, 0, cache);
+  await history(undefined, 0, cache);
+  expect(runs.list).toHaveBeenCalledTimes(1);
+  threads.search.mockResolvedValue([{ ...draft, status: "busy" }] as never);
+  runs.list.mockResolvedValue([{ status: "pending" }] as never);
+  expect((await history(undefined, 0, cache)).entries[0].state).toBe("pending");
+  threads.search.mockResolvedValue([{ ...draft, updated_at: "next" }] as never);
+  runs.list.mockResolvedValue([{ status: "interrupted" }] as never);
+  expect((await history(undefined, 0, cache)).entries[0].state).toBe("interrupted");
+  expect(runs.list).toHaveBeenCalledTimes(3);
+  cache.clear();
 });

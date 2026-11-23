@@ -31,6 +31,7 @@ DeepSeek presets can use their own search configuration; other providers use sep
 ```dotenv
 LLM4OM_DAILY_TOKENS=2000000
 LLM4OM_RUNS_PER_HOUR=30
+LLM4OM_RUN_JOBS=4
 LLM4OM_SANDBOX_JOBS=4
 TZ=Asia/Shanghai
 ```
@@ -53,7 +54,7 @@ flowchart TB
   Sandbox --> Work["Solves and check scripts"]
 ```
 
-`serve --jobs` defaults to four active runs, with others queued. Four sandbox slots cover all solves and checks, including parallel AutoFormulation checks. Waiting counts toward run limits. One service process manages each workspace.
+One service process manages each workspace. `LLM4OM_RUN_JOBS` limits active runs, and an explicit `serve --jobs` takes precedence. `LLM4OM_SANDBOX_JOBS` limits concurrent solves and check scripts. Both default to four. Waiting for a sandbox counts toward the run deadline.
 
 ## Back up the workspace
 

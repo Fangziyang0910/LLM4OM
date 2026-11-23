@@ -16,16 +16,16 @@ test("a submitted conversation appears in history while its first reply is runni
   const entry = history.getByRole("button", { name: title, exact: false }).first();
   await expect(entry).toBeVisible({ timeout: 2000 });
   await expect(entry).toHaveAttribute("aria-current", "page");
-  await expect(entry).toContainText("正在规划");
+  await expect(entry).toContainText("正在求解");
   await page.getByRole("button", { name: "停止", exact: true }).click();
   await expect(entry).toContainText("已停止");
   await page.reload();
   await expect(entry).toContainText("已停止");
   await page.getByRole("textbox", { name: "发送给优化助手" }).fill("下一条尚未发送的消息");
   await page.getByRole("button", { name: "重试这一轮", exact: true }).click();
-  await expect(entry).toContainText("正在规划");
+  await expect(entry).toContainText("正在求解");
   await expect(page.getByRole("log")).toContainText("实际求解结果：13", { timeout: 30000 });
-  await expect(entry).not.toContainText("正在规划");
+  await expect(entry).not.toContainText("正在求解");
   await expect(page.getByRole("textbox", { name: "发送给优化助手" })).toHaveValue("下一条尚未发送的消息");
 });
 
@@ -41,7 +41,7 @@ test("a completed conversation remains in history and reopens after navigating a
   const history = page.getByRole("navigation", { name: "运行记录" });
   const entry = history.getByRole("button", { name: title, exact: false }).first();
   await expect(entry).toBeVisible();
-  await page.getByRole("button", { name: "快速求解", exact: true }).click();
+  await page.getByRole("button", { name: "多方案对比", exact: true }).click();
   await entry.click();
   await expect(page).toHaveURL(url);
   await expect(page.getByRole("log")).toContainText(title);
@@ -57,7 +57,7 @@ test("history discovers conversations created elsewhere even when this page has 
   await page.goto("/");
   await loaded;
   const history = page.getByRole("navigation", { name: "运行记录" });
-  await expect(page.getByRole("button", { name: "快速求解", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "多方案对比", exact: true })).toBeVisible();
   const title = "其他页面新建的对话";
   const response = await page.request.post("/threads", { data: {
     metadata: { graph_id: "optimization", kind: "optimization", title } } });
@@ -70,20 +70,23 @@ test("history discovers conversations created elsewhere even when this page has 
 
 test("requirements history follows the first message and keeps an active conversation and draft when reopening", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
+  const data = { "demand.csv": "customer,demand\nA,003\n" };
   const response = await page.request.post("/threads", { data: {
     metadata: { graph_id: "requirements", kind: "requirements", title: "新需求对话", preset: "env" },
-    supersteps: [{ updates: [{ as_node: "discuss", values: { description: "原需求稿", data: {}, messages: [] } }] }] } });
+    supersteps: [{ updates: [{ as_node: "discuss", values: { description: "原需求稿", data, messages: [] } }] }] } });
   expect(response.ok()).toBe(true);
   const id = (await response.json()).thread_id;
   await page.goto(`/chat/${id}`);
   const input = page.getByRole("textbox", { name: "发送给需求助手" });
   const title = "E2E_PAUSE_CHAT 需求历史同步检查";
   await input.fill(title);
+  const submitted = page.waitForRequest(request => request.method() === "POST" && request.url().endsWith("/runs/stream"));
   await input.press("Enter");
+  expect((await submitted).postDataJSON().input).not.toHaveProperty("data");
   const entry = page.getByRole("navigation", { name: "运行记录" }).getByRole("button", { name: title, exact: false }).first();
   await expect(entry).toContainText("正在梳理");
   await input.fill("下一条需求草稿");
-  await page.getByRole("button", { name: "快速求解", exact: true }).click();
+  await page.getByRole("button", { name: "多方案对比", exact: true }).click();
   await entry.click();
   await expect(page).toHaveURL(new RegExp(`/chat/${id}$`));
   await expect(input).toHaveValue("下一条需求草稿");
@@ -92,6 +95,8 @@ test("requirements history follows the first message and keeps an active convers
   await page.reload();
   await expect(input).toHaveValue("下一条需求草稿");
   await expect(page.getByRole("log")).toContainText(title);
+  const saved = await (await page.request.get(`/threads/${id}/state`)).json();
+  expect(saved.values.data).toEqual(data);
 });
 
 test("a failed reply stays in history and retry updates the same conversation without duplicating its question", async ({ page }) => {
@@ -109,7 +114,7 @@ test("a failed reply stays in history and retry updates the same conversation wi
   await expect(entry).toContainText("对话中断");
   await page.getByRole("button", { name: "重试这一轮", exact: true }).click();
   await expect(page.getByRole("log")).toContainText("没有重复求解");
-  await expect(entry).toContainText("对话规划");
+  await expect(entry).toContainText("最优 · 13");
   const thread = await (await page.request.get(`/threads/${id}`)).json();
   expect(thread.values.messages.filter((message: { type: string }) => message.type === "human")).toHaveLength(1);
   expect(thread.values.plans).toHaveLength(1);

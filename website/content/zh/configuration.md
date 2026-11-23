@@ -31,6 +31,7 @@ DeepSeek预设可使用自己的搜索配置；其他模型使用独立搜索密
 ```dotenv
 LLM4OM_DAILY_TOKENS=2000000
 LLM4OM_RUNS_PER_HOUR=30
+LLM4OM_RUN_JOBS=4
 LLM4OM_SANDBOX_JOBS=4
 TZ=Asia/Shanghai
 ```
@@ -53,7 +54,7 @@ flowchart TB
   Sandbox --> Work["求解与检查脚本"]
 ```
 
-`serve --jobs` 默认4，其他运行排队。沙箱并发默认4，覆盖所有运行以及AutoFormulation的并行检查；等待沙箱计入运行时限。每个工作区由一个服务进程管理。
+每个工作区使用一个服务进程。`LLM4OM_RUN_JOBS` 限制同时进行的完整运行，显式传入的 `serve --jobs` 优先。`LLM4OM_SANDBOX_JOBS` 限制同时求解和检查脚本的数量。两项默认均为 4，等待沙箱计入运行时限。
 
 ## 备份完整工作区
 

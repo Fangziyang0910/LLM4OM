@@ -43,7 +43,7 @@ When enabled, reflection is triggered by execution failure. Experts are question
 
 Look for new information: a missing rule, resolved ambiguity, domain issue or objective correction. The final model shows how comments became expressions used in computation.
 
-Use CoE for LP/MILP collaboration workflows and method comparisons. For explicit per-constraint checks see [SAC-Opt](../sac-opt/); for problem-type retrieval see [OptiTree](../optitree/).
+Use CoE for LP/MILP collaboration workflows and method comparisons. For problem-type retrieval see [OptiTree](../optitree/).
 
 ## Source and platform adaptation
 

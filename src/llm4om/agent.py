@@ -36,7 +36,7 @@ from llm4om.graph import Resources, get_resources, run
 from llm4om.languages import LANGUAGES
 from llm4om.llm import LLMSettings
 from llm4om.methods import methods
-from llm4om.problem import problem_text, validate_description
+from llm4om.problem import changed_input_message, input_changed, problem_text, validate_description
 from llm4om.runtime import Recorder
 from llm4om.web_search import search_tool
 
@@ -199,6 +199,7 @@ class AgentContext:
     language: str | None = None
     solver: str | None = None
     thinking: bool | None = None
+    input_fingerprint: str | None = None
 
 
 class AgentPlanState(AgentState):
@@ -410,12 +411,23 @@ def _build_tools_and_middleware(
         values = await session.load(source)
         solved = values.get("solve") or {}
         variables = solved.get("variables") or {}
-        found = {name: value for name, value in variables.items() if query.casefold() in name.casefold()}
+        needle = query.casefold()
+        if needle:
+            page = {}
+            total = 0
+            for name, value in variables.items():
+                if needle in name.casefold():
+                    if offset <= total < offset + 100:
+                        page[name] = value
+                    total += 1
+        else:
+            total = len(variables)
+            page = dict(islice(variables.items(), offset, min(total, offset + 100))) if offset < total else {}
         return {"source": source, "description": values["description"], "configuration": _configuration(values),
                 "formulation": values.get("formulation"), "code": values.get("code"),
                 "status": solved.get("status"), "objective": solved.get("objective"),
-                "variables": dict(islice(found.items(), offset, offset + 100)), "total_matches": len(found),
-                "next_offset": offset + 100 if offset + 100 < len(found) else None,
+                "variables": page, "total_matches": total,
+                "next_offset": offset + 100 if offset + 100 < total else None,
                 "explanation": values.get("explanation"), "infeasibility": values.get("infeasibility"),
                 "failure": values.get("failure")}
 
@@ -512,17 +524,24 @@ def _build_tools_and_middleware(
         parsed = ast.parse(expression, mode="eval")
         if any(isinstance(node, _FORBIDDEN_CALC_NODES) for node in ast.walk(parsed)):
             raise InvalidExpression("Unsupported expression syntax.")
-        uses_plan = any(isinstance(node, ast.Name) and node.id in {"v", "values", "objective"}
-                        for node in ast.walk(parsed))
+        referenced = {node.id for node in ast.walk(parsed) if isinstance(node, ast.Name)}
+        uses_plan = referenced & {"v", "values", "objective"}
         source = (session.selected_source(plan_id, runtime.state["current"])
                   if plan_id or ((uses_plan or query) and runtime.state["current"]) else None)
         values = await session.load(source) if source else {}
         solved = values.get("solve") or {}
         variables = solved.get("variables") or {}
-        matched = {name: value for name, value in variables.items() if query.casefold() in name.casefold()}
-        if query and not matched:
+        needle = query.casefold()
+        names = {"v": variables} if variables else {}
+        if variables and "values" in referenced:
+            selected = ([value for name, value in variables.items() if needle in name.casefold()]
+                        if needle else list(variables.values()))
+            names["values"] = selected
+            matched = len(selected)
+        else:
+            matched = sum(needle in name.casefold() for name in variables) if needle else len(variables)
+        if needle and not matched:
             raise ValueError("No matching decision values. Use lookup_variables to find their exact names.")
-        names = {"v": dict(variables), "values": list(matched.values())} if variables else {}
         if solved.get("objective") is not None:
             names["objective"] = solved["objective"]
         result = simple_eval(expression, names=names, operators=_CALC_OPERATORS,
@@ -532,7 +551,7 @@ def _build_tools_and_middleware(
         if type(result) not in (int, float) or not math.isfinite(result):
             raise ValueError("The expression must return a finite number.")
         facts = {"source": source, "expression": expression, "query": query,
-                 "matched_variables": len(matched), "result": result}
+                 "matched_variables": matched, "result": result}
         return json.dumps(facts, ensure_ascii=False), {"type": "calculation", "calculation": facts}
 
     @tool
@@ -684,6 +703,8 @@ def _conversation_graph(*, optimization: bool) -> Any:
         if not messages or messages[-1].type != "human" or not messages[-1].text.strip():
             raise ValueError("Ask about the plan or describe the changes you want to calculate.")
         choice = runtime.context or AgentContext()
+        if input_changed(choice.input_fingerprint, state.get("data") or {}):
+            return {"failure": changed_input_message(choice.locale)}
         resources = get_resources()
         session = Conversation(state, choice, resources, get_client(url=None), optimization=optimization)
         current = state.get("current") or state.get("source")

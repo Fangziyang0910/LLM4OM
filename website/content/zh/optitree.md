@@ -37,7 +37,7 @@ flowchart TB
 
 ## 使用范围与其他方法
 
-当前范围为 LP/MILP，默认温度 0，最多四次代码检查。它适合研究类型检索怎样影响建模。若主要需要逐项构建，查看 [OptiMUS](../optimus/)；若希望探索多个完整模型候选，查看 [AutoFormulation](../autoformulation/)。
+当前范围为 LP/MILP，默认温度 0，最多四次代码检查。它适合研究类型检索怎样影响建模。若主要需要逐项构建，查看 [OptiMUS](../optimus/)。
 
 ## 来源与平台适配
 

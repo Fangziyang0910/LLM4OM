@@ -68,13 +68,22 @@ test("attachments finish reading and saving before the agent can send, while the
   expect((await (await page.request.get(`/threads/${threadId}`)).json()).values.data).toEqual({
     "delayed.csv": "name,price\nA,003\n", "second.csv": "value\n2\n", "third.csv": "value\n3\n",
   });
+  const followUp = page.waitForRequest(req => req.method() === "POST" && req.url().endsWith("/runs/stream"));
+  await input.press("Enter");
+  expect((await followUp).postDataJSON().input).not.toHaveProperty("data");
+  await expect(page.getByRole("article", { name: "优化助手" })).toHaveCount(2);
+  expect((await (await page.request.get(`/threads/${threadId}/state`)).json()).values.data["third.csv"]).toBe("value\n3\n");
 });
 
 test("the mobile conversation keeps navigation, composer controls and keyboard sending accessible", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
+  let historyReads = 0;
+  page.on("request", req => { if (req.url().endsWith("/threads/search")) historyReads++; });
   await page.goto("/agent");
   await expect(page.getByRole("heading", { name: "想优化什么问题？", exact: true })).toHaveCount(1);
+  expect(historyReads).toBe(0);
   await page.getByRole("button", { name: "打开菜单" }).click();
+  await expect.poll(() => historyReads).toBeGreaterThan(0);
   await expect(page.getByRole("dialog").getByRole("button", { name: "新建优化任务", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   const input = page.getByRole("textbox", { name: "发送给优化助手" });

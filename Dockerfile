@@ -1,17 +1,23 @@
 # The LLM4OM server. It starts sandbox containers (llm4om-worker) through the host's Docker socket; see compose.yaml.
-FROM python:3.12-slim AS build
+FROM python:3.12-slim AS dependencies
 RUN python -m pip install --no-cache-dir uv==0.12.19
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
-COPY pyproject.toml uv.lock README.md LICENSE NOTICE ./
-RUN uv sync --locked --no-dev --extra web --no-install-project
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --extra web --no-install-project
+
+FROM dependencies AS package
+COPY README.md LICENSE NOTICE ./
 COPY src ./src
-RUN uv sync --locked --no-dev --extra web --no-editable
+RUN --mount=type=cache,target=/root/.cache/uv uv build --wheel --out-dir /dist
 
 FROM python:3.12-slim
 # Only the client: `docker run` and `docker kill` for the sandbox.
 COPY --from=docker:29.8.1-cli /usr/local/bin/docker /usr/local/bin/docker
-COPY --from=build /app/.venv /app/.venv
+COPY --from=dependencies /app/.venv /app/.venv
+# Keep the workbench wheel in its own layer so app updates can reuse the locked runtime.
+RUN --mount=from=package,source=/dist,target=/dist \
+    python -m pip --python /app/.venv/bin/python install --no-cache-dir --no-deps --no-index /dist/*.whl
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/llm4om-entrypoint
 # pip is unused at run time; removing it drops its advisories. The entrypoint switches to the llm4om user.
 RUN python -m pip uninstall -y pip && useradd --system --uid 10001 --user-group --home-dir /data --create-home llm4om

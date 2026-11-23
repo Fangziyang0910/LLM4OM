@@ -4,7 +4,7 @@ import { client } from "@/features/runs/sdk";
 import { useRun } from "@/features/runs/useRun";
 
 vi.mock("@/features/runs/sdk", () => ({
-  client: { threads: { get: vi.fn(), getState: vi.fn() }, runs: { list: vi.fn(), joinStream: vi.fn() }, store: { getItem: vi.fn() } },
+  client: { threads: { get: vi.fn(), search: vi.fn(), getState: vi.fn() }, runs: { list: vi.fn(), joinStream: vi.fn() }, store: { getItem: vi.fn() } },
 }));
 
 const threads = vi.mocked(client.threads);
@@ -97,9 +97,12 @@ test("a pinned plan reads its old result while the same thread's latest run stay
     spec: { method: "direct", llm: {} }, steps: [{ id: "saved", type: "artifact", content: "old" }] } } as never);
   runs.list.mockResolvedValue([{ run_id: "latest", status: "success" }] as never);
   const onFinished = vi.fn();
+  threads.search.mockResolvedValue([{ metadata: { title: "plan", method: "latest" } }] as never);
   const pinned = renderHook(() => useRun(source, onFinished));
   await waitFor(() => expect(pinned.result.current.values.solve?.objective).toBe(13));
-  expect(threads.getState).toHaveBeenCalledWith("thread", "old");
+  expect(threads.getState).toHaveBeenCalledWith("thread", "old", { signal: expect.any(AbortSignal) });
+  expect(threads.get).not.toHaveBeenCalled();
+  expect(threads.search).toHaveBeenCalledWith(expect.objectContaining({ ids: ["thread"], select: ["metadata", "status"] }));
   expect(pinned.result.current.values.code).toBe("old code");
   expect(pinned.result.current.meta?.method).toBe("direct");
   expect(pinned.result.current.steps.map(step => step.id)).toEqual(["saved"]);
@@ -117,14 +120,14 @@ test("a pinned plan reads its old result while the same thread's latest run stay
 
 test("switching checkpoints in the same thread ignores the previous checkpoint's late response", async () => {
   let oldResponse!: (value: never) => void;
-  threads.get.mockResolvedValue({ metadata: {} } as never);
+  threads.search.mockResolvedValue([{ metadata: {} }] as never);
   threads.getState.mockImplementation((_, checkpoint) => checkpoint === "old"
     ? new Promise(resolve => { oldResponse = resolve; })
     : Promise.resolve({ values: { solve: { objective: 42 } } } as never));
   const { result, rerender, unmount } = renderHook(({ checkpoint }) =>
     useRun({ thread_id: "thread", checkpoint_id: checkpoint }, vi.fn()), { initialProps: { checkpoint: "old" } });
   rerender({ checkpoint: "other" });
-  await waitFor(() => expect(result.current.values.solve?.objective).toBe(42));
+  await waitFor(() => expect({ value: result.current.values.solve?.objective, error: result.current.error }).toEqual({ value: 42, error: null }));
   oldResponse({ values: { solve: { objective: 13 } } } as never);
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(result.current.values.solve?.objective).toBe(42);
@@ -133,7 +136,7 @@ test("switching checkpoints in the same thread ignores the previous checkpoint's
 });
 
 test("an unavailable checkpoint reports failure instead of falling back to the thread's latest result", async () => {
-  threads.get.mockResolvedValue({ metadata: {}, values: { solve: { objective: 99 } } } as never);
+  threads.search.mockResolvedValue([{ metadata: {} }] as never);
   threads.getState.mockRejectedValue(new Error("Checkpoint not found"));
   const { result, unmount } = renderHook(() => useRun({ thread_id: "thread", checkpoint_id: "missing" }, vi.fn()));
   await waitFor(() => expect(result.current.error).toBe("Checkpoint not found"));

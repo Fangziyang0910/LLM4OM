@@ -49,7 +49,7 @@ Execution errors identify exceptions and stages. Locate file names, fields, indi
 
 ## Method validation and solver results
 
-TriVAL retains semantic, formulation and code validation; SAC-Opt retains per-constraint comparisons; Feedback Repair retains accept/repair reasons. Failure messages identify stages, with artifacts and executions in the process view.
+TriVAL retains semantic, formulation and code validation. Failure messages identify stages, with artifacts and executions in the process view.
 
 Open the relevant stage and compare feedback with its model/code version. Method articles provide stopping conditions, return paths and parameters for following the run.
 

@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { ArrowRight, Factory, GitFork, Truck } from "lucide-react";
+import { ArrowRight, Factory, GitFork, MessageSquareText, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { errorText } from "@/format";
 import { t } from "@/i18n";
 import { ProblemEditor } from "@/features/composer/ProblemEditor";
-import { DRAFT_KEY, type ModelingConfigProps, useRunLauncher } from "@/features/composer/RunSettings";
+import { type ModelingConfigProps, useRunLauncher } from "@/features/composer/RunSettings";
 import { readDataFiles } from "@/features/composer/files";
-import { normalizeTarget } from "@/features/runs/target";
+export { initialDraft } from "./draft";
 import type { Draft } from "@/types";
 
 const STARTERS: {
@@ -52,25 +54,16 @@ const STARTERS: {
   },
 ];
 
-export function initialDraft(): Draft {
-  let saved: Partial<Draft> = {};
-  try { saved = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "{}") ?? {}; } catch { /* storage may be unavailable */ }
-  const target = normalizeTarget(saved.language, saved.solver);
-  return { description: saved.description ?? "", data: saved.data ?? {}, method: saved.method ?? "direct",
-    language: target.language, preset: saved.preset ?? null, solver: target.solver, time_limit: saved.time_limit,
-    origin: saved.origin, comparing: saved.comparing ?? false, methods: saved.methods ?? [], presets: saved.presets ?? [] };
-}
-
 export type ComposerProps = ModelingConfigProps & {
   openExamples: () => void;
   onDiscuss?: () => Promise<void>;
 };
 
-export function Composer({ ...modeling }: ComposerProps) {
+export function Composer({ onDiscuss, ...modeling }: ComposerProps) {
   const { draft, setDraft, options } = modeling;
   const [reading, setReading] = useState(false);
   const set = (change: Partial<Draft>) => setDraft(current => ({ ...current, ...change }));
-  const { settingsTrigger, startButton, settingsDialog } = useRunLauncher({
+  const { busy, setBusy, settingsTrigger, startButton, settingsDialog } = useRunLauncher({
     ...modeling,
     problem: { description: draft.description, data: draft.data, origin: draft.origin },
     reading,
@@ -88,7 +81,14 @@ export function Composer({ ...modeling }: ComposerProps) {
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex min-h-full max-w-5xl flex-col gap-4 p-4 sm:px-6 sm:py-5 lg:h-full">
         <header className="animate-fade-up flex shrink-0 flex-col gap-1">
-          <h1 className="text-lg font-semibold tracking-tight sm:text-xl">{t("多方案对比")}</h1>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h1 className="text-lg font-semibold tracking-tight sm:text-xl">{t("多方案对比")}</h1>
+            {onDiscuss ? <Button type="button" variant="ghost" size="sm" disabled={busy || reading}
+              className="text-xs text-muted-foreground" onClick={async () => {
+                setBusy(true);
+                try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
+              }}><MessageSquareText />{t("通过对话整理需求")}</Button> : null}
+          </div>
           <p className="text-xs text-muted-foreground sm:text-[13px]">{t("同一问题可指定或并排对比多种建模方法、AI 模型与求解器。")}</p>
         </header>
 

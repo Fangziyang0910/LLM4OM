@@ -13,6 +13,7 @@ import sys
 import tempfile
 import uuid
 from dataclasses import dataclass, field, fields
+from itertools import islice
 from pathlib import Path
 from typing import Any
 
@@ -63,10 +64,12 @@ class SolveResult:
             if pairs:
                 lines.append(f"Knee compromise objectives: {pairs}")
         if self.has_solution:
-            nonzero = [(name, value) for name, value in self.variables.items() if value]
-            shown = "\n".join(f"  {name} = {value:g}" for name, value in nonzero[:max_variables])
-            more = f"\n  ... {len(nonzero) - max_variables} more nonzero variables" if len(nonzero) > max_variables else ""
-            lines.append(f"Nonzero variables ({len(nonzero)} of {len(self.variables)}):\n{shown}{more}")
+            count = sum(1 for value in self.variables.values() if value)
+            limit = slice(max_variables).indices(count)[1]
+            nonzero = ((name, value) for name, value in self.variables.items() if value)
+            shown = "\n".join(f"  {name} = {value:g}" for name, value in islice(nonzero, limit))
+            more = f"\n  ... {count - max_variables} more nonzero variables" if count > max_variables else ""
+            lines.append(f"Nonzero variables ({count} of {len(self.variables)}):\n{shown}{more}")
         if self.output.strip():
             lines.append("Printed output:\n" + self.output.strip()[-3000:])
         return "\n".join(lines)

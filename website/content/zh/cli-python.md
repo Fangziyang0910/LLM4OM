@@ -21,7 +21,7 @@ uv run llm4om run --file problem.txt --data production.json --method bind --lang
 | 选项 | 用途 |
 |---|---|
 | `--problem` / `--file` | 直接输入题目或读取文件 |
-| `--method` | 方法ID，如feedback_repair、sac_opt |
+| `--method` | 方法ID，如direct、llmopt |
 | `--language` | 库ID，如pyomo、ortools、cvxpy |
 | `--solver` | 原生后端ID，省略为AUTO |
 | `--workspace` / `--preset` | 预设所在工作区与预设ID |
