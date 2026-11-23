@@ -3,9 +3,9 @@ import { expect, test } from "@playwright/test";
 test("business explanation and a revised plan preserve the original checkpoint", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(String(error)));
-  await page.goto("/");
+  await page.goto("/model");
   await page.getByRole("main").getByRole("button", { name: /^生产计划/ }).click();
-  await page.getByRole("button", { name: /^开始建模/ }).click();
+  await page.getByRole("button", { name: "立即求解", exact: true }).click();
   await page.waitForURL(/\/run\//);
   await page.getByRole("button", { name: "导出 Excel", exact: true }).waitFor({ timeout: 60_000 });
   await expect(page.getByText("方案解读", { exact: true })).toBeVisible();
@@ -20,7 +20,7 @@ test("business explanation and a revised plan preserve the original checkpoint",
   await dialog.getByRole("button", { name: "生成新方案", exact: true }).click();
   await expect(page).not.toHaveURL(new RegExp(`${sourceId}$`));
   await expect(page.getByRole("tab", { name: "方案对比", exact: true })).toHaveAttribute("data-state", "active", { timeout: 60_000 });
-  await expect(page.getByText("目标值差（新 − 原）", { exact: true }).locator("..")).toContainText("-1");
+  await expect(page.getByText("目标值变化量（新 − 原）", { exact: true }).locator("..")).toContainText("-1");
   const child = await (await page.request.get(`/threads/${page.url().split("/").at(-1)}`)).json();
   expect(child.metadata.parent.thread_id).toBe(sourceId);
   expect(child.metadata.parent.checkpoint_id).toBeTruthy();
@@ -38,14 +38,14 @@ test("business explanation and a revised plan preserve the original checkpoint",
   } });
   expect(later.ok()).toBe(true);
   await page.reload();
-  await expect(page.getByText("目标值差（新 − 原）", { exact: true }).locator("..")).toContainText("-1");
-  await page.getByText("查看题面变化", { exact: true }).click();
+  await expect(page.getByText("目标值变化量（新 − 原）", { exact: true }).locator("..")).toContainText("-1");
+  await page.getByText("查看问题描述修改对照", { exact: true }).click();
   await expect(page.getByRole("tabpanel")).toContainText("B 至少生产 3 件");
   for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(viewport);
     expect(await page.getByRole("main").evaluate(main => main.scrollWidth <= main.clientWidth)).toBe(true);
   }
-  await page.getByRole("tab", { name: "解", exact: true }).click();
+  await page.getByRole("tab", { name: "最优方案", exact: true }).click();
   await expect(page.getByText("方案解读", { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });

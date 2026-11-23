@@ -1,6 +1,6 @@
 import { outcome } from "@/format";
 import { locale, t } from "@/i18n";
-import type { Entry, OptimizationMeta, RequirementsMeta, RunMeta, RunSpec, RunValues, SolutionChatMeta, SourceRun, Usage } from "@/features/runs/types";
+import type { Entry, OptimizationMeta, RequirementsMeta, RunMeta, RunSpec, RunValues, SolutionChatMeta, SourceRun, Timing, Usage } from "@/features/runs/types";
 import type { Draft, Preset } from "@/types";
 
 export type RequirementsDraft = { description: string; data: Record<string, string> };
@@ -195,14 +195,12 @@ export async function history(metadata?: Record<string, unknown>, offset = 0): P
       actual_solver: "values.solve.solver", last_message_type: "values.messages[-1].type", last_message_tools: "values.messages[-1].tool_calls" } });
   const entries = (await Promise.all(threads.filter(thread => thread.metadata?.title).map(async thread => {
     const extracted = (thread as unknown as { extracted?: Record<string, unknown> }).extracted ?? {};
-    const timing = (extracted.timing && typeof extracted.timing === "object" ? extracted.timing : null) as Record<string, unknown> | null;
-    const finishedAt = timing?.finished_at ?? extracted.finished_at;
-    const elapsed = timing?.elapsed ?? extracted.elapsed;
+    const timing = extracted.timing as Timing | undefined;
     const conversation = ["requirements", "solution_chat", "optimization"].includes(String(thread.metadata?.kind));
     // Cancellation can leave the thread idle. Only its run distinguishes a stopped turn from a completed one.
     // Finished replies and completed modeling runs already have their outcome in the extracted state.
     const unfinished = conversation ? extracted.last_message_type !== "ai"
-      || (Array.isArray(extracted.last_message_tools) && extracted.last_message_tools.length > 0) : !extracted.solved || !finishedAt;
+      || (Array.isArray(extracted.last_message_tools) && extracted.last_message_tools.length > 0) : !extracted.solved || !timing?.finished_at;
     let latest;
     if (thread.status === "busy" || (thread.status === "idle" && unfinished)) {
       try {
@@ -222,7 +220,7 @@ export async function history(metadata?: Record<string, unknown>, offset = 0): P
     return { id: thread.thread_id, created: thread.created_at, updated: thread.updated_at, meta, state,
       objective: typeof extracted.objective === "number" ? extracted.objective : null,
       paretoTotal: typeof extracted.pareto_total === "number" ? extracted.pareto_total : undefined,
-      elapsed: finishedAt && typeof elapsed === "number" ? elapsed : null,
+      elapsed: timing?.finished_at && typeof timing.elapsed === "number" ? timing.elapsed : null,
       failure: typeof extracted.failure === "string" ? extracted.failure : null, usage: (extracted.usage as Usage | undefined) ?? null } as Entry;
   }))).filter((entry): entry is Entry => entry !== null);
   return { entries, nextOffset: threads.length === PAGE_SIZE ? offset + PAGE_SIZE : undefined };

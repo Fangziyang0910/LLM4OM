@@ -142,12 +142,12 @@ export function useConversation<State extends ConversationState, Bag extends Bag
     onCustomEvent: options.onCustomEvent,
   }) as unknown as UseStream<State, Bag>;
   const join = useRef(stream.joinStream);
-  const switchThreadRef = useRef((stream as { switchThread?: (threadId: string | null) => void }).switchThread);
+  const switchThreadRef = useRef(stream.switchThread);
   useEffect(() => {
     join.current = stream.joinStream;
-    switchThreadRef.current = (stream as { switchThread?: (threadId: string | null) => void }).switchThread;
+    switchThreadRef.current = stream.switchThread;
   });
-  useEffect(() => () => { switchThreadRef.current?.(null); }, []);
+  useEffect(() => () => { switchThreadRef.current(null); }, []);
 
   // The thread query is also the confirmation that survives a reload. A new draft is never cleared here: the
   // draft module compares the acknowledged message ID with the text it is still holding. Do not confirm from
@@ -193,11 +193,8 @@ export function useConversation<State extends ConversationState, Bag extends Bag
     setSending(true);
     try {
       const message = prepare(input);
-      let created: string;
-      try {
-        created = (await client.threads.create({ graphId: options.assistantId, metadata: turn.metadata,
-          supersteps: discussSupersteps({ ...turn.values, messages: [message] }) })).thread_id;
-      } catch (error) { toast.error(errorText(error)); return undefined; }
+      const { thread_id: created } = await client.threads.create({ graphId: options.assistantId, metadata: turn.metadata,
+        supersteps: discussSupersteps({ ...turn.values, messages: [message] }) });
       // `threads.create(supersteps)` is a root native checkpoint, so the question is already persisted.
       acknowledge([message]);
       createdThread.current = created;
@@ -228,9 +225,8 @@ export function useConversation<State extends ConversationState, Bag extends Bag
       if (!activeRunId) {
         try { activeRunId = sessionStorage.getItem(`lg:stream:${active}`); } catch { /* storage may be unavailable */ }
       }
-      if (!activeRunId && typeof client.runs.list === "function") {
-        const runs = await client.runs.list(active, { limit: 1 });
-        const latest = runs[0];
+      if (!activeRunId) {
+        const [latest] = await client.runs.list(active, { limit: 1 });
         if (latest && (latest.status === "pending" || latest.status === "running")) activeRunId = latest.run_id;
       }
       if (activeRunId) {

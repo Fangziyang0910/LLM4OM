@@ -9,14 +9,14 @@ import { useChatDraft, useConversation } from "./conversation";
 
 vi.mock("@/features/runs/sdk", () => ({ client: {
   threads: { get: vi.fn(), update: vi.fn(), create: vi.fn(), updateState: vi.fn() },
-  runs: { create: vi.fn(), cancel: vi.fn() },
+  runs: { create: vi.fn(), cancel: vi.fn(), list: vi.fn() },
 } }));
 vi.mock("@langchain/langgraph-sdk/react", () => ({ useStream: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 const threads = vi.mocked(client.threads), runs = vi.mocked(client.runs);
 const stream = { messages: [] as Message[], values: {}, isLoading: false, isThreadLoading: false,
-  error: undefined, submit: vi.fn(), stop: vi.fn(), joinStream: vi.fn() };
+  error: undefined, submit: vi.fn(), stop: vi.fn(), joinStream: vi.fn(), switchThread: vi.fn() };
 const callbacks = () => vi.mocked(useStream).mock.calls.at(-1)![0];
 const question = () => stream.submit.mock.calls.at(-1)![0].messages[0] as Message;
 
@@ -31,6 +31,7 @@ beforeEach(() => {
   threads.create.mockResolvedValue({ thread_id: "created" } as never);
   threads.updateState.mockResolvedValue({} as never);
   runs.create.mockResolvedValue({ run_id: "first-run" } as never);
+  runs.list.mockResolvedValue([]);
 });
 afterEach(cleanup);
 

@@ -13,7 +13,7 @@ vi.mock("@/features/runs/sdk", () => ({
 vi.mock("@langchain/langgraph-sdk/react", () => ({
   useStream: vi.fn(() => ({
     messages: [], values: {}, isLoading: false, isThreadLoading: false,
-    error: undefined, submit: vi.fn(), stop: vi.fn(), joinStream: vi.fn(),
+    error: undefined, submit: vi.fn(), stop: vi.fn(), joinStream: vi.fn(), switchThread: vi.fn(),
   })),
 }));
 vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));

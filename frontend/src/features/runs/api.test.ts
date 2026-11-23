@@ -214,7 +214,7 @@ test("blank Markdown headings still yield a visible title and deleted threads do
   threads.search.mockResolvedValueOnce([
     { thread_id: "gone", created_at: "2026-01-01", updated_at: "2026-01-01", status: "idle", metadata: { title: "deleted" }, extracted: {} },
     { thread_id: "ok", created_at: "2026-01-01", updated_at: "2026-01-01", status: "idle", metadata: { title: "alive" },
-      extracted: { finished_at: 1, solved: "optimal", objective: 5 } },
+      extracted: { timing: { started_at: 0, elapsed: 1, finished_at: 1 }, solved: "optimal", objective: 5 } },
   ] as never);
   runs.list.mockRejectedValueOnce(Object.assign(new Error("not found"), { status: 404 }));
   const page = await history();
