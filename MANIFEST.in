@@ -1,1 +1,1 @@
-recursive-include skills *.md *.yaml
+recursive-include skills *.md *.yaml *.py

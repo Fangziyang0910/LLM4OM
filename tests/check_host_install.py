@@ -18,14 +18,16 @@ def main() -> None:
     for module in ("fastapi", "langgraph_api", "langchain_openai", "langchain_anthropic",
                    "langchain_deepseek", "langchain_openrouter", "openrouter", "dotenv"):
         assert importlib.util.find_spec(module) is None, f"Unexpected optional dependency: {module}"
-    assert len(command("methods")) == 13
+    assert {method["id"] for method in command("methods")} == {
+        "direct", "or_llm_agent", "llmopt", "trival", "bind", "autoco", "optitree", "coe", "optimus",
+    }
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "session"
         first = command("host", "start", "--problem", "Maximize integer x with 0 <= x <= 3.",
                         "--session", str(path), "--sandbox", "local")
         assert first["status"] == "waiting" and first["pending"][0]["role"] == "generate"
         assert command("host", "status", "--session", str(path))["pending"] == first["pending"]
-    print("Base CLI: no provider/Web extras, 13 methods, persistent host request passed.")
+    print("Base CLI: no provider/Web extras, method discovery, persistent host request passed.")
 
 
 if __name__ == "__main__":

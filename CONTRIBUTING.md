@@ -185,3 +185,5 @@ LLM4OM_TEST_DOCKER=1 uv run pytest tests/test_docker.py -W error::UserWarning
 `tests/test_server_restart.py` 用本地脚本 LLM 和真实服务器验证中断进度在正常退出、重启后仍存在；普通 pytest 会运行它。
 
 前端代码按 `features/composer`、`features/runs`、`features/presets` 组织；功能类型与测试放在对应目录，共享 UI 放在 `components`。复杂方法的包入口只导出方法对象和图工厂，执行逻辑放在 `graph.py`，提示、解析与搜索按已有职责拆分。
+
+宿主 Skill 的 [run.py](skills/llm4om/scripts/run.py) 固定到 GitHub 上已有的运行库提交。发布新的方法或 Worker 后，将此依赖更新至对应提交，并从临时目录安装 Skill 验证一次完整求解。

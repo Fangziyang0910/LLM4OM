@@ -9,14 +9,11 @@
 <div class="table-scroll" tabindex="0" role="region" aria-label="Table, scroll horizontally"><table><thead><tr><th>Setup</th><th>Requirements</th><th>Use</th></tr></thead><tbody><tr><td>Host Skill</td><td>uv, Git, Node.js 22.20+, Docker, Codex or Claude Code</td><td>Current host model; no platform API key or Web deployment</td></tr><tr><td>Docker Compose</td><td>Docker, Compose v2.24+, model-service configuration</td><td>Personal or team service</td></tr><tr><td>Python service</td><td>Python 3.11–3.13, uv, Docker, model-service configuration</td><td>Development or existing Python setup</td></tr></tbody></table></div>
 <p>Data lives in a workspace or Compose volume. Choose a machine with persistent storage and access to the model service.</p>
 <h2 id="section-2">Use the current Codex or Claude Code model<a href="#section-2" class="heading-anchor" aria-label="Use the current Codex or Claude Code model — link to section">#</a></h2>
-<p>Install the CLI, solver environment and Skill from the same release:</p>
-<pre><code class="language-bash">uv tool install --python 3.12 git+https://github.com/Fangziyang0910/LLM4OM@v0.43.0
-llm4om build-worker
-npx skills add https://github.com/Fangziyang0910/LLM4OM/tree/v0.43.0/skills/llm4om --skill llm4om -g -a codex -a claude-code
+<p>Install with Node.js 22.20+ and Git. Select your agent when prompted. To run the skill, the agent needs shell and workspace access, <a href="https://docs.astral.sh/uv/getting-started/installation/">uv</a>, and a running Docker engine.</p>
+<pre><code class="language-bash">npx skills add Fangziyang0910/LLM4OM --skill llm4om -g
 </code></pre>
-<p>Confirm <code>llm4om --version</code> reports <code>LLM4OM 0.43.0</code> and <code>llm4om backends</code> can query the worker. Open a new host session and invoke <code>$llm4om</code> in Codex or <code>/llm4om</code> in Claude Code. Give the agent the production problem from the <a href="../quickstart/">quickstart</a>, optionally requesting Direct and Pyomo. The expected optimum is A=3, B=2, profit=13.</p>
-<p>The current host model performs the reasoning, writes code and explains actual results. The CLI preserves method stages and runs tools and solvers locally. No <code>.env</code>, platform model preset or Web server is required. <code>npx</code> installs skill files; it does not install the CLI or Docker.</p>
-<p>Keep only the matching <code>-a</code> option for one host. Full examples, upgrades, removal and setup problems are covered in the <a href="https://github.com/Fangziyang0910/LLM4OM/blob/v0.43.0/docs/host-modeling.md">bilingual host-model guide</a>. Linux installation is verified; full macOS and Windows installation has not been verified.</p>
+<p>Open a new session, invoke <code>$llm4om</code> in Codex or <code>/llm4om</code> in Claude Code, then describe your problem and attach your data. Your current model formulates the problem and explains the solution. The skill downloads its pinned runtime on first use and builds and reuses the Docker solver image on demand. No separate LLM4OM CLI, model API key, or Web service is required.</p>
+<p>For a worked example, session recovery, and upgrades, see the <a href="https://github.com/Fangziyang0910/LLM4OM/blob/main/docs/host-modeling.md">host modeling guide</a>.</p>
 <h2 id="section-3">Start with Docker Compose<a href="#section-3" class="heading-anchor" aria-label="Start with Docker Compose — link to section">#</a></h2>
 <pre><code class="language-bash">git <span class="hljs-built_in">clone</span> https://github.com/Fangziyang0910/LLM4OM.git
 <span class="hljs-built_in">cd</span> LLM4OM

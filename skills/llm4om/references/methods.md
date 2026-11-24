@@ -1,8 +1,8 @@
 # Method selection
 
-Use the method requested by the user. The CLI executes each method's existing LangGraph graph, prompts, parsers, tool loops, and stopping rules. Read `llm4om methods` for installed IDs, fixed parameters, sources, and scope. Third-party method sources and adaptations remain maintained in the repository's `docs/methods.md`.
+Use the method requested by the user. The runtime executes each method's existing LangGraph graph, prompts, parsers, tool loops, and stopping rules. Use the runner’s `methods` command for installed IDs, fixed parameters, sources, and scope. Third-party method sources and adaptations remain maintained in the repository's `docs/methods.md`.
 
-| CLI ID | Preserved workflow | Scope |
+| Method ID | Preserved workflow | Scope |
 |---|---|---|
 | `direct` | Generate formulation and code, then execute the final code. | General; default baseline. |
 | `or_llm_agent` | Mathematical model, code generation, conversation-based fixes, and infeasibility or model-recheck recovery. | LP/MILP. |
@@ -16,4 +16,4 @@ Use the method requested by the user. The CLI executes each method's existing La
 
 The modeling library is a separate choice (for the 8 exact methods): `pyomo`, `ortools`, `cvxpy`, `pyscipopt`, or `casadi`. A method's problem scope does not expand because another library is selected. The target library and backend must support the required variable domains and problem class.
 
-`llm4om target --language LIBRARY --solver BACKEND` prints the maintained build contract and native references. Internal API selection remains in the generated code; a backend is an optional native engine/plugin identifier, not another modeling library. `llm4om backends` reports the actual worker's available engines and interfaces.
+`target --language LIBRARY --solver BACKEND` prints the maintained build contract and native references. Internal API selection remains in the generated code; a backend is an optional native engine/plugin identifier, not another modeling library. `backends` reports the actual worker's available engines and interfaces.

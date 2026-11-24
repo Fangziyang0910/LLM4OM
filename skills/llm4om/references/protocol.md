@@ -1,6 +1,6 @@
 # Host response format
 
-`host start`, `host resume`, and `host status` return JSON with a session path, status, pending requests, actual steps, usage counts, and available formulation/code/solve artifacts.
+`start`, `resume` and `status` return JSON with the session path, status and full result file path. Waiting turns include every pending request. Final replies include the solver outcome; read `result.json` for the complete values and history.
 
 ## Text answers
 
@@ -31,7 +31,7 @@ When the request supplies tools and requires a call, return tool-call intentions
 }
 ```
 
-This example illustrates shape only; write executable code for the real task. Use the actual supplied tool name and schema. The CLI assigns a tool-call ID if omitted. Tool results return in the next model request. Tool-choice requirements appear in `options`; a structured validator normally requires its output tool rather than a prose answer.
+This example illustrates shape only; write executable code for the real task. Use the actual supplied tool name and schema. The runtime assigns a tool-call ID if omitted. Tool results return in the next model request. Tool-choice requirements appear in `options`; a structured validator normally requires its output tool rather than a prose answer.
 
 ## Parallel requests
 
@@ -48,8 +48,8 @@ The graph preserves the original sample count, ranking, voting, and branch selec
 | `failed` | Read `failure` and completed artifacts; start a new session for a new attempt. |
 | `interrupted` | The process stopped during computation. Resume with an empty JSON object if there are no pending model requests. |
 
-Completed model answers, solves, and helper scripts are preserved across CLI invocations. Native LangGraph checkpoints retain method state. A process killed during an unfinished solve may need to run that unfinished operation again.
+Completed model answers, solves, and helper scripts are preserved across runner invocations. Native LangGraph checkpoints retain method state. A process killed during an unfinished solve may need to run that unfinished operation again.
 
-Host pauses do not consume the method's active execution time limit. `--max-calls` caps host requests, `--max-solves` caps solves, and `--time-limit` bounds each solve or helper script. Published method parameters and retry rules remain fixed. AutoFormulation retains an expensive search by default; use an explicit call budget when needed and report budget exhaustion as an incomplete search.
+Host pauses do not consume the method's active execution time limit. `--max-calls` caps host requests, `--max-solves` caps solves, and `--time-limit` bounds each solve or helper script. Published method parameters and retry rules remain fixed.
 
-`usage.llm_calls` counts distinct host-model requests; the CLI itself makes no LLM API call. Token counts are `null` because the coding agent owns model usage. A native solve status or objective value is execution evidence, not a model's prediction.
+`usage.llm_calls` counts distinct host-model requests; the runtime makes no LLM API call. Token counts are `null` because the coding agent owns model usage. A native solve status or objective value is execution evidence, not a model's prediction.

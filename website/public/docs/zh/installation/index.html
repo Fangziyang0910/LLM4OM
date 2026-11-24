@@ -9,14 +9,11 @@
 <div class="table-scroll" tabindex="0" role="region" aria-label="表格，可横向滚动"><table><thead><tr><th>方式</th><th>需要的环境</th><th>适合用途</th></tr></thead><tbody><tr><td>宿主 Skill</td><td>uv、Git、Node.js 22.20+、Docker、Codex 或 Claude Code</td><td>使用宿主当前模型，无需平台 API Key 或 Web 部署</td></tr><tr><td>Docker Compose</td><td>Docker、Compose v2.24或更新版本、模型服务配置</td><td>个人或团队运行</td></tr><tr><td>Python启动</td><td>Python 3.11–3.13、uv、Docker、模型服务配置</td><td>开发或已有Python环境</td></tr></tbody></table></div>
 <p>运行数据保存在工作区或Compose数据卷中。安装前选择一台可持续保存数据并访问模型服务的机器。</p>
 <h2 id="section-2">使用当前 Codex 或 Claude Code 模型<a href="#section-2" class="heading-anchor" aria-label="使用当前 Codex 或 Claude Code 模型 — 章节链接">#</a></h2>
-<p>CLI、求解环境和 Skill 使用相同发布版本：</p>
-<pre><code class="language-bash">uv tool install --python 3.12 git+https://github.com/Fangziyang0910/LLM4OM@v0.43.0
-llm4om build-worker
-npx skills add https://github.com/Fangziyang0910/LLM4OM/tree/v0.43.0/skills/llm4om --skill llm4om -g -a codex -a claude-code
+<p>安装时需要 Node.js 22.20+ 和 Git。在安装器中选择你的 Agent。运行 Skill 时，Agent 需要能执行命令、访问工作区，并能使用 <a href="https://docs.astral.sh/uv/getting-started/installation/">uv</a> 和已启动的 Docker。</p>
+<pre><code class="language-bash">npx skills add Fangziyang0910/LLM4OM --skill llm4om -g
 </code></pre>
-<p>运行 <code>llm4om --version</code> 确认显示 <code>LLM4OM 0.43.0</code>，运行 <code>llm4om backends</code> 检查求解镜像。安装后新开宿主会话，在 Codex 中输入 <code>$llm4om</code>，或在 Claude Code 中输入 <code>/llm4om</code>。发送<a href="../quickstart/">快速开始</a>的生产题，可指定 Direct 和 Pyomo；该例应得到 A=3、B=2、利润=13。</p>
-<p>宿主当前模型负责理解、建模、写代码和解释实际结果。CLI 保留方法阶段，在本机执行工具与求解。不需要配置 <code>.env</code>、平台预设模型或 Web 服务。<code>npx</code> 安装技能文件，CLI 与 Docker 仍需分别准备。</p>
-<p>只用一个宿主时，保留对应的 <code>-a</code> 参数。完整示例、升级、卸载与安装问题见<a href="https://github.com/Fangziyang0910/LLM4OM/blob/v0.43.0/docs/host-modeling.md">双语宿主建模指南</a>。已验证 Linux；macOS、Windows 尚未完成整套安装验证。</p>
+<p>新开会话，在 Codex 输入 <code>$llm4om</code>，或在 Claude Code 输入 <code>/llm4om</code>，然后描述问题、附上数据。当前模型负责建模和解读，Skill 首次运行时自动下载固定版本的运行库，求解时按需构建并复用 Docker 镜像。无需单独安装 LLM4OM CLI、配置模型 API Key 或启动 Web 服务。</p>
+<p>完整求解示例、会话恢复与升级见<a href="https://github.com/Fangziyang0910/LLM4OM/blob/main/docs/host-modeling.md">宿主建模指南</a>。</p>
 <h2 id="section-3">使用 Docker Compose 启动<a href="#section-3" class="heading-anchor" aria-label="使用 Docker Compose 启动 — 章节链接">#</a></h2>
 <pre><code class="language-bash">git <span class="hljs-built_in">clone</span> https://github.com/Fangziyang0910/LLM4OM.git
 <span class="hljs-built_in">cd</span> LLM4OM

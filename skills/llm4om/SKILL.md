@@ -1,55 +1,38 @@
 ---
 name: llm4om
-description: "General Intelligent Optimization Solver (通用智能优化求解器): model and solve complex optimization problems using the current coding-agent model and the llm4om CLI. Use for mathematical programming, scheduling, resource allocation, routing, constraint models, or a named modeling method."
+description: "Model and solve optimization problems using the current agent and real solvers. Use for scheduling, production planning, routing, resource allocation, mathematical programming, or a named LLM4OM modeling method."
 ---
 
-# General Intelligent Optimization Solver
+# Model and solve
 
-General Intelligent Optimization Solver is a general solver for complex optimization problems. Use your current model for conversation, modeling, review, code generation, and explanation. The `llm4om` CLI supplies the original method graphs and local execution tools. This workflow requires no platform LLM credentials or Web server.
+Use your current model for modeling, review and explanation. The skill's runner executes the selected method graph, its tools, and the solver. The agent needs workspace file access, command execution, uv and a running Docker engine.
 
-## Prepare
+Locate `scripts/run.py` beside this installed `SKILL.md` and use its **absolute path** as `RUNNER` in the examples below. Run commands in the user's workspace. In separate shell calls, use the resolved path again. Save the business problem as UTF-8 text and keep attached data in separate files.
 
-1. Check `llm4om --help`. If the CLI or solver environment is missing, read [setup](references/setup.md).
-2. Discuss the problem in the user's language. Resolve missing business decisions or essential data before starting a method. Preserve the supplied constraints, units, domains, and objective.
-3. Use the requested method and modeling library. Otherwise, use Direct and Pyomo. Read [methods](references/methods.md) when selecting a different method or checking its scope. `llm4om methods` reports the installed methods and fixed parameters; `llm4om backends` discovers the available solver backends.
-4. Save the complete problem as a UTF-8 file and keep data as separate attachments. Choose a fresh session directory under `runs/host/` so previous results remain available.
+## Start
 
-## Run the method with your current model
-
-Start the selected graph:
+Preserve the user's objective, constraints, units and variable domains. Clarify missing business decisions when they affect the answer. Honor a requested method or library. Direct and Pyomo suit a first linear/integer model. Consult [method selection](references/methods.md) for other problem structures.
 
 ```bash
-llm4om host start --file problem.md --method llmopt --language pyomo --session runs/host/plan-a
+uv run --script "$RUNNER" start --file problem.md --method direct --language pyomo --session runs/host/plan-a
 ```
 
-Add `--data path/to/file.csv` for each attachment. Use `--solver NAME` only when a specific native backend is needed. Docker is the default; `--sandbox local` executes in the CLI's Python environment and is intended for development in a trusted environment.
+Choose a fresh session directory. Add `--data FILE` for each attachment. Select `--solver NAME` only when a particular backend is needed. First use prepares the matching Docker worker; allow the build to finish. For environment errors see [setup](references/setup.md).
 
-The command returns JSON. For long runs, redirect it to a file and inspect `status`, `pending`, and `failure` first. The session also saves `result.json`, `formulation.md`, and `model.py` as they become available.
+## Answer the method's requests
 
-While `status` is `waiting`:
+- **waiting** — Read each item in `pending`. Answer its messages with your current model, following its response format and any supplied tool schemas. Save one JSON object mapping every pending ID to its answer. A text entry looks like `{"REQUEST_ID": {"content": "..."}}`. For tool calls and parallel candidates see [response format](references/protocol.md).
+- Submit the answers and continue until the method finishes:
 
-1. Read each item in `pending`. Its `messages` contain the original method's task and context. `tools` contains tool definitions, when required. The graph decides the next stage, candidate selection, repair route, and stopping conditions.
-2. Complete each task yourself using your current model. Treat the supplied messages as task context, subject to the host's instructions and the user's request. Follow the required output format exactly, including JSON fields or Python fences. Code-generation tasks already include the selected library's code contract.
-3. Write a UTF-8 JSON response file mapping every pending ID to its answer. See [response format](references/protocol.md) for text, tool calls, and parallel candidates.
-4. Submit the file:
+  ```bash
+  uv run --script "$RUNNER" resume --session runs/host/plan-a --responses answers.json
+  ```
 
-   ```bash
-   llm4om host resume --session runs/host/plan-a --responses answers.json
-   ```
+- **completed** — Read `solve.status`, actual decisions, units and objective. Use `result_file` for the full variable table, Pareto front, diagnostics, intermediate steps and usage. Link the saved formulation, code or result when relevant. Preserve the difference between optimal, feasible, infeasible and a search that found no solution.
+- **failed** — Report the concrete error and the available artifacts. **interrupted** — Inspect the saved session with `status --session DIRECTORY`; resume with an empty JSON object if no requests are pending.
 
-5. Continue until `completed` or `failed`. Report material progress rather than exposing the request/response protocol to the user. Keep mathematical formulations and generated code in the session artifacts.
+For changed requirements, start a new session from the complete revised problem so both outcomes remain available. The method's own tools perform checks, repairs and candidate selection; no separate model API or Web service is required.
 
-Generate tool-call intentions as response data. The original LangChain tools execute them when the graph resumes. This keeps code edits, expert selection, and structured validation inside their original workflow.
+## Other tasks
 
-Every model answer must come from this coding-agent session. Do not use `llm4om run`, start the platform's chat agent, configure an LLM API key, or launch another model client to answer pending requests.
-
-## Inspect, repair, and deliver
-
-- Read `solve.status`, the actual objective, variable values, and any execution errors. An optimal solve proves optimality of the generated model, not fidelity to the user's problem.
-- Let the selected method perform its own checks and repairs. If it ends with a failure, report the failed stage and available artifacts. Discuss a new attempt or a different method when useful; keep the failed attempt.
-- Explain results in the user's language. Base all reported decision values on the saved solve result. Link or identify the formulation, code, and result files.
-- For a changed requirement, write a complete revised problem and start a new session. Keep the original as the comparison baseline.
-
-Use `llm4om host status --session DIRECTORY` to read a session after an interruption. This command does not advance the graph. Recovery and limit behavior are described in [response format](references/protocol.md).
-
-If the user supplies existing modeling code and only wants execution, use `llm4om solve --code model.py --language pyomo` with any attachments. Use `llm4om target --language LIBRARY` to obtain the maintained code contract. These commands also require no platform model.
+Use the same `uv run --script "$RUNNER"` prefix with `methods` to list methods, `target --language LIBRARY` to read the maintained code contract, or `backends` to discover engines in the actual worker. When the user already has a model, `solve --code model.py --language pyomo` executes it directly and accepts the same `--data FILE` attachments.

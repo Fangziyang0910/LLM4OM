@@ -100,21 +100,15 @@ Agent 也可以回答普通问题、帮助写作、解释代码、整理资料�
 
 ### 在 Codex / Claude Code 中使用当前模型
 
-Skill 将对话、建模、代码生成和结果解读交给当前宿主模型。CLI 复用现有 9 种方法图及求解环境，不调用平台 LLM，不需要启动 Web 服务。
-
-无需克隆仓库。准备好 [uv](https://docs.astral.sh/uv/getting-started/installation/)、Git、已启动的 Docker，以及 Node.js 22.20 或更新版本。以下命令安装已发布的 v0.43.0，使用 Python 3.12。要使用本页所述最新改动，可将两条安装命令中的 `v0.43.0` 替换为同一个 `main` 提交号。
+安装时需要 Node.js 22.20+ 和 Git。在安装器中选择你的 Agent。运行 Skill 时，Agent 需要能执行命令、访问工作区，并能使用 [uv](https://docs.astral.sh/uv/getting-started/installation/) 和已启动的 Docker。
 
 ```bash
-uv tool install --python 3.12 git+https://github.com/Fangziyang0910/LLM4OM@v0.43.0
-llm4om build-worker
-npx skills add https://github.com/Fangziyang0910/LLM4OM/tree/v0.43.0/skills/llm4om --skill llm4om -g -a codex -a claude-code
+npx skills add Fangziyang0910/LLM4OM --skill llm4om -g
 ```
 
-运行 `llm4om --version` 确认版本，运行 `llm4om backends` 检查实际求解环境。安装后开启新会话，在 Codex 中使用 `$llm4om`，或在 Claude Code 中使用 `/llm4om`，描述问题并指定方法、建模库或附件。只用一个宿主时，删除另一项 `-a` 参数即可。
+新开会话，在 Codex 输入 `$llm4om`，或在 Claude Code 输入 `/llm4om`，然后描述问题、附上数据。当前模型负责建模和解读，Skill 首次运行时自动下载固定版本的运行库，求解时按需构建并复用 Docker 镜像。无需单独安装 LLM4OM CLI、配置模型 API Key 或启动 Web 服务。
 
-宿主读取方法任务、用当前模型作答；CLI 执行原有阶段、工具、检查与求解，将真实反馈交回宿主。会话在本地保存，支持跨命令恢复。完整安装与协议见 [Skill](skills/llm4om/SKILL.md) 和[命令行使用指南](docs/host-modeling.md)。`npx` 安装技能文件，CLI 与求解环境需要分别准备。
-
-基础安装不包含模型供应商客户端和 Web 服务。API 模型运行可安装 `llm4om[llm]`，原有工作台安装 `llm4om[web]`；下方 Docker 部署保持原用法。宿主模式保留方法流程；采样温度和上下文隔离由宿主控制，不能视为原 API 实验的完全复现。
+完整求解示例、会话恢复与升级见[宿主建模指南](docs/host-modeling.md)。
 
 ### 方式一：Docker（推荐）
 
