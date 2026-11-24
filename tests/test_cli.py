@@ -74,6 +74,20 @@ def build_model(data):
     assert json.loads(capsys.readouterr().out)["objective"] == 12
 
 
+def test_run_time_limit_reaches_the_solver(tmp_path, monkeypatch, make_resources):
+    from tests.conftest import PRODUCTION_PROBLEM, TWO_PART_REPLY
+
+    resources = make_resources(lambda *_: TWO_PART_REPLY)
+    monkeypatch.setattr("llm4om.graph._resources", lambda *_: resources)
+    output = tmp_path / "result.json"
+    args = ["run", "--problem", PRODUCTION_PROBLEM, "--output", str(output), "--time-limit"]
+    assert main([*args, "11"]) == 0
+    state = json.loads(output.read_text())
+    assert state["spec"]["limits"]["solve_time_limit"] == 11 and state["solve"]["objective"] == 13
+    assert main([*args, "301"]) == 1
+    assert "between 5 and 300" in json.loads(output.read_text())["failure"]
+
+
 def test_host_cli_can_exit_and_resume_in_new_processes(tmp_path: Path) -> None:
     from tests.conftest import PRODUCTION_PROBLEM, TWO_PART_REPLY
 

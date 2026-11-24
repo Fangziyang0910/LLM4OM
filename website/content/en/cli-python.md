@@ -25,6 +25,7 @@ Repeat `--data` for more files. Code reads text by original file name. `--preset
 | `--language` | ID such as pyomo, ortools or cvxpy |
 | `--solver` | Native ID; omission uses AUTO |
 | `--workspace` / `--preset` | Preset workspace and ID |
+| `--time-limit` | Time limit per solve, 5–300 seconds. Omit to use the method default. |
 | `--output` | Save final JSON state |
 
 ## Complete minimal Python call

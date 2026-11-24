@@ -25,6 +25,7 @@ uv run llm4om run --file problem.txt --data production.json --method bind --lang
 | `--language` | 库ID，如pyomo、ortools、cvxpy |
 | `--solver` | 原生后端ID，省略为AUTO |
 | `--workspace` / `--preset` | 预设所在工作区与预设ID |
+| `--time-limit` | 每次求解的时限，5–300 秒，省略时使用方法默认值 |
 | `--output` | 保存最终JSON状态 |
 
 ## Python最小完整调用

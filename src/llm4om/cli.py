@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from importlib.metadata import version
 from importlib.resources import files
 from io import TextIOWrapper
@@ -17,6 +18,8 @@ from uuid import uuid4
 
 from llm4om.languages import LANGUAGES, CodeTarget
 from llm4om.sandbox import WORKER_IMAGE
+
+HOST_COMMANDS = {"start", "resume", "status"}
 
 
 def _print_step(step: dict[str, Any]) -> None:
@@ -74,20 +77,24 @@ async def _solve(args: argparse.Namespace) -> int:
     return 0 if result.executed else 1
 
 
-async def _host(args: argparse.Namespace) -> int:
+async def host_result(args: argparse.Namespace, prepare_worker: Callable[[], None] | None = None) -> dict[str, Any]:
+    """Run a host command and return the full result for the caller to present."""
     from llm4om.host import resume, start, status
 
-    if args.host_command == "start":
-        directory = args.session or str(Path("runs/host") / uuid4().hex[:12])
-        result = await start(directory, _problem(args), method=args.method, language=args.language,
-                             solver=args.solver, data=_data(args.data), sandbox=args.sandbox,
-                             max_calls=args.max_calls, max_solves=args.max_solves, time_limit=args.time_limit)
-    elif args.host_command == "resume":
-        result = await resume(args.session, json.loads(_read(args.responses)))
-    else:
-        result = await status(args.session)
-    _json(result)
-    return 1 if result["status"] == "failed" else 0
+    if args.command == "status":
+        return await status(args.session)
+    if args.command == "resume":
+        answers = json.loads(_read(args.responses))
+        if prepare_worker:
+            prepare_worker()
+        return await resume(args.session, answers)
+    problem, data = _problem(args), _data(args.data)
+    if prepare_worker:
+        prepare_worker()
+    directory = args.session or str(Path("runs/host") / uuid4().hex[:12])
+    return await start(directory, problem, method=args.method, language=args.language,
+                       solver=args.solver, data=data, sandbox=args.sandbox, max_calls=args.max_calls,
+                       max_solves=args.max_solves, time_limit=args.time_limit)
 
 
 async def _run(args: argparse.Namespace) -> int:
@@ -97,7 +104,7 @@ async def _run(args: argparse.Namespace) -> int:
     problem, data = _problem(args), _data(args.data)
     state = await run(problem, method=args.method, language=args.language, data=data,
                       solver=args.solver, preset=args.preset, workspace=args.workspace,
-                      sandbox=args.sandbox, on_step=_print_step)
+                      sandbox=args.sandbox, on_step=_print_step, time_limit=args.time_limit)
     if args.output:
         Path(args.output).write_text(json.dumps(state, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
     if state.get("failure"):
@@ -154,41 +161,48 @@ def _build_worker(args: argparse.Namespace) -> int:
         return subprocess.run(["docker", "build", "-f", str(Path(directory) / "worker.Dockerfile"), "-t", args.tag, directory]).returncode
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="llm4om", description=__doc__)
-    parser.add_argument("--version", action="version", version=f"LLM4OM {version('llm4om')}")
+def command_parser(*, for_skill: bool = False) -> argparse.ArgumentParser:
+    """Build the standalone CLI or the Docker-only skill command surface."""
+    description = "Model and solve using the current agent and Docker." if for_skill else __doc__
+    parser = argparse.ArgumentParser(prog=None if for_skill else "llm4om", description=description)
+    if not for_skill:
+        parser.add_argument("--version", action="version", version=f"LLM4OM {version('llm4om')}")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    commands.add_parser("methods", help="List modeling methods and their fixed parameters as JSON.")
-    target = commands.add_parser("target", help="Print the selected modeling library's code contract and reference.")
-    target.add_argument("--language", default="pyomo")
-    target.add_argument("--solver")
-    backends = commands.add_parser("backends", help="Discover native solver backends in the actual execution environment.")
-    backends.add_argument("--sandbox", choices=("docker", "local"), default="docker")
+    target_options = argparse.ArgumentParser(add_help=False)
+    target_options.add_argument("--language", default="pyomo", help="Modeling library: " + ", ".join(LANGUAGES) + ".")
+    target_options.add_argument("--solver", help="Native backend identifier; default: AUTO (the code's native backend).")
+    environment = argparse.ArgumentParser(add_help=False)
+    if for_skill:
+        environment.set_defaults(sandbox="docker")
+    else:
+        environment.add_argument("--sandbox", choices=("docker", "local"), default="docker")
+    inputs = argparse.ArgumentParser(add_help=False, parents=[target_options, environment])
+    inputs.add_argument("--data", action="append", default=[], help="Attach a CSV or JSON data file; repeatable.")
 
-    solve = commands.add_parser("solve", help="Execute existing build_model(data) code; no LLM or Web server.")
-    solve.add_argument("--code", required=True, help="UTF-8 Python file defining build_model(data).")
-    solve.add_argument("--language", default="pyomo")
-    solve.add_argument("--solver")
-    solve.add_argument("--data", action="append", default=[])
-    solve.add_argument("--sandbox", choices=("docker", "local"), default="docker")
-    solve.add_argument("--time-limit", type=float, default=60)
+    commands.add_parser("methods", help="List modeling methods and their fixed parameters as JSON.")
+    commands.add_parser("target", parents=[target_options], help="Print the selected library's code contract and reference.")
+    commands.add_parser("backends", parents=[environment], help="Discover solver backends in the execution environment.")
+    solve = commands.add_parser("solve", parents=[inputs], help="Execute existing build_model(data) code.")
+    solve.add_argument("--code", required=True, help="Python file defining build_model(data).")
+    solve.add_argument("--time-limit", type=float, default=60, help="Time limit in seconds (default: 60).")
     solve.add_argument("--output", help="Also write the JSON solve result to this file.")
 
-    modeling = argparse.ArgumentParser(add_help=False)
-    source = modeling.add_mutually_exclusive_group(required=True)
-    source.add_argument("--problem", help="Problem description text.")
-    source.add_argument("--file", help="UTF-8 problem description file.")
-    modeling.add_argument("--data", action="append", default=[], help="Attach a CSV or JSON data file; repeatable.")
+    modeling = argparse.ArgumentParser(add_help=False, parents=[inputs])
+    if for_skill:
+        modeling.set_defaults(problem=None)
+        modeling.add_argument("--file", required=True, help="Problem description file.")
+        host_commands = commands
+    else:
+        source = modeling.add_mutually_exclusive_group(required=True)
+        source.add_argument("--problem", help="Problem description text.")
+        source.add_argument("--file", help="Problem description file.")
+        host = commands.add_parser("host", help="Run methods using answers from the current coding agent; no LLM API.")
+        host_commands = host.add_subparsers(dest="command", required=True)
     modeling.add_argument("--method", default="direct")
-    modeling.add_argument("--language", default="pyomo", help="Modeling library: " + ", ".join(LANGUAGES) + ".")
-    modeling.add_argument("--solver", help="Native backend identifier; default: AUTO (the code's native backend).")
-    modeling.add_argument("--sandbox", choices=("docker", "local"), default="docker")
-
-    host = commands.add_parser("host", help="Run methods using answers from the current coding agent; no LLM API.")
-    host_commands = host.add_subparsers(dest="host_command", required=True)
-    start = host_commands.add_parser("start", parents=[modeling], help="Start a method and return its pending model requests as JSON.")
-    start.add_argument("--session", help="New session directory; default: runs/host/<random-id>.")
+    start = host_commands.add_parser("start", parents=[modeling], help="Start a method and return pending requests as JSON.")
+    session_help = "New session directory." if for_skill else "New session directory; default: runs/host/<random-id>."
+    start.add_argument("--session", required=for_skill, help=session_help)
     start.add_argument("--max-calls", type=int, help="Cap host-model requests, including parallel requests.")
     start.add_argument("--max-solves", type=int)
     start.add_argument("--time-limit", type=float, help="Time limit of each solve or check script, in seconds.")
@@ -197,6 +211,8 @@ def main(argv: list[str] | None = None) -> int:
     resume.add_argument("--responses", required=True, help="UTF-8 JSON file: {request_id: {content, tool_calls}}.")
     status = host_commands.add_parser("status", help="Read pending tasks and results without executing anything.")
     status.add_argument("--session", required=True)
+    if for_skill:
+        return parser
 
     serve = commands.add_parser("serve", help="Start the Web workbench on the LangGraph server.")
     serve.add_argument("--workspace", default="runs/web", help="Directory for LLM presets and run history.")
@@ -207,6 +223,7 @@ def main(argv: list[str] | None = None) -> int:
                        help="Where generated code runs; 'local' skips isolation and is for development only.")
 
     run = commands.add_parser("run", parents=[modeling], help="Model and solve one problem.")
+    run.add_argument("--time-limit", type=float, help="Time limit per solve in seconds (5–300); defaults to the method setting.")
     run.add_argument("--preset", help="LLM preset id; default: the first preset.")
     run.add_argument("--workspace", default="runs/web", help="Directory with the saved LLM presets.")
     run.add_argument("--output", help="Write the final state (steps included) to this JSON file.")
@@ -214,33 +231,46 @@ def main(argv: list[str] | None = None) -> int:
     build = commands.add_parser("build-worker", help="Build the Docker image that runs generated code and solvers.")
     build.add_argument("--tag", default=WORKER_IMAGE)
 
-    args = parser.parse_args(argv)
+    return parser
+
+
+def run_tool(args: argparse.Namespace) -> int:
+    """Execute a parsed solver tool and write its command-line output."""
+    if args.command == "methods":
+        from llm4om.methods import methods
+
+        _json([{"id": method.id, "name": method.name, "source": method.source,
+                "linear_only": method.linear_only, "builtin_solver": method.builtin_solver,
+                "parameters": method.parameters(),
+                "languages": sorted(LANGUAGES if method.languages is None else method.languages)} for method in methods().values()])
+        return 0
+    if args.command == "target":
+        print(CodeTarget(args.language, args.solver).prompt)
+        return 0
+    if args.command == "backends":
+        from llm4om.sandbox import Sandbox
+
+        _json(asyncio.run(Sandbox(args.sandbox).catalog()))
+        return 0
+    if args.command == "solve":
+        return asyncio.run(_solve(args))
+    raise ValueError(f"Unknown solver tool {args.command!r}.")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = command_parser().parse_args(argv)
     try:
-        if args.command == "methods":
-            from llm4om.methods import methods
-
-            _json([{"id": method.id, "name": method.name, "source": method.source,
-                    "linear_only": method.linear_only, "builtin_solver": method.builtin_solver,
-                    "parameters": method.parameters(),
-                    "languages": sorted(LANGUAGES if method.languages is None else method.languages)} for method in methods().values()])
-            return 0
-        if args.command == "target":
-            print(CodeTarget(args.language, args.solver).prompt)
-            return 0
-        if args.command == "backends":
-            from llm4om.sandbox import Sandbox
-
-            _json(asyncio.run(Sandbox(args.sandbox).catalog()))
-            return 0
-        if args.command == "solve":
-            return asyncio.run(_solve(args))
-        if args.command == "host":
-            return asyncio.run(_host(args))
+        if args.command in HOST_COMMANDS:
+            result = asyncio.run(host_result(args))
+            _json(result)
+            return int(result["status"] == "failed")
         if args.command == "serve":
             return _serve(args)
         if args.command == "run":
             return asyncio.run(_run(args))
-        return _build_worker(args)
+        if args.command == "build-worker":
+            return _build_worker(args)
+        return run_tool(args)
     except ModuleNotFoundError as error:
         if args.command not in {"run", "serve"}:
             raise
@@ -252,7 +282,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except KeyboardInterrupt:
         message = "Interrupted."
-        if args.command == "host":
+        if args.command in HOST_COMMANDS:
             message += " Inspect with 'llm4om host status' and resume the saved session."
         print(message, file=sys.stderr)
         return 130

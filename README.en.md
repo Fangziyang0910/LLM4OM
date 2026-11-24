@@ -153,7 +153,7 @@ To prepare a separate requirements draft, open **Multi-plan comparison** in the 
 You can also run from the command line or Python:
 
 ```bash
-uv run llm4om run --problem "..." --method or_llm_agent --language pyomo
+uv run llm4om run --problem "..." --method or_llm_agent --language pyomo --time-limit 30
 ```
 
 ```python

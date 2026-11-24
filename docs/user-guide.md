@@ -331,6 +331,7 @@ uv run llm4om run --file problem.txt --data demand.csv --method coe
 | `--solver` | 原生后端 ID；省略时为 AUTO，由模型和库选择原生后端 |
 | `--preset` | 预设模型 id；默认用第一个预设 |
 | `--workspace` | 保存预设的工作区 |
+| `--time-limit` | 单次求解的时限，单位为秒，范围 5–300；省略时沿用方法默认值 |
 | `--output` | 把最终状态（含全部步骤）写入 JSON 文件 |
 | `--sandbox local` | 在本机子进程中执行生成代码，不隔离，只用于开发 |
 

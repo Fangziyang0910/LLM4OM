@@ -153,7 +153,7 @@ uv run llm4om serve --workspace runs/web --port 8767
 也可以在命令行或 Python 中运行：
 
 ```bash
-uv run llm4om run --problem "……" --method or_llm_agent --language pyomo
+uv run llm4om run --problem "……" --method or_llm_agent --language pyomo --time-limit 30
 ```
 
 ```python
