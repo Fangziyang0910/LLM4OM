@@ -22,9 +22,8 @@ test("a phone opens the requested conversation and shows a chosen plan immediate
   await expect(page.getByLabel("相关方案", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "查看原方案", exact: true }).click();
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible();
-  const embeddedSteps = page.getByRole("button", { name: "求解步骤", exact: true });
-  await embeddedSteps.click();
-  await expect(embeddedSteps).toHaveAttribute("aria-expanded", "true");
+  await steps.click();
+  await expect(page.getByRole("heading", { name: "求解步骤", exact: true })).toBeVisible();
 });
 
 test("a phone reviews the requirements draft before starting a modeling run", async ({ page }) => {
