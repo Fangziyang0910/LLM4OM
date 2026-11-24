@@ -1,17 +1,16 @@
 # /// script
 # requires-python = ">=3.11,<3.14"
-# dependencies = ["llm4om @ https://github.com/Fangziyang0910/LLM4OM/archive/d8fa79384683e166a8ddb708eb36dc040d895783.tar.gz"]
+# dependencies = ["llm4om @ https://github.com/Fangziyang0910/LLM4OM/archive/79b9206210acdd95d2db3b5ca6bdcbf81fa977e8.tar.gz"]
 # ///
 """Drive the pinned host runtime from an installed skill. Paths belong to the caller's workspace."""
 
-import argparse
 import asyncio
 import json
 import subprocess
 import sys
 from pathlib import Path
 
-from llm4om import cli, host
+from llm4om import cli
 from llm4om.sandbox import WORKER_IMAGE
 
 
@@ -52,49 +51,12 @@ def turn_output(result: dict) -> dict:
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    commands = parser.add_subparsers(dest="action", required=True)
-    commands.add_parser("methods", help="List available modeling methods")
-    commands.add_parser("backends", help="List solver backends in the Docker worker")
-    target = commands.add_parser("target", help="Read the model code contract for a library and solver")
-    solve = commands.add_parser("solve", help="Solve an existing model in the Docker worker")
-    solve.add_argument("--code", required=True, help="Python file defining build_model(data)")
-    solve.add_argument("--output", help="Also write the full solver result to this file")
-    start = commands.add_parser("start", help="Start modeling a UTF-8 business problem")
-    start.add_argument("--file", required=True)
-    start.add_argument("--method", default="direct")
-    start.add_argument("--max-calls", type=int)
-    start.add_argument("--max-solves", type=int)
-    for command in (start, target, solve):
-        command.add_argument("--language", default="pyomo")
-        command.add_argument("--solver")
-    for command in (start, solve):
-        command.add_argument("--data", action="append", default=[], help="Attach a data file; repeat for multiple inputs")
-        command.add_argument("--time-limit", type=float)
-    resume = commands.add_parser("resume", help="Submit host answers and continue the method")
-    resume.add_argument("--responses", required=True, help="JSON file mapping pending request IDs to answers")
-    status = commands.add_parser("status", help="Read a saved session without advancing it")
-    for command in (start, resume, status):
-        command.add_argument("--session", required=True, type=Path)
-    args = parser.parse_args(argv)
-
-    if args.action in {"methods", "target", "backends", "solve"}:
-        if args.action in {"backends", "solve"}:
-            prepare_worker()
-        return cli.main(argv)
-
-    if args.action == "start":
-        problem, data = cli._read(args.file), cli._data(args.data)
+    args = cli.command_parser(for_skill=True).parse_args(argv)
+    if args.command in {"backends", "solve"}:
         prepare_worker()
-        result = asyncio.run(host.start(args.session, problem, method=args.method, language=args.language,
-                                        solver=args.solver, data=data, max_calls=args.max_calls,
-                                        max_solves=args.max_solves, time_limit=args.time_limit))
-    elif args.action == "resume":
-        answers = json.loads(cli._read(args.responses))
-        prepare_worker()
-        result = asyncio.run(host.resume(args.session, answers))
-    else:
-        result = asyncio.run(host.status(args.session))
+    if args.command not in cli.HOST_COMMANDS:
+        return cli.run_tool(args)
+    result = asyncio.run(cli.host_result(args, prepare_worker=prepare_worker))
     print(json.dumps(turn_output(result), ensure_ascii=False))
     return int(result["status"] == "failed")
 

@@ -55,6 +55,16 @@ def test_large_results_keep_the_full_artifact_address(tmp_path):
     assert result["solve"]["variables"] == variables
 
 
+def test_skill_keeps_docker_only_tools_and_requires_explicit_session_files(capsys):
+    for args in (["backends", "--sandbox", "local"], ["run", "--problem", "test"],
+                 ["start", "--problem", "test", "--session", "plan"], ["start", "--file", "problem.md"]):
+        with pytest.raises(SystemExit) as error:
+            runner.main(args)
+        assert error.value.code == 2
+    assert runner.main(["methods"]) == 0
+    assert any(method["id"] == "direct" for method in json.loads(capsys.readouterr().out))
+
+
 @pytest.mark.docker
 @pytest.mark.skipif(os.environ.get("LLM4OM_TEST_DOCKER") != "1", reason="requires the current Docker worker")
 def test_skill_runs_a_model_and_reopens_the_result(tmp_path, capsys):
