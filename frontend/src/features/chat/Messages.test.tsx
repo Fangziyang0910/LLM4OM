@@ -11,7 +11,6 @@ test.each([
   ["selected_plan", { selected_plan: { name: "原方案", source: { thread_id: "original" } } }, "已选择：原方案"],
   ["plans", { plans: [{ name: "已求解方案", source: { thread_id: "saved" }, instruction: "原问题", status: "optimal", objective: 0 }] }, "已求解方案"],
   ["search", { query: "公开资料", results: [{ title: "实际来源", url: "https://example.org/reference" }] }, "实际来源"],
-  ["draft", {}, "需求稿已整理"],
 ])("a typed %s artifact renders independently of the tool's name", (type, artifact, text) => {
   render(<ChatMessages messages={[question, { type: "tool", name: "another_capability", tool_call_id: "result", content: "",
     artifact: { ...artifact, type } }]} loading={false} label="优化助手" onRetry={vi.fn()} />);

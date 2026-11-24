@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import type { Message } from "@langchain/langgraph-sdk";
 import { ArrowDown, ArrowRight, CalendarDays, Check, Factory, Globe, MessageSquareText, Paperclip, Save, Sparkles, Truck } from "lucide-react";
@@ -21,6 +21,7 @@ import { ChatInput } from "@/features/chat/ChatInput";
 import { inputFingerprint } from "@/features/chat/inputFingerprint";
 import { useChatModel, useConversation } from "@/features/chat/conversation";
 import { useChatScroll } from "@/features/chat/scroll";
+import { visibleDraft } from "./visibleDraft";
 
 type Values = Partial<RequirementsDraft> & { messages?: Message[]; usage?: Usage; failure?: string | null };
 const STARTERS = [
@@ -61,7 +62,9 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
   const saved = useRef<RequirementsDraft | null>(null);
   const saveQueue = useRef(Promise.resolve());
   const inputArea = useRef<HTMLTextAreaElement>(null);
-  const draft = edited ?? { description: conversation.values.description ?? "", data: conversation.values.data ?? {} };
+  const storedDescription = conversation.values.description ?? "";
+  const description = useMemo(() => visibleDraft(storedDescription), [storedDescription]);
+  const draft = edited ?? { description, data: conversation.values.data ?? {} };
   const messages = conversation.messages;
   const { preset, presetId, setSelected, thinkingMode, setThinking } = useChatModel(presets, meta);
   const canSearch = searchConfigured || preset?.provider === "deepseek";
@@ -106,7 +109,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
       const shouldTitle = !messages.length && (!meta?.title || meta.title === t("新需求对话"));
       const firstLine = input.trim().split(/\r?\n/).map(line => line.replace(/^#+\s*/, "").trim()).find(Boolean) ?? "";
       await conversation.send({ retry, context: { preset: preset.id, locale, search: searchOn, thinking: thinkingMode,
-        input_fingerprint: inputFingerprint(draft.data, draft.description) },
+        input_fingerprint: inputFingerprint(draft.data, edited?.description ?? storedDescription) },
         metadata: { preset: preset.id, provider: preset.provider, model: preset.name || preset.model,
           thinking: thinkingMode, search: searchOn, ...(shouldTitle && firstLine ? { title: firstLine.slice(0, 120) } : {}) } });
     } catch (error) { toast.error(errorText(error)); }
@@ -141,10 +144,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
           <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain">
             <div ref={content} className="grid min-h-full grid-cols-1">
               {!messages.length && !failure ? <div className="mx-auto flex min-h-full flex-col justify-center gap-4 py-6">
-                <div className="space-y-1">
-                  <h2 className="text-base font-semibold">{t("先聊聊，你想优化什么事项？")}</h2>
-                  <p className="text-xs text-muted-foreground">{t("在对话中确认的目标与限制会自动整理到右侧需求稿。")}</p>
-                </div>
+                <h2 className="text-base font-semibold">{t("先聊聊，你想优化什么事项？")}</h2>
                 <div className="grid gap-2">{STARTERS.map(item => <button key={item.title} type="button"
                   disabled={busy || launching} onClick={() => { setInput(t(item.text)); inputArea.current?.focus(); }}
                   className="flex items-center gap-3 rounded-xl border border-border/80 bg-card p-3 text-left text-sm shadow-2xs transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">

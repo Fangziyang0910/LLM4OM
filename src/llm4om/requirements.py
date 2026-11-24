@@ -50,7 +50,7 @@ def update_draft(description: Annotated[str, StringConstraints(strip_whitespace=
 
     Call once when the user supplies or asks to organize business facts, after any searches, then reply.
     Preserve the user's wording, scope, priorities and edits; do not add unstated conditions or promote preferences
-    into requirements. Mark unresolved questions, assumptions and conflicts explicitly. Do not call when the user
+    into requirements. Include open points only when you can name a specific unresolved question, assumption or conflict. Do not call when the user
     explicitly asks to discuss only or not to change the draft for now.
     """
     return Command(update={"description": description,
@@ -98,14 +98,15 @@ def requirements_graph() -> Any:
                   "idea, even if the draft is incomplete. A request to think through a problem is not itself a request to avoid drafting. "
                   "Do not record exploratory options or hypotheticals as requirements. Gather needed references first, update the complete "
                   "draft once, then give the final reply. Briefly explain what changed instead of repeating the full draft in chat; "
-                  "ask the most useful next question if an important point remains unresolved. "
+                  "ask a follow-up only if a material decision is still open. A short acknowledgment of the actual edit is enough otherwise. "
                   "If the user explicitly asks to discuss only or not to change the draft for now, do not call update_draft even if new facts appear; "
                   "keep the current draft, reply in chat, and update it later when the user asks to record or prepare it. Otherwise, when a "
                   "draft is being prepared and the user gives new confirmed facts, update it in the same turn. "
                   "You may also chat without changing the draft when no requirements change. "
                   "The draft is a standalone business problem: what to decide, the desired outcome, actual conditions, data and units. "
                   "Keep the draft compact and proportional to the problem: state each fact once, merging overlapping sections. "
-                  "Omit and remove empty headings, workflow status reports, checklists and hypothetical future requirements. "
+                  "Give each section a business purpose. When the last question is settled, omit its heading and any "
+                  "placeholder such as “无待确认项” or “None”. Skip empty notes, inventories and unsolicited progress summaries. "
                   "Keep unresolved questions, assumptions and conflicts that still need confirmation in the draft as open points, not as requirements. "
                   "Preserve confirmed facts, including unrelated ones, with their quantities, units, bounds and direction, and distinguish "
                   "hard requirements from preferences. "
@@ -114,8 +115,7 @@ def requirements_graph() -> Any:
                   "draft text. "
                   "Apply the latest user request to it, replacing superseded requirements. Reconcile open questions against confirmed "
                   "facts, including manual edits: remove questions already answered and integrate their answers into the conditions. "
-                  "If enough has been supplied, say the user can review the draft and use it for modeling. Do not require every problem to "
-                  "fit a fixed template. Never invent numbers, assume unconfirmed rules or silently relax requirements. Read the supplied "
+                  "Give handoff instructions only when asked. Never invent numbers, assume unconfirmed rules or silently relax requirements. Read the supplied "
                   "data and use its actual file names. "
                   "When web_search is available, use it for requested or necessary current public information. "
                   "Search with focused public queries, not private attachments or the full conversation. "

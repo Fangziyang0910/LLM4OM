@@ -24,10 +24,6 @@ export type ToolArtifact = {
 
 type ResultProps = { artifact?: ToolArtifact; onOpenPlan?: (source: SourceRun) => void; onCompare?: (group: string) => void };
 
-function DraftResult() {
-  return <p className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-success/20 bg-success/8 px-3 py-1 text-xs font-medium text-success"><Check className="size-3.5 shrink-0" />{t("需求稿已整理")}</p>;
-}
-
 function SelectedPlan({ artifact, onOpenPlan }: ResultProps) {
   const plan = artifact?.selected_plan;
   if (!plan) return null;
@@ -97,7 +93,7 @@ function Search({ artifact }: ResultProps) {
 }
 
 export const resultViews: Readonly<Record<string, ComponentType<ResultProps>>> = {
-  draft: DraftResult, selected_plan: SelectedPlan, calculation: Calculation, plans: Plans, search: Search,
+  selected_plan: SelectedPlan, calculation: Calculation, plans: Plans, search: Search,
 };
 
 // Saved messages predating artifact types keep their original presentation.
@@ -110,7 +106,7 @@ const tools = new Map<string, { activity: string; result?: string }>([
   ["lookup_variables", { activity: "正在读取方案决策明细…" }],
   ["calculate", { activity: "正在精确核对数值…", result: "calculation" }],
   ["select_plan", { activity: "正在切换当前讨论方案…", result: "selected_plan" }],
-  ["update_draft", { activity: "正在同步更新需求描述…", result: "draft" }],
+  ["update_draft", { activity: "正在同步更新需求描述…" }],
 ]);
 
 export function activity(name: string): string {

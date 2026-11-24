@@ -43,7 +43,7 @@ The platform integrates **9 modeling strategies**: 8 exact-modeling workflows an
 | 💬 **Model through conversation** | Discuss an idea, calculate a first plan, inspect results and revise conditions in one agent. Specify methods and libraries in chat, or use the retained manual workbench |
 | 🧠 **9 modeling strategies** | Direct, OR-LLM-Agent, LLMOPT, TriVAL, BIND, AutoCO, OptiTree, Chain-of-Experts and OptiMUS 0.3; each has its own LangGraph |
 | 🧩 **5 modeling libraries** | Pyomo, OR-Tools, CVXPY, PySCIPOpt and CasADi, with backend discovery through each library’s own plugin registry |
-| 📝 **Requirements chat** | Clarify the decision, objectives and conditions, including open questions and conflicts; review the editable draft before handing it to a modeling method |
+| 📝 **Requirements chat** | Capture the decision, objectives and conditions in an editable draft. Open questions appear only while there is something to resolve |
 | 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
 | ⚖️ **Compare methods** | Run up to 12 methods or models on one problem and compare objective, time and tokens |
 | 💬 **Explain and revise plans** | Get a direct answer with actual choices, locations, quantities and cost or profit, followed by decision details; change conditions and compare the new plan with the saved original |

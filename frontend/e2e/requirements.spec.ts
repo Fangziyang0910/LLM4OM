@@ -1,5 +1,27 @@
 import { expect, test } from "@playwright/test";
 
+test("reopening a draft hides empty sections and sends the visible problem to Quick Solve", async ({ page }) => {
+  await page.goto("/model");
+  await page.getByRole("button", { name: "通过对话整理需求" }).click();
+  await page.waitForURL(/\/chat\//);
+  const id = page.url().split("/").at(-1)!;
+  const problem = "安排 A 和 B 的产量。工时按小时，预算无上限。";
+  const stored = problem + "\n\n## 待确认\n- 无（工时单位已确认）。\n\n备注：无";
+  const response = await page.request.post(`/threads/${id}/state`, { data: { values: { description: stored }, as_node: "discuss" } });
+  expect(response.ok()).toBe(true);
+  await page.reload();
+  await expect(page.getByLabel("问题描述")).toHaveValue(problem);
+  expect((await (await page.request.get(`/threads/${id}`)).json()).values.description).toBe(stored);
+  await page.getByRole("button", { name: "带入快速求解", exact: true }).click();
+  await expect(page.getByLabel("问题描述")).toHaveValue(problem);
+  await page.goto(`/chat/${id}`);
+  await page.getByLabel("发送给需求助手").fill("我想安排工厂 A、B 两种产品的生产。");
+  await page.getByLabel("发送给需求助手").press("Enter");
+  await expect(page.getByRole("log")).toContainText("每件产品的利润和资源消耗是多少");
+  await expect(page.getByRole("log")).not.toContainText("需求稿已整理");
+  await expect(page.getByLabel("问题描述")).toHaveValue(/待确认：每件利润/);
+});
+
 test("requesting prices with search off finishes instead of repeatedly updating the draft", async ({ page }) => {
   await page.goto("/model");
   await page.getByRole("button", { name: "通过对话整理需求" }).click();
