@@ -33,7 +33,7 @@ from llm4om.methods import Method, methods
 from llm4om.problem import problem_text, validate_data_files, validate_description
 from llm4om.progress import NAMESPACE, save_progress, timing
 from llm4om.runtime import RECURSION_LIMIT, Context, LimitExceeded, Limits, Recorder
-from llm4om.sandbox import Sandbox
+from llm4om.sandbox import Sandbox, SolveResult
 
 
 class RunInput(TypedDict, total=False):
@@ -159,6 +159,8 @@ def platform_graph(method: Method) -> Any:
                 "solver": target.solver if target is not None else "AUTO",
                 "preset": preset, "preset_name": preset_name,
                 "llm": settings.public(),
+                # Limited CVXPY results from this platform require a checked iterate from the worker.
+                **({"cvxpy_limit_checked": True} if target and target.language == "cvxpy" else {}),
                 "explain": choice.explain,
                 "locale": choice.locale,
                 "sandbox": resources.sandbox.kind, "worker_image": resources.sandbox.image if resources.sandbox.kind == "docker" else None}
@@ -262,7 +264,7 @@ def platform_graph(method: Method) -> Any:
         diagnosis = solved.get("diagnosis") or {}
         diagnosed = solved.get("status") == "infeasible" and diagnosis.get("items") and not diagnosis.get("error")
         interpret = ((state.get("spec") or {}).get("explain") and not state.get("failure") and not solved.get("error")
-                     and (solved.get("status") in {"optimal", "feasible", "locally_optimal"} or diagnosed))
+                     and (SolveResult.from_payload(solved).has_solution or diagnosed))
         return "explain" if interpret else "finish"
 
     builder = StateGraph(RunState, input_schema=RunInput, context_schema=RunContext)
@@ -286,7 +288,7 @@ async def run(description: str, *, method: str = "direct", language: str = "pyom
               solver: str | None = None, data: dict[str, str] | None = None,
               preset: str | None = None, llm: LLMSettings | None = None,
               workspace: str | Path | None = None, sandbox: str | None = None,
-              resources: Resources | None = None,
+              resources: Resources | None = None, time_limit: float | None = None,
               change: str | None = None, explain: bool = False, locale: Literal["zh", "en"] = "zh",
               on_step: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
     """Run one method in process and return the final state. `on_step` receives each step as it is recorded."""
@@ -302,7 +304,7 @@ async def run(description: str, *, method: str = "direct", language: str = "pyom
     graph.checkpointer = False
     async for mode, chunk in graph.astream(
             {"description": description, "data": data or {}, "change": change}, config,
-            context=RunContext(language, preset, solver, explain, locale), stream_mode=["custom", "values"]):
+            context=RunContext(language, preset, solver, explain, locale, time_limit), stream_mode=["custom", "values"]):
         if mode == "values":
             final = chunk
         elif on_step and "step" in chunk:

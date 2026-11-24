@@ -1,0 +1,1 @@
+import{r as e}from"./rolldown-runtime-XKyaHtl9.js";import{i as t}from"./react-DSaHhmf3.js";var n=e(t(),1);function r(e=`1024px`){let t=(0,n.useMemo)(()=>matchMedia(`(min-width: ${e})`),[e]),r=(0,n.useCallback)(e=>(t.addEventListener(`change`,e),()=>t.removeEventListener(`change`,e)),[t]);return(0,n.useSyncExternalStore)(r,()=>t.matches)}export{r as t};

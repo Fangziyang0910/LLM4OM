@@ -1,4 +1,4 @@
-import { STATUS } from "@/format";
+import { STATUS, uncheckedCvxpyLimit } from "@/format";
 import { locale, t } from "@/i18n";
 import type { Options } from "@/types";
 import type { RunMeta, RunValues } from "@/features/runs/types";
@@ -22,6 +22,7 @@ const inlineCode = (text: string, inTable = false) => {
 export function report(meta: RunMeta, values: RunValues, options: Options, link?: string): string {
   const method = options.methods.find(item => item.id === meta.method);
   const solve = values.solve;
+  const unchecked = uncheckedCvxpyLimit(values.spec, solve?.status);
   const usage = values.usage;
   const parts = [`# ${meta.title}`, [
     `- ${t("建模方法")}${COLON}${method?.name ?? meta.method}`,
@@ -47,7 +48,7 @@ export function report(meta: RunMeta, values: RunValues, options: Options, link?
   if (values.formulation) parts.push(`## ${t("数学模型")}\n\n${values.formulation.trim()}`);
   if (values.code) parts.push(`## ${t("求解代码")}\n\n${fence(values.code, "python")}`);
   if (solve) {
-    if (values.infeasibility) {
+    if (!values.failure && values.infeasibility) {
       const explanation = values.infeasibility;
       parts.push([`## ${t("为什么无解")}`, explanation.summary,
         ...explanation.conflicts.map(item => `${item.explanation}\n\n${item.constraints.map(constraint => `- ${inlineCode(constraint)}`).join("\n")}`),
@@ -55,7 +56,7 @@ export function report(meta: RunMeta, values: RunValues, options: Options, link?
           ...explanation.adjustments.map(item => `- **${item.title}**${COLON}${item.instruction}`)] : []),
       ].join("\n\n"));
     }
-    if (values.explanation) {
+    if (!unchecked && !values.failure && values.explanation) {
       const explanation = values.explanation;
       const decisions = explanation.decisions
         .filter(item => Object.hasOwn(solve.variables, item.variable))
@@ -70,7 +71,7 @@ export function report(meta: RunMeta, values: RunValues, options: Options, link?
     const lines = [`- ${t("求解状态")}${COLON}${(STATUS[solve.status] ?? solve.status)}`];
     if (solve.objective != null) lines.push(`- ${t("目标值")}${COLON}${solve.objective}`);
     const nonzero = Object.entries(solve.variables).filter(([, value]) => value != null && value !== 0);
-    let text = `## ${t("求解结果")}\n\n${lines.join("\n")}`;
+    let text = `## ${unchecked ? t("未经核验的求解器记录") : values.failure ? t("候选模型的求解记录") : t("求解结果")}\n\n${lines.join("\n")}`;
     if (nonzero.length) {
       text += `\n\n${t("非零变量（{count} / {total}）", { count: nonzero.length, total: Object.keys(solve.variables).length })}${COLON}\n\n`
         + `| ${t("变量")} | ${t("取值")} |\n|---|---:|\n` + nonzero.slice(0, 500).map(([name, value]) => `| ${inlineCode(name, true)} | ${value} |`).join("\n");

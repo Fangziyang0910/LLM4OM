@@ -1,0 +1,1 @@
+var e=e=>e.checkpoint_id?`${e.thread_id}:${e.checkpoint_id}`:e.thread_id,t=(e,t)=>e?.thread_id===t?.thread_id&&e?.checkpoint_id===t?.checkpoint_id;function n(e){return e.meta.kind==null||e.meta.kind===`run`}export{t as n,e as r,n as t};

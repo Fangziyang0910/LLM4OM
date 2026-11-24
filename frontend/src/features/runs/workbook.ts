@@ -1,5 +1,5 @@
 import type { CellObject, Row, Sheet } from "write-excel-file/universal";
-import { STATUS } from "@/format";
+import { canHaveSolution, STATUS, uncheckedCvxpyLimit } from "@/format";
 import { t } from "@/i18n";
 import { groupVariables } from "@/features/runs/tables";
 import { targetLabel } from "@/features/runs/target";
@@ -18,18 +18,18 @@ const wide = (value: string): Row => [cell(value, {
 const chunkRows = (text: string): Row[] =>
   text.split("\n").flatMap(paragraph => (paragraph.match(/[\s\S]{1,450}/gu) || [""]).map(wide));
 
-export function hasSolution(solve: Solve | null | undefined): solve is Solve {
-  return !!solve && !solve.error && ["optimal", "feasible", "locally_optimal", "time_limit", "iteration_limit"].includes(solve.status)
-    && (solve.objective != null || Object.keys(solve.variables).length > 0 || !!solve.pareto?.solutions.length);
+export function hasSolution(values?: RunValues): values is RunValues & { solve: Solve } {
+  const solve = values?.solve;
+  return !values?.failure && !!solve && !solve.error && canHaveSolution(solve.status) && !uncheckedCvxpyLimit(values?.spec, solve.status)
+    && (solve.objective != null || Object.values(solve.variables).some(value => value != null) || !!solve.pareto?.solutions.length);
 }
 
 /** A business plan with every actual value, plus the problem and settings that produced it. */
 function solutionWorkbook(meta: RunMeta, values: RunValues, options: Options, link?: string): Sheet<Blob>[] {
-  const solve = values.solve;
-  if (!hasSolution(solve)) {
+  if (!hasSolution(values)) {
     throw new Error(t("当前没有可导出的求解方案。"));
   }
-  const explanation = values.explanation;
+  const { solve, explanation } = values;
   const labels = new Map(explanation?.decisions.map(item => [item.variable, item]));
   const plan: Row[] = [
     [cell(meta.title || t("求解方案"), { fontSize: 16, fontWeight: "bold", columnSpan: 4, height: 42 })],

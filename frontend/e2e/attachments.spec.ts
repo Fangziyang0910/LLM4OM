@@ -27,6 +27,53 @@ test("data rows can be added, saved and cancelled without editing CSV syntax", a
     .toBe("客户,需求量\n门店A,003\n门店B,004\n");
 });
 
+test("mixed text encodings preserve Excel headers and reject unreadable files individually", async ({ page }) => {
+  await page.goto("/model");
+  const contents = "仓库,容量\n上海,003\n";
+  await page.locator('input[type="file"]').setInputFiles([
+    { name: "excel.csv", mimeType: "text/csv", buffer: Buffer.from("\uFEFF" + contents, "utf16le") },
+    { name: "legacy.csv", mimeType: "text/csv", buffer: Buffer.from([0xb2, 0xd6, 0xbf, 0xe2, 0x0a]) },
+    { name: "costs.csv", mimeType: "text/csv", buffer: Buffer.from("\uFEFF" + contents) },
+  ]);
+  await expect(page.getByRole("button", { name: "编辑 costs.csv" })).toBeVisible();
+  const data = await page.evaluate(() => JSON.parse(localStorage.getItem("llm4om-draft")!).data);
+  expect(data).toEqual({ "excel.csv": contents, "costs.csv": contents });
+  await expect(page.getByText(/无法读取 legacy.csv.*UTF-8/)).toBeVisible();
+});
+
+test("several ordinary attachments survive reloading a quick-solve draft above localStorage capacity", async ({ page }) => {
+  await page.goto("/model");
+  const names = ["orders.csv", "capacity.csv", "prices.csv"];
+  const contents = names.map((_, i) => "row,value\n" + (i + ",200\n").repeat(310_000));
+  await page.locator('input[type="file"]').setInputFiles(names.map((name, i) => ({
+    name, mimeType: "text/csv", buffer: Buffer.from(contents[i]),
+  })));
+  for (const name of names) await expect(page.getByRole("button", { name: "编辑 " + name, exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "问题描述" }).fill("Use all three tables");
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue("Use all three tables");
+  for (const name of names) await expect(page.getByRole("button", { name: "编辑 " + name, exact: true })).toBeVisible();
+  for (const [i, name] of names.entries()) {
+    await page.getByRole("button", { name: "编辑 " + name, exact: true }).click();
+    await page.getByRole("tab", { name: "原文", exact: true }).click();
+    const raw = await page.getByLabel("数据文件原文").inputValue();
+    expect(Buffer.from(raw).equals(Buffer.from(contents[i])), name).toBe(true);
+    await page.getByRole("button", { name: "取消", exact: true }).click();
+  }
+  await page.getByRole("button", { name: "编辑 capacity.csv", exact: true }).click();
+  await page.getByLabel("第 1 行，第 2 列", { exact: true }).fill("999");
+  await page.getByRole("button", { name: "保存数据", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.reload();
+  await page.getByRole("button", { name: "编辑 capacity.csv", exact: true }).click();
+  await expect(page.getByLabel("第 1 行，第 2 列", { exact: true })).toHaveValue("999");
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await page.getByRole("button", { name: "移除 orders.csv", exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "编辑 prices.csv", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "编辑 orders.csv", exact: true })).toHaveCount(0);
+});
+
 test("dragging text into the problem preserves native insertion and file imports", async ({ page }) => {
   await page.goto("/model");
   const input = page.getByRole("textbox", { name: "问题描述", exact: true });

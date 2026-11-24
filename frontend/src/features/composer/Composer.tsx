@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ArrowRight, Factory, GitFork, MessageSquareText, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { t } from "@/i18n";
 import { ProblemEditor } from "@/features/composer/ProblemEditor";
 import { type ModelingConfigProps, useRunLauncher } from "@/features/composer/RunSettings";
 import { readDataFiles } from "@/features/composer/files";
+import { saveDraft } from "./draft";
 export { initialDraft } from "./draft";
 import type { Draft } from "@/types";
 
@@ -62,6 +63,8 @@ export type ComposerProps = ModelingConfigProps & {
 export function Composer({ onDiscuss, ...modeling }: ComposerProps) {
   const { draft, setDraft, options } = modeling;
   const [reading, setReading] = useState(false);
+  const latestDraft = useRef(draft);
+  useLayoutEffect(() => { latestDraft.current = draft; }, [draft]);
   const set = (change: Partial<Draft>) => setDraft(current => ({ ...current, ...change }));
   const { busy, setBusy, settingsTrigger, startButton, settingsDialog } = useRunLauncher({
     ...modeling,
@@ -69,12 +72,18 @@ export function Composer({ onDiscuss, ...modeling }: ComposerProps) {
     reading,
   });
 
+  const applyFiles = async (files: Record<string, string>) => {
+    if (!Object.keys(files).length) return;
+    const current = latestDraft.current;
+    const data = { ...current.data, ...files };
+    try { await saveDraft({ ...current, data }); }
+    catch (error) { toast.error(t("草稿未保存到浏览器：{error}", { error: errorText(error) }), { id: "draft-save" }); }
+    setDraft(latest => ({ ...latest, data }));
+  };
   const attach = async (list: FileList | null) => {
     setReading(true);
-    try {
-      const data = await readDataFiles(list, draft.data);
-      setDraft(current => ({ ...current, data: { ...current.data, ...data } }));
-    } finally { setReading(false); }
+    try { await applyFiles(await readDataFiles(list, draft.data)); }
+    finally { setReading(false); }
   };
 
   return <div className="flex h-full flex-col">
@@ -101,7 +110,7 @@ export function Composer({ onDiscuss, ...modeling }: ComposerProps) {
               const previous = { description: draft.description, data: draft.data, origin: draft.origin }; set({ description: "", data: {}, origin: undefined });
               toast.success(t("已清空问题和附件。"), { action: { label: t("撤销"), onClick: () => set(previous) } });
             }}
-            onDataChange={(name, content) => setDraft(current => ({ ...current, data: { ...current.data, [name]: content } }))}
+            onDataChange={(name, content) => applyFiles({ [name]: content })}
             onRemove={name => setDraft(current => {
               const data = { ...current.data }; delete data[name]; return { ...current, data };
             })} />

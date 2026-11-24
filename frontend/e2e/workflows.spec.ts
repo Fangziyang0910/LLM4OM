@@ -12,11 +12,19 @@ async function production(page: Page) {
 test("a phone opens the requested conversation and shows a chosen plan immediately", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await production(page);
+  const steps = page.getByRole("tab", { name: "求解步骤", exact: true });
+  await expect(page.getByRole("button", { name: "求解步骤", exact: true })).toHaveCount(0);
+  await steps.click();
+  await expect(steps).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tab", { name: "模型与结果", exact: true }).click();
   await page.getByRole("button", { name: "对话追问", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "发送给方案助手" })).toBeVisible({ timeout: 2000 });
-  await page.getByLabel("已生成的方案").locator("summary").click();
+  await expect(page.getByLabel("相关方案", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "查看原方案", exact: true }).click();
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible();
+  const embeddedSteps = page.getByRole("button", { name: "求解步骤", exact: true });
+  await embeddedSteps.click();
+  await expect(embeddedSteps).toHaveAttribute("aria-expanded", "true");
 });
 
 test("a phone reviews the requirements draft before starting a modeling run", async ({ page }) => {
@@ -51,6 +59,41 @@ test("opening the original of a revised plan preserves the displayed baseline ch
   await page.getByRole("tab", { name: "方案对比", exact: true }).click();
   await page.getByRole("link", { name: "查看原方案", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`checkpoint=${state.checkpoint.checkpoint_id}`));
+});
+
+test("failed and infeasible revisions do not export a business plan or report removed decisions", async ({ page }) => {
+  const original = await production(page);
+  const { checkpoint, values } = await (await page.request.get(`/threads/${original}/state`)).json();
+  const group = "unusable-" + Date.now();
+  for (const status of ["optimal", "infeasible"]) {
+    const failure = status === "optimal" ? "Candidate failed validation" : null;
+    const created = await page.request.post("/threads", { data: {
+      metadata: { graph_id: "direct", method: "direct", title: status, group,
+        parent: { thread_id: original, checkpoint_id: checkpoint.checkpoint_id }, scenario: { name: status, instruction: "Limit capacity" } },
+      supersteps: [{ updates: [{ as_node: "finish", values: { ...values, failure, explanation: null,
+        revision: { instruction: "Limit capacity", description: values.description },
+        solve: { ...values.solve, status, objective: failure ? 123 : null, variables: failure ? { candidate: 77 } : {} } } }] }],
+    } });
+    expect(created.ok()).toBe(true);
+    const { thread_id } = await created.json();
+    await page.goto(`/run/${thread_id}`);
+    const pane = page.getByRole("tabpanel");
+    await expect(pane).toContainText("前后方案指标对比");
+    await expect(pane).toContainText("需要两个可用的求解方案才能比较决策。");
+    await expect(pane.getByRole("table")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "导出 Excel" })).toHaveCount(0);
+    await page.getByRole("tab", { name: "求解结果", exact: true }).click();
+    if (failure) await expect(pane).not.toContainText("candidate");
+    await page.getByRole("button", { name: "对话追问", exact: true }).click();
+    const prompt = page.getByRole("button", { name: failure ? "排查失败原因" : "解释条件冲突" });
+    await prompt.click();
+    await expect(page.getByRole("textbox", { name: "发送给方案助手" })).toHaveValue(failure ? /失败/ : /冲突/);
+    await expect(page.getByRole("button", { name: "解读关键决策" })).toHaveCount(0);
+  }
+  await page.goto("/compare/" + group);
+  const failedRow = page.getByRole("row").filter({ hasText: "运行失败" }).first();
+  await expect(failedRow.getByRole("cell").nth(3)).toHaveText("—");
+  await expect(page.getByRole("main")).not.toContainText("candidate");
 });
 
 test("requirements keep conversation on the left and retain draft input across layout changes", async ({ page }) => {
@@ -93,4 +136,54 @@ test("the original row in a scenario comparison opens its frozen baseline", asyn
   } } });
   await open.click();
   await expect(page).toHaveURL(new RegExp(`checkpoint=${state.checkpoint.checkpoint_id}`));
+});
+
+
+test("requirements can be typed while an attachment is saved and the first turn uses that file", async ({ page }) => {
+  await page.goto("/model");
+  await page.getByRole("button", { name: "通过对话整理需求" }).click();
+  await page.waitForURL(/\/chat\//);
+  const threadId = page.url().split("/").at(-1)!;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`**/threads/${threadId}/state`, async route => {
+    if (route.request().method() === "POST") await pending;
+    await route.continue();
+  });
+  const input = page.getByRole("textbox", { name: "发送给需求助手" });
+  await page.getByLabel("添加附件", { exact: true }).setInputFiles({
+    name: "costs.csv", mimeType: "text/csv", buffer: Buffer.from("产品,成本\nA,3"),
+  });
+  try {
+    await input.fill("请根据我刚上传的成本表整理生产需求。", { timeout: 4_000 });
+    await expect(page.getByRole("button", { name: "发送", exact: true })).toBeDisabled();
+    await input.press("Enter");
+    await expect(page.getByRole("log")).not.toContainText("请根据我刚上传");
+  } finally { release(); }
+  await expect(page.getByRole("button", { name: "发送", exact: true })).toBeEnabled();
+  await input.press("Enter");
+  await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue(/costs.csv/);
+  expect((await (await page.request.get(`/threads/${threadId}`)).json()).values.data["costs.csv"]).toContain("A,3");
+});
+
+
+test("limited runs distinguish verified decisions, an empty search and an old unchecked CVXPY result", async ({ page }) => {
+  const original = await production(page);
+  const { values } = await (await page.request.get(`/threads/${original}/state`)).json();
+  for (const mode of ["verified", "unchecked", "empty"]) {
+    const created = await page.request.post("/threads", { data: {
+      metadata: { graph_id: "direct", method: "direct", title: "限时生产计划" },
+      supersteps: [{ updates: [{ as_node: "finish", values: { ...values, explanation: null,
+        spec: { ...values.spec, language: "cvxpy", cvxpy_limit_checked: mode !== "unchecked" },
+        solve: { ...values.solve, status: "time_limit", objective: mode === "empty" ? null : 0,
+          variables: mode === "empty" ? {} : { output: 0 } } } }] }],
+    } });
+    expect(created.ok()).toBe(true);
+    await page.goto(`/run/${(await created.json()).thread_id}`);
+    await expect(page.getByRole("main")).toContainText(
+      mode === "empty" ? "尚未找到可行方案" : mode === "unchecked" ? "旧版记录没有核验" : "最优性尚未证明");
+    await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toHaveCount(mode === "verified" ? 1 : 0);
+    await page.getByRole("button", { name: "对话追问", exact: true }).click();
+    await expect(page.getByRole("button", { name: mode === "verified" ? "核对目标值" : "解释求解状态", exact: true })).toBeVisible();
+  }
 });

@@ -14,6 +14,7 @@ import { ChatInput } from "@/features/chat/ChatInput";
 import { useChatModel, useConversation } from "@/features/chat/conversation";
 import { useChatScroll } from "@/features/chat/scroll";
 import { client } from "@/features/runs/sdk";
+import { hasSolution } from "@/features/runs/workbook";
 import { StatusBadge } from "@/features/runs/status";
 import { errorText, formatNumber, savedRunState } from "@/format";
 import { locale, t } from "@/i18n";
@@ -46,12 +47,22 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
   const summary = useQuery({ queryKey: ["source-run", currentPlan?.thread_id, currentPlan?.checkpoint_id], enabled: !!currentPlan,
     queryFn: () => client.threads.getState<RunValues>(currentPlan!.thread_id, currentPlan!.checkpoint_id), staleTime: Infinity, retry: false });
   const values = summary.data?.values as RunValues | undefined;
+  const solve = hasSolution(values) ? values.solve : null;
   const { preset, presetId, setSelected, thinkingMode, setThinking } = useChatModel(presets, meta);
   const busy = conversation.busy;
   const failure = conversation.error || conversation.values.failure;
   const plans = conversation.values.plans ?? [];
   const groups = [...new Set(plans.flatMap(plan => plan.group ? [plan.group] : []))];
   const openPlan = (source: SourceRun) => { setViewed(source); setPane("plan"); };
+
+  const originalButton = original && <Button variant="ghost" size="sm" className="justify-between rounded-lg text-xs"
+    onClick={() => openPlan(original)}>{t("查看原方案")}<ArrowUpRight /></Button>;
+  const outcome = values && savedRunState(values);
+  const starter = solve ? [t("解读关键决策"), t("请用通俗的话解释这个方案的主要决策和原因。")]
+    : outcome === "infeasible" ? [t("解释条件冲突"), t("哪些条件无法同时满足？请结合这次求解的证据解释冲突。")]
+    : outcome === "failed" || outcome === "error" ? [t("排查失败原因"), t("这次求解在哪一步失败了？请根据运行记录说明原因和我可以做的下一步。")]
+    : [t("解释求解状态"), t("这个求解状态意味着什么？根据这次运行记录，我接下来可以怎么做？")];
+  const fillQuestion = (question: string) => { setInput(question); inputArea.current?.focus(); };
 
   const submit = async (retry = false) => {
     if (busy || (!retry && !input.trim())) return;
@@ -77,22 +88,22 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
         {summary.error ? <p role="alert" className="text-destructive">{errorText(summary.error)}</p> : !values ? <Spinner /> : <>
           <p className="truncate font-medium" title={values.description}>{values.description?.trim().split("\n")[0].replace(/^#{1,6}\s+/, "")}</p>
           <div className="mt-2 flex items-center justify-between gap-2">
-            {values.solve?.pareto?.solutions.length ? <span>{t("多目标 Pareto 前沿")} <strong>{t("{count} 个 Pareto 解", { count: values.solve.pareto.total })}</strong></span>
-              : <span>{values.explanation?.objective_label || t("最优目标值")} <strong>{values.solve?.objective == null ? "—" : formatNumber(values.solve.objective)}</strong> {values.explanation?.objective_unit}</span>}
+            {solve?.pareto?.solutions.length ? <span>{t("多目标 Pareto 前沿")} <strong>{t("{count} 个 Pareto 解", { count: solve.pareto.total })}</strong></span>
+              : <span>{values.explanation?.objective_label || t("目标值")} <strong>{solve?.objective == null ? "—" : formatNumber(solve.objective)}</strong> {values.explanation?.objective_unit}</span>}
             <StatusBadge status={savedRunState(values)} />
           </div>
         </>}
         {viewed && !sameSource(viewed, currentPlan) ? <Button variant="link" size="xs" className="mt-2 h-auto p-0" onClick={() => setViewed(undefined)}>{t("返回当前讨论方案")}</Button> : null}
       </div>
-      <details className="max-h-48 shrink-0 overflow-y-auto rounded-xl border border-border/60 bg-muted/15 px-3 py-2 text-xs" aria-label={t("已生成的方案")}>
-        <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">{t("相关衍生方案")} · {plans.length + 1}</summary>
+      {plans.length ? <details className="max-h-48 shrink-0 overflow-y-auto rounded-xl border border-border/60 bg-muted/15 px-3 py-2 text-xs" aria-label={t("相关方案")}>
+        <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">{t("相关方案")} · {plans.length + Number(!!original)}</summary>
         <div className="mt-2 flex flex-col gap-1">
-          <Button variant="ghost" size="sm" className="justify-between rounded-lg text-xs" disabled={!original} onClick={() => original && openPlan(original)}>{t("查看原方案")}<ArrowUpRight /></Button>
+          {originalButton}
           {plans.map(plan => <Button key={sourceKey(plan.source)} variant="ghost" className="h-auto justify-between rounded-lg py-2 text-left text-xs whitespace-normal"
             onClick={() => openPlan(plan.source)} title={plan.instruction}><span>{plan.name}</span><ArrowUpRight className="shrink-0" /></Button>)}
           {groups.map((group, i) => <Button key={group} variant="ghost" size="sm" className="rounded-lg" onClick={() => onCompare(group)}><Columns3 />{t("查看多场景对比 {number}", { number: i + 1 })}</Button>)}
         </div>
-      </details>
+      </details> : originalButton}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain">
           <div ref={content} className="grid min-h-full grid-cols-1">
@@ -100,12 +111,12 @@ export function SolutionChat({ threadId, presets, openPresets, onFinished, onOpe
               failure={failure} disabled={busy} onRetry={() => void submit(true)} progress={progress}
               onOpenPlan={openPlan} onCompare={onCompare} />
               : <div className="mx-auto flex min-h-full max-w-md flex-col justify-center gap-3.5 py-6">
-                <h2 className="text-base font-semibold">{t("想进一步了解或微调当前方案吗？")}</h2>
-                <p className="text-xs leading-relaxed text-muted-foreground">{t("可以让我用通俗语言解读关键决策，或直接提出新的假设条件重新测算。")}</p>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setInput(t("请用通俗的话解释这个方案的主要决策和原因。")); inputArea.current?.focus(); }}>{t("解读关键决策")}</Button>
-                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setInput(t("如果预算或产能缩减 10%，方案会怎么变？")); inputArea.current?.focus(); }}>{t("测算条件变化")}</Button>
-                </div>
+                <h2 className="text-base font-semibold">{t("你想了解这次求解的哪一部分？")}</h2>
+                {values ? <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => fillQuestion(starter[1])}>{starter[0]}</Button>
+                  {solve?.objective != null ? <Button variant="outline" size="sm" className="rounded-xl"
+                    onClick={() => fillQuestion(t("这个目标值是怎么算出来的？请用实际决策数量和题目中的数据帮我核对。"))}>{t("核对目标值")}</Button> : null}
+                </div> : null}
               </div>}
           </div>
         </div>

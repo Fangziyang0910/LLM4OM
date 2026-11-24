@@ -23,13 +23,13 @@ function Form() {
 
 test("finishing an attachment preserves text edited while the file was loading", async () => {
   const { container } = render(<Form />);
-  let resolve!: (text: string) => void;
-  const file = { name: "data.csv", size: 12, text: () => new Promise<string>(done => { resolve = done; }) };
+  let resolve!: (buffer: ArrayBuffer) => void;
+  const file = { name: "data.csv", size: 12, arrayBuffer: () => new Promise<ArrayBuffer>(done => { resolve = done; }) };
   fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
   expect((screen.getByRole("button", { name: /正在读取数据/ }) as HTMLButtonElement).disabled).toBe(true);
   expect((container.querySelector('input[type="file"]') as HTMLInputElement).disabled).toBe(true);
   fireEvent.change(screen.getByRole("textbox", { name: "问题描述" }), { target: { value: "new problem" } });
-  await act(async () => resolve("a,b\n1,2"));
+  await act(async () => resolve(new TextEncoder().encode("a,b\n1,2").buffer));
   expect((screen.getByRole("textbox", { name: "问题描述" }) as HTMLTextAreaElement).value).toBe("new problem");
   expect(screen.getByText("data.csv")).toBeTruthy();
   expect(JSON.parse(localStorage.getItem("llm4om-draft")!)).toMatchObject({ description: "new problem", data: { "data.csv": "a,b\n1,2" } });
@@ -37,7 +37,7 @@ test("finishing an attachment preserves text edited while the file was loading",
 
 test("an unreadable text attachment reports the failure and keeps the draft", async () => {
   const { container } = render(<Form />);
-  const file = { name: "data.csv", size: 12, text: () => Promise.reject(new Error("read failed")) };
+  const file = { name: "data.csv", size: 12, arrayBuffer: () => Promise.reject(new Error("read failed")) };
   fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith("无法读取 data.csv：read failed"));
   expect(JSON.parse(localStorage.getItem("llm4om-draft")!).data).toEqual({});
@@ -47,8 +47,8 @@ test("dropping unsupported files reports their format without discarding support
   render(<Form />);
   const read = vi.fn(async () => "%PDF-1.7 binary contents");
   fireEvent.drop(screen.getByRole("textbox", { name: "问题描述" }), { dataTransfer: { files: [
-    { name: "report.pdf", size: 20, text: read },
-    { name: "data.CSV", size: 12, text: async () => "name,price\nA,003\n" },
+    { name: "report.pdf", size: 20, arrayBuffer: read },
+    { name: "data.CSV", size: 12, arrayBuffer: async () => new TextEncoder().encode("name,price\nA,003\n").buffer },
   ] } });
   await screen.findByText("data.CSV");
   expect(screen.queryByText("report.pdf")).toBeNull();

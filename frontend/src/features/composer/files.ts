@@ -51,7 +51,15 @@ export async function readDataFiles(list: FileList | null, existing: Record<stri
         if (!count) continue;
         add(valid);
         toast.success(t("{name} 已转换为 {count} 个 CSV 文件。", { name: file.name, count }));
-      } else add({ [file.name]: await file.text() });
+      } else {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const encoding = bytes[0] === 0xff && bytes[1] === 0xfe ? "utf-16le"
+          : bytes[0] === 0xfe && bytes[1] === 0xff ? "utf-16be" : "utf-8";
+        let content: string;
+        try { content = new TextDecoder(encoding, { fatal: true }).decode(bytes); }
+        catch { throw new Error(t("请将文件另存为 UTF-8，或上传原始 XLSX 文件。")); }
+        add({ [file.name]: content });
+      }
     } catch (error) { toast.error(t("无法读取 {name}：{error}", { name: file.name, error: errorText(error) })); }
   }
   return data;

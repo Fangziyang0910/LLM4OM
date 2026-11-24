@@ -496,7 +496,10 @@ class OrtoolsLibrary:
 
         monitors.append(model.CustomLimit(expired))
         if objective is not None:
-            monitors.append(model.Maximize(objective, 1) if bundle.get("sense", "min") == "max" else model.Minimize(objective, 1))
+            sense = bundle.get("sense", "min")
+            if sense not in ("min", "max"):
+                raise ModelError(f"Unknown objective sense {sense!r}; use 'min' or 'max'.")
+            monitors.append(model.Maximize(objective, 1) if sense == "max" else model.Minimize(objective, 1))
         decision = bundle.get("search") or model.Phase(variables, model.CHOOSE_FIRST_UNBOUND, model.ASSIGN_MIN_VALUE)
         model.NewSearch(decision, monitors)
         values, value = None, None
@@ -612,6 +615,35 @@ class CvxpyLibrary:
         selection = Selection(model, backend, solve)
         return selection
 
+    @staticmethod
+    def _feasible_iterate(problem):
+        """USER_LIMIT can return an intermediate iterate that violates the original model."""
+        import cvxpy as cp
+        import numpy as np
+
+        tolerance = 1e-6
+        constraints = list(problem.constraints)
+        try:
+            if not np.isfinite(problem.value):
+                return False
+            for variable in problem.variables():
+                value = variable.value
+                if value is None or not np.all(np.isfinite(value)):
+                    return False
+                constraints.extend(variable.domain)
+                for attribute in ("integer", "boolean"):
+                    indices = variable.attributes[attribute]
+                    if not indices:
+                        continue
+                    entries = np.asarray(value) if indices is True else np.asarray(value)[tuple(zip(*indices))]
+                    if not np.allclose(entries, np.rint(entries), rtol=0, atol=tolerance):
+                        return False
+                    if attribute == "boolean" and np.any((entries < -tolerance) | (entries > 1 + tolerance)):
+                        return False
+            return all(constraint.value(tolerance=tolerance) for constraint in constraints)
+        except (ValueError, TypeError, NotImplementedError, ArithmeticError, cp.error.SolverError):
+            return False
+
     def solve(self, problem, time_limit, *, solver, interface="dcp"):
         """One CVXPY result reader, with each solver's own time-limit option."""
         import cvxpy as cp
@@ -653,6 +685,8 @@ class CvxpyLibrary:
             cp.settings.INFEASIBLE_OR_UNBOUNDED: "infeasible_or_unbounded", cp.USER_LIMIT: "time_limit",
         }.get(problem.status, "error")
         if problem.status not in cp.settings.SOLUTION_PRESENT or problem.value is None:
+            return status, None, None
+        if problem.status == cp.USER_LIMIT and not self._feasible_iterate(problem):
             return status, None, None
         values = {}
         for variable in problem.variables():
@@ -918,6 +952,8 @@ def run(request):
             result["solver"] = selection.solver  # OR-Tools reports the engine AUTO chose before solving.
             status, objective, values = selection.solve(request.get("time_limit", 60))
             result["solver"] = selection.solver  # CVXPY reports the engine it actually used after solving.
+            if request["language"] == "cvxpy" and status == "time_limit" and values is not None:
+                result["verified_iterate"] = True
             if status == "infeasible":
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                     result["diagnosis"] = diagnose(selection)

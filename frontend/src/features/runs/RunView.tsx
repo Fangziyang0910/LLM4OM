@@ -21,7 +21,7 @@ import { client } from "@/features/runs/sdk";
 import { t } from "@/i18n";
 import { report } from "@/features/runs/report";
 import { exportSolution, hasSolution } from "@/features/runs/workbook";
-import { STATUS, duration, errorText, formatNumber, formatTokens, outcome, tone } from "@/format";
+import { STATUS, duration, errorText, formatNumber, formatTokens, outcome, tone, uncheckedCvxpyLimit } from "@/format";
 import { phases } from "@/features/runs/steps";
 import type { Draft, Options } from "@/types";
 import type { RunMeta, RunValues, SourceRun, Step } from "@/features/runs/types";
@@ -67,6 +67,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const wide = useDesktop() && !embedded;
+  const showViewTabs = !wide && !embedded;
   const layout = useDefaultLayout({ id: "llm4om-run", panelIds: ["process", "outputs"], onlySaveAfterUserInteractions: true });
   const active = streaming || run?.status === "pending" || run?.status === "running";
   const now = useNow(active);
@@ -94,7 +95,8 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const tokens = usage ? usage.input_tokens + usage.output_tokens : null;
 
   const draft = (): Draft => ({ description: values.description ?? "", data: values.data ?? {}, method: meta.method,
-    language: meta.language, solver: meta.solver, preset: meta.preset ?? null, origin: threadId });
+    language: meta.language, solver: meta.solver, time_limit: values.spec?.limits?.solve_time_limit,
+    preset: meta.preset ?? null, origin: threadId });
   const link = new URL(`/run/${threadId}`, location.href);
   if (source?.checkpoint_id) link.searchParams.set("checkpoint", source.checkpoint_id);
   const href = link.href;
@@ -151,16 +153,16 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   </div> : null;
 
   const headerActions = <div className="flex shrink-0 items-center gap-1.5">
-    <Button variant={(wide && !assistantOpen ? withProcess : view === "process") ? "secondary" : "ghost"} size="sm" className="h-8 rounded-lg text-xs"
+    {!showViewTabs && <Button variant={(wide && !assistantOpen ? withProcess : view === "process") ? "secondary" : "ghost"} size="sm" className="h-8 rounded-lg text-xs"
       aria-expanded={wide && !assistantOpen ? withProcess : view === "process"}
       onClick={() => { if (wide && !assistantOpen) setProcessVisible(!withProcess); else setView(view === "process" ? "outputs" : "process"); }}>
-      <Layers className="size-3.5" />{t("求解步骤")}</Button>
+      <Layers className="size-3.5" />{t("求解步骤")}</Button>}
     {active ? <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" disabled={stopping} onClick={() => void stop()}>
       {stopping ? <Spinner /> : <Square className="size-3 fill-current" />}{stopping ? t("正在停止") : t("停止")}</Button> : <>
       {["failed", "error", "timeout", "interrupted"].includes(state) ? <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs"
         disabled={busy || !values.description} title={t("用同样的问题和设置再求解一次")} onClick={() => void rerun()}>
         {busy ? <Spinner /> : <RefreshCw className="size-3.5" />}{t("重新求解")}</Button> : null}
-      {hasSolution(solve) ? <Button variant="outline" size="sm" className="size-8 rounded-lg p-0 text-xs sm:w-auto sm:px-2.5" aria-label={t("导出 Excel")}
+      {finished && hasSolution(values) ? <Button variant="outline" size="sm" className="size-8 rounded-lg p-0 text-xs sm:w-auto sm:px-2.5" aria-label={t("导出 Excel")}
         title={t("导出 Excel")} disabled={exporting} onClick={() => void exportExcel()}>
         {exporting ? <Spinner /> : <FileDown className="size-3.5" />}<span className="hidden sm:inline">{t("导出表格")}</span></Button> : null}
     </>}
@@ -183,7 +185,8 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   </div>;
 
   if (embedded) {
-    const pareto = solve?.pareto?.solutions.length ? solve.pareto : null;
+    const accepted = hasSolution(values) ? values.solve : null;
+    const pareto = accepted?.pareto?.solutions.length ? accepted.pareto : null;
     const knee = pareto ? (pareto.solutions.find(item => item.knee) ?? pareto.solutions[0]) : null;
     const embeddedMeta = [engineBadge, elapsed != null ? duration(elapsed) : null].filter(Boolean).join(" · ");
     return <div className="flex h-full min-h-0 min-w-0 flex-col">
@@ -196,12 +199,12 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
             </div>
             : <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               {pareto ? <span className="text-base font-semibold tracking-tight tabular">{t("共 {total} 个非支配解", { total: pareto.total })}</span>
-                : solve?.objective != null ? <span className="flex items-baseline gap-1.5">
-                  <span className="text-xs text-muted-foreground">{values.explanation?.objective_label || t("最优目标值")}</span>
-                  <span className="text-lg font-bold tracking-tight tabular">{formatNumber(solve.objective)}</span>
+                : accepted?.objective != null ? <span className="flex items-baseline gap-1.5">
+                  <span className="text-xs text-muted-foreground">{values.explanation?.objective_label || t("目标值")}</span>
+                  <span className="text-lg font-bold tracking-tight tabular">{formatNumber(accepted.objective)}</span>
                   {values.explanation?.objective_unit ? <span className="text-xs text-muted-foreground">{values.explanation.objective_unit}</span> : null}
                 </span> : null}
-              <StatusBadge status={solve ? solve.status : state} />
+              <StatusBadge status={state} />
               <span title={configDetail} className="truncate text-xs text-muted-foreground tabular">{embeddedMeta}</span>
             </div>}
           {!active && pareto && knee ? <p className="truncate text-xs text-muted-foreground tabular">
@@ -260,9 +263,9 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
       <ResizableHandle withHandle aria-label={t("调整过程与结果的宽度")} className="mx-2 bg-transparent" />
       <ResizablePanel id="outputs" defaultSize="68%" minSize="30%"><Pane>{outputs}</Pane></ResizablePanel>
     </ResizablePanelGroup> : <div className="flex min-h-96 flex-1 shrink-0 flex-col gap-3 p-4 pt-3.5 sm:px-5 lg:min-h-0 lg:shrink">
-      {!wide && !embedded ? <Tabs value={view} onValueChange={value => setView(value as "outputs" | "process")}>
+      {showViewTabs ? <Tabs value={view} onValueChange={value => setView(value as "outputs" | "process")}>
         <TabsList className="w-full rounded-xl">
-          <TabsTrigger value="outputs" className="rounded-lg">{t("求解结果")}</TabsTrigger>
+          <TabsTrigger value="outputs" className="rounded-lg">{t("模型与结果")}</TabsTrigger>
           <TabsTrigger value="process" className="rounded-lg">{t("求解步骤")}{active ? <span className="size-1.5 animate-pulse rounded-full bg-primary" /> : null}</TabsTrigger>
         </TabsList>
       </Tabs> : null}
@@ -427,22 +430,27 @@ function Summary({ state, values, steps, error, active, elapsed, onTab, actions 
     <>{actions}<Button variant="outline" size="sm" className="rounded-lg" onClick={() => onTab("solution")}>{t("查看详情")}<ArrowRight /></Button></>);
 
   const kind = tone(solve.status);
-  const explain = kind === "good" ? null
+  const unchecked = uncheckedCvxpyLimit(values.spec, solve.status);
+  const explain = unchecked ? t("旧版记录没有核验停止时的数值是否满足约束。请重新求解以取得可核验的结果。")
+    : kind === "good" ? null
     : solve.status === "infeasible" ? (solve.diagnosis?.items.length
       ? t("当前条件存在冲突，无法同时满足（共定位到 {count} 处冲突条件），请查看下方冲突诊断与调整建议。", { count: solve.diagnosis.total })
       : t("当前约束条件之间存在矛盾，无法同时满足。建议点击右侧“调整条件”放宽部分限制后重试。"))
     : solve.status === "unbounded" ? t("优化目标可以无限放大或缩小，通常是因为缺少上限或预算等约束条件。")
+    : solve.status === "time_limit" || solve.status === "iteration_limit"
+      ? hasSolution(values) ? t("求解在达到上限时停止。下方是已找到的可行方案，最优性尚未证明。")
+        : t("求解在达到上限时停止，尚未找到可行方案。")
     : STATUS[solve.status] ?? solve.status;
 
-  const pareto = solve.pareto?.solutions.length ? solve.pareto : null;
+  const pareto = !unchecked && solve.pareto?.solutions.length ? solve.pareto : null;
   const knee = pareto ? (pareto.solutions.find(item => item.knee) ?? pareto.solutions[0]) : null;
   return frame(kind, kind === "good" ? <CircleCheck /> : <TriangleAlert />, <div className="flex flex-col gap-1">
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       {pareto ? <span className="flex flex-wrap items-baseline gap-2">
         <span className="text-xs font-medium text-muted-foreground">{t("多目标 Pareto 前沿")}</span>
         <span className="text-xl font-bold tracking-tight tabular sm:text-2xl">{t("共 {total} 个非支配解", { total: pareto.total })}</span>
-      </span> : solve.objective != null ? <span className="flex flex-wrap items-baseline gap-2">
-        <span className="text-xs font-medium text-muted-foreground">{values.explanation?.objective_label || t("最优目标值")}</span>
+      </span> : !unchecked && solve.objective != null ? <span className="flex flex-wrap items-baseline gap-2">
+        <span className="text-xs font-medium text-muted-foreground">{values.explanation?.objective_label || t("目标值")}</span>
         <span className="text-2xl font-bold tracking-tight tabular sm:text-3xl">{formatNumber(solve.objective)}</span>
         {values.explanation?.objective_unit ? <span className="text-xs font-medium text-muted-foreground">{values.explanation.objective_unit}</span> : null}
       </span> : <span className="font-semibold">{STATUS[solve.status] ?? solve.status}</span>}

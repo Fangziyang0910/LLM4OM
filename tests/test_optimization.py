@@ -54,7 +54,8 @@ def test_an_initial_idea_can_be_discussed_without_creating_a_run(make_resources,
 
 
 @pytest.mark.parametrize("mode", ["initial", "scenario"])
-def test_lost_save_response_reuses_the_saved_calculation_on_retry(make_resources, saved_plans, mode):
+@pytest.mark.parametrize("committed", [True, False])
+def test_a_failed_save_reuses_the_calculation_on_retry(make_resources, saved_plans, mode, committed):
     snapshots, client = saved_plans
     generations = []
 
@@ -82,8 +83,11 @@ def test_lost_save_response_reuses_the_saved_calculation_on_retry(make_resources
     save = client.threads.create.side_effect
 
     async def save_without_response(**kwargs):
-        await save(**kwargs)
-        raise httpx.ReadError("save response lost")
+        if client.threads.create.await_count == 1:
+            if committed:
+                await save(**kwargs)
+            raise httpx.ReadError("save response lost")
+        return await save(**kwargs)
 
     client.threads.create.side_effect = save_without_response
 
@@ -102,7 +106,8 @@ def test_lost_save_response_reuses_the_saved_calculation_on_retry(make_resources
         saved = snapshots[result["current"]["thread_id"]]["values"]
         assert saved["solve"]["objective"] == (13 if mode == "initial" else 12)
         assert len([item for item in result["messages"] if item.type == "human"]) == 1
-        client.threads.create.assert_awaited_once()
+        assert client.threads.create.await_count == (1 if committed else 2)
+        assert result["unsaved_plan"] is None
         assert generations == ["generate"]
 
     asyncio.run(check())
@@ -229,15 +234,26 @@ def test_scenario_reuse_cannot_ignore_a_changed_pinned_backend(make_resources, s
     snapshots[source["thread_id"]] = {"values": {"description": PRODUCTION_PROBLEM,
         "spec": {"method": "direct", "language": "pyomo", "solver": "highs", "preset": None}},
         "checkpoint": {"checkpoint_id": source["checkpoint_id"]}}
-    calculate = AsyncMock()
+    calculate = AsyncMock(return_value={"description": PRODUCTION_PROBLEM,
+        "spec": {"method": "direct", "language": "pyomo", "solver": "gurobi", "preset": None},
+        "solve": {"status": "optimal", "objective": 13}})
     monkeypatch.setattr("llm4om.agent.run", calculate)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            return tool_call("solve_scenarios", scenarios=[{"name": "new backend", "instruction": "B 至少生产 3 件"}])
+        if messages[-1].status == "error":
+            assert "Pinned configuration changed" in messages[-1].text
+            assert "model_and_solve" in tools
+            return tool_call("model_and_solve", description=PRODUCTION_PROBLEM, name="new backend")
+        return "Done."
+
     result = asyncio.run(optimization_graph().ainvoke({"source": source, "messages": [("human", "换后端重新计算")]},
-        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(lambda *_:
-            tool_call("solve_scenarios", scenarios=[{"name": "new backend", "instruction": "B 至少生产 3 件"}]))}},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}},
         context=AgentContext(solver="gurobi")))
-    assert "Pinned configuration changed" in result["failure"]
-    calculate.assert_not_awaited()
-    client.threads.create.assert_not_awaited()
+    assert result["failure"] is None, result["failure"]
+    assert calculate.await_count == client.threads.create.await_count == 1
+    assert calculate.await_args.kwargs["solver"] == "gurobi"
 
 
 @pytest.mark.parametrize("retry_reply", [False, True])
@@ -411,3 +427,45 @@ def test_steps_stream_to_the_workspace_without_entering_agent_messages(make_reso
         assert "test-key" not in str(events)
 
     asyncio.run(check())
+
+
+@pytest.mark.parametrize("dataset,expected", [("current", 12), ("plan", 8)])
+def test_changed_capacity_file_is_resolved_before_scenario_solving(make_resources, saved_plans, dataset, expected):
+    snapshots, client = saved_plans
+    source = {"thread_id": str(uuid4()), "checkpoint_id": str(uuid4())}
+    description = "Maximize the number made, up to the capacity in cap.csv."
+    original = {"description": description, "data": {"cap.csv": "capacity\n8"},
+                "spec": {"method": "direct", "language": "pyomo", "solver": "highs", "preset": None}}
+    snapshots[source["thread_id"]] = {"values": original, "checkpoint": {"checkpoint_id": source["checkpoint_id"]}}
+    scenario = [{"name": "production", "instruction": "Make at least one unit."}]
+
+    def reply(role, messages, tools):
+        if role == "optimization":
+            if messages[-1].type == "human":
+                return tool_call("solve_scenarios", scenarios=scenario)
+            if messages[-1].status == "error":
+                assert "attachment" in messages[-1].text.lower() and client.threads.create.await_count == 0
+                return tool_call("solve_scenarios", scenarios=scenario, attachment_source=dataset)
+            return "Done."
+        if role == "revise_problem":
+            return description + " Make at least one unit."
+        if role == "explain_result":
+            return json.dumps({"summary": "Use the available capacity.", "objective_label": "Units"})
+        return """### Formulation
+Maximize production subject to capacity and minimum.
+```python
+import pyomo.environ as pyo
+def build_model(data):
+    m = pyo.ConcreteModel()
+    m.qty = pyo.Var(bounds=(1, int(data["cap.csv"].splitlines()[1])))
+    m.obj = pyo.Objective(expr=m.qty, sense=pyo.maximize)
+    return m
+```"""
+
+    result = asyncio.run(optimization_graph().ainvoke({"source": source, "data": {"cap.csv": "capacity\n12"},
+        "messages": [("human", "Apply the minimum using the " + dataset + " capacity file.")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+    assert sum(m.type == "tool" and m.status == "error" for m in result["messages"]) == 1
+    assert snapshots[result["current"]["thread_id"]]["values"]["solve"]["objective"] == expected
+    assert original["data"]["cap.csv"].endswith("8") and client.threads.create.await_count == 1

@@ -87,6 +87,34 @@ def test_host_rejects_invalid_answers_without_consuming_the_pending_request(tmp_
         asyncio.run(resume(directory, {}))
 
 
+def test_resumed_session_uses_its_recorded_worker_image(tmp_path: Path, monkeypatch: Any) -> None:
+    from llm4om.host.records import open_records
+    from llm4om.sandbox import Sandbox, SolveResult
+
+    directory = tmp_path / "session"
+    pending = asyncio.run(start(directory, PRODUCTION_PROBLEM, sandbox="docker"))["pending"]
+    with open_records(directory) as records:
+        spec = records.get("spec")
+        records.put("spec", {**spec, "worker_image": "llm4om-worker:previous"})
+
+    async def solve(sandbox, *args, **kwargs):
+        assert sandbox.image == "llm4om-worker:previous"
+        return SolveResult("optimal", 13)
+
+    monkeypatch.setattr(Sandbox, "solve", solve)
+    result = asyncio.run(resume(directory, {pending[0]["id"]: {"content": TWO_PART_REPLY}}))
+    assert result["status"] == "completed", result["failure"]
+
+
+def test_final_solver_error_survives_reopening_host_session(tmp_path: Path) -> None:
+    directory = tmp_path / "session"
+    result = drive_host(directory, lambda *_: TWO_PART_REPLY.replace("return m", "return m.missing"))
+    for saved in (result, asyncio.run(status(directory)), json.loads((directory / "result.json").read_text())):
+        assert saved["status"] == "failed"
+        assert "missing" in saved["failure"]
+        assert saved["solve"]["status"] == "error"
+
+
 def test_host_caps_requests_before_returning_work_to_the_agent(tmp_path: Path) -> None:
     result = drive_host(tmp_path / "session", method_script("optimus", "pyomo"), method="optimus", max_calls=2)
     assert result["status"] == "failed" and "limit" in result["failure"]

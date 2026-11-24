@@ -40,7 +40,7 @@ test("a revision pins the source checkpoint and inherits its recorded choices an
   threads.search.mockResolvedValue([{ status: "idle", metadata: { title: "生产计划", method: "old", language: "old", group: "method-comparison" } }] as never);
   threads.getState.mockResolvedValue({ checkpoint: { checkpoint_id: "saved-checkpoint" }, values: {
     description: "原问题", data: { "data.csv": "a,b\n1,2" },
-    spec: { method: "llmopt", language: "ortools", solver: "CP_SAT", preset: null,
+    spec: { method: "llmopt", language: "ortools", solver: "CP_SAT", preset: null, limits: { solve_time_limit: 15 },
       llm: { provider: "deepseek", model: "saved-model" } },
   } } as never);
   await startRevision("original-thread", " B 至少生产 3 件 ", []);
@@ -49,7 +49,7 @@ test("a revision pins the source checkpoint and inherits its recorded choices an
   expect(threads.create.mock.calls[0][0]?.metadata).not.toHaveProperty("group");
   expect(runs.create).toHaveBeenCalledWith("thread-1", "llmopt", expect.objectContaining({
     input: { description: "原问题", data: { "data.csv": "a,b\n1,2" }, change: "B 至少生产 3 件" },
-    context: { language: "ortools", solver: "CP_SAT", preset: null, explain: true, locale: "zh" },
+    context: { language: "ortools", solver: "CP_SAT", preset: null, time_limit: 15, explain: true, locale: "zh" },
   }));
 });
 
@@ -165,6 +165,14 @@ test("history pages use all server rows for offsets and keep execution time afte
   expect(next.nextOffset).toBeUndefined();
   expect(next.entries[0].id).toBe("earlier");
   expect(next.entries[0].elapsed).toBeNull();
+});
+
+test("a failed plan saved by an agent has a finished checkpoint without a native run", async () => {
+  threads.search.mockResolvedValue([{ thread_id: "plan", status: "idle", metadata: { title: "scenario", method: "direct" },
+    extracted: { timing: { finished_at: 1 }, failure: "Model generation failed" } }] as never);
+  runs.list.mockResolvedValue([]);
+  const { entries } = await history();
+  expect(entries[0].state).toBe("failed");
 });
 
 test("idle history uses the latest run for unfinished conversations and unsolved runs", async () => {

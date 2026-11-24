@@ -23,6 +23,7 @@
     "clsx": "2.1.1",
     "diff": "9.0.0",
     "highlight.js": "11.11.1",
+    "idb-keyval": "6.3.0",
     "js-sha256": "0.11.1",
     "katex": "0.18.2",
     "lucide-react": "1.61.0",

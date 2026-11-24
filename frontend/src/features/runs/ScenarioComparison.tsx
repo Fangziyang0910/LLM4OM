@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Diff } from "@/components/Content";
 import { client } from "@/features/runs/sdk";
+import { hasSolution } from "./workbook";
 import { StatusBadge } from "@/features/runs/status";
 import { variableChanges } from "@/features/runs/tables";
 import { errorText, formatNumber, savedRunState } from "@/format";
@@ -20,18 +21,20 @@ export function ScenarioComparison({ source, values, active = false }: { source:
     queryFn: () => client.threads.getState<RunValues>(source.thread_id, source.checkpoint_id), staleTime: Infinity, retry: false });
   const [limit, setLimit] = useState(200);
   if (query.error) return <Alert><TriangleAlert /><AlertDescription>
-    {t("无法读取原方案，可能已被删除。当前方案仍可在“最优方案”标签页查看。")}
+    {t("无法读取原方案，可能已被删除。当前方案仍可在“求解结果”标签页查看。")}
     <span className="text-xs">{errorText(query.error)}</span>
   </AlertDescription></Alert>;
   if (!query.data) return <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Spinner />{t("正在加载原方案…")}</div>;
 
   const before = query.data.values as RunValues;
-  const waitingForResult = active && !values.solve;
-  const changes = waitingForResult ? [] : variableChanges(before.solve?.variables ?? {}, values.solve?.variables ?? {});
+  const previousSolve = hasSolution(before) ? before.solve : null;
+  const currentSolve = !active && hasSolution(values) ? values.solve : null;
+  const comparable = previousSolve && currentSolve;
+  const changes = comparable ? variableChanges(previousSolve.variables, currentSolve.variables) : [];
   const labels = new Map([...(before.explanation?.decisions ?? []), ...(values.explanation?.decisions ?? [])].map(item => [item.variable, item.label]));
-  const previous = before.solve?.objective, current = values.solve?.objective;
-  const beforePareto = before.solve?.pareto?.solutions.length ? before.solve.pareto : null;
-  const afterPareto = values.solve?.pareto?.solutions.length ? values.solve.pareto : null;
+  const previous = previousSolve?.objective, current = currentSolve?.objective;
+  const beforePareto = previousSolve?.pareto?.solutions.length ? previousSolve.pareto : null;
+  const afterPareto = currentSolve?.pareto?.solutions.length ? currentSolve.pareto : null;
   const hasPareto = !!beforePareto || !!afterPareto;
   const difference = !hasPareto && previous != null && current != null ? current - previous : null;
   const number = (value: number | undefined | null) => value == null ? "—" : formatNumber(value);
@@ -54,20 +57,21 @@ export function ScenarioComparison({ source, values, active = false }: { source:
           <span className="font-semibold text-primary">{t("本次调整条件")}：</span>{values.revision.instruction}</div> : null}
         <div className="grid gap-3 sm:grid-cols-3">
           {scenarios.map(([label, result, isCurrent]) => {
-            const pareto = result.solve?.pareto?.solutions.length ? result.solve.pareto : null;
+            const solve = isCurrent ? currentSolve : previousSolve;
+            const pareto = solve?.pareto?.solutions.length ? solve.pareto : null;
             return <div key={label} className="flex min-w-0 flex-col gap-2 rounded-xl border border-border/70 bg-muted/15 p-3.5">
               <span className="text-xs font-medium text-muted-foreground">{label}</span>
               <StatusBadge status={statusOf(result, isCurrent)} />
               {pareto ? <>
                 <span className="text-lg font-bold tracking-tight tabular">{t("{count} 个 Pareto 解", { count: pareto.total })}</span>
                 <span className="text-xs leading-relaxed text-muted-foreground tabular">{t("推荐折中解：")}{paretoKnee(pareto)}</span>
-              </> : <span className="text-2xl font-bold tracking-tight tabular">{number(result.solve?.objective)}</span>}
+              </> : <span className="text-2xl font-bold tracking-tight tabular">{number(solve?.objective)}</span>}
             </div>;
           })}
           <div className="flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary/[0.04] p-3.5">
             <span className="text-xs font-medium text-muted-foreground">{hasPareto ? t("多目标权衡对比") : t("目标值变化量（新 − 原）")}</span>
             {hasPareto ? <span className="text-xs leading-relaxed text-muted-foreground">
-              {t("多目标方案包含一组权衡解，可切换至“最优方案”标签页查看完整的 Pareto 前沿图与折中解。")}
+              {t("多目标方案包含一组权衡解，可切换至“求解结果”标签页查看完整的 Pareto 前沿图与折中解。")}
             </span> : <>
               <span className="text-2xl font-bold tracking-tight text-primary tabular">{difference != null && difference > 0 ? `+${number(difference)}` : number(difference)}</span>
               <span className="text-xs leading-relaxed text-muted-foreground">{t("当两次优化的目标单位一致时可直接比较增减。")}</span>
@@ -81,9 +85,10 @@ export function ScenarioComparison({ source, values, active = false }: { source:
       </CardContent>
     </Card>
     <Card className="gap-3 rounded-2xl border-border/80 py-5 shadow-2xs">
-      <CardHeader className="px-5"><CardTitle className="text-sm font-semibold">{t("具体决策数值变化（共 {count} 项）", { count: changes.length })}</CardTitle></CardHeader>
+      <CardHeader className="px-5"><CardTitle className="text-sm font-semibold">{comparable ? t("具体决策数值变化（共 {count} 项）", { count: changes.length }) : t("决策变化")}</CardTitle></CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-3 px-5">
-        {waitingForResult ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner />{t("正在计算最优方案，求解完成后将展示在这里…")}</p>
+        {active ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner />{t("求解中，完成后将在这里显示结果。")}</p>
+          : !comparable ? <p className="text-sm text-muted-foreground">{t("需要两个可用的求解方案才能比较决策。")}</p>
           : changes.length ? <Table className="text-[13px]" containerClassName="rounded-xl border border-border/80">
           <TableHeader className="bg-muted/40"><TableRow><TableHead>{t("决策项")}</TableHead><TableHead className="text-right">{t("原方案")}</TableHead>
             <TableHead className="text-right">{t("新方案")}</TableHead><TableHead className="text-right">{t("变化量")}</TableHead>

@@ -5,16 +5,18 @@ import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "./index.css";
 import App from "./App";
+import { restoreDraft } from "./features/composer/draft";
 import { Toaster } from "./components/theme";
 import { TooltipProvider } from "./components/ui/tooltip";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1 } } });
 
+const draft = await restoreDraft();
 createRoot(document.getElementById("root")!).render(
   <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={300}>
-        <App />
+        <App restoredDraft={draft} />
       </TooltipProvider>
       <Toaster />
     </QueryClientProvider>

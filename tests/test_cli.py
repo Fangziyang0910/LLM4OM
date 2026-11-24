@@ -56,6 +56,24 @@ def test_cli_solves_code_without_model_settings(tmp_path: Path, capsys: Any) -> 
     assert result["status"] == "optimal" and result["objective"] == 13
 
 
+@pytest.mark.parametrize("encoding", ["utf-8-sig", "utf-16"])
+def test_cli_uses_spreadsheet_headers_without_the_byte_order_mark(tmp_path, capsys, encoding):
+    source = tmp_path / "model.py"
+    source.write_text("""import csv, io
+import pyomo.environ as pyo
+def build_model(data):
+    limit = int(next(csv.DictReader(io.StringIO(data['capacity.csv'])))['容量'])
+    m = pyo.ConcreteModel()
+    m.x = pyo.Var(bounds=(0, limit))
+    m.obj = pyo.Objective(expr=m.x, sense=pyo.maximize)
+    return m
+""", encoding="utf-8")
+    data = tmp_path / "capacity.csv"
+    data.write_text("容量\n12\n", encoding=encoding)
+    assert main(["solve", "--code", str(source), "--data", str(data), "--sandbox", "local"]) == 0
+    assert json.loads(capsys.readouterr().out)["objective"] == 12
+
+
 def test_host_cli_can_exit_and_resume_in_new_processes(tmp_path: Path) -> None:
     from tests.conftest import PRODUCTION_PROBLEM, TWO_PART_REPLY
 

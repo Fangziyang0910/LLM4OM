@@ -74,6 +74,23 @@ def test_lp_backend_cannot_silently_relax_an_integer_model(interface: str, code:
     assert 'refusing to relax' in result.error
 
 
+@pytest.mark.parametrize("sense,expected", [("min", 1), ("max", 4), ("maximize", None)])
+@pytest.mark.parametrize("kind", ["local", pytest.param("docker", marks=[pytest.mark.docker,
+    pytest.mark.skipif(not os.environ.get("LLM4OM_TEST_DOCKER"), reason="set LLM4OM_TEST_DOCKER=1")])])
+def test_constraint_solver_preserves_objective_direction(sense: str, expected: int | None, kind: str) -> None:
+    code = f"""from ortools.constraint_solver import pywrapcp
+def build_model(data):
+    model = pywrapcp.Solver("direction")
+    x = model.IntVar(1, 4, "x")
+    return {{"model": model, "variables": [x], "objective": x, "sense": {sense!r}}}
+"""
+    result = asyncio.run(Sandbox(kind).solve(code, {}, "ortools", 5))
+    if expected is None:
+        assert not result.executed and "sense" in result.error
+    else:
+        assert result.status == "optimal" and result.objective == expected
+
+
 def test_auto_preserves_the_backend_chosen_in_native_code() -> None:
     code = '''from ortools.linear_solver import pywraplp
 def build_model(data):

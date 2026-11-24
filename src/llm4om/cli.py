@@ -10,6 +10,7 @@ import sys
 import tempfile
 from importlib.metadata import version
 from importlib.resources import files
+from io import TextIOWrapper
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -27,7 +28,14 @@ def _print_step(step: dict[str, Any]) -> None:
 
 def _read(path: str) -> str:
     try:
-        return Path(path).read_text(encoding="utf-8")
+        with Path(path).open("rb") as stream:
+            prefix = stream.read(2)
+            stream.seek(0)
+            encoding = "utf-16" if prefix in (b"\xff\xfe", b"\xfe\xff") else "utf-8-sig"
+            with TextIOWrapper(stream, encoding=encoding) as text:
+                return text.read()
+    except UnicodeDecodeError as error:
+        raise ValueError(f"Cannot decode {path}. Save it as UTF-8 or UTF-16 with a byte order mark.") from error
     except OSError as error:
         raise ValueError(f"Cannot read {error.filename}: {error.strerror}.") from error
 

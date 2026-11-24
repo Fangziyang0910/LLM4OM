@@ -63,7 +63,7 @@ function Plans({ artifact, onOpenPlan, onCompare }: ResultProps) {
       <div className="flex items-start justify-between gap-2"><p className="min-w-0 break-words text-sm font-semibold">{plan.name}</p>
         <StatusBadge status={plan.failure ? "failed" : plan.status ?? "unknown"} /></div>
       <p title={plan.instruction} className="mt-1 line-clamp-2 break-words leading-relaxed text-muted-foreground">{plan.instruction}</p>
-      {plan.pareto?.total ? <div className="mt-2.5 space-y-1">
+      {plan.failure ? <p className="mt-2 break-words text-destructive">{plan.failure}</p> : plan.pareto?.total ? <div className="mt-2.5 space-y-1">
         <p className="break-words">{t("多目标 Pareto 前沿")} <strong className="text-sm font-bold text-foreground tabular-nums">{t("{count} 个 Pareto 解", { count: plan.pareto.total })}</strong></p>
         {plan.pareto.knee?.length ? <p className="text-muted-foreground tabular">{t("推荐折中解：")}{plan.pareto.objectives.map((obj, idx) =>
           `${obj.name} = ${plan.pareto!.knee?.[idx] == null ? "—" : formatNumber(plan.pareto!.knee![idx]!)}`).join(" · ")}</p> : null}
@@ -103,9 +103,10 @@ export const resultViews: Readonly<Record<string, ComponentType<ResultProps>>> =
 // Saved messages predating artifact types keep their original presentation.
 const tools = new Map<string, { activity: string; result?: string }>([
   ["web_search", { activity: "正在检索参考资料…", result: "search" }],
-  ["model_and_solve", { activity: "正在自动建模并求解最优方案…", result: "plans" }],
+  ["model_and_solve", { activity: "正在建模并求解…", result: "plans" }],
   ["modeling_capabilities", { activity: "正在匹配最佳求解策略…" }],
-  ["solve_scenarios", { activity: "正在并行计算多组假设场景…", result: "plans" }],
+  ["solve_scenarios", { activity: "正在计算场景方案…", result: "plans" }],
+  ["read_attachment", { activity: "正在核对附件原文…" }],
   ["lookup_variables", { activity: "正在读取方案决策明细…" }],
   ["calculate", { activity: "正在精确核对数值…", result: "calculation" }],
   ["select_plan", { activity: "正在切换当前讨论方案…", result: "selected_plan" }],

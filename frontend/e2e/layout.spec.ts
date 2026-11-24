@@ -10,7 +10,7 @@ test("the result tab strip does not create a vertical scrollbar", async ({ page 
   const list = page.getByRole("tablist", { name: "运行产物", exact: true });
   for (const size of [{ width: 1366, height: 768 }, { width: 1920, height: 1080 }, { width: 1024, height: 600 }]) {
     await page.setViewportSize(size);
-    for (const name of ["最优方案", "问题与数据", "数学模型", "求解代码"]) {
+    for (const name of ["求解结果", "问题与数据", "数学模型", "求解代码"]) {
       const tab = list.getByRole("tab", { name, exact: true });
       await tab.click();
       await expect(tab).toHaveAttribute("aria-selected", "true");

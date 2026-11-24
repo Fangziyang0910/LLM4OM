@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowRight, ChevronDown, Clock, Columns3, Play, Settings2, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
@@ -21,7 +21,7 @@ import { errorText } from "@/format";
 import { t } from "@/i18n";
 import type { BackendCatalog, Draft, Method, Options, Preset } from "@/types";
 
-import { DRAFT_KEY } from "./draft";
+import { saveDraft } from "./draft";
 
 const MAX_COMPARED = 12;
 const CORE_METHODS = new Set(["direct", "or_llm_agent", "llmopt", "trival", "bind", "autoco"]);
@@ -122,8 +122,8 @@ export function useRunLauncher({
       }));
     }
   }, [method.id, language.id, selfContained, comparing, draft.method, draft.language, setDraft]);
-  useEffect(() => {
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* storage may be unavailable or full */ }
+  useLayoutEffect(() => {
+    void saveDraft(draft).catch(error => toast.error(t("草稿未保存到浏览器：{error}", { error: errorText(error) }), { id: "draft-save" }));
   }, [draft]);
   useEffect(() => {
     revealMethod(methodList.current);

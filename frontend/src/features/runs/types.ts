@@ -50,6 +50,7 @@ export type RunSpec = {
   llm: { provider: string; model: string; base_url: string; temperature: number | null; max_tokens: number | null;
     timeout: number; max_retries: number; extra_body: Record<string, unknown> };
   sandbox: string; worker_image: string | null;
+  cvxpy_limit_checked?: boolean;
   explain?: boolean;
   locale?: "zh" | "en";
 };

@@ -23,7 +23,7 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
     state: entry.state, error: queries[i].error }));
   const plans = [...(previous ? [{ name: t("原方案"), id: source!.thread_id, source, instruction: "", values: previous,
     state: savedRunState(previous), error: null }] : []), ...records];
-  const solvedPlans = plans.filter(plan => hasSolution(plan.values?.solve));
+  const solvedPlans = plans.filter(plan => hasSolution(plan.values));
   const reference = solvedPlans[0]?.values?.solve?.variables;
   const names = [...new Set(solvedPlans.flatMap(plan => Object.keys(plan.values!.solve!.variables)))];
   const changed = reference
@@ -43,17 +43,17 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
         <Columns3 className="size-3.5" />{t("多场景方案对比")}
       </span>
       <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("不同业务假设下的方案对比")}</h1>
-      <p className="text-sm text-muted-foreground">{t("以原方案为基准，独立计算并对比各假设场景下的最优结果与关键决策变化。")}</p>
+      <p className="text-sm text-muted-foreground">{t("以原方案为基准，独立计算并对比各假设场景下的求解结果与关键决策变化。")}</p>
     </header>
     {baseline.error ? <p role="alert" className="text-sm text-muted-foreground">{t("原方案暂不可读，已生成的各场景结果仍可正常查看。")}</p> : null}
     <Table containerClassName="rounded-2xl border border-border/80 bg-card shadow-xs"><TableHeader className="bg-muted/40"><TableRow><TableHead>{t("业务场景")}</TableHead><TableHead>{t("假设条件变化")}</TableHead>
-      <TableHead>{t("状态")}</TableHead><TableHead className="text-right">{t("最优目标值")}</TableHead><TableHead /></TableRow></TableHeader>
+      <TableHead>{t("状态")}</TableHead><TableHead className="text-right">{t("目标值")}</TableHead><TableHead /></TableRow></TableHeader>
       <TableBody>{plans.map(plan => <TableRow key={plan.id} className="hover:bg-muted/30">
         <TableCell className="min-w-28 max-w-64 font-medium whitespace-normal [overflow-wrap:anywhere]">{plan.name}</TableCell>
         <TableCell className="min-w-48 max-w-96 text-xs leading-5 text-muted-foreground whitespace-normal">{plan.instruction || t("原始基准条件")}</TableCell>
         <TableCell><StatusBadge status={plan.state} />{plan.error ? <p role="alert" className="mt-1 text-xs text-destructive">{errorText(plan.error)}</p> : null}</TableCell>
         <TableCell className="text-right">{(() => {
-          const pareto = plan.values?.solve?.pareto?.solutions.length ? plan.values.solve.pareto : null;
+          const pareto = hasSolution(plan.values) && plan.values.solve.pareto?.solutions.length ? plan.values.solve.pareto : null;
           if (pareto) {
             const knee = pareto.solutions.find(item => item.knee) ?? pareto.solutions[0];
             return <>
@@ -63,7 +63,7 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
             </>;
           }
           return <>
-            <span className="font-mono font-semibold tabular">{hasSolution(plan.values?.solve) && plan.values?.solve?.objective != null ? formatNumber(plan.values.solve.objective) : ["running", "pending"].includes(plan.state) ? "…" : "—"}</span>
+            <span className="font-mono font-semibold tabular">{hasSolution(plan.values) && plan.values?.solve?.objective != null ? formatNumber(plan.values.solve.objective) : ["running", "pending"].includes(plan.state) ? "…" : "—"}</span>
             {plan.values?.explanation ? <p className="mt-1 text-xs text-muted-foreground">{plan.values.explanation.objective_label} {plan.values.explanation.objective_unit}</p> : null}
           </>;
         })()}</TableCell>
@@ -77,7 +77,7 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
       </TableRow></TableHeader><TableBody>{shown.map(name => <TableRow key={name}><TableCell className="font-mono text-xs">{name}</TableCell>
         {plans.map(plan => {
           const variables = plan.values?.solve?.variables;
-          const raw = hasSolution(plan.values?.solve) && variables && Object.hasOwn(variables, name) ? variables[name] : null;
+          const raw = hasSolution(plan.values) && variables && Object.hasOwn(variables, name) ? variables[name] : null;
           return <TableCell key={plan.id} className="text-right font-mono tabular">
             {raw == null ? "—" : formatNumber(raw)}</TableCell>;
         })}

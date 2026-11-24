@@ -41,10 +41,10 @@ test("pinned plan pages and conversation exports keep their checkpoint after the
   await assistant.getByRole("button", { name: "收起方案助手", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/run/${sourceId}\\?checkpoint=${checkpoint}`));
   await page.reload();
-  await expect(page.getByText(original.explanation?.objective_label || "最优目标值", { exact: true }).locator("..")).toContainText("13");
+  await expect(page.getByText(original.explanation?.objective_label || "目标值", { exact: true }).locator("..")).toContainText("13");
   await expect(page.getByRole("button", { name: "导出 Excel", exact: true })).toBeVisible();
   await page.goto(`/run/${sourceId}`);
-  await expect(page.getByText("最优目标值", { exact: true }).locator("..")).toContainText("99");
+  await expect(page.getByText("目标值", { exact: true }).locator("..")).toContainText("99");
   await page.goto(discussion);
   await expect(page.getByLabel("当前讨论方案", { exact: true })).toContainText("13");
 });
@@ -136,7 +136,7 @@ test("a plan conversation explains actual values, computes changes and continues
   await page.reload();
   await expect(page.getByRole("log")).toContainText("目标值 12");
   const assistant = page.getByRole("complementary", { name: "方案助手", exact: true });
-  await assistant.getByText("相关衍生方案 · 2", { exact: true }).click();
+  await assistant.getByText("相关方案 · 2", { exact: true }).click();
   await assistant.getByRole("button", { name: "查看原方案", exact: true }).click();
   await expect(page).toHaveURL(chatUrl);
   await expect(page.getByText("总利润", { exact: true }).locator("..")).toContainText("13");
@@ -186,7 +186,7 @@ test("several scenarios can also be calculated from chat and remain available af
   await page.getByLabel("发送给方案助手").fill("E2E_SOLUTION_BATCH：计算 B 至少生产 3 件和至少生产 4 件两个方案");
   await page.getByLabel("发送给方案助手").press("Enter");
   await expect(page.getByRole("log")).toContainText("目标值 8", { timeout: 60_000 });
-  await page.getByText("相关衍生方案 · 3", { exact: true }).click();
+  await page.getByText("相关方案 · 3", { exact: true }).click();
   await expect(page.getByRole("button", { name: "查看多场景对比 1", exact: true })).toBeVisible();
   const state = (await (await page.request.get(`/threads/${id}`)).json()).values;
   expect(state.plans).toHaveLength(2);

@@ -38,6 +38,13 @@ describe("business solution workbook", () => {
     expect(rows.flat()).toContain("链接：http://localhost/run/example");
   });
 
+  it("keeps a failed validation out of the business workbook even when the candidate solved", async () => {
+    const values = { failure: "Code validation failed", solve: {
+      status: "optimal", objective: 13, variables: { x: 4 }, output: "", error: null,
+    } };
+    await expect(exportSolution(meta, values, options)).rejects.toThrow("当前没有可导出的求解方案。");
+  });
+
   it("exports all values when no business explanation is available", async () => {
     const variables = Object.fromEntries(Array.from({ length: 501 }, (_, i) => [`x[${i}]`, i]));
     const blob = await exportSolution(meta, { solve: { status: "feasible", objective: 0, variables, output: "", error: null } }, options);

@@ -221,7 +221,7 @@ def solve_problem(code: str, data: dict[str, str] | None, solver: str | None, ti
     kwargs = sanitize_config(alg, operators, hyperparameters) if alg != "AUTO" else {}
     res = solve(problem, alg, time_limit=float(time_limit), seed=seed, **kwargs)
 
-    status = "feasible" if res.feasible else "infeasible"
+    status = "feasible" if res.feasible else "no_feasible_solution"
     variables = flatten_solution(problem, res.best_solution) if res.feasible else {}
     objective: float | None = None
     pareto: dict[str, Any] | None = None

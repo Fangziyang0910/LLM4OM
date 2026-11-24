@@ -20,7 +20,7 @@ from typing import Any
 WORKER = Path(__file__).with_name("worker.py")
 RESULT_MARKER = "@@LLM4OM_RESULT@@"
 # The image contains worker.py and autoco/, so a change to them or worker.Dockerfile needs a new tag (and compose.yaml's).
-WORKER_IMAGE = "llm4om-worker:17"
+WORKER_IMAGE = "llm4om-worker:19"
 START_MARGIN = 60  # seconds beyond the time limit for starting the sandbox, importing libraries and building the model
 MAX_STDOUT_BYTES = 32 * 1024 * 1024
 MAX_STDERR_BYTES = 1 * 1024 * 1024
@@ -38,6 +38,14 @@ class SolveResult:
     solver: str | None = None  # actual backend, also when the library selected it automatically
     pareto: dict[str, Any] | None = None  # multi-objective Pareto front: {objectives, solutions, total}
 
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> "SolveResult":
+        allowed = {item.name for item in fields(cls)}
+        filtered = {key: value for key, value in payload.items() if key in allowed}
+        if not isinstance(filtered.get("status"), str):
+            return cls("error", error="The sandbox returned an invalid result payload.")
+        return cls(**filtered)
+
     @property
     def executed(self) -> bool:
         """The code ran: it built a model and the solver returned a status, or the script finished."""
@@ -46,7 +54,9 @@ class SolveResult:
     @property
     def has_solution(self) -> bool:
         """A solution was found; a satisfaction problem (OR-Tools CP-SAT without objective) has no objective value."""
-        return self.objective is not None or (self.status == "feasible" and (bool(self.variables) or bool(self.pareto)))
+        return (self.executed and self.status in {"optimal", "feasible", "locally_optimal", "iteration_limit", "time_limit"}
+                and (self.objective is not None or any(v is not None for v in self.variables.values())
+                     or bool((self.pareto or {}).get("solutions"))))
 
     def feedback(self, max_variables: int = 60) -> str:
         """Plain-text execution feedback for prompts."""
@@ -88,14 +98,6 @@ class Sandbox:
         self._catalog: dict[str, Any] | None = None
         self._catalog_lock = asyncio.Lock()
 
-    @staticmethod
-    def _to_result(payload: dict[str, Any]) -> SolveResult:
-        allowed = {item.name for item in fields(SolveResult)}
-        filtered = {key: value for key, value in payload.items() if key in allowed}
-        if not isinstance(filtered.get("status"), str):
-            return SolveResult("error", error="The sandbox returned an invalid result payload.")
-        return SolveResult(**filtered)
-
     async def solve(self, code: str, data: dict[str, str], language: str, time_limit: float, *,
                     solver: str | None = None) -> SolveResult:
         """Build the model from `code` with `data` and solve it with the language's solver, within `time_limit`."""
@@ -108,12 +110,16 @@ class Sandbox:
 
             target = CodeTarget(language, solver)
             language, solver = target.language, target.solver
-        return self._to_result(await self._run({"code": code, "data": data, "language": language,
-                                                "solver": solver, "time_limit": time_limit}, time_limit))
+        payload = await self._run({"code": code, "data": data, "language": language,
+                                   "solver": solver, "time_limit": time_limit}, time_limit)
+        if language == "cvxpy" and payload.get("status") == "time_limit" and not payload.get("verified_iterate"):
+            # A resumed session may still use a worker that forwarded unchecked CVXPY iterates.
+            payload.update(objective=None, variables={})
+        return SolveResult.from_payload(payload)
 
     async def run_script(self, script: str, time_limit: float) -> SolveResult:
         """Run a script as __main__; `output` holds what it printed and any traceback."""
-        return self._to_result(await self._run({"script": script}, time_limit))
+        return SolveResult.from_payload(await self._run({"script": script}, time_limit))
 
     async def catalog(self) -> dict[str, Any]:
         """One native capability discovery per service process, in the actual solving environment."""

@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { Client, Thread } from "@langchain/langgraph-sdk";
-import { outcome } from "@/format";
+import { outcome, recordedSolverStatus, uncheckedCvxpyLimit } from "@/format";
 import { locale, t } from "@/i18n";
 import type { Entry, OptimizationMeta, RequirementsMeta, RunMeta, RunSpec, RunValues, SolutionChatMeta, SourceRun, Timing, Usage } from "@/features/runs/types";
 import type { Draft, Preset } from "@/types";
@@ -100,7 +100,8 @@ async function revisionSource(threadId: string, presets: Preset[], source?: Sour
   const { values, meta, pinned } = await loadCheckpoint(threadId, source, t("请等待当前运行结束后再调整条件。"));
   const preset = meta.preset ? presets.find(item => item.id === meta.preset) : presets[0];
   return { draft: { description: values.description!, data: values.data ?? {}, method: meta.method,
-    language: meta.language, solver: meta.solver, preset: meta.preset ?? null }, preset, source: pinned };
+    language: meta.language, solver: meta.solver, time_limit: values.spec?.limits?.solve_time_limit,
+    preset: meta.preset ?? null }, preset, source: pinned };
 }
 
 /** Revise a saved checkpoint in a new thread; the source's problem, attachments and choices remain intact. */
@@ -209,7 +210,7 @@ export async function history(metadata?: Record<string, unknown>, offset = 0, ca
     // Cancellation can leave the thread idle. Only its run distinguishes a stopped turn from a completed one.
     // Finished replies and completed modeling runs already have their outcome in the extracted state.
     const unfinished = conversation ? extracted.last_message_type !== "ai"
-      || extracted.last_tool != null : !extracted.solved || !timing?.finished_at;
+      || extracted.last_tool != null : !timing?.finished_at || (!extracted.solved && !extracted.failure);
     let latest;
     if (thread.status === "busy" || (thread.status === "idle" && unfinished)) {
       try {
@@ -225,14 +226,14 @@ export async function history(metadata?: Record<string, unknown>, offset = 0, ca
       }
     }
     const status = latest ?? (thread.status === "idle" ? (conversation || !unfinished ? "success" : "interrupted") : thread.status);
-    const state = outcome(latest ? status === "running" : thread.status === "busy", status, extracted.failure,
-      extracted.solved as string | undefined);
     const spec = extracted.spec as RunSpec | undefined;
+    const state = outcome(latest ? status === "running" : thread.status === "busy", status, extracted.failure,
+      recordedSolverStatus(spec?.method ?? thread.metadata?.method as string | undefined, extracted.solved as string | undefined));
     const meta = conversation
       ? thread.metadata as RequirementsMeta | SolutionChatMeta | OptimizationMeta : runMeta(thread.metadata as RunMeta, spec);
     if ((meta.kind == null || meta.kind === "run") && typeof extracted.actual_solver === "string") (meta as RunMeta).solver = extracted.actual_solver;
     return { id: thread.thread_id, created: thread.created_at, updated: thread.updated_at, meta, state,
-      objective: typeof extracted.objective === "number" ? extracted.objective : null,
+      objective: typeof extracted.objective === "number" && !uncheckedCvxpyLimit(spec, extracted.solved) ? extracted.objective : null,
       paretoTotal: typeof extracted.pareto_total === "number" ? extracted.pareto_total : undefined,
       elapsed: timing?.finished_at && typeof timing.elapsed === "number" ? timing.elapsed : null,
       failure: typeof extracted.failure === "string" ? extracted.failure : null, usage: (extracted.usage as Usage | undefined) ?? null } as Entry;

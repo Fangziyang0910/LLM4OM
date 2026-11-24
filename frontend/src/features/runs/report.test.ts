@@ -17,6 +17,15 @@ describe("run report", () => {
     expect(text).toContain("建议尚未验证。");
     expect(text).toContain("**增加产能**：切割资源提高至 15。");
   });
+  it("labels numerical output from a rejected candidate as diagnostic evidence", () => {
+    const text = report({ title: "候选方案", method: "direct", language: "pyomo", model: "m", provider: null }, {
+      failure: "校验未通过", solve: { status: "optimal", objective: 13, variables: { a: 2 }, output: "", error: null },
+    }, options);
+    expect(text).toContain("## 候选模型的求解记录");
+    expect(text).not.toContain("## 求解结果");
+    expect(text).toContain("校验未通过");
+  });
+
   it("exports the original problem, requested change and business values from the actual solution", () => {
     const text = report({ title: "新方案", method: "direct", language: "pyomo", provider: null, model: "m1" },
       { description: "新题面", revision: { description: "原题面", instruction: "B 至少生产 3 件" },

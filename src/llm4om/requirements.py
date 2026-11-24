@@ -11,11 +11,11 @@ from langchain_core.messages import AnyMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph, add_messages
 from langgraph.runtime import Runtime
 from langgraph.types import Command
-from pydantic import StringConstraints
+from pydantic import Field, StringConstraints
 
 from llm4om.agent import CONVERSATION_STYLE, invoke_turn_agent, prepare_turn_model
 from llm4om.graph import get_resources
-from llm4om.problem import changed_input_message, input_changed, problem_text
+from llm4om.problem import MAX_DATA_CHARS, attachment_excerpt, changed_input_message, input_changed, problem_text
 from llm4om.web_search import search_tool
 
 
@@ -75,8 +75,7 @@ def requirements_graph() -> Any:
                   "Keep the conversation centered on the decision the user actually needs to make, its objective and boundaries, and the facts already known. "
                   "Find the unknowns that could change that decision. Focus each turn on the most important one or two. "
                   "Ask at most two questions in total, each about one thing, concrete and easy to answer, and only when the answer would change the problem. "
-                  "Do not pack unrelated questions into one numbered point. Do not ask for facts already in the conversation, draft "
-                  "or supplied data, or repeat a question the user already answered. Do not ask the user to confirm an ordinary, "
+                  "Ask each question separately. Do not ask the user to confirm an ordinary, "
                   "unambiguous reading or speculate about additional restrictions without a reason. Do not present a checklist or intake form. "
                   "A vague starting idea is welcome; ask the smallest useful next question. "
                   "When the user seems unsure, or a short example or a few possible directions would make the question easier to answer, "
@@ -115,8 +114,6 @@ def requirements_graph() -> Any:
                   "draft text. "
                   "Apply the latest user request to it, replacing superseded requirements. Reconcile open questions against confirmed "
                   "facts, including manual edits: remove questions already answered and integrate their answers into the conditions. "
-                  "Preserving an edit means preserving its meaning, "
-                  "not keeping an obsolete question beside its answer. "
                   "If enough has been supplied, say the user can review the draft and use it for modeling. Do not require every problem to "
                   "fit a fixed template. Never invent numbers, assume unconfirmed rules or silently relax requirements. Read the supplied "
                   "data and use its actual file names. "
@@ -133,6 +130,11 @@ def requirements_graph() -> Any:
         if not choice.search:
             prompt += ("Web search is disabled for this turn. If the user requests current web facts, ask them to enable "
                        "the web search button or supply the sources. Do not claim to have searched or invent prices.\n")
+
+        @tool
+        def read_attachment(filename: str, query: str = "", offset: Annotated[int, Field(ge=0)] = 0) -> dict:
+            """Read a page of an attached file, optionally locating an exact substring past the preview."""
+            return attachment_excerpt(state.get("data") or {}, filename, query, offset)
 
         draft_started = False
 
@@ -171,6 +173,8 @@ def requirements_graph() -> Any:
 
         try:
             tools = [update_draft, *([search_tool(settings)] if choice.search else [])]
+            if any(len(content) > MAX_DATA_CHARS for content in (state.get("data") or {}).values()):
+                tools.append(read_attachment)
             result = await invoke_turn_agent(
                 model, resources, tools=tools, middleware=[current_draft, guard_draft],
                 state_schema=DraftState, context_schema=RequirementsContext,

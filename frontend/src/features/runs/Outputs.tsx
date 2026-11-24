@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, CodeXml, Download, FileText, GitCompare, typ
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { t } from "@/i18n";
+import { uncheckedCvxpyLimit } from "@/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,7 +24,7 @@ import { ReadingTranslation } from "@/components/ReadingTranslation";
 
 export type Tab = "solution" | "formulation" | "code" | "problem" | "comparison";
 const TABS: [Tab, string, LucideIcon][] = [
-  ["solution", t("最优方案"), Sparkles],
+  ["solution", t("求解结果"), Sparkles],
   ["problem", t("问题与数据"), FileText],
   ["formulation", t("数学模型"), Sigma],
   ["code", t("求解代码"), CodeXml],
@@ -53,6 +54,7 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
   const codes = useMemo(() => versions(steps, "code", values.code), [steps, values.code]);
   const counts: Partial<Record<Tab, number>> = { formulation: formulations.length, code: codes.length };
 
+  const unchecked = uncheckedCvxpyLimit(values.spec, values.solve?.status);
   return <Tabs value={tab} onValueChange={value => setTab(value as Tab)} className="h-full min-h-0 min-w-0 gap-0">
     <TabsList ref={tabs} variant="line" aria-label={t("运行产物")} className="h-11 w-full justify-start gap-1 overflow-x-auto rounded-none border-b border-border/70 bg-muted/15 px-3">
       {[...TABS, ...(source ? [["comparison", t("方案对比"), Table2] as const] : [])].map(([id, label, TabIcon]) => <TabsTrigger key={id} value={id} className="flex-none px-2.5 sm:px-3 [&_svg]:hidden sm:[&_svg]:inline-block">
@@ -62,14 +64,14 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
       </TabsTrigger>)}
     </TabsList>
     <TabsContent key={tab} value={tab} className="min-h-0 overflow-y-auto p-4 sm:p-5">
-      {tab === "solution" ? values.solve ? <div className="flex flex-col gap-4">
+      {tab === "solution" ? values.solve && !values.failure && !unchecked ? <div className="flex flex-col gap-4">
         {values.explanation ? <Explanation explanation={values.explanation} solve={values.solve} /> : null}
         {values.infeasibility ? <Infeasibility explanation={values.infeasibility} onAdjust={active ? undefined : onAdjust} /> : null}
-        {values.explanation_error ? <Alert><AlertDescription>{t("通俗解读暂未生成，您仍可直接查看下方详细决策数值。")}</AlertDescription></Alert> : null}
+        {values.explanation_error ? <Alert><AlertDescription>{values.solve.status === "infeasible" ? t("通俗解读暂未生成，可在下方查看求解器定位的冲突。") : t("通俗解读暂未生成，您仍可直接查看下方详细决策数值。")}</AlertDescription></Alert> : null}
         {values.explanation && values.solve.pareto?.solutions.length ? <ParetoFront pareto={values.solve.pareto} /> : null}
         {values.explanation ? <VariableDetails solve={values.solve} /> : <Solution solve={values.solve} />}
       </div>
-        : <Blank icon={Sparkles} text={active ? t("正在计算最优方案，求解完成后将展示在这里…") : values.failure ? t("本次求解未能生成方案。") : finished ? t("暂无求解结果。") : t("求解尚未完成。")} />
+        : <Blank icon={Sparkles} text={active ? t("求解中，完成后将在这里显示结果。") : values.failure ? t("本次求解未能生成方案。") : unchecked ? t("旧版记录没有核验停止时的数值是否满足约束。请重新求解以取得可核验的结果。") : finished ? t("暂无求解结果。") : t("求解尚未完成。")} />
         : null}
       {tab === "formulation" ? <Versioned key="formulation" items={formulations} picked={picked.formulation} pick={id => setPicked("formulation", id)}
         noun={t("数学模型")} active={active} file="formulation.md" diffFormat="markdown" modelSections

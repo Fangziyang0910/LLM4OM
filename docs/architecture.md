@@ -45,7 +45,7 @@ LangChain 工具中间件在每轮允许一次方案变更调用（建模、场�
 
 进程内平台图不继承对话检查点、进度键或消息流，建模代码不会作为聊天回复推送。计算属于父对话的原生 Run，不在同一任务队列中创建并等待子 Run；仅有一个执行槽时也能完成。派生方案没有单独的 Run 行，页面从已保存的完成时间识别结果。最终回复失败时保存已完成方案引用；重试按原消息 ID 读取本轮已算好的结果。取舍见 [ADR 0015](adr/0015-plan-conversation.md)。
 
-批量计算失败时，`pending` 在原生状态中保留本轮消息 ID、固定基准和完整场景请求；部分完成不改变当前方案。重试使用原请求生成相同方案 ID，复用已保存结果并补完剩余场景。新消息不会被旧请求劫持。两类 Agent 均使用 `ContextEditingMiddleware(ClearToolUsesEdit)`：工具历史超过约 16,000 token 时清理旧工具输入和结果，保留最近三次工具结果；只改写模型请求，线程中的原始消息、来源和稿件不变。当前业务稿或实际方案每次单独注入。
+批量计算失败时，`pending` 在原生状态中保留本轮消息 ID、固定基准和完整场景请求；部分完成不改变当前方案。重试使用原请求生成相同方案 ID，复用已保存结果并补完剩余场景。新消息不会被旧请求劫持。优化对话中，当前附件与基准快照不同时，场景工具按用户要求显式选用当前或原方案附件。选用当前附件时，批次同时固定数据供失败重试。需求助手、优化助手和方案助手可从附件原文检索预览以外的记录；方案追问按指定检查点读取。达到时间或迭代上限且返回可用解时，平台继续解读已找到的方案并保留停止状态。建模校验失败的候选数值不提供给对话工具。两类 Agent 均使用 `ContextEditingMiddleware(ClearToolUsesEdit)`：工具历史超过约 16,000 token 时清理旧工具输入和结果，保留最近三次工具结果；只改写模型请求，线程中的原始消息、来源和稿件不变。当前业务稿或实际方案每次单独注入。
 
 ## 模块
 
@@ -205,7 +205,7 @@ OR-Tools CP-SAT 和原生 CP 接口允许无目标的可满足性模型，成功
 
 `Sandbox.solve(code, data, language, time_limit, solver=...)` 构建并求解模型；`run_script` 运行方法的检查脚本；`catalog` 在同一执行环境读取并缓存后端能力。外层超时比求解时限多 60 秒，用于启动沙箱、导入库和构建模型。请求格式和结果标记只在 `sandbox/` 内部使用。所有运行共享服务的 Sandbox，`solve` 和 `run_script` 共用并发额度，默认最多 4 个，由 `LLM4OM_SANDBOX_JOBS` 设置。排队仍计入运行总时限，单次沙箱超时从取得额度后开始。`--jobs` 单独控制并发运行数。
 
-`Sandbox("docker")` 在镜像 `llm4om-worker:17` 中运行 Worker。容器使用只读根文件系统和 `tmpfs` 工作目录，禁用网络和全部 capability，以非 root 用户运行。镜像包含 `worker.py` 与 AutoCO 运行代码。修改 Worker 代码或 `worker.Dockerfile` 时同步更新 `WORKER_IMAGE` 和 `compose.yaml` 中的标签。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE` 或 `MOSEKLM_LICENSE_FILE` 时只读挂载对应许可证文件。超时、取消或标准输出超过 32 MiB 时，沙箱先停止子进程，再等待 `docker rm --force` 清理容器。
+`Sandbox("docker")` 在镜像 `llm4om-worker:19` 中运行 Worker。容器使用只读根文件系统和 `tmpfs` 工作目录，禁用网络和全部 capability，以非 root 用户运行。镜像包含 `worker.py` 与 AutoCO 运行代码。修改 Worker 代码或 `worker.Dockerfile` 时同步更新 `WORKER_IMAGE` 和 `compose.yaml` 中的标签。`docker run` 只使用本地镜像（`--pull never`）。设置了 `GRB_LICENSE_FILE` 或 `MOSEKLM_LICENSE_FILE` 时只读挂载对应许可证文件。超时、取消或标准输出超过 32 MiB 时，沙箱先停止子进程，再等待 `docker rm --force` 清理容器。
 
 求解状态为 `infeasible` 时，Worker 在同一次运行中找出一组互相冲突的约束，写入 `SolveResult.diagnosis`（`tool`、`items`、`total`、`error`）：线性模型写成 LP 文件后由 Gurobi 计算 IIS（无许可证时只适用于小模型），CVXPY 模型不诊断。诊断限时 20 秒，最多列出 60 条。`feedback()` 不包含诊断，研究方法继续使用原反馈。Gurobi 预求解把模型判为“不可行或无界”时，Worker 关闭对偶约简（`DualReductions=0`）再求解一次，得到确定的状态。
 

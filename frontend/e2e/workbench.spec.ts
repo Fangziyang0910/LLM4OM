@@ -148,6 +148,9 @@ test("stopping after a lost progress stream shows the stopped run without a manu
 test("a failed run can be retried directly while preserving its original record and settings", async ({ page }) => {
   await open(page);
   await page.getByRole("textbox", { name: "问题描述" }).fill("E2E_PAUSE_REPAIR 工厂生产计划");
+  await page.getByRole("button", { name: "查看运行设置", exact: true }).click();
+  await page.getByRole("button", { name: "15 秒", exact: true }).click();
+  await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole("button", { name: "立即求解", exact: true }).click();
   await page.waitForURL(/\/run\//);
   const originalUrl = page.url();
@@ -159,6 +162,7 @@ test("a failed run can be retried directly while preserving its original record 
   await expect(page).not.toHaveURL(originalUrl);
   await expect(page.getByRole("button", { name: "重新求解", exact: true })).toBeVisible({ timeout: 60_000 });
   const retried = await (await page.request.get(`/threads/${page.url().split("/").at(-1)}`)).json();
+  expect(retried.values.spec.limits.solve_time_limit).toBe(15);
   expect(retried.values.description).toBe(before.values.description);
   expect(retried.values.spec).toMatchObject({ method: before.values.spec.method, language: before.values.spec.language,
     preset: before.values.spec.preset, solver: before.values.spec.solver });
@@ -282,6 +286,24 @@ test("history can load records beyond the first two hundred", async ({ page }) =
   }
 });
 
+test("comparison retains a time-limited incumbent and distinguishes a heuristic search miss", async ({ page }) => {
+  const group = "incumbents-" + Date.now();
+  for (const [method, status, objective] of [
+    ["direct", "time_limit", 8], ["llmopt", "feasible", 10], ["autoco", "infeasible", null],
+  ] as const) {
+    const response = await page.request.post("/threads", { data: {
+      metadata: { graph_id: method, method, language: method === "autoco" ? method : "pyomo", title: method, group },
+      supersteps: [{ updates: [{ as_node: "finish", values: { timing: { finished_at: 1 },
+        solve: { status, objective, variables: {} } } }] }],
+    } });
+    expect(response.ok()).toBe(true);
+  }
+  await page.goto("/compare/" + group);
+  await expect(page.getByRole("row").filter({ hasText: "达到时限" }).getByRole("cell").nth(4)).toHaveText("8");
+  await expect(page.getByRole("row").filter({ hasText: "AutoCO" })).toContainText("未找到可行解");
+  await expect(page.getByRole("main")).toContainText("8 至 10");
+});
+
 test("a comparison runs several methods on one problem, also over plain HTTP", async ({ page }) => {
   // Over plain HTTP on a network address (not localhost) browsers leave out these secure-context APIs.
   await page.addInitScript(() => {
@@ -296,7 +318,7 @@ test("a comparison runs several methods on one problem, also over plain HTTP", a
   await page.getByRole("button", { name: "完成", exact: true }).click();
   await page.getByRole("button", { name: "开始对比（2 个方案）" }).click();
   await page.waitForURL(/\/compare\//);
-  await expect(page.getByText(/交叉验证一致：2 组已求得最优解的方案目标值完全相同/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/2 个方案的目标值在数值容差内一致/)).toBeVisible({ timeout: 60_000 });
   const rows = page.getByRole("row");
   await expect(rows.filter({ hasText: "Direct" })).toContainText("13");
   await expect(rows.filter({ hasText: "OR-LLM-Agent" })).toContainText("13");
@@ -327,7 +349,7 @@ test("an infeasible model shows the constraints that conflict", async ({ page })
   await page.getByRole("button", { name: "立即求解" }).click();
   await page.waitForURL(/\/run\//);
   await expect(page.getByText(/当前条件存在冲突|当前约束条件之间存在矛盾/)).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("tab", { name: "最优方案", exact: true }).click();
+  await page.getByRole("tab", { name: "求解结果", exact: true }).click();
   const conflict = page.getByRole("heading", { name: /冲突约束定位/ }).locator("..");
   await expect(conflict).toContainText("cutting");
   await expect(conflict).toContainText("contract");

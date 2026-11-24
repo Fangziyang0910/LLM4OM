@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Run } from "@langchain/langgraph-sdk";
 import { client } from "@/features/runs/sdk";
 import { runMeta, threadHeader } from "@/features/runs/api";
-import { errorText } from "@/format";
+import { errorText, recordedSolverStatus } from "@/format";
 import { t } from "@/i18n";
 import type { RunMeta, RunValues, SourceRun, Step } from "@/features/runs/types";
 
@@ -155,5 +155,9 @@ export function useRun(run: string | SourceRun, onFinished: () => void, refresh 
     return () => controller.abort();
   }, [threadId, checkpointId, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const solve = data.values.solve;
+  const status = recordedSolverStatus(data.values.spec?.method ?? data.meta?.method, solve?.status);
+  if (solve && status && status !== solve.status)
+    return { ...data, values: { ...data.values, solve: { ...solve, status } } };
   return data;
 }

@@ -120,3 +120,23 @@ def test_license_mounts_are_readonly_and_only_include_license_files(tmp_path: Pa
     result = asyncio.run(Sandbox("local").run_script("import os\nassert os.environ['GRB_LICENSE_FILE']\n"
                                                    "assert os.environ['MOSEKLM_LICENSE_FILE']\n", 5))
     assert result.executed
+
+
+@pytest.mark.parametrize("kind", ["local", pytest.param("docker", marks=[pytest.mark.docker,
+    pytest.mark.skipif(not os.environ.get("LLM4OM_TEST_DOCKER"), reason="set LLM4OM_TEST_DOCKER=1")])])
+@pytest.mark.parametrize("bounds,valid", [((0, 1), False), ((5, 10), True)])
+def test_limited_cvxpy_iterate_must_satisfy_the_original_constraints(kind, bounds, valid):
+    low, high = bounds
+    code = f"""import cvxpy as cp
+def build_model(data):
+    x = cp.Variable(name="x")
+    return cp.Problem(cp.Minimize(cp.square(x - 6)), [x >= {low}, x <= {high}])
+"""
+    # Stop Clarabel on its first iterate, without relying on machine speed or a large test problem.
+    result = asyncio.run(Sandbox(kind).solve(code, {}, "cvxpy", 1e-9, solver="CLARABEL"))
+    assert result.status == "time_limit" and result.error is None, result
+    if valid:
+        assert low <= result.variables["x"] <= high
+        assert result.objective == pytest.approx((result.variables["x"] - 6) ** 2)
+    else:
+        assert result.objective is None and result.variables == {}

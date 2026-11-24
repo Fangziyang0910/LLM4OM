@@ -10,7 +10,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/api";
 import { clearChatDraft, createRequirements, createSolutionChat, deleteRun, getThreadKind, history, startComparison, startRevision, startRun, startScenarios } from "@/features/runs/api";
 import { errorText } from "@/format";
-import { initialDraft } from "@/features/composer/draft";
 import { Sidebar } from "@/components/Sidebar";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { t } from "@/i18n";
@@ -42,7 +41,7 @@ const routeFromUrl = (): Route => {
 };
 const NO_PRESETS: Preset[] = [];
 
-export default function App() {
+export default function App({ restoredDraft }: { restoredDraft: Draft }) {
   const queryClient = useQueryClient();
   const optionsQuery = useQuery({ queryKey: ["options"], queryFn: () => api<Options>("/api/options"), staleTime: Infinity });
   const presetsQuery = useQuery({ queryKey: ["presets"], queryFn: () => api<Presets>("/api/presets") });
@@ -63,7 +62,7 @@ export default function App() {
   const [route, setRoute] = useState<Route>(routeFromUrl);
   const routeRef = useRef(route);
   useEffect(() => { routeRef.current = route; });
-  const [draft, setDraft] = useState<Draft>(initialDraft);
+  const [draft, setDraft] = useState<Draft>(restoredDraft);
   const agentDraftSeq = useRef(0);
   const [agentDraft, setAgentDraft] = useState({ id: 0, description: "", data: {} as Record<string, string> });
   const [examplesOpen, setExamplesOpen] = useState<boolean | null>(null);

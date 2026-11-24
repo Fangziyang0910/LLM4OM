@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import { history } from "@/features/runs/api";
 import { targetLabel } from "@/features/runs/target";
-import { STATUS, duration, errorText, formatNumber, tone } from "@/format";
+import { canHaveSolution, STATUS, duration, errorText, formatNumber, tone } from "@/format";
 import { t } from "@/i18n";
 import { isRunEntry, type Entry, type SourceRun } from "@/features/runs/types";
 import type { Options } from "@/types";
@@ -15,9 +15,9 @@ import { ScenarioResults } from "./ScenarioResults";
 
 /** Whether single-objective solved runs agree on the objective value, up to a relative 1e-6. */
 function agreement(entries: Entry[]): { solved: number; same: boolean; low: number | null; high: number | null; pareto: number } {
-  const pareto = entries.filter(entry => tone(entry.state) === "good" && !!entry.paretoTotal && entry.paretoTotal > 0).length;
+  const pareto = entries.filter(entry => canHaveSolution(entry.state) && !!entry.paretoTotal && entry.paretoTotal > 0).length;
   const values = entries
-    .filter(entry => tone(entry.state) === "good" && (!entry.paretoTotal || entry.paretoTotal <= 0) && entry.objective != null)
+    .filter(entry => canHaveSolution(entry.state) && (!entry.paretoTotal || entry.paretoTotal <= 0) && entry.objective != null)
     .map(entry => entry.objective!);
   if (!values.length) return { solved: 0, same: false, low: null, high: null, pareto };
   const low = Math.min(...values), high = Math.max(...values);
@@ -62,7 +62,7 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
         {result.same ? <CircleCheck className="size-5 shrink-0 text-success" /> : <TriangleAlert className="size-5 shrink-0 text-warning" />}
         <p>
           {result.same
-            ? t("交叉验证一致：{count} 组已求得最优解的方案目标值完全相同（{value}）。", { count: result.solved, value: formatNumber(result.low!) })
+            ? t("{count} 个方案的目标值在数值容差内一致（约 {value}）。", { count: result.solved, value: formatNumber(result.low!) })
             : t("不同方案求得的目标值存在差异（范围：{low} 至 {high}），建议点开具体方案核对约束条件。", { low: formatNumber(result.low!), high: formatNumber(result.high!) })}
         </p>
       </div> : null}
@@ -70,7 +70,7 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
       <Table className="text-[13px]" containerClassName="rounded-2xl border border-border/80 bg-card shadow-xs">
         <TableHeader className="bg-muted/40"><TableRow>
           <TableHead>{t("求解策略")}</TableHead><TableHead>{t("求解引擎")}</TableHead><TableHead>{t("AI 模型")}</TableHead>
-          <TableHead>{t("状态")}</TableHead><TableHead className="text-right">{t("最优目标值")}</TableHead>
+          <TableHead>{t("状态")}</TableHead><TableHead className="text-right">{t("目标值")}</TableHead>
           <TableHead className="text-right">{t("耗时")}</TableHead><TableHead />
         </TableRow></TableHeader>
         <TableBody>{entries.map(entry => (
@@ -82,9 +82,9 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
               <StatusIcon status={entry.state} className="size-3.5" />{(STATUS[entry.state] ?? entry.state)}</span>
               {entry.failure ? <p className="mt-1 max-w-64 text-xs whitespace-normal text-destructive">{entry.failure}</p> : null}</TableCell>
             <TableCell className="text-right font-mono font-semibold tabular">
-              {entry.paretoTotal && entry.paretoTotal > 0 && tone(entry.state) === "good"
+              {entry.paretoTotal && entry.paretoTotal > 0 && canHaveSolution(entry.state)
                 ? t("{count} 个 Pareto 解", { count: entry.paretoTotal })
-                : entry.objective != null && tone(entry.state) === "good"
+                : entry.objective != null && canHaveSolution(entry.state)
                   ? formatNumber(entry.objective) : "—"}</TableCell>
             <TableCell className="text-right tabular text-muted-foreground">{entry.state === "running" ? "…" : entry.elapsed == null ? "—" : duration(entry.elapsed)}</TableCell>
             <TableCell className="text-right"><Button variant="ghost" size="icon-xs" aria-label={t("打开运行")}><ArrowRight /></Button></TableCell>

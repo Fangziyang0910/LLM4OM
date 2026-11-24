@@ -45,7 +45,7 @@ test("business explanation and a revised plan preserve the original checkpoint",
     await page.setViewportSize(viewport);
     expect(await page.getByRole("main").evaluate(main => main.scrollWidth <= main.clientWidth)).toBe(true);
   }
-  await page.getByRole("tab", { name: "最优方案", exact: true }).click();
+  await page.getByRole("tab", { name: "求解结果", exact: true }).click();
   await expect(page.getByText("方案解读", { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });

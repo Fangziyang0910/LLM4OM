@@ -205,3 +205,48 @@ def test_a_later_run_does_not_repeat_an_old_change_request(make_resources: Any) 
         assert roles == ["revise_problem", "generate", "generate"]
 
     asyncio.run(check())
+
+
+@pytest.mark.parametrize("status", ["time_limit", "iteration_limit"])
+@pytest.mark.parametrize("found", [True, False])
+def test_limited_search_explains_only_a_returned_solution(make_resources, monkeypatch, status, found):
+    def reply(role, messages, tools):
+        if role == "explain_result":
+            facts = json.loads(messages[-1].text)
+            assert facts["status"] == status and facts["objective"] == 0
+            return json.dumps({"summary": "Produce zero units.", "objective_label": "Profit"})
+        return TWO_PART_REPLY
+
+    resources = make_resources(reply)
+
+    async def limited(*args, **kwargs):
+        return SolveResult(status, 0 if found else None, {"x[A]": 0} if found else {})
+
+    monkeypatch.setattr(resources.sandbox, "solve", limited)
+    result = asyncio.run(run(PRODUCTION_PROBLEM, resources=resources, explain=True))
+    assert result["failure"] is None and result["solve"]["status"] == status
+    assert bool(result["explanation"]) == found
+    assert result["usage"]["solves"] == 1
+
+
+@pytest.mark.parametrize("upper,verified", [(1, False), (10, True)])
+def test_real_limited_cvxpy_run_passes_only_feasible_quantities_to_the_explainer(make_resources, upper, verified):
+    code = f"""import cvxpy as cp
+def build_model(data):
+    x = cp.Variable(name="production")
+    return cp.Problem(cp.Minimize(cp.square(x - 6)), [x >= 0, x <= {upper}])
+"""
+
+    def reply(role, messages, tools):
+        if role == "explain_result":
+            facts = json.loads(messages[-1].text)
+            assert facts["status"] == "time_limit" and 0 <= facts["variables"]["production"] <= upper
+            return json.dumps({"summary": "A feasible quantity was found before the limit.", "objective_label": "Cost"})
+        return "### Formulation\nChoose the production quantity.\n```python\n" + code + "```"
+
+    resources = make_resources(reply, Limits(solve_time_limit=1e-9))
+    result = asyncio.run(run("Choose a production quantity.", language="cvxpy", solver="CLARABEL",
+                             explain=True, resources=resources))
+    assert result["failure"] is None and result["spec"]["cvxpy_limit_checked"]
+    assert result["solve"]["status"] == "time_limit" and bool(result["explanation"]) == verified
+    assert result["usage"]["llm_calls"] == 1 + int(verified)

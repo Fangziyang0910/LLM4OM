@@ -142,6 +142,34 @@ def test_sandbox_solves_autoco_single_objective_with_data_attachment() -> None:
     assert "Decoded solution" in result.output
 
 
+@pytest.fixture(params=["local", pytest.param("docker", marks=[pytest.mark.docker,
+    pytest.mark.skipif(os.environ.get("LLM4OM_TEST_DOCKER") != "1", reason="set LLM4OM_TEST_DOCKER=1")])])
+def autoco_sandbox(request: pytest.FixtureRequest) -> Sandbox:
+    return Sandbox(request.param)
+
+
+def test_autoco_search_without_a_feasible_candidate_does_not_prove_infeasibility(autoco_sandbox: Sandbox) -> None:
+    # A feasible continuous point exists at x = 1/7, but this bounded search does not visit it.
+    code = MULTI_OBJ_CODE.replace("0.0\n\n    def decode", "float(v != 1 / 7)\n\n    def decode")
+    result = asyncio.run(autoco_sandbox.solve(code, {}, "autoco", 0.1, solver="MOEA/D"))
+    assert result.error is None
+    assert result.status == "no_feasible_solution"
+    assert result.objective is None and not result.variables and not result.pareto
+
+
+@pytest.mark.parametrize("expression", ["float('nan'), 0.0", "1.0, float('nan')"])
+def test_autoco_invalid_evaluation_cannot_produce_a_feasible_plan(expression: str, autoco_sandbox: Sandbox) -> None:
+    code = SINGLE_OBJ_CODE.replace("float(obj), float(v1 + v2)", expression)
+    result = asyncio.run(autoco_sandbox.solve(code, {}, "autoco", 0.1, solver="GA"))
+    assert not result.executed and "finite" in result.error
+
+
+@pytest.mark.parametrize(("old", "new"), [('senses=["max"]', 'senses=["minimize"]'), ('"integer"', '"int"')])
+def test_autoco_rejects_invalid_direction_and_domain(old: str, new: str, autoco_sandbox: Sandbox) -> None:
+    result = asyncio.run(autoco_sandbox.solve(SINGLE_OBJ_CODE.replace(old, new), {}, "autoco", 0.1, solver="GA"))
+    assert not result.executed
+
+
 def test_sandbox_solves_autoco_multi_objective_pareto_front() -> None:
     alg = "NSGA-II" if has_pymoo else "MOEA/D"
     # Native optimizer imports consume the wall-clock budget on Windows; retain the same quality assertions.

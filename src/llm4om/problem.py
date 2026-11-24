@@ -52,3 +52,20 @@ def input_changed(expected: str | None, data: Mapping[str, str], description: st
 def changed_input_message(locale: str) -> str:
     return ("另一处已修改本轮输入。请刷新页面，核对最新内容后重试。" if locale == "zh" else
             "The inputs for this turn changed in another session. Reload, review the latest inputs and retry.")
+
+
+def attachment_excerpt(data: Mapping[str, str], filename: str, query: str, offset: int) -> dict:
+    """Read a bounded excerpt, including a literal match if requested. Offsets count text characters."""
+    if filename not in data:
+        return {"error": "File not found in these attachments.", "files": list(data)}
+    content = data[filename]
+    start = offset
+    if query:
+        match = content.find(query, offset)
+        if match < 0:
+            return {"filename": filename, "found": False}
+        # Include the beginning of a matching CSV row when it fits.
+        start = max(content.rfind("\n", 0, match) + 1, match - 200)
+    end = min(start + 4000, len(content))
+    return {"filename": filename, "offset": start, "text": content[start:end],
+            "next_offset": end if end < len(content) else None}

@@ -112,7 +112,9 @@ async def explain_result(context: Context, problem: str, formulation: str | None
                       "optimality proofs, sensitivity claims or unstated assumptions. "
                       "Do not add generic disclaimers, unspecified features or tool limitations. "
                       "The platform displays solver status separately. Respect that status: optimal means the solver "
-                      "proved optimality for this model; feasible or locally_optimal does not mean a global optimum.\n"
+                      "proved optimality for this model. For a time or iteration limit, describe the returned plan as "
+                      "the plan found before the limit, with optimality unproven. A feasible or locally optimal "
+                      "result also does not establish a global optimum.\n"
                       + parser.get_format_instructions()),
         HumanMessage(json.dumps({"problem": problem, "formulation": formulation, "code": code,
                                  "status": solve["status"], "objective": solve.get("objective"),

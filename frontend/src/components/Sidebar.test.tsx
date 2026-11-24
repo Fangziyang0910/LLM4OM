@@ -39,6 +39,7 @@ test("non-optimal solved runs keep their true solver status label instead of Opt
     meta: { title: "计划", method: "direct", language: "pyomo", provider: null, model: null },
     objective: 13, elapsed: 1, failure: null, usage: null,
   };
+  expect(resultText({ ...runEntry, state: "time_limit" })).toBe("达到时限 · 13");
   expect(resultText(runEntry)).toBe("可行解 · 13");
   expect(resultText({ ...runEntry, state: "locally_optimal" })).toBe("局部最优 · 13");
   expect(resultText({ ...runEntry, state: "optimal" })).toBe("最优 · 13");

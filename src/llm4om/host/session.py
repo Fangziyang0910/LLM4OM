@@ -21,7 +21,7 @@ from llm4om.method_steps import NodeSteps, latest_artifacts
 from llm4om.methods import Method, methods
 from llm4om.problem import problem_text, validate_data_files, validate_description
 from llm4om.runtime import RECURSION_LIMIT, Context, Limits, ModelingState
-from llm4om.sandbox import Sandbox, SolveResult
+from llm4om.sandbox import WORKER_IMAGE, Sandbox, SolveResult
 from llm4om.storage import write_private_json
 
 CHECKPOINT_TYPES = [("llm4om.sandbox", "SolveResult")]
@@ -53,7 +53,8 @@ class HostContext(Context):
     def __init__(self, records: Records, spec: dict[str, Any], method: Method) -> None:
         self.records = records
         self.spec = spec
-        super().__init__(records.restore(Limits(**spec["limits"])), Sandbox(spec["sandbox"]),
+        sandbox = Sandbox(spec["sandbox"], image=spec.get("worker_image") or WORKER_IMAGE)
+        super().__init__(records.restore(Limits(**spec["limits"])), sandbox,
                          lambda role: HostChatModel(role=role),
                          method.code_target(spec["language"], spec["solver"]), spec["data"])
         self.solved.update(records.solved())
@@ -102,8 +103,13 @@ def result_document(records: Records, snapshot: Any) -> dict[str, Any]:
     artifacts = latest_artifacts(steps)
     code = values.get("code") or artifacts.get("code")
     solved = records.solved().get(code) if code else None
+    if solved and spec["method"] == "autoco" and solved.status == "infeasible":
+        solved = replace(solved, status="no_feasible_solution")
     state = ("failed" if failure else "waiting" if pending else
              "interrupted" if snapshot.next or snapshot.created_at is None else "completed")
+    if state == "completed" and solved is not None and not solved.executed:
+        state = "failed"
+        failure = solved.error or f"The solver returned status {solved.status!r}."
     public_spec = {key: value for key, value in spec.items() if key != "data"}
     public_spec["data_files"] = list(spec["data"])
     return {"session": str(records.directory), "status": state, "spec": public_spec,

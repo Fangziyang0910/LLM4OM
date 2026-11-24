@@ -62,3 +62,7 @@ retained in web_assets/licenses/write-excel-file-MIT.txt.
 Chat scrolling uses use-stick-to-bottom 1.1.6, Copyright (c) StackBlitz,
 under the MIT license. The original license is retained in
 web_assets/licenses/use-stick-to-bottom-MIT.txt.
+
+Large workbench drafts are stored using idb-keyval 6.3.0, Copyright 2016
+Jake Archibald, licensed under Apache-2.0. The original notice is retained
+in web_assets/licenses/idb-keyval-Apache-2.0.txt.

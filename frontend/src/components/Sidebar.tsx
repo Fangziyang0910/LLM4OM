@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { STATUS, formatNumber, tone } from "@/format";
+import { canHaveSolution, STATUS, formatNumber, tone } from "@/format";
 import { dateLocale, t } from "@/i18n";
 import { isRunEntry, type Entry } from "@/features/runs/types";
 import { groupHistory, type HistoryGroup } from "@/features/runs/history";
@@ -39,8 +39,8 @@ export function resultText(entry: Entry): string {
   if (entry.meta.kind === "requirements") return entry.state === "running" ? t("正在梳理…")
     : entry.failure ? t("梳理中断") : t("需求梳理");
   if (entry.state === "running") return t("正在求解…");
-  if (entry.paretoTotal && entry.paretoTotal > 0 && tone(entry.state) === "good") return t("{count} 个 Pareto 解", { count: entry.paretoTotal });
-  if (entry.objective != null && tone(entry.state) === "good") return `${STATUS[entry.state] ?? entry.state} · ${formatNumber(entry.objective)}`;
+  if (entry.paretoTotal && entry.paretoTotal > 0 && canHaveSolution(entry.state)) return t("{count} 个 Pareto 解", { count: entry.paretoTotal });
+  if (entry.objective != null && canHaveSolution(entry.state)) return `${STATUS[entry.state] ?? entry.state} · ${formatNumber(entry.objective)}`;
   if (entry.state === "infeasible") return t("条件冲突");
   return STATUS[entry.state] ?? entry.state;
 }

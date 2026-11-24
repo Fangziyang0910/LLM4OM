@@ -1,20 +1,29 @@
 /** How statuses, numbers, durations and errors read in the page. */
 import { t } from "./i18n";
+import type { RunSpec } from "@/features/runs/types";
 
 const STATUS_TEXT: Record<string, string> = {
   pending: "排队中", running: "建模中", success: "已完成", error: "运行出错", timeout: "超时", interrupted: "已停止",
-  failed: "运行失败",
+  failed: "运行失败", no_feasible_solution: "未找到可行解",
   optimal: "最优", feasible: "可行解", infeasible: "不可行", unbounded: "无界",
   locally_optimal: "局部最优", locally_infeasible: "局部不可行", iteration_limit: "达到迭代上限",
   infeasible_or_unbounded: "不可行或无界", time_limit: "达到时限", executed: "已执行",
 };
 export const STATUS: Record<string, string> = Object.fromEntries(Object.entries(STATUS_TEXT).map(([key, text]) => [key, t(text)]));
 
+/** These solver statuses can carry a feasible incumbent, including when a search reached its limit. */
+export const canHaveSolution = (status: string) =>
+  ["optimal", "feasible", "locally_optimal", "time_limit", "iteration_limit"].includes(status);
+
+/** Older CVXPY workers could report an infeasible last iterate when a search stopped. */
+export const uncheckedCvxpyLimit = (spec: RunSpec | null | undefined, status: unknown) =>
+  spec?.language === "cvxpy" && status === "time_limit" && !spec.cvxpy_limit_checked;
+
 /** The colour family of a status: good, bad, warn, live or idle. */
 export function tone(state: string): "good" | "bad" | "warn" | "live" | "idle" {
   if (["optimal", "locally_optimal", "feasible", "success", "executed"].includes(state)) return "good";
   if (["failed", "error", "infeasible", "unbounded", "infeasible_or_unbounded"].includes(state)) return "bad";
-  if (["time_limit", "timeout", "interrupted", "locally_infeasible", "iteration_limit"].includes(state)) return "warn";
+  if (["no_feasible_solution", "time_limit", "timeout", "interrupted", "locally_infeasible", "iteration_limit"].includes(state)) return "warn";
   if (["running", "pending"].includes(state)) return "live";
   return "idle";
 }
@@ -29,9 +38,14 @@ export function outcome(active: boolean, status: string | undefined, failure: un
   return failure ? "failed" : solveStatus ?? "success";
 }
 
+/** Older AutoCO workers recorded an unsuccessful heuristic search as infeasible. */
+export function recordedSolverStatus(method: string | undefined, status: string | undefined) {
+  return method === "autoco" && status === "infeasible" ? "no_feasible_solution" : status;
+}
+
 /** Outcome of a saved checkpoint's values, without an active run object. */
-export function savedRunState(values: { failure?: unknown; solve?: { status?: string } | null; timing?: { finished_at?: number } }): string {
-  return values.failure ? "failed" : values.solve?.status ?? (values.timing?.finished_at ? "success" : "interrupted");
+export function savedRunState(values: { failure?: unknown; spec?: { method?: string } | null; solve?: { status?: string } | null; timing?: { finished_at?: number } }): string {
+  return values.failure ? "failed" : recordedSolverStatus(values.spec?.method, values.solve?.status) ?? (values.timing?.finished_at ? "success" : "interrupted");
 }
 
 /** An error's message; for an SDK error ("HTTP 429: {\"detail\": ...}"), the server's detail alone. */

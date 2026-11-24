@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Literal
+from typing import Callable, Literal, get_args
 
 import numpy as np
 
@@ -24,6 +24,8 @@ class VarSpec:
     n_categories: int = 2  # Used when var_type == "assignment" (values in 0..n_categories-1)
 
     def __post_init__(self) -> None:
+        if self.var_type not in get_args(VarType):
+            raise ValueError(f"Unknown variable type {self.var_type!r}. Choose one of {get_args(VarType)}.")
         if self.size <= 0:
             raise ValueError(f"VarSpec '{self.name}' size must be positive, got {self.size}.")
         if self.var_type == "assignment" and self.n_categories < 1:
@@ -52,6 +54,8 @@ class Problem:
     decode: Callable[..., object] | None = None
 
     def __post_init__(self) -> None:
+        if not self.senses or any(sense not in get_args(Sense) for sense in self.senses):
+            raise ValueError("Each objective must declare its sense as 'min' or 'max'.")
         object.__setattr__(self, "_signs", np.array([1.0 if s == "min" else -1.0 for s in self.senses], dtype=float))
 
     def decode_solution(self, x: object) -> object:
@@ -82,7 +86,7 @@ class Problem:
         raw = self.evaluate(arg)
         if isinstance(raw, tuple) and len(raw) == 2:
             raw_obj, raw_cv = raw
-            cv = max(0.0, float(raw_cv))
+            cv = float(raw_cv)
         else:
             raw_obj, cv = raw, 0.0
 
@@ -92,7 +96,9 @@ class Problem:
                 f"Expected {len(self.senses)} objective(s) in `(objectives, violation)`, got {f_arr.shape[0]} from return {raw!r}."
             )
 
-        return f_arr * self._signs, cv  # type: ignore[attr-defined]
+        if not np.isfinite(cv) or not np.all(np.isfinite(f_arr)):
+            raise ValueError("Objective values and constraint violation must be finite.")
+        return f_arr * self._signs, max(0.0, cv)  # type: ignore[attr-defined]
 
     def restore_objectives(self, internal_f: np.ndarray) -> float | np.ndarray:
         """Convert internal minimized objective vector back to original sense(s)."""

@@ -60,7 +60,7 @@ The agent also handles ordinary questions, writing, code explanations, supplied 
 
 ## Screenshots
 
-Optimization, requirements and plan conversations use the same layout: chat on the left, the draft or plan on the right. Drag the divider to resize the panels; widths survive reload. On phones, Discuss plan opens chat directly and plan cards switch to results. Requirements chat offers Review requirements draft before modeling. Browsing history keeps the calculation baseline, and opening an original plan preserves its frozen version. Run settings show methods, modeling libraries and models side by side.
+Optimization, requirements and plan conversations use the same layout: chat on the left, the draft or plan on the right. Drag the divider to resize the panels; widths survive reload. On phones, switch between **Model and results** and **Solving Steps**. **Ask Follow-up** opens the conversation, and **Open Original Plan** returns to its saved result. Requirements chat offers Review requirements draft before modeling. Browsing history keeps the calculation baseline, and opening an original plan preserves its frozen version. Run settings show methods, modeling libraries and models side by side.
 
 The conversation screenshots use scripted examples and locally solved results.
 
@@ -102,7 +102,7 @@ The conversation screenshots use scripted examples and locally solved results.
 
 The skill lets your current coding-agent model handle conversation, modeling, code generation, review, and explanation. The CLI reuses all 9 method graphs and the existing solver runtime. It calls no platform LLM and needs no Web server.
 
-No checkout is needed. Prepare [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, a running Docker installation, and Node.js 22.20 or newer. These commands pin both components to v0.43.0 and select Python 3.12:
+No checkout is needed. Prepare [uv](https://docs.astral.sh/uv/getting-started/installation/), Git, a running Docker installation, and Node.js 22.20 or newer. These commands install the published v0.43.0 with Python 3.12. To use the latest changes described here, replace `v0.43.0` in both install commands with the same commit SHA from `main`.
 
 ```bash
 uv tool install --python 3.12 git+https://github.com/Fangziyang0910/LLM4OM@v0.43.0
@@ -134,7 +134,7 @@ You need Python 3.11–3.13, [uv](https://docs.astral.sh/uv/) and Docker:
 
 ```bash
 uv sync --extra web
-uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:17
+uv run llm4om build-worker      # build the solver sandbox image llm4om-worker:19
 uv run llm4om serve --workspace runs/web --port 8767
 ```
 
@@ -142,14 +142,17 @@ The repository includes the built frontend, so Node.js is not needed. Solver dep
 
 ### Try a problem
 
-1. If `.env` sets no model, click **LLM preset** at the bottom left and add a provider, key and model ID.
+Send a problem to the modeling assistant on the home page (`/`), or open **Multi-plan comparison** in the sidebar (`/model`) to follow this example.
+
+1. If `.env` sets no model, click **AI model** at the bottom left and add a provider, key and model ID.
 2. Click the **Production planning** example, or enter:
 
    > A factory makes products A and B in non-negative integer quantities. Each A earns 3 and each B earns 2. A uses 2 units of cutting and 1 unit of machining; B uses 1 unit of cutting and 2 units of machining. Each resource has 8 units. Choose the quantities that maximize total profit.
 
-3. Click **Start modeling**. In a few seconds the page shows the optimum A=3, B=2 with profit 13.
+3. Click **Solve Now**. The optimal plan for this example makes 3 units of A and 2 of B, for a total profit of 13.
+4. Click **Ask Follow-up** and ask “How much of the profit comes from each product?” At the saved quantities, A contributes 9 and B contributes 4. To try different resource limits, open **Compare Scenarios** and enter each limit. Each scenario runs from the same original plan.
 
-Click an uploaded file name to review and edit its data. After solving, use **Discuss the plan** to ask questions or request explicit changes, or **Business scenario comparison** below the results to calculate several alternatives from one baseline. Each new outcome comes from real modeling and solving; original records remain intact.
+Click an uploaded file name to inspect or edit the data before solving. You can export a feasible solution to Excel. For an infeasible model or a failed run, use the result page to ask about conflicting requirements or the cause of the failure.
 
 To prepare a separate requirements draft, open **Multi-plan comparison** in the sidebar and click **Discuss your requirements**. The assistant updates an editable draft as you talk. Add data and review the text, then click **Apply to Quick Solve** to return to the editor. Click **Solve Now** to start modeling. Saved conversations can be continued from history. Press Enter to send, or Shift+Enter for a new line. Enable **Web search** to find public references and inspect their sources. DeepSeek presets use their own search endpoint; other models can use a separate server-side search key (see `.env.example`).
 

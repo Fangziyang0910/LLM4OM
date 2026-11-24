@@ -3,6 +3,7 @@
 import asyncio
 import json
 from copy import deepcopy
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -12,11 +13,13 @@ import httpx
 import pytest
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from llm4om.agent import AgentContext, optimization_graph, solution_graph
 from llm4om.graph import run
 from llm4om.llm import LLMSettings
 from llm4om.requirements import RequirementsContext, requirements_graph
+from llm4om.runtime import Limits
 from tests.conftest import PRODUCTION_PROBLEM, TWO_PART_REPLY, tool_call
 from tests.test_followups import EXPLANATION, REVISED_REPLY
 
@@ -90,6 +93,24 @@ def test_a_result_question_reads_actual_values_without_running_a_model(make_reso
     assert snapshots[source["thread_id"]]["values"] == original
 
 
+def test_plan_lookup_returns_the_solver_error_for_a_failed_calculation(make_resources, monkeypatch):
+    broken = TWO_PART_REPLY.replace("return m", "return m.missing")
+    original = asyncio.run(run(PRODUCTION_PROBLEM, resources=make_resources(lambda *_: broken)))
+    assert original["solve"]["status"] == "error" and "missing" in original["solve"]["error"]
+    _, _, source = checkpoint_client(monkeypatch, original)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            return tool_call("lookup_variables", query="")
+        facts = json.loads(messages[-1].text)
+        assert facts["error"] == original["solve"]["error"]
+        return "The generated model referenced a missing attribute."
+
+    result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [("human", "Why did this plan fail?")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+
+
 @pytest.mark.parametrize("factory", [optimization_graph, solution_graph])
 def test_choosing_a_saved_plan_changes_the_next_turn_without_recalculating(make_resources, monkeypatch, factory):
     original = {"description": "原生产计划", "spec": {"preset": None},
@@ -128,6 +149,33 @@ def test_choosing_a_saved_plan_changes_the_next_turn_without_recalculating(make_
     asyncio.run(check())
     client.threads.create.assert_not_called()
     assert snapshots[source["thread_id"]]["values"] == original
+
+
+@pytest.mark.parametrize("factory", [optimization_graph, solution_graph])
+def test_deleted_current_plan_does_not_block_switching_to_another_saved_plan(make_resources, monkeypatch, factory):
+    _, snapshots, original = checkpoint_client(monkeypatch, {
+        "description": "Original", "spec": {"preset": None}, "solve": {"status": "optimal", "objective": 13}})
+    deleted = {"thread_id": str(uuid4()), "checkpoint_id": str(uuid4())}
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            assert "select_plan" in tools
+            return tool_call("select_plan", plan_id=original["thread_id"])
+        assert '"objective": 13' in messages[0].text
+        return "Back to the original plan."
+
+    async def check():
+        graph = factory()
+        graph.checkpointer = InMemorySaver()
+        config = {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}
+        await graph.aupdate_state(config, {"source": original, "current": deleted, "plans": [], "messages": []},
+                                  as_node="discuss")
+        result = await graph.ainvoke({"messages": [("human", "Use the original plan again.")]}, config)
+        assert result["failure"] is None
+        assert result["current"] == original
+
+    asyncio.run(check())
+    assert list(snapshots) == [original["thread_id"]]
 
 
 def test_a_reply_failure_keeps_an_explicit_plan_selection(make_resources, monkeypatch):
@@ -177,6 +225,32 @@ def test_calculator_input_errors_can_be_corrected_within_the_same_reply(make_res
     assert result["current"] == source and not result["plans"]
     assert snapshots[source["thread_id"]]["values"] == original
     client.threads.create.assert_not_called()
+
+
+def test_failed_validation_does_not_supply_a_business_result_to_selection_or_arithmetic(make_resources, monkeypatch):
+    original = {"description": "Candidate", "spec": {"preset": None}, "failure": "Validation rejected the model.",
+                "solve": {"status": "optimal", "objective": 13, "variables": {"x": 2}}}
+    _, _, source = checkpoint_client(monkeypatch, original)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            return tool_call("lookup_variables", query="")
+        if messages[-1].name == "lookup_variables":
+            snapshot = json.loads(messages[0].text.split("Current frozen plan:\n")[1].split("\n")[0])
+            facts = json.loads(messages[-1].text)
+            for payload in [snapshot["solve"], facts]:
+                assert payload["status"] == "failed" and payload["objective"] is None and not payload["variables"]
+            return tool_call("select_plan", plan_id=source["thread_id"])
+        if messages[-1].name == "select_plan":
+            facts = json.loads(messages[-1].text)
+            assert facts["status"] == "failed" and facts["objective"] is None
+            return tool_call("calculate", expression="objective * 2")
+        assert messages[-1].status == "error" and original["failure"] in messages[-1].text
+        return "The candidate failed validation."
+
+    result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [("human", "Use the original plan and double its profit")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
 
 
 def test_variable_pages_can_reach_values_beyond_the_initial_snapshot(make_resources, monkeypatch):
@@ -291,8 +365,9 @@ def test_changes_use_the_existing_pipeline_and_save_real_results(make_resources:
         return REVISED_REPLY.replace('>= 3)', '>= 4)') if "B 至少生产 4 件" in str(messages) else REVISED_REPLY
 
     resources = make_resources(reply)
-    original = asyncio.run(run(PRODUCTION_PROBLEM, data={"capacity.csv": "capacity\n8\n"},
-                              resources=make_resources(lambda *_: TWO_PART_REPLY)))
+    baseline = make_resources(lambda *_: TWO_PART_REPLY, Limits(solve_time_limit=15),
+                              LLMSettings("deepseek", "baseline-model", api_key="test-key"))
+    original = asyncio.run(run(PRODUCTION_PROBLEM, data={"capacity.csv": "capacity\n8\n"}, resources=baseline))
     client, snapshots, source = checkpoint_client(monkeypatch, original)
     result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [HumanMessage("请计算这些新条件")]},
         {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": resources}}, context=AgentContext()))
@@ -303,6 +378,10 @@ def test_changes_use_the_existing_pipeline_and_save_real_results(make_resources:
         values = snapshots[plan["source"]["thread_id"]]["values"]
         assert values["data"] == original["data"] and values["spec"]["method"] == "direct"
         assert values["solve"]["status"] == "optimal" and values["usage"]["solves"] == 1
+        assert values["spec"]["limits"]["solve_time_limit"] == 15
+        metadata = snapshots[plan["source"]["thread_id"]]["metadata"]
+        assert metadata["model"] == values["spec"]["llm"]["model"] != original["spec"]["llm"]["model"]
+        assert metadata["provider"] == values["spec"]["llm"]["provider"] != original["spec"]["llm"]["provider"]
         assert values["timing"]["finished_at"]
         assert "test-key" not in json.dumps(values)
     assert snapshots[source["thread_id"]]["values"] == original
@@ -374,7 +453,7 @@ def test_retrying_a_failed_explanation_keeps_the_calculation_without_repeating_i
 
 
 @pytest.mark.parametrize("resume", [True, False])
-def test_a_partly_saved_batch_keeps_its_base_and_can_be_resumed_or_left_behind(make_resources: Any, monkeypatch: pytest.MonkeyPatch, resume: bool) -> None:
+def test_a_partly_saved_batch_keeps_its_base_and_can_be_resumed_or_left_behind(make_resources: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, resume: bool) -> None:
     scenarios = [{"name": f"B 至少 {n} 件", "instruction": f"B 至少生产 {n} 件"} for n in (3, 4)]
     revised = []
 
@@ -409,23 +488,31 @@ def test_a_partly_saved_batch_keeps_its_base_and_can_be_resumed_or_left_behind(m
     client.threads.create.side_effect = fail_second_save
 
     async def check() -> None:
-        graph = solution_graph()
-        graph.checkpointer = InMemorySaver()
         config = {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}
-        failed = await graph.ainvoke({"source": source, "messages": [("human", "分别计算 B 至少生产 3 件和至少生产 4 件")]}, config)
+
+        async def turn(inputs):
+            # Reopen the conversation database on each invocation, including the retry.
+            async with AsyncSqliteSaver.from_conn_string(str(tmp_path / "conversation.sqlite")) as saver:
+                graph = solution_graph()
+                graph.checkpointer = saver
+                return await graph.ainvoke(inputs, config)
+
+        failed = await turn({"source": source, "messages": [("human", "分别计算 B 至少生产 3 件和至少生产 4 件")]})
         assert failed["failure"] and len(failed["plans"]) == 1
+        assert failed["unsaved_plan"]["values"]["solve"]["objective"] == 8
         assert failed["current"] == source
         if not resume:
-            result = await graph.ainvoke({"messages": [("human", "只解释当前方案，不要继续计算")]}, config)
-            assert result["failure"] is None and result["pending"] is None
+            result = await turn({"messages": [("human", "只解释当前方案，不要继续计算")]})
+            assert result["failure"] is None and result["pending"] is None and result["unsaved_plan"] is None
             assert result["current"] == source and len(result["plans"]) == 1
             assert client.threads.create.await_count == 2
             return
-        result = await graph.ainvoke({"messages": [failed["messages"][-1]]}, config)
+        result = await turn({"messages": [failed["messages"][-1]]})
         assert result["failure"] is None, result["failure"]
         assert result["current"] == source and len(result["plans"]) == 2
         assert [snapshots[plan["source"]["thread_id"]]["values"]["solve"]["objective"] for plan in result["plans"]] == [12, 8]
-        assert revised.count("B 至少生产 3 件") == 1
+        assert revised == ["B 至少生产 3 件", "B 至少生产 4 件"]
+        assert result["unsaved_plan"] is None
         assert all(snapshots[plan["source"]["thread_id"]]["metadata"]["parent"] == source for plan in result["plans"])
         assert len([message for message in result["messages"] if message.type == "human"]) == 1
 
@@ -466,3 +553,59 @@ def test_modeling_messages_do_not_leak_into_the_conversation_stream(make_resourc
         assert "build_model" not in str(progress) and "test-key" not in str(progress)
 
     asyncio.run(check())
+
+
+@pytest.mark.parametrize("kind", ["requirements", "optimization", "solution_chat"])
+def test_assistants_can_find_actual_rows_beyond_the_preview(make_resources, monkeypatch, kind):
+    data = {"orders.csv": "order,units\n" + "normal-order,2\n" * 2000 + "East-429,73\n"}
+    original = {"description": "Weekly orders", "spec": {"preset": None}, "data": data}
+    client, _, source = checkpoint_client(monkeypatch, original)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            assert "East-429,73" not in messages[0].text
+            assert "read_attachment" in tools
+            return tool_call("read_attachment", filename="orders.csv", query="East-429")
+        assert "East-429,73" in messages[-1].text and len(messages[-1].text) < 5000
+        return "East-429 需要 73 件。"
+
+    graph = {"requirements": requirements_graph, "optimization": optimization_graph, "solution_chat": solution_graph}[kind]()
+    inputs = {"messages": [("human", "East-429 订单有多少件？")]}
+    if kind == "solution_chat":
+        inputs["source"] = source
+    else:
+        inputs["data"] = data
+    result = asyncio.run(graph.ainvoke(inputs, {"configurable": {"thread_id": str(uuid4()),
+        "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+    assert "73" in result["messages"][-1].text and result["usage"]["solves"] == 0
+    client.threads.create.assert_not_called()
+
+
+@pytest.mark.parametrize("checked", [False, True])
+def test_result_chat_only_uses_checked_limited_cvxpy_values(make_resources, monkeypatch, checked):
+    spec = {"language": "cvxpy", "preset": None}
+    if checked:
+        spec["cvxpy_limit_checked"] = True
+    original = {"description": "Check the quantity", "spec": spec,
+                "solve": {"status": "time_limit", "objective": 0, "variables": {"quantity": 0}}}
+    client, _, source = checkpoint_client(monkeypatch, original)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            return tool_call("lookup_variables", query="")
+        if messages[-1].name == "lookup_variables":
+            facts = json.loads(messages[-1].text)
+            assert facts["status"] == "time_limit"
+            assert facts["objective"] == (0 if checked else None)
+            return tool_call("calculate", expression="objective")
+        if checked:
+            assert json.loads(messages[-1].text)["result"] == 0
+        else:
+            assert messages[-1].status == "error" and "verify" in messages[-1].text
+        return "Checked."
+
+    result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [("human", "Check the value.")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+    client.threads.create.assert_not_called()

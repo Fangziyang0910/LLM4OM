@@ -2,10 +2,10 @@ import { expect, test } from "@playwright/test";
 
 test("attachments finish reading and saving before the agent can send, while the next message stays editable", async ({ page }) => {
   await page.addInitScript(() => {
-    const read = File.prototype.text;
-    File.prototype.text = function () {
-      if (this.name === "delayed.csv") return new Promise<string>(resolve => {
-        window.addEventListener("finish-file-read", () => resolve("name,price\nA,003\n"), { once: true });
+    const read = File.prototype.arrayBuffer;
+    File.prototype.arrayBuffer = function () {
+      if (this.name === "delayed.csv") return new Promise<ArrayBuffer>(resolve => {
+        window.addEventListener("finish-file-read", () => resolve(new TextEncoder().encode("name,price\nA,003\n").buffer), { once: true });
       });
       return read.call(this);
     };
@@ -166,6 +166,8 @@ test("the independent agent discusses an idea, models it, and calculates changes
   await expect(page.getByRole("button", { name: "对比本轮方案" })).toBeVisible({ timeout: 60_000 });
   await page.reload();
   await expect(page.getByRole("log")).toContainText("目标值 12");
+  const removed = await page.request.delete(`/threads/${saved.values.current.thread_id}`);
+  expect(removed.ok()).toBe(true);
   await input.fill("E2E_SELECT_ORIGINAL 回到原方案，先不重新计算");
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "已选择：生产计划", exact: true })).toBeVisible();

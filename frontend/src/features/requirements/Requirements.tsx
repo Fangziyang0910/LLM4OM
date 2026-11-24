@@ -157,11 +157,11 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
           {!follow ? <Button type="button" variant="outline" size="icon-sm" aria-label={t("回到最新消息")}
             className="absolute right-3 bottom-3 rounded-full bg-background shadow-sm" onClick={followLatest}><ArrowDown /></Button> : null}
         </div>
-        <ChatInput value={input} onChange={setInput} disabled={busy || launching} loading={conversation.loading} stopping={conversation.stopping} label={t("发送给需求助手")}
+        <ChatInput value={input} onChange={setInput} disabled={conversation.busy || action || launching} sendingDisabled={reading} loading={conversation.loading} stopping={conversation.stopping} label={t("发送给需求助手")}
           inputRef={inputArea} presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets}
           onSend={() => void submit()} onStop={() => void stop()}>
-          <Button asChild type="button" variant="ghost" size="icon-sm" title={Object.keys(draft.data).join(", ") || t("添加附件")}>
-            <label className={cn("relative cursor-pointer", (busy || launching) && "pointer-events-none opacity-50")}><Paperclip />
+          <Button asChild type="button" variant="ghost" size="icon-sm" title={reading ? t("正在读取数据……") : Object.keys(draft.data).join(", ") || t("添加附件")}>
+            <label className={cn("relative cursor-pointer", (busy || launching) && "pointer-events-none opacity-50")}>{reading ? <Spinner /> : <Paperclip />}
               {Object.keys(draft.data).length ? <span className="absolute -top-0.5 -right-0.5 rounded-full bg-primary px-1 text-[9px] text-primary-foreground">{Object.keys(draft.data).length}</span> : null}
               <input type="file" className="sr-only" aria-label={t("添加附件")} multiple accept={DATA_FILE_ACCEPT} disabled={busy || launching}
                 onChange={event => { void attach(event.target.files); event.target.value = ""; }} />
