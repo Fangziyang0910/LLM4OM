@@ -10,13 +10,13 @@
     "file": "zh-attachments-1-light.svg"
   },
   "zh-autoco-1": {
-    "hash": "b1736e02168c259b07e4e8e5736510ae60b27c4adb8fef24f2a13b2261629d61",
-    "sourceHash": "a6c84c9df31d6f81feb34f6f00a21bd5c9441633f720cee9159318aef1c81832",
+    "hash": "2928adf9084d0939b111d217ee76becc3915d8d14d38b2eeb8ac0908d05429fc",
+    "sourceHash": "e812d8d00491b4bbded64948975691cb51141a878c1144cdceca8d6199114ffb",
     "file": "zh-autoco-1.svg"
   },
   "zh-autoco-1-light": {
-    "hash": "8a1f1d1a3115707db871543ae0513b0fd6a59ab033626800025a471749168968",
-    "sourceHash": "a6c84c9df31d6f81feb34f6f00a21bd5c9441633f720cee9159318aef1c81832",
+    "hash": "f5b58e724e540ac6839771d4f3a5dba593db41e23dd5b71cda91220a9bfe5b4d",
+    "sourceHash": "e812d8d00491b4bbded64948975691cb51141a878c1144cdceca8d6199114ffb",
     "file": "zh-autoco-1-light.svg"
   },
   "zh-backends-1": {
@@ -300,13 +300,13 @@
     "file": "en-attachments-1-light.svg"
   },
   "en-autoco-1": {
-    "hash": "2a8ec7ac4287aa645067564fa10fd3f6358232753e26fb5c47dddb3947308c8b",
-    "sourceHash": "1a84d890482e5cd0c6fd9c3a7a7e34811c04442bc49b2d9068d18d39402d9815",
+    "hash": "f1e732f5833395dd29754d854920a714e1e792eea5ebb40407ca1847fed1b1df",
+    "sourceHash": "a788b390eaca33a212e8a8817f18012cd8e4c59da76ed4815d704d2a100a0ac3",
     "file": "en-autoco-1.svg"
   },
   "en-autoco-1-light": {
-    "hash": "43b9002231a2c892b78f2f5a2e8a459f66644ef3ab84dfd8e2b327375c0d4c3c",
-    "sourceHash": "1a84d890482e5cd0c6fd9c3a7a7e34811c04442bc49b2d9068d18d39402d9815",
+    "hash": "fb88bec876aad2467a89437313578adbc3cc4d821f1513eb59fc3136344d5990",
+    "sourceHash": "a788b390eaca33a212e8a8817f18012cd8e4c59da76ed4815d704d2a100a0ac3",
     "file": "en-autoco-1-light.svg"
   },
   "en-backends-1": {

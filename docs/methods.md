@@ -2,7 +2,7 @@
 
 方法负责建模流程：调用 LLM、输出中间产物、请求求解、根据反馈修正。平台提供 LLM、代码契约和求解沙箱。接口见[架构](architecture.md#方法接口)。
 
-每个方法都是一张 LangGraph 图，即使只有一个节点。前 8 个精确建模方法开放 Pyomo、OR-Tools、CVXPY、PySCIPOpt、CasADi 五个建模库；第 9 个方法 AutoCO 为内置求解器方法（`languages=frozenset()`），自带 12 类启发式与进化算法池并在隔离沙箱中完成代码体检、短时试跑与正式求解。代码提示和组件组装共享库指引，库内 API 由代码表达，平台识别原生模型。OptiMUS、CoE、OptiTree、OR-LLM-Agent 保留 LP/MILP 建模范围；它与库选择独立。所选库及后端仍须能够表达并求解该数学问题。
+每个方法都是一张 LangGraph 图，即使只有一个节点。前 8 个精确建模方法开放 Pyomo、OR-Tools、CVXPY、PySCIPOpt、CasADi 五个建模库；第 9 个方法 AutoCO 为内置求解器方法（`languages=frozenset()`），通过问题建模生成候选解评估器并在沙箱中检查，再根据模型特征进行算法选择与配置。选配时可短时试跑，正式求解使用内置 12 类启发式与进化算法中的一种。代码提示和组件组装共享库指引，库内 API 由代码表达，平台识别原生模型。OptiMUS、CoE、OptiTree、OR-LLM-Agent 保留 LP/MILP 建模范围；它与库选择独立。所选库及后端仍须能够表达并求解该数学问题。
 
 ## 方法一览
 

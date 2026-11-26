@@ -6,7 +6,7 @@ A modeling method controls how the LLM turns a business problem into an executab
 |---|---|---|
 | Need a quick first exact model | [Direct](../direct/) | Domains, constraints and data binding |
 | Need to separate interpretation, formulation and code errors | [TriVAL](../trival/) | Layered checks and attribution |
-| Multi-objective Pareto trade-offs, large combinatorial or black-box nonlinear tasks | **[AutoCO](../autoco/)** | KG algorithm selection, pilot trials and 12-family metaheuristic pool |
+| Multi-objective Pareto trade-offs, large combinatorial or black-box nonlinear tasks | **[AutoCO](../autoco/)** | Problem modeling defines the evaluator. Model features and optional pilot trials guide algorithm selection and configuration |
 | Many rules need component inspection | [OptiMUS 0.3](../optimus/) | Constraint-to-formula-to-code mapping |
 | Want to inspect role collaboration | [Chain-of-Experts](../coe/) | Useful information added by later experts |
 | Want problem-type templates | [OptiTree](../optitree/) | Match path and template applicability |

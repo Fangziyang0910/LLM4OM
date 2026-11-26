@@ -380,8 +380,8 @@
         "AutoCO"
       ],
       "summary": [
-        "面向大规模组合优化、非线性黑盒与多目标 Pareto 权衡的 12 类智能优化引擎。",
-        "12-family metaheuristic engine for large combinatorial, black-box nonlinear, and multi-objective Pareto problems."
+        "从问题建模到算法选择与配置，使用内置算法搜索可行解或多目标权衡方案。",
+        "From problem modeling to algorithm selection and configuration for single- and multi-objective search."
       ],
       "sources": [
         "src/llm4om/methods/autoco/graph.py",

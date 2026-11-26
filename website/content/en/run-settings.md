@@ -30,7 +30,7 @@ For production/transport LP/MILP, start with compatible Pyomo backends. Inspect 
 |---|---|---|---|
 | First exact production run | Direct | Pyomo / AUTO | Formulation, quantities and profit |
 | Inspect layered business-rule checks | TriVAL | Mathematically suitable library / AUTO | Semantic, formulation and code validation artifacts |
-| Multi-objective or large combinatorial task | [AutoCO](../autoco/) | Built-in 12-family metaheuristic pool | KG algorithm selection, pilot trials and Pareto front |
+| Multi-objective or large combinatorial task | [AutoCO](../autoco/) | Built-in 12-family metaheuristic pool | Algorithm selection and configuration, optional pilot trials, Pareto candidates for multiple objectives |
 | Large JSON/CSV | BIND | Pyomo or another compatible library / AUTO | Schema and data-reading code |
 
 ![Solving preferences and advanced settings: modeling methods, AI models, solver engine and time limit](../../../assets/screens/en/settings-light.webp)

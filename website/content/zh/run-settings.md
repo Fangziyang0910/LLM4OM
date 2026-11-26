@@ -30,7 +30,7 @@ flowchart TB
 |---|---|---|---|
 | 第一次跑精确生产案例 | Direct | Pyomo / AUTO | 数学模型、产量、利润 |
 | 复杂业务规则分层复核 | TriVAL | 与数学类型匹配的库 / AUTO | 语义、公式、代码三层验证记录 |
-| 多目标权衡或大规模组合调度 | [AutoCO](../autoco/) | 内置 12 类智能优化算法池 | 知识图谱选型、预试验与 Pareto 前沿 |
+| 多目标权衡或大规模组合调度 | [AutoCO](../autoco/) | 内置 12 类智能优化算法池 | 算法选择与配置、可选试跑、多目标问题的 Pareto 候选解 |
 | 使用大份 JSON/CSV | BIND | Pyomo 等兼容库 / AUTO | schema 和数据读取代码 |
 
 ![求解偏好与高级设置：建模方法、AI 模型、求解引擎和求解时限](../../../assets/screens/zh/settings-light.webp)
