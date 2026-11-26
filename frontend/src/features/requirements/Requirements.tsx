@@ -17,7 +17,7 @@ import { useDesktop } from "@/lib/useDesktop";
 import { cn } from "@/lib/utils";
 import type { RequirementsMeta, Usage } from "@/features/runs/types";
 import { ChatMessages, ThreadLoadError } from "@/features/chat/Messages";
-import { ChatInput } from "@/features/chat/ChatInput";
+import { ChatInput, ToolToggle } from "@/features/chat/ChatInput";
 import { inputFingerprint } from "@/features/chat/inputFingerprint";
 import { useChatModel, useConversation } from "@/features/chat/conversation";
 import { useChatScroll } from "@/features/chat/scroll";
@@ -138,7 +138,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
           <Button variant="secondary" size="xs" className="rounded-lg" disabled={busy || launching || !draft.description.trim()} onClick={async () => {
             setAction(true);
             try { await save(); onUse(draft); } catch (error) { toast.error(errorText(error)); } finally { setAction(false); }
-          }}>{t("带入快速求解")}<ArrowRight /></Button>
+          }}>{t("带入手动建模")}<ArrowRight /></Button>
         </div>
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div ref={log} role="log" aria-label={t("对话记录")} aria-busy={conversation.loading} className="min-h-0 chat-scroll flex-1 overflow-y-auto overscroll-contain">
@@ -169,9 +169,7 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
           onSend={() => void submit()} onStop={() => void stop()}>
 
           <span title={canSearch ? t("搜索公开资料，并在回复中展示来源。") : t("选择支持搜索的模型或由管理员开启搜索服务。")}>
-            <Button type="button" variant="ghost" size="sm" aria-label={t("联网搜索")} aria-pressed={searchOn} disabled={busy || launching || !canSearch}
-              className={cn("h-8 gap-1.5 px-2 text-xs", searchOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
-              onClick={() => setSearch(!searchOn)}><Globe /><span>{t("联网搜索")}</span></Button>
+            <ToolToggle label={t("联网搜索")} icon={<Globe />} pressed={searchOn} disabled={busy || launching || !canSearch} onPressedChange={setSearch} />
           </span>
         </ChatInput>
       </div>

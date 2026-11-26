@@ -26,8 +26,21 @@ function openLibrary() {
   const onUse = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   render(<QueryClientProvider client={client}><Examples open onClose={vi.fn()} datasets={[dataset]} onUse={onUse} /></QueryClientProvider>);
+  fireEvent.click(screen.getByRole("button", { name: language.value === "zh" ? "全部题库" : "All collections" }));
   return onUse;
 }
+
+test("the library opens on scenario templates, filters them and uses the full problem without loading benchmarks", () => {
+  const onUse = vi.fn();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  render(<QueryClientProvider client={client}><Examples open onClose={vi.fn()} datasets={[dataset]} onUse={onUse} /></QueryClientProvider>);
+  expect(screen.getAllByRole("button", { name: "使用此模板" }).length).toBeGreaterThan(5);
+  fireEvent.change(screen.getByRole("textbox", { name: "搜索案例" }), { target: { value: "排班" } });
+  expect(screen.getAllByRole("button", { name: "使用此模板" })).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "使用此模板" }));
+  expect(onUse).toHaveBeenLastCalledWith(expect.stringMatching(/^门店每天需要的店员人数/));
+  expect(api).not.toHaveBeenCalled();
+});
 
 test("an example translates on request and can use either the translation or its original", async () => {
   vi.mocked(api).mockResolvedValueOnce(page).mockResolvedValueOnce({ original, translation: translated, cached: false, locale: "zh" });

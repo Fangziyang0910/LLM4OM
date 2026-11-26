@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
-import { ArrowRight, Check, CircleCheck, Clock, Columns3, FileDown, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sparkles, Square, Tag, Trash2, TriangleAlert } from "lucide-react";
+import { ArrowRight, Check, Columns3, FileDown, Info, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sparkles, Square, Tag, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,7 +24,7 @@ import { client } from "@/features/runs/sdk";
 import { t } from "@/i18n";
 import { report } from "@/features/runs/report";
 import { exportSolution, hasSolution } from "@/features/runs/workbook";
-import { STATUS, duration, errorText, formatNumber, formatTokens, outcome, tone, uncheckedCvxpyLimit } from "@/format";
+import { STATUS, duration, errorText, formatNumber, formatTokens, outcome, shortTitle, tone, uncheckedCvxpyLimit } from "@/format";
 import { phases } from "@/features/runs/steps";
 import type { Draft, Options } from "@/types";
 import type { RunMeta, RunValues, SourceRun, Step } from "@/features/runs/types";
@@ -155,22 +156,25 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const title = meta.title || (values.description ?? "").trim().split("\n")[0] || t("未命名方案");
   const targetText = targetLabel(options, meta, solve?.solver);
   const methodText = method?.name ?? meta.method;
-  const engineBadge = targetText && !targetText.toLowerCase().startsWith(methodText.toLowerCase())
-    ? `${methodText} · ${targetText}` : (targetText || methodText);
-  const configDetail = [
-    engineBadge,
-    meta.model ?? provider?.label,
-    calls ? t("{count} 次推理", { count: calls }) + (tokens ? ` · ${formatTokens(tokens)} token` : "") : null,
-  ].filter(Boolean).join(" · ");
+  const detailRows: [string, string | null | undefined][] = [
+    [t("建模方法"), methodText],
+    [t("建模库与求解器"), targetText.toLowerCase().startsWith(methodText.toLowerCase()) ? null : targetText],
+    [t("AI 模型"), meta.model ?? provider?.label],
+    [t("推理次数"), calls ? String(calls) : null],
+    ["Token", tokens ? formatTokens(tokens) : null],
+    [t("用时"), elapsed != null ? duration(elapsed) : null],
+  ];
+  const detailSummary = [meta.model ?? provider?.label, elapsed != null ? duration(elapsed) : null].filter(Boolean).join(" · ") || methodText;
 
-  const followUpActions = !active && !embedded ? <div role="group" aria-label={t("运行操作")} className="flex flex-wrap items-center gap-2">
-    <Button variant="secondary" size="sm" className="rounded-lg shadow-2xs" disabled={busy || !values.description} onClick={() => setRevision("")}>
+  const actionClass = "min-w-0 flex-1 rounded-lg px-2 text-xs sm:flex-none sm:px-3 sm:text-sm";
+  const followUpActions = !active && !embedded ? <div role="group" aria-label={t("运行操作")} className="flex w-full items-center gap-2 sm:w-auto">
+    <Button size="sm" className={cn(actionClass, "shadow-xs")} disabled={busy || !values.description} onClick={() => setRevision("")}>
       <Pencil />{t("调整条件")}
     </Button>
-    <Button variant="outline" size="sm" className="rounded-lg bg-background/70" disabled={busy || !values.spec} onClick={() => setScenarios(true)}>
+    <Button variant="outline" size="sm" className={actionClass} disabled={busy || !values.spec} onClick={() => setScenarios(true)}>
       <Columns3 />{t("多场景对比")}
     </Button>
-    {!assistantOpen ? <Button variant="outline" size="sm" className="rounded-lg bg-background/70" disabled={busy || !values.spec} onClick={async () => {
+    {!assistantOpen ? <Button variant="outline" size="sm" className={actionClass} disabled={busy || !values.spec} onClick={async () => {
       setBusy(true);
       try { await onDiscuss(); } catch (error) { toast.error(errorText(error)); } finally { setBusy(false); }
     }}>{busy ? <Spinner /> : <MessageSquare />}{t("对话追问")}</Button> : null}
@@ -212,7 +216,6 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
     const accepted = hasSolution(values) ? values.solve : null;
     const pareto = accepted?.pareto?.solutions.length ? accepted.pareto : null;
     const knee = pareto ? (pareto.solutions.find(item => item.knee) ?? pareto.solutions[0]) : null;
-    const embeddedMeta = [engineBadge, elapsed != null ? duration(elapsed) : null].filter(Boolean).join(" · ");
     return <div className="flex h-full min-h-0 min-w-0 flex-col">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/70 bg-muted/15 px-4 py-2.5">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -229,7 +232,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
                   {values.explanation?.objective_unit ? <span className="text-xs text-muted-foreground">{values.explanation.objective_unit}</span> : null}
                 </span> : null}
               <StatusBadge status={state} />
-              <span title={configDetail} className="truncate text-xs text-muted-foreground tabular">{embeddedMeta}</span>
+              <span className="min-w-0 text-xs text-muted-foreground [&_svg]:size-3.5"><RunDetails rows={detailRows} summary={detailSummary} /></span>
             </div>}
           {!active && pareto && knee ? <p className="text-xs break-words text-muted-foreground tabular">
             {t("推荐折中解：")}{pareto.objectives.map((obj, idx) => `${objectiveLabel(obj)} = ${knee.objectives[idx] == null ? "—" : formatNumber(knee.objectives[idx]!)}`).join(" · ")}
@@ -251,25 +254,18 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   }
 
   return <div className="flex h-full min-h-0 min-w-0 flex-col overflow-y-auto">
-    <header className="flex shrink-0 flex-col gap-2 border-b border-border/70 bg-background/80 px-4 py-2.5 backdrop-blur-md sm:px-5 md:flex-row md:items-center">
+    <header className="flex shrink-0 items-start gap-3 border-b border-border/70 bg-background/80 px-4 py-3 backdrop-blur-md sm:px-5">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {!assistantOpen && (meta.group || meta.conversation) ? <div className="flex flex-wrap items-center gap-3">
           {meta.group ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground hover:text-primary" onClick={() => onCompare(meta.group!)}><Columns3 />{t("返回对比列表")}</Button> : null}
           {meta.conversation ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground hover:text-primary" onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回对话规划")}</Button> : null}
         </div> : null}
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{title}</h1></TooltipTrigger>
-            <TooltipContent className="max-w-md whitespace-pre-wrap">{(values.description || title).slice(0, 400)}</TooltipContent>
-          </Tooltip>
-          <span title={configDetail} className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-            {engineBadge}
-          </span>
-          {elapsed != null ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/70 px-2 py-0.5 text-[11px] text-muted-foreground tabular">
-            <Clock className="size-3" />{duration(elapsed)}
-          </span> : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5 empty:hidden">
+        <Tooltip>
+          <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{shortTitle(title)}</h1></TooltipTrigger>
+          <TooltipContent className="max-w-md whitespace-pre-wrap">{(values.description || title).slice(0, 400)}</TooltipContent>
+        </Tooltip>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground [&_svg]:size-3.5">
+          <RunDetails rows={detailRows} summary={detailSummary} />
           {meta.tags?.map(tag => <Badge key={tag} variant="secondary" title={tag} className="h-5 max-w-48 gap-1 font-normal"><Tag className="size-3" /><span className="truncate">{tag}</span></Badge>)}
           {meta.note ? <button className="flex max-w-80 items-center gap-1.5 truncate hover:text-foreground" title={meta.note} onClick={() => setNoting(true)}>
             <NotebookPen />{meta.note.split("\n")[0]}</button> : null}
@@ -342,6 +338,45 @@ function NoteDialog({ meta, onClose, onSave }: { meta: RunMeta; onClose: () => v
       </DialogFooter>
     </DialogContent>
   </Dialog>;
+}
+
+/** How the run was made — method, library, model and cost — kept one click away from the result. */
+function RunDetails({ rows, summary }: { rows: [string, string | null | undefined][]; summary: string }) {
+  return <Popover>
+    <PopoverTrigger asChild>
+      <button type="button" title={summary} className="inline-flex max-w-full items-center gap-1 rounded-md text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <span className="truncate tabular">{summary}</span><Info className="shrink-0 opacity-70" /><span className="sr-only">{t("运行详情")}</span>
+      </button>
+    </PopoverTrigger>
+    <PopoverContent align="start" className="w-auto max-w-80 rounded-xl p-3.5">
+      <p className="mb-2 text-xs font-semibold">{t("运行详情")}</p>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+        {rows.filter(([, value]) => value).map(([label, value]) => <div key={label} className="contents">
+          <dt className="text-muted-foreground">{label}</dt><dd className="min-w-0 break-words tabular">{value}</dd>
+        </div>)}
+      </dl>
+    </PopoverContent>
+  </Popover>;
+}
+
+/** The objective after each solve of the run, when it solved more than once: how revisions moved the result. */
+function ObjectiveTrend({ steps }: { steps: Step[] }) {
+  const values = steps.flatMap(step => step.type === "solve" && step.objective != null && Number.isFinite(step.objective) ? [step.objective] : []);
+  if (values.length < 2) return null;
+  const [width, height, pad] = [132, 40, 4];
+  const low = Math.min(...values), high = Math.max(...values), span = high - low || 1;
+  const points = values.map((value, index) => [pad + index * (width - 2 * pad) / (values.length - 1),
+    high === low ? height / 2 : pad + (high - value) / span * (height - 2 * pad)] as const);
+  const last = points[points.length - 1];
+  return <figure className="flex shrink-0 flex-col gap-1">
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" className="overflow-visible text-primary"
+      aria-label={t("各次求解的目标值：{values}", { values: values.map(formatNumber).join(", ") })}>
+      <polyline points={points.map(point => point.join(",")).join(" ")} fill="none" stroke="currentColor" strokeOpacity=".55" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      {points.slice(0, -1).map(([x, y], index) => <circle key={index} cx={x} cy={y} r="2" className="fill-card" stroke="currentColor" strokeOpacity=".55" strokeWidth="1.2" />)}
+      <circle cx={last[0]} cy={last[1]} r="3.2" fill="currentColor" />
+    </svg>
+    <figcaption className="text-[11px] text-muted-foreground tabular">{t("{count} 次求解的目标值", { count: values.length })}</figcaption>
+  </figure>;
 }
 
 function Pane({ children }: { children: React.ReactNode }) {
@@ -468,24 +503,37 @@ function Summary({ state, values, steps, error, active, elapsed, onTab, actions 
 
   const pareto = !unchecked && solve.pareto?.solutions.length ? solve.pareto : null;
   const knee = pareto ? (pareto.solutions.find(item => item.knee) ?? pareto.solutions[0]) : null;
-  return frame(kind, kind === "good" ? <CircleCheck /> : <TriangleAlert />, <div className="flex flex-col gap-1">
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      {pareto ? <span className="flex flex-wrap items-baseline gap-2">
-        <span className="text-xs font-medium text-muted-foreground">{t("多目标 Pareto 前沿")}</span>
-        <span className="text-xl font-bold tracking-tight tabular sm:text-2xl">{t("共 {total} 个非支配解", { total: pareto.total })}</span>
-      </span> : !unchecked && solve.objective != null ? <span className="flex flex-wrap items-baseline gap-2">
-        <span className="text-xs font-medium text-muted-foreground">{values.explanation?.objective_label || t("目标值")}</span>
-        <span className="text-2xl font-bold tracking-tight tabular sm:text-3xl">{formatNumber(solve.objective)}</span>
-        {values.explanation?.objective_unit ? <span className="text-xs font-medium text-muted-foreground">{values.explanation.objective_unit}</span> : null}
-      </span> : <span className="font-semibold">{STATUS[solve.status] ?? solve.status}</span>}
-      <StatusBadge status={solve.status} />
-    </div>
-    {pareto && knee ? <p className="text-xs text-muted-foreground tabular">
-      {t("推荐折中解：")}{pareto.objectives.map((obj, idx) => {
-        const val = knee.objectives[idx];
-        return `${objectiveLabel(obj)} = ${val == null ? "—" : formatNumber(val)}`;
-      }).join(" · ")}
-    </p> : null}
+  const label = pareto ? t("多目标 Pareto 前沿") : values.explanation?.objective_label || t("目标值");
+  const headline = pareto ? <span className="text-2xl font-bold tracking-tight tabular sm:text-3xl">{t("共 {total} 个非支配解", { total: pareto.total })}</span>
+    : !unchecked && solve.objective != null ? <span className="flex flex-wrap items-baseline gap-1.5">
+      <span className="text-3xl font-bold tracking-tight tabular sm:text-4xl">{formatNumber(solve.objective)}</span>
+      {values.explanation?.objective_unit ? <span className="text-sm font-medium text-muted-foreground">{values.explanation.objective_unit}</span> : null}
+    </span> : <span className="text-lg font-semibold">{STATUS[solve.status] ?? solve.status}</span>;
+  const tradeoff = pareto && knee ? <p className="text-xs text-muted-foreground tabular">
+    {t("推荐折中解：")}{pareto.objectives.map((obj, idx) => {
+      const val = knee.objectives[idx];
+      return `${objectiveLabel(obj)} = ${val == null ? "—" : formatNumber(val)}`;
+    }).join(" · ")}
+  </p> : null;
+
+  // The label and the value share one parent, so the value reads as the label's figure.
+  const figure = <>
+    <span className="text-xs font-medium text-muted-foreground">{label}</span>
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">{headline}<StatusBadge status={solve.status} /></div>
+    {tradeoff}
+  </>;
+  if (kind !== "good" || explain) return frame(kind, <TriangleAlert />, <div className="flex flex-col gap-1">
+    {figure}
     {explain ? <p className="text-sm leading-relaxed text-muted-foreground">{explain}</p> : null}
   </div>, actions);
+
+  const variables = Object.keys(solve.variables).length;
+  return <div className={cn("animate-fade-up flex flex-wrap items-center gap-x-8 gap-y-4 rounded-2xl border bg-card p-4 shadow-xs sm:px-5", TONE.good.border)}>
+    <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
+      {figure}
+      {!pareto && variables ? <p className="text-xs text-muted-foreground tabular">{t("{count} 个决策变量", { count: variables })}</p> : null}
+    </div>
+    {!pareto ? <ObjectiveTrend steps={steps} /> : null}
+    {actions ? <div className="w-full sm:w-auto">{actions}</div> : null}
+  </div>;
 }

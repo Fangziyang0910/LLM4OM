@@ -64,12 +64,12 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
       </TabsTrigger>)}
     </TabsList>
     <TabsContent key={tab} value={tab} className="min-h-0 overflow-y-auto p-4 sm:p-5">
-      {tab === "solution" ? values.solve && !values.failure && !unchecked ? <div className="flex flex-col gap-4">
+      {tab === "solution" ? values.solve && !values.failure && !unchecked ? <div className="flex flex-col gap-6">
         {values.solve.pareto?.solutions.length ? <ParetoFront pareto={values.solve.pareto} decisions={values.explanation?.decisions} runKey={runKey} /> : null}
         {values.explanation ? <Explanation explanation={values.explanation} solve={values.solve} /> : null}
         {values.infeasibility ? <Infeasibility explanation={values.infeasibility} onAdjust={active ? undefined : onAdjust} /> : null}
         {values.explanation_error ? <Alert><AlertDescription>{values.solve.status === "infeasible" ? t("通俗解读暂未生成，可在下方查看求解器定位的冲突。") : t("通俗解读暂未生成，您仍可直接查看下方详细决策数值。")}</AlertDescription></Alert> : null}
-        {values.explanation ? <VariableDetails solve={values.solve} /> : <Solution solve={values.solve} />}
+        {values.explanation ? <VariableDetails solve={values.solve} explained={values.explanation.decisions.map(item => item.variable)} /> : <Solution solve={values.solve} />}
       </div>
         : <Blank icon={Sparkles} text={active ? t("求解中，完成后将在这里显示结果。") : values.failure ? t("本次求解未能生成方案。") : unchecked ? t("旧版记录没有核验停止时的数值是否满足约束。请重新求解以取得可核验的结果。") : finished ? t("暂无求解结果。") : t("求解尚未完成。")} />
         : null}
@@ -87,15 +87,18 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
   </Tabs>;
 }
 
-function VariableDetails({ solve }: { solve: NonNullable<RunValues["solve"]> }) {
+/** The solver's raw variables behind the explanation; when the explanation already lists them all, only the log and export are new. */
+function VariableDetails({ solve, explained }: { solve: NonNullable<RunValues["solve"]>; explained: string[] }) {
   const [visited, setVisited] = useState(false);
-  const count = useMemo(() => Object.keys(solve.variables).length, [solve.variables]);
-  return <details className="group/vars rounded-2xl border border-border/80 bg-card p-4 shadow-2xs"
+  const names = useMemo(() => Object.keys(solve.variables), [solve.variables]);
+  const covered = names.every(name => explained.includes(name));
+  return <details className="group/vars border-t border-border/70 pt-4"
     onToggle={event => { if (event.currentTarget.open) setVisited(true); }}>
-    <summary className="flex cursor-pointer items-center justify-between text-sm font-medium">
-      <span>{t("查看全部决策变量明细（共 {count} 项）", { count })}</span>
+    <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+      <ChevronRight className="size-3.5 transition-transform group-open/vars:rotate-90" />
+      {covered ? t("原始变量与求解日志") : t("查看全部决策变量明细（共 {count} 项）", { count: names.length })}
     </summary>
-    {visited ? <div className="mt-4 border-t border-border/60 pt-4"><Solution solve={solve} /></div> : null}
+    {visited ? <div className="mt-4"><Solution solve={solve} /></div> : null}
   </details>;
 }
 

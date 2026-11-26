@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BookOpen, ChartSpline, ChevronDown, Columns3, Cpu, History, MessageSquareText, MoreHorizontal, PanelLeftClose, Plus, Search, Trash2, X } from "lucide-react";
+import { BookOpen, ChevronDown, Columns3, Cpu, MessageSquareText, MoreHorizontal, PanelLeftClose, Plus, Search, SquareFunction, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { groupHistory, type HistoryGroup } from "@/features/runs/history";
 import type { Options, Preset } from "@/types";
 import { StatusIcon, TONE } from "@/features/runs/status";
 import { ThemeMenu } from "@/components/theme";
+import { LogoMark } from "@/components/Logo";
 
 const DAY = 86_400_000;
 const clockFormat = new Intl.DateTimeFormat(dateLocale, { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -122,9 +123,7 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
       <div className="flex items-center gap-1">
         <a className="group flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1 transition-colors hover:bg-sidebar-accent/50" href="/"
           title={t("通用智能优化求解器 — 求解各种复杂优化问题的通用求解器")} onClick={event => { event.preventDefault(); onAgent(); }}>
-          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground shadow-2xs">
-            <ChartSpline className="size-4" />
-          </span>
+          <LogoMark className="size-7 drop-shadow-xs" />
           <span className="min-w-0 truncate text-[14px] font-semibold tracking-tight">{t("通用智能优化求解器")}</span>
         </a>
         {onCollapse ? <Button type="button" variant="ghost" size="icon-sm" aria-label={t("收起侧边栏")} title={t("收起侧边栏")}
@@ -159,10 +158,9 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
 
     <div className="min-h-0 flex-1 overflow-y-auto">
       <nav aria-label={t("运行记录")} className="px-3 pb-3">
-        {!entries.length && !loading && !error ? <div className="mt-2 flex flex-col items-center gap-1.5 rounded-lg border border-dashed bg-background/40 px-4 py-7 text-center text-xs text-muted-foreground">
-          <History className="size-4 text-muted-foreground/60" />
-          <p className="font-medium text-foreground/75">{t("暂无求解记录")}</p>
-        </div> : null}
+        {!entries.length && !loading && !error ? <p className="px-2.5 pt-3 text-xs leading-relaxed text-muted-foreground">
+          {t("求解过的问题会保存在这里。")}
+        </p> : null}
         {entries.length && !shown.length ? <p className="px-2.5 py-6 text-center text-xs text-muted-foreground">{t("没有找到匹配的记录。")}</p> : null}
         {[...groups].map(([label, items]) => <section key={label} className="mt-3 first:mt-1">
           <h2 className="px-2.5 pb-1 text-[11px] font-medium text-muted-foreground/75">{label}</h2>
@@ -197,9 +195,9 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
     <div className="flex flex-col gap-0.5 border-t border-sidebar-border/80 bg-sidebar/80 p-3 py-2">
       <Button variant={activeMode === "quick" && !current ? "secondary" : "ghost"}
         className="h-8.5 justify-start gap-2.5 rounded-lg px-2.5 text-[13px] font-normal text-foreground/85 hover:bg-sidebar-accent"
-        title={t("同一问题并排体验多种建模方法、模型或求解器")}
+        title={t("指定建模方法、建模库和模型求解，或并排对比多种组合")}
         onClick={onNew}>
-        <Columns3 className="size-4 shrink-0 text-muted-foreground" />{t("多方案对比")}
+        <SquareFunction className="size-4 shrink-0 text-muted-foreground" />{t("手动建模")}
       </Button>
       <Button variant="ghost" className="h-8.5 justify-start gap-2.5 rounded-lg px-2.5 text-[13px] font-normal text-foreground/85 hover:bg-sidebar-accent" onClick={onExamples}>
         <BookOpen className="size-4 shrink-0 text-muted-foreground" />{t("案例模板库")}

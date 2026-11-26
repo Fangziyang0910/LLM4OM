@@ -21,7 +21,7 @@ test("desktop results keep modeling central and present adjustment actions toget
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   await expect(page.locator("main header").getByTitle(/deepseek-v4\.1 flash-1017/)).toBeVisible();
-  await page.getByText("查看全部决策变量明细（共 2 项）", { exact: true }).click();
+  await page.getByText("原始变量与求解日志", { exact: true }).click();
   await expect(page.getByLabel("筛选变量")).toBeVisible();
   await expect(page.getByRole("button", { name: "多场景对比", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "更多操作", exact: true }).click();
@@ -164,6 +164,8 @@ test("example navigation stays visible without scrolling through the whole page"
   await page.getByRole("button", { name: "打开菜单", exact: true }).click();
   await page.getByRole("button", { name: "案例模板库", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "案例模板库", exact: true });
+  await dialog.getByRole("combobox", { name: "案例分类", exact: true }).click();
+  await page.getByRole("option", { name: "全部题库", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "下一页", exact: true })).toBeInViewport();
   await dialog.getByRole("button", { name: "下一页", exact: true }).click();
   await expect(dialog).toContainText("21–40");
@@ -358,9 +360,10 @@ test("examples preserve the composer and chat drafts through back, replacement, 
   const chat = page.getByRole("textbox", { name: "发送给优化助手" });
   await chat.fill("保留预算 731 和交期");
   await expect(page.getByRole("button", { name: /^生产排产优化/ })).toHaveCount(0);
-  const compare = page.getByRole("button", { name: "多方案对比", exact: true });
+  const compare = page.getByRole("button", { name: "手动建模", exact: true });
   const library = page.getByRole("button", { name: "案例模板库", exact: true });
   await compare.click();
+  await page.getByRole("radio", { name: "多方案对比", exact: true }).click();
   await page.getByRole("button", { name: /^运输问题/ }).click();
   await expect(page.getByRole("button", { name: "开始对比（1 个方案）" })).toBeDisabled();
   const file = page.getByRole("button", { name: "编辑 transport.csv" });
@@ -371,6 +374,7 @@ test("examples preserve the composer and chat drafts through back, replacement, 
 
   await compare.click();
   await library.click();
+  await page.getByRole("dialog").getByRole("button", { name: "全部题库", exact: true }).click();
   const use = page.getByRole("button", { name: "带入此案例" }).first();
   await use.click();
   await page.getByRole("button", { name: "替换当前草稿" }).click();
@@ -379,6 +383,7 @@ test("examples preserve the composer and chat drafts through back, replacement, 
   await expect(file).toBeVisible();
   await expect(page.getByRole("main")).toContainText("三个仓库");
   await library.click();
+  await page.getByRole("dialog").getByRole("button", { name: "全部题库", exact: true }).click();
   await use.click();
   const popup = page.waitForEvent("popup");
   await page.getByRole("button", { name: "用案例新建对话" }).click();

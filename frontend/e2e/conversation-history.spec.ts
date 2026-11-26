@@ -41,7 +41,7 @@ test("a completed conversation remains in history and reopens after navigating a
   const history = page.getByRole("navigation", { name: "运行记录" });
   const entry = history.getByRole("button", { name: title, exact: false }).first();
   await expect(entry).toBeVisible();
-  await page.getByRole("button", { name: "多方案对比", exact: true }).click();
+  await page.getByRole("button", { name: "手动建模", exact: true }).click();
   await entry.click();
   await expect(page).toHaveURL(url);
   await expect(page.getByRole("log")).toContainText(title);
@@ -57,7 +57,7 @@ test("history discovers conversations created elsewhere even when this page has 
   await page.goto("/");
   await loaded;
   const history = page.getByRole("navigation", { name: "运行记录" });
-  await expect(page.getByRole("button", { name: "多方案对比", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "手动建模", exact: true })).toBeVisible();
   const title = "其他页面新建的对话";
   const response = await page.request.post("/threads", { data: {
     metadata: { graph_id: "optimization", kind: "optimization", title } } });
@@ -86,7 +86,7 @@ test("requirements history follows the first message and keeps an active convers
   const entry = page.getByRole("navigation", { name: "运行记录" }).getByRole("button", { name: title, exact: false }).first();
   await expect(entry).toContainText("正在梳理");
   await input.fill("下一条需求草稿");
-  await page.getByRole("button", { name: "多方案对比", exact: true }).click();
+  await page.getByRole("button", { name: "手动建模", exact: true }).click();
   await entry.click();
   await expect(page).toHaveURL(new RegExp(`/chat/${id}$`));
   await expect(input).toHaveValue("下一条需求草稿");

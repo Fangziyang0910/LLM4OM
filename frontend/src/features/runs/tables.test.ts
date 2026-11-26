@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asMatrix, groupVariables, parseDelimited, variableChanges } from "@/features/runs/tables";
+import { alignVariables, asMatrix, groupVariables, parseDelimited, variableChanges } from "@/features/runs/tables";
 
 describe("groupVariables", () => {
   it.each([
@@ -55,6 +55,16 @@ it("compares actual variable values without turning missing values into zero", (
     { name: "c", before: undefined, after: 0 },
   ]);
   expect(variableChanges({}, { constructor: 0 })).toEqual([{ name: "constructor", before: undefined, after: 0 }]);
+});
+
+it("aligns decisions that separately generated models named differently, but never guesses between candidates", () => {
+  expect(alignVariables([{ "x[A]": 3, "x[B]": 2 }, { "x[A]": 4, "x[B]": 2 }, { A: 2, B: 3 }])).toEqual([
+    ["x[A]", "x[A]", "A"], ["x[B]", "x[B]", "B"],
+  ]);
+  expect(alignVariables([{ "ship[W1,C2]": 20 }, { "x['W1', 'C2']": 40 }])).toEqual([["ship[W1,C2]", "x['W1', 'C2']"]]);
+  expect(alignVariables([{ "x[A]": 1, "y[A]": 2 }, { A: 1 }])).toEqual([["x[A]", undefined], ["y[A]", undefined], [undefined, "A"]]);
+  expect(alignVariables([{ "x[A]": 1 }, { A: 1, "y[A]": 2 }])).toEqual([["x[A]", undefined], [undefined, "A"], [undefined, "y[A]"]]);
+  expect(variableChanges({ "x[A]": 3, "x[B]": 2 }, { A: 2, B: 2 })).toEqual([{ name: "x[A]", renamed: "A", before: 3, after: 2 }]);
 });
 
 it("parses chained and dotted indexed names, rejects malformed brackets, sorts tuples elementwise, and rejects matrix collisions", () => {

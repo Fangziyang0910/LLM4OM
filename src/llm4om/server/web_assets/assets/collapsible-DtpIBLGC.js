@@ -1,0 +1,1 @@
+import{r as e}from"./react-DSaHhmf3.js";import{at as t,it as n,ot as r}from"./ui-CRYYFMZ5.js";var i=e();function a({...e}){return(0,i.jsx)(n,{"data-slot":`collapsible`,...e})}function o({...e}){return(0,i.jsx)(r,{"data-slot":`collapsible-trigger`,...e})}function s({...e}){return(0,i.jsx)(t,{"data-slot":`collapsible-content`,...e})}export{s as n,o as r,a as t};

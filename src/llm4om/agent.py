@@ -30,7 +30,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import Command
 from langgraph_sdk import get_client
 from pydantic import BaseModel, ConfigDict, Field
-from simpleeval import DEFAULT_OPERATORS, InvalidExpression, simple_eval
+from simpleeval import DEFAULT_OPERATORS, EvalWithCompoundTypes, InvalidExpression
 
 from llm4om.graph import Resources, get_resources, run
 from llm4om.languages import LANGUAGES
@@ -93,7 +93,8 @@ Reserve optitree, coe and optimus for explicit user requests or comparisons.
 Use solve_scenarios for changes to an existing plan with unchanged configuration. If attachments differ, choose attachment_source="current" for the updated files or "plan" when the user wants the archived inputs. Ask only if their intent is unclear.
 Use modeling_capabilities before selecting a non-default method, modeling library or explicit backend; honor linear_only scope.
 Follow explicit user choices; pinned configuration takes priority over tool arguments. Users need not configure technical details.
-Write the standalone problem with corrected values and units in place of obsolete questions. Never invent missing quantities or business rules.
+Write the standalone problem with corrected values and units in place of obsolete questions. Never invent missing quantities,
+units, currency or business rules; keep a cost without a stated currency unitless.
 When search is available, use focused public queries for requested or necessary current information, without private attachments.
 Cite actual source URLs. Keep reference information distinct from confirmed requirements; use suggested assumptions when the user
 authorizes them, otherwise clarify the assumption before calculation. Do not claim to have searched when search is disabled.
@@ -101,6 +102,7 @@ authorizes them, otherwise clarify the assumption before calculation. Do not cla
 
 PLAN_TOOLS = """Use the current frozen plan as the source of truth: the problem, attached data, formulation, code and ACTUAL result.
 Describe what the saved decisions mean. Read exact variable identities and units from the problem and model.
+Use only the currency and units the problem states; if it names no currency, report amounts without adding one ($, USD, CNY, 元).
 Use lookup_variables for omitted decision values or another available plan. Follow next_offset if more values are needed.
 Use calculate to check derived totals, costs, utilization, remaining capacity, percentages and numerical comparisons
 before reporting them. v contains exact saved variable names and values; values includes every match, not just the displayed page.
@@ -116,7 +118,8 @@ Saved explanations are interpretations; suggested adjustments are untested candi
 Removing one reported conflict does not establish feasibility for the whole problem. Check other requirements before
 suggesting a change, and let an actual new solve establish whether it works. Do not promise that a proposed relaxation is sufficient.
 
-For explicit changed conditions, call solve_scenarios once with the user's complete changes; preserve unrelated conditions.
+For explicit changed conditions, call solve_scenarios once with the user's complete changes. Each instruction states
+only what changes, such as "B 至少生产 3 件"; unchanged conditions carry over automatically, so do not restate them.
 A new requirement changes the problem even if the current solution happens to satisfy it already; save the revised problem.
 If undoing changes exactly restores a saved problem with the same data, you may select that saved plan and say you are
 reusing its actual result. Run a fresh calculation when the user specifically asks to rerun or verify the modeling workflow.
@@ -139,6 +142,7 @@ TOOL_INPUT_ERRORS = (InvalidExpression, ArithmeticError, ValueError, LookupError
 CHANGE_TOOLS = {"select_plan", "solve_scenarios", "model_and_solve"}
 RECOVERABLE_TOOLS = {"lookup_variables", "read_attachment", "select_plan", "calculate"}
 _FORBIDDEN_CALC_NODES = (ast.JoinedStr, ast.FormattedValue, ast.LShift, ast.RShift)
+MAX_CALC_RESULTS = 100
 
 
 def _safe_pow(base: Any, exponent: Any) -> int | float:
@@ -214,7 +218,7 @@ class AgentPlanState(AgentState):
 class Scenario(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=100, description="A short business name for this scenario")
-    instruction: str = Field(min_length=1, description="The user's complete, explicit changes; preserve all other requirements")
+    instruction: str = Field(min_length=1, description="Only the changed conditions, complete and exact; unchanged requirements carry over automatically and are not restated")
 
 
 def _attachment_stats(data: dict[str, str]) -> list[dict[str, Any]]:
@@ -593,8 +597,9 @@ def _build_tools_and_middleware(
 
         With a saved plan, v maps exact variable names to actual values; values contains ALL values matching query
         (empty means all); objective is its actual objective. Without a plan, use ordinary numeric expressions.
-        Each expression returns one number. Use arithmetic and sum, min, max, abs, round, len, sqrt.
-        Examples: sum(values); v['x[A]'] * 2 + v['x[B]']; 8 - (2 * v['x[A]'] + v['x[B]']).
+        An expression returns one number, or a list of up to 100 numbers to check several totals at once.
+        Use arithmetic and sum, min, max, abs, round, len, sqrt.
+        Examples: sum(values); v['x[A]'] * 2 + v['x[B]']; [v['x[W1,C1]'] + v['x[W1,C2]'], v['x[W2,C1]'] + v['x[W2,C2]']].
         Constants must come from the supplied problem or data. This evaluates expressions, not Python scripts.
         """
         parsed = ast.parse(expression, mode="eval")
@@ -624,12 +629,16 @@ def _build_tools_and_middleware(
             raise ValueError("No matching decision values. Use lookup_variables to find their exact names.")
         if solved.get("objective") is not None:
             names["objective"] = solved["objective"]
-        result = simple_eval(expression, names=names, operators=_CALC_OPERATORS,
-                             functions={"sum": sum, "min": min, "max": max,
-                                        "abs": abs, "round": round, "len": len, "sqrt": math.sqrt},
-                             allowed_attrs={})
-        if type(result) not in (int, float) or not math.isfinite(result):
-            raise ValueError("The expression must return a finite number.")
+        result = EvalWithCompoundTypes(names=names, operators=_CALC_OPERATORS,
+                                       functions={"sum": sum, "min": min, "max": max,
+                                                  "abs": abs, "round": round, "len": len, "sqrt": math.sqrt},
+                                       allowed_attrs={}).eval(expression)
+        numbers = list(result) if isinstance(result, (list, tuple)) else [result]
+        if (not 1 <= len(numbers) <= MAX_CALC_RESULTS
+                or any(type(number) not in (int, float) or not math.isfinite(number) for number in numbers)):
+            raise ValueError(f"The expression must return a finite number or a list of up to {MAX_CALC_RESULTS} finite numbers.")
+        if isinstance(result, (list, tuple)):
+            result = numbers
         facts = {"source": source, "expression": expression, "query": query,
                  "matched_variables": matched, "result": result}
         return json.dumps(facts, ensure_ascii=False), {"type": "calculation", "calculation": facts}

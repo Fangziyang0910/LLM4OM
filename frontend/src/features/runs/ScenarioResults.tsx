@@ -5,6 +5,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { client } from "@/features/runs/sdk";
 import { StatusBadge } from "@/features/runs/status";
+import { alignVariables } from "@/features/runs/tables";
 import { hasSolution } from "@/features/runs/workbook";
 import { errorText, formatNumber, savedRunState } from "@/format";
 import { t } from "@/i18n";
@@ -24,19 +25,16 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
   const plans = [...(previous ? [{ name: t("原方案"), id: source!.thread_id, source, instruction: "", values: previous,
     state: savedRunState(previous), error: null }] : []), ...records];
   const solvedPlans = plans.filter(plan => hasSolution(plan.values));
-  const reference = solvedPlans[0]?.values?.solve?.variables;
-  const names = [...new Set(solvedPlans.flatMap(plan => Object.keys(plan.values!.solve!.variables)))];
-  const changed = reference
-    ? names.filter(name => {
-      const refVal = Object.hasOwn(reference, name) ? reference[name] : undefined;
-      return solvedPlans.some(plan => {
-        const vars = plan.values!.solve!.variables;
-        const val = Object.hasOwn(vars, name) ? vars[name] : undefined;
-        return val !== refVal;
-      });
-    })
-    : [];
-  const shown = (changed.length ? changed : names).slice(0, 20);
+  // Each scenario writes its own model, so one decision may be `x[A]` in one plan and `A` in another.
+  const aligned = alignVariables(solvedPlans.map(plan => plan.values!.solve!.variables));
+  const rows = aligned.map(names => {
+    const cells = new Map(solvedPlans.map((plan, i) => [plan.id, names[i]]));
+    const label = solvedPlans.map((plan, i) => plan.values!.explanation?.decisions.find(item => item.variable === names[i])?.label).find(Boolean);
+    const values = solvedPlans.map((plan, i) => names[i] === undefined ? undefined : plan.values!.solve!.variables[names[i]!]);
+    return { key: names.map(name => name ?? "").join("\u0000"), names: [...new Set(names.filter(name => name !== undefined))], label, cells,
+      changed: values.some(value => value !== values[0]) };
+  });
+  const shown = (rows.some(row => row.changed) ? rows.filter(row => row.changed) : rows).slice(0, 20);
   return <div className="h-full overflow-y-auto"><div className="mx-auto flex max-w-6xl min-w-0 flex-col gap-5 p-4 sm:p-6">
     <header className="animate-fade-up flex flex-col gap-2">
       <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
@@ -74,10 +72,13 @@ export function ScenarioResults({ entries, onOpen }: { entries: Entry<RunMeta>[]
     {shown.length ? <section className="flex flex-col gap-3"><h2 className="text-sm font-semibold">{t("关键决策横向对比")}</h2>
       <Table containerClassName="rounded-2xl border border-border/80 bg-card shadow-xs"><TableHeader className="bg-muted/40"><TableRow>
         <TableHead>{t("决策项")}</TableHead>{plans.map(plan => <TableHead key={plan.id} className="min-w-28 max-w-64 text-right whitespace-normal [overflow-wrap:anywhere]">{plan.name}</TableHead>)}
-      </TableRow></TableHeader><TableBody>{shown.map(name => <TableRow key={name}><TableCell className="font-mono text-xs">{name}</TableCell>
+      </TableRow></TableHeader><TableBody>{shown.map(row => <TableRow key={row.key}>
+        <TableCell className="min-w-32 max-w-72 whitespace-normal [overflow-wrap:anywhere]">
+          {row.label ? <span className="text-[13px] font-medium">{row.label}</span> : null}
+          <span className={row.label ? "mt-0.5 block font-mono text-[11px] text-muted-foreground" : "font-mono text-xs"}>{row.names.join(" · ")}</span></TableCell>
         {plans.map(plan => {
-          const variables = plan.values?.solve?.variables;
-          const raw = hasSolution(plan.values) && variables && Object.hasOwn(variables, name) ? variables[name] : null;
+          const name = row.cells.get(plan.id);
+          const raw = hasSolution(plan.values) && name !== undefined ? plan.values.solve.variables[name] : null;
           return <TableCell key={plan.id} className="text-right font-mono tabular">
             {raw == null ? "—" : formatNumber(raw)}</TableCell>;
         })}

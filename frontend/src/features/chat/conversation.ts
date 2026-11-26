@@ -3,12 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { v7 } from "@langchain/core/utils/uuid";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import type { UseStream } from "@langchain/langgraph-sdk/react";
-import type { BagTemplate, Message, ThreadState } from "@langchain/langgraph-sdk";
+import type { BagTemplate, Checkpoint, Config, Message, ThreadState } from "@langchain/langgraph-sdk";
 import type { GetConfigurableType, GetCustomEventType, GetUpdateType } from "@langchain/langgraph-sdk/ui";
 import { toast } from "sonner";
 import { chatDraftKey, discussSupersteps, saveThreadValues, threadHeader } from "@/features/runs/api";
 import { client } from "@/features/runs/sdk";
 import { errorText } from "@/format";
+import { t } from "@/i18n";
 import type { Preset } from "@/types";
 
 type Pending = { id: string; text: string };
@@ -70,6 +71,8 @@ export type ConversationTurn<State extends ConversationState, Bag extends BagTem
   metadata?: Record<string, unknown>;
   /** Resend the last user message with its original ID instead of the draft. */
   retry?: boolean;
+  /** Send this text instead of the draft, which stays as it is. */
+  text?: string;
 };
 
 export type ConversationOptions<State extends ConversationState, Bag extends BagTemplate = BagTemplate> = {
@@ -84,6 +87,26 @@ export type ConversationOptions<State extends ConversationState, Bag extends Bag
   onFinish?: (state: ThreadState<State>) => void;
   onError?: () => void;
 };
+
+/**
+ * The earliest checkpoint of a thread whose last message is `questionId`. History lists every branch newest first; a
+ * question can be asked again only while it is the last one, so all checkpoints after its first save still contain it.
+ * A run's own input checkpoint holds the question as a pending write, so only the next checkpoint ends with it.
+ */
+async function questionCheckpoint(threadId: string, questionId: string) {
+  const size = 20;
+  let found: Checkpoint | undefined, before: Config | undefined;
+  for (;;) {
+    const states = await client.threads.getHistory<ConversationState>(threadId, { limit: size, ...(before ? { before } : {}) });
+    for (const state of states) {
+      const messages = state.values?.messages ?? [];
+      if (!messages.some(message => message.id === questionId)) return found;
+      if (messages.at(-1)?.id === questionId) found = state.checkpoint;
+    }
+    if (states.length < size) return found;
+    before = { configurable: { checkpoint_id: states.at(-1)!.checkpoint.checkpoint_id ?? undefined } };
+  }
+}
 
 /**
  * The conversation lifecycle shared by the requirements, plan and optimization conversations.
@@ -174,20 +197,55 @@ export function useConversation<State extends ConversationState, Bag extends Bag
     const loading = stream.isLoading || stream.isThreadLoading || (!!active && thread.isPending);
     if (!active || sendingRef.current || stoppingRef.current || loading) return false;
     const question = turn.retry ? [...stream.messages].reverse().find(message => message.type === "human") : undefined;
-    if (turn.retry ? !question : !input.trim()) return false;
+    const text = turn.text ?? input;
+    if (turn.retry ? !question : !text.trim()) return false;
     sendingRef.current = true;
     setSending(true);
     // A later message must never cancel or join the finished run that came before it.
     runId.current = null;
     try {
       if (turn.metadata) await client.threads.update(active, { metadata: turn.metadata, returnMinimal: true });
-      const message = question ?? prepare(input);
+      const message = question ?? prepare(text);
       // `GetUpdateType` is conditional on the page's Bag and stays unresolved inside this generic hook.
       const update = { ...turn.values, messages: [message] } as unknown as GetUpdateType<Bag, State>;
       await stream.submit(update, {
         context: turn.context, multitaskStrategy: "reject", streamResumable: true, streamSubgraphs: true,
         optimisticValues: turn.retry ? undefined : current => ({
           ...current, ...turn.values, messages: [...(current.messages ?? []), message] }),
+      });
+      return true;
+    } catch (error) { toast.error(errorText(error)); return false; }
+    finally { sendingRef.current = false; setSending(false); }
+  };
+
+  /**
+   * Ask the last question again, edited or unchanged, in place of its answer. The run forks from the earliest checkpoint
+   * that ends with this question: the state just after it was saved, before any answer, plan or pending retry made for
+   * it in any branch. The question keeps its ID, so the edit replaces it instead of adding a second question.
+   */
+  const rewrite = async (text: string, turn: ConversationTurn<State, Bag> = {}) => {
+    const active = threadId;
+    const loading = stream.isLoading || stream.isThreadLoading || (!!active && thread.isPending);
+    const messages = stream.messages;
+    const question = [...messages].reverse().find(message => message.type === "human");
+    if (!active || !question?.id || !text.trim() || sendingRef.current || stoppingRef.current || loading) return false;
+    sendingRef.current = true;
+    setSending(true);
+    runId.current = null;
+    try {
+      const fork = await questionCheckpoint(active, question.id);
+      if (!fork?.checkpoint_id) throw new Error(t("找不到这个问题的保存记录，无法重新发送。"));
+      if (turn.metadata) await client.threads.update(active, { metadata: turn.metadata, returnMinimal: true });
+      const message: Message = { type: "human", id: question.id, content: text.trim() };
+      const earlier = messages.slice(0, messages.indexOf(question));
+      const update = { ...turn.values, messages: [message] } as unknown as GetUpdateType<Bag, State>;
+      // The server rejects a null checkpoint_map, which the SDK type nonetheless requires.
+      const checkpoint = { checkpoint_id: fork.checkpoint_id, checkpoint_ns: fork.checkpoint_ns ?? "",
+        ...(fork.checkpoint_map ? { checkpoint_map: fork.checkpoint_map } : {}) } as Omit<Checkpoint, "thread_id">;
+      await stream.submit(update, {
+        context: turn.context, checkpoint,
+        multitaskStrategy: "reject", streamResumable: true, streamSubgraphs: true,
+        optimisticValues: current => ({ ...current, ...turn.values, messages: [...earlier, message] }),
       });
       return true;
     } catch (error) { toast.error(errorText(error)); return false; }
@@ -265,6 +323,7 @@ export function useConversation<State extends ConversationState, Bag extends Bag
     input,
     setInput,
     send,
+    rewrite,
     startThread,
     reconnect,
     stop,

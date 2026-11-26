@@ -12,7 +12,7 @@ test("reopening a draft hides empty sections and sends the visible problem to Qu
   await page.reload();
   await expect(page.getByLabel("问题描述")).toHaveValue(problem);
   expect((await (await page.request.get(`/threads/${id}`)).json()).values.description).toBe(stored);
-  await page.getByRole("button", { name: "带入快速求解", exact: true }).click();
+  await page.getByRole("button", { name: "带入手动建模", exact: true }).click();
   await expect(page.getByLabel("问题描述")).toHaveValue(problem);
   await page.goto(`/chat/${id}`);
   await page.getByLabel("发送给需求助手").fill("我想安排工厂 A、B 两种产品的生产。");
@@ -130,7 +130,7 @@ test("a requirements conversation persists its editable draft and hands only the
   expect(saved.messages).toHaveLength(8);
   expect(saved.usage.solves).toBe(0);
 
-  await page.getByRole("button", { name: "带入快速求解", exact: true }).click();
+  await page.getByRole("button", { name: "带入手动建模", exact: true }).click();
   await expect(page).toHaveURL(/\/model$/);
   await expect(page.getByLabel("问题描述")).toHaveValue(edited);
   expect((await (await page.request.get(`/threads/${id}/runs`)).json()).length).toBe(2);
@@ -188,7 +188,7 @@ test("the requirements assistant retries a failed turn and keeps the editable pr
   await expect(page.getByRole("tabpanel", { name: "当前需求稿", exact: true })).toContainText("总利润最大");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("tab", { name: "对话助手", exact: true }).click();
-  await page.getByRole("button", { name: "带入快速求解", exact: true }).click();
+  await page.getByRole("button", { name: "带入手动建模", exact: true }).click();
   await expect(page).toHaveURL(/\/model$/);
   await expect(page.getByLabel("问题描述")).toHaveValue(result.description);
   expect((await (await page.request.get(`/threads/${id}/runs`)).json()).length).toBe(2);
@@ -206,7 +206,7 @@ test("a failed draft save keeps the user's edit and prevents handing off stale t
     else await route.continue();
   });
   await page.getByLabel("问题描述").fill("人工修改：晚班至少 3 人，不得放宽。");
-  await page.getByRole("button", { name: "带入快速求解", exact: true }).click();
+  await page.getByRole("button", { name: "带入手动建模", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("需求稿未保存");
   await expect(page).toHaveURL(url);
   await expect(page.getByLabel("问题描述")).toHaveValue("人工修改：晚班至少 3 人，不得放宽。");

@@ -51,7 +51,8 @@ export async function startRun(draft: Draft, preset: Preset | undefined, group: 
     revision?: { instruction: string; source: SourceRun; name?: string }): Promise<string> {
   if (draft.preset && !preset) throw new Error(t("原预设已删除，请重新选择预设模型。"));
   const title = titleFromDescription(draft.description, t("未命名方案"));
-  const meta: RunMeta = { title: revision ? `${title} · ${revision.name || revision.instruction.slice(0, 60)}` : title,
+  const change = revision?.name || revision?.instruction || "";
+  const meta: RunMeta = { title: revision ? `${title} · ${change.length > 80 ? change.slice(0, 79).trimEnd() + "…" : change}` : title,
     method: draft.method, language: draft.language, preset: preset?.id ?? null,
     ...(draft.solver ? { solver: draft.solver } : {}),
     ...(draft.origin ? { origin: draft.origin } : {}),

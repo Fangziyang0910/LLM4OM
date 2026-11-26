@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { errorText } from "@/format";
@@ -174,7 +175,7 @@ export function useRunLauncher({
   const isDefaultConfig = !comparing && method.id === "direct" && language.id === "pyomo" && backend === "AUTO" && timeLimit === 60;
   const limitSuffix = timeLimit !== 60 ? ` · ${timeLimit}s` : "";
   const settingsBadge = comparing
-    ? t("多方案对比（{count}）", { count: runs.length })
+    ? t("已选 {count} 个方案", { count: runs.length })
     : selfContained
       ? `${method.name}${limitSuffix}`
       : `${method.name} · ${language.name}${backend !== "AUTO" ? ` (${backend})` : ""}${limitSuffix}`;
@@ -210,11 +211,12 @@ export function useRunLauncher({
   </div>;
 
   const changeMode = (on: boolean) => set({ comparing: on, methods: on && !draft.methods?.length ? [method.id] : draft.methods });
-  const settingsTrigger = <><select aria-label={t("运行模式")} disabled={busy || disabled}
-    className="h-8 max-w-full rounded-xl border bg-background px-2 text-xs" value={comparing ? "compare" : "single"}
-    onChange={event => changeMode(event.target.value === "compare")}>
-    <option value="single">{t("单次求解")}</option><option value="compare">{t("多方案对比")}</option>
-  </select><button type="button" aria-label={t("查看运行设置")} aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}
+  const settingsTrigger = <><ToggleGroup type="single" variant="outline" size="sm" aria-label={t("运行模式")} disabled={busy || disabled}
+    value={comparing ? "compare" : "single"} onValueChange={value => { if (value) changeMode(value === "compare"); }}
+    className="h-8 rounded-xl bg-background/80 shadow-2xs *:data-[slot=toggle-group-item]:h-8 *:data-[slot=toggle-group-item]:px-2.5 *:data-[slot=toggle-group-item]:text-xs">
+    <ToggleGroupItem value="single" className="data-[spacing=0]:first:rounded-l-xl">{t("单次求解")}</ToggleGroupItem>
+    <ToggleGroupItem value="compare" className="data-[spacing=0]:last:rounded-r-xl">{t("多方案对比")}</ToggleGroupItem>
+  </ToggleGroup><button type="button" aria-label={t("查看运行设置")} aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}
     title={t("点击调整 AI 模型、多方案对比或底层求解引擎")}
     className={cn(
       "inline-flex h-8 max-w-full items-center gap-1.5 rounded-xl border bg-background/80 px-2.5 text-xs font-normal shadow-2xs transition-colors hover:border-primary/40 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",

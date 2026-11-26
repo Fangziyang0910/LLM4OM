@@ -141,7 +141,8 @@ test("a plan conversation explains actual values, computes changes and continues
   await assistant.getByText("相关方案 · 2", { exact: true }).click();
   await assistant.getByRole("button", { name: "查看原方案", exact: true }).click();
   await expect(page).toHaveURL(chatUrl);
-  await expect(page.getByText("总利润", { exact: true }).locator("..")).toContainText("13");
+  // The chat card of the revised plan also shows 总利润; check the original run beside it.
+  await expect(page.getByRole("tabpanel", { name: "方案详情" }).getByText("总利润", { exact: true }).locator("..")).toContainText("13");
   await expect(page.getByLabel("当前讨论方案", { exact: true })).toContainText("12");
   await input.fill("请查询现在的实际决策值"); await input.press("Enter");
   await expect(page.getByRole("log")).toContainText("x[B] = 3");

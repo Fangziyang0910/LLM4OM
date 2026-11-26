@@ -68,7 +68,31 @@ const integerFormat = new Intl.NumberFormat("en-US");
 const decimalFormat = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 8 });
 export const formatNumber = (value: number) => (Number.isInteger(value) ? integerFormat : decimalFormat).format(value);
 
-export const formatTokens = (count: number) => count < 1000 ? String(count) : `${(count / 1000).toFixed(count < 10000 ? 1 : 0)}k`;
+const TOKEN_UNITS = [[1e9, "B"], [1e6, "M"], [1e3, "k"]] as const;
+export function formatTokens(count: number): string {
+  const [size, unit] = TOKEN_UNITS.find(([size]) => count >= size) ?? [1, ""];
+  if (!unit) return String(count);
+  const scaled = count / size;
+  return `${scaled.toFixed(scaled < 10 && !Number.isInteger(scaled) ? 1 : 0)}${unit}`;
+}
+
+/**
+ * A long title shortened to its first clause, ignoring bracketed details, and to `width` columns (a CJK character takes two);
+ * a " · " suffix such as a scenario name stays.
+ */
+export function shortTitle(title: string, width = 72): string {
+  const [head, ...rest] = title.split(" · ");
+  const plain = head.replace(/（[^（）]*）|\([^()]*\)|\[[^[\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
+  const clause = plain.split(/[，。；：！？]|[;:!?.](?=\s)/)[0].trim();
+  const base = clause.length >= 4 ? clause : head.trim();
+  let used = 0, end = 0;
+  for (const char of base) {
+    used += /[\u2e80-\uffef]/.test(char) ? 2 : 1;
+    if (used > width) break;
+    end += char.length;
+  }
+  return [end < base.length ? base.slice(0, end).trimEnd() + "…" : base, ...rest].join(" · ");
+}
 
 export function duration(seconds: number): string {
   const rounded = Math.round(seconds);

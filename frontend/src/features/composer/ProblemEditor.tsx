@@ -33,13 +33,13 @@ function dataRowCount(name: string, content: string): number {
 
 /** Unified problem & data composer card: live Markdown block rendering, inline data attachments, and integrated action bar. */
 export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, onRemove, onClear, disabled = false, reading = false,
-  label = t("问题描述"), actions, toolbarExtra, primaryAction, placeholder, autoFocus = false }: {
+  label = t("问题描述"), actions, toolbarExtra, primaryAction, placeholder, autoFocus = false, className }: {
   value: string; data: Record<string, string>; onChange: (value: string) => void;
   onFiles: (files: FileList | null) => void; onRemove: (name: string) => void; onClear: () => void;
   onDataChange: (name: string, content: string) => void | Promise<void>;
   disabled?: boolean; reading?: boolean;
   autoFocus?: boolean;
-  label?: string; actions?: ReactNode; toolbarExtra?: ReactNode; primaryAction?: ReactNode; placeholder?: string;
+  label?: string; actions?: ReactNode; toolbarExtra?: ReactNode; primaryAction?: ReactNode; placeholder?: string; className?: string;
 }) {
   const [dragging, setDragging] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -194,7 +194,7 @@ export function ProblemEditor({ value, data, onChange, onFiles, onDataChange, on
 
   return <Card className={cn(
     "relative min-h-48 min-w-0 flex-1 gap-0 overflow-hidden rounded-2xl border-border/90 bg-card py-0 shadow-sm transition-[border-color,box-shadow] duration-200 focus-within:border-primary/45 focus-within:ring-3 focus-within:ring-primary/10 max-lg:max-h-[calc(100dvh-12rem)] lg:min-h-56",
-    dragging && "border-primary ring-3 ring-primary/20")}
+    className, dragging && "border-primary ring-3 ring-primary/20")}
     onDragOver={event => {
       if (!event.dataTransfer.types?.includes("Files") && !event.dataTransfer.files?.length) return;
       event.preventDefault(); if (!locked) setDragging(true);

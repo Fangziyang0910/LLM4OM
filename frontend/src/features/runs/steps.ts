@@ -55,16 +55,23 @@ export function roleLabel(role: string): string {
   return methodRoleLabel(role) ?? (Object.hasOwn(ROLE_LABELS, part) ? ROLE_LABELS[part] : roleName(role));
 }
 
-/** The first readable line of Markdown, for a one-line preview. */
+// Display math, \[…\], \(…\) and inline $…$: LaTeX source reads as noise in a one-line preview.
+const MATH = /\$\$[\s\S]*?(?:\$\$|$)|\\\[[\s\S]*?(?:\\\]|$)|\\\([\s\S]*?(?:\\\)|$)|\$[^$\n]+\$/g;
+// Headings, ✅/❌ flags and "**Key**: value" lines name what a model step produced.
+const SECTION = /^\s*(#+\s|✅|❌|\*\*[^*]+\*\*\s*[:：])/;
+
+/** The readable lines of Markdown joined on one line, for a preview; model steps show their section names when they have any. */
 export function preview(markdown: string, length = 160, modelSections = false): string {
-  const text = markdown
-    .replace(/```[\s\S]*?(```|$)/g, " ")
-    .split("\n")
-    .map(line => line.replace(/^#+\s*/, "").replace(/^[-*+>]\s+/, "").replace(/^\|.*\|$/, "").replace(/\*\*|__|[`$]/g, "").replace(/\\[()[\]]/g, "").trim())
+  const lines = markdown.replace(/```[\s\S]*?(```|$)/g, " ").replace(MATH, " ").split("\n");
+  const sections = modelSections ? lines.filter(line => SECTION.test(line)) : [];
+  const parts = (sections.length ? sections : lines)
+    .map(line => line.replace(/^#+\s*/, "").replace(/^[-*+>]\s+/, "").replace(/^\|.*\|$/, "").replace(/\*\*|__|[`$]/g, "").replace(/\\[()[\]]/g, "")
+      .replace(/\s+([,，.。;；:：])/g, "$1").replace(/[,，;；:：]\s*(?=[,，;；:：.。])/g, "").replace(/\s{2,}/g, " ").trim())
     .map(line => modelSections ? line.replace(/^(✅ |❌ )?([^:：]+)([:：].*)?$/,
       (_, flag, value, suffix) => (flag ?? "") + expertLabel(modelLabel(value)) + (suffix ?? "")) : line)
-    .filter(line => line && !/^[-:| ]+$/.test(line))
-    .join(" · ");
+    .filter(line => /[\p{L}\p{N}]/u.test(line))
+    .filter((line, index, all) => line !== all[index - 1]);
+  const text = parts.join(" · ");
   return text.length > length ? text.slice(0, length) + "…" : text;
 }
 

@@ -29,7 +29,7 @@ for (const [width, height] of [[320, 568], [390, 844], [768, 1024], [1024, 768],
     else {
       await expect(navigation).toBeHidden();
       await page.getByRole("button", { name: "打开菜单" }).click();
-      await expect(page.getByRole("dialog").getByRole("button", { name: "多方案对比", exact: true })).toBeVisible();
+      await expect(page.getByRole("dialog").getByRole("button", { name: "手动建模", exact: true })).toBeVisible();
     }
   });
 }

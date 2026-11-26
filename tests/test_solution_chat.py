@@ -293,6 +293,40 @@ def test_unrelated_arithmetic_does_not_read_or_switch_the_saved_plan(make_resour
     client.threads.create.assert_not_called()
 
 
+def test_calculator_checks_several_totals_in_one_call(make_resources, monkeypatch):
+    original = {"description": "运输方案", "spec": {"preset": None},
+        "solve": {"status": "optimal", "objective": 0, "variables": {"x[W1,C1]": 3, "x[W1,C2]": 4, "x[W2,C1]": 5}}}
+    _, _, source = checkpoint_client(monkeypatch, original)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            return tool_call("calculate", expression="[v['x[W1,C1]'] + v['x[W1,C2]'], v['x[W2,C1]'], 0.5]")
+        facts = json.loads(messages[-1].text)
+        assert facts["result"] == [7, 5, 0.5] and facts["matched_variables"] == 3
+        return "W1 发出 7，W2 发出 5。"
+
+    result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [("human", "核对每个仓库的发货量")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+
+
+@pytest.mark.parametrize("expression", ["[]", "[1, 'a']", "{'a': 1}", "[1] * 101", "[[1, 2]]"])
+def test_calculator_rejects_results_that_are_not_numbers(make_resources, monkeypatch, expression):
+    original = {"description": "实际零值", "spec": {"preset": None},
+        "solve": {"status": "optimal", "objective": 0, "variables": {"x[0]": 0}}}
+    _, _, source = checkpoint_client(monkeypatch, original)
+
+    def reply(role, messages, tools):
+        if messages[-1].type == "human":
+            return tool_call("calculate", expression=expression)
+        assert messages[-1].status == "error"
+        return "该表达式没有给出数值。"
+
+    result = asyncio.run(solution_graph().ainvoke({"source": source, "messages": [("human", "核对")]},
+        {"configurable": {"thread_id": str(uuid4()), "llm4om_resources": make_resources(reply)}}))
+    assert result["failure"] is None, result["failure"]
+
+
 def test_plan_arithmetic_uses_all_frozen_variables_and_does_not_solve(make_resources, monkeypatch):
     original = {"description": "250 项实际决策", "data": {}, "spec": {"preset": None},
         "solve": {"status": "optimal", "objective": 31125, "variables": {f"x[{i}]": i for i in range(250)}}}

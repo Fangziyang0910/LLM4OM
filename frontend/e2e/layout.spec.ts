@@ -87,6 +87,7 @@ test("long catalog names wrap within the desktop navigation", async ({ page }) =
   await page.goto("/model");
   await page.getByRole("button", { name: "案例模板库", exact: true }).click();
   const nav = page.getByRole("navigation", { name: "案例分类", exact: true });
+  await nav.getByRole("button", { name: "全部题库", exact: true }).click();
   expect(await nav.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);
   await expect(page.getByRole("button", { name: "下一页", exact: true })).toBeInViewport();
 });

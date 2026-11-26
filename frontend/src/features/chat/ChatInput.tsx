@@ -7,15 +7,31 @@ import { t } from "@/i18n";
 import { cn } from "@/lib/utils";
 import type { Preset } from "@/types";
 
+/**
+ * An on/off tool in the input toolbar: muted when off, tinted when on. A narrow input beside a desktop panel shows its
+ * icon alone; on a phone the tools fold into their own row, where the label fits.
+ */
+export function ToolToggle({ label, icon, pressed, disabled, title, onPressedChange }: {
+  label: string; icon: ReactNode; pressed: boolean; disabled?: boolean; title?: string; onPressedChange: (pressed: boolean) => void;
+}) {
+  return <Button type="button" variant="ghost" size="sm" aria-label={label} aria-pressed={pressed} title={title} disabled={disabled}
+    onClick={() => onPressedChange(!pressed)}
+    className={cn("h-8 shrink-0 gap-1.5 rounded-lg px-2 text-xs font-normal text-muted-foreground",
+      pressed && "bg-primary/10 font-medium text-primary hover:bg-primary/15 hover:text-primary")}>
+    {icon}<span className="md:@max-lg:hidden">{label}</span></Button>;
+}
+
 /** Both conversations use the same keyboard, composition and model-selection behavior. */
 export function ChatInput({ value, onChange, disabled, loading, sendingDisabled = false, stopping = false, onSend, onStop, presets, presetId, onPreset, openPresets,
-  attachment, searchActive, children, inputRef, label, placeholder, thinking, onThinking }: {
+  attachment, searchActive, children, inputRef, label, placeholder, thinking, onThinking, onFiles }: {
   value: string; onChange: (value: string) => void; disabled: boolean; loading: boolean;
   stopping?: boolean;
   sendingDisabled?: boolean;
   onSend: () => void; onStop: () => void; presets: Preset[]; presetId?: string; onPreset: (id: string) => void;
   openPresets: () => void; attachment?: ReactNode; searchActive?: boolean; children?: ReactNode; inputRef?: Ref<HTMLTextAreaElement>; label: string; placeholder?: string;
   thinking?: boolean | null; onThinking: (enabled: boolean) => void;
+  /** Files pasted into the message; without it, a paste only inserts text. */
+  onFiles?: (files: FileList) => void;
 }) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const toolsId = useId();
@@ -34,7 +50,8 @@ export function ChatInput({ value, onChange, disabled, loading, sendingDisabled 
     onSubmit={event => { event.preventDefault(); if (!disabled && !sendingDisabled && value.trim()) onSend(); }}>
     <div className="rounded-2xl border border-border/80 bg-card/95 p-2.5 shadow-sm backdrop-blur-sm transition-all duration-200 focus-within:border-primary/45 focus-within:ring-4 focus-within:ring-primary/10 sm:p-3">
       <Textarea ref={field} aria-label={label} placeholder={loading ? t("正在生成回复，可先输入下一条消息…") : placeholder ?? t("说说你的想法，或补充更多条件…")} value={value} disabled={disabled && !loading}
-        onChange={event => onChange(event.target.value)} className="max-h-36 min-h-14 resize-none border-0 bg-transparent px-1.5 py-1 text-base leading-relaxed shadow-none field-sizing-content focus-visible:border-0 focus-visible:ring-0 sm:text-sm dark:bg-transparent"
+        onChange={event => onChange(event.target.value)}
+        onPaste={event => { if (onFiles && event.clipboardData.files.length) { event.preventDefault(); onFiles(event.clipboardData.files); } }} className="max-h-36 min-h-14 resize-none border-0 bg-transparent px-1.5 py-1 text-base leading-relaxed shadow-none field-sizing-content focus-visible:border-0 focus-visible:ring-0 sm:text-sm dark:bg-transparent"
         onKeyDown={event => {
           if (event.key === "Enter" && (!event.shiftKey || event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
             event.preventDefault(); if (!disabled && !sendingDisabled && value.trim()) onSend();
@@ -58,11 +75,8 @@ export function ChatInput({ value, onChange, disabled, loading, sendingDisabled 
             </Select> : <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 rounded-lg text-xs" onClick={openPresets}>
               <Cpu className="size-3.5" />{t("配置 AI 模型")}
             </Button>}
-            {preset?.provider === "deepseek" ? <Button type="button" variant="ghost" size="sm" aria-label={t("深度思考")} aria-pressed={thinkingOn}
-              title={t("开启深度推理以处理复杂逻辑问题")}
-              disabled={disabled} onClick={() => onThinking(!thinkingOn)}
-              className={cn("h-8 shrink-0 gap-1.5 rounded-lg px-2 text-xs text-muted-foreground", thinkingOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}>
-              <Brain /><span className="inline">{t("深度思考")}</span></Button> : null}
+            {preset?.provider === "deepseek" ? <ToolToggle label={t("深度思考")} icon={<Brain />} pressed={thinkingOn} disabled={disabled}
+              title={t("开启深度推理以处理复杂逻辑问题")} onPressedChange={onThinking} /> : null}
             {children}
         </div>
         <div className="ml-auto flex shrink-0 items-center">

@@ -17,6 +17,7 @@ import { useDesktop } from "@/lib/useDesktop";
 import type { Entry, SourceRun } from "@/features/runs/types";
 import { sourceKey } from "@/features/runs/types";
 import type { Draft, Options, Preset, Presets } from "@/types";
+import { cn } from "@/lib/utils";
 
 const Composer = lazy(() => import("@/features/composer/Composer").then(module => ({ default: module.Composer })));
 const Examples = lazy(() => import("@/features/composer/Examples").then(module => ({ default: module.Examples })));
@@ -62,6 +63,17 @@ export default function App({ restoredDraft }: { restoredDraft: Draft }) {
   const [route, setRoute] = useState<Route>(routeFromUrl);
   const routeRef = useRef(route);
   useEffect(() => { routeRef.current = route; });
+  useEffect(() => {
+    // A file dropped outside a drop zone would make the browser open it in place of the app.
+    const guard = (event: DragEvent) => {
+      if (!event.dataTransfer?.types.includes("Files") || event.defaultPrevented) return;
+      event.preventDefault();
+      if (event.type === "dragover") event.dataTransfer.dropEffect = "none";
+    };
+    window.addEventListener("dragover", guard);
+    window.addEventListener("drop", guard);
+    return () => { window.removeEventListener("dragover", guard); window.removeEventListener("drop", guard); };
+  }, []);
   const [draft, setDraft] = useState<Draft>(restoredDraft);
   const homeEditor = useRef<{ fillIfEmpty: (description: string) => boolean }>(null);
   const [exampleTarget, setExampleTarget] = useState<Route | null>(null);
@@ -86,7 +98,7 @@ export default function App({ restoredDraft }: { restoredDraft: Draft }) {
   const refresh = useCallback(() => queryClient.invalidateQueries({
     predicate: query => ["history", "conversation", "compare"].includes(String(query.queryKey[0])),
   }), [queryClient]);
-  const newProblem = () => { setDraft(current => ({ ...current, comparing: true, methods: current.methods?.length ? current.methods : [current.method] })); go({ name: "new" }); };
+  const newProblem = () => go({ name: "new" });
   const openAgent = () => {
     if (route.name === "agent") {
       clearChatDraft("optimization-new");
@@ -188,7 +200,7 @@ export default function App({ restoredDraft }: { restoredDraft: Draft }) {
         : "flex h-12 shrink-0 items-center gap-2 border-b bg-background/80 px-2.5 backdrop-blur-md"}>
         <Button variant="ghost" size="icon-sm" aria-label={t("打开菜单")} className="xl:hidden" onClick={() => setMenuOpen(true)}><Menu /></Button>
         {!sidebarOpen ? <Button variant="ghost" size="icon-sm" aria-label={t("展开侧边栏")} title={t("展开侧边栏")} className="hidden xl:inline-flex" onClick={() => toggleSidebar(true)}><PanelLeftOpen /></Button> : null}
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight">{route.name === "new" ? (draft.comparing ? t("多方案对比") : t("单次求解"))
+        <span className={cn("min-w-0 flex-1 truncate text-sm font-semibold tracking-tight", route.name === "new" && "xl:invisible")}>{route.name === "new" ? t("手动建模")
           : route.name === "agent-new" || route.name === "agent" ? t("智能优化对话") : route.name === "chat" ? t("需求梳理") : route.name === "discussion" ? t("方案追问") : route.name === "compare" ? t("方案对比") : t("求解结果")}</span>
         <Button variant="ghost" size="icon-sm" aria-label={t("新建优化任务")} title={t("新建优化任务")} onClick={openAgent}><Plus /></Button>
       </header> : null}

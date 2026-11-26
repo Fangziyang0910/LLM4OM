@@ -270,7 +270,7 @@ test("search and manual modeling remain available from the agent entry", async (
   await expect(page.getByRole("log")).toContainText("公开排班参考");
   await page.getByRole("complementary", { name: "搜索来源" }).locator("summary").click();
   await expect(page.getByRole("link", { name: "排班参考", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "多方案对比", exact: true }).click();
+  await page.getByRole("button", { name: "手动建模", exact: true }).click();
   await page.waitForURL(/\/model$/);
   await expect(page.getByRole("textbox", { name: "问题描述" })).toBeVisible();
 });
@@ -283,11 +283,11 @@ test("switching between quick solve and planning preserves both unsent drafts", 
   await page.waitForURL(/\/$/);
   await expect(page.getByRole("textbox", { name: "发送给优化助手" })).toBeVisible();
   await page.getByRole("textbox", { name: "发送给优化助手" }).fill("Agent 里另一份未发送草稿");
-  await page.getByRole("button", { name: "多方案对比", exact: true }).click();
+  await page.getByRole("button", { name: "手动建模", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue("原有工作台的未发送问题");
   await page.getByRole("button", { name: "新建优化任务", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "发送给优化助手" })).toHaveValue("Agent 里另一份未发送草稿");
-  await page.getByRole("button", { name: "多方案对比", exact: true }).click();
+  await page.getByRole("button", { name: "手动建模", exact: true }).click();
   await page.waitForURL(/\/model$/);
   await expect(page.getByRole("textbox", { name: "问题描述" })).toHaveValue("原有工作台的未发送问题");
   await page.reload();
@@ -302,4 +302,112 @@ test("the agent entry works on a windowed desktop in English and dark mode", asy
   await expect(page.getByRole("textbox", { name: "Message the optimization assistant" })).toBeVisible();
   await expect(page.locator("html")).toHaveClass(/dark/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("after a plan the agent offers next questions, and the last question can be regenerated or edited in place", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/agent");
+  const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  await input.fill("请计算工厂的生产计划");
+  await input.press("Enter");
+  await page.waitForURL(/\/agent\//);
+  const id = page.url().split("/").at(-1)!;
+  const log = page.getByRole("log");
+  await expect(log).toContainText("实际求解结果：13", { timeout: 60_000 });
+  const card = page.getByRole("complementary", { name: "本轮计算结果" });
+  await expect(card.getByLabel("关键决策", { exact: true })).toContainText("3");
+  await expect(card).toContainText("Direct · Pyomo");
+
+  const next = page.getByRole("group", { name: "接下来可以", exact: true });
+  await next.getByRole("button", { name: "如果条件变化…" }).click();
+  await expect(input).toHaveValue("如果，方案会怎样变化？");
+  expect(await input.evaluate((field: HTMLTextAreaElement) => field.selectionStart)).toBe(2);
+  await input.fill("");
+  await next.getByRole("button", { name: "解释主要决策" }).click();
+  await expect(log.getByRole("article", { name: "你" }).last()).toHaveText("请用业务语言解释这个方案的主要决策。");
+  await expect(next).toBeVisible({ timeout: 60_000 });
+  const before = (await (await page.request.get(`/threads/${id}`)).json()).values;
+
+  await log.getByRole("button", { name: "重新生成", exact: true }).click();
+  const answerId = async () => (await (await page.request.get(`/threads/${id}`)).json()).values.messages.at(-1).id;
+  await expect.poll(answerId, { timeout: 60_000 }).not.toBe(before.messages.at(-1).id);
+  await expect(next).toBeVisible({ timeout: 60_000 });
+  const regenerated = (await (await page.request.get(`/threads/${id}`)).json()).values;
+  expect(regenerated.failure).toBeNull();
+  const questions = (values: { messages: { type: string; content: string }[] }) => values.messages.filter(item => item.type === "human").map(item => item.content);
+  expect(questions(regenerated)).toEqual(questions(before));
+  expect(regenerated.messages).toHaveLength(before.messages.length);
+  expect(regenerated.plans).toEqual(before.plans);
+
+  const last = log.getByRole("article", { name: "你" }).last();
+  await last.hover();
+  await log.getByRole("button", { name: "编辑问题", exact: true }).click();
+  const editor = log.getByRole("textbox", { name: "编辑问题", exact: true });
+  await expect(editor).toHaveValue("请用业务语言解释这个方案的主要决策。");
+  await editor.fill("E2E_AGENT_IDEA 换个问题：帮我排班");
+  await editor.press("Enter");
+  await expect(log).toContainText("每班至少需要几个人", { timeout: 60_000 });
+  await expect(log).not.toContainText("请用业务语言解释这个方案的主要决策。");
+  const edited = (await (await page.request.get(`/threads/${id}`)).json()).values;
+  expect(edited.failure).toBeNull();
+  expect(questions(edited)).toEqual(["请计算工厂的生产计划", "E2E_AGENT_IDEA 换个问题：帮我排班"]);
+  expect(edited.plans).toHaveLength(1);
+  expect((await (await page.request.get(`/threads/${id}`)).json()).metadata.title).toBe("请计算工厂的生产计划");
+  await page.reload();
+  await expect(log).toContainText("每班至少需要几个人");
+  await expect(log).not.toContainText("请用业务语言解释这个方案的主要决策。");
+});
+
+test("data files can be dropped onto or pasted into the conversation, and the home page links to the template library", async ({ page }) => {
+  await page.goto("/agent");
+  const chat = page.getByRole("region", { name: "优化对话", exact: true });
+  const transfer = (name: string) => page.evaluateHandle(file => {
+    const data = new DataTransfer();
+    data.items.add(new File(["product,profit\nA,3\nB,2\n"], file, { type: "text/csv" }));
+    return data;
+  }, name);
+  const dropped = await transfer("dropped.csv");
+  await chat.dispatchEvent("dragover", { dataTransfer: dropped });
+  await expect(page.getByText("松开即可添加数据文件", { exact: true })).toBeVisible();
+  await chat.dispatchEvent("drop", { dataTransfer: dropped });
+  await expect(page.getByText("松开即可添加数据文件", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "dropped.csv", exact: true })).toBeVisible();
+  const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  await input.evaluate(async (field: HTMLTextAreaElement) => {
+    const data = new DataTransfer();
+    data.items.add(new File(["product,cost\nA,1\n"], "pasted.csv", { type: "text/csv" }));
+    field.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await expect(page.getByRole("button", { name: "pasted.csv", exact: true })).toBeVisible();
+  await expect(input).toHaveValue("");
+
+  await page.goto("/agent");
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "浏览更多场景模板", exact: true }).click();
+  const library = page.getByRole("dialog", { name: "案例模板库" });
+  await library.getByRole("textbox").fill("排班");
+  await library.getByRole("button", { name: "使用此模板", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "发送给优化助手" })).toHaveValue(/^门店每天需要的店员人数/);
+});
+
+test("editing the first question renames the conversation after the new question", async ({ page }) => {
+  await page.goto("/agent");
+  const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  await input.fill("E2E_GENERAL 列表和元组有什么区别？");
+  await input.press("Enter");
+  await page.waitForURL(/\/agent\//);
+  const id = page.url().split("/").at(-1)!;
+  const log = page.getByRole("log");
+  await expect(log).toContainText("列表可以修改");
+  await log.getByRole("article", { name: "你" }).hover();
+  await log.getByRole("button", { name: "编辑问题", exact: true }).click();
+  await log.getByRole("textbox", { name: "编辑问题", exact: true }).fill("E2E_AGENT_IDEA 门店排班怎么安排");
+  await log.getByRole("button", { name: "重新发送", exact: true }).click();
+  await expect(log).toContainText("每班至少需要几个人");
+  await expect(log).not.toContainText("列表可以修改");
+  const saved = await (await page.request.get(`/threads/${id}`)).json();
+  expect(saved.metadata.title).toBe("E2E_AGENT_IDEA 门店排班怎么安排");
+  expect(saved.values.messages.filter((item: { type: string }) => item.type === "human")).toHaveLength(1);
+  await expect(page.getByRole("navigation", { name: "运行记录" }).getByRole("button", { name: /^E2E_AGENT_IDEA 门店排班怎么安排/ })).toBeVisible();
 });

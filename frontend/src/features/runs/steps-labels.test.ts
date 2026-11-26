@@ -33,6 +33,14 @@ test("generated artifact previews localize labels and ordinary source previews s
   expect(preview("**Attempts**: 2\n\n## Objective and constraints", 160, true)).toBe("尝试次数: 2 · 目标函数与约束");
 });
 
+test("previews leave out LaTeX source and repeated sections", () => {
+  language.value = "zh";
+  const step = "#### Formulation\n\n#### Formulation\n\n$$\\max\\ 3x_A + 2x_B$$ subject to $2x_A + x_B \\le 8$.\n\n#### Code\n\n```python\nm = 1\n```";
+  expect(preview(step, 160, true)).toBe("数学模型 · 代码");
+  expect(preview("$$\\max\\ 3x_A$$ subject to $2x_A \\le 8$, $x_A \\ge 0$.")).toBe("subject to.");
+  expect(preview("按 \\(x\\) 安排生产，满足 $x \\le 8$ 的要求。")).toBe("按 安排生产，满足 的要求。");
+});
+
 test.each([["zh", "解读求解结果"], ["en", "Explain the result"]])("result explanation role follows %s", (locale, expected) => {
   language.value = locale;
   expect(roleLabel("explain_result")).toBe(expected);

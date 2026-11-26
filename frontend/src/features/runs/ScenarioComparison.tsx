@@ -96,8 +96,8 @@ export function ScenarioComparison({ source, values, active = false }: { source:
           <TableBody>{changes.slice(0, limit).map(item => {
             const delta = item.before != null && item.after != null ? item.after - item.before : null;
             return <TableRow key={item.name}>
-              <TableCell className="min-w-32 max-w-64 font-medium whitespace-normal [overflow-wrap:anywhere]"><span>{labels.get(item.name) ?? item.name}</span>
-                {labels.has(item.name) ? <span className="mt-0.5 block font-mono text-[11px] font-normal text-muted-foreground">{item.name}</span> : null}</TableCell>
+              <TableCell className="min-w-32 max-w-64 font-medium whitespace-normal [overflow-wrap:anywhere]"><span>{labels.get(item.name) ?? (item.renamed && labels.get(item.renamed)) ?? item.name}</span>
+                {labels.has(item.name) || item.renamed ? <span className="mt-0.5 block font-mono text-[11px] font-normal text-muted-foreground">{item.renamed ? `${item.name} → ${item.renamed}` : item.name}</span> : null}</TableCell>
               <TableCell className="text-right font-mono tabular">{number(item.before)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular">{number(item.after)}</TableCell>
               <TableCell className="text-right font-mono text-primary tabular">{delta != null && delta > 0 ? `+${number(delta)}` : number(delta)}</TableCell>
@@ -105,7 +105,7 @@ export function ScenarioComparison({ source, values, active = false }: { source:
           })}</TableBody>
         </Table> : <p className="text-sm text-muted-foreground">{t("各同名决策项的取值未发生变化。")}</p>}
         {changes.length > limit ? <Button variant="link" size="sm" onClick={() => setLimit(limit + 200)}>{t("显示更多")}</Button> : null}
-        <p className="text-xs leading-relaxed text-muted-foreground">{t("决策项按变量名自动对齐；新增或移除的项显示为“—”。")}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">{t("决策项按变量名和下标自动对齐；新增或移除的项显示为“—”。")}</p>
       </CardContent>
     </Card>
   </div>;

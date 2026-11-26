@@ -31,7 +31,7 @@ function Form() {
 test.each([
   ["en", "Production planning", "Exact solver", "A factory makes products A and B"],
   ["en", "Transportation", "With data", "Three warehouses ship one product to four customers"],
-  ["en", "Multi-Objective GPU Scheduling", "AutoCO · Multi-objective", "Assign 12 AI compute jobs"],
+  ["en", "Multi-objective GPU scheduling", "AutoCO · Multi-objective", "Assign 12 AI compute jobs"],
   ["zh", "生产计划", "精确求解", "工厂生产 A、B 两种产品"],
   ["zh", "运输问题", "附数据表", "三个仓库向四个客户运送同一种货物"],
   ["zh", "多目标 GPU 调度", "AutoCO · 多目标", "将 12 个 AI 计算任务"],

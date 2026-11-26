@@ -10,7 +10,7 @@ test("quoted customer indices survive solving, matrix display, CSV and Excel dow
   await page.waitForURL(/\/run\//);
   const excel = page.getByRole("button", { name: "导出 Excel", exact: true });
   await expect(excel).toBeVisible({ timeout: 60_000 });
-  await page.getByText("查看全部决策变量明细（共 2 项）", { exact: true }).click();
+  await page.getByText("原始变量与求解日志", { exact: true }).click();
   await expect(page.getByRole("columnheader", { name: "Monday", exact: true })).toBeVisible();
   await expect(page.getByRole("rowheader", { name: "North, East", exact: true }).locator("..")).toContainText("3");
   await expect(page.getByRole("rowheader", { name: "West", exact: true }).locator("..")).toContainText("0");
@@ -31,7 +31,7 @@ test("quoted customer indices survive solving, matrix display, CSV and Excel dow
   expect(plan.data).toContainEqual(["x['North, East',Monday] 的生产数量", 3, "件", "x['North, East',Monday]"]);
   expect(plan.data).toContainEqual(["x[West,Monday] 的生产数量", 0, "件", "x[West,Monday]"]);
   await page.reload();
-  await page.getByText("查看全部决策变量明细（共 2 项）", { exact: true }).click();
+  await page.getByText("原始变量与求解日志", { exact: true }).click();
   await expect(page.getByRole("rowheader", { name: "North, East", exact: true })).toBeVisible();
 });
 

@@ -1,8 +1,8 @@
-import { type ReactNode, type Ref, lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { type DragEvent, type ReactNode, type Ref, lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDefaultLayout } from "react-resizable-panels";
 import type { Message } from "@langchain/langgraph-sdk";
-import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, Columns2, Factory, GitFork, Globe, Menu, PanelLeftOpen, Paperclip, SlidersHorizontal, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, CalendarDays, Columns2, Factory, FileUp, GitFork, Globe, Menu, PanelLeftOpen, Paperclip, SlidersHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,10 @@ import { useDesktop } from "@/lib/useDesktop";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Toggle } from "@/components/ui/toggle";
-import { ChatInput } from "@/features/chat/ChatInput";
-import type { ChatProgress, ModelingEvent, ModelingTask } from "@/features/chat/Messages";
+import { LogoMark } from "@/components/Logo";
+import { ChatInput, ToolToggle } from "@/features/chat/ChatInput";
+import type { ChatProgress, ModelingEvent, ModelingTask, Suggestion } from "@/features/chat/Messages";
+import { resultType, type ComputedPlan, type ToolArtifact } from "@/features/chat/results";
 import { inputFingerprint } from "@/features/chat/inputFingerprint";
 import { useChatModel, useConversation } from "@/features/chat/conversation";
 import { useChatScroll } from "@/features/chat/scroll";
@@ -24,7 +25,7 @@ import { client } from "@/features/runs/sdk";
 import type { OptimizationMeta, Plan, SourceRun, Usage } from "@/features/runs/types";
 import { sameSource, sourceKey } from "@/features/runs/types";
 import type { BackendCatalog, Options, Preset } from "@/types";
-import { errorText } from "@/format";
+import { errorText, shortTitle } from "@/format";
 import { locale, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -57,7 +58,33 @@ const AGENT_STARTERS = [
   },
 ] as const;
 
-export function Agent({ threadId, options, presets, ref, sidebarCollapsed = false, onExpandSidebar, onThread, openPresets, onMenu, onFinished, onOpen, onCompare, renderRun }: {
+/** The plans the latest turn computed, if it computed any. */
+function latestPlans(messages: Message[]): ComputedPlan[] | undefined {
+  for (const message of [...messages].reverse()) {
+    if (message.type === "human") return undefined;
+    if (message.type === "tool" && resultType(message.artifact as ToolArtifact | undefined, message.name) === "plans")
+      return (message.artifact as ToolArtifact | undefined)?.plans;
+  }
+  return undefined;
+}
+
+/** Next questions after a turn that computed plans; templates leave a place for the user's own condition. */
+function planSuggestions(plans: ComputedPlan[]): Suggestion[] {
+  const ask = (label: string, text: string): Suggestion => ({ label, text, send: true });
+  const fill = (label: string, text: string, after: string): Suggestion => ({ label, text, after, send: false });
+  const compare = fill(t("对比几种情况"), t("请分别计算以下几种情况并对比：\n1. "), "\n2. ");
+  const solved = plans.filter(plan => !plan.failure && (plan.objective != null || !!plan.pareto?.total));
+  if (!solved.length) return [ask(t("分析原因"), t("为什么没有得到可行方案？请指出可能互相冲突的条件。")),
+    fill(t("放宽条件后重算"), t("请把"), t("放宽后重新计算。"))];
+  if (plans.length > 1) return [ask(t("选出最合适的方案"), t("请比较这几个方案，告诉我哪个最合适以及原因。")), compare];
+  return [
+    solved[0].pareto?.total ? ask(t("比较权衡方案"), t("请挑几个有代表性的权衡方案，说明各自的取舍。"))
+      : ask(t("解释主要决策"), t("请用业务语言解释这个方案的主要决策。")),
+    fill(t("如果条件变化…"), t("如果"), t("，方案会怎样变化？")), compare,
+  ];
+}
+
+export function Agent({ threadId, options, presets, ref, sidebarCollapsed = false, onExpandSidebar, onThread, openPresets, onMenu, onExamples, onFinished, onOpen, onCompare, renderRun }: {
   threadId?: string; options: Options; presets: Preset[];
   ref?: Ref<{ fillIfEmpty: (description: string) => boolean }>; sidebarCollapsed?: boolean; onExpandSidebar?: () => void;
   onThread: (id: string) => void; openPresets: () => void; onMenu: () => void; onExamples?: () => void;
@@ -81,6 +108,7 @@ export function Agent({ threadId, options, presets, ref, sidebarCollapsed = fals
   const [liveTask, setLiveTask] = useState<string>();
   const [workspaceOpen, setWorkspace] = useState<boolean>();
   const [pane, setPane] = useState<"chat" | "workspace">("chat");
+  const [dragging, setDragging] = useState(false);
   const inputArea = useRef<HTMLTextAreaElement>(null);
   const upload = useRef<HTMLInputElement>(null);
   const mounted = useRef(true);
@@ -182,9 +210,9 @@ export function Agent({ threadId, options, presets, ref, sidebarCollapsed = fals
     return () => { disposed = true; };
   }, [threadId]);
 
-  const submit = async (retry = false) => {
-    if (busy || dataPending || (!retry && !input.trim())) return;
-    if (!preset) { toast.error(t("请先配置可用的 AI 模型。")); openPresets(); return; }
+  /** The model, tools and pinned configuration of a new turn; null when no model is configured yet. */
+  const startTurn = () => {
+    if (!preset) { toast.error(t("请先配置可用的 AI 模型。")); openPresets(); return null; }
     followLatest(); setViewed(undefined); setLiveTask(undefined); setProgress(undefined); setTasks({});
     const context = { input_fingerprint: inputFingerprint(data), preset: preset.id, locale, search: searching && canSearch, thinking: thinkingMode,
       method: chosenMethod === "auto" ? null : chosenMethod,
@@ -192,11 +220,45 @@ export function Agent({ threadId, options, presets, ref, sidebarCollapsed = fals
       solver: chosenSolver === "AUTO" ? null : chosenSolver };
     const metadata = { preset: preset.id, provider: preset.provider, model: preset.name || preset.model,
       method: context.method, language: context.language, solver: context.solver, search: context.search, thinking: thinkingMode };
+    return { context, metadata };
+  };
+  const submit = async (retry = false, text?: string) => {
+    if (busy || dataPending || (!retry && !(text ?? input).trim())) return;
+    const turn = startTurn();
+    if (!turn) return;
     if (!threadId) {
-      const created = await conversation.startThread({ context, metadata: { ...metadata, kind: "optimization",
+      const created = await conversation.startThread({ ...turn, metadata: { ...turn.metadata, kind: "optimization",
         title: input.trim().split("\n")[0].slice(0, 120) }, values: { data } });
       if (created && mounted.current) { onThread(created); onFinished(); }
-    } else await conversation.send({ retry, context, metadata });
+    } else await conversation.send({ retry, text, ...turn });
+  };
+  /** Ask the last question again, edited or unchanged; the files now attached go with it. */
+  const rewrite = async (text?: string) => {
+    const question = [...messages].reverse().find(message => message.type === "human");
+    const original = typeof question?.content === "string" ? question.content : "";
+    if (busy || dataPending || !(text ?? original).trim()) return;
+    const turn = startTurn();
+    if (!turn) return;
+    // The conversation is named after its first question, so editing that question renames it.
+    const first = messages.find(message => message.type === "human") === question;
+    const metadata = first && text ? { ...turn.metadata, title: text.trim().split("\n")[0].slice(0, 120) } : turn.metadata;
+    await conversation.rewrite(text ?? original, { ...turn, metadata, values: { data } });
+  };
+  /** Put a question template in the input, keeping any draft, with the cursor where the user's condition goes. */
+  const fill = (before: string, after = "") => {
+    const prefix = input.trim() ? `${input.trimEnd()}\n${before}` : before;
+    setInput(prefix + after);
+    requestAnimationFrame(() => { inputArea.current?.focus(); inputArea.current?.setSelectionRange(prefix.length, prefix.length); });
+  };
+  const addFiles = async (list: FileList) => {
+    if (!list.length) return;
+    if (busy || dataPending) { toast(t("请等当前回复结束后再添加文件。")); return; }
+    setReading(true);
+    try {
+      const added = await readDataFiles(list, data);
+      if (Object.keys(added).length) await saveData({ ...data, ...added });
+    } catch (error) { toast.error(errorText(error)); }
+    finally { setReading(false); }
   };
   const stop = async () => { if (await conversation.stop()) { setLiveTask(undefined); onFinished(); } };
   const saveData = async (next: Record<string, string>) => {
@@ -223,12 +285,26 @@ export function Agent({ threadId, options, presets, ref, sidebarCollapsed = fals
       className="-ml-1 hidden rounded-lg text-muted-foreground hover:text-foreground xl:inline-flex" onClick={onExpandSidebar}>
       <PanelLeftOpen className="size-4" />
     </Button> : null}
-    <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/90">{hasConversation ? (meta?.title || t("智能优化对话")) : ""}</h1>
+    <h1 className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-foreground/90">{hasConversation ? <span className="truncate" title={meta?.title}>{meta?.title ? shortTitle(meta.title) : t("智能优化对话")}</span>
+      : <><LogoMark className="size-6" /><span className="truncate font-semibold tracking-tight text-foreground">{t("通用智能优化求解器")}</span></>}</h1>
     {!workspace && (plans.length > 0 || !!currentPlan || !!task) ? <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => { setWorkspace(true); setPane("workspace"); }}>
       <Columns2 className="size-3.5" />{t("方案面板")}
     </Button> : null}
   </header>;
-  const chat = <section aria-label={t("优化对话")} className={cn("flex h-full min-h-0 min-w-0 flex-col", workspace && pane === "workspace" && "hidden lg:flex")}>
+  const hasFiles = (event: DragEvent) => !!event.dataTransfer.types?.includes("Files");
+  const plansNow = !busy ? latestPlans(messages) : undefined;
+  const suggestions = plansNow?.length ? planSuggestions(plansNow) : undefined;
+  const chat = <section aria-label={t("优化对话")} className={cn("relative flex h-full min-h-0 min-w-0 flex-col", workspace && pane === "workspace" && "hidden lg:flex")}
+    onDragOver={event => { if (!hasFiles(event)) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDragging(true); }}
+    onDragLeave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDragging(false); }}
+    onDrop={event => { setDragging(false); if (!hasFiles(event)) return; event.preventDefault(); void addFiles(event.dataTransfer.files); }}>
+    {dragging ? <div className="pointer-events-none absolute inset-2 z-30 grid place-items-center rounded-2xl border-2 border-dashed border-primary/55 bg-background/80 backdrop-blur-sm">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary"><FileUp className="size-5" /></span>
+        <p className="text-sm font-medium">{t("松开即可添加数据文件")}</p>
+        <p className="text-xs text-muted-foreground">{t("支持 CSV、Excel、JSON、TSV 和文本文件")}</p>
+      </div>
+    </div> : null}
     {chatHeader}
     <div className={cn("flex min-h-0 flex-1 flex-col", empty && "justify-center")}>
     <div className={cn("relative flex min-h-0 flex-col", !empty && "flex-1")}>
@@ -236,13 +312,16 @@ export function Agent({ threadId, options, presets, ref, sidebarCollapsed = fals
         <div ref={content} className="grid min-h-full grid-cols-1">
           {messages.length || failure ? <Suspense fallback={<Spinner />}><ChatMessages messages={messages} loading={conversation.loading} label={t("优化助手")}
             failure={failure} disabled={busy || dataPending} onRetry={() => void submit(true)} progress={progress} tasks={tasks}
-            activeTaskId={desktop && workspace ? liveTask : undefined}
+            activeTaskId={desktop && workspace ? liveTask : undefined} options={options} suggestions={suggestions}
+            onSuggest={item => item.send ? void submit(false, item.text) : fill(item.text, item.after)}
+            onEdit={text => void rewrite(text)} onRegenerate={() => void rewrite()}
             onShowTask={id => { setLiveTask(id); setWorkspace(true); setPane("workspace"); }}
             onOpenPlan={source => { setViewed(source); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} /></Suspense>
             : threadId ? <div role="status" className="grid place-content-center gap-2 text-sm text-muted-foreground">
               {conversation.busy ? t("正在加载对话记录……") : t("暂无对话消息。")}
             </div> : <div className="animate-fade-up mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-6 py-6">
-              <div className="space-y-1.5 text-center">
+              <div className="flex flex-col items-center gap-1.5 text-center">
+                <LogoMark className="mb-2 size-11 drop-shadow-sm" />
                 <h2 className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]">{t("想优化什么问题？")}</h2>
                 <p className="text-sm text-muted-foreground">{t("用日常语言描述目标和条件，或拖入表格直接求解。")}</p>
               </div>
@@ -253,19 +332,22 @@ export function Agent({ threadId, options, presets, ref, sidebarCollapsed = fals
                     key={item.title}
                     type="button"
                     onClick={() => { setInput(t(item.prompt)); inputArea.current?.focus(); }}
-                    className="group flex flex-col gap-2 rounded-xl border border-border/80 bg-card/85 p-3.5 text-left transition-all duration-150 hover:border-primary/35 hover:bg-card hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="group flex flex-col gap-2 rounded-xl border border-border/80 bg-card p-3.5 text-left shadow-2xs transition-all duration-150 hover:border-primary/35 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <div className="flex items-center gap-2">
                       <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                         <Icon className="size-3.5" />
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{t(item.title)}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{t(item.title)}</span>
                       <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/60 opacity-0 transition-all group-hover:translate-x-0.5 group-hover:text-primary group-hover:opacity-100" />
                     </div>
                     <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{t(item.summary)}</p>
                   </button>;
                 })}
               </div>
+              {onExamples && !input && !Object.keys(data).length ? <Button variant="ghost" size="sm" className="self-center rounded-lg text-xs text-muted-foreground hover:text-foreground" onClick={onExamples}>
+                <BookOpen className="size-3.5" />{t("浏览更多场景模板")}<ArrowRight className="size-3" />
+              </Button> : null}
             </div>}
         </div>
       </div>
@@ -350,7 +432,7 @@ export function Agent({ threadId, options, presets, ref, sidebarCollapsed = fals
         searchActive={canSearch && searching} attachment={<Button type="button" variant="ghost" size="icon-sm" disabled={busy || dataPending} aria-label={t("添加数据文件")}
           title={t(reading ? "正在读取数据……" : savingData ? "正在保存……" : "添加数据文件")} onClick={() => upload.current?.click()}>
           {dataPending ? <Spinner /> : <Paperclip />}</Button>}
-        onSend={() => void submit()} onStop={() => void stop()} placeholder={t("描述你想解决的业务问题，或继续补充调整要求…")}>
+        onSend={() => void submit()} onStop={() => void stop()} onFiles={list => void addFiles(list)} placeholder={t("描述你想解决的业务问题，或继续补充调整要求…")}>
 
         <Button type="button" variant={settings || customized ? "secondary" : "ghost"} size="sm" aria-label={t("建模偏好")}
           title={t("可选指定建模方法与求解器，默认自动匹配")}
@@ -359,19 +441,13 @@ export function Agent({ threadId, options, presets, ref, sidebarCollapsed = fals
           <SlidersHorizontal className="size-3.5 shrink-0" />
           <span className="truncate">{configSummary}</span>
         </Button>
-        {canSearch ? <span title={t("搜索公开资料，并在回复中展示来源。")}>
-          <Toggle size="sm" pressed={searching} disabled={busy} aria-label={t("联网搜索")} onPressedChange={setSearch}><Globe /><span>{t("联网搜索")}</span></Toggle>
-        </span> : null}
+        {canSearch ? <ToolToggle label={t("联网搜索")} icon={<Globe />} pressed={searching} disabled={busy}
+          title={t("搜索公开资料，并在回复中展示来源。")} onPressedChange={setSearch} /> : null}
       </ChatInput>
       <input ref={upload} type="file" multiple accept={DATA_FILE_ACCEPT} className="hidden" disabled={busy || dataPending} aria-label={t("数据文件")} onChange={async event => {
         const field = event.currentTarget;
         if (!field.files?.length || busy || dataPending) return;
-        setReading(true);
-        try {
-          const added = await readDataFiles(field.files, data);
-          if (Object.keys(added).length) await saveData({ ...data, ...added });
-        } catch (error) { toast.error(errorText(error)); }
-        finally { field.value = ""; setReading(false); }
+        try { await addFiles(field.files); } finally { field.value = ""; }
       }} />
     </div>
     </div>

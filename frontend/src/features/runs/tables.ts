@@ -139,9 +139,52 @@ export function parseDelimited(text: string, delimiter = ","): string[][] | null
 }
 
 /** Added and removed variables stay distinct from variables whose actual value is zero. */
+/** The indices a variable is known by across models: `x[W1,C2]` → `W1,C2`; a scalar is known by its own name. */
+function indexKey(name: string): string {
+  const parsed = splitIndexedName(name);
+  return parsed ? parsed.indices.join(",") : name.trim();
+}
+
+/**
+ * Line up the variables of separately generated models, one row per decision with each model's variable name.
+ * Exact names match first. A variable without an exact match joins the one earlier variable with the same indices
+ * (`A` ↔ `x[A]`), so a renamed variable family stays on one row; ambiguous indices keep their own rows.
+ */
+export function alignVariables(solutions: Record<string, number | null>[]): (string | undefined)[][] {
+  const rows: (string | undefined)[][] = [];
+  const exact = new Map<string, number>();
+  solutions.forEach((variables, column) => {
+    const byIndex = new Map<string, number[]>();
+    rows.forEach((row, at) => {
+      if (row[column] !== undefined) return;
+      const known = row.find(name => name !== undefined)!;
+      byIndex.set(indexKey(known), [...(byIndex.get(indexKey(known)) ?? []), at]);
+    });
+    const pending: string[] = [];
+    for (const name of Object.keys(variables)) {
+      const at = exact.get(name);
+      if (at !== undefined && rows[at][column] === undefined) rows[at][column] = name;
+      else pending.push(name);
+    }
+    const counts = new Map<string, number>();
+    for (const name of pending) counts.set(indexKey(name), (counts.get(indexKey(name)) ?? 0) + 1);
+    for (const name of pending) {
+      const candidates = (byIndex.get(indexKey(name)) ?? []).filter(at => rows[at][column] === undefined);
+      const at = counts.get(indexKey(name)) === 1 && candidates.length === 1 ? candidates[0] : undefined;
+      if (at !== undefined) { rows[at][column] = name; continue; }
+      const row: (string | undefined)[] = Array(solutions.length).fill(undefined);
+      row[column] = name;
+      rows.push(row);
+      if (!exact.has(name)) exact.set(name, rows.length - 1);
+    }
+  });
+  return rows;
+}
+
+/** Decisions whose values differ between two solutions, aligned as in {@link alignVariables}. */
 export function variableChanges(before: Record<string, number | null>, after: Record<string, number | null>) {
-  return [...new Set([...Object.keys(before), ...Object.keys(after)])]
-    .map(name => ({ name, before: Object.hasOwn(before, name) ? before[name] : undefined,
-      after: Object.hasOwn(after, name) ? after[name] : undefined }))
+  return alignVariables([before, after])
+    .map(([previous, next]) => ({ name: (previous ?? next)!, ...(previous !== undefined && next !== undefined && next !== previous ? { renamed: next } : {}),
+      before: previous !== undefined ? before[previous] : undefined, after: next !== undefined ? after[next] : undefined }))
     .filter(item => item.before !== item.after);
 }

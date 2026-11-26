@@ -71,6 +71,15 @@ test("arithmetic shows actual tool output with its expression available on deman
   expect((calculation as HTMLDetailsElement).open).toBe(false);
 });
 
+test("a calculation that checks several totals shows them together", () => {
+  render(<ChatMessages messages={[question, { type: "tool", name: "calculate", tool_call_id: "totals", content: "",
+    artifact: { calculation: { expression: "[a, b, c, d, e]", result: [1200, 0.5, 3, 4, 5], matched_variables: 5 } } }]}
+    loading={false} label="优化助手" onRetry={vi.fn()} />);
+  const calculation = screen.getByLabelText("计算核对");
+  expect(calculation.querySelector("strong")!.textContent).toBe("1,200, 0.5, 3, 4, …");
+  expect(calculation.textContent).toContain("= [1200, 0.5, 3, 4, 5]");
+});
+
 test("choosing a saved plan has a compact receipt that opens that plan", () => {
   const open = vi.fn();
   render(<ChatMessages messages={[question, { type: "tool", name: "select_plan", tool_call_id: "choose", content: "",
@@ -166,4 +175,81 @@ test("parallel tool calls keep remaining tool progress visible and mid-stream fa
     loading={false} label="优化助手" failure="HTTP 502: Bad Gateway" onRetry={retry} />);
   fireEvent.click(screen.getByRole("button", { name: "重试这一轮" }));
   expect(retry).toHaveBeenCalledOnce();
+});
+
+const plansMessage = (plans: unknown[]): Message => ({ type: "tool", name: "model_and_solve", tool_call_id: "solve", content: "", artifact: { type: "plans", plans } });
+const solved = {
+  name: "生产计划", source: { thread_id: "calculated", checkpoint_id: "saved" }, group: null,
+  instruction: "工厂生产 A、B 两种产品。", description: "工厂生产 A、B 两种产品。", status: "optimal", objective: 13,
+  variables: { "x[A]": 3, "x[B]": 2 }, total_variables: 2, method: "direct", language: "pyomo",
+  configuration: { method: "direct", language: "pyomo", actual_solver: "highs" },
+  explanation: { summary: "", objective_label: "总利润", objective_unit: "元", notes: [], total_variables: 2,
+    decisions: [{ variable: "x[A]", label: "A 的产量", unit: "件" }, { variable: "x[B]", label: "B 的产量", unit: "件" }] },
+};
+const options = { methods: [{ id: "direct", name: "Direct" }], languages: [{ id: "pyomo", name: "Pyomo" }], providers: [], datasets: [] } as never;
+
+test("a plan card answers with its key decisions and the configuration that was chosen, keeping the modeled problem folded", () => {
+  render(<ChatMessages messages={[question, plansMessage([solved])]} loading={false} label="优化助手" onRetry={vi.fn()} options={options} />);
+  const card = screen.getByRole("complementary", { name: "本轮计算结果" });
+  expect(card.textContent).toContain("总利润 13 元");
+  const decisions = within(card).getByLabelText("关键决策");
+  expect(decisions.textContent).toBe("A 的产量3 件B 的产量2 件");
+  expect(card.textContent).toContain("Direct · Pyomo · highs");
+  expect(within(card).getByText("建模所用的题面").closest("details")!.open).toBe(false);
+  expect(card.textContent).not.toContain("调整：");
+});
+
+test("a scenario card names its change, and without an explanation lists nonzero values first", () => {
+  const values = Object.fromEntries(Array.from({ length: 7 }, (_, index) => [`y[${index}]`, index === 5 ? 4 : 0]));
+  render(<ChatMessages messages={[question, plansMessage([{ ...solved, name: "B 至少 3 件", instruction: "B 至少生产 3 件",
+    explanation: null, variables: values, total_variables: 7 }])]} loading={false} label="优化助手" onRetry={vi.fn()} />);
+  const card = screen.getByRole("complementary", { name: "本轮计算结果" });
+  expect(card.textContent).toContain("调整：B 至少生产 3 件");
+  expect(within(card).getByLabelText("关键决策").textContent).toMatch(/^y\[5\]4y\[0\]0.*另有 3 项决策$/);
+  expect(within(card).queryByText("建模所用的题面")).toBeNull();
+  expect(card.textContent).toContain("direct · pyomo · highs");
+});
+
+test("only the latest finished turn offers editing, regenerating and next questions", () => {
+  const edit = vi.fn(), regenerate = vi.fn(), suggest = vi.fn();
+  const answer: Message = { type: "ai", id: "answer", content: "总利润为 13。" };
+  const suggestion = { label: "解释主要决策", text: "请解释主要决策。", send: true };
+  const props = { label: "优化助手", onRetry: vi.fn(), onEdit: edit, onRegenerate: regenerate, onSuggest: suggest, suggestions: [suggestion] };
+  const earlier: Message[] = [{ type: "human", id: "first", content: "第一个问题" }, { type: "ai", id: "first-answer", content: "第一个回答" }];
+  const { rerender } = render(<ChatMessages messages={[...earlier, question, plansMessage([solved]), answer]} loading={false} {...props} />);
+  expect(screen.getAllByRole("button", { name: "编辑问题" })).toHaveLength(1);
+  expect(screen.getAllByRole("button", { name: "重新生成" })).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "解释主要决策" }));
+  expect(suggest).toHaveBeenCalledWith(suggestion);
+  fireEvent.click(screen.getByRole("button", { name: "重新生成" }));
+  expect(regenerate).toHaveBeenCalledOnce();
+
+  fireEvent.click(screen.getByRole("button", { name: "编辑问题" }));
+  const field = screen.getByRole("textbox", { name: "编辑问题" });
+  expect(screen.getByRole("button", { name: "重新发送" })).toHaveProperty("disabled", true);
+  fireEvent.change(field, { target: { value: "帮我看一下 B 的方案" } });
+  fireEvent.keyDown(field, { key: "Enter" });
+  expect(edit).toHaveBeenCalledWith("帮我看一下 B 的方案");
+
+  rerender(<ChatMessages messages={[...earlier, question, plansMessage([solved]), answer]} loading {...props} />);
+  expect(screen.queryByRole("button", { name: "编辑问题" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "重新生成" })).toBeNull();
+  expect(screen.queryByRole("group", { name: "接下来可以" })).toBeNull();
+  rerender(<ChatMessages messages={[...earlier, question]} loading={false} failure={new Error("boom")} {...props} />);
+  expect(screen.queryByRole("button", { name: "编辑问题" })).toBeNull();
+  expect(screen.getByRole("button", { name: "重试这一轮" })).toBeTruthy();
+});
+
+test("a running model shows its stage from the latest step", () => {
+  const call: Message = { type: "ai", id: "call", content: "", tool_calls: [{ id: "task", name: "model_and_solve", args: {} }] };
+  const step = (id: string, type: string, title: string) => ({ id, time: Date.now() / 1000 - 65, type, title, content: "" });
+  const task = (steps: unknown[]) => ({ task: { name: "生产计划", method: "direct", language: "pyomo", steps } }) as never;
+  const { rerender } = render(<ChatMessages messages={[question, call]} loading label="优化助手" onRetry={vi.fn()}
+    tasks={task([step("a", "llm", "generate")])} />);
+  const stages = screen.getByRole("list", { name: "求解阶段" });
+  expect(within(stages).getByText("建模").closest("[aria-current]")).toBeTruthy();
+  expect(screen.getByText(/已用时 1 分 5 秒/)).toBeTruthy();
+  rerender(<ChatMessages messages={[question, call]} loading label="优化助手" onRetry={vi.fn()}
+    tasks={task([step("a", "llm", "generate"), step("b", "solve", "solve"), step("c", "llm", "explain_result")])} />);
+  expect(within(screen.getByRole("list", { name: "求解阶段" })).getByText("解读").closest("[aria-current]")).toBeTruthy();
 });

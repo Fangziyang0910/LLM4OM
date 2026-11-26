@@ -89,6 +89,8 @@ async def explain_result(context: Context, problem: str, formulation: str | None
                       "Read what the user actually asks for: for example where to locate facilities, how many to build, "
                       "what quantities to produce, or which assignments to make. Start the summary with those specific "
                       "answers and the relevant total, cost or profit, using actual solution values and original units. "
+                      "Use only the currency and units stated in the problem or data. When they name no currency, "
+                      "do not add one: write no $, USD, CNY or 元, and leave objective_unit empty rather than a placeholder. "
                       "The summary must stand on its own, usually in one to three concise sentences. Do not just restate the "
                       "optimization goal, describe the model, announce that a solution was found, or refer to the table "
                       "instead of answering. Explain the plan in everyday business terms, without variable names, "
