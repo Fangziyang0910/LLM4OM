@@ -2,9 +2,11 @@
 
 ## Start from a draft or a blank page
 
-Existing homepage text and attachments carry into the conversation. You can also start with “Schedule next week's employees across three stores.” The assistant updates the draft and asks for information affecting the next step.
+On the Manual modeling page, choose “Discuss your requirements” to open the assistant; text and attachments already on the page come with you. You can also start with “Schedule next week's employees across three stores.” The assistant updates the draft and asks for information affecting the next step.
 
 Desktop keeps the problem and data beside the assistant. Narrow screens use tabs. Edit the draft directly or switch to Markdown preview.
+
+![Requirements assistant: the draft takes shape during the conversation, listing known facts and open questions](../../../assets/screens/en/requirements-light.webp)
 
 ## How a draft develops
 
@@ -48,4 +50,4 @@ Search shows queries and sources. Adopt useful business rules into the draft. �
 
 Conversation history retains requirement development; runs retain the handoff statement and data. Unsent text stays in the current browser tab and survives refresh. Stop or retry a turn, then continue refining.
 
-Next see [data editing](../attachments/) and [run settings](../run-settings/). For clarification and computation in one continuing conversation, use [Chat Agent](../chat-agent/).
+Next see [data editing](../attachments/) and [run settings](../run-settings/). For clarification and computation in one continuing conversation, use [Optimization chat](../chat-agent/).

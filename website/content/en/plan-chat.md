@@ -1,4 +1,6 @@
-Click “Discuss plan” on a result to query decisions, calculate metrics, explain the model or create another plan. The assistant sits beside the saved result.
+Choose “Ask Follow-up” on a result to query decisions, calculate metrics, explain the model or create another plan. The assistant sits beside the saved result.
+
+![Ask Follow-up: the assistant reads the actual solver values and calculates each warehouse's remaining supply](../../../assets/screens/en/discussion-light.webp)
 
 ## Ask a concrete question
 
@@ -20,7 +22,7 @@ flowchart TB
   Card --> Continue["Explain or revise requirements"]
 ```
 
-Calculation cards show the result. Expand one for its expression and number of values read. Ordinary arithmetic is also supported. The adjacent formulation and original variables identify the components used.
+Calculation cards show the result; one card can check several totals at once, such as each warehouse's shipments. Expand one for its expression and number of values read. Ordinary arithmetic is also supported. The adjacent formulation and original variables identify the components used.
 
 ## Try a sequence
 

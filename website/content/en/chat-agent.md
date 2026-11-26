@@ -1,4 +1,6 @@
-Chat Agent is the default workbench homepage (`/`). Describe an optimization problem in plain language and attach Excel, CSV, or JSON files — the platform automatically routes between exact solvers and the AutoCO metaheuristic engine while rendering live results, interactive Pareto trade-offs, and mathematical models side by side.
+Optimization chat is the workbench home page (`/`). Describe an optimization problem in plain language or drop in Excel, CSV or JSON files. The assistant builds a model, runs a solver and shows the plan and formulation on the right, plus a Pareto front for multi-objective problems.
+
+![Optimization chat: the conversation and result card on the left, the full plan on the right](../../../assets/screens/en/agent-light.webp)
 
 ## Send the first message
 
@@ -12,6 +14,8 @@ the lowest-cost schedule after we confirm the requirements.
 ```
 
 Tool execution shows stages and result cards. On desktop, the adjacent workbench displays formulation, code and results. Open a plan's full run page for export.
+
+While a plan is computed, its card shows the current stage (modeling, solving, interpreting) and the elapsed time. The finished card lists the objective, the main decisions and the modeling method, library and solver actually used, followed by suggested next questions: click one to send it, or to place it in the composer for you to complete.
 
 ## How a conversation progresses
 
@@ -68,10 +72,10 @@ A single new plan becomes current. Multiple scenarios use one fixed baseline and
 
 Click file names to edit attachments. After saving, ask to model using the new data. New runs save new inputs; existing plans retain their snapshots. When search is enabled, inspect sources and confirm adopted business rules before calculation.
 
-Optimization chat waits for attachments to finish reading and saving before enabling Send. You can keep editing the message while waiting. If saving fails, the original attachments remain available and an error is shown; add the same file again to retry.
+Drop data files onto the conversation or paste them into the composer. Optimization chat waits for attachments to finish reading and saving before enabling Send. You can keep editing the message while waiting. If saving fails, the original attachments remain available and an error is shown; add the same file again to retry.
 
 ## Everyday controls and recovery
 
 Enter sends; Shift+Enter adds a line. On desktop, collapse or expand the left sidebar anytime, and drag the divider (or focus it with Tab and use arrow keys) to resize the conversation and workspace panels. Scrolling upward pauses following; “Back to latest” resumes it.
 
-Refresh reconnects to active server runs. Saved plans open from chat cards or sidebar history. Stop and retry preserve turn context. DeepSeek's thinking toggle controls the conversation reply; modeling tools use the run preset parameters.
+Refresh reconnects to active server runs. Saved plans open from chat cards or sidebar history. Stop and retry preserve turn context. After the latest reply finishes, edit the question and send it again, or regenerate the reply; saved plans are not affected. DeepSeek's thinking toggle controls the conversation reply; modeling tools use the run preset parameters.

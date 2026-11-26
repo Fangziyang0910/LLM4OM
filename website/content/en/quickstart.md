@@ -10,7 +10,7 @@ Before you start, confirm that:
 
 Enter credentials in local settings or the server environment, never in the problem or attachments. Select your preferred interface language before starting the run.
 
-Send the problem in Optimization chat or use manual modeling. This example uses Direct, Pyomo and AUTO to match the recording.
+Send the problem in Optimization chat on the home page, or open Manual modeling in the sidebar to choose the setup yourself. This walkthrough uses Manual modeling with Direct, Pyomo and automatic solver selection, matching the recording.
 
 ## 2. Enter the problem
 
@@ -22,11 +22,11 @@ There are 8 hours of each resource.
 Calculate the production plan with maximum total profit.
 ```
 
-Use the solve button to start, then follow formulation, code and solving. Begin with the complete statement above; it needs no attachment. For a data-file version, download [JSON](../../../assets/examples/production.json) or [CSV](../../../assets/examples/production.csv), describe fields and capacities, then run.
+Paste the statement on the Manual modeling page and choose “Solve Now” (or press Ctrl+Enter / Cmd+Enter), then follow formulation, code and solving. Begin with the complete statement above; it needs no attachment. For a data-file version, download [JSON](../../../assets/examples/production.json) or [CSV](../../../assets/examples/production.csv), describe fields and capacities, then run.
 
 ## 3. Review and export
 
-The expected result is **A=3, B=2, total profit CNY 13**. Read quantities in Optimal Plan and expressions in Formulation/Code. Export Excel downloads solution and problem/conditions sheets.
+The expected result is **A=3, B=2, total profit CNY 13**. Read quantities in Solve result and expressions in Formulation and Code. “Export Excel” at the top right downloads the solution and problem/conditions sheets.
 
 Check these items before moving on:
 
@@ -39,15 +39,15 @@ Check these items before moving on:
 
 If the model or values differ, inspect the statement, attachments, domains and resource directions, then use [troubleshooting](../troubleshooting/). Rounding fractional values does not replace an integer constraint.
 
-![Actual production result](../../../assets/screens/en/plan.png)
+![Actual production result: 3 units of A and 2 of B, total profit 13](../../../assets/screens/en/plan-light.webp)
 
-View run settings retains method, model and backend choices; the page also shows duration and usage. Open Solving Steps for individual stages. Raw model output is collapsed by default and can be expanded. It can contain English protocol fields; the localized reading view does not alter saved records.
+“Run details” under the title records the method, model, modeling library, solver, duration and usage. Open Solving Steps for individual stages. Raw model output is collapsed by default and can be expanded. It can contain English protocol fields; the localized reading view does not alter saved records.
 
 ## 4. Revise and compare
 
 Request “B at least 3, with other conditions unchanged.” The new result is **A=2, B=3, profit 12**. Comparison shows changes from the original.
 
-Use Business scenarios to calculate B≥3 and B≥4 together; profits are 12 and 8. See [scenario comparison](../scenarios/).
+Choose “Compare Scenarios” to calculate B≥3 and B≥4 together; profits are 12 and 8. See [scenario comparison](../scenarios/).
 
 ## 5. Follow the recording
 

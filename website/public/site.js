@@ -12,7 +12,6 @@ let paused = false;
 let elapsed = 0;
 let previousFrame = 0;
 let frame;
-let activeShot = "pareto";
 const duration = 3600;
 const motionPreference = matchMedia("(prefers-reduced-motion: reduce)");
 const studio = document.querySelector("#studio");
@@ -35,6 +34,8 @@ function workbenchUrl() {
 function syncWorkbenchLinks() {
   const live = workbenchUrl();
   for (const link of document.querySelectorAll(".workbench-link")) {
+    const label = link.querySelector(".workbench-label");
+    if (label) label.textContent = live ? t("openWorkbench") : t(label.dataset.i18n);
     if (live) {
       link.href = live;
       link.target = "_blank";
@@ -331,15 +332,15 @@ function setView(next) {
   $("#model-content").hidden = next !== "model";
 }
 
-function setShot(shot) {
-  activeShot = shot;
-  selectTabs(".showcase-tabs button", document.querySelector(`.showcase-tabs button[data-shot="${shot}"]`));
-  const img = $("#sc1-image");
-  const light = `assets/screens/live/${shot}-light.png`;
-  const dark = `assets/screens/live/${shot}-dark.png`;
-  img.dataset.lightSrc = light;
-  img.dataset.darkSrc = dark;
-  img.src = document.documentElement.dataset.theme === "dark" ? dark : light;
+/** Real workbench screenshots follow both the page language and the theme. */
+function syncShots() {
+  const dark = document.documentElement.dataset.theme === "dark";
+  for (const img of document.querySelectorAll("img[data-shot]")) {
+    img.dataset.lightSrc = `assets/screens/${language}/${img.dataset.shot}-light.webp`;
+    img.dataset.darkSrc = `assets/screens/${language}/${img.dataset.shot}-dark.webp`;
+    const next = dark ? img.dataset.darkSrc : img.dataset.lightSrc;
+    if (img.getAttribute("src") !== next) img.src = next;
+  }
 }
 
 function applyLanguage() {
@@ -351,8 +352,10 @@ function applyLanguage() {
   $("#language-toggle").setAttribute("aria-label", language === "en" ? "切换到中文" : "Switch to English");
   for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
   for (const el of document.querySelectorAll("[data-i18n-label]")) el.setAttribute("aria-label", t(el.dataset.i18nLabel));
+  for (const el of document.querySelectorAll("[data-i18n-alt]")) el.alt = t(el.dataset.i18nAlt);
   for (const link of document.querySelectorAll("a[data-docs]")) link.href = `docs/${language}/${link.dataset.docs}/`;
   syncWorkbenchLinks();
+  syncShots();
   updatePlayback();
   renderCase();
 }
@@ -449,14 +452,10 @@ $("#play-demo").addEventListener("click", () => {
 $("#skip-demo").addEventListener("click", complete);
 $("#download-plan").addEventListener("click", downloadCsv);
 
-document.querySelectorAll(".showcase-tabs button").forEach(btn => {
-  btn.addEventListener("click", () => setShot(btn.dataset.shot));
-});
-
 const dialog = $("#photo-dialog");
-document.querySelectorAll("[data-zoom-target]").forEach(btn => {
+document.querySelectorAll("[data-zoom-shot]").forEach(btn => {
   btn.addEventListener("click", () => {
-    const srcImg = document.getElementById(btn.dataset.zoomTarget);
+    const srcImg = btn.closest("figure")?.querySelector("img");
     if (!srcImg) return;
     $("#dialog-image").src = srcImg.src;
     $("#dialog-image").alt = srcImg.alt;
@@ -472,7 +471,38 @@ $("#language-toggle").addEventListener("click", () => {
   applyLanguage();
 });
 
-document.addEventListener("llm4om:themechange", () => setShot(activeShot));
+document.addEventListener("llm4om:themechange", syncShots);
+
+// Installation snippets: tabs with arrow-key focus, and a copy button for the visible one.
+const codeTabs = [...document.querySelectorAll(".code-tabs [role=tab]")];
+function selectCode(tab) {
+  for (const item of codeTabs) {
+    const selected = item === tab;
+    item.setAttribute("aria-selected", String(selected));
+    item.tabIndex = selected ? 0 : -1;
+    document.getElementById(item.getAttribute("aria-controls")).hidden = !selected;
+  }
+}
+codeTabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => selectCode(tab));
+  tab.addEventListener("keydown", event => {
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    const next = codeTabs[(index + (event.key === "ArrowRight" ? 1 : codeTabs.length - 1)) % codeTabs.length];
+    selectCode(next);
+    next.focus();
+  });
+});
+$("#copy-code")?.addEventListener("click", async event => {
+  const panel = document.querySelector(".code-window pre:not([hidden])");
+  // Comments are instructions for the reader, not commands to paste.
+  const text = panel.innerText.split("\n").filter(line => !line.trim().startsWith("#")).join("\n").trim();
+  const button = event.currentTarget;
+  try {
+    await navigator.clipboard.writeText(text);
+    button.textContent = t("copied");
+    setTimeout(() => { button.textContent = t("copy"); }, 1600);
+  } catch {}
+});
 
 // Smooth scroll reveal (pre-reveals ahead of viewport + passive scroll fallback)
 if (!motionPreference.matches && "IntersectionObserver" in window) {

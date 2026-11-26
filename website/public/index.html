@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f7f5">
-  <meta name="description" content="用日常语言描述业务目标与约束，自动在精确求解器与 AutoCO 智能优化算法池间选配，输出可验证的最优方案与多目标 Pareto 前沿。">
+  <meta name="description" content="用日常语言描述目标、规则和数据，自动建立数学模型，由真实求解器计算并用业务语言解释结果。模型、代码和数值都可以核对。开源，可私有部署。">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="通用智能优化求解器 — 自然语言驱动的双引擎优化平台">
-  <meta property="og:description" content="精确求解 × AutoCO 智能优化双引擎：用自然语言描述目标并上传表格，自动建立数学模型并求解可验证的最优方案与多目标 Pareto 前沿。">
-  <title>通用智能优化求解器 — 自然语言驱动的双引擎优化平台</title>
+  <meta property="og:title" content="通用智能优化求解器 — 用业务语言求解优化问题">
+  <meta property="og:description" content="描述业务问题，得到可核对的最优方案：自动建模、真实求解器计算、业务语言解读。开源，可私有部署。">
+  <title>通用智能优化求解器 — 用业务语言求解优化问题</title>
   <link rel="icon" type="image/svg+xml" href="assets/llm4om.svg">
   <link rel="preload" href="assets/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <script src="theme.js"></script>
@@ -22,57 +22,56 @@
   <header class="site-header">
     <div class="container header-inner">
       <a class="brand" href="#" aria-label="通用智能优化求解器首页" data-i18n-label="homeLabel">
-        <span class="brand-mark"><img src="assets/llm4om.svg" width="22" height="22" alt=""></span>
+        <span class="brand-mark"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><defs><linearGradient id="brand-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--brand)"/><stop offset="1" stop-color="var(--brand-accent)"/></linearGradient></defs><rect width="24" height="24" rx="6" fill="url(#brand-gradient)"/><path d="M4.5 15 8 6.5l9.5-1.2L19.5 13 11 19z" fill="#fff" fill-opacity=".28" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><circle cx="17.5" cy="5.3" r="2.4" fill="#fff"/></svg></span>
         <span class="brand-name" data-i18n="brandName">通用智能优化求解器</span>
       </a>
       <nav class="main-nav" aria-label="主导航" data-i18n-label="navLabel">
-        <a href="#interactive" data-i18n="navDemo">交互体验</a>
-        <a href="#workbench" data-i18n="navWorkbench">工作台</a>
-        <a href="#engines" data-i18n="navEngines">双引擎架构</a>
-        <a href="#capabilities" data-i18n="navCapabilities">核心能力</a>
+        <a href="#product" data-i18n="navProduct">产品</a>
+        <a href="#use-cases" data-i18n="navUseCases">场景</a>
+        <a href="#deploy" data-i18n="navDeploy">部署</a>
         <a href="docs/zh/introduction/" data-docs="introduction" data-i18n="navDocs">文档</a>
+        <a href="https://github.com/Fangziyang0910/LLM4OM/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer" data-i18n="navChangelog">更新日志</a>
       </nav>
       <div class="header-actions">
         <button id="language-toggle" class="icon-pill" type="button" aria-label="Switch to English">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18Z"/></svg>
           <span id="language-name">EN</span>
         </button>
+        <a class="icon-link" href="https://github.com/Fangziyang0910/LLM4OM" target="_blank" rel="noopener noreferrer" aria-label="GitHub"><img class="github-icon" src="assets/github.svg" width="16" height="16" alt=""></a>
         <a class="btn btn-primary btn-sm workbench-link" href="docs/zh/quickstart/" data-docs-fallback="quickstart">
-          <span data-i18n="navLaunch">进入工作台</span>
-          <span aria-hidden="true">↗</span>
+          <span class="workbench-label" data-i18n="navStart">开始使用</span>
         </a>
       </div>
     </div>
   </header>
 
   <main id="main">
-    <!-- Hero -->
     <section class="hero" aria-labelledby="hero-title">
       <div class="container">
         <div class="hero-copy">
-          <div class="eyebrow-pill">
+          <a class="eyebrow-pill" href="https://github.com/Fangziyang0910/LLM4OM" target="_blank" rel="noopener noreferrer">
             <span class="status-dot" aria-hidden="true"></span>
-            <span data-i18n="heroBadge">EIPI · 精确求解 × AutoCO 智能优化双引擎</span>
-          </div>
+            <span data-i18n="heroBadge">开源 · Apache-2.0 · 由 EIPI 团队开发</span>
+            <span aria-hidden="true">→</span>
+          </a>
           <h1 id="hero-title">
-            <span data-i18n="heroLine1">用自然语言，</span>
-            <span class="hero-accent" data-i18n="heroLine2">求解一切复杂优化问题。</span>
+            <span data-i18n="heroLine1">说清业务问题，</span>
+            <span class="hero-accent" data-i18n="heroLine2">拿到可核对的最优方案。</span>
           </h1>
-          <p class="hero-description" data-i18n="heroDescription">无需编写公式或求解器代码。描述目标并上传表格，系统自动在 5 大精确框架与 AutoCO 算法池间路由，输出沙箱计算的方案与 Pareto 前沿。</p>
+          <p class="hero-description" data-i18n="heroDescription">生产、排班、运输、选址……用日常语言写下目标、规则和数据。求解器自动建立数学模型，在隔离环境中调用真实求解器计算，再用业务语言解释结果；模型、代码和每个数值都可以核对。</p>
           <div class="hero-actions">
             <a class="btn btn-primary workbench-link" href="docs/zh/quickstart/" data-docs-fallback="quickstart">
-              <span data-i18n="heroPrimaryCta">立即体验工作台</span>
-              <span aria-hidden="true">↗</span>
+              <span class="workbench-label" data-i18n="heroPrimaryCta">开始使用</span>
+              <span aria-hidden="true">→</span>
             </a>
-            <a class="btn btn-secondary" href="docs/zh/introduction/" data-docs="introduction" data-i18n="heroDocsCta">阅读文档</a>
-            <a class="btn btn-ghost" href="https://github.com/Fangziyang0910/LLM4OM" target="_blank" rel="noopener noreferrer">
-              <img class="github-icon" src="assets/github.svg" width="16" height="16" alt="">
-              <span data-i18n="heroGithubCta">GitHub</span>
+            <a class="btn btn-secondary" href="https://github.com/Fangziyang0910/LLM4OM" target="_blank" rel="noopener noreferrer">
+              <img class="github-icon" src="assets/github.svg" width="16" height="16" alt=""><span data-i18n="heroGithubCta">在 GitHub 查看</span>
             </a>
+            <a class="btn btn-ghost" href="docs/zh/introduction/" data-docs="introduction" data-i18n="heroDocsCta">阅读文档</a>
           </div>
         </div>
 
-        <!-- Interactive Live Product Window -->
+        <!-- Interactive demo: small problems solved in the browser -->
         <div class="stage-frame" id="interactive">
           <div class="studio" id="studio" data-phase="complete" role="region" aria-label="可交互优化工作台演示" data-i18n-label="studioLabel">
             <div class="studio-toolbar">
@@ -239,272 +238,325 @@
             </div>
             <div class="playback-track" aria-hidden="true"><div id="playback-progress"></div></div>
           </div>
-          <p class="demo-caption" data-i18n="demoCaption">所有示例均由内置精确求解与实测 Pareto 数据驱动；点击任意目标点、拖动滑块或切换约束，实时观察方案变化。</p>
+          <p class="demo-caption" data-i18n="demoCaption">交互示例：生产、排班和配送在浏览器中直接求解小规模问题；GPU 调度展示一次 AutoCO 运行得到的部分 Pareto 前沿。这里不调用大模型。</p>
           <p class="sr-only" id="demo-announcement" role="status" aria-live="polite"></p>
         </div>
+
       </div>
     </section>
 
-    <!-- Metrics Proof Strip -->
-    <section class="metrics-strip" aria-label="核心规模指标">
-      <div class="container metrics-grid">
-        <div class="metric-item reveal">
-          <strong data-i18n="stat1Num">9 种</strong>
-          <span data-i18n="stat1Label">内置建模与求解策略</span>
+    <section class="works-strip" aria-labelledby="works-title">
+      <div class="container">
+        <h2 id="works-title" class="works-title" data-i18n="worksTitle">接入你已经在用的建模库、求解器和模型服务</h2>
+        <div class="works-row">
+          <span class="works-label" data-i18n="worksLibraries">建模库</span>
+          <ul class="works-chips"><li>Pyomo</li><li>OR-Tools</li><li>CVXPY</li><li>PySCIPOpt</li><li>CasADi</li></ul>
         </div>
-        <div class="metric-item reveal">
-          <strong data-i18n="stat2Num">5 大</strong>
-          <span data-i18n="stat2Label">精确数学建模框架</span>
+        <div class="works-row">
+          <span class="works-label" data-i18n="worksSolvers">求解器</span>
+          <ul class="works-chips"><li>HiGHS</li><li>SCIP</li><li>CP-SAT</li><li>GLPK</li><li>Clarabel</li><li>OSQP</li><li>Ipopt</li><li>Gurobi</li><li>CPLEX</li><li>Xpress</li><li>MOSEK</li></ul>
         </div>
-        <div class="metric-item reveal">
-          <strong data-i18n="stat3Num">12 类</strong>
-          <span data-i18n="stat3Label">AutoCO 智能优化算法</span>
-        </div>
-        <div class="metric-item reveal">
-          <strong data-i18n="stat4Num">100%</strong>
-          <span data-i18n="stat4Label">沙箱实算与结果校验</span>
+        <div class="works-row">
+          <span class="works-label" data-i18n="worksModels">模型服务</span>
+          <ul class="works-chips"><li>DeepSeek</li><li>OpenAI</li><li>Anthropic</li><li>Gemini</li><li>Kimi</li><li>GLM</li><li data-i18n="worksBailian">百炼</li><li>OpenRouter</li><li data-i18n="worksCompatible">OpenAI 兼容接口</li></ul>
         </div>
       </div>
     </section>
 
-    <!-- Showcase 1: Natural-Language Workbench -->
-    <section class="section" id="workbench" aria-labelledby="sc1-title">
+    <section class="section" id="product" aria-labelledby="agent-title">
       <div class="container showcase-split">
         <div class="showcase-copy reveal">
-          <p class="eyebrow" data-i18n="sc1Eyebrow">对话式优化工作台</p>
-          <h2 id="sc1-title" data-i18n="sc1Title">像聊天一样，完成专业建模与求解。</h2>
-          <p class="section-desc" data-i18n="sc1Desc">无需面对满屏参数面板。直接用大白话说明目标、拖入 Excel/CSV，系统自动完成建模、沙箱求解、方案解读与可视化；想改预算或加限制，继续追问即可。</p>
-          <ul class="check-list">
-            <li data-i18n="sc1Bullet1">默认全自动路由，零配置即可上手</li>
-            <li data-i18n="sc1Bullet2">右侧实时联动方案、Pareto 权衡图与决策明细</li>
-            <li data-i18n="sc1Bullet3">自然语言随时调整约束、对比前后变化</li>
-          </ul>
-          <div class="showcase-tabs" role="tablist" aria-label="切换工作台预览">
-            <button type="button" role="tab" aria-selected="true" data-shot="pareto" data-i18n="sc1TabPareto">多目标 Pareto 前沿</button>
-            <button type="button" role="tab" aria-selected="false" data-shot="chat" data-i18n="sc1TabChat">精确求解与方案解读</button>
-          </div>
+          <p class="eyebrow" data-i18n="agentEyebrow">对话求解</p>
+          <h2 id="agent-title" data-i18n="agentTitle">一段对话，从问题到方案。</h2>
+          <p class="section-desc" data-i18n="agentDesc">直接描述问题，或把表格拖进对话。信息不足时，助手只追问最关键的条件；问题明确后自动选择建模方法和求解器，算完用业务语言说明结果。</p>
+          <ul class="check-list"><li data-i18n="agentBullet1">结果卡片列出目标值、关键决策，以及实际使用的方法和求解器</li><li data-i18n="agentBullet2">给出接下来可以问的问题；可以编辑上一个问题或重新生成回复</li><li data-i18n="agentBullet3">需要时可在对话里指定建模方法、建模库和求解器</li></ul>
         </div>
-        <div class="showcase-media reveal">
-          <div class="screen-card">
-            <img id="sc1-image"
-              src="assets/screens/live/pareto-light.png"
-              data-light-src="assets/screens/live/pareto-light.png"
-              data-dark-src="assets/screens/live/pareto-dark.png"
-              width="2880" height="1720"
-              alt="通用智能优化求解器工作台：自然语言对话与多目标 Pareto 权衡图"
-              loading="lazy">
-            <button type="button" class="zoom-fab" data-zoom-target="sc1-image" aria-label="放大查看">
-              <span aria-hidden="true">⤢</span><span data-i18n="zoom">放大查看</span>
-            </button>
-          </div>
-        </div>
+        <div class="showcase-media reveal"><figure class="screen-card"><img class="product-shot" data-shot="agent" src="assets/screens/zh/agent-light.webp" data-light-src="assets/screens/zh/agent-light.webp" data-dark-src="assets/screens/zh/agent-dark.webp" width="2880" height="1800" alt="优化对话：运输问题的结果卡片、关键决策和旁边的求解结果" data-i18n-alt="shotAgentAlt" decoding="async"><button type="button" class="zoom-fab" data-zoom-shot aria-label="放大查看" data-i18n-label="zoom"><span aria-hidden="true">⤢</span><span data-i18n="zoom">放大查看</span></button></figure></div>
       </div>
     </section>
 
-    <!-- Showcase 2: Dual Engine Architecture + Verified Benchmarks -->
-    <section class="section section-tinted" id="engines" aria-labelledby="sc2-title">
+    <section class="section section-tinted" id="verify" aria-labelledby="verify-title">
       <div class="container showcase-split showcase-reverse">
         <div class="showcase-copy reveal">
-          <p class="eyebrow" data-i18n="sc2Eyebrow">双引擎架构</p>
-          <h2 id="sc2-title" data-i18n="sc2Title">精确求解 × AutoCO，单目标到多目标全覆盖。</h2>
-          <p class="section-desc" data-i18n="sc2Desc">传统大模型优化工具只能生成线性规划代码，一遇到大规模组合优化、非线性黑盒或多目标权衡就会超时甚至报错。平台将数学规划与 AutoCO 智能优化算法池合二为一，按问题特征自动选配最优引擎。</p>
+          <p class="eyebrow" data-i18n="verifyEyebrow">可以核对</p>
+          <h2 id="verify-title" data-i18n="verifyTitle">方案数值来自求解器，过程全部留档。</h2>
+          <p class="section-desc" data-i18n="verifyDesc">大模型负责理解问题、写出数学模型和求解代码；计算由真实求解器在隔离容器中完成。数学模型、求解代码、求解日志和完整变量都保存在运行记录里，可以逐项核对和导出。</p>
+          <ul class="check-list"><li data-i18n="verifyBullet1">代码在无网络、只读文件系统的容器中运行，用完即删</li><li data-i18n="verifyBullet2">公式阅读视图与求解代码逐版本保留</li><li data-i18n="verifyBullet3">导出带业务名称和单位的 Excel 方案，或 Markdown 报告</li></ul>
+        </div>
+        <div class="showcase-media reveal"><figure class="screen-card"><img class="product-shot" data-shot="verify" src="assets/screens/zh/verify-light.webp" data-light-src="assets/screens/zh/verify-light.webp" data-dark-src="assets/screens/zh/verify-dark.webp" width="2880" height="1800" alt="运行页的数学模型：决策变量、目标函数和约束" data-i18n-alt="shotVerifyAlt" loading="lazy" decoding="async"><button type="button" class="zoom-fab" data-zoom-shot aria-label="放大查看" data-i18n-label="zoom"><span aria-hidden="true">⤢</span><span data-i18n="zoom">放大查看</span></button></figure></div>
+      </div>
+    </section>
+
+    <section class="section" id="scenarios" aria-labelledby="scenarios-title">
+      <div class="container showcase-split">
+        <div class="showcase-copy reveal">
+          <p class="eyebrow" data-i18n="scenariosEyebrow">调整与比较</p>
+          <h2 id="scenarios-title" data-i18n="scenariosTitle">改一个条件，看方案怎么变。</h2>
+          <p class="section-desc" data-i18n="scenariosDesc">说一句“B 至少生产 3 件”就能得到新方案，原方案保留在旁边。多个假设从同一基准分别计算，并排比较目标值和决策变化；条件互相冲突时，平台根据求解器给出的冲突约束说明原因。</p>
+          <ul class="check-list"><li data-i18n="scenariosBullet1">每个新方案单独保存，随时可以切回原方案</li><li data-i18n="scenariosBullet2">场景对比列出目标值与各项决策的增减</li><li data-i18n="scenariosBullet3">无解时列出冲突的约束，并给出有依据的调整建议</li></ul>
+        </div>
+        <div class="showcase-media reveal"><figure class="screen-card"><img class="product-shot" data-shot="revision" src="assets/screens/zh/revision-light.webp" data-light-src="assets/screens/zh/revision-light.webp" data-dark-src="assets/screens/zh/revision-dark.webp" width="2880" height="1800" alt="调整条件后的方案对比：新旧目标值和发生变化的决策" data-i18n-alt="shotRevisionAlt" loading="lazy" decoding="async"><button type="button" class="zoom-fab" data-zoom-shot aria-label="放大查看" data-i18n-label="zoom"><span aria-hidden="true">⤢</span><span data-i18n="zoom">放大查看</span></button></figure></div>
+      </div>
+    </section>
+
+    <section class="section section-tinted" id="engines" aria-labelledby="engines-title">
+      <div class="container showcase-split showcase-reverse">
+        <div class="showcase-copy reveal">
+          <p class="eyebrow" data-i18n="enginesEyebrow">两类求解引擎</p>
+          <h2 id="engines-title" data-i18n="enginesTitle">精确求解与启发式搜索，各用其长。</h2>
+          <p class="section-desc" data-i18n="enginesDesc">线性、整数、凸和约束规划问题交给精确求解器，结果附带求解器给出的状态；大规模组合、黑盒或多目标问题交给 AutoCO，由它从内置算法池中选择并配置算法，搜索可行解或 Pareto 前沿。默认自动选择，也可以手动指定。</p>
           <div class="engine-cards">
             <div class="engine-card">
               <div class="engine-card-top">
-                <h3 data-i18n="engExactTitle">精确求解引擎</h3>
-                <span class="mini-tag" data-i18n="engExactBadge">LP / MILP / 凸优化 / 约束规划</span>
+                <h3 data-i18n="engExactTitle">精确求解</h3>
+                <span class="mini-tag" data-i18n="engExactBadge">LP · MILP · 凸优化 · 约束规划</span>
               </div>
-              <p data-i18n="engExactDesc">Pyomo · OR-Tools · CVXPY · PySCIPOpt · CasADi</p>
+              <p class="engine-list">Pyomo · OR-Tools · CVXPY · PySCIPOpt · CasADi</p>
+              <p class="engine-note" data-i18n="engExactNote">求解器报告最优、可行或不可行等状态。</p>
             </div>
             <div class="engine-card engine-card-accent">
               <div class="engine-card-top">
-                <h3 data-i18n="engAutocoTitle">AutoCO 智能优化算法池</h3>
-                <span class="mini-tag mini-tag-blue" data-i18n="engAutocoBadge">黑盒组合 / 大规模排程 / 多目标 Pareto</span>
+                <h3 data-i18n="engAutocoTitle">AutoCO 智能优化</h3>
+                <span class="mini-tag mini-tag-blue" data-i18n="engAutocoBadge">大规模组合 · 黑盒 · 多目标</span>
               </div>
-              <p data-i18n="engAutocoDesc">SA · TS · ILS · LNS · GA · CMA-ES · DE · PSO · ACO · NSGA-II · MOEA/D · NSGA-III</p>
+              <p class="engine-list">SA · TS · ILS · LNS · GA · CMA-ES · DE · PSO · ACO · NSGA-II · MOEA/D · NSGA-III</p>
+              <p class="engine-note" data-i18n="engAutocoNote">启发式结果不保证全局最优，多目标问题返回非支配解集。</p>
             </div>
           </div>
         </div>
-
-        <div class="showcase-media reveal">
-          <div class="benchmark-panel">
-            <div class="benchmark-header">
-              <span class="benchmark-dot"></span>
-              <span data-i18n="benchTitle">实测对比（同一大模型与沙箱环境）</span>
-            </div>
-            <table class="benchmark-table">
-              <thead>
-                <tr>
-                  <th data-i18n="benchColTask">测试场景</th>
-                  <th data-i18n="benchColExact">传统精确建模</th>
-                  <th data-i18n="benchColAutoco">AutoCO 智能优化</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="task-name" data-i18n="benchRow1Task">30 节点二次指派（QAP-30）</td>
-                  <td class="muted-cell" data-i18n="benchRow1Exact">超时（距最优 +6.2% ~ +10.7%）</td>
-                  <td class="win-cell" data-i18n="benchRow1Autoco">18 秒逼近最优（+0.29%，132 万次评估）</td>
-                </tr>
-                <tr>
-                  <td class="task-name" data-i18n="benchRow2Task">三目标 GPU 集群调度（36 任务）</td>
-                  <td class="muted-cell" data-i18n="benchRow2Exact">仅能输出 1 个加权单点</td>
-                  <td class="win-cell" data-i18n="benchRow2Autoco">200 个零违规 Pareto 解（HV +11.5%）</td>
-                </tr>
-                <tr>
-                  <td class="task-name" data-i18n="benchRow3Task">中小规模线性 / 整数规划</td>
-                  <td class="win-cell" data-i18n="benchRow3Exact">毫秒~秒级证明全局最优</td>
-                  <td class="muted-cell" data-i18n="benchRow3Autoco">自动路由至精确引擎</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <div class="showcase-media reveal"><figure class="screen-card"><img class="product-shot" data-shot="pareto" src="assets/screens/zh/pareto-light.webp" data-light-src="assets/screens/zh/pareto-light.webp" data-dark-src="assets/screens/zh/pareto-dark.webp" width="2880" height="1800" alt="AutoCO 求解多目标 GPU 调度：Pareto 前沿与各方案明细" data-i18n-alt="shotParetoAlt" loading="lazy" decoding="async"><button type="button" class="zoom-fab" data-zoom-shot aria-label="放大查看" data-i18n-label="zoom"><span aria-hidden="true">⤢</span><span data-i18n="zoom">放大查看</span></button></figure></div>
       </div>
     </section>
 
-    <!-- Showcase 3: Full Method & Solver Control -->
-    <section class="section" aria-labelledby="sc3-title">
-      <div class="container showcase-split">
-        <div class="showcase-copy reveal">
-          <p class="eyebrow" data-i18n="sc3Eyebrow">全量方法自由体验</p>
-          <h2 id="sc3-title" data-i18n="sc3Title">平时零配置，需要时 9 种策略与求解器随时切换。</h2>
-          <p class="section-desc" data-i18n="sc3Desc">日常使用保持“自动求解”即可；研究者或运筹工程师点一下就能体验 Direct、OR-LLM-Agent、TriVAL、AutoCO 等 9 种建模方法，指定具体大模型与求解器，并在同一问题上并排横评结果。</p>
-          <ul class="check-list">
-            <li data-i18n="sc3Bullet1">4 大常用策略前置 + 10 种学术方法按需展开</li>
-            <li data-i18n="sc3Bullet2">同一问题并行跑多策略/多模型，自动交叉核对</li>
-            <li data-i18n="sc3Bullet3">完整保留数学模型、执行代码与多版本 Diff</li>
-          </ul>
-        </div>
-        <div class="showcase-media reveal">
-          <div class="screen-card">
-            <img id="sc3-image"
-              src="assets/screens/live/compare-light.png"
-              data-light-src="assets/screens/live/compare-light.png"
-              data-dark-src="assets/screens/live/compare-dark.png"
-              width="2880" height="1720"
-              alt="9 种建模策略、AI 模型与底层求解引擎设置面板"
-              loading="lazy">
-            <button type="button" class="zoom-fab" data-zoom-target="sc3-image" aria-label="放大查看">
-              <span aria-hidden="true">⤢</span><span data-i18n="zoom">放大查看</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Bento Grid Capabilities -->
-    <section class="section section-tinted" id="capabilities" aria-labelledby="bento-title">
+    <section class="section" id="use-cases" aria-labelledby="templates-title">
       <div class="container">
         <div class="section-header-center reveal">
-          <p class="eyebrow" data-i18n="bentoEyebrow">核心能力</p>
-          <h2 id="bento-title" data-i18n="bentoTitle">从数据准备到方案导出，完整闭环。</h2>
+          <p class="eyebrow" data-i18n="templatesEyebrow">场景模板</p>
+          <h2 id="templates-title" data-i18n="templatesTitle">从一个业务场景开始。</h2>
+          <p class="section-desc" data-i18n="templatesDesc">工作台内置 8 个可以直接求解的场景模板，覆盖常见的运营决策。选一个模板，换成你自己的数据即可。</p>
+        </div>
+        <ul class="template-grid">
+          <li class="template-card reveal">
+            <span class="template-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16h.01"/><path d="M16 16h.01"/><path d="M3 19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5a.5.5 0 0 0-.769-.422l-4.462 2.844A.5.5 0 0 1 15 10.5v-2a.5.5 0 0 0-.769-.422L9.77 10.922A.5.5 0 0 1 9 10.5V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"/><path d="M8 16h.01"/></svg></span>
+            <span class="template-industry" data-i18n="tpl1Industry">生产制造</span>
+            <h3 data-i18n="tpl1Title">生产计划</h3>
+            <p data-i18n="tpl1Summary">在有限设备与工序额度下，合理安排多种产品的产量，让总利润最高。</p>
+          </li>
+          <li class="template-card reveal">
+            <span class="template-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/><path d="m7.5 4.27 9 5.15"/></svg></span>
+            <span class="template-industry" data-i18n="tpl2Industry">库存计划</span>
+            <h3 data-i18n="tpl2Title">多期生产与库存</h3>
+            <p data-i18n="tpl2Summary">按 6 个月需求安排每月产量，在开工费、生产费和库存费之间取得最低总成本。</p>
+          </li>
+          <li class="template-card reveal">
+            <span class="template-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span>
+            <span class="template-industry" data-i18n="tpl3Industry">物流运输</span>
+            <h3 data-i18n="tpl3Title">运输调拨</h3>
+            <p data-i18n="tpl3Summary">三个仓库向四个客户发货，按供需和单位运费求总运费最低的调拨方案。</p>
+          </li>
+          <li class="template-card reveal">
+            <span class="template-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg></span>
+            <span class="template-industry" data-i18n="tpl4Industry">物流运输</span>
+            <h3 data-i18n="tpl4Title">车辆配送路径</h3>
+            <p data-i18n="tpl4Summary">两辆限载货车从配送中心出发服务 6 个客户，规划总行驶距离最短的路线。</p>
+          </li>
+          <li class="template-card reveal">
+            <span class="template-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg></span>
+            <span class="template-industry" data-i18n="tpl5Industry">选址布局</span>
+            <h3 data-i18n="tpl5Title">仓库选址</h3>
+            <p data-i18n="tpl5Summary">从 4 个候选地址中选择要建的仓库，同时决定供货关系，使建设费与运费之和最低。</p>
+          </li>
+          <li class="template-card reveal">
+            <span class="template-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M8 13h.01"/><path d="M12 13h.01"/><path d="M16 13h.01"/><path d="M8 17h.01"/><path d="M12 17h.01"/><path d="M16 17h.01"/></svg></span>
+            <span class="template-industry" data-i18n="tpl6Industry">人员排班</span>
+            <h3 data-i18n="tpl6Title">门店排班</h3>
+            <p data-i18n="tpl6Summary">每名店员连续上班 5 天、休息 2 天，满足每天的人手需求并使雇佣人数最少。</p>
+          </li>
+          <li class="template-card reveal">
+            <span class="template-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg></span>
+            <span class="template-industry" data-i18n="tpl7Industry">金融投资</span>
+            <h3 data-i18n="tpl7Title">投资组合</h3>
+            <p data-i18n="tpl7Summary">在目标收益约束下分配 4 类资产的权重，使组合风险（方差）最小。</p>
+          </li>
+          <li class="template-card reveal">
+            <span class="template-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/><path d="M12 12v3"/></svg></span>
+            <span class="template-industry" data-i18n="tpl8Industry">算力调度</span>
+            <h3 data-i18n="tpl8Title">多目标 GPU 调度</h3>
+            <p data-i18n="tpl8Summary">把 12 个 AI 训练任务分到 4 个集群，同时权衡总电费与故障风险，自动生成 Pareto 前沿。</p>
+          </li>
+        </ul>
+        <p class="section-more reveal"><a href="docs/zh/examples/" data-docs="examples"><span data-i18n="templatesMore">查看模板与公开题库</span> <span aria-hidden="true">→</span></a></p>
+      </div>
+    </section>
+
+    <section class="section section-tinted" id="more" aria-labelledby="bento-title">
+      <div class="container">
+        <div class="section-header-center reveal">
+          <p class="eyebrow" data-i18n="bentoEyebrow">更多功能</p>
+          <h2 id="bento-title" data-i18n="bentoTitle">从准备数据到交付方案，都在一个工作台里。</h2>
         </div>
         <div class="bento-grid">
           <article class="bento-card reveal">
-            <span class="bento-num">01</span>
-            <h3 data-i18n="bento1Title">表格直传与在线编辑</h3>
-            <p data-i18n="bento1Desc">支持拖拽 Excel (.xlsx)、CSV、TSV、JSON，内置表格视图可直接增删行与改列名，完整数据直通求解沙箱。</p>
+            <span class="bento-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span>
+            <h3 data-i18n="bentoDataTitle">表格直接拖进对话</h3>
+            <p data-i18n="bentoDataDesc">支持 Excel、CSV、TSV、JSON 和文本。建模前可以在表格视图里检查和编辑数据，补充列名与单位。</p>
           </article>
           <article class="bento-card reveal">
-            <span class="bento-num">02</span>
-            <h3 data-i18n="bento2Title">沙箱隔离实算，绝不编造数字</h3>
-            <p data-i18n="bento2Desc">所有优化代码都在无网 Docker 沙箱内由真实求解器运行，所有目标值与决策明细 100% 源自求解器输出。</p>
+            <span class="bento-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/><path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"/></svg></span>
+            <h3 data-i18n="bentoRequirementsTitle">先把需求理清楚</h3>
+            <p data-i18n="bentoRequirementsDesc">还没想清楚时，需求助手边聊边整理一份可编辑的需求稿，确认后再交给建模。</p>
           </article>
           <article class="bento-card reveal">
-            <span class="bento-num">03</span>
-            <h3 data-i18n="bento3Title">无解冲突精准定位</h3>
-            <p data-i18n="bento3Desc">当业务条件互相矛盾时，自动提取冲突约束证据并用业务语言解释原因，给出可执行的放宽建议。</p>
+            <span class="bento-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="6" r="3"/><path d="M12 6h5a2 2 0 0 1 2 2v7"/><path d="m15 9-3-3 3-3"/><circle cx="19" cy="18" r="3"/><path d="M12 18H7a2 2 0 0 1-2-2V9"/><path d="m9 15 3 3-3 3"/></svg></span>
+            <h3 data-i18n="bentoCompareTitle">手动建模与方法对比</h3>
+            <p data-i18n="bentoCompareDesc">9 种建模方法、5 个建模库可以任选；同一问题最多 12 个方案并排比较目标值、用时和 Token。</p>
           </article>
           <article class="bento-card reveal">
-            <span class="bento-num">04</span>
-            <h3 data-i18n="bento4Title">多目标 Pareto 交互权衡</h3>
-            <p data-i18n="bento4Desc">自动高亮推荐折中解（Knee Point），支持在交互散点图与明细表之间联动点选，直观比较不同业务偏好。</p>
+            <span class="bento-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></span>
+            <h3 data-i18n="bentoHistoryTitle">历史、标签与报告</h3>
+            <p data-i18n="bentoHistoryDesc">同一问题的需求、方案和对比按来源归在一起，可以加备注和标签，导出 Markdown 报告。</p>
           </article>
           <article class="bento-card reveal">
-            <span class="bento-num">05</span>
-            <h3 data-i18n="bento5Title">多场景假设对比</h3>
-            <p data-i18n="bento5Desc">基于冻结的原方案一键衍生“旺季需求 +20%”“预算收紧 10%”等多个假设场景，并行计算并横向对比决策变化。</p>
+            <span class="bento-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19h8"/><path d="m4 17 6-6-6-6"/></svg></span>
+            <h3 data-i18n="bentoCliTitle">命令行、Python 与 Agent</h3>
+            <p data-i18n="bentoCliDesc">同样的建模流程可以在命令行或 Python 中运行，也可以作为 Codex、Claude Code 的 Skill 使用。</p>
           </article>
           <article class="bento-card reveal">
-            <span class="bento-num">06</span>
-            <h3 data-i18n="bento6Title">开源私有部署 & 多模型兼容</h3>
-            <p data-i18n="bento6Desc">一条 Docker Compose 命令即可团队部署，支持 OpenAI、DeepSeek、Claude、Gemini 及本地 vLLM / Ollama。</p>
+            <span class="bento-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></span>
+            <h3 data-i18n="bentoLocaleTitle">中英文与深色模式</h3>
+            <p data-i18n="bentoLocaleDesc">界面支持中文、英文和深色模式；建模方法按运行语言生成说明。</p>
           </article>
         </div>
       </div>
     </section>
 
-    <!-- FAQ -->
-    <section class="section" id="faq" aria-labelledby="faq-title">
+    <section class="section" id="deploy" aria-labelledby="deploy-title">
+      <div class="container deploy-layout">
+        <div class="reveal">
+          <p class="eyebrow" data-i18n="deployEyebrow">开源部署</p>
+          <h2 id="deploy-title" data-i18n="deployTitle">部署在你自己的环境里。</h2>
+          <p class="section-desc" data-i18n="deployDesc">Apache-2.0 开源。用 Docker Compose 在个人电脑或团队服务器上启动，连接你选择的模型服务；密钥只保存在服务器上。</p>
+          <ul class="check-list">
+            <li data-i18n="deployBullet1">模型服务任选，也可以连接内网部署的 OpenAI 兼容模型</li>
+            <li data-i18n="deployBullet2">团队共用时可配置 HTTPS 和每日用量上限</li>
+            <li data-i18n="deployBullet3">工作台没有内置登录，需要时用防火墙或带登录的反向代理限制访问</li>
+          </ul>
+          <p class="deploy-links">
+            <a href="docs/zh/installation/" data-docs="installation"><span data-i18n="deployInstall">安装与启动</span> <span aria-hidden="true">→</span></a>
+            <a href="docs/zh/team-deployment/" data-docs="team-deployment"><span data-i18n="deployTeam">团队部署</span> <span aria-hidden="true">→</span></a>
+          </p>
+        </div>
+        <div class="code-window reveal">
+          <div class="code-tabs" role="tablist" aria-label="安装方式" data-i18n-label="deployTabsLabel">
+            <button type="button" role="tab" id="tab-docker" aria-selected="true" aria-controls="code-docker" data-code="docker">Docker Compose</button>
+            <button type="button" role="tab" id="tab-skill" aria-selected="false" aria-controls="code-skill" data-code="skill" tabindex="-1">Codex · Claude Code</button>
+            <button type="button" class="copy-code" id="copy-code" data-i18n="copy">复制</button>
+          </div>
+          <pre id="code-docker" role="tabpanel" aria-labelledby="tab-docker"><code>git clone https://github.com/Fangziyang0910/LLM4OM.git && cd LLM4OM
+cp .env.example .env   <span class="code-comment" data-i18n="codeEnv"># 填写模型服务商、地址、模型和密钥</span>
+docker compose up -d --build
+<span class="code-comment" data-i18n="codeOpen"># 打开 http://localhost:8767</span></code></pre>
+          <pre id="code-skill" role="tabpanel" aria-labelledby="tab-skill" hidden><code>npx skills add Fangziyang0910/LLM4OM --skill llm4om -g
+<span class="code-comment" data-i18n="codeSkill"># 新开会话：Claude Code 输入 /llm4om，Codex 输入 $llm4om</span>
+<span class="code-comment" data-i18n="codeSkill2"># 由当前 Agent 建模和解读，求解在本机 Docker 中进行</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tinted" id="faq" aria-labelledby="faq-title">
       <div class="container faq-layout">
         <div class="reveal">
           <p class="eyebrow" data-i18n="faqEyebrow">常见问题</p>
-          <h2 id="faq-title" data-i18n="faqTitle">开始前你可能关心的问题</h2>
+          <h2 id="faq-title" data-i18n="faqTitle">开始之前</h2>
+          <p class="section-desc" data-i18n="faqDesc">没有找到答案？查看文档中的常见问题与排查，或在 GitHub 提交 Issue。</p>
         </div>
         <div class="faq-list reveal">
           <details>
-            <summary data-i18n="faq1Q">完全不会运筹学建模或写代码，也能直接用吗？</summary>
-            <p data-i18n="faq1A">可以。打开工作台直接用日常语言说明目标和约束，拖入 Excel 或 CSV 表格就能自动完成建模、求解并输出带中文解读的方案，结果还能一键导出 Excel。</p>
+            <summary data-i18n="faq1Q">不懂运筹学或编程，能用吗？</summary>
+            <p data-i18n="faq1A">可以。用日常语言写下目标、规则和数据即可，缺少关键信息时助手会追问。结果附带业务语言解读，也可以导出 Excel。第一次处理某类问题时，建议核对数学模型是否准确表达了你的要求。</p>
           </details>
           <details>
-            <summary data-i18n="faq2Q">精确求解和 AutoCO 智能优化有什么区别？需要我自己选吗？</summary>
-            <p data-i18n="faq2A">默认不需要自己选。对于线性、混合整数、凸优化等结构化问题，平台优先调用精确求解器证明全局最优；遇到大规模复杂组合调度、黑盒非线性或多目标 Pareto 权衡时，自动切换 AutoCO 12 类智能优化算法池。当然，你也可以随时手动指定任意策略或求解器。</p>
+            <summary data-i18n="faq2Q">结果可信吗？</summary>
+            <p data-i18n="faq2A">方案数值由求解器计算，不由大模型生成；最优、可行、不可行等求解状态如实显示。大模型可能误解题意，所以平台保留数学模型、求解代码和完整变量供你核对，也可以用不同方法或模型交叉比较。</p>
           </details>
           <details>
-            <summary data-i18n="faq3Q">如何保证计算结果准确，而不是大模型胡编的数字？</summary>
-            <p data-i18n="faq3A">大模型只负责把业务描述翻译成数学模型与可执行代码，真正的求解全部在隔离的 Docker 求解沙箱里由真实求解器/算法引擎完成，界面展示的所有目标值和决策变量都直接读取求解器输出，支持随时核对数学公式、代码与求解日志。</p>
+            <summary data-i18n="faq3Q">精确求解和 AutoCO 怎么选？</summary>
+            <p data-i18n="faq3A">默认自动选择：线性、整数、凸和约束规划问题使用精确求解器；大规模组合、黑盒或多目标问题使用 AutoCO。AutoCO 的启发式结果不保证全局最优。也可以在对话或设置中手动指定。</p>
           </details>
           <details>
-            <summary data-i18n="faq4Q">支持团队内网部署和自有大模型吗？</summary>
-            <p data-i18n="faq4A">完全支持。项目采用 Apache-2.0 开源协议，通过 Docker Compose 即可在个人电脑或内网服务器一键启动，支持配置多家云端 API 或内网私有部署的 OpenAI 兼容模型。</p>
+            <summary data-i18n="faq4Q">我的数据会发送到哪里？</summary>
+            <p data-i18n="faq4A">题面和附件内容会按需发送给你配置的模型服务，用于理解问题和写出模型；求解代码在你自己的服务器上运行。需要数据不出内网时，可以连接内网部署的 OpenAI 兼容模型服务。</p>
+          </details>
+          <details>
+            <summary data-i18n="faq5Q">支持哪些大模型？</summary>
+            <p data-i18n="faq5A">DeepSeek、OpenAI、Anthropic、Google Gemini、Kimi、GLM、阿里云百炼、OpenRouter，以及任意 OpenAI 兼容接口。优化对话需要模型支持工具调用。</p>
+          </details>
+          <details>
+            <summary data-i18n="faq6Q">需要付费吗？</summary>
+            <p data-i18n="faq6A">平台以 Apache-2.0 协议开源，可以免费使用和部署。使用云端模型时按模型服务商计费；Gurobi、CPLEX 等商业求解器需要各自的许可证，或在其限规模模式下使用。</p>
           </details>
         </div>
       </div>
     </section>
 
-    <!-- Closing CTA -->
     <section class="cta-section" id="get-started" aria-labelledby="cta-title">
       <div class="container cta-inner reveal">
-        <h2 id="cta-title" data-i18n="ctaTitle">现在就开始求解你的优化问题。</h2>
-        <p data-i18n="ctaDesc">开源免费，支持本地运行与团队私有化部署。</p>
+        <h2 id="cta-title" data-i18n="ctaTitle">从第一个优化问题开始。</h2>
+        <p data-i18n="ctaDesc">按快速开始安装平台，用场景模板跑通第一个方案。</p>
         <div class="cta-actions">
           <a class="btn btn-primary btn-lg workbench-link" href="docs/zh/quickstart/" data-docs-fallback="quickstart">
-            <span data-i18n="ctaLaunch">进入在线工作台</span>
-            <span aria-hidden="true">↗</span>
+            <span class="workbench-label" data-i18n="ctaStart">开始使用</span>
+            <span aria-hidden="true">→</span>
           </a>
-          <a class="btn btn-secondary btn-lg" href="docs/zh/introduction/" data-docs="introduction" data-i18n="ctaDocs">查看完整文档</a>
-          <a class="btn btn-ghost btn-lg" href="docs/zh/team-deployment/" data-docs="team-deployment">
-            <span data-i18n="ctaDeploy">安装与团队部署指南</span>
-            <span aria-hidden="true">↗</span>
-          </a>
+          <a class="btn btn-secondary btn-lg" href="https://github.com/Fangziyang0910/LLM4OM" target="_blank" rel="noopener noreferrer"><img class="github-icon" src="assets/github.svg" width="16" height="16" alt=""><span data-i18n="heroGithubCta">在 GitHub 查看</span></a>
         </div>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <div class="container footer-inner">
-      <a class="team-brand" href="https://scut-eipi.github.io/" target="_blank" rel="noopener noreferrer">
-        <img src="assets/eipi-logo-dark.svg" width="44" height="44" alt="EIPI">
-        <span data-i18n="teamCredit">由 EIPI 团队开发</span>
-        <span aria-hidden="true">↗</span>
-      </a>
-      <div class="footer-links">
-        <a href="docs/zh/introduction/" data-docs="introduction" data-i18n="navDocs">文档</a>
-        <a href="https://github.com/Fangziyang0910/LLM4OM" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
-        <a href="https://github.com/Fangziyang0910/LLM4OM/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Apache-2.0</a>
-        <span data-i18n="footerBrand">通用智能优化求解器</span>
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="#"><span class="brand-mark"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><defs><linearGradient id="footer-gradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--brand)"/><stop offset="1" stop-color="var(--brand-accent)"/></linearGradient></defs><rect width="24" height="24" rx="6" fill="url(#footer-gradient)"/><path d="M4.5 15 8 6.5l9.5-1.2L19.5 13 11 19z" fill="#fff" fill-opacity=".28" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><circle cx="17.5" cy="5.3" r="2.4" fill="#fff"/></svg></span><span class="brand-name" data-i18n="brandName">通用智能优化求解器</span></a>
+        <p data-i18n="footerTagline">用业务语言描述问题，得到可核对的最优方案。</p>
+        <a class="team-brand" href="https://scut-eipi.github.io/" target="_blank" rel="noopener noreferrer">
+          <img src="assets/eipi-logo-dark.svg" width="32" height="32" alt="EIPI">
+          <span data-i18n="teamCredit">由 EIPI 团队开发</span>
+        </a>
       </div>
+      <nav class="footer-column" aria-labelledby="footer-product">
+        <h2 id="footer-product" data-i18n="footerProduct">产品</h2>
+        <a href="#product" data-i18n="navProduct">产品</a>
+        <a href="#use-cases" data-i18n="footerTemplates">场景模板</a>
+        <a href="#deploy" data-i18n="navDeploy">部署</a>
+        <a href="#faq" data-i18n="faqEyebrow">常见问题</a>
+      </nav>
+      <nav class="footer-column" aria-labelledby="footer-docs">
+        <h2 id="footer-docs" data-i18n="navDocs">文档</h2>
+        <a href="docs/zh/quickstart/" data-docs="quickstart" data-i18n="footerQuickstart">快速开始</a>
+        <a href="docs/zh/chat-agent/" data-docs="chat-agent" data-i18n="footerAgent">优化对话</a>
+        <a href="docs/zh/methods/" data-docs="methods" data-i18n="footerMethods">建模方法</a>
+        <a href="docs/zh/solvers/" data-docs="solvers" data-i18n="footerSolvers">建模库与求解器</a>
+      </nav>
+      <nav class="footer-column" aria-labelledby="footer-resources">
+        <h2 id="footer-resources" data-i18n="footerResources">资源</h2>
+        <a href="https://github.com/Fangziyang0910/LLM4OM" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/Fangziyang0910/LLM4OM/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer" data-i18n="navChangelog">更新日志</a>
+        <a href="https://github.com/Fangziyang0910/LLM4OM/issues" target="_blank" rel="noopener noreferrer" data-i18n="footerIssues">问题反馈</a>
+        <a href="https://github.com/Fangziyang0910/LLM4OM/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" data-i18n="footerLicense">许可证 Apache-2.0</a>
+      </nav>
+    </div>
+    <div class="container footer-bottom">
+      <span data-i18n="footerCopyright">© 2026 EIPI 团队 · Apache-2.0</span>
     </div>
   </footer>
 
   <dialog id="photo-dialog" aria-labelledby="photo-dialog-title">
     <div class="dialog-header">
-      <span id="photo-dialog-title" data-i18n="workbenchDialogTitle">工作台实景预览</span>
+      <span id="photo-dialog-title" data-i18n="workbenchDialogTitle">工作台界面</span>
       <button id="close-photo" type="button" aria-label="关闭预览" data-i18n-label="closeLabel">×</button>
     </div>
-    <img id="dialog-image" src="assets/screens/live/pareto-light.png" width="2880" height="1720" alt="工作台实景预览">
+    <img id="dialog-image" src="assets/screens/zh/agent-light.webp" width="2880" height="1800" alt="工作台界面">
   </dialog>
 </body>
 </html>

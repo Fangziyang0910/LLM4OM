@@ -1125,8 +1125,7 @@ html[data-theme="dark"] .step-panel pre { background: #0e1017; }
 @media (max-width: 600px) {
   .docs-header-inner { height: 54px; padding-inline: 14px; gap: 6px; }
   .docs-header .brand { font-size: 13.5px; gap: 7px; }
-  .docs-header .brand-mark { width: 24px; height: 24px; border-radius: 7px; }
-  .docs-header .brand-mark img { width: 15px; height: 15px; }
+  .docs-header .brand-mark svg { width: 24px; height: 24px; }
   .docs-search-button {
     width: 32px;
     min-width: 32px;

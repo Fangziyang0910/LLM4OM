@@ -76,31 +76,36 @@ const output = path.join(__dirname, "../artifacts/website/v2");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     const missing = await page.evaluate(async () => {
       const { copy } = await import("./translations.js");
-      return [...document.querySelectorAll("[data-i18n],[data-i18n-label]")].flatMap(node => [node.dataset.i18n, node.dataset.i18nLabel]).filter(key => key && (!copy[key]?.[0] || !copy[key]?.[1]));
+      return [...document.querySelectorAll("[data-i18n],[data-i18n-label],[data-i18n-alt]")].flatMap(node => [node.dataset.i18n, node.dataset.i18nLabel, node.dataset.i18nAlt]).filter(key => key && (!copy[key]?.[0] || !copy[key]?.[1]));
     });
     assert.deepEqual(missing, []);
-    await page.locator("#sc1-image").scrollIntoViewIfNeeded();
     for (const locale of ["en", "zh"]) {
       if ((await page.locator("html").getAttribute("lang")) !== (locale === "en" ? "en" : "zh-CN")) await page.locator("#language-toggle").click();
-      for (const item of ["pareto", "chat"]) {
-        await page.locator(`[data-shot="${item}"]`).click();
-        await page.locator("#sc1-image").evaluate(image => image.decode());
-        assert.equal(await page.locator("#sc1-image").getAttribute("src"), `assets/screens/live/${item}-dark.png`);
-        const brightness = await page.locator("#sc1-image").evaluate(image => {
+      for (const item of ["agent", "verify", "revision", "pareto"]) {
+        const image = page.locator(`img[data-shot="${item}"]`);
+        await image.scrollIntoViewIfNeeded();
+        await expect(image).toHaveAttribute("src", `assets/screens/${locale}/${item}-dark.webp`);
+        await image.evaluate(node => node.decode());
+        const brightness = await image.evaluate(node => {
           const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
-          const ctx = canvas.getContext("2d"); ctx.drawImage(image, 0, 0, 1, 1);
+          const ctx = canvas.getContext("2d"); ctx.drawImage(node, 0, 0, 1, 1);
           return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3).reduce((a, b) => a + b) / 3;
         });
         assert.ok(brightness < 100, `Expected a dark ${locale} screenshot: ${item}`);
       }
       if (locale === "en") assert.doesNotMatch(await page.locator("main").innerText(), /[\u3400-\u9fff]/);
     }
-    await page.locator('[data-shot="chat"]').press("Home");
-    await expect(page.locator('[data-shot="pareto"]')).toHaveAttribute("aria-selected", "true");
-    await page.locator("[data-zoom-target=sc1-image]").click();
+    await page.locator("[data-zoom-shot]").first().click();
     assert.equal(await page.locator("dialog").evaluate(dialog => dialog.open), true);
+    await expect(page.locator("#dialog-image")).toHaveAttribute("src", /agent-dark\.webp$/);
     await page.keyboard.press("Escape");
     assert.equal(await page.locator("dialog").evaluate(dialog => dialog.open), false);
+    await page.locator("#tab-skill").click();
+    await expect(page.locator("#code-skill")).toBeVisible();
+    await expect(page.locator("#code-docker")).toBeHidden();
+    await page.locator("#tab-skill").press("ArrowLeft");
+    await expect(page.locator("#tab-docker")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#code-docker")).toContainText("docker compose up -d --build");
     await page.locator(".faq-list summary").first().click();
     assert.equal(await page.locator(".faq-list details").first().getAttribute("open"), "");
 
@@ -121,11 +126,11 @@ const output = path.join(__dirname, "../artifacts/website/v2");
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`${base}?lang=zh`);
-    await page.locator("#sc1-image").scrollIntoViewIfNeeded();
-    await page.locator("#sc1-image").evaluate(image => image.decode());
+    await page.locator('img[data-shot="agent"]').scrollIntoViewIfNeeded();
+    await page.locator('img[data-shot="agent"]').evaluate(image => image.decode());
     const style = ".site-header,.skip-link{visibility:hidden!important}";
     await page.locator("#studio").screenshot({ path: path.join(output, "interactive-zh.png"), style });
-    await page.locator("#workbench").screenshot({ path: path.join(output, "features-zh.png"), style });
+    await page.locator("#product").screenshot({ path: path.join(output, "features-zh.png"), style });
     await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo(0, 0); });
     await page.screenshot({ path: path.join(output, "full-page-zh.png"), fullPage: true });
     await context.close();
@@ -154,7 +159,7 @@ const output = path.join(__dirname, "../artifacts/website/v2");
     assert.equal(await motion.locator('[data-person="0"]').evaluate(node => node.style.gridColumn), "2");
     await moving.close();
     assert.deepEqual(errors, []);
-    console.log("PASS: four computed cases; sliders, conflicting requirements, CSV export; full bilingual copy and matching dark media; keyboard tabs/dialog; six viewport sizes; playback, pause/resume, language changes during playback, and staff reassignment.");
+    console.log("PASS: four computed cases; sliders, conflicting requirements, CSV export; full bilingual copy and matching dark product screenshots; screenshot zoom and install tabs; six viewport sizes; playback, pause/resume, language changes during playback, and staff reassignment.");
     console.log(`Screenshots: ${output}`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

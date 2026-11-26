@@ -1,15 +1,17 @@
-Business scenarios compute several explicit changes from one saved plan. Compare demand, budgets, capacities, availability or supply conditions.
+Compare Scenarios computes several explicit changes from one saved plan. Compare demand, budgets, capacities, availability or supply conditions.
 
 ## Create a scenario group
 
-Choose “Business scenario comparison” below a result. Enter names and changes for 2–6 scenarios. Names identify results; changes become revised problem statements. Each run uses the common inputs and original configuration.
+Choose “Compare Scenarios” at the top of a result. Enter names and changes for 2–6 scenarios. Names identify results; changes become revised problem statements. Each run uses the common inputs and original configuration.
 
 ```text
 Scenario 1: regular order, at least 3 units of B.
 Scenario 2: larger B order, at least 4 units of B.
 ```
 
-You can also request several scenarios in one plan-conversation message, then compare the batch.
+You can also request several scenarios in one chat message, then open “Compare these plans”.
+
+![Two scenarios requested in one chat message: profit 12 with at least 3 units of B, 16 with cutting capacity raised to 10](../../../assets/screens/en/chat-scenarios-light.webp)
 
 ## Branching from one baseline
 
@@ -34,9 +36,7 @@ Every scenario saves its statement, code, execution and result. Scenario convers
 | B≥3 | 2 | 3 | 12 |
 | B≥4 | 0 | 4 | 8 |
 
-![Actual scenario comparison](../../../assets/screens/en/scenarios.png)
-
-Read status and objective, then changed decisions. The table prioritizes the first 20 changed same-named variables. Open a run for complete values and inputs.
+Read status and objective, then changed decisions. Decisions align by variable name and index (for example `A` and `x[A]`), and the table shows the first 20 that changed. Open a run for complete values and inputs.
 
 ## Try creating and selecting scenarios
 

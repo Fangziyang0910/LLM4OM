@@ -53,19 +53,20 @@ const fits = async page => assert.equal(await page.evaluate(() => document.docum
       await page.goto(`${base}?lang=${locale}`);
       for (const theme of ["light", "dark"]) {
         await choose(page, theme);
-        for (const feature of ["pareto", "chat"]) {
-          await page.locator(`[data-shot="${feature}"]`).click();
-          await page.locator("#sc1-image").evaluate(image => image.decode());
-          await expect(page.locator("#sc1-image")).toHaveAttribute("src", `assets/screens/live/${feature}-${theme}.png`);
-          const brightness = await page.locator("#sc1-image").evaluate(img => {
+        for (const feature of ["agent", "pareto"]) {
+          const image = page.locator(`img[data-shot="${feature}"]`);
+          await image.scrollIntoViewIfNeeded();
+          await expect(image).toHaveAttribute("src", `assets/screens/${locale}/${feature}-${theme}.webp`);
+          await image.evaluate(node => node.decode());
+          const brightness = await image.evaluate(img => {
             const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
             const ctx = canvas.getContext("2d"); ctx.drawImage(img, 0, 0, 1, 1);
             return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3).reduce((a, b) => a + b) / 3;
           });
           assert.ok(theme === "light" ? brightness > 180 : brightness < 100, `Wrong screenshot appearance: ${theme}/${locale}/${feature}`);
         }
-        await page.locator("[data-zoom-target=sc1-image]").click();
-        await expect(page.locator("#photo-dialog img")).toHaveAttribute("src", new RegExp(`/chat-${theme}\\.png$`));
+        await page.locator("[data-zoom-shot]").first().click();
+        await expect(page.locator("#photo-dialog img")).toHaveAttribute("src", new RegExp(`/${locale}/agent-${theme}\\.webp$`));
         await page.keyboard.press("Escape");
       }
     }

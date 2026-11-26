@@ -71,7 +71,7 @@ const output = path.join(__dirname, "../artifacts/website/docs");
     await page.goto(`${base}docs/`);
     await expect(page).toHaveURL(/docs\/en\/introduction\/$/);
 
-    for (const [locale, query, id] of [["en", "AutoCO", "autoco"], ["zh", "Pareto", "autoco"], ["en", "BIND", "bind"], ["zh", "无解", "conflicts"], ["en", "CP-SAT", "ortools"], ["en", "LLMOPT", "llmopt"], ["zh", "单件利润", "attachments"]]) {
+    for (const [locale, query, id] of [["en", "AutoCO", "autoco"], ["zh", "多目标", "autoco"], ["en", "BIND", "bind"], ["zh", "无解", "conflicts"], ["en", "CP-SAT", "ortools"], ["en", "LLMOPT", "llmopt"], ["zh", "单件利润", "attachments"]]) {
       await page.goto(`${base}docs/${locale}/introduction/`);
       await page.keyboard.press("Control+k");
       await expect(page.locator("#docs-search")).toHaveJSProperty("open", true);

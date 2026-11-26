@@ -1,6 +1,6 @@
 # 通用智能优化求解器官网与文档中心
 
-面向大众的中英文宣传站（通用智能优化求解器 / General Intelligent Optimization Solver），定位为求解各种复杂优化问题的通用求解器，署名 EIPI 团队。包括生产、排班、配送三个可操作示例，十二张双语、深浅两种主题的工作台截图、三步使用介绍和常见问题。示例支持播放、暂停、跳过、修改条件及下载 CSV。
+面向大众的中英文宣传站（通用智能优化求解器 / General Intelligent Optimization Solver），定位为求解各种复杂优化问题的通用求解器，署名 EIPI 团队。首页包括交互演示（多目标 GPU 调度与生产、排班、配送三个可操作示例）、兼容的建模库/求解器/模型服务、四段产品功能介绍（附真实运行的双语、深浅两版截图）、8 个场景模板、部署方式、常见问题和页脚导航。示例支持播放、暂停、跳过、修改条件及下载 CSV。
 
 Docs 沿用官网风格，提供 38 篇文章、76 个中英文页面：快速开始与基本概念、13 篇功能指南、9 种方法、5 个建模库、求解后端、部署、CLI / Python 和故障排查。文章包含机制、输入输出、完整代码与操作案例；双语 Mermaid 图在构建时生成深、浅两版 SVG，方法图与逐步案例联动。五类交互案例包括生产、方案对话、数据编辑、凸优化和局部搜索，另有双语、深浅两版工作台录屏与字幕。侧栏、页内目录、全文搜索、代码复制、手机目录和同章节语言切换沿用现有框架。
 
@@ -66,7 +66,7 @@ GitHub Pages 承载官网与文档。完整建模服务仍需 Python、Docker �
 node website/check.cjs http://127.0.0.1:8831/
 ```
 
-检查三个示例的实际计算、条件变化、无解、CSV 下载、完整语言切换与记忆、对应语言的深色素材、键盘页签、大图对话框、FAQ，以及 1440、1280、768、390、360、320 六种屏幕宽度。另在正常动效设置下检查播放、暂停、继续、播放中切语言和排班位置动画。截图保存到忽略提交的 `artifacts/website/v2/`。
+检查三个示例的实际计算、条件变化、无解、CSV 下载、完整语言切换与记忆、对应语言的深色产品截图、截图放大对话框、部署代码页签、FAQ，以及 1440、1280、768、390、360、320 六种屏幕宽度。另在正常动效设置下检查播放、暂停、继续、播放中切语言和排班位置动画。截图保存到忽略提交的 `artifacts/website/v2/`。
 
 文档检查：
 
@@ -91,7 +91,7 @@ node website/capture.cjs
 node website/capture.cjs light
 ```
 
-复用已有前端、Python 环境、Playwright、ffmpeg 和 Pyomo / HiGHS。脚本启动隔离的本地平台与固定回复适配器，实际求解生产问题与两个变更场景，采集中文、英文截图，录制 MP4 并生成 WebVTT 字幕。默认采集深色，参数 `light` 采集浅色并在文件名添加 `-light`。截图位于 `public/assets/screens/{zh,en}/`，录屏位于 `public/assets/demos/`；日志、原始视频和隔离数据位于忽略提交的 `artifacts/website/`。完成后关闭脚本启动的服务。
+复用已有前端、Python 环境、Playwright、ffmpeg 和 Pyomo / HiGHS。脚本启动隔离的本地平台与固定回复适配器，实际求解生产问题与两个变更场景，录制中文、英文 MP4，生成 WebVTT 字幕和录屏海报（`public/assets/screens/{zh,en}/plan*.png`）。默认采集深色，参数 `light` 采集浅色并在文件名添加 `-light`。录屏位于 `public/assets/demos/`；日志、原始视频和隔离数据位于忽略提交的 `artifacts/website/`。完成后关闭脚本启动的服务。
 
 ## 维护
 
@@ -104,5 +104,5 @@ node website/capture.cjs light
 - 文档源稿与目录：`content/{zh,en}/`、`docs-manifest.json`；生成器：`build-docs.mjs`。
 - 文档框架与搜索：`public/docs/docs.css`、`docs.js`。
 - 学习材料渲染：`doc-components.mjs`、`render-diagrams.mjs`；客户端：`public/docs/learning.mjs`；纯数值计算：`learning-models.mjs`。
-- 截图由 `capture.cjs` 新采集；团队标识来自 EIPI 现有官网。Inter 字体的 OFL 许可随站点保留。
+- 产品截图 `public/assets/screens/{zh,en}/*-{light,dark}.webp` 来自真实模型运行的工作台（1440×900、2 倍像素密度），首页按语言和主题切换，Docs 中写浅色路径，构建时补上深色版本。团队标识来自 EIPI 现有官网。Inter 字体的 OFL 许可随站点保留。
 - 功能变化时核对主项目 README 和用户指南。不要添加未经核实的效果指标或在线平台地址。

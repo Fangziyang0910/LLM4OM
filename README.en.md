@@ -16,6 +16,7 @@
 <p align="center">
   <a href="README.md">中文</a> · <b>English</b>
   <br>
+  <a href="https://fangziyang0910.github.io/LLM4OM/?lang=en">Website</a> ·
   <a href="https://fangziyang0910.github.io/LLM4OM/docs/en/introduction/">Docs</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#modeling-methods">Methods</a> ·
@@ -27,88 +28,53 @@
 
 ---
 
-**General Intelligent Optimization Solver** (**通用智能优化求解器**) is a general solver for complex optimization problems across scheduling, supply chains, vehicle routing, resource allocation, network flows and nonlinear programming. Configure runs directly in the workbench, or chat with the optimization assistant and attach business data. The agent invokes a complete modeling workflow to formulate the mathematical model, write solver code and compute optimal solutions inside an isolated container. Inspect actual steps, formulations, code and results in the workspace alongside chat, and continue the conversation to revise constraints.
-
-The platform integrates **9 modeling strategies**: 8 exact-modeling workflows and the AutoCO metaheuristic engine, alongside **5 modeling libraries**. Enter an optimization problem, run modeling and solving, and inspect models and computed solutions without writing solver code yourself.
+**General Intelligent Optimization Solver** (**通用智能优化求解器**) turns a business problem into an optimization plan you can check. Describe a production, staffing, shipping or siting problem in plain language and attach your spreadsheets. The platform writes a mathematical model and solver code, runs a real solver in an isolated Docker container, and explains the result in business terms. The model, code, solver log and every variable stay in the run record.
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Demo: ordinary chat, arithmetic and the Agent modeling workspace" width="100%">
-  <br><sub>A real run recorded before the interface update: move from ordinary chat and arithmetic to production modeling with DeepSeek · Direct · Pyomo, revise conditions, then return to the original plan.</sub>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dark-en.webp">
+    <img src="docs/assets/agent-en.webp" alt="Optimization chat: the conversation and result card on the left, the full computed plan on the right" width="100%">
+  </picture>
+  <br><sub>Optimization chat: describe a shipping problem, the assistant models it and solves it with HiGHS, and the full plan appears on the right. Captured from a real run (DeepSeek · Direct · Pyomo).</sub>
 </p>
 
-## Highlights
+## Features
 
-| Feature | What you get |
-|---|---|
-| 💬 **Model through conversation** | Discuss an idea, calculate a first plan, inspect results and revise conditions in one agent. Specify methods and libraries in chat, or use the retained manual workbench |
-| 🧠 **9 modeling strategies** | Direct, OR-LLM-Agent, LLMOPT, TriVAL, BIND, AutoCO, OptiTree, Chain-of-Experts and OptiMUS 0.3; each has its own LangGraph |
-| 🧩 **5 modeling libraries** | Pyomo, OR-Tools, CVXPY, PySCIPOpt and CasADi, with backend discovery through each library’s own plugin registry |
-| 📝 **Requirements chat** | Capture the decision, objectives and conditions in an editable draft. Open questions appear only while there is something to resolve |
-| 🔍 **Every step visible** | Live LLM calls, saved partial work after cancellation, paged history and a fixed configuration record for every run |
-| ⚖️ **Compare methods** | Run up to 12 methods or models on one problem and compare objective, time and tokens |
-| 💬 **Explain and revise plans** | Get a direct answer with actual choices, locations, quantities and cost or profit, followed by decision details; change conditions and compare the new plan with the saved original |
-| 🔄 **Plan chat and business scenarios** | Ask about actual results; condition changes show real modeling progress and result cards, with a fixed baseline for several alternatives |
-| 📊 **Review data before modeling** | Edit CSV, TSV, JSON and text attachments, including converted Excel sheets; clarify column names and units before saving |
-| 🧯 **Explain infeasibility** | Read business explanations grounded in actual conflicting constraints; select and edit a candidate change, then solve a new model to verify it (Gurobi IIS) |
-| 🔒 **Isolated sandbox** | Generated code runs in a container with no network, a read-only file system and no root, removed after use |
-| 👥 **Team deployment** | One `docker compose up`; preset keys never leave the server; optional HTTPS and usage limits |
-| 🌗 **A workbench people like** | Export Excel plans with business labels, units and all actual values; notes and tags, Markdown reports, Excel import, 2,033 public problems, Chinese and English, dark mode |
-
-Optimization chat is the default workbench at `/`; manual modeling and method comparisons are available at `/model`. Describe a problem or attach data; the assistant asks focused questions when needed and calls a complete modeling workflow. Specify a method or library in chat. Exact modeling and AutoCO use their respective solving paths, with actual settings retained in the run. Actual steps stream to a task card; the modeling workspace shows the mathematical model, code and results. Each plan is saved independently. Plan views, links, exports and revisions from a conversation use its saved checkpoint, so later thread updates do not replace an earlier plan. Both interfaces remain available and share the same modeling methods and independently saved runs.
-
-The agent also handles ordinary questions, writing, code explanations, supplied material and arithmetic without starting a modeling run. For plan discussions, a calculator reads all saved decision values to check costs, remaining capacity and ratios. Say “use the second plan” or “return to the original” to change the baseline for later discussion without solving again. Browsing a historical plan still only changes the view.
+- **Solve through chat**: describe the problem or drop in a spreadsheet. The assistant asks for missing conditions when needed, then models, solves and explains. The result card lists the objective, the key decisions and the method, library and solver actually used.
+- **Results you can check**: generated code runs in a container with no network, a read-only file system and no root, removed after use. Formulations, solver code, solver logs and all variables are kept for every version; export an Excel plan with business labels and units, or a Markdown report.
+- **Change and compare**: change one condition in a sentence to get a new plan while the original stays; compute several what-ifs from the same baseline and compare them side by side. When a model is infeasible, the explanation is based on the conflicting constraints reported by the solver (Gurobi IIS), with suggested changes to verify.
+- **Two solving paths**: linear, integer, convex and constraint programs go through Pyomo, OR-Tools, CVXPY, PySCIPOpt or CasADi to backends such as HiGHS, SCIP, CP-SAT and Ipopt. Large combinatorial, black-box and multi-objective problems can use AutoCO, which selects and configures one of 12 heuristic algorithm families. Heuristic results are not guaranteed to be globally optimal.
+- **Manual modeling and method comparison**: choose from 9 modeling methods, 5 modeling libraries and your model presets; run up to 12 setups on one problem and compare objective, time and tokens.
+- **Data and requirements**: review and edit CSV, TSV, JSON, text and Excel before modeling; when the problem is still vague, the requirements assistant turns the conversation into an editable draft.
+- **Deploy and integrate**: start with one Docker Compose command; model keys stay on the server. The same workflow runs from the command line, Python, or as a skill in Codex and Claude Code.
+- **Templates and benchmarks**: 8 industry templates ready to solve and 2,033 public benchmark problems in 9 collections. Chinese and English interfaces, light and dark modes.
 
 ## Screenshots
 
-Optimization, requirements and plan conversations use the same layout: chat on the left, the draft or plan on the right. Drag the divider to resize the panels; widths survive reload. On phones, switch between **Model and results** and **Solving Steps**. **Ask Follow-up** opens the conversation, and **Open Original Plan** returns to its saved result. Requirements chat offers Review requirements draft before modeling. Browsing history keeps the calculation baseline, and opening an original plan preserves its frozen version. Run settings show methods, modeling libraries and models side by side.
-
-The conversation screenshots use scripted examples and locally solved results.
+Captured from real runs: DeepSeek model, local Docker solving. The Chinese interface is shown below; the English interface is above.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/assets/agent-home.png" alt="Independent optimization chat"><p align="center"><sub>A separate agent entry, starting from a problem</sub></p></td>
-    <td width="50%"><img src="docs/assets/agent.png" alt="Optimization agent and modeling workspace"><p align="center"><sub>Calculate through chat; inspect actual models and results alongside</sub></p></td>
+    <td width="50%"><img src="docs/assets/run.webp" alt="Result page"><p align="center"><sub>Result page: objective, plan explanation and key decisions</sub></p></td>
+    <td width="50%"><img src="docs/assets/formulation.webp" alt="Formulation"><p align="center"><sub>Formulation and solver code kept for every version</sub></p></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/assets/home.png" alt="New problem"><p align="center"><sub>Write the problem; choose method, language and model</sub></p></td>
-    <td width="50%"><img src="docs/assets/run.png" alt="Run result"><p align="center"><sub>The verdict first: objective, modeling process, solution matrix</sub></p></td>
+    <td><img src="docs/assets/revision.webp" alt="Plan comparison after a change"><p align="center"><sub>Change one condition and compare with the original</sub></p></td>
+    <td><img src="docs/assets/conflict.webp" alt="Infeasibility diagnosis"><p align="center"><sub>Infeasible model: the conflict explained, with changes to try</sub></p></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/assets/settings.png" alt="Desktop run settings"><p align="center"><sub>Methods, modeling libraries and models visible together</sub></p></td>
+    <td><img src="docs/assets/pareto.webp" alt="Multi-objective Pareto front"><p align="center"><sub>Multi-objective problem: a Pareto front from AutoCO</sub></p></td>
+    <td><img src="docs/assets/compare.webp" alt="Multi-plan comparison"><p align="center"><sub>Several methods on one problem, side by side</sub></p></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/assets/requirements.png" alt="Requirements conversation and editable draft"><p align="center"><sub>Discuss business requirements, then review the draft before modeling</sub></p></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/data-editor.png" alt="Edit attachment data"><p align="center"><sub>Review cells, column names and units before modeling</sub></p></td>
-    <td><img src="docs/assets/solution-chat.png" alt="Plan conversation"><p align="center"><sub>Discuss actual results; calculate a new plan after changing conditions</sub></p></td>
-  </tr>
-  <tr>
-    <td colspan="2"><img src="docs/assets/scenarios.png" alt="Business scenario comparison"><p align="center"><sub>Compare actual results under different conditions against one saved baseline</sub></p></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/formulation.png" alt="Formulation"><p align="center"><sub>Formulations render as LaTeX; each version can be diffed</sub></p></td>
-    <td><img src="docs/assets/compare.png" alt="Comparison"><p align="center"><sub>Five methods on one problem</sub></p></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/conflict.png" alt="Infeasibility diagnosis"><p align="center"><sub>Infeasible model: Gurobi IIS finds 3 conflicting constraints</sub></p></td>
-    <td><img src="docs/assets/dark-en.png" alt="Dark mode in English"><p align="center"><sub>Dark mode and the English interface</sub></p></td>
+    <td><img src="docs/assets/requirements.webp" alt="Requirements assistant"><p align="center"><sub>The requirements assistant drafts as you talk</sub></p></td>
+    <td><img src="docs/assets/data-editor.webp" alt="Data editor"><p align="center"><sub>Review and edit data before modeling</sub></p></td>
   </tr>
 </table>
 
+See the [user guide](docs/user-guide.md) and the [online docs](https://fangziyang0910.github.io/LLM4OM/docs/en/introduction/) for more.
+
 ## Quick start
-
-### Use the current model in Codex / Claude Code
-
-Install with Node.js 22.20+ and Git. Select your agent when prompted. To run the skill, the agent needs shell and workspace access, [uv](https://docs.astral.sh/uv/getting-started/installation/), and a running Docker engine.
-
-```bash
-npx skills add Fangziyang0910/LLM4OM --skill llm4om -g
-```
-
-Open a new session, invoke `$llm4om` in Codex or `/llm4om` in Claude Code, then describe your problem and attach your data. Your current model formulates the problem and explains the solution. The skill downloads its pinned runtime on first use and builds and reuses the Docker solver image on demand. No separate LLM4OM CLI, model API key, or Web service is required.
-
-For a worked example, session recovery, and upgrades, see the [host modeling guide](docs/host-modeling.md).
 
 ### Option 1: Docker (recommended)
 
@@ -134,9 +100,21 @@ uv run llm4om serve --workspace runs/web --port 8767
 
 The repository includes the built frontend, so Node.js is not needed. Solver dependencies run inside the Docker Worker; the host only needs the Web dependencies, without installing every commercial or platform-specific solver locally.
 
+### Option 3: use it in Codex / Claude Code
+
+Install with Node.js 22.20+ and Git. Select your agent when prompted. To run the skill, the agent needs shell and workspace access, [uv](https://docs.astral.sh/uv/getting-started/installation/), and a running Docker engine.
+
+```bash
+npx skills add Fangziyang0910/LLM4OM --skill llm4om -g
+```
+
+Open a new session, invoke `$llm4om` in Codex or `/llm4om` in Claude Code, then describe your problem and attach your data. Your current model formulates the problem and explains the solution. The skill downloads its pinned runtime on first use and builds and reuses the Docker solver image on demand. No separate LLM4OM CLI, model API key, or Web service is required.
+
+For a worked example, session recovery, and upgrades, see the [host modeling guide](docs/host-modeling.md).
+
 ### Try a problem
 
-Send a problem to the modeling assistant on the home page (`/`), or open **Multi-plan comparison** in the sidebar (`/model`) to follow this example.
+Send a problem to the modeling assistant on the home page (`/`), or open **Manual modeling** in the sidebar (`/model`) to follow this example.
 
 1. If `.env` sets no model, click **AI model** at the bottom left and add a provider, key and model ID.
 2. Click the **Production planning** example, or enter:
@@ -148,7 +126,7 @@ Send a problem to the modeling assistant on the home page (`/`), or open **Multi
 
 Click an uploaded file name to inspect or edit the data before solving. You can export a feasible solution to Excel. For an infeasible model or a failed run, use the result page to ask about conflicting requirements or the cause of the failure.
 
-To prepare a separate requirements draft, open **Multi-plan comparison** in the sidebar and click **Discuss your requirements**. The assistant updates an editable draft as you talk. Add data and review the text, then click **Apply to Quick Solve** to return to the editor. Choose **Single run** and click **Solve Now** to start modeling. Saved conversations can be continued from history. Press Enter to send, or Shift+Enter for a new line. Enable **Web search** to find public references and inspect their sources. DeepSeek presets use their own search endpoint; other models can use a separate server-side search key (see `.env.example`).
+To prepare a separate requirements draft, open **Manual modeling** in the sidebar and click **Discuss your requirements**. The assistant updates an editable draft as you talk. Add data and review the text, then click **Apply to Manual modeling** to return to the editor. Choose **Single run** and click **Solve Now** to start modeling. Saved conversations can be continued from history. Press Enter to send, or Shift+Enter for a new line. Enable **Web search** to find public references and inspect their sources. DeepSeek presets use their own search endpoint; other models can use a separate server-side search key (see `.env.example`).
 
 You can also run from the command line or Python:
 

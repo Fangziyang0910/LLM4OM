@@ -33,9 +33,9 @@ flowchart TB
 
 The preset assigns main 3, infeasibility 1 and recheck 2 attempts. Repairs use copied conversations; only the final code returns to the main conversation. Read each round together with its actual execution record.
 
-## Difference from Chat Agent
+## Difference from Optimization chat
 
-“Agent” here names a fixed modeling method. [Chat Agent](../chat-agent/) is the user-facing optimization conversation. It can call Direct, TriVAL or other methods and handles explanations, plan selection and scenarios. You can request OR-LLM-Agent as the modeling method within Optimization chat.
+“Agent” here names a fixed modeling method. [Optimization chat](../chat-agent/) is the user-facing conversation. It can call Direct, TriVAL or other methods and handles explanations, plan selection and scenarios. You can request OR-LLM-Agent as the modeling method within Optimization chat.
 
 ## When to use it and what to inspect
 

@@ -2,7 +2,9 @@ An infeasible result means the current requirements cannot hold together in the 
 
 ## Where to inspect it
 
-Open “Solution” and “Why infeasible.” Expand the referenced constraints to inspect the expressions or bounds behind an explanation. Formulation and code remain in adjacent tabs.
+After the run, the Solve result tab shows “Why No Feasible Plan Exists.” Expand “Inspect conflicting constraints” to see the expressions or bounds behind the explanation. Formulation and code remain in adjacent tabs.
+
+![Infeasibility diagnosis: the conflict in business terms, with suggested changes to try](../../../assets/screens/en/conflict-light.webp)
 
 Linear-model diagnosis uses Gurobi IIS. Original evidence is retained for tracing business rules to mathematical expressions.
 

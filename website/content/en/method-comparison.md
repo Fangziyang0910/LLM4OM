@@ -1,10 +1,12 @@
 Method and LLM comparison runs one problem with several configurations and aligns results and usage. Use it to inspect how workflows handle your task and how changing the LLM preset affects the process.
 
-## Start from run settings
+## Start from manual modeling
 
-Enable “Compare,” select methods or presets, and choose a shared library/backend. Up to 12 runs can start together. After confirming inputs, open the comparison page to follow progress.
+On the Manual modeling page, switch to “Multi-plan comparison” (or turn it on in “Solving Preferences & Advanced Settings”), select methods or presets, and choose a shared library/backend. Up to 12 runs can start together. After confirming inputs, open the comparison page to follow progress.
 
 Try Direct, LLMOPT and TriVAL with one preset, or hold the method fixed and select two presets. Each row opens its complete run.
+
+![Multi-plan comparison: one problem solved by three methods, all reaching 13](../../../assets/screens/en/compare-light.webp)
 
 ## Reading the table
 

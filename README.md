@@ -16,6 +16,7 @@
 <p align="center">
   <b>中文</b> · <a href="README.en.md">English</a>
   <br>
+  <a href="https://fangziyang0910.github.io/LLM4OM/?lang=zh">官网</a> ·
   <a href="https://fangziyang0910.github.io/LLM4OM/docs/zh/introduction/">在线文档</a> ·
   <a href="#快速开始">快速开始</a> ·
   <a href="#建模方法">建模方法</a> ·
@@ -27,88 +28,50 @@
 
 ---
 
-**通用智能优化求解器**（General Intelligent Optimization Solver）是一个求解各种复杂优化问题的通用求解器。面向生产排程、供应链规划、车辆路径、资源配置、网络流与非线性规划等各类复杂优化场景，你可以在工作台直接配置运行，也可以与优化助手对话、上传业务数据，由 Agent 调用完整建模方法，自动构建数学模型和求解代码，并在隔离容器中计算最优解。实际步骤、模型、代码和结果可在旁边的建模工作区随时核对，也可以继续对话调整约束条件。
-
-平台内置 **9 种智能建模策略**：8 种精确建模流程与 AutoCO 智能优化引擎，配合 **5 种建模求解库**。你不需要手写求解代码，可以直接输入复杂优化问题、运行建模求解，再查看可核对的模型和结果。
+**通用智能优化求解器**（General Intelligent Optimization Solver）把业务问题变成可以核对的优化方案。用日常语言描述生产、排班、运输、选址等问题并附上数据表格，平台生成数学模型和求解代码，在隔离的 Docker 容器中调用真实求解器计算，再用业务语言解释结果。模型、代码、求解日志和完整变量都保存在运行记录里。
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="演示：普通对话、计算与 Agent 建模工作区" width="100%">
-  <br><sub>真实运行（界面更新前录制）：从普通对话和计算切换到生产建模，使用 DeepSeek · Direct · Pyomo 求解，再修改条件并切回原方案。</sub>
+  <img src="docs/assets/agent.webp" alt="优化对话：左侧是对话和结果卡片，右侧是实际求解的完整方案" width="100%">
+  <br><sub>优化对话：描述一个运输问题，助手建模并调用 HiGHS 求解，右侧显示完整方案。截图来自真实运行（DeepSeek · Direct · Pyomo）。</sub>
 </p>
 
-## 亮点
+## 主要功能
 
-| 能力 | 说明 |
-|---|---|
-| 💬 **对话完成建模** | 从想法沟通到首次求解、结果讨论和条件调整，在同一个 Agent 中完成；可直接指定方法和建模库，手动配置入口仍保留 |
-| 🧠 **9 种建模策略** | Direct、OR-LLM-Agent、LLMOPT、TriVAL、BIND、AutoCO、OptiTree、Chain-of-Experts、OptiMUS 0.3；每种方法都有独立 LangGraph 图 |
-| 🧩 **5 种建模求解器** | Pyomo、OR-Tools、CVXPY、PySCIPOpt、CasADi；覆盖线性规划、约束规划、路径、网络流、凸锥优化、连续非线性与 MINLP |
-| 📝 **需求对话** | 需求稿保留决策、目标和条件。只有还有具体疑问或冲突时才列出待确认事项；可直接编辑后交给建模方法 |
-| 🔍 **全过程可见** | 每次 LLM 调用实时显示；保留中断前已完成的步骤和产物；历史可分页，运行配置固定记录 |
-| ⚖️ **多方法对比** | 同一问题一次运行最多 12 个方法或模型，并排比较目标值、用时和 token |
-| 💬 **方案解读与条件调整** | 先回答具体安排、选址、数量和费用或收益，再展示实际决策明细；一句话修改条件，重新建模并与原方案对比，保留原运行 |
-| 🔄 **方案对话与业务场景** | 围绕实际结果多轮追问；改条件时显示实际建模进度和结果卡片，多个场景共用固定基准并排比较 |
-| 📊 **建模前检查数据** | 直接编辑 CSV、TSV、JSON 和文本；Excel 转换后可检查表格、补充列名及单位，保存后再建模 |
-| 🧯 **无解原因与调整** | 根据实际冲突约束解释业务矛盾；选择并编辑候选调整，再重新建模验证（Gurobi IIS） |
-| 🔒 **隔离沙箱** | 生成代码在无网络、只读、非 root 的容器中运行，用完即删 |
-| 👥 **团队部署** | 一条 `docker compose up` 启动；预设模型的密钥不出服务器；可选 HTTPS 和用量上限 |
-| 🌗 **好用的工作台** | 导出含业务名称、单位和完整数值的 Excel 方案；备注与标签、Markdown 报告、Excel 导入、2033 道公开题、中英文界面、深色模式 |
-
-工作台默认首页 `/` 提供优化对话；手动建模与方法对比从 `/model` 进入。描述问题或附上数据，助手按需追问，并调用完整建模流程。可通过对话指定方法或建模库；精确建模与 AutoCO 使用各自的求解路径，实际配置保存在运行记录中。计算时展示实际步骤；建模工作区查看数学模型、代码和结果。每个方案独立保存，后续修改保留原方案。对话中的方案展示、链接、导出和条件调整使用固定检查点，线程后续更新不会替换旧方案。两套交互并列提供，共用建模方法与独立运行记录。
-
-Agent 也可以回答普通问题、帮助写作、解释代码、整理资料和计算，不要求每轮都进入建模。讨论结果时，计算工具读取已保存的完整决策值，核对费用、余量和比例。可以直接说“用第二个方案”或“回到原方案”切换后续讨论的基准，无需重新求解；查看历史方案仍只影响浏览。
+- **对话求解**：描述问题或拖入表格，助手按需追问缺少的条件，然后建模、求解并解释结果。结果卡片列出目标值、关键决策，以及实际使用的方法、建模库和求解器。
+- **结果可以核对**：生成的代码在无网络、只读、非 root 的容器中运行，用完即删。数学模型、求解代码、求解日志和完整变量逐版本保留，可导出带业务名称和单位的 Excel 或 Markdown 报告。
+- **调整与比较**：一句话修改条件得到新方案，原方案保留；多个假设从同一基准分别计算并排比较。无解时根据求解器给出的冲突约束（Gurobi IIS）解释原因，并给出待验证的调整建议。
+- **两类求解路径**：线性、整数、凸优化和约束规划问题由 Pyomo、OR-Tools、CVXPY、PySCIPOpt、CasADi 交给 HiGHS、SCIP、CP-SAT、Ipopt 等后端求解；大规模组合、黑盒和多目标问题可交给 AutoCO，从 12 类启发式算法中选择并配置。启发式结果不保证全局最优。
+- **手动建模与方法对比**：在 9 种建模方法、5 个建模库和多个模型预设中自行选择；同一问题一次并排运行最多 12 组，比较目标值、用时和 Token。
+- **数据与需求整理**：建模前检查和编辑 CSV、TSV、JSON、文本和 Excel；需求还不清楚时，先由需求助手整理成可编辑的需求稿。
+- **部署与集成**：Docker Compose 一条命令启动，模型密钥只保存在服务器；同一套流程也可以在命令行、Python 或 Codex / Claude Code 的 Skill 中运行。
+- **场景模板与题库**：8 个可直接求解的行业场景模板，以及 9 组、2033 道公开评测题。界面支持中英文、浅色和深色模式。
 
 ## 截图
 
-优化对话、需求助手和方案助手统一采用左侧对话、右侧需求稿或方案的布局，分栏宽度可拖动调整并在刷新后保留。手机上通过“模型与结果”和“求解步骤”切换视图；点击“对话追问”进入聊天，点击“查看原方案”返回该次求解的结果；需求聊天先“检查需求稿”，再启动建模。查看历史方案不改变后续计算的基准，打开原方案保留其固定版本。运行设置并列展示方法、建模库和模型。
-
-对话界面截图使用脚本化示例和本地求解结果。
+截图来自真实运行：DeepSeek 模型，本地 Docker 求解。
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/assets/agent-home.png" alt="独立优化对话入口"><p align="center"><sub>独立 Agent 入口，从一个问题开始</sub></p></td>
-    <td width="50%"><img src="docs/assets/agent.png" alt="优化 Agent 与建模工作区"><p align="center"><sub>对话完成求解，旁边查看实际模型与结果</sub></p></td>
+    <td width="50%"><img src="docs/assets/run.webp" alt="结果页"><p align="center"><sub>结果页：目标值、方案解读和关键决策</sub></p></td>
+    <td width="50%"><img src="docs/assets/formulation.webp" alt="数学模型"><p align="center"><sub>数学模型与求解代码逐版本保留</sub></p></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/assets/home.png" alt="新建页面"><p align="center"><sub>写问题，选择方法、写法和模型</sub></p></td>
-    <td width="50%"><img src="docs/assets/run.png" alt="运行结果"><p align="center"><sub>结论先行：目标值、建模过程和解的矩阵</sub></p></td>
+    <td><img src="docs/assets/revision.webp" alt="调整条件后的方案对比"><p align="center"><sub>改一个条件，与原方案逐项对比</sub></p></td>
+    <td><img src="docs/assets/conflict.webp" alt="无解诊断"><p align="center"><sub>无解时说明冲突，并给出调整建议</sub></p></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/assets/settings.png" alt="桌面运行设置"><p align="center"><sub>方法、建模库与模型同时可见</sub></p></td>
+    <td><img src="docs/assets/pareto.webp" alt="多目标 Pareto 前沿"><p align="center"><sub>多目标问题：AutoCO 给出 Pareto 前沿</sub></p></td>
+    <td><img src="docs/assets/compare.webp" alt="多方案对比"><p align="center"><sub>同一问题，多种方法并排对比</sub></p></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/assets/requirements.png" alt="需求对话与可编辑需求稿"><p align="center"><sub>聊天整理业务要求，确认需求稿后再建模</sub></p></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/data-editor.png" alt="附件数据编辑"><p align="center"><sub>检查表格、补充列名与单位，再建模</sub></p></td>
-    <td><img src="docs/assets/solution-chat.png" alt="方案对话"><p align="center"><sub>解释实际结果，改变条件后实际计算新方案</sub></p></td>
-  </tr>
-  <tr>
-    <td colspan="2"><img src="docs/assets/scenarios.png" alt="业务场景对比"><p align="center"><sub>同一份原方案，比较不同业务条件下的实际结果</sub></p></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/formulation.png" alt="数学模型"><p align="center"><sub>数学模型用 LaTeX 渲染，每一版都能对比</sub></p></td>
-    <td><img src="docs/assets/compare.png" alt="方法对比"><p align="center"><sub>5 种方法同题对比</sub></p></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/conflict.png" alt="无解解释与候选调整"><p align="center"><sub>把实际冲突解释成业务要求，选择调整后重新求解</sub></p></td>
-    <td><img src="docs/assets/dark-en.png" alt="深色英文界面"><p align="center"><sub>深色模式和英文界面</sub></p></td>
+    <td><img src="docs/assets/requirements.webp" alt="需求助手"><p align="center"><sub>需求助手边聊边整理需求稿</sub></p></td>
+    <td><img src="docs/assets/dark-en.webp" alt="深色英文界面"><p align="center"><sub>英文界面与深色模式</sub></p></td>
   </tr>
 </table>
 
+更多界面见[使用指南](docs/user-guide.md)和[在线文档](https://fangziyang0910.github.io/LLM4OM/docs/zh/introduction/)。
+
 ## 快速开始
-
-### 在 Codex / Claude Code 中使用当前模型
-
-安装时需要 Node.js 22.20+ 和 Git。在安装器中选择你的 Agent。运行 Skill 时，Agent 需要能执行命令、访问工作区，并能使用 [uv](https://docs.astral.sh/uv/getting-started/installation/) 和已启动的 Docker。
-
-```bash
-npx skills add Fangziyang0910/LLM4OM --skill llm4om -g
-```
-
-新开会话，在 Codex 输入 `$llm4om`，或在 Claude Code 输入 `/llm4om`，然后描述问题、附上数据。当前模型负责建模和解读，Skill 首次运行时自动下载固定版本的运行库，求解时按需构建并复用 Docker 镜像。无需单独安装 LLM4OM CLI、配置模型 API Key 或启动 Web 服务。
-
-完整求解示例、会话恢复与升级见[宿主建模指南](docs/host-modeling.md)。
 
 ### 方式一：Docker（推荐）
 
@@ -134,9 +97,21 @@ uv run llm4om serve --workspace runs/web --port 8767
 
 仓库已包含前端构建文件，不需要 Node.js。求解依赖安装在 Docker Worker 中，宿主机只需安装 Web 依赖；不必在本机安装全部商业或平台限定的求解器。
 
+### 方式三：在 Codex / Claude Code 中使用
+
+安装时需要 Node.js 22.20+ 和 Git。在安装器中选择你的 Agent。运行 Skill 时，Agent 需要能执行命令、访问工作区，并能使用 [uv](https://docs.astral.sh/uv/getting-started/installation/) 和已启动的 Docker。
+
+```bash
+npx skills add Fangziyang0910/LLM4OM --skill llm4om -g
+```
+
+新开会话，在 Codex 输入 `$llm4om`，或在 Claude Code 输入 `/llm4om`，然后描述问题、附上数据。当前模型负责建模和解读，Skill 首次运行时自动下载固定版本的运行库，求解时按需构建并复用 Docker 镜像。无需单独安装 LLM4OM CLI、配置模型 API Key 或启动 Web 服务。
+
+完整求解示例、会话恢复与升级见[宿主建模指南](docs/host-modeling.md)。
+
 ### 试一个问题
 
-在首页 `/` 可以直接把问题发给建模助手。要跟着下面的例子操作，请打开侧栏的“多方案对比”（`/model`）。
+在首页 `/` 可以直接把问题发给建模助手。要跟着下面的例子操作，请打开侧栏的“手动建模”（`/model`）。
 
 1. 没有在 `.env` 中设置模型时，点击左下角“AI 模型”，添加服务商、密钥和模型 ID。
 2. 点击“生产计划”例子，或输入：
@@ -148,7 +123,7 @@ uv run llm4om serve --workspace runs/web --port 8767
 
 有附件时，可点击文件名检查或编辑数据，再提交求解。已有可行解可导出 Excel；遇到无解或运行失败，可在结果页追问冲突条件或失败原因。
 
-需要单独整理需求稿时，从侧栏打开“多方案对比”，点击“通过对话整理需求”。助手会边聊边整理需求稿；你可以修改文本、附上数据，再点击“带入快速求解”回到编辑页。选择“单次求解”，点击“立即求解”启动建模。对话可从历史记录继续。Enter 发送，Shift+Enter 换行；可打开“联网搜索”查阅公开资料并核对来源。DeepSeek 预设直接使用自身搜索接口，其他模型可配合服务端独立搜索密钥（见 `.env.example`）。
+需要单独整理需求稿时，从侧栏打开“手动建模”，点击“通过对话整理需求”。助手会边聊边整理需求稿；你可以修改文本、附上数据，再点击“带入手动建模”回到编辑页。选择“单次求解”，点击“立即求解”启动建模。对话可从历史记录继续。Enter 发送，Shift+Enter 换行；可打开“联网搜索”查阅公开资料并核对来源。DeepSeek 预设直接使用自身搜索接口，其他模型可配合服务端独立搜索密钥（见 `.env.example`）。
 
 也可以在命令行或 Python 中运行：
 

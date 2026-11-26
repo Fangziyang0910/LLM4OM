@@ -10,8 +10,9 @@
 <rect width="1280" height="372" rx="24" fill="url(#bg)"/><rect width="1280" height="372" rx="24" fill="url(#dots)" opacity="0.7"/><rect width="1280" height="372" rx="24" fill="url(#glow)"/>
 <g transform="translate(64,92)">
   <rect width="76" height="76" rx="20" fill="url(#brand)"/>
-  <g transform="translate(14,14) scale(2)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16c.5-2 1.5-7 4-7 2 0 2 3 4 3 2.5 0 4.5-5 5-7"/>
+  <g transform="scale(3.1667)">
+    <path d="M4.5 15 8 6.5l9.5-1.2L19.5 13 11 19z" fill="#fff" fill-opacity=".28" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
+    <circle cx="17.5" cy="5.3" r="2.4" fill="#fff"/>
   </g>
   <text x="100" y="54" font-family="Inter, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" font-size="48" font-weight="800" fill="#14112b" letter-spacing="-1">通用智能优化求解器</text>
 </g>

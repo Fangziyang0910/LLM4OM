@@ -1,14 +1,16 @@
-General Intelligent Optimization Solver is a natural-language-driven **dual-engine optimization platform (Exact Solvers × AutoCO Metaheuristics)**. Describe your business goals and drop spreadsheets — the platform automatically routes between **5 exact mathematical modeling frameworks** and **AutoCO's 12-family metaheuristic pool**, running inside an isolated sandbox to return computed solutions and multi-objective Pareto fronts.
+General Intelligent Optimization Solver turns a business problem into an optimization plan you can check line by line. Describe goals and constraints in plain language and attach your spreadsheets. The platform writes a mathematical model and solver code, runs a real solver in an isolated Docker environment, and explains the result in business terms.
+
+Linear, integer and other mathematical programs go through modeling libraries such as Pyomo and OR-Tools to solvers such as HiGHS, SCIP and CP-SAT. Large combinatorial problems and multi-objective trade-offs can use the heuristic search in [AutoCO](../autoco/). Every plan keeps its problem statement, data, model, code and solver record.
 
 ## Choose an entry point
 
 | Entry | Starting point | Next actions |
 |---|---|---|
-| [Optimization chat](../chat-agent/) (default `/` workbench) | Send a plain-language problem or drop Excel/CSV | Zero-config dual-engine routing, side-by-side Pareto/plan analysis, follow-up revisions and scenarios |
-| [Multi-strategy comparison & manual setup](../run-settings/) (`/model`) | Prepared statement needing explicit strategy control | Switch across all 9 methods, 5 modeling libraries and solvers, or benchmark up to 12 runs side by side |
-| [Requirements assistant](../requirements/) | A developing business idea | Structure a clear problem statement and attachments before solving |
+| [Optimization chat](../chat-agent/) (home page `/`) | Describe the problem or drop in Excel/CSV | The assistant models and solves it; read the explanation, ask follow-ups, change conditions or compare scenarios |
+| [Manual modeling](../run-settings/) (`/model`) | A clear problem statement and a method, library and model you want to choose yourself | Pick from 9 modeling methods, 5 modeling libraries and several solvers; “Multi-plan comparison” runs up to 12 side by side |
+| [Requirements assistant](../requirements/) | A business idea still taking shape | Turn the conversation into an editable requirements draft, then apply it to manual modeling |
 
-![General Intelligent Optimization Solver workbench: conversational planning and interactive Pareto front](../../../assets/screens/live/pareto-light.png)
+![Optimization chat: describe the problem on the left, review the computed plan on the right](../../../assets/screens/en/agent-light.webp)
 
 ## Start here
 
@@ -48,9 +50,9 @@ AutoCO returns the heuristic results and Pareto candidates found within its sear
 
 ## Understand modeling and computation
 
-[Methods](../methods/) covers **14 workflows**: Direct, OR-LLM-Agent, LLMOPT, TriVAL and BIND, the **[AutoCO metaheuristic engine](../autoco/)** for large combinatorial and multi-objective Pareto tasks, plus OptiMUS, CoE and OptiTree — each with mechanisms, Mermaid diagrams, interactive step-by-step walkthroughs and live preset parameters.
+[Methods](../methods/) covers 9 modeling methods: Direct, OR-LLM-Agent, LLMOPT, TriVAL and BIND, [AutoCO](../autoco/) for large combinatorial and multi-objective tasks, plus OptiMUS, CoE and OptiTree. Each page explains the mechanism and includes a Mermaid diagram, a step-by-step walkthrough and the current parameters.
 
-[Libraries and solvers](../solvers/) covers **5 exact modeling libraries** (Pyomo, OR-Tools, CVXPY, PySCIPOpt, CasADi), native interfaces, backend compatibility and complete runnable examples.
+[Libraries and solvers](../solvers/) covers 5 modeling libraries (Pyomo, OR-Tools, CVXPY, PySCIPOpt, CasADi), native interfaces, backend compatibility and complete runnable examples.
 
 ## Watch and interact
 

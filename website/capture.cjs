@@ -57,12 +57,12 @@ async function ready(url) {
       const problem = en
         ? "Production plan for products A and B\nProduce nonnegative integer quantities. Profit is CNY 3 per A and CNY 2 per B. Each A uses 2 cutting units and 1 processing unit; each B uses 1 cutting unit and 2 processing units. Each resource has 8 units. Maximize total profit."
         : "A、B 两种产品的生产计划\n产量均为非负整数。A 每件利润 3 元，B 每件利润 2 元。每件 A 使用切割资源 2 单位、加工资源 1 单位；每件 B 使用切割资源 1 单位、加工资源 2 单位。两种资源各有 8 单位，求总利润最高的生产安排。";
-      await page.goto(base);
-      mark("填写生产需求，开始自动建模。", "Enter a production problem and start modeling.");
+      await page.goto(`${base}/model`);
+      mark("在手动建模页填写生产需求并求解。", "Enter a production problem in manual modeling and solve it.");
       assert.equal(await page.locator("html").evaluate(node => node.classList.contains("dark")), theme === "dark");
       await page.getByLabel(en ? "Problem description" : "问题描述", { exact: true }).fill(problem);
       await pauses(1400);
-      await page.getByRole("button", { name: en ? /^Start modeling/ : /^开始建模/ }).click();
+      await page.getByRole("button", { name: en ? /^Solve Now/ : /^立即求解/ }).click();
       await page.waitForURL(/\/run\//);
       await page.getByRole("button", { name: en ? "Export Excel" : "导出 Excel", exact: true }).waitFor({ timeout: 60000 });
       const run = await (await page.request.get(`${base}/threads/${page.url().split("/").at(-1)}`)).json();
@@ -73,7 +73,7 @@ async function ready(url) {
       if (en) assert.doesNotMatch(await page.locator("body").innerText(), /[\u3400-\u9fff]/);
       const planBox = await page.getByRole("main").boundingBox();
       await page.screenshot({ path: path.join(output, `plan${suffix}.png`), clip: { x: planBox.x, y: 0, width: planBox.width, height: 625 } });
-      await page.getByRole("button", { name: en ? "Business scenario comparison" : "业务场景对比", exact: true }).click();
+      await page.getByRole("button", { name: en ? "Compare Scenarios" : "多场景对比", exact: true }).click();
       for (const [i, amount] of [3, 4].entries()) {
         await page.getByLabel(en ? `Scenario ${i + 1} name` : `场景 ${i + 1} 名称`, { exact: true }).fill(en ? `At least ${amount} of B` : `B 至少生产 ${amount} 件`);
         await page.getByLabel(en ? `Scenario ${i + 1} changes` : `场景 ${i + 1} 调整要求`, { exact: true }).fill(en ? `Make at least ${amount} units of B, keeping all other conditions unchanged.` : `B 至少生产 ${amount} 件，其他条件保持不变。`);
@@ -82,17 +82,14 @@ async function ready(url) {
       await pauses(2000);
       await page.getByRole("button", { name: en ? "Calculate and compare" : "计算并对比", exact: true }).click();
       await page.waitForURL(/\/compare\//);
-      await page.getByRole("heading", { name: en ? "Key decisions compared" : "关键决策对比", exact: true }).waitFor({ timeout: 60000 });
+      await page.getByRole("heading", { name: en ? "Key Decisions Side by Side" : "关键决策横向对比", exact: true }).waitFor({ timeout: 60000 });
       await page.waitForFunction(() => !document.body.innerText.includes("…"));
       await expect(page.getByRole("row").filter({ hasText: en ? "At least 3 of B" : "B 至少生产 3 件" }).first()).toContainText("12", { timeout: 30000 });
       await expect(page.getByRole("row").filter({ hasText: en ? "At least 4 of B" : "B 至少生产 4 件" }).first()).toContainText("8", { timeout: 30000 });
       mark("同一基准下对比：原方案利润 13，两个场景分别为 12 和 8。", "Compare from one baseline: original profit 13; scenario profits 12 and 8.");
       await pauses(3000);
       if (en) assert.doesNotMatch(await page.locator("body").innerText(), /[\u3400-\u9fff]/);
-      const scenarioBox = await page.getByRole("main").boundingBox();
-      const tableBox = await page.getByRole("table").first().boundingBox();
-      await page.screenshot({ path: path.join(output, `scenarios${suffix}.png`), clip: { x: scenarioBox.x, y: 0, width: scenarioBox.width, height: tableBox.y + tableBox.height + 26 } });
-      await page.goto(base);
+      await page.goto(`${base}/model`);
       const filename = en ? "production.csv" : "生产数据.csv";
       const data = en ? "Product,Profit (CNY),Cutting units,Processing units\nA,3,2,1\nB,2,1,2\n" : "产品,单件利润（元）,切割资源（单位）,加工资源（单位）\nA,3,2,1\nB,2,1,2\n";
       await page.getByLabel(en ? "Problem description" : "问题描述", { exact: true }).fill(problem);
@@ -101,8 +98,6 @@ async function ready(url) {
       await page.getByRole("dialog").waitFor();
       mark("打开附件，检查字段和数据。", "Open an attachment and inspect its fields and values.");
       if (en) assert.doesNotMatch(await page.locator("body").innerText(), /[\u3400-\u9fff]/);
-      const dataBox = await page.getByRole("dialog").boundingBox();
-      await page.screenshot({ path: path.join(output, `data${suffix}.png`), clip: { x: dataBox.x - 18, y: dataBox.y - 18, width: dataBox.width + 36, height: dataBox.height + 36 } });
       await pauses(1800);
       await page.getByLabel(en ? "Row 1, column 2" : "第 1 行，第 2 列", { exact: true }).fill("4");
       mark("修改 A 的单件利润并保存到需求稿。", "Edit A's unit profit and save the attachment to the draft.");

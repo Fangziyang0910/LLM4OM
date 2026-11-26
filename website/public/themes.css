@@ -11,7 +11,7 @@
 html[data-theme="light"] { color-scheme: light; --bg: #faf9fc; --surface: #fff; --raised: #f0edf6; --text: #241d31; --muted: #625970; --line: #dcd5e6; --accent: #6044ae; --mint: #267a5e; --soft: #f4f0fa; --strong-line: #b9a6d4; }
 html[data-theme="light"] input[type="range"] { accent-color: var(--accent); }
 html[data-theme="light"] .site-header { background: rgb(250 249 252 / 93%); border-color: var(--line); }
-html[data-theme="light"] :is(.main-nav,.hero-description,.demo-badge,.demo-caption,.speaker,.attachment,.follow-up-label,.resource-control,.resource-control > span,.day-heading,.plot-note,.route-labels,.route-summary,.model-data,.plan-footer p,.feature-caption p,.usage-steps p,.faq-list p,.start-inner p:not(.eyebrow),.team-brand,.footer-inner > div) { color: var(--muted); }
+html[data-theme="light"] :is(.main-nav,.hero-description,.demo-badge,.demo-caption,.speaker,.attachment,.follow-up-label,.resource-control,.resource-control > span,.day-heading,.plot-note,.route-labels,.route-summary,.model-data,.plan-footer p,.feature-caption p,.usage-steps p,.faq-list p,.start-inner p:not(.eyebrow),.team-brand,.footer-column,.footer-bottom) { color: var(--muted); }
 html[data-theme="light"] :is(.docs-entry,.text-link,.case-tabs button[aria-selected="true"],.case-tabs button:hover,.question-block p,.plan-tabs button[aria-selected="true"],.metric > strong,.bar-label,.model-content pre,.model-content > p,.faq-list summary,.feature-tabs button[aria-selected="true"]) { color: var(--text); }
 html[data-theme="light"] .button-small { background: var(--text); color: #fff; }
 html[data-theme="light"] .button-outline { background: var(--surface); border-color: var(--line); color: var(--text); }

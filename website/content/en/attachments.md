@@ -47,7 +47,7 @@ flowchart TB
 
 ## Watch the actual workflow
 
-![English data editor](../../../assets/screens/en/data.png)
+![Data editor: check fields and values, then save changes to the current problem](../../../assets/screens/en/data-light.webp)
 
 Choose “Edit data” below the recording to jump to opening an attachment, editing unit profit and saving it. See [quickstart](../quickstart/) for the complete workflow.
 

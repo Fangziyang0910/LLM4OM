@@ -1,18 +1,18 @@
-The run page brings the plan, formulation, code and process together. Start with status and objective, then read the explanation, inspect complete variables or export the result.
+The result page brings the plan, formulation, code and solving process together. The top shows the objective, solver status and number of decision variables; below it you can read the explanation, inspect every variable or export the result.
 
 ## Navigate from summary to detail
 
 | Area | Content | Action |
 |---|---|---|
-| Summary | Status, objective or failure | Jump to formulation or solution |
-| Plan explanation | Business labels, units and key rules | Understand main decisions |
-| Solution | Groups, lists and two-index matrices | Filter values and download CSV |
+| Summary | Objective, status and decision count; an objective trend when solved several times | Change conditions, Compare Scenarios, Ask Follow-up |
+| Solve result | Plan explanation and key decision table | Understand the main decisions |
+| Raw variables and solver log | Groups, lists, two-index matrices and the solver log (collapsed) | Filter values and download CSV |
+| Problem and data | Saved statement and attachments | Review the input snapshot |
 | Formulation | Mathematical expressions | Read versions and differences |
 | Code | Native-library implementation | Inspect variables, objective and rules |
-| Problem and data | Saved statement and attachments | Review input snapshot |
-| Process | Stage calls and feedback | Inspect artifacts, errors and revisions |
+| Solving Steps | Stage calls, artifacts and feedback | Inspect artifacts, errors and revisions |
 
-![Computed production plan](../../../assets/screens/en/plan.png)
+![Result page for the production example: total profit and status at the top, the plan explanation and key decisions below](../../../assets/screens/en/plan-light.webp)
 
 ## Read a concrete result
 
@@ -22,7 +22,7 @@ Two-index variables form matrices, useful for employee-by-day or warehouse-by-st
 
 For multi-objective runs solved with [AutoCO](../autoco/) (`NSGA-II`, `MOEA/D`, or `NSGA-III`), the results view renders an **interactive Pareto front scatter plot** highlighting the recommended **Knee Point**. Click any point on the chart or row in the table to inspect its decoded decisions and export them.
 
-![Interactive multi-objective Pareto front and decision breakdown](../../../assets/screens/live/pareto-light.png)
+![Pareto front for multi-objective GPU scheduling: select any plan to see its assignment](../../../assets/screens/en/pareto-light.webp)
 
 ## Choose an export
 
@@ -37,13 +37,13 @@ For multi-objective runs solved with [AutoCO](../autoco/) (`NSGA-II`, `MOEA/D`, 
 
 ## Explanation and complete values
 
-The run preset produces labels, units and short explanations; numerical cells read solver values. Explanations use up to 100 nonzero variables. Use the full-variable panel and exports for all data. Explanation language follows the interface at run start.
+The run preset produces labels, units and short explanations; numerical cells read solver values. With up to 100 variables the explanation reads all of them, zeros included; larger results are shortened. Use “Raw variables and solver log” and the exports for all data. Explanation language follows the interface at run start.
 
-“Run information” shows preset, method, actual backend, time and usage. Find intermediate model executions and feedback in the process view.
+“Run details” under the title shows the preset, method, actual backend, time and usage. To inspect an intermediate model, open “Solving Steps” at the top right.
 
 ## Continue from a result
 
-“Revise requirements” creates a new plan and comparison. “Business scenarios” computes alternatives from the current plan. “Discuss plan” opens the assistant beside the result. Query a schedule first, then request changed conditions.
+“Change conditions” creates a new plan and comparison. “Compare Scenarios” computes alternatives from the current plan. “Ask Follow-up” opens the assistant beside the result. Query a schedule first, then request changed conditions.
 
 Drag or keyboard-adjust dividers to resize process and assistant panels. Closing a side panel returns the main area to full width.
 

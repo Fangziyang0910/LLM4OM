@@ -28,6 +28,7 @@ addEventListener("hashchange", syncLanguageAnchor);
     wbLink.href = `${location.protocol}//${host}:8767/`;
     wbLink.target = "_blank";
     wbLink.rel = "noopener noreferrer";
+    wbLink.querySelector("span").textContent = wbLink.dataset.liveLabel;
   }
 })();
 

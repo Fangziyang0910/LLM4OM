@@ -90,8 +90,9 @@ def banner(c: dict[str, str]) -> str:
 {background(1280, 372)}
 <g transform="translate(64,92)">
   <rect width="76" height="76" rx="20" fill="url(#brand)"/>
-  <g transform="translate(14,14) scale(2)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16c.5-2 1.5-7 4-7 2 0 2 3 4 3 2.5 0 4.5-5 5-7"/>
+  <g transform="scale(3.1667)">
+    <path d="M4.5 15 8 6.5l9.5-1.2L19.5 13 11 19z" fill="#fff" fill-opacity=".28" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
+    <circle cx="17.5" cy="5.3" r="2.4" fill="#fff"/>
   </g>
   {title}
 </g>

@@ -11,3 +11,5 @@ The second iteration responds to the user's explicit review: replace mismatched 
 The user then authorized GitHub deployment and explicitly approved changing the existing LLM4OM repository to public. Use that repository's separate gh-pages branch for the static site.
 
 The user explicitly requested a complete bilingual Docs section covering features, methods, Chat Agent and solvers, preserving the current website style, and authorized deployment when complete. Extend the established direction directly. No style-selection or publication confirmation is needed.
+
+The user later asked to bring the product site and docs up to a mature-product standard (“相关的产品介绍页面以及文档都帮我按照成熟产品的思路来搞好”). This iteration keeps the interactive demo and the light/dark/system themes, aligns the logo and colors with the redesigned workbench, removes unsourced metrics and the benchmark table, gives each feature section one real full-window screenshot from model runs, and adds the compatible-tools strip, scenario templates, an install section with commands, FAQ and a multi-column footer. The Docs use the same screenshots and a recording re-made on the current interface.

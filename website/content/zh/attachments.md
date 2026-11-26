@@ -47,7 +47,7 @@ flowchart TB
 
 ## 查看实际操作
 
-![中文数据编辑器](../../../assets/screens/zh/data.png)
+![数据编辑器：检查字段和数值，修改后保存到当前问题](../../../assets/screens/zh/data-light.webp)
 
 点击录屏下方的“编辑数据”，直接观看打开附件、修改单件利润并保存的操作。完整流程见[快速开始](../quickstart/)。
 

@@ -33,13 +33,13 @@ For production/transport LP/MILP, start with compatible Pyomo backends. Inspect 
 | Multi-objective or large combinatorial task | [AutoCO](../autoco/) | Built-in 12-family metaheuristic pool | KG algorithm selection, pilot trials and Pareto front |
 | Large JSON/CSV | BIND | Pyomo or another compatible library / AUTO | Schema and data-reading code |
 
-![Settings panel showing modeling strategies, LLM presets and solver backends](../../../assets/screens/live/compare-light.png)
+![Solving preferences and advanced settings: modeling methods, AI models, solver engine and time limit](../../../assets/screens/en/settings-light.webp)
 
 The settings modal places the **6 primary strategies** (Direct, OR-LLM-Agent, LLMOPT, TriVAL, BIND, AutoCO) upfront, with the remaining 3 research methods expandable on demand. Each method article lists current preset parameters, which are saved with every run.
 
 ## Start and follow progress
 
-After attachments finish reading, click “Start modeling” or press Ctrl+Enter / Cmd+Enter. The run page displays stages and artifacts. Execution takes place on the server; reopen the link to see progress.
+After attachments finish reading, click “Solve Now” (“Compare” when Multi-plan comparison is on) or press Ctrl+Enter / Cmd+Enter. The run page displays stages and artifacts. Execution takes place on the server; reopen the link to see progress.
 
 Completed runs show status and objective. “Run information” includes actual preset, backend, elapsed time and usage. “Modeling process” expands the stages that used those settings.
 

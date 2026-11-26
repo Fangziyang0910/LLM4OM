@@ -15,7 +15,7 @@ original_reply = fixture.reply
 
 def reply(messages: list[dict], tools: list[dict]) -> str | dict:
     system = messages[0]["content"]
-    if "Explain a computed optimization solution" in system:
+    if "Answer the person who asked the original question" in system:
         english = "in English" in system
         facts = json.loads(messages[-1]["content"])
         return json.dumps({

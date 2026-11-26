@@ -1,11 +1,13 @@
-“Revise requirements” prepares a changed problem from a saved plan and runs the original modeling configuration again. Both plans are retained, with differences in problem text, objective and decisions.
+“Change conditions” prepares a changed problem from a saved plan and runs the original modeling configuration again. Both plans are retained, with differences in problem text, objective and decisions.
 
 ## Make one revision
 
-1. Open the original result and choose “Revise requirements.”
+1. Open the original result and choose “Change conditions” at the top.
 2. Enter a specific change, such as “Require B≥3; keep everything else.”
 3. Generate the new plan and follow preparation, modeling and solving.
 4. Open the plan comparison for objective, variables and text differences.
+
+![Plan comparison after a change: W2 supply cut to 130 tons, total shipping cost from 1,360 to 1,420](../../../assets/screens/en/revision-light.webp)
 
 For a complete rewrite, use “More → Edit and run” to return inputs and settings to the editor.
 
@@ -50,6 +52,6 @@ Name the object, rule and new value. For changed costs or capacities, edit and s
 
 ## Read differences and retain the baseline
 
-Comparison uses the original checkpoint saved when revision starts. It aligns objectives and same-named variables; renamed variables appear as additions/removals. Expand text differences to inspect the changed requirements.
+Comparison uses the original checkpoint saved when revision starts. It shows both objectives and the matching decisions. Decisions align by variable name and index, so `A` and `x[A]` count as one item when the index matches uniquely; anything that cannot be matched appears as added or removed. Expand text differences to inspect the changed requirements.
 
 Original, revised run and comparison remain available in history. Use [scenarios](../scenarios/) for multiple alternatives or [plan conversation](../plan-chat/) to combine queries and revisions.

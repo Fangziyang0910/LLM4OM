@@ -1,14 +1,23 @@
-Homepage examples introduce the workflow; public problem collections expose different statements and structures. Load a problem into the editor, then run it with your configuration.
+The Scenario Library in the sidebar holds two kinds of problems: scenario templates to start from common business questions, and public benchmarks to browse different statements and model structures. “Browse more scenario templates” below the home-page examples opens the same library.
 
-## Three introductory tasks
+![Scenario Library: pick a template by industry or browse the public benchmarks](../../../assets/screens/en/templates-light.webp)
 
-| Example | Decision | Changes to try |
+## Scenario templates
+
+Each template is a complete business description with its data in the text. Choose “Use template” to solve it as is, or change the numbers to your own first.
+
+| Template | Industry | Decision |
 |---|---|---|
-| Production | Quantities per product | Hours and minimum orders |
-| Staffing | Employee-by-day assignments | Availability and coverage |
-| Delivery assignment | Vehicle-to-store matching | Disable a route or change costs |
+| Production planning | Manufacturing | Product quantities within equipment and process limits, for maximum profit |
+| Multi-period production and inventory | Inventory planning | Monthly output for six months, balancing setup, production and holding costs |
+| Transportation | Logistics | Shipments from three warehouses to four customers at the lowest freight cost |
+| Vehicle routing | Logistics | Routes for two capacity-limited trucks serving six customers, shortest total distance |
+| Warehouse location | Facility location | Which of four candidate warehouses to build and who supplies whom, lowest build plus freight cost |
+| Store shifts | Staff scheduling | Five-days-on, two-off shifts that cover daily demand with the fewest hires |
+| Portfolio allocation | Finance | Weights for four asset classes that meet a target return with the lowest risk |
+| Multi-objective GPU scheduling | Compute scheduling | Twelve training jobs on four clusters, trading power cost against failure risk |
 
-The homepage provides three interactive fixed cases. [Quickstart](../quickstart/) includes the production statement, recording and data. [OR-Tools](../ortools/) supplies staffing code.
+The interactive demo on the product home page covers three small cases: production, staffing and delivery. [Quickstart](../quickstart/) includes the production statement, recording and data. [OR-Tools](../ortools/) supplies staffing code.
 
 ## Download production data
 

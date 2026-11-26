@@ -157,7 +157,7 @@ MY_METHOD = Method("my_method", "我的方法", "一句话说明。", my_graph, 
 - 架构取舍写成 ADR（[索引](docs/adr/README.md)），术语写入 [GLOSSARY](GLOSSARY.md)。
 - 修改 `docs/references/catalog.json` 后，运行 `python3 scripts/render_references.py`。
 - 横幅和架构图由 `python3 scripts/render_assets.py` 生成，修改文字或配色时改这个脚本，不要直接改 SVG。
-- 界面有明显变化时，更新 `docs/assets/` 中的截图和 `demo.gif`。截图使用 1440×900 视口、2 倍像素密度；`demo.gif` 是一次真实运行的录屏，宽 960 像素。
+- 界面有明显变化时，更新 `docs/assets/`（README 与使用指南）和 `website/public/assets/screens/`（官网与文档）中的截图。截图来自真实运行，使用 1440×900 视口、2 倍像素密度，保存为 WebP；官网和文档的截图分浅色、深色两版。文档中的工作台录屏用 `node website/capture.cjs` 和 `node website/capture.cjs light` 重新录制。
 
 ## 发布
 

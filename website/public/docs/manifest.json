@@ -125,8 +125,8 @@
       "id": "chat-agent",
       "group": "features",
       "title": [
-        "Chat Agent 优化对话",
-        "Chat Agent"
+        "优化对话",
+        "Optimization chat"
       ],
       "summary": [
         "通过连续对话完成需求沟通、计算和方案调整。",
