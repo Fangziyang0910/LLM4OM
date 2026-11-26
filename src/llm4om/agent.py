@@ -657,7 +657,10 @@ def _build_tools_and_middleware(
             "backends": await session.resources.sandbox.catalog()}
 
     @tool
-    async def model_and_solve(description: str, name: str, runtime: ToolRuntime[AgentContext],
+    async def model_and_solve(description: str,
+                              name: Annotated[str, Field(description="A short business title in the user's language, "
+                                                         "such as 生产计划 or Production plan; not a code identifier")],
+                              runtime: ToolRuntime[AgentContext],
                               method: str | None = None, language: str | None = None,
                               solver: str | None = None) -> Command:
         """Model and actually solve a complete optimization problem through an existing method workflow.
