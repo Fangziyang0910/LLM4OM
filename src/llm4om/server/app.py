@@ -8,7 +8,7 @@ import os
 from dataclasses import asdict
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
@@ -51,6 +51,11 @@ class TranslationBody(BaseModel):
 
 class ReadingTranslationBody(BaseModel):
     text: str = Field(min_length=1, max_length=100000)
+    locale: Literal["zh", "en"] = "zh"
+
+
+class DisplayTranslationBody(BaseModel):
+    texts: list[Annotated[str, Field(min_length=1, max_length=1000)]] = Field(max_length=20)
     locale: Literal["zh", "en"] = "zh"
 
 
@@ -156,6 +161,19 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
         if not body.text.strip():
             raise HTTPException(400, "Provide text to translate.")
         return await reading_translation(body.text, body.locale)
+
+    @app.post("/api/display-translations")
+    async def translate_display(body: DisplayTranslationBody) -> dict[str, Any]:
+        if any(not text.strip() for text in body.texts):
+            raise HTTPException(400, "Provide nonempty display labels to translate.")
+        try:
+            return await translations.translate_display(body.texts, body.locale)
+        except LimitExceeded as error:
+            raise HTTPException(429, str(error)) from None
+        except TranslationError as error:
+            raise HTTPException(502, str(error)) from None
+        except OSError:
+            raise HTTPException(503, "The translation cache is unavailable. Please retry.") from None
 
     @app.post("/api/datasets/{dataset_id}/translation")
     async def translate_example(dataset_id: str, body: TranslationBody) -> dict[str, Any]:

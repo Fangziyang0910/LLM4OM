@@ -12,6 +12,7 @@ import { chatDraftKey, clearChatDraft, createRequirements, createSolutionChat, d
 import { errorText } from "@/format";
 import { Sidebar } from "@/components/Sidebar";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
+import { DisplayTranslationProvider } from "@/components/DisplayTranslation";
 import { t } from "@/i18n";
 import { useDesktop } from "@/lib/useDesktop";
 import type { Entry, SourceRun } from "@/features/runs/types";
@@ -43,6 +44,10 @@ const routeFromUrl = (): Route => {
 const NO_PRESETS: Preset[] = [];
 
 export default function App({ restoredDraft }: { restoredDraft: Draft }) {
+  return <DisplayTranslationProvider><WorkbenchApp restoredDraft={restoredDraft} /></DisplayTranslationProvider>;
+}
+
+function WorkbenchApp({ restoredDraft }: { restoredDraft: Draft }) {
   const queryClient = useQueryClient();
   const optionsQuery = useQuery({ queryKey: ["options"], queryFn: () => api<Options>("/api/options"), staleTime: Infinity });
   const presetsQuery = useQuery({ queryKey: ["presets"], queryFn: () => api<Presets>("/api/presets") });

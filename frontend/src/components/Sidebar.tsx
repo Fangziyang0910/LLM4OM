@@ -12,6 +12,7 @@ import type { Options, Preset } from "@/types";
 import { StatusIcon, TONE } from "@/features/runs/status";
 import { ThemeMenu } from "@/components/theme";
 import { LogoMark } from "@/components/Logo";
+import { DisplayLabel, useDisplayLookup } from "@/components/DisplayTranslation";
 
 const DAY = 86_400_000;
 const clockFormat = new Intl.DateTimeFormat(dateLocale, { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -47,8 +48,8 @@ export function resultText(entry: Entry): string {
 }
 
 /** Whether a run matches a search: every word is in its title, method, model, note or tags; `#tag` needs that tag. */
-export function matches(entry: Entry, query: string, methodName: (id: string) => string): boolean {
-  const text = [entry.meta.title, isRunEntry(entry) ? methodName(entry.meta.method) : entry.meta.kind === "optimization" ? t("对话规划") : entry.meta.kind === "requirements" ? t("需求梳理") : t("方案追问"),
+export function matches(entry: Entry, query: string, methodName: (id: string) => string, lookup: (text: string) => string = text => text): boolean {
+  const text = [entry.meta.title, lookup(entry.meta.title), isRunEntry(entry) ? methodName(entry.meta.method) : entry.meta.kind === "optimization" ? t("对话规划") : entry.meta.kind === "requirements" ? t("需求梳理") : t("方案追问"),
     entry.meta.model ?? "", entry.meta.note ?? "", ...(entry.meta.tags ?? [])]
     .join("\n").toLowerCase();
   const tags = (entry.meta.tags ?? []).map(tag => tag.toLowerCase());
@@ -65,10 +66,11 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
   onExamples: () => void; onPresets: () => void; onCollapse?: () => void;
 }) {
   const methodName = (id: string) => options?.methods.find(item => item.id === id)?.name ?? id;
+  const lookup = useDisplayLookup();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const history = useMemo(() => groupHistory(entries), [entries]);
-  const shown = query.trim() ? history.filter(item => matches(item.entry, query, methodName)
-    || item.related.some(entry => matches(entry, query, methodName))) : history;
+  const shown = query.trim() ? history.filter(item => matches(item.entry, query, methodName, lookup)
+    || item.related.some(entry => matches(entry, query, methodName, lookup))) : history;
   const tags = useMemo(() => [...new Set(entries.flatMap(entry => entry.meta.tags ?? []))].slice(0, 12), [entries]);
   const groups = new Map<string, HistoryGroup[]>();
   for (const item of shown) {
@@ -87,7 +89,7 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
     const summarySource = primaryRun ?? entry;
     const summaryText = resultText(summarySource);
     const summaryTone = TONE[tone(summarySource.state)].text;
-    return <div className="group/item relative">
+    return <DisplayLabel text={entry.meta.title}>{(label, ref) => <div ref={ref} className="group/item relative">
       <button onClick={() => onOpen(entry)} title={entry.meta.title} aria-current={selectedItem ? "page" : undefined}
         className={cn("flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors duration-150 hover:bg-sidebar-accent/70",
           selectedItem && "bg-sidebar-accent ring-1 ring-primary/15")}>
@@ -95,7 +97,7 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
           {!isRunEntry(entry) ? (primaryRun ? <StatusIcon status={primaryRun.state} className="size-3.5 shrink-0" />
             : <MessageSquareText className={cn("size-3.5 shrink-0", selectedItem ? "text-primary" : "text-muted-foreground")} />)
             : <StatusIcon status={entry.state} className="size-3.5 shrink-0" />}
-          <span className={cn("min-w-0 flex-1 truncate text-[13px] leading-5", selectedItem ? "font-medium text-foreground" : "text-foreground/90")}>{entry.meta.title}</span>
+          <span className={cn("min-w-0 flex-1 truncate text-[13px] leading-5", selectedItem ? "font-medium text-foreground" : "text-foreground/90")}>{label}</span>
           {!summaryText ? <span className="shrink-0 text-[11px] tabular text-muted-foreground/70 transition-opacity [@media(hover:hover)]:group-hover/item:opacity-0 [@media(hover:hover)]:group-focus-within/item:opacity-0">{when(entry.created)}</span> : null}
         </span>
         {summaryText ? <span className="flex min-w-0 items-center gap-1.5 pl-[22px] text-[11px] leading-4 text-muted-foreground">
@@ -106,7 +108,7 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-xs" aria-label={t("更多操作：{title}", { title: entry.meta.title })}
+          <Button variant="ghost" size="icon-xs" aria-label={t("更多操作：{title}", { title: label })}
             className="absolute top-1.5 right-1.5 size-6 rounded-md opacity-100 [@media(hover:hover)]:opacity-0 group-hover/item:opacity-100 group-focus-within/item:opacity-100 data-[state=open]:opacity-100">
             <MoreHorizontal className="size-3.5" /></Button>
         </DropdownMenuTrigger>
@@ -115,7 +117,7 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
           <DropdownMenuItem variant="destructive" onClick={() => onDelete(entry)}><Trash2 />{t("删除")}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>;
+    </div>}</DisplayLabel>;
   };
 
   return <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground select-none">
@@ -166,15 +168,15 @@ export function Sidebar({ entries, current, activeMode = "quick", options, prese
           <h2 className="px-2.5 pb-1 text-[11px] font-medium text-muted-foreground/75">{label}</h2>
           <ul className="flex flex-col gap-0.5">{items.map(({ entry, related }) => {
             const hasActiveOrMatchingChild = related.some(item => item.id === current)
-              || (!!query.trim() && related.some(item => matches(item, query, methodName)));
+              || (!!query.trim() && related.some(item => matches(item, query, methodName, lookup)));
             const showRelated = related.length > 0 && (entry.meta.kind !== "optimization" || related.length > 1 || hasActiveOrMatchingChild);
-            const open = (!!query.trim() && related.some(item => matches(item, query, methodName)))
+            const open = (!!query.trim() && related.some(item => matches(item, query, methodName, lookup)))
               || (expanded[entry.id] ?? hasActiveOrMatchingChild);
             return <li key={entry.id}>
               {row(entry, related)}
               {showRelated ? <>
                 <Button variant="ghost" size="xs" aria-expanded={open} className="mb-1 ml-[22px] h-6 gap-1 rounded-md px-1.5 text-[11px] font-normal text-muted-foreground"
-                  aria-label={t("相关记录：{title}", { title: entry.meta.title })}
+                  aria-label={t("相关记录：{title}", { title: lookup(entry.meta.title) })}
                   onClick={() => setExpanded(value => ({ ...value, [entry.id]: !open }))}>
                   <ChevronDown className={cn("size-3 transition-transform duration-150", !open && "-rotate-90")} />{t("{count} 条衍生方案", { count: related.length })}
                 </Button>

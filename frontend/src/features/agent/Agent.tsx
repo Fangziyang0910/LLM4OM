@@ -26,6 +26,7 @@ import type { OptimizationMeta, Plan, SourceRun, Usage } from "@/features/runs/t
 import { sameSource, sourceKey } from "@/features/runs/types";
 import type { BackendCatalog, Options, Preset } from "@/types";
 import { errorText, shortTitle } from "@/format";
+import { DisplayText } from "@/components/DisplayTranslation";
 import { locale, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -285,7 +286,7 @@ export function Agent({ threadId, options, presets, ref, sidebarCollapsed = fals
       className="-ml-1 hidden rounded-lg text-muted-foreground hover:text-foreground xl:inline-flex" onClick={onExpandSidebar}>
       <PanelLeftOpen className="size-4" />
     </Button> : null}
-    <h1 className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-foreground/90">{hasConversation ? <span className="truncate" title={meta?.title}>{meta?.title ? shortTitle(meta.title) : t("智能优化对话")}</span>
+    <h1 className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-foreground/90">{hasConversation ? <span className="truncate" title={meta?.title}>{meta?.title ? <DisplayText text={shortTitle(meta.title)} /> : t("智能优化对话")}</span>
       : <><LogoMark className="size-6" /><span className="truncate font-semibold tracking-tight text-foreground">{t("通用智能优化求解器")}</span></>}</h1>
     {!workspace && (plans.length > 0 || !!currentPlan || !!task) ? <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => { setWorkspace(true); setPane("workspace"); }}>
       <Columns2 className="size-3.5" />{t("方案面板")}

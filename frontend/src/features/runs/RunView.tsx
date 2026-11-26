@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DisplayText } from "@/components/DisplayTranslation";
 import { useDefaultLayout } from "react-resizable-panels";
 import { ArrowRight, Check, Columns3, FileDown, Info, Layers, Link2, MessageSquare, MoreHorizontal, NotebookPen, Pencil, RefreshCw, Sparkles, Square, Tag, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -227,9 +228,9 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
             : <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               {pareto ? <span className="text-base font-semibold tracking-tight tabular">{t("共 {total} 个非支配解", { total: pareto.total })}</span>
                 : accepted?.objective != null ? <span className="flex items-baseline gap-1.5">
-                  <span className="text-xs text-muted-foreground">{values.explanation?.objective_label || t("目标值")}</span>
+                  <span className="text-xs text-muted-foreground">{values.explanation?.objective_label ? <DisplayText text={values.explanation.objective_label} /> : t("目标值")}</span>
                   <span className="text-lg font-bold tracking-tight tabular">{formatNumber(accepted.objective)}</span>
-                  {values.explanation?.objective_unit ? <span className="text-xs text-muted-foreground">{values.explanation.objective_unit}</span> : null}
+                  {values.explanation?.objective_unit ? <span className="text-xs text-muted-foreground"><DisplayText text={values.explanation.objective_unit} /></span> : null}
                 </span> : null}
               <StatusBadge status={state} />
               <span className="min-w-0 text-xs text-muted-foreground [&_svg]:size-3.5"><RunDetails rows={detailRows} summary={detailSummary} /></span>
@@ -261,7 +262,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
           {meta.conversation ? <Button variant="link" size="xs" className="h-auto p-0 text-xs text-muted-foreground hover:text-primary" onClick={() => onConversation(meta.conversation!)}><MessageSquare />{t("返回对话规划")}</Button> : null}
         </div> : null}
         <Tooltip>
-          <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg">{shortTitle(title)}</h1></TooltipTrigger>
+          <TooltipTrigger asChild><h1 className="truncate text-base font-semibold tracking-tight md:text-lg"><DisplayText text={shortTitle(title)} /></h1></TooltipTrigger>
           <TooltipContent className="max-w-md whitespace-pre-wrap">{(values.description || title).slice(0, 400)}</TooltipContent>
         </Tooltip>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground [&_svg]:size-3.5">
@@ -503,11 +504,11 @@ function Summary({ state, values, steps, error, active, elapsed, onTab, actions 
 
   const pareto = !unchecked && solve.pareto?.solutions.length ? solve.pareto : null;
   const knee = pareto ? (pareto.solutions.find(item => item.knee) ?? pareto.solutions[0]) : null;
-  const label = pareto ? t("多目标 Pareto 前沿") : values.explanation?.objective_label || t("目标值");
+  const label = pareto ? t("多目标 Pareto 前沿") : values.explanation?.objective_label ? <DisplayText text={values.explanation.objective_label} /> : t("目标值");
   const headline = pareto ? <span className="text-2xl font-bold tracking-tight tabular sm:text-3xl">{t("共 {total} 个非支配解", { total: pareto.total })}</span>
     : !unchecked && solve.objective != null ? <span className="flex flex-wrap items-baseline gap-1.5">
       <span className="text-3xl font-bold tracking-tight tabular sm:text-4xl">{formatNumber(solve.objective)}</span>
-      {values.explanation?.objective_unit ? <span className="text-sm font-medium text-muted-foreground">{values.explanation.objective_unit}</span> : null}
+      {values.explanation?.objective_unit ? <span className="text-sm font-medium text-muted-foreground"><DisplayText text={values.explanation.objective_unit} /></span> : null}
     </span> : <span className="text-lg font-semibold">{STATUS[solve.status] ?? solve.status}</span>;
   const tradeoff = pareto && knee ? <p className="text-xs text-muted-foreground tabular">
     {t("推荐折中解：")}{pareto.objectives.map((obj, idx) => {

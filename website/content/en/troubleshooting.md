@@ -65,12 +65,15 @@ Run information records time, calls and quotas. See [configuration](../configura
 |---|---|
 | A foreign-language statement remains visible | Source statements are retained; use the reading translation in Problem and data and switch to the original when needed |
 | Historical model explanations use another language | Wait for the reading translation; a Translate to Chinese action is available for some mixed-language content |
+| History titles, result labels or units use another language | Visible text can use batched, cached display translations for the interface language. Initial generation takes time; failures retain the source. Hover over a translation to inspect the original |
 | English or JSON appears during solving | View raw model output shows the actual response, which can contain code, English and tool protocols; it is separate from the localized model reading view |
 | Variables show `var_type`, `domain` or `shape` | Fixed model labels are localized in the reading view. Hard-refresh to load current assets; code and raw logs retain protocol names |
 | Expressions such as `x_A` appear as plain text | Check for `$...$`, `$$...$$` or math delimiters in the source; translation does not automatically convert bare text into formulas |
 | An example translation fails or is empty | Keep the source; check the default available preset, connection and quota, then retry. Existing plans need no new solve |
 
 New runs request explanations in the interface language. This does not guarantee the same language in provider reasoning. A statement and interface already in the same language usually need no reading translation.
+
+Display translations of titles, natural-language result labels and units use the default available preset and its daily quota; cache hits reuse existing translations. They do not rerun the solver, translate raw reasoning, or rewrite statements, title metadata, code, variable names, copied content, reports, Excel exports or subsequent modeling inputs. Translating a unit name does not convert values. Language detection and machine translation can be wrong, especially for mixed-language content; check important entities and units against the source.
 
 Example and reading translations translate natural language, including table headings and descriptive cells, while requesting unchanged numbers, formulas, variable names, code and table structure. Generation uses the server's default available preset and counts toward its quota. The same source, target language and translation rules reuse the local cache. Check important units, negations and constraint directions against the source; translations can be wrong.
 
