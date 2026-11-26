@@ -179,6 +179,17 @@ def test_examples_are_paged(tmp_path: Path) -> None:
     assert all("bakery" in item["description"].lower() for item in filtered["cases"])
 
 
+def test_business_term_search_includes_multiple_collections_before_pagination(tmp_path: Path) -> None:
+    with client(tmp_path) as api:
+        first = api.get("/api/datasets", params={"q": "运输", "limit": 100}).json()
+        second = api.get("/api/datasets", params={"q": "运输", "offset": 100, "limit": 100}).json()
+        scoped = api.get("/api/datasets/nl4opt", params={"q": "运输"}).json()
+        assert api.get("/api/datasets", params={"q": "运输问题"}).json()["total"] == first["total"]
+    assert first["total"] == second["total"] > scoped["total"] > 0
+    keys = [(item["dataset"], item["id"]) for item in first["cases"] + second["cases"]]
+    assert len(keys) == len(set(keys)) and len({source for source, _ in keys}) > 1
+
+
 @pytest.mark.parametrize("params", [{"offset": -1}, {"limit": 0}, {"limit": 101}])
 def test_invalid_example_pages_are_rejected(tmp_path: Path, params: dict[str, int]) -> None:
     with client(tmp_path) as api:

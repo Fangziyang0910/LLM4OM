@@ -16,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { updateMeta } from "@/features/runs/api";
+import { sourceKey } from "./types";
+import { objectiveLabel } from "./pareto";
 import { targetLabel } from "@/features/runs/target";
 import { client } from "@/features/runs/sdk";
 import { t } from "@/i18n";
@@ -32,6 +34,13 @@ import { StatusBadge, TONE } from "@/features/runs/status";
 import { Timeline } from "@/features/runs/Timeline";
 import { RevisionDialog } from "@/features/runs/RevisionDialog";
 import { ScenariosDialog } from "@/features/runs/ScenariosDialog";
+
+function tabFromUrl(embeddedRun?: string): Tab | null {
+  const params = new URLSearchParams(location.search);
+  if (embeddedRun && params.get("tabRun") !== embeddedRun) return null;
+  const value = params.get("tab");
+  return value === "solution" || value === "problem" || value === "formulation" || value === "code" || value === "comparison" ? value : null;
+}
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
@@ -59,7 +68,21 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const [revision, setRevision] = useState<string | null>(null);
   const [scenarios, setScenarios] = useState(false);
   const meta = loaded ? { ...loaded, ...changed } : null;
-  const [chosen, setTab] = useState<Tab | null>(null);  // null follows the run
+  const runKey = source ? sourceKey(source) : threadId;
+  const embeddedRun = embedded || assistantOpen ? runKey : undefined;
+  const [chosen, selectTab] = useState<Tab | null>(() => tabFromUrl(embeddedRun));
+  useEffect(() => {
+    const pop = () => selectTab(tabFromUrl(embeddedRun));
+    window.addEventListener("popstate", pop);
+    return () => window.removeEventListener("popstate", pop);
+  }, [embeddedRun]);
+  const setTab = (next: Tab) => {
+    const url = new URL(location.href);
+    url.searchParams.set("tab", next);
+    if (embeddedRun) url.searchParams.set("tabRun", embeddedRun);
+    window.history.replaceState(window.history.state, "", url);
+    selectTab(next);
+  };
   const [picked, setPicked] = useState<Partial<Record<"formulation" | "code", string>>>({});
   const [processVisible, setProcessVisible] = useState<boolean | null>(null);
   const [view, setView] = useState<"outputs" | "process">("outputs");  // narrow screens show one pane at a time
@@ -87,7 +110,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const finished = !active && recordedStatus === "success";
   const hasFormulation = !!values.formulation || steps.some(step => step.type === "artifact" && !!step.formulation);
   const hasCode = !!values.code || steps.some(step => step.type === "artifact" && !!step.code);
-  const tab: Tab = chosen ?? (active ? (hasCode ? "code" : hasFormulation ? "formulation" : "problem")
+  const tab: Tab = (chosen === "comparison" && !meta.parent ? null : chosen) ?? (active ? (hasCode ? "code" : hasFormulation ? "formulation" : "problem")
     : meta.parent && values.revision ? "comparison" : solve ? "solution" : hasFormulation ? "formulation" : hasCode ? "code" : "problem");
   const elapsed = values.timing ? active ? Math.max(0, now / 1000 - values.timing.started_at) : values.timing.elapsed : null;
   const usage = values.usage;
@@ -99,6 +122,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
     preset: meta.preset ?? null, origin: threadId });
   const link = new URL(`/run/${threadId}`, location.href);
   if (source?.checkpoint_id) link.searchParams.set("checkpoint", source.checkpoint_id);
+  if (chosen) link.searchParams.set("tab", tab);
   const href = link.href;
   const stop = async () => {
     if (!run) return;
@@ -126,7 +150,7 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
   const show = (key: "formulation" | "code", id: string) => { setPicked(current => ({ ...current, [key]: id })); showTab(key); };
 
   const timeline = <Timeline steps={steps} live={live} active={active} hideHeader={embedded} onShow={show} />;
-  const outputs = <Outputs values={values} steps={steps} active={active} tab={tab} setTab={setTab} picked={picked} language={language}
+  const outputs = <Outputs runKey={runKey} values={values} steps={steps} active={active} tab={tab} setTab={setTab} picked={picked} language={language}
     finished={finished} source={meta.parent} onAdjust={setRevision} setPicked={(key, id) => setPicked(current => ({ ...current, [key]: id }))} />;
   const title = meta.title || (values.description ?? "").trim().split("\n")[0] || t("未命名方案");
   const targetText = targetLabel(options, meta, solve?.solver);
@@ -207,8 +231,8 @@ export function RunView({ threadId: requested, source, options, onFinished, onEd
               <StatusBadge status={state} />
               <span title={configDetail} className="truncate text-xs text-muted-foreground tabular">{embeddedMeta}</span>
             </div>}
-          {!active && pareto && knee ? <p className="truncate text-xs text-muted-foreground tabular">
-            {t("推荐折中解：")}{pareto.objectives.map((obj, idx) => `${obj.name} = ${knee.objectives[idx] == null ? "—" : formatNumber(knee.objectives[idx]!)}`).join(" · ")}
+          {!active && pareto && knee ? <p className="text-xs break-words text-muted-foreground tabular">
+            {t("推荐折中解：")}{pareto.objectives.map((obj, idx) => `${objectiveLabel(obj)} = ${knee.objectives[idx] == null ? "—" : formatNumber(knee.objectives[idx]!)}`).join(" · ")}
           </p> : null}
         </div>
         {headerActions}
@@ -459,7 +483,7 @@ function Summary({ state, values, steps, error, active, elapsed, onTab, actions 
     {pareto && knee ? <p className="text-xs text-muted-foreground tabular">
       {t("推荐折中解：")}{pareto.objectives.map((obj, idx) => {
         const val = knee.objectives[idx];
-        return `${obj.name} = ${val == null ? "—" : formatNumber(val)}`;
+        return `${objectiveLabel(obj)} = ${val == null ? "—" : formatNumber(val)}`;
       }).join(" · ")}
     </p> : null}
     {explain ? <p className="text-sm leading-relaxed text-muted-foreground">{explain}</p> : null}

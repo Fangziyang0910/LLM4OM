@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, CircleCheck, Columns3, RefreshCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -69,27 +70,44 @@ export function Compare({ group, options, onOpen }: { group: string; options: Op
 
       <Table className="text-[13px]" containerClassName="rounded-2xl border border-border/80 bg-card shadow-xs">
         <TableHeader className="bg-muted/40"><TableRow>
-          <TableHead>{t("求解策略")}</TableHead><TableHead>{t("求解引擎")}</TableHead><TableHead>{t("AI 模型")}</TableHead>
-          <TableHead>{t("状态")}</TableHead><TableHead className="text-right">{t("目标值")}</TableHead>
-          <TableHead className="text-right">{t("耗时")}</TableHead><TableHead />
+          <TableHead>{t("求解策略")}</TableHead><TableHead className="text-right">{t("目标值")}</TableHead><TableHead>{t("状态")}</TableHead>
+          <TableHead className="hidden md:table-cell">{t("求解引擎")}</TableHead><TableHead className="hidden md:table-cell">{t("AI 模型")}</TableHead>
+          <TableHead className="hidden text-right md:table-cell">{t("耗时")}</TableHead>
         </TableRow></TableHeader>
-        <TableBody>{entries.map(entry => (
-          <TableRow key={entry.id} className="cursor-pointer transition-colors hover:bg-muted/40" onClick={() => onOpen(entry.id)}>
-            <TableCell className="font-medium">{methodName(entry.meta.method)}</TableCell>
-            <TableCell className="text-muted-foreground">{targetLabel(options, entry.meta)}</TableCell>
-            <TableCell className="max-w-48 truncate text-muted-foreground">{entry.meta.model ?? "—"}</TableCell>
-            <TableCell><span className={cn("flex items-center gap-1.5 font-medium", TONE[tone(entry.state)].text)} title={entry.failure ?? undefined}>
-              <StatusIcon status={entry.state} className="size-3.5" />{(STATUS[entry.state] ?? entry.state)}</span>
-              {entry.failure ? <p className="mt-1 max-w-64 text-xs whitespace-normal text-destructive">{entry.failure}</p> : null}</TableCell>
-            <TableCell className="text-right font-mono font-semibold tabular">
-              {entry.paretoTotal && entry.paretoTotal > 0 && canHaveSolution(entry.state)
-                ? t("{count} 个 Pareto 解", { count: entry.paretoTotal })
-                : entry.objective != null && canHaveSolution(entry.state)
-                  ? formatNumber(entry.objective) : "—"}</TableCell>
-            <TableCell className="text-right tabular text-muted-foreground">{entry.state === "running" ? "…" : entry.elapsed == null ? "—" : duration(entry.elapsed)}</TableCell>
-            <TableCell className="text-right"><Button variant="ghost" size="icon-xs" aria-label={t("打开运行")}><ArrowRight /></Button></TableCell>
-          </TableRow>
-        ))}</TableBody>
+        <TableBody>{entries.map(entry => {
+          const engine = targetLabel(options, entry.meta);
+          const elapsed = entry.state === "running" ? "…" : entry.elapsed == null ? "—" : duration(entry.elapsed);
+          return <Fragment key={entry.id}>
+            <TableRow className="cursor-pointer max-md:border-b-0" onClick={() => onOpen(entry.id)}>
+              <TableCell className="font-medium whitespace-normal">
+                <button type="button" className="inline-flex items-center gap-1 text-left hover:underline"
+                  aria-label={t("打开方案：{method}", { method: methodName(entry.meta.method) })}>
+                  {methodName(entry.meta.method)}<ArrowRight className="size-3 shrink-0 text-muted-foreground" />
+                </button>
+              </TableCell>
+              <TableCell className="text-right font-mono font-semibold whitespace-normal tabular">
+                {entry.paretoTotal && entry.paretoTotal > 0 && canHaveSolution(entry.state)
+                  ? t("{count} 个 Pareto 解", { count: entry.paretoTotal })
+                  : entry.objective != null && canHaveSolution(entry.state) ? formatNumber(entry.objective) : "—"}
+              </TableCell>
+              <TableCell><span className={cn("flex items-center gap-1.5 font-medium whitespace-normal", TONE[tone(entry.state)].text)} title={entry.failure ?? undefined}>
+                <StatusIcon status={entry.state} className="size-3.5 shrink-0" />{STATUS[entry.state] ?? entry.state}</span>
+                {entry.failure ? <p className="mt-1 max-w-64 text-xs whitespace-normal text-destructive">{entry.failure}</p> : null}</TableCell>
+              <TableCell className="hidden text-muted-foreground md:table-cell">{engine}</TableCell>
+              <TableCell className="hidden max-w-48 truncate text-muted-foreground md:table-cell">{entry.meta.model ?? "—"}</TableCell>
+              <TableCell className="hidden text-right tabular text-muted-foreground md:table-cell">{elapsed}</TableCell>
+            </TableRow>
+            <TableRow className="md:hidden"><TableCell colSpan={3} className="pt-0 text-xs whitespace-normal text-muted-foreground">
+              <details><summary className="w-fit cursor-pointer py-1">{t("运行信息")}</summary>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 py-1">
+                  <dt>{t("求解引擎")}</dt><dd>{engine}</dd>
+                  <dt>{t("AI 模型")}</dt><dd className="break-all">{entry.meta.model ?? "—"}</dd>
+                  <dt>{t("耗时")}</dt><dd>{elapsed}</dd>
+                </dl>
+              </details>
+            </TableCell></TableRow>
+          </Fragment>;
+        })}</TableBody>
       </Table>
     </div>
   </div>;

@@ -15,7 +15,7 @@ import { api } from "@/api";
 import { errorText } from "@/format";
 import type { Dataset } from "@/types";
 
-type Case = { id: string; sample_id: string; subset: string; description: string };
+type Case = { dataset: string; id: string; sample_id: string; subset: string; description: string };
 type Translation = { original: string; translation: string; cached: boolean; locale: string };
 const PAGE = 20;
 const TRANSLATION_ERRORS = new Map([
@@ -28,21 +28,21 @@ const TRANSLATION_ERRORS = new Map([
 export function Examples({ open, onClose, datasets, onUse }: {
   open: boolean; onClose: () => void; datasets: Dataset[]; onUse: (description: string) => void;
 }) {
-  const [dataset, setDataset] = useState<Dataset>(datasets[0]);
+  const [dataset, setDataset] = useState<Dataset>();
   const [offset, setOffset] = useState(0);
   const [search, setSearch] = useState("");
   const trimmed = search.trim();
   const { data: page, error, refetch, isFetching } = useQuery({
-    queryKey: ["dataset", dataset?.id, offset, trimmed], enabled: open && !!dataset, staleTime: Infinity,
+    queryKey: ["dataset", dataset?.id, offset, trimmed], enabled: open && datasets.length > 0, staleTime: Infinity,
     queryFn: () => {
       const params = new URLSearchParams({ offset: String(offset), limit: String(PAGE) });
       if (trimmed) params.set("q", trimmed);
-      return api<{ total: number; cases: Case[] }>(`/api/datasets/${dataset.id}?${params}`);
+      return api<{ total: number; cases: Case[] }>(`/api/datasets${dataset ? `/${dataset.id}` : ""}?${params}`);
     },
   });
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => { list.current?.scrollTo(0, 0); }, [page]);
-  const choose = (item: Dataset) => { setDataset(item); setOffset(0); };
+  const choose = (item?: Dataset) => { setDataset(item); setOffset(0); };
 
   return <Dialog open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <DialogContent className="flex h-[min(820px,90dvh)] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-5xl">
@@ -54,7 +54,15 @@ export function Examples({ open, onClose, datasets, onUse }: {
         <DialogDescription>{t("精选生产制造、仓储物流、排班调度等真实优化场景，点击即可带入体验。")}</DialogDescription>
       </DialogHeader>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <nav aria-label={t("案例分类")} className="flex min-h-0 shrink-0 gap-1.5 overflow-auto border-b bg-muted/15 p-2.5 md:w-60 md:flex-col md:border-r md:border-b-0">
+        <label className="flex shrink-0 items-center gap-2 border-b px-4 py-2 text-sm md:hidden">
+          {t("题库")}<select className="min-w-0 flex-1 rounded-lg border bg-background p-2" value={dataset?.id ?? ""}
+            onChange={event => choose(datasets.find(item => item.id === event.target.value))}>
+            <option value="">{t("全部题库")}</option>
+            {datasets.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+          </select>
+        </label>
+        <nav aria-label={t("案例分类")} className="hidden md:flex min-h-0 shrink-0 gap-1.5 overflow-auto border-b bg-muted/15 p-2.5 md:w-60 md:flex-col md:border-r md:border-b-0">
+          <Button variant={!dataset ? "secondary" : "ghost"} className="shrink-0 justify-start" aria-pressed={!dataset} onClick={() => choose()}>{t("全部题库")}</Button>
           {datasets.map(item => {
             const active = item.id === dataset?.id;
             return <button key={item.id} aria-current={active} onClick={() => choose(item)}
@@ -75,7 +83,7 @@ export function Examples({ open, onClose, datasets, onUse }: {
           </div> : null}
           <div className="relative mb-3">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input aria-label={t("搜索案例")} value={search} placeholder={t("按关键词筛选当前题库（如 routing、knapsack、schedule）…")}
+            <Input aria-label={t("搜索案例")} maxLength={200} value={search} placeholder={t("搜索案例，如运输、排班或背包…")}
               onChange={event => { setSearch(event.target.value); setOffset(0); }} className="h-9 rounded-xl pr-8 pl-8 text-xs" />
             {search ? <Button variant="ghost" size="icon-xs" aria-label={t("清除搜索")} className="absolute top-1/2 right-1 -translate-y-1/2"
               onClick={() => { setSearch(""); setOffset(0); }}><X /></Button> : null}
@@ -83,8 +91,8 @@ export function Examples({ open, onClose, datasets, onUse }: {
           {error ? <Alert variant="destructive"><AlertDescription className="flex items-center justify-between gap-3">{errorText(error)}
             <Button variant="outline" size="sm" onClick={() => void refetch()}>{t("重试")}</Button></AlertDescription></Alert>
             : !page ? <div className="flex flex-col gap-3">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-28 rounded-2xl" />)}</div>
-            : !page.cases.length ? <p className="py-10 text-center text-sm text-muted-foreground">{t("当前题库中没有匹配的案例。")}</p> : <>
-            <ol className="flex flex-col gap-3">{page.cases.map(item => <ExampleCard key={item.id} item={item} dataset={dataset.id} onUse={onUse} />)}</ol>
+            : !page.cases.length ? <p className="py-10 text-center text-sm text-muted-foreground">{t("没有匹配的案例。")}</p> : <>
+            <ol className="flex flex-col gap-3">{page.cases.map(item => <ExampleCard key={`${item.dataset}/${item.id}`} item={item} dataset={item.dataset} sourceName={datasets.find(source => source.id === item.dataset)?.title ?? item.dataset} onUse={onUse} />)}</ol>
           </>}
         </div>
       </div>
@@ -97,7 +105,7 @@ export function Examples({ open, onClose, datasets, onUse }: {
   </Dialog>;
 }
 
-function ExampleCard({ item, dataset, onUse }: { item: Case; dataset: string; onUse: (text: string) => void }) {
+function ExampleCard({ item, dataset, sourceName, onUse }: { item: Case; dataset: string; sourceName: string; onUse: (text: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [showTranslation, setShowTranslation] = useState(false);
   const translation = useMutation({
@@ -111,8 +119,8 @@ function ExampleCard({ item, dataset, onUse }: { item: Case; dataset: string; on
 
   return <li className="group flex flex-col gap-2.5 rounded-2xl border border-border/80 bg-card p-4 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md">
     <div className="flex flex-wrap items-center gap-2">
-      <Badge variant="secondary" className="rounded-md font-mono text-[11px] font-normal">#{item.sample_id}</Badge>
-      {item.subset && item.subset !== dataset ? <Badge variant="outline" className="rounded-md font-normal text-muted-foreground">{item.subset}</Badge> : null}
+      <Badge variant="secondary" className="rounded-md font-mono text-[11px] font-normal">{sourceName} · #{item.sample_id}</Badge>
+      {item.subset && item.subset.toLowerCase() !== dataset.toLowerCase() ? <Badge variant="outline" className="rounded-md font-normal text-muted-foreground">{item.subset}</Badge> : null}
       <Button size="sm" variant="secondary" className="ml-auto rounded-lg" onClick={() => onUse(text)}>
         {showingTranslation ? t("带入译文") : translated !== undefined ? t("带入原文") : t("带入此案例")}<ArrowRight />
       </Button>

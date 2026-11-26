@@ -19,7 +19,7 @@ beforeEach(() => {
 
 const original = "Ship 10 whole packages from A to B at $2 each.";
 const translated = "从 A 向 B 运输10个整包，每包费用为2美元。";
-const page = { total: 1, cases: [{ id: "sample-1", sample_id: "1", subset: "nl4opt", description: original }] };
+const page = { total: 1, cases: [{ dataset: "nl4opt", id: "sample-1", sample_id: "1", subset: "nl4opt", description: original }] };
 const dataset = { id: "nl4opt", title: "NL4Opt", description: "自然语言线性优化问题。", count: 1, license: "MIT", source_url: "https://example.org" };
 
 function openLibrary() {

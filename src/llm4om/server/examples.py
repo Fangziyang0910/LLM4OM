@@ -23,22 +23,43 @@ def _cases(dataset_id: str) -> list[dict[str, Any]]:
     return json.loads(ROOT.joinpath(dataset_id + ".json").read_text("utf-8"))["cases"]
 
 
-def cases(dataset_id: str, offset: int = 0, limit: int = 20, q: str = "") -> dict[str, Any]:
-    """One page of problems, optionally filtered by substring query `q`."""
-    all_cases = _cases(dataset_id)
-    query = q.strip().lower()
-    if query:
-        tokens = query.split()
-        filtered = [
-            case for case in all_cases
-            if all(tok in f"{case['sample_id']} {case['subset']} {case['description']}".lower() for tok in tokens)
-        ]
-    else:
-        filtered = all_cases
-    selected = filtered[offset:offset + limit]
-    return {"total": len(filtered), "cases": [
-        {"id": case["case_id"], "sample_id": case["sample_id"], "subset": case["subset"], "description": case["description"]}
-        for case in selected]}
+# Common business terms used to find the source-language problem descriptions.
+_SEARCH_TERMS = {
+    "运输": ("transport", "shipping", "shipment", "freight"), "物流": ("logistics", "transport", "delivery"),
+    "配送": ("delivery", "routing", "distribution"), "路径": ("routing", "route", "path"),
+    "排班": ("shift", "schedul"), "排程": ("schedul",), "调度": ("schedul", "dispatch"),
+    "生产制造": ("produc", "manufactur"), "仓储物流": ("warehouse", "logistics", "storage"),
+    "排班调度": ("shift", "schedul"), "生产": ("produc", "manufactur"), "库存": ("inventor", "stock"), "仓储": ("warehouse", "storage"),
+    "选址": ("location", "locate"), "背包": ("knapsack",), "分配": ("assign", "allocat"),
+}
+
+
+def _alternatives(word: str) -> tuple[str, ...]:
+    # Keep literal matching; Chinese users also enter the scenario names printed in the library.
+    for suffix in ("问题", "案例", "优化"):
+        word_without_suffix = word.removesuffix(suffix)
+        if word_without_suffix in _SEARCH_TERMS:
+            return (word, *_SEARCH_TERMS[word_without_suffix])
+    return (word, *_SEARCH_TERMS.get(word, ()))
+
+
+def cases(dataset_id: str | None = None, offset: int = 0, limit: int = 20, q: str = "") -> dict[str, Any]:
+    """Search the selected collections before paginating, retaining the source for translation."""
+    sources = [dataset_id] if dataset_id is not None else [item["id"] for item in datasets()]
+    terms = [_alternatives(word) for word in q.casefold().split()]
+    page = []
+    total = 0
+    for source in sources:
+        for item in _cases(source):
+            if terms:
+                text = f"{item['sample_id']} {item['subset']} {item['description']}".casefold()
+                if not all(any(word in text for word in alternatives) for alternatives in terms):
+                    continue
+            if offset <= total < offset + limit:
+                page.append({"dataset": source, "id": item["case_id"], "sample_id": item["sample_id"],
+                             "subset": item["subset"], "description": item["description"]})
+            total += 1
+    return {"total": total, "cases": page}
 
 
 def case(dataset_id: str, case_id: str) -> dict[str, Any]:

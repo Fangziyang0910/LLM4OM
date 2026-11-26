@@ -91,7 +91,7 @@ export function Composer({ onDiscuss, ...modeling }: ComposerProps) {
       <div className="mx-auto flex min-h-full max-w-5xl flex-col gap-4 p-4 sm:px-6 sm:py-5 lg:h-full">
         <header className="animate-fade-up flex shrink-0 flex-col gap-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-lg font-semibold tracking-tight sm:text-xl">{t("多方案对比")}</h1>
+            <h1 className="text-lg font-semibold tracking-tight sm:text-xl">{draft.comparing ? t("多方案对比") : t("单次求解")}</h1>
             {onDiscuss ? <Button type="button" variant="ghost" size="sm" disabled={busy || reading}
               className="text-xs text-muted-foreground" onClick={async () => {
                 setBusy(true);
@@ -115,7 +115,7 @@ export function Composer({ onDiscuss, ...modeling }: ComposerProps) {
               const data = { ...current.data }; delete data[name]; return { ...current, data };
             })} />
 
-          {!draft.description ? <section className="animate-fade-up flex shrink-0 flex-col gap-2">
+          {!draft.description && !Object.keys(draft.data).length ? <section className="animate-fade-up flex shrink-0 flex-col gap-2">
             <h2 className="px-0.5 text-xs font-medium text-muted-foreground">{t("快速示例")}</h2>
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
               {STARTERS.map(item => {
@@ -123,7 +123,7 @@ export function Composer({ onDiscuss, ...modeling }: ComposerProps) {
                 const targetMethod = item.method && options.methods.some(m => m.id === item.method) ? item.method : undefined;
                 return <button key={item.title} type="button" onClick={() => set({
                   description: t(item.description), data: item.data ?? {}, origin: undefined,
-                  ...(targetMethod ? { method: targetMethod, comparing: false } : {}),
+                  ...(!draft.comparing && targetMethod ? { method: targetMethod } : {}),
                 })}
                   className="group flex min-w-0 flex-col gap-2 rounded-xl border bg-card/90 p-3.5 text-left transition-all duration-150 hover:border-primary/40 hover:bg-card hover:shadow-xs">
                   <span className="flex items-center gap-2 text-sm">

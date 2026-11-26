@@ -351,3 +351,39 @@ test("the requirements draft runs in the modeling workbench and related history 
   await related.click();
   await expect(navigation.getByRole("button", { name: /CHAT_WORKSPACE_ONLY.*需求梳理/ })).toHaveCount(0);
 });
+
+test("examples preserve the composer and chat drafts through back, replacement, undo and opening a new tab", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  const chat = page.getByRole("textbox", { name: "发送给优化助手" });
+  await chat.fill("保留预算 731 和交期");
+  await expect(page.getByRole("button", { name: /^生产排产优化/ })).toHaveCount(0);
+  const compare = page.getByRole("button", { name: "多方案对比", exact: true });
+  const library = page.getByRole("button", { name: "案例模板库", exact: true });
+  await compare.click();
+  await page.getByRole("button", { name: /^运输问题/ }).click();
+  await expect(page.getByRole("button", { name: "开始对比（1 个方案）" })).toBeDisabled();
+  const file = page.getByRole("button", { name: "编辑 transport.csv" });
+  await library.click();
+  await page.goBack();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(chat).toHaveValue("保留预算 731 和交期");
+
+  await compare.click();
+  await library.click();
+  const use = page.getByRole("button", { name: "带入此案例" }).first();
+  await use.click();
+  await page.getByRole("button", { name: "替换当前草稿" }).click();
+  await expect(file).toHaveCount(0);
+  await page.getByRole("button", { name: "撤销", exact: true }).click();
+  await expect(file).toBeVisible();
+  await expect(page.getByRole("main")).toContainText("三个仓库");
+  await library.click();
+  await use.click();
+  const popup = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "用案例新建对话" }).click();
+  const casePage = await popup;
+  await expect(casePage.getByRole("textbox", { name: "发送给优化助手" })).toHaveValue(/printers/);
+  await casePage.close();
+  await expect(file).toBeVisible();
+});

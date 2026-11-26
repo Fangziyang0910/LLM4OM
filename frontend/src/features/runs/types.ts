@@ -7,7 +7,7 @@ export type Step = {
 };
 /** The constraints of an infeasible model that cannot hold together, found by `tool`. */
 export type Diagnosis = { tool: string; items: string[]; total: number; error: string | null };
-export type ParetoObjective = { name: string; sense: "min" | "max" };
+export type ParetoObjective = { name: string; label?: string; unit?: string; sense: "min" | "max" };
 export type ParetoSolution = {
   objectives: (number | null)[];
   knee?: boolean;

@@ -159,18 +159,19 @@ export function Requirements({ threadId, searchConfigured, onFinished, onUse, ..
         </div>
         <ChatInput value={input} onChange={setInput} disabled={conversation.busy || action || launching} sendingDisabled={reading} loading={conversation.loading} stopping={conversation.stopping} label={t("发送给需求助手")}
           inputRef={inputArea} presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets}
-          onSend={() => void submit()} onStop={() => void stop()}>
-          <Button asChild type="button" variant="ghost" size="icon-sm" title={reading ? t("正在读取数据……") : Object.keys(draft.data).join(", ") || t("添加附件")}>
+          searchActive={canSearch && searchOn} attachment={<Button asChild type="button" variant="ghost" size="icon-sm" title={reading ? t("正在读取数据……") : Object.keys(draft.data).join(", ") || t("添加附件")}>
             <label className={cn("relative cursor-pointer", (busy || launching) && "pointer-events-none opacity-50")}>{reading ? <Spinner /> : <Paperclip />}
               {Object.keys(draft.data).length ? <span className="absolute -top-0.5 -right-0.5 rounded-full bg-primary px-1 text-[9px] text-primary-foreground">{Object.keys(draft.data).length}</span> : null}
               <input type="file" className="sr-only" aria-label={t("添加附件")} multiple accept={DATA_FILE_ACCEPT} disabled={busy || launching}
                 onChange={event => { void attach(event.target.files); event.target.value = ""; }} />
             </label>
-          </Button>
+          </Button>}
+          onSend={() => void submit()} onStop={() => void stop()}>
+
           <span title={canSearch ? t("搜索公开资料，并在回复中展示来源。") : t("选择支持搜索的模型或由管理员开启搜索服务。")}>
             <Button type="button" variant="ghost" size="sm" aria-label={t("联网搜索")} aria-pressed={searchOn} disabled={busy || launching || !canSearch}
               className={cn("h-8 gap-1.5 px-2 text-xs", searchOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
-              onClick={() => setSearch(!searchOn)}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Button>
+              onClick={() => setSearch(!searchOn)}><Globe /><span>{t("联网搜索")}</span></Button>
           </span>
         </ChatInput>
       </div>

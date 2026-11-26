@@ -28,8 +28,8 @@ test("cancel does not save edited data and a failed save keeps the editor open",
   render(<DataEditor name="prices.tsv" content={"name\tprice\nA\t003\n"} onSave={save} onClose={close} />);
   fireEvent.change(screen.getByLabelText("第 1 行，第 2 列"), { target: { value: "004" } });
   fireEvent.click(screen.getByRole("button", { name: "取消" }));
-  expect(close).toHaveBeenCalledOnce(); expect(save).not.toHaveBeenCalled();
-  close.mockClear();
+  expect(close).not.toHaveBeenCalled(); expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "继续编辑" }));
   fireEvent.click(screen.getByRole("button", { name: "保存数据" }));
   await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("save rejected"));
   expect(close).not.toHaveBeenCalled();
@@ -60,6 +60,8 @@ test("a header-only TSV accepts multiple added rows and cancel keeps the origina
   fireEvent.mouseDown(screen.getByRole("tab", { name: "原文" }), { button: 0, ctrlKey: false });
   expect((screen.getByLabelText("数据文件原文") as HTMLTextAreaElement).value).toBe("客户\t需求量\n门店A\t\n\t\n");
   fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(close).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "放弃修改" }));
   expect(save).not.toHaveBeenCalled();
   expect(close).toHaveBeenCalledOnce();
 });

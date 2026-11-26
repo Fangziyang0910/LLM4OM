@@ -128,6 +128,11 @@ def create_app(presets: LLMPresetStore | None = None, budget: TokenBudget | None
             detail = settings.redact(f"{type(error).__name__}: {error}")
             raise HTTPException(502, f"Could not read the model list: {detail}") from error
 
+    @app.get("/api/datasets")
+    def search_datasets(offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100),
+                        q: str = Query("", max_length=200)) -> dict[str, Any]:
+        return examples.cases(None, offset, limit, q)
+
     @app.get("/api/datasets/{dataset_id}")
     def dataset(dataset_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100),
                 q: str = Query("", max_length=200)) -> dict[str, Any]:

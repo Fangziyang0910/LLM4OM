@@ -19,6 +19,7 @@ export function DataEditor({ name, content, onSave, onClose }: {
 }) {
   const [text, setText] = useState(content);
   const [page, setPage] = useState(0);
+  const [confirmClose, setConfirmClose] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tabular = /\.(csv|tsv)$/i.test(name);
@@ -40,7 +41,20 @@ export function DataEditor({ name, content, onSave, onClose }: {
     setError(null);
     setText(toCsv(next, delimiter));
   };
-  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
+  const close = () => {
+    if (busy) return;
+    if (text === content) onClose(); else setConfirmClose(true);
+  };
+  const save = async () => {
+    setBusy(true); setError(null);
+    try {
+      if (new Blob([text]).size > 2_000_000) throw new Error(t("文件超过 2 MB，请缩减数据。"));
+      if (/\.json$/i.test(name)) JSON.parse(text);
+      await onSave(text); onClose();
+    } catch (error) { setError(errorText(error)); }
+    finally { setBusy(false); }
+  };
+  return <Dialog open onOpenChange={open => { if (!open) close(); }}>
     <DialogContent className="flex max-h-[90dvh] min-h-0 flex-col sm:max-w-4xl" aria-busy={busy}
       onKeyDown={event => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) event.stopPropagation(); }}>
       <DialogHeader>
@@ -98,17 +112,20 @@ export function DataEditor({ name, content, onSave, onClose }: {
       </Tabs>
       {error || parsed.error ? <p role="alert" className="text-sm text-destructive">{error || parsed.error}</p> : null}
       <DialogFooter>
-        <Button variant="outline" disabled={busy} onClick={onClose}>{t("取消")}</Button>
-        <Button disabled={busy || text === content || !!parsed.error} onClick={async () => {
-          setBusy(true); setError(null);
-          try {
-            if (new Blob([text]).size > 2_000_000) throw new Error(t("文件超过 2 MB，请缩减数据。"));
-            if (/\.json$/i.test(name)) JSON.parse(text);
-            await onSave(text); onClose();
-          } catch (error) { setError(errorText(error)); }
-          finally { setBusy(false); }
-        }}>{busy ? <Spinner /> : <Save />}{t("保存数据")}</Button>
+        <Button variant="outline" disabled={busy} onClick={close}>{t("取消")}</Button>
+        <Button disabled={busy || text === content || !!parsed.error} onClick={save}>{busy ? <Spinner /> : <Save />}{t("保存数据")}</Button>
       </DialogFooter>
+      <Dialog open={confirmClose} onOpenChange={open => { if (!busy) setConfirmClose(open); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>{t("保存文件修改？")}</DialogTitle><DialogDescription>{name}</DialogDescription></DialogHeader>
+          {error || parsed.error ? <p role="alert" className="text-sm text-destructive">{error || parsed.error}</p> : null}
+          <DialogFooter>
+            <Button variant="outline" disabled={busy} onClick={() => setConfirmClose(false)}>{t("继续编辑")}</Button>
+            <Button variant="ghost" disabled={busy} onClick={onClose}>{t("放弃修改")}</Button>
+            <Button disabled={busy || !!parsed.error} onClick={save}>{t("保存并关闭")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DialogContent>
   </Dialog>;
 }

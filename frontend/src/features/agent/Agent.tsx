@@ -1,4 +1,4 @@
-import { type ReactNode, lazy, Suspense, useEffect, useRef, useState } from "react";
+import { type ReactNode, type Ref, lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDefaultLayout } from "react-resizable-panels";
 import type { Message } from "@langchain/langgraph-sdk";
@@ -57,9 +57,9 @@ const AGENT_STARTERS = [
   },
 ] as const;
 
-export function Agent({ threadId, options, presets, initial, sidebarCollapsed = false, onExpandSidebar, onThread, openPresets, onMenu, onFinished, onOpen, onCompare, renderRun }: {
-  threadId?: string; options: Options; presets: Preset[]; initial: { description: string; data: Record<string, string> };
-  sidebarCollapsed?: boolean; onExpandSidebar?: () => void;
+export function Agent({ threadId, options, presets, ref, sidebarCollapsed = false, onExpandSidebar, onThread, openPresets, onMenu, onFinished, onOpen, onCompare, renderRun }: {
+  threadId?: string; options: Options; presets: Preset[];
+  ref?: Ref<{ fillIfEmpty: (description: string) => boolean }>; sidebarCollapsed?: boolean; onExpandSidebar?: () => void;
   onThread: (id: string) => void; openPresets: () => void; onMenu: () => void; onExamples?: () => void;
   onFinished: () => void; onOpen: (source: SourceRun) => void; onCompare: (id: string) => void; renderRun: (source: SourceRun) => ReactNode;
 }) {
@@ -89,7 +89,7 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
     return () => { mounted.current = false; };
   }, []);
   const conversation = useConversation<Values, { CustomEventType: ChatProgress | ModelingEvent }>({
-    assistantId: "optimization", threadId, initialInput: initial.description, reconnectOnMount: false,
+    assistantId: "optimization", threadId, reconnectOnMount: false,
     onCreated: onFinished,
     onCustomEvent: event => {
       if (event.type === "scenario_progress") setProgress(event);
@@ -108,7 +108,7 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
   const meta = conversation.thread.metadata as OptimizationMeta | undefined;
   const { input, setInput } = conversation;
   const messages = conversation.messages;
-  const data = files ?? conversation.values.data ?? initial.data;
+  const data = files ?? conversation.values.data ?? {};
   const { preset, presetId, setSelected, thinkingMode, setThinking } = useChatModel(presets, meta);
   const chosenMethod = method ?? meta?.method ?? "auto";
   const chosenMethodMeta = options.methods.find(item => item.id === chosenMethod);
@@ -147,6 +147,14 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
   const workspace = workspaceOpen ?? !!currentPlan;
   const shown = viewed ?? currentPlan;
   const viewing = shown ?? plans.at(-1)?.source;
+  const occupied = !!input || !!Object.keys(data).length || reading || savingData || conversation.busy;
+  useImperativeHandle(ref, () => ({
+    fillIfEmpty(description) {
+      if (occupied) return false;
+      setInput(description);
+      return true;
+    },
+  }), [occupied, setInput]);
   const task = liveTask ? tasks[liveTask] : undefined;
   const reconnect = useRef(conversation.reconnect);
   const reloadThread = useRef(conversation.thread.reload);
@@ -231,13 +239,15 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
             activeTaskId={desktop && workspace ? liveTask : undefined}
             onShowTask={id => { setLiveTask(id); setWorkspace(true); setPane("workspace"); }}
             onOpenPlan={source => { setViewed(source); setLiveTask(undefined); setWorkspace(true); setPane("workspace"); }} onCompare={onCompare} /></Suspense>
-            : <div className="animate-fade-up mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-6 py-6">
+            : threadId ? <div role="status" className="grid place-content-center gap-2 text-sm text-muted-foreground">
+              {conversation.busy ? t("正在加载对话记录……") : t("暂无对话消息。")}
+            </div> : <div className="animate-fade-up mx-auto flex w-full min-h-full max-w-[46rem] flex-col justify-center gap-6 py-6">
               <div className="space-y-1.5 text-center">
                 <h2 className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]">{t("想优化什么问题？")}</h2>
                 <p className="text-sm text-muted-foreground">{t("用日常语言描述目标和条件，或拖入表格直接求解。")}</p>
               </div>
               <div className="grid gap-2.5 sm:grid-cols-3">
-                {AGENT_STARTERS.map(item => {
+                {!input && !Object.keys(data).length && AGENT_STARTERS.map(item => {
                   const Icon = item.icon;
                   return <button
                     key={item.title}
@@ -337,10 +347,11 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
       <ChatInput label={t("发送给优化助手")} value={input} onChange={setInput}
         disabled={busy} sendingDisabled={dataPending} loading={conversation.loading} stopping={conversation.stopping} inputRef={inputArea}
         presets={presets} presetId={presetId} onPreset={setSelected} thinking={thinkingMode} onThinking={setThinking} openPresets={openPresets}
-        onSend={() => void submit()} onStop={() => void stop()} placeholder={t("描述你想解决的业务问题，或继续补充调整要求…")}>
-        <Button type="button" variant="ghost" size="icon-sm" disabled={busy || dataPending} aria-label={t("添加数据文件")}
+        searchActive={canSearch && searching} attachment={<Button type="button" variant="ghost" size="icon-sm" disabled={busy || dataPending} aria-label={t("添加数据文件")}
           title={t(reading ? "正在读取数据……" : savingData ? "正在保存……" : "添加数据文件")} onClick={() => upload.current?.click()}>
-          {dataPending ? <Spinner /> : <Paperclip />}</Button>
+          {dataPending ? <Spinner /> : <Paperclip />}</Button>}
+        onSend={() => void submit()} onStop={() => void stop()} placeholder={t("描述你想解决的业务问题，或继续补充调整要求…")}>
+
         <Button type="button" variant={settings || customized ? "secondary" : "ghost"} size="sm" aria-label={t("建模偏好")}
           title={t("可选指定建模方法与求解器，默认自动匹配")}
           className={cn("h-8 max-w-44 gap-1.5 rounded-lg px-2 text-xs font-normal", customized ? "text-primary font-medium" : "text-muted-foreground")}
@@ -349,7 +360,7 @@ export function Agent({ threadId, options, presets, initial, sidebarCollapsed = 
           <span className="truncate">{configSummary}</span>
         </Button>
         {canSearch ? <span title={t("搜索公开资料，并在回复中展示来源。")}>
-          <Toggle size="sm" pressed={searching} disabled={busy} aria-label={t("联网搜索")} onPressedChange={setSearch}><Globe /><span className="hidden @lg:inline">{t("联网搜索")}</span></Toggle>
+          <Toggle size="sm" pressed={searching} disabled={busy} aria-label={t("联网搜索")} onPressedChange={setSearch}><Globe /><span>{t("联网搜索")}</span></Toggle>
         </span> : null}
       </ChatInput>
       <input ref={upload} type="file" multiple accept={DATA_FILE_ACCEPT} className="hidden" disabled={busy || dataPending} aria-label={t("数据文件")} onChange={async event => {

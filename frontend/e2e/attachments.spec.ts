@@ -20,7 +20,8 @@ test("data rows can be added, saved and cancelled without editing CSV syntax", a
   await dialog.getByLabel("第 3 行，第 1 列", { exact: true }).fill("不保存的门店");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(dialog.getByRole("button", { name: "保存数据", exact: true })).toBeInViewport();
-  await dialog.getByRole("button", { name: "取消", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "放弃修改", exact: true }).click();
   await page.getByRole("button", { name: "编辑 demand.csv", exact: true }).click();
   await expect(dialog.getByLabel("第 3 行，第 1 列", { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("llm4om-draft")!).data["demand.csv"]))

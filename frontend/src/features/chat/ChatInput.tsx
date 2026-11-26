@@ -1,5 +1,5 @@
-import { useEffect, useImperativeHandle, useRef, type ReactNode, type Ref } from "react";
-import { ArrowUp, Brain, Cpu, Square } from "lucide-react";
+import { useEffect, useImperativeHandle, useId, useRef, useState, type ReactNode, type Ref } from "react";
+import { ArrowUp, Brain, ChevronDown, Cpu, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,14 +9,16 @@ import type { Preset } from "@/types";
 
 /** Both conversations use the same keyboard, composition and model-selection behavior. */
 export function ChatInput({ value, onChange, disabled, loading, sendingDisabled = false, stopping = false, onSend, onStop, presets, presetId, onPreset, openPresets,
-  children, inputRef, label, placeholder, thinking, onThinking }: {
+  attachment, searchActive, children, inputRef, label, placeholder, thinking, onThinking }: {
   value: string; onChange: (value: string) => void; disabled: boolean; loading: boolean;
   stopping?: boolean;
   sendingDisabled?: boolean;
   onSend: () => void; onStop: () => void; presets: Preset[]; presetId?: string; onPreset: (id: string) => void;
-  openPresets: () => void; children?: ReactNode; inputRef?: Ref<HTMLTextAreaElement>; label: string; placeholder?: string;
+  openPresets: () => void; attachment?: ReactNode; searchActive?: boolean; children?: ReactNode; inputRef?: Ref<HTMLTextAreaElement>; label: string; placeholder?: string;
   thinking?: boolean | null; onThinking: (enabled: boolean) => void;
 }) {
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsId = useId();
   const field = useRef<HTMLTextAreaElement>(null);
   const responding = useRef(loading);
   const preset = presets.find(item => item.id === presetId);
@@ -38,10 +40,15 @@ export function ChatInput({ value, onChange, disabled, loading, sendingDisabled 
             event.preventDefault(); if (!disabled && !sendingDisabled && value.trim()) onSend();
           }
         }} />
-      <div className="mt-1.5 flex min-w-0 items-center gap-1.5 border-t border-border/50 pt-2">
-        {/* Narrow sidebars scroll the controls instead of pushing Send or Stop out of reach. */}
-        <div className="-my-1 -ml-1 flex min-w-0 flex-1 items-center overflow-x-auto px-1 py-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1">
-          <div className="flex w-max items-center gap-1">
+      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 border-t border-border/50 pt-2">
+        {attachment}
+        <Button type="button" size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs md:hidden"
+          aria-expanded={toolsOpen} aria-controls={toolsId} onClick={() => setToolsOpen(!toolsOpen)}>
+          {t("更多工具")}<ChevronDown className={cn("size-3", toolsOpen && "rotate-180")} />
+        </Button>
+        {searchActive && !toolsOpen ? <span className="text-xs text-primary md:hidden">{t("联网已开启")}</span> : null}
+        <div id={toolsId} className={cn("order-last min-w-0 basis-full flex-wrap items-center gap-1 rounded-lg bg-muted/30 p-1 md:order-none md:flex md:flex-1 md:basis-auto md:bg-transparent md:p-0",
+          toolsOpen ? "flex" : "hidden")}>
             {presets.length ? <Select value={presetId ?? ""} onValueChange={id => { if (id) onPreset(id); }} disabled={disabled}>
               <SelectTrigger aria-label={t("对话模型")} title={preset?.name || preset?.model}
                 className="h-8! w-32 min-w-0 overflow-hidden rounded-lg border-0 bg-muted/45 px-2.5 text-xs font-medium shadow-none hover:bg-muted @lg:w-44 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:overflow-hidden">
@@ -55,11 +62,10 @@ export function ChatInput({ value, onChange, disabled, loading, sendingDisabled 
               title={t("开启深度推理以处理复杂逻辑问题")}
               disabled={disabled} onClick={() => onThinking(!thinkingOn)}
               className={cn("h-8 shrink-0 gap-1.5 rounded-lg px-2 text-xs text-muted-foreground", thinkingOn && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}>
-              <Brain /><span className="hidden @md:inline">{t("深度思考")}</span></Button> : null}
+              <Brain /><span className="inline">{t("深度思考")}</span></Button> : null}
             {children}
-          </div>
         </div>
-        <div className="flex shrink-0 items-center">
+        <div className="ml-auto flex shrink-0 items-center">
           {loading || stopping ? <Button type="button" variant="secondary" size="icon-sm" className="rounded-full" aria-label={t("停止")}
             title={stopping ? t("正在停止…") : t("停止")} disabled={stopping} onClick={onStop}><Square className="size-3 fill-current" /></Button>
             : <Button type="submit" size="icon-sm" className="rounded-full shadow-xs" aria-label={t("发送")} title={t("发送")} disabled={disabled || sendingDisabled || !value.trim()}><ArrowUp /></Button>}

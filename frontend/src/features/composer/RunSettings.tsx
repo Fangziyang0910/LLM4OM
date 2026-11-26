@@ -130,7 +130,7 @@ export function useRunLauncher({
   }, [method.id, comparing]);
 
   const ready = problem.description.trim().length > 0 && !disabled && !reading && !backendUnavailable && presetsStatus === "ready"
-    && (!comparing || (runs.length > 0 && runs.length <= MAX_COMPARED));
+    && (!comparing || (runs.length >= 2 && runs.length <= MAX_COMPARED));
 
   const start = async () => {
     if (busy) return;
@@ -209,16 +209,23 @@ export function useRunLauncher({
     </Collapsible> : null}
   </div>;
 
-  const settingsTrigger = <button type="button" aria-label={t("查看运行设置")} aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}
+  const changeMode = (on: boolean) => set({ comparing: on, methods: on && !draft.methods?.length ? [method.id] : draft.methods });
+  const settingsTrigger = <><select aria-label={t("运行模式")} disabled={busy || disabled}
+    className="h-8 max-w-full rounded-xl border bg-background px-2 text-xs" value={comparing ? "compare" : "single"}
+    onChange={event => changeMode(event.target.value === "compare")}>
+    <option value="single">{t("单次求解")}</option><option value="compare">{t("多方案对比")}</option>
+  </select><button type="button" aria-label={t("查看运行设置")} aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}
     title={t("点击调整 AI 模型、多方案对比或底层求解引擎")}
     className={cn(
       "inline-flex h-8 max-w-full items-center gap-1.5 rounded-xl border bg-background/80 px-2.5 text-xs font-normal shadow-2xs transition-colors hover:border-primary/40 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       (!isDefaultConfig || comparing) ? "border-primary/35 bg-primary/8 text-primary font-medium" : "text-muted-foreground")}>
     <SlidersHorizontal className="size-3.5 shrink-0" />
     <span className="truncate">{settingsBadge}</span>
-  </button>;
+  </button></>;
 
   const startButton = <div className="flex w-full flex-col items-end gap-1 sm:w-auto">
+    {comparing && runs.length < 2 && !reviewFirst ? <button type="button" className="text-left text-xs text-primary underline" onClick={() => presets.length ? setSettingsOpen(true) : openPresets()}>
+      {presets.length ? t("至少选择两个方案以开始对比") : t("配置 AI 模型")}</button> : null}
     {comparing && runs.length > MAX_COMPARED ? <p className="text-xs text-destructive">
       {t("一次最多对比 {max} 个方案，当前已选 {count} 个。", { max: MAX_COMPARED, count: runs.length })}</p> : null}
     <Button size="default" className="h-9 w-full gap-1.5 rounded-xl px-5 font-medium shadow-xs sm:w-auto"
@@ -241,8 +248,7 @@ export function useRunLauncher({
             </div>
             <Label className="ml-auto shrink-0 cursor-pointer gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium shadow-2xs" title={t("同一问题同时用多个策略或模型计算，并排核对结果")}>
               <Columns3 className="size-3.5 text-primary" />{t("多方案对比")}
-              <Switch size="sm" checked={comparing} aria-label={t("对比多个方法")} onCheckedChange={on => set({ comparing: on,
-                methods: on && !draft.methods?.length ? [method.id] : draft.methods })} />
+              <Switch size="sm" checked={comparing} aria-label={t("对比多个方法")} onCheckedChange={changeMode} />
             </Label>
           </div>
           <div className="grid min-h-0 flex-1 grid-cols-1 divide-y overflow-y-auto lg:grid-cols-[1.2fr_1fr] lg:divide-y-0">

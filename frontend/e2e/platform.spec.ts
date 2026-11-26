@@ -57,6 +57,7 @@ test("data can be reviewed and edited before modeling, with cancel and immutable
   await page.getByRole("button", { name: "编辑 prices.csv", exact: true }).click();
   await page.getByLabel("第 1 行，第 2 列", { exact: true }).fill("9");
   await page.getByRole("button", { name: "取消", exact: true }).click();
+  await page.getByRole("button", { name: "放弃修改", exact: true }).click();
   await page.getByRole("button", { name: "编辑 prices.csv", exact: true }).click();
   await expect(page.getByLabel("第 1 行，第 2 列", { exact: true })).toHaveValue("3");
   await page.getByLabel("第 2 列列名").fill("单件利润（元）");
@@ -100,6 +101,7 @@ test("requirements file edits persist, and a rejected save can be cancelled with
   await page.getByRole("button", { name: "保存数据", exact: true }).click();
   await expect(page.getByRole("dialog").getByRole("alert")).toContainText("save rejected");
   await page.getByRole("button", { name: "取消", exact: true }).click();
+  await page.getByRole("button", { name: "放弃修改", exact: true }).click();
   await page.getByRole("button", { name: "编辑 costs.csv", exact: true }).click();
   await expect(page.getByLabel("第 1 行，第 2 列", { exact: true })).toHaveValue("5");
 });

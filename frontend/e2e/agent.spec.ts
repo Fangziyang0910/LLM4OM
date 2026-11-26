@@ -87,6 +87,7 @@ test("the mobile conversation keeps navigation, composer controls and keyboard s
   await expect(page.getByRole("dialog").getByRole("button", { name: "新建优化任务", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   const input = page.getByRole("textbox", { name: "发送给优化助手" });
+  await page.getByRole("button", { name: "更多工具" }).click();
   await page.getByRole("button", { name: "建模偏好" }).click();
   for (const size of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(size);

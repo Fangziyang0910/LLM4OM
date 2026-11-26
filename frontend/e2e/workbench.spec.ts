@@ -191,7 +191,7 @@ test("a named DeepSeek preset keeps its native provider, custom endpoint and act
   expect(saved.api_key).toBeUndefined();
   await dialog.getByRole('button', { name: '删除这个预设' }).click();
   await dialog.getByRole('button', { name: '确认删除？' }).click();
-  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await dialog.locator('[data-slot="dialog-footer"]').getByRole('button', { name: '关闭', exact: true }).click();
   expect(errors).toEqual([]);
 });
 
@@ -299,7 +299,7 @@ test("comparison retains a time-limited incumbent and distinguishes a heuristic 
     expect(response.ok()).toBe(true);
   }
   await page.goto("/compare/" + group);
-  await expect(page.getByRole("row").filter({ hasText: "达到时限" }).getByRole("cell").nth(4)).toHaveText("8");
+  await expect(page.getByRole("row").filter({ hasText: "达到时限" }).getByRole("cell", { name: "8", exact: true })).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: "AutoCO" })).toContainText("未找到可行解");
   await expect(page.getByRole("main")).toContainText("8 至 10");
 });

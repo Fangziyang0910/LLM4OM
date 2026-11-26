@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip as RechartsTooltip, XAxis, YAxis } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { adjacentSolution, objectiveLabel } from "./pareto";
 import { formatNumber } from "@/format";
 import { t } from "@/i18n";
 import type { ParetoObjective, ParetoSolution } from "./types";
@@ -40,37 +41,43 @@ export default function TradeoffPlot({
         <span>X</span>
         <Select value={String(xi)} onValueChange={v => setXAxis(Number(v))}>
           <SelectTrigger size="sm" aria-label={t("横轴目标")} className="h-7 min-w-28 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>{objectives.map((obj, idx) => <SelectItem key={idx} value={String(idx)}>{obj.name}</SelectItem>)}</SelectContent>
+          <SelectContent>{objectives.map((obj, idx) => <SelectItem key={idx} value={String(idx)}>{objectiveLabel(obj)}</SelectItem>)}</SelectContent>
         </Select>
         <span>Y</span>
         <Select value={String(yi)} onValueChange={v => setYAxis(Number(v))}>
           <SelectTrigger size="sm" aria-label={t("纵轴目标")} className="h-7 min-w-28 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>{objectives.map((obj, idx) => <SelectItem key={idx} value={String(idx)} disabled={idx === xi}>{obj.name}</SelectItem>)}</SelectContent>
+          <SelectContent>{objectives.map((obj, idx) => <SelectItem key={idx} value={String(idx)} disabled={idx === xi}>{objectiveLabel(obj)}</SelectItem>)}</SelectContent>
         </Select>
       </div> : null}
     </div>
-    <div role="img" aria-label={t("目标权衡图")} className="h-56 w-full select-none">
+    <div role="group" tabIndex={0} aria-label={t("目标权衡图")} className="h-56 w-full rounded-md select-none focus-visible:outline-ring"
+      onKeyDown={event => {
+        const next = adjacentSolution(event.key, points.findIndex(point => point.idx === activeIndex), points.length);
+        if (next === undefined) return;
+        event.preventDefault();
+        onSelect(points[next].idx);
+      }}>
       <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 520, height: 224 }}>
-        <ScatterChart margin={{ top: 10, right: 16, bottom: 22, left: 8 }}>
+        <ScatterChart accessibilityLayer={false} margin={{ top: 10, right: 16, bottom: 22, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.1} />
           <XAxis
             type="number"
             dataKey="x"
-            name={xObj.name}
+            name={objectiveLabel(xObj)}
             domain={["auto", "auto"]}
             tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
             tickFormatter={v => formatNumber(Number(Number(v).toPrecision(4)))}
-            label={{ value: `${xObj.name} (${xObj.sense === "max" ? "↑" : "↓"})`, position: "insideBottom", offset: -14, fontSize: 11, fill: "var(--muted-foreground)" }}
+            label={{ value: `${objectiveLabel(xObj)} (${xObj.sense === "max" ? "↑" : "↓"})`, position: "insideBottom", offset: -14, fontSize: 11, fill: "var(--muted-foreground)" }}
           />
           <YAxis
             type="number"
             dataKey="y"
-            name={yObj.name}
+            name={objectiveLabel(yObj)}
             domain={["auto", "auto"]}
             width={56}
             tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
             tickFormatter={v => formatNumber(Number(Number(v).toPrecision(4)))}
-            label={{ value: `${yObj.name} (${yObj.sense === "max" ? "↑" : "↓"})`, angle: -90, position: "insideLeft", offset: 4, style: { textAnchor: "middle" }, fontSize: 11, fill: "var(--muted-foreground)" }}
+            label={{ value: `${objectiveLabel(yObj)} (${yObj.sense === "max" ? "↑" : "↓"})`, angle: -90, position: "insideLeft", offset: 4, style: { textAnchor: "middle" }, fontSize: 11, fill: "var(--muted-foreground)" }}
           />
           <RechartsTooltip
             cursor={{ strokeDasharray: "3 3", strokeOpacity: 0.35 }}
@@ -83,8 +90,8 @@ export default function TradeoffPlot({
                   {pt.knee ? <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">{t("推荐折中")}</span> : null}
                 </div>
                 <div className="space-y-0.5 font-mono text-[11px] tabular">
-                  <div>{xObj.name}: <strong>{formatNumber(pt.x)}</strong></div>
-                  <div>{yObj.name}: <strong>{formatNumber(pt.y)}</strong></div>
+                  <div>{objectiveLabel(xObj)}: <strong>{formatNumber(pt.x)}</strong></div>
+                  <div>{objectiveLabel(yObj)}: <strong>{formatNumber(pt.y)}</strong></div>
                 </div>
               </div>;
             }}
@@ -92,10 +99,6 @@ export default function TradeoffPlot({
           <Scatter
             data={points}
             isAnimationActive={false}
-            onClick={entry => {
-              const pt = (entry?.payload ?? entry) as PlotPoint | undefined;
-              if (pt && typeof pt.idx === "number") onSelect(pt.idx);
-            }}
             shape={(props: unknown) => {
               const { cx, cy, payload } = props as { cx?: number; cy?: number; payload?: PlotPoint };
               if (cx == null || cy == null || !payload) return <g />;

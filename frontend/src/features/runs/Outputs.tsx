@@ -31,10 +31,10 @@ const TABS: [Tab, string, LucideIcon][] = [
 ];
 
 /** What the run produced: the solution, the problem & data, the formulation, and the code. */
-export function Outputs({ values, steps, active, tab, setTab, picked, setPicked, language, finished, source, onAdjust }: {
+export function Outputs({ values, steps, active, tab, setTab, picked, setPicked, language, finished, source, onAdjust, runKey }: {
   values: RunValues; steps: Step[]; active: boolean; tab: Tab; setTab: (tab: Tab) => void;
   picked: Partial<Record<"formulation" | "code", string>>; setPicked: (key: "formulation" | "code", id: string | undefined) => void;
-  language?: Language; finished: boolean; source?: SourceRun;
+  runKey?: string; language?: Language; finished: boolean; source?: SourceRun;
   onAdjust: (instruction: string) => void;
 }) {
   const tabs = useRef<HTMLDivElement>(null);
@@ -65,10 +65,10 @@ export function Outputs({ values, steps, active, tab, setTab, picked, setPicked,
     </TabsList>
     <TabsContent key={tab} value={tab} className="min-h-0 overflow-y-auto p-4 sm:p-5">
       {tab === "solution" ? values.solve && !values.failure && !unchecked ? <div className="flex flex-col gap-4">
+        {values.solve.pareto?.solutions.length ? <ParetoFront pareto={values.solve.pareto} decisions={values.explanation?.decisions} runKey={runKey} /> : null}
         {values.explanation ? <Explanation explanation={values.explanation} solve={values.solve} /> : null}
         {values.infeasibility ? <Infeasibility explanation={values.infeasibility} onAdjust={active ? undefined : onAdjust} /> : null}
         {values.explanation_error ? <Alert><AlertDescription>{values.solve.status === "infeasible" ? t("通俗解读暂未生成，可在下方查看求解器定位的冲突。") : t("通俗解读暂未生成，您仍可直接查看下方详细决策数值。")}</AlertDescription></Alert> : null}
-        {values.explanation && values.solve.pareto?.solutions.length ? <ParetoFront pareto={values.solve.pareto} /> : null}
         {values.explanation ? <VariableDetails solve={values.solve} /> : <Solution solve={values.solve} />}
       </div>
         : <Blank icon={Sparkles} text={active ? t("求解中，完成后将在这里显示结果。") : values.failure ? t("本次求解未能生成方案。") : unchecked ? t("旧版记录没有核验停止时的数值是否满足约束。请重新求解以取得可核验的结果。") : finished ? t("暂无求解结果。") : t("求解尚未完成。")} />
@@ -95,7 +95,7 @@ function VariableDetails({ solve }: { solve: NonNullable<RunValues["solve"]> }) 
     <summary className="flex cursor-pointer items-center justify-between text-sm font-medium">
       <span>{t("查看全部决策变量明细（共 {count} 项）", { count })}</span>
     </summary>
-    {visited ? <div className="mt-4 border-t border-border/60 pt-4"><Solution solve={solve} showPareto={false} /></div> : null}
+    {visited ? <div className="mt-4 border-t border-border/60 pt-4"><Solution solve={solve} /></div> : null}
   </details>;
 }
 
